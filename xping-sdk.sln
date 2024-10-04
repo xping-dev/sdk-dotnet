@@ -1,0 +1,112 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{464CE18C-1C75-473C-812A-E958172BC048}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{035C3BB1-D7FE-46D6-8DA7-A2F20FBA2518}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E0C3A702-A0A5-4D65-9CBE-B017E76DDC6F}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk.Core", "src\Xping.Sdk.Core\Xping.Sdk.Core.csproj", "{EC960CDD-7EA0-4A2E-BA66-DA05D361014E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk.IntegrationTests", "tests\Xping.Sdk.IntegrationTests\Xping.Sdk.IntegrationTests.csproj", "{FD397829-B952-41A1-B9EF-DB44B55964D4}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk", "src\Xping.Sdk\Xping.Sdk.csproj", "{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{B1313130-03E1-4238-BB93-74BD2E0084C1}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Xping.Sdk.Shared", "src\Xping.Sdk.Shared\Xping.Sdk.Shared.shproj", "{18AF9728-0693-431B-BB78-0577F98FE560}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk.Core.UnitTests", "tests\Xping.Sdk.Core.UnitTests\Xping.Sdk.Core.UnitTests.csproj", "{BE7F097A-93A6-4597-8904-6350A2343181}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk.Shared.UnitTests", "tests\Xping.Sdk.Shared.UnitTests\Xping.Sdk.Shared.UnitTests.csproj", "{C156C14D-49F5-417F-B455-7C713439CDA2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WebApp", "samples\WebApp\WebApp.csproj", "{7A9E8B2C-4726-45A5-9BC5-DEC16B268368}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleAppTesting", "samples\ConsoleAppTesting\ConsoleAppTesting.csproj", "{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Xping.Sdk.Availability.UnitTests", "tests\Xping.Sdk.Availability.UnitTests\Xping.Sdk.Availability.UnitTests.csproj", "{33F7600A-124F-46A8-80B5-E1DD3264B24D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IntegrationTesting", "samples\IntegrationTesting\IntegrationTesting.csproj", "{86A5FC4F-7A18-4319-801F-87F102949276}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductionTests", "samples\ProductionTests\ProductionTests.csproj", "{EEBAEC70-E383-4391-82CC-72EB252A1BE6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EC960CDD-7EA0-4A2E-BA66-DA05D361014E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC960CDD-7EA0-4A2E-BA66-DA05D361014E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC960CDD-7EA0-4A2E-BA66-DA05D361014E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC960CDD-7EA0-4A2E-BA66-DA05D361014E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FD397829-B952-41A1-B9EF-DB44B55964D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD397829-B952-41A1-B9EF-DB44B55964D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD397829-B952-41A1-B9EF-DB44B55964D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD397829-B952-41A1-B9EF-DB44B55964D4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BE7F097A-93A6-4597-8904-6350A2343181}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE7F097A-93A6-4597-8904-6350A2343181}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE7F097A-93A6-4597-8904-6350A2343181}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE7F097A-93A6-4597-8904-6350A2343181}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C156C14D-49F5-417F-B455-7C713439CDA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C156C14D-49F5-417F-B455-7C713439CDA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C156C14D-49F5-417F-B455-7C713439CDA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C156C14D-49F5-417F-B455-7C713439CDA2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A9E8B2C-4726-45A5-9BC5-DEC16B268368}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A9E8B2C-4726-45A5-9BC5-DEC16B268368}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A9E8B2C-4726-45A5-9BC5-DEC16B268368}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A9E8B2C-4726-45A5-9BC5-DEC16B268368}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{33F7600A-124F-46A8-80B5-E1DD3264B24D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{33F7600A-124F-46A8-80B5-E1DD3264B24D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{33F7600A-124F-46A8-80B5-E1DD3264B24D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{33F7600A-124F-46A8-80B5-E1DD3264B24D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{86A5FC4F-7A18-4319-801F-87F102949276}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86A5FC4F-7A18-4319-801F-87F102949276}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86A5FC4F-7A18-4319-801F-87F102949276}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86A5FC4F-7A18-4319-801F-87F102949276}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EEBAEC70-E383-4391-82CC-72EB252A1BE6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEBAEC70-E383-4391-82CC-72EB252A1BE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEBAEC70-E383-4391-82CC-72EB252A1BE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEBAEC70-E383-4391-82CC-72EB252A1BE6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EC960CDD-7EA0-4A2E-BA66-DA05D361014E} = {464CE18C-1C75-473C-812A-E958172BC048}
+		{FD397829-B952-41A1-B9EF-DB44B55964D4} = {E0C3A702-A0A5-4D65-9CBE-B017E76DDC6F}
+		{CF9C97AA-FA29-43CD-B45F-76E60A6B1D9A} = {464CE18C-1C75-473C-812A-E958172BC048}
+		{18AF9728-0693-431B-BB78-0577F98FE560} = {464CE18C-1C75-473C-812A-E958172BC048}
+		{BE7F097A-93A6-4597-8904-6350A2343181} = {E0C3A702-A0A5-4D65-9CBE-B017E76DDC6F}
+		{C156C14D-49F5-417F-B455-7C713439CDA2} = {E0C3A702-A0A5-4D65-9CBE-B017E76DDC6F}
+		{7A9E8B2C-4726-45A5-9BC5-DEC16B268368} = {B1313130-03E1-4238-BB93-74BD2E0084C1}
+		{B972A01E-4D7C-4D7A-9A9A-2D81CF621E1E} = {B1313130-03E1-4238-BB93-74BD2E0084C1}
+		{33F7600A-124F-46A8-80B5-E1DD3264B24D} = {E0C3A702-A0A5-4D65-9CBE-B017E76DDC6F}
+		{86A5FC4F-7A18-4319-801F-87F102949276} = {B1313130-03E1-4238-BB93-74BD2E0084C1}
+		{EEBAEC70-E383-4391-82CC-72EB252A1BE6} = {B1313130-03E1-4238-BB93-74BD2E0084C1}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1EAD876E-2071-435E-AEC4-D3DEF2F4A328}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		src\Xping.Sdk.Shared\Xping.Sdk.Shared.projitems*{18af9728-0693-431b-bb78-0577f98fe560}*SharedItemsImports = 13
+		src\Xping.Sdk.Shared\Xping.Sdk.Shared.projitems*{c156c14d-49f5-417f-b455-7c713439cda2}*SharedItemsImports = 5
+		src\Xping.Sdk.Shared\Xping.Sdk.Shared.projitems*{cf9c97aa-fa29-43cd-b45f-76e60a6b1d9a}*SharedItemsImports = 5
+		src\Xping.Sdk.Shared\Xping.Sdk.Shared.projitems*{ec960cdd-7ea0-4a2e-ba66-da05d361014e}*SharedItemsImports = 5
+	EndGlobalSection
+EndGlobal
