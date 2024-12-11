@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.Net.Http.Headers;
 using Microsoft.Playwright;
 using Xping.Sdk;
 using Xping.Sdk.Core;
