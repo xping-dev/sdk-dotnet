@@ -2,12 +2,12 @@
 
 [![NuGet](https://img.shields.io/nuget/v/Xping.Core)](https://www.nuget.org/profiles/Xping)
 ![Build Status](https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=9JYAN87PBS)](https://codecov.io/gh/xping-dev/sdk-dotnet)
+[![codecov](https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO)](https://codecov.io/gh/xping-dev/sdk-dotnet)
 
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <img src="docs/images/logo.svg" />
+  <img src="docs/docs/media/logo.svg" />
   <h2 align="center">Xping SDK</h3>
   <p align="center">
     <b>Xping SDK</b> is a free and open-source .NET library written in C# to help automate Web Application or Web API testing.
