@@ -28,6 +28,7 @@ public class DiagnosticTests(TestAgent testAgent) : BaseTest(testAgent)
         TestAgent.Cleanup();
     }
 
+    [Ignore("Investigate: An error occurred while sending the ping request on CI runner.")]
     [Test]
     public async Task VerifyDnsAndIpAddressAvailability()
     {
