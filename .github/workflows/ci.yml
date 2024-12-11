@@ -28,5 +28,5 @@ jobs:
       with:
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
-        slug: Xping/sdk
+        slug: Xping/sdk-dotnet
  
