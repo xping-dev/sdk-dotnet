@@ -68,10 +68,10 @@ public class HomePageTests(TestAgent testAgent) : BaseTest(testAgent)
         
         TestAgent.UseHtmlValidation(html =>
         {
-            var categories = html.Locator(selector: "//div[@class='list-group']/a");
+            var categories = html.Locator(selector: "//div[@class='container']//li");
             
             Expect(categories).ToHaveCount(expectedCount);
-            Expect(categories).ToHaveInnerText(["CATEGORIES", "Phones", "Laptops", "Monitors"]);
+            Expect(categories).ToHaveInnerText(["Home", "Privacy", "Register", "Login"]);
         });
         
         await RunAsync();

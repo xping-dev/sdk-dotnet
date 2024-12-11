@@ -591,8 +591,8 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(5));
         Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 5th index, but only 3 elements exist. This error occurred as part of validating " +
-            $"HTML data."));
+            $"Expected to access the 5th index, but only 3 elements exist. This error occurred during the validation " +
+            $"of HTML data."));
     }
 
     [Test]
@@ -608,8 +608,8 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(0));
         Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 0th index, but only 0 elements exist. This error occurred as part of validating " +
-            $"HTML data."));
+            $"Expected to access the 0th index, but only 0 elements exist. This error occurred during the validation " +
+            $"of HTML data."));
     }
 
     [Test]
@@ -781,7 +781,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
                         new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveInnerText))))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("elementInnerTexts")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("innerText")),
                 It.Is<IPropertyBagValue>(p =>
                     p.Equals(new PropertyBagValue<string>(innerText)))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
@@ -824,7 +824,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
                         new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveInnerText))))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("elementInnerTexts")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("innerText")),
                 It.Is<IPropertyBagValue>(p =>
                     p.Equals(new PropertyBagValue<string>(innerText)))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)

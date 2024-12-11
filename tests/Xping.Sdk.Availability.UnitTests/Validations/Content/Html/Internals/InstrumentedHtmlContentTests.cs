@@ -258,7 +258,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             "No <title> node available. Ensure that the html content has <title> node before attempting " +
-            "to validate its value. This error occurred as part of validating HTML data."));
+            "to validate its value. This error occurred during the validation of HTML data."));
     }
 
     [Test]
@@ -287,7 +287,7 @@ public sealed class InstrumentedHtmlContentTests
         Assert.That(exception.Message, Is.EqualTo(
             "Multiple <title> nodes were found. The method expects a single <title> node under the <head> " +
             "node. Please ensure that the HTML content contains only one <title> node for proper validation. " +
-            "This error occurred as part of validating HTML data."));
+            "This error occurred during the validation of HTML data."));
     }
 
     [Test]
@@ -314,7 +314,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             $"Expected the <title> node's inner text to be \"OtherTitle\", but the actual <title> node's inner " +
-            $"text was \"expectedTitle\". This error occurred as part of validating HTML data."));
+            $"text was \"expectedTitle\". This error occurred during the validation of HTML data."));
     }
 
     [Test]
@@ -420,7 +420,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             $"The expected HTML document size should be equal to or less than 5 bytes; however, " +
-            $"the actual size was {byteCount} bytes. This error occurred as part of validating HTML data."));
+            $"the actual size was {byteCount} bytes. This error occurred during the validation of HTML data."));
     }
 
     [Test]
