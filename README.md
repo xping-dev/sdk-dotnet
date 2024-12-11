@@ -1,8 +1,8 @@
 <div id="top"></div>
 
 [![NuGet](https://img.shields.io/nuget/v/Xping.Core)](https://www.nuget.org/profiles/Xping)
-![Build Status](https://github.com/xping-dev/sdk/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/gh/Xping/Xping-sdk/graph/badge.svg?token=9JYAN87PBS)](https://codecov.io/gh/Xping/Xping-sdk)
+![Build Status](https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=9JYAN87PBS)](https://codecov.io/gh/xping-dev/sdk-dotnet)
 
 <!-- PROJECT LOGO -->
 <br />
