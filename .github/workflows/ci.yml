@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build -c Release --no-restore
+    - name: Ensure browsers are installed
+      run: pwsh ./tests/Xping.Sdk.IntegrationTests/bin/Release/net8.0/playwright.ps1 install --with-deps
+    - name: Test
+      run: dotnet test -c Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory ./coverage
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4.0.1
+      with:
+        fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: xping-dev/sdk-dotnet
+ 
