@@ -50,20 +50,20 @@ TestAgent.UseHttpValidation(response =>
 {
     Expect(response)
         .ToHaveSuccessStatusCode()
-        .ToHaveResponseTimeLessThan(TimeSpan.FromSeconds(30))
-        .ToHaveHeaderWithValue(HeaderNames.Server, value: "Google");
+        .ToHaveResponseTimeLessThan(TimeSpan.FromSeconds(MaxResponseTimeMs))
+        .ToHaveHeaderWithValue(HeaderNames.Server, value: "ServerName");
 });
 ```
 
-|HTTP Response Assert Function|Description|
-|-----------------------------|-----------|
+|Assert Function|Description|
+|---------------|-----------|
 |`ToHaveSuccessStatusCode()`|Ensures that the HTTP response has a successful (2xx) status code.|
 |`ToHaveStatusCode(HttpStatusCode)`|Validates that the HTTP response has the specified status code.|
 |`ToHaveHttpHeader(string, TextOptions?)`|Validates that the HTTP response contains a specific header.|
 |`ToHaveHeaderWithValue(string, string, TextOptions?)`|Validates that the HTTP response contains a specific header with value.|
 |`ToHaveContentType(string contentType, TextOptions?)`|Validates the Content-Type header of the HTTP response.|
 |`ToHaveBodyContaining(string expectedContent, TextOptions?)`|Validates that the response body contains a specific string.|
-|`ToHaveResponseTimeLessThan(TimeSpan maxDuration)`|Validates that the response time is less than a specified duration.|
+|`ToHaveResponseTimeLessThan(TimeSpan maxDuration)`|Validates that the response time is less than a specified duration. Ensuring that your web application responds within an acceptable time frame is crucial for user experience, performance, and SEO. The acceptable maximum response time can vary based on the context and the type of web application. Here are some general guidelines. User Experience: Users generally expect web pages to load within 2-3 seconds. Any longer, and you risk losing their interest. Performance Standards: For optimal performance, aim for a response time of under 200 milliseconds (ms) for critical assets and 500 ms for most page resources. SEO Considerations: Search engines like Google favor websites with faster response times, impacting your search rankings. In production tests, setting a max response time of 2-3 seconds for the entire page load is reasonable.|
 
 ## HTML Response Validation
 
@@ -83,8 +83,8 @@ TestAgent.UseHtmlValidation(html =>
 });
 ```
 
-|HTML Content Assert Function|Description|
-|----------------------------|-----------|
+|Assert Function|Description|
+|---------------|-----------|
 |`ToHaveTitle(string title, TextOptions? options = null)`|Validates that an HTML document has the specified title. The title is typically found within the &lt;title&gt; tag in the &lt;head&gt; section of an HTML document.|
 |`ToHaveTitle(Regex title, TextOptions? options = null)`|Validates that title of HTML document matches the specified regex. The title is typically found within the &lt;title&gt; tag in the &lt;head&gt; section of an HTML document.|
 |`ToHaveMaxDocumentSize(int maxSizeInBytes)`|Validates that the size in bytes of an HTML document is equal to or less than the specified maximum size.|

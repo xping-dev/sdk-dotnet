@@ -22,21 +22,20 @@ This can be done by executing the following code:
 ```csharp
 var testAgent = host.Services.GetRequiredService<TestAgent>();
 
-testAgent
-    .UseDnsLookup()
-    .UseIPAddressAccessibilityCheck()
-    .UseHttpClient()
-    .UseHttpValidation(response =>
-    {
-        Expect(response)
-            .ToHaveSuccessStatusCode()
-            .ToHaveResponseTimeLessThan(TimeSpan.FromSeconds(30))
-            .ToHaveHeaderWithValue(HeaderNames.Server, value: "Google");
-    })
-    .UseHtmlValidation(html =>
-    {
-        html.HasMaxDocumentSize(MAX_SIZE_IN_BYTES);
-    });
+testAgent.UseDnsLookup()
+         .UseIPAddressAccessibilityCheck()
+         .UseHttpClient()
+         .UseHttpValidation(response =>
+         {
+             Expect(response)
+                 .ToHaveSuccessStatusCode()
+                 .ToHaveResponseTimeLessThan(TimeSpan.FromMilliseconds(MaxResponseTimeMs))
+                 .ToHaveHeaderWithValue(HeaderNames.Server, "ServerName");
+         })
+         .UseHtmlValidation(html =>
+         {
+             Expect(html).ToHaveTitle("Home page");
+         });
 ```
 
 ## Validating the Testing Pipeline

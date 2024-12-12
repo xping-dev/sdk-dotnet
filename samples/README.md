@@ -61,7 +61,7 @@ If `pwsh` is not available, you will have to [install PowerShell](https://docs.m
 
 To run and use the samples, follow these steps:
 
-1. Open the solution file (Xping-sdk.sln) in Visual Studio Code or any other code editor.
+1. Open the solution file (xping-sdk.sln) in Visual Studio Code or any other code editor.
 2. Select the sample project that you want to run from the solution explorer. For example, `ConsoleAppTesting`.
 3. For debugging purposes open the `Properties/launchSettings.json` file and modify the settings according to your testing needs. For example, you can change the `--url` of the page being validated. Run the sample project by pressing F5 or using the `dotnet run` command.
 Observe the test results in the console or in the Test Explorer window (if you are running `IntegrationTesting` sample).
@@ -78,6 +78,7 @@ This folder contains the following sample projects:
 |-------|-----------|
 |ConsoleAppTesting|This sample demonstrates you how to use the `Xping.Sdk` NuGet package to test a Web Application or a Web API. It runs as a standalone application and gets a web address of the web application to validate from the command line argument `--url`. This kind of testing can help you test multiple web addresses with the same set of test components, verify if the web application is up and running after deployment, or warm up the web application by hitting its different routes. This sample has more details and features that you can explore by clicking <a href="#consoleapptesting-sample">here</a>.|
 |IntegrationTesing|This sample shows you how to test a Web Application or a Web API using the `Xping.Sdk` NuGet package and the `HttpClient` client. It performs integration tests where you can serve the Web Application in memory for testing. This testing will verify if for example the database and the web pages work together correctly and display the right data. This sample has more details and features that you can explore by clicking <a href="#integrationtesting-sample">here</a>.|
+| ProductionTesting | This sample demonstrates how to perform testing on a live production environment using the Xping.Sdk NuGet package. It includes techniques for live site monitoring, real-time data validation, and ensuring the overall health and availability of your Web Application or Web API in a production setting. This approach helps to detect and resolve issues promptly, enhancing the reliability and performance of your application. Explore more details and features by clicking <a href="#productiontesting-sample">here</a>.|
 |WebApp|This project is a simple ASP.NET Core Web Application that serves as a testing target for the `IntegrationTesting`. It has a home page that displays a welcome message and login page. You can use this project to test the functionality and integrity of the Web Application using different test components and scenarios. You can also modify the Web Application to create your own testing targets.|
 
 ### ConsoleAppTesting Sample 
@@ -90,7 +91,7 @@ This folder contains the following sample projects:
 - It verifies if the web application is up and running after deployment, which ensures the quality and reliability of your product. You can set the expected response content and status code in the code and compare them with the actual response from the web address. For example, you can set the expected response content to `"Welcome to Xping"` and the expected response status code to `200` and check if they match the actual response from the web address.
 - It warms up the web application by hitting different routes, which improves the performance and user experience of your product right after deployment. You can provide web addresses with different paths that access different parts of your web application and make sure they are loaded and ready to use. For example, you can provide web addresses like https://example.com/home, https://example.com/about, and https://example.com/contact.
 
-We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/Xping/Xping-sdk/discussions/29). 😊
+We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/xping-dev/sdk-dotnet/discussions/1). 😊
 
 ### IntegrationTesting Sample
 
@@ -103,4 +104,15 @@ With this project, you can:
 > [!NOTE] 
 > Running the Web Application in memory prevents you from using headless browsers in this testing scenario.
 
-We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/Xping/Xping-sdk/discussions/29). 😊
+We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/xping-dev/sdk-dotnet/discussions/1). 😊
+
+### ProductionTesting Sample
+
+Production Testing includes the following features and benefits:
+
+- It performs testing on a live production environment, ensuring that your web application or API is functioning correctly in real-world conditions. This sample demonstrates how to utilize the Xping.Sdk NuGet package for seamless integration.
+- It employs live site monitoring techniques, which allow you to continuously verify the availability and performance of your web application. You can detect and respond to issues in real-time, enhancing the reliability and user experience of your product.
+- It validates real-time data and responses, ensuring that the live site delivers accurate and expected content. This helps in maintaining the integrity of your application’s data and interactions.
+- It automates the monitoring and testing process, which saves you time and effort. You can set up periodic checks and alerts to notify you of any deviations or failures, allowing for prompt resolution.
+
+We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/xping-dev/sdk-dotnet/discussions/1). 😊

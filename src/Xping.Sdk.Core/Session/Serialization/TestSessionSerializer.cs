@@ -26,7 +26,7 @@ public sealed class TestSessionSerializer
     /// <param name="stream">The stream to save the serialized data</param>
     /// <param name="format">The format to use for serialization: Binary or XML</param>
     /// <param name="ownsStream">
-    /// True to indicate that the stream in closed by the writer when done, otherwise false
+    /// True to indicate that the stream is closed by the writer when done, otherwise false
     /// </param>
     public void Serialize(TestSession session, Stream stream, SerializationFormat format, bool ownsStream = false)
     {

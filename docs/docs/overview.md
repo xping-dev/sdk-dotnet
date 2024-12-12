@@ -57,6 +57,6 @@ Test session serialization is a feature that allows users to convert test sessio
 * Transferring test sessions between different machines or applications. This can help users to share their testing information with other users or tools, as well as to run their tests on different environments or platforms.
 * Simplifying the implementation of other features that might require serialization, such as session replication, backup, or migration. This can help users to ensure the reliability and consistency of their testing data, as well as to avoid data loss or corruption.
 
-Test session serialization supports two formats: binary and XML. Users can choose the format that suits their needs and preferences, depending on the size, readability, and compatibility of the data. Users can use the TestSessionSerializer class, which provides two methods to serialize and deserialize test sessions.
+Test session serialization supports two formats: binary and XML. Users can choose the format that suits their needs and preferences, depending on the size, readability, and compatibility of the data. Users can use the @Xping.Sdk.Core.Session.Serialization.TestSessionSerializer class, which provides two methods to serialize and deserialize test sessions.
 
 Xping test session serialization is a powerful and useful feature that enhances the functionality and usability of the Xping project. It enables users to store, transfer, and manipulate test sessions in a convenient and efficient way.

@@ -41,11 +41,13 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-<b>Xping SDK</b> provides a set of tools to make it easy to write automated tests for Web Application and Web API, as well as troubleshoot issues that may arise during testing. The library provides a number of features to verify that the Web Application is functioning correctly, such as checking that the correct data is displayed on a page or that the correct error messages are displayed when an error occurs.
+<b>Xping SDK</b> provides a comprehensive set of tools to simplify writing automated tests for Web Applications and Web APIs, as well as troubleshooting issues during testing. The library offers features to verify the correct functionality of web applications, such as ensuring the correct data is displayed on a page or the appropriate error messages appear when an error occurs.
 
-The library is called <b>Xping</b>, which stands for eXternal Pings, and is used to verify the availability of a server and monitor its content. 
+In addition to these core features, Xping SDK leverages AI-powered testing and live site monitoring techniques to enhance test reliability and performance. This ensures that your web applications are not only functioning correctly but are also monitored for real-time performance and availability.
 
-You can find more information about the library, including documentation and examples, on the official website <a href="https://www.xping.io">xping.io</a>.
+The library, named Xping, stands for eXternal Pings and is used to verify the availability of a server and monitor its content.
+
+For more information about the library, including documentation and examples, visit the official website <a href="https://xping.io">xping.io</a>.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -78,7 +80,7 @@ Host.CreateDefaultBuilder()
         .AddHttpClientFactory()
         .AddTestAgent(agent =>
         {
-            agent.UploadToken = "--- Your Dashboard Upload Token ---"; // optional
+            agent.UploadToken = "--- Your Dashboard Upload Token ---";
             agent.UseDnsLookup()
                  .UseIPAddressAccessibilityCheck()
                  .UseHttpClient()
@@ -86,9 +88,13 @@ Host.CreateDefaultBuilder()
                  {
                      Expect(response)
                          .ToHaveSuccessStatusCode()
-                         .ToHaveHttpHeader(HeaderNames.Server)
-                             .WithValue("Google", new() { Exact = false });
+                         .ToHaveResponseTimeLessThan(TimeSpan.FromMilliseconds(MaxResponseTimeMs))
+                         .ToHaveHeaderWithValue(HeaderNames.Server, "ServerName");
                  })
+                 .UseHtmlValidation(html =>
+                 {
+                     Expect(html).ToHaveTitle("Home page");
+                 });
         });
     });
 ```
@@ -107,24 +113,22 @@ You can also integrate it with your preferred testing framework, such as NUnit, 
 [TestFixtureSource(typeof(XpingTestFixture))]
 public class HomePageTests(TestAgent testAgent) : XpingAssertions
 {
-    public required TestAgent TestAgent { get; init; } = testAgent;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        TestAgent.UploadToken = "--- Your Dashboard Upload Token ---"; // optional
+        testAgent.UploadToken = "--- Your Dashboard Upload Token ---";
     }
 
     [Test]
     public async Task VerifyHomePageTitle()
     {
-        TestAgent.UseBrowserClient()
+        testAgent.UseBrowserClient()
                  .UsePageValidation(async page =>
                  {
                      await Expect(page).ToHaveTitleAsync("STORE");
                  });
 
-        await using TestSession session = await TestAgent.RunAsync(new Uri("https://demoblaze.com"));
+        await using TestSession session = await testAgent.RunAsync(new Uri("https://demoblaze.com"));
 
         Assert.That(session.IsValid, Is.True, session.Failures.FirstOrDefault()?.ErrorMessage);
     }
@@ -138,7 +142,7 @@ That’s it! You’re now ready to start automating your web application tests a
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-The `samples` folder in this repository contains various examples of how to use Xping SDK for your testing needs. For a comprehensive guide on how to install, configure, and customize Xping SDK, please refer to the [docs](https://xping-dev.github.io/sdk/index.html).
+The `samples` folder in this repository contains various examples of how to use Xping SDK for your testing needs. For a comprehensive guide on how to install, configure, and customize Xping SDK, please refer to the [docs](https://xping-dev.github.io/sdk-dotnet/index.html).
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -146,11 +150,11 @@ The `samples` folder in this repository contains various examples of how to use 
 <!-- ROADMAP -->
 ## Roadmap
 
-We use [Milestones](https://github.com/xping-dev/sdk/milestones) to communicate upcoming changes in <b>Xping</b> SDK:
+We use [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones) to communicate upcoming changes in <b>Xping</b> SDK:
 
-- [Working Set](https://github.com/xping-dev/sdk/milestone/1) refers to the features that are currently being actively worked on. While not all of these features will be committed in the next release, they do reflect the top priorities of the maintainers for the upcoming period.
+- [Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1) refers to the features that are currently being actively worked on. While not all of these features will be committed in the next release, they do reflect the top priorities of the maintainers for the upcoming period.
 
-- [Backlog](https://github.com/xping-dev/sdk/milestone/2) is a set of feature candidates for some future releases, but are not being actively worked on.
+- [Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2) is a set of feature candidates for some future releases, but are not being actively worked on.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

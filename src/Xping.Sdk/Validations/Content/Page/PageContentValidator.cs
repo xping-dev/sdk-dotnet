@@ -10,7 +10,8 @@ using Xping.Sdk.Validations.Content.Page.Internals;
 namespace Xping.Sdk.Validations.Content.Page;
 
 /// <summary>
-/// Represents a validator that checks if a http response content matches a specified pattern or condition.
+/// Represents a validator that checks if a http content response rendered in the browser matches a specified 
+/// pattern or condition.
 /// </summary>
 /// <remarks>
 /// <note>
