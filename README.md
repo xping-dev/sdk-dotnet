@@ -66,7 +66,7 @@ The library is distributed as a [NuGet packages](https://www.nuget.org/profiles/
 3. Run the following command to install the <b>Xping</b> NuGet package:
 
    ```
-   dotnet add package Xping.Availability
+   dotnet add package Xping.Sdk
    ```
 
 4. Once the package is installed, you can start using the <b>Xping</b> library in your project.
