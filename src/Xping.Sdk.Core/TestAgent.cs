@@ -122,7 +122,7 @@ public class TestAgent : IDisposable
     /// <param name="cancellationToken">
     /// An optional CancellationToken object that can be used to cancel the validation process.</param>
     /// <returns>
-    /// Returns a Task&lt;TestStession&gt; object that represents the asynchronous outcome of testing operation.
+    /// Returns a Task&lt;TestSession&gt; object that represents the asynchronous outcome of testing operation.
     /// </returns>
     public async Task<TestSession> RunAsync(
         Uri url,
