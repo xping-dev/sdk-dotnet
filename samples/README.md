@@ -11,8 +11,9 @@ This folder contains various examples of how to use Xping SDK for your testing n
     <li><a href="#usage">Usage</a></li>
     <li><a href="#samples">Samples</a></li>
     <ul>
-        <li><a href="#consoleapptesting-sample">ConsoleAppTesting</a></li>
-        <li><a href="#integrationtesting-sample">IntegrationTesting</a></li>
+        <li><a href="#consoleapptesting-sample">ConsoleApp Testing</a></li>
+        <li><a href="#integrationtesting-sample">Integration Testing</a></li>
+        <li><a href="#productiontesting-sample">Production Testing</a></li>
     </ul>
   </ol>
 </details>
