@@ -32,11 +32,11 @@ jobs:
           path: _build/nuget
       - name: Publish NuGet packages
         run: |
-          dotnet nuget push _build/nuget/Xping.Core.${GITHUB_REF_NAME#v}.nupkg --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
+          dotnet nuget push _build/nuget/Xping.Sdk.Core.${GITHUB_REF_NAME#v}.nupkg --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
           dotnet nuget push _build/nuget/Xping.Sdk.${GITHUB_REF_NAME#v}.nupkg --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
       - name: Upload GitHub release
         run: |
-          gh release upload --repo xping-dev/sdk ${GITHUB_REF_NAME} _build/nuget/Xping.Core.${GITHUB_REF_NAME#v}.nupkg
+          gh release upload --repo xping-dev/sdk ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.Core.${GITHUB_REF_NAME#v}.nupkg
           gh release upload --repo xping-dev/sdk ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.${GITHUB_REF_NAME#v}.nupkg
         env:
           GH_TOKEN: ${{ github.token }}
