@@ -10,7 +10,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: dotnet pack core
       run: dotnet pack ./src/Xping.Sdk.Core/Xping.Sdk.Core.csproj -c Release -p:NuspecProperties="version=${GITHUB_REF_NAME#v}" -o _build/nuget
-    - name: dotnet pack availability
+    - name: dotnet pack sdk
       run: dotnet pack ./src/Xping.Sdk/Xping.Sdk.csproj -c Release -p:NuspecProperties="version=${GITHUB_REF_NAME#v}" -o _build/nuget
     - uses: actions/upload-artifact@v4
       with:

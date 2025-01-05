@@ -41,7 +41,7 @@ Below figure provides a high-level overview of the <b>Xping</b> architecture.
 
 ## HTTP Request Sender
 
-Xping uses two mechanisms to run automated tests in its HTTP request system: HttpClient and Headless Browsers.
+Xping uses two mechanisms to run automated tests in its pipeline: HttpClient and Headless Browsers.
 
 * [HttpClient](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient) is a .NET class that provides a high-level abstraction for sending and receiving HTTP requests and responses. It is fast, lightweight, and easy to use. However, it does not process HTML responses or run JavaScript code, which may limit its ability to validate server responses.
 

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NuspecFile>..\..\nuspec\Xping.Core.nuspec</NuspecFile>
+    <NuspecFile>..\..\nuspec\Xping.Sdk.Core.nuspec</NuspecFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.3" />

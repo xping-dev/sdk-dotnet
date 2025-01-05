@@ -3,7 +3,7 @@ using Xping.Sdk.Core.Session;
 
 namespace ConsoleAppTesting;
 
-public sealed class Progress(ILogger<Program> logger) : IProgress<TestStep>
+internal sealed class Progress(ILogger<Program> logger) : IProgress<TestStep>
 {
     private static readonly Action<ILogger, string, Exception?> LogSuccessMessage = LoggerMessage.Define<string>(
         logLevel: LogLevel.Information, eventId: 1, formatString: "{Value}");

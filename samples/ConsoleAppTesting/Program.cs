@@ -12,12 +12,13 @@ using Xping.Sdk.Extensions;
 
 namespace ConsoleAppTesting;
 
-public sealed class Program : XpingAssertions
+internal sealed class Program : XpingAssertions
 {
     const int EXIT_SUCCESS = 0;
     const int EXIT_FAILURE = 1;
 
-    const int MAX_SIZE_IN_BYTES = 153600; // 150kB
+    private const int MaxHtmlSizeAllowed = 150 * 1024; // 150 KB in bytes
+    private const int MaxResponseTimeMs = 3000; // 3 seconds in milliseconds
 
     static async Task<int> Main(string[] args)
     {
@@ -45,13 +46,13 @@ public sealed class Program : XpingAssertions
                 {
                     Expect(response)
                         .ToHaveSuccessStatusCode()
-                        .ToHaveResponseTimeLessThan(TimeSpan.FromSeconds(30))
+                        .ToHaveResponseTimeLessThan(TimeSpan.FromMilliseconds(MaxResponseTimeMs))
                         .ToHaveHeaderWithValue(HeaderNames.Server, value: "Google");
                 })
                 .UseHtmlValidation(html =>
                 {
                     Expect(html)
-                        .ToHaveMaxDocumentSize(MAX_SIZE_IN_BYTES)
+                        .ToHaveMaxDocumentSize(MaxHtmlSizeAllowed)
                         .ToHaveMetaTag(new("property", "og:image"), "https://a.wpimg.pl/a/f/png/37220/wpogimage.png");
                 });
 
@@ -73,7 +74,7 @@ public sealed class Program : XpingAssertions
                         .AddHttpClientFactory()
                         .AddTestAgent(agent =>
                         {
-                            agent.UploadToken = "--- Your Dashboard Upload Token ---"; // optional
+                            agent.UploadToken = "--- Your Dashboard Upload Token ---";
                         });
             })
             .ConfigureLogging(logging =>

@@ -15,7 +15,7 @@ namespace Xping.Sdk.Core.Session.Serialization;
 /// </remarks>
 public sealed class TestSessionSerializer
 {
-    private readonly DataContractSerializer dataContractSerializer = new(
+    private readonly DataContractSerializer _dataContractSerializer = new(
         type: typeof(TestSession),
         knownTypes: GetKnownTypes());
 
@@ -41,7 +41,12 @@ public sealed class TestSessionSerializer
             _ => throw new NotSupportedException("Only Binary or XML is supported as serialization format.")
         };
 
-        dataContractSerializer.WriteObject(writer, session);
+        _dataContractSerializer.WriteObject(writer, session);
+
+        // Flush the writer to ensure that all data is written to the stream
+        writer.Flush();
+        // Reset the stream position to 0
+        stream.Position = 0;
     }
 
     /// <summary>
@@ -62,7 +67,8 @@ public sealed class TestSessionSerializer
             _ => throw new NotSupportedException("Only Binary or XML is supported as serialization format.")
         };
 
-        var result = dataContractSerializer.ReadObject(reader, true);
+        var result = _dataContractSerializer.ReadObject(reader, true);
+
         return result as TestSession;
     }
 
