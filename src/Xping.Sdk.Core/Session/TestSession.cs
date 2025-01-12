@@ -44,6 +44,12 @@ public sealed class TestSession :
     public Guid Id { get; private set; }
 
     /// <summary>
+    /// Gets the upload token for the test session that links the TestAgent's results to the project configured on 
+    /// the server.
+    /// </summary>
+    public Guid UploadToken { get; internal set; }
+
+    /// <summary>
     /// A Uri object that represents the URL of the page being validated.
     /// </summary>
     public required Uri Url

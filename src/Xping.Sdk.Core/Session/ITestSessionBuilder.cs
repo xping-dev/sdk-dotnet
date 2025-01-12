@@ -78,7 +78,10 @@ public interface ITestSessionBuilder
     /// <summary>
     /// Gets the test session.
     /// </summary>
+    /// <param name="uploadToken">
+    /// The upload token that links the TestAgent's results to the project configured on the server.
+    /// </param>
     /// <returns>The test session.</returns>
-    TestSession GetTestSession();
+    TestSession GetTestSession(Guid uploadToken);
 }
 

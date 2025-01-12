@@ -217,8 +217,11 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <summary>
     /// Gets the test session.
     /// </summary>
+    /// <param name="uploadToken">
+    /// The upload token that links the TestAgent's results to the project configured on the server.
+    /// </param>
     /// <returns>The test session.</returns>
-    public TestSession GetTestSession()
+    public TestSession GetTestSession(Guid uploadToken)
     {
         try
         {
@@ -234,7 +237,8 @@ public class TestSessionBuilder : ITestSessionBuilder
                 Steps = _steps,
                 // Set the test session status to completed to indicate that no further modifications are allowed.
                 State = TestSessionState.Completed,
-                DeclineReason = null
+                DeclineReason = null,
+                UploadToken = uploadToken
             };
 
             return session;
@@ -247,7 +251,8 @@ public class TestSessionBuilder : ITestSessionBuilder
                 StartDate = _startDate < DateTime.UtcNow ? DateTime.UtcNow : _startDate,
                 Steps = _steps,
                 State = TestSessionState.Declined,
-                DeclineReason = ex.Message
+                DeclineReason = ex.Message,
+                UploadToken = uploadToken
             };
 
             return session;
