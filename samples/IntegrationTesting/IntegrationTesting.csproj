@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <NoWarn>CA2007;CA1812;CA1010</NoWarn>
+    <NoWarn>CA2007;CA1812;CA1515;CA1010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

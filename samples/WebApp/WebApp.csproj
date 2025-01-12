@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>aspnet-WebApp-cf00d0f9-6c3b-4e8f-ac53-a75cf8ff315e</UserSecretsId>
+    <NoWarn>CA1515</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
