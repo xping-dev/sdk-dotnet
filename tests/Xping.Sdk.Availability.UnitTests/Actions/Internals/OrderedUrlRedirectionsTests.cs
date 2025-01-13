@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Actions.Internals;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Actions.Internals;
 
 namespace Xping.Sdk.Availability.UnitTests.Actions.Internals;
 
