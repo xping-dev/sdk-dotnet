@@ -1,3 +1,10 @@
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
 using System.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

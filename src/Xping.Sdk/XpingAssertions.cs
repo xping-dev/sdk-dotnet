@@ -1,4 +1,11 @@
-﻿using Microsoft.Playwright;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Microsoft.Playwright;
 using Xping.Sdk.Shared;
 using Xping.Sdk.Validations.Content.Html;
 using Xping.Sdk.Validations.Content.Html.Internals;

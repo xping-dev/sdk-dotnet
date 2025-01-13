@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Components;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Components;
 
 /// <summary>
 /// This class is used to store settings for a test execution. It provides a set of properties that can be used to 

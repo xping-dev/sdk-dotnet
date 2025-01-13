@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Actions;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Actions;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Extensions;

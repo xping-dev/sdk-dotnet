@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Validations.TextUtils;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Validations.TextUtils;
 
 /// <summary>
 /// Encapsulates options for text matching in HTML element location. This class provides configuration for text-based 

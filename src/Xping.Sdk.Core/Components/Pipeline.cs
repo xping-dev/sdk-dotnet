@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Components;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Components;
 
 /// <summary>
 /// The Pipeline class is a concrete implementation of the <see cref="CompositeTests"/> class that is designed to run 

@@ -1,4 +1,11 @@
-﻿using HtmlAgilityPack;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using HtmlAgilityPack;
 
 namespace Xping.Sdk.Validations.Content.Html.Internals.Selectors;
 

@@ -1,4 +1,11 @@
-﻿using System.Collections.ObjectModel;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.NetworkInformation;
 using Xping.Sdk.Actions.Configurations;

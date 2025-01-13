@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Clients.Http;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Clients.Http;
 
 /// <summary>
 /// Represents the configuration settings specific to HttpClient.

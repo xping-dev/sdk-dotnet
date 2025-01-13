@@ -1,4 +1,11 @@
-﻿using System.Text.RegularExpressions;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Text.RegularExpressions;
 using Xping.Sdk.Shared;
 using Xping.Sdk.Validations.TextUtils;
 using Xping.Sdk.Validations.TextUtils.Internals;

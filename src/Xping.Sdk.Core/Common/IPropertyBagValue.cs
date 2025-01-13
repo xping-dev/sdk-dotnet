@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Common;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Common;
 
 /// <summary>
 /// IPropertyBagValue is an interface that specifies the common behavior of property bag values that are associated with 

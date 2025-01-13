@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Core.Components;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Validations.HttpResponse.Internals

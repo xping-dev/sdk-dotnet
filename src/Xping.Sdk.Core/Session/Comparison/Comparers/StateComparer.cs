@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Session.Comparison.Comparers;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Session.Comparison.Comparers;
 
 /// <summary>
 /// Implements comparison logic for <see cref="TestSession.State"/> property.
