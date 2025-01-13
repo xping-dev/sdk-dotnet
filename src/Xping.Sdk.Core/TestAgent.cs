@@ -165,13 +165,6 @@ public class TestAgent : IDisposable
         }
 
         TestSession testSession = sessionBuilder.GetTestSession(uploadToken: _uploadToken);
-
-        TestSessionUploader uploader = new();
-        if (!string.IsNullOrWhiteSpace(UploadToken))
-        {
-            await uploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
-        }
-
         return testSession;
     }
 
