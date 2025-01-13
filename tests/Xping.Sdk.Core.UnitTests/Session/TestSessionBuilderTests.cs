@@ -81,7 +81,7 @@ public sealed class TestSessionBuilderTests
         builder.Build();
         builder.Build();
 
-        TestSession session = builder.GetTestSession();
+        TestSession session = builder.GetTestSession(Guid.Empty);
         int counter = 0;
         Assert.Multiple(() =>
         {
@@ -123,7 +123,7 @@ public sealed class TestSessionBuilderTests
         var builder = new TestSessionBuilder();
 
         // Assert
-        Assert.That(builder.GetTestSession().State, Is.EqualTo(TestSessionState.Declined));
+        Assert.That(builder.GetTestSession(Guid.Empty).State, Is.EqualTo(TestSessionState.Declined));
     }
 
     [Test]
@@ -141,7 +141,7 @@ public sealed class TestSessionBuilderTests
             context: new TestContext(builder, instrumentation, progress: null));
 
         // Assert
-        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 
     [Test]
@@ -159,6 +159,6 @@ public sealed class TestSessionBuilderTests
             context: new TestContext(builder, instrumentation, progress: null));
 
         // Assert
-        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 }

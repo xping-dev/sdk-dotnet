@@ -251,7 +251,8 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.Progress?.Report(testStep);
     }
 
-    public async Task ToContainTextAsync(IEnumerable<string> expected, LocatorAssertionsToContainTextOptions? options = null)
+    public async Task ToContainTextAsync(
+        IEnumerable<string> expected, LocatorAssertionsToContainTextOptions? options = null)
     {
         var values = expected as string[] ?? expected.ToArray();
         _context.SessionBuilder
@@ -274,7 +275,8 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.Progress?.Report(testStep);
     }
 
-    public async Task ToContainTextAsync(IEnumerable<Regex> expected, LocatorAssertionsToContainTextOptions? options = null)
+    public async Task ToContainTextAsync(
+        IEnumerable<Regex> expected, LocatorAssertionsToContainTextOptions? options = null)
     {
         var values = expected as Regex[] ?? expected.ToArray();
         _context.SessionBuilder
@@ -297,7 +299,100 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.Progress?.Report(testStep);
     }
 
-    public async Task ToHaveAttributeAsync(string name, string value, LocatorAssertionsToHaveAttributeOptions? options = null)
+    public async Task ToHaveAccessibleDescriptionAsync(
+        string description, LocatorAssertionsToHaveAccessibleDescriptionOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToHaveAccessibleDescriptionAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(description)),
+                new PropertyBagValue<string>(description))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleDescriptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToHaveAccessibleDescriptionAsync(description, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ToHaveAccessibleDescriptionAsync(
+        Regex description, LocatorAssertionsToHaveAccessibleDescriptionOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToHaveAccessibleDescriptionAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(description)),
+                new PropertyBagValue<string>(description.ToString()))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleDescriptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToHaveAccessibleDescriptionAsync(description, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ToHaveAccessibleNameAsync(
+        string name, LocatorAssertionsToHaveAccessibleNameOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToHaveAccessibleNameAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(name)),
+                new PropertyBagValue<string>(name))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleNameOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToHaveAccessibleNameAsync(name, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ToHaveAccessibleNameAsync(
+        Regex name, LocatorAssertionsToHaveAccessibleNameOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToHaveAccessibleNameAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(name)),
+                new PropertyBagValue<string>(name.ToString()))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleNameOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToHaveAccessibleNameAsync(name, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ToHaveAttributeAsync(
+        string name, string value, LocatorAssertionsToHaveAttributeOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
@@ -579,6 +674,28 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.Progress?.Report(testStep);
     }
 
+    public async Task ToHaveRoleAsync(AriaRole role, LocatorAssertionsToHaveRoleOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToHaveRoleAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(role)),
+                new PropertyBagValue<string>(role.ToString()))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToHaveRoleOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToHaveRoleAsync(role, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
     public async Task ToHaveTextAsync(string expected, LocatorAssertionsToHaveTextOptions? options = null)
     {
         _context.SessionBuilder
@@ -752,6 +869,29 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
             );
 
         await _locatorAssertions.ToHaveValuesAsync(enumerable, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ToMatchAriaSnapshotAsync(
+        string expected, LocatorAssertionsToMatchAriaSnapshotOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(ToMatchAriaSnapshotAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(expected)),
+                new PropertyBagValue<string>(expected))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAssertionsToMatchAriaSnapshotOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options))
+            );
+
+        await _locatorAssertions.ToMatchAriaSnapshotAsync(expected, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();

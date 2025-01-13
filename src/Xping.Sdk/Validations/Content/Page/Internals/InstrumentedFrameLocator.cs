@@ -13,9 +13,13 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
     private readonly TestContext _context = context.RequireNotNull(nameof(context));
     private readonly IFrameLocator _locator = locator.RequireNotNull(nameof(locator));
 
-    public IFrameLocator First => new InstrumentedFrameLocator(_context, First);
+    [Obsolete("This method is obsolete in Playwright library. Use the 'ActiveLocator' property instead.")]
+    public IFrameLocator First => new InstrumentedFrameLocator(_context, _locator.First);
 
-    public IFrameLocator Last => new InstrumentedFrameLocator(_context, Last);
+    [Obsolete("This method is obsolete in Playwright library. Use the 'ActiveLocator' property instead.")]
+    public IFrameLocator Last => new InstrumentedFrameLocator(_context, _locator.Last);
+
+    public ILocator Owner => new InstrumentedLocator(_context, _locator.Owner);
 
     public IFrameLocator FrameLocator(string selector)
     {
@@ -379,6 +383,7 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         return new InstrumentedLocator(_context, result);
     }
 
+    [Obsolete("This method is obsolete in Playwright library. Use the 'Locator' method instead.")]
     public IFrameLocator Nth(int index)
     {
         _context.SessionBuilder

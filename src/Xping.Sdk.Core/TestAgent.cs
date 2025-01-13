@@ -1,7 +1,15 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿/*
+ * © 2024 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK. 
+ * 
+ * License: [MIT]
+ */
+
+using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Session.Collector;
 
 namespace Xping.Sdk.Core;
 
@@ -63,7 +71,7 @@ public class TestAgent : IDisposable
     {
         // Initialize the container for each thread.
         return new Pipeline($"Pipeline#Thread[{Thread.CurrentThread.Name}:{Environment.CurrentManagedThreadId}]");
-    });
+    }); 
 
     /// <summary>
     /// Controls whether the TestAgent's pipeline container object should be instantiated for each thread separately.
@@ -156,8 +164,7 @@ public class TestAgent : IDisposable
             sessionBuilder.Build(agent: this, error: Errors.ExceptionError(ex));
         }
 
-        TestSession testSession = sessionBuilder.GetTestSession();
-
+        TestSession testSession = sessionBuilder.GetTestSession(uploadToken: _uploadToken);
         return testSession;
     }
 
