@@ -47,6 +47,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
     public IReadOnlyList<IWorker> Workers => _page.Workers;
 
+    public IClock Clock => throw new NotImplementedException();
+
     public event EventHandler<IPage> Close
     {
         add { _page.Close += value; }
@@ -3717,5 +3719,147 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.Progress?.Report(testStep);
 
         return result;
+    }
+
+    public async Task RequestGCAsync()
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(RequestGCAsync)));
+
+        await _page.RequestGCAsync().ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task AddLocatorHandlerAsync(
+        ILocator locator, Func<ILocator, Task> handler, PageAddLocatorHandlerOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(AddLocatorHandlerAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(locator)),
+                new PropertyBagValue<string>(locator.ToString() ?? "Null"))
+            .Build(
+                new PropertyBagKey(key: nameof(PageAddLocatorHandlerOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await handler(locator).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task RemoveLocatorHandlerAsync(ILocator locator)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(RemoveLocatorHandlerAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(locator)),
+                new PropertyBagValue<string>(locator.ToString() ?? "Null"));
+
+        // Assuming there is a method to remove locator handler in the _page object
+        await _page.RemoveLocatorHandlerAsync(locator).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task RouteWebSocketAsync(string url, Action<IWebSocketRoute> handler)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(url)),
+                new PropertyBagValue<string>(url))
+            .Build(
+                new PropertyBagKey(key: nameof(handler)),
+                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+
+        await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task RouteWebSocketAsync(Regex url, Action<IWebSocketRoute> handler)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(url)),
+                new PropertyBagValue<string>(url.ToString()))
+            .Build(
+                new PropertyBagKey(key: nameof(handler)),
+                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+
+        await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task RouteWebSocketAsync(Func<string, bool> url, Action<IWebSocketRoute> handler)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(url)),
+                new PropertyBagValue<string>(url.ToString() ?? "Null"))
+            .Build(
+                new PropertyBagKey(key: nameof(handler)),
+                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+
+        await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task AddLocatorHandlerAsync(
+        ILocator locator, Func<Task> handler, PageAddLocatorHandlerOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(AddLocatorHandlerAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(locator)),
+                new PropertyBagValue<string>(locator.ToString() ?? "Null"))
+            .Build(
+                new PropertyBagKey(key: nameof(PageAddLocatorHandlerOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await _page.AddLocatorHandlerAsync(locator, handler, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
     }
 }

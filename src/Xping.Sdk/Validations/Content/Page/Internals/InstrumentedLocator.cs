@@ -22,6 +22,8 @@ internal class InstrumentedLocator(TestContext context, ILocator locator) : ILoc
 
     public IPage Page => new InstrumentedPage(_context, _locator.Page);
 
+    public IFrameLocator ContentFrame => new InstrumentedFrameLocator(_context, _locator.ContentFrame);
+
     public async Task<IReadOnlyList<ILocator>> AllAsync()
     {
         _context.SessionBuilder
@@ -1714,6 +1716,31 @@ internal class InstrumentedLocator(TestContext context, ILocator locator) : ILoc
                  new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _locator.WaitForAsync(options);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+
+        return result;
+    }
+
+    public async Task<string> AriaSnapshotAsync(LocatorAriaSnapshotOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>(nameof(AriaSnapshotAsync)))
+            .Build(
+                new PropertyBagKey(key: nameof(LocatorAriaSnapshotOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        var result = await _locator.AriaSnapshotAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "AriaSnapshot"),
+                new PropertyBagValue<string>(result));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
