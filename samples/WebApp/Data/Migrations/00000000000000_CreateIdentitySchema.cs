@@ -1,4 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace WebApp.Data.Migrations

@@ -1,4 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Session;
 
 namespace ConsoleAppTesting;
