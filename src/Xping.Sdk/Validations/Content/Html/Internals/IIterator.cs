@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Validations.Content.Html.Internals;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Validations.Content.Html.Internals;
 
 internal interface IIterator<out T>
 {

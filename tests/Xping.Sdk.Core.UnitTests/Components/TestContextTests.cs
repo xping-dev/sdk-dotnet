@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.UnitTests.Components;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.UnitTests.Components;
 
 using Moq;
 using Xping.Sdk.Core.Common;

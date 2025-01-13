@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Session.Comparison;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Session.Comparison;
 
 /// <summary>
 /// Represents a difference between two TestSession properties.

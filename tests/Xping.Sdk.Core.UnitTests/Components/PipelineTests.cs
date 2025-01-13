@@ -1,4 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.ComponentModel.DataAnnotations;
 using Moq;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;

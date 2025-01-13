@@ -1,4 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc.Testing;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Clients.Http;

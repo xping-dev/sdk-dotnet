@@ -1,4 +1,11 @@
-﻿using Microsoft.Net.Http.Headers;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Microsoft.Net.Http.Headers;
 using Microsoft.Playwright;
 using System.Net.Http.Json;
 using System.Net;

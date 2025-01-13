@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Shared;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Shared;
 
 /// <summary>
 /// Defines the units of time that can be used to represent a time interval.

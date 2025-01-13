@@ -1,4 +1,11 @@
-﻿using Moq.Protected;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Moq.Protected;
 using Moq;
 using Xping.Sdk.Core.Clients.Http;
 using Microsoft.AspNetCore.Mvc.Testing;

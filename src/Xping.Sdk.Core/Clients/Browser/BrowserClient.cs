@@ -1,4 +1,11 @@
-﻿using System.Diagnostics;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Diagnostics;
 using Microsoft.Net.Http.Headers;
 using Microsoft.Playwright;
 using Xping.Sdk.Core.Clients.Browser.Internals;

@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Core.Common;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Extensions;
 
 using TestContext = Xping.Sdk.Core.Components.TestContext;

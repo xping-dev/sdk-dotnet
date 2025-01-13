@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Validations;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Validations;
 
 /// <summary>
 /// Represents errors that occur during test execution when a validation step identifies discrepancies or a lack of

@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Validations.Content;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Validations.Content;
 
 /// <summary>
 /// Represents an HTML attribute with a name and value.

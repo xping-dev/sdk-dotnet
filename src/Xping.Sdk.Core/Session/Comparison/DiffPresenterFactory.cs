@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Core.Session.Comparison.Internals;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Core.Session.Comparison.Internals;
 
 namespace Xping.Sdk.Core.Session.Comparison;
 

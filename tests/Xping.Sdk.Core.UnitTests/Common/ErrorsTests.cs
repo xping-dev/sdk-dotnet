@@ -1,4 +1,11 @@
-﻿using System.ComponentModel;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.ComponentModel;
 using System.Net;
 using System.Threading;
 using Microsoft.AspNetCore.Components;

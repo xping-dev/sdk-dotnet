@@ -1,3 +1,10 @@
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
 using Xping.Sdk.Core.Common;
 
 namespace Xping.Sdk.UnitTests.Common;

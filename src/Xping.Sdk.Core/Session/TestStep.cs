@@ -1,4 +1,11 @@
-﻿using Xping.Sdk.Shared;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using Xping.Sdk.Shared;
 using Xping.Sdk.Core.Common;
 using System.Runtime.Serialization;
 

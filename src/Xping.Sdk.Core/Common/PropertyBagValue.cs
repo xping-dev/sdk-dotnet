@@ -1,4 +1,11 @@
-﻿using System.Diagnostics;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Diagnostics;
 using System.Runtime.Serialization;
 using Xping.Sdk.Core.Session.Comparison.Comparers.Internals;
 using Xping.Sdk.Shared;

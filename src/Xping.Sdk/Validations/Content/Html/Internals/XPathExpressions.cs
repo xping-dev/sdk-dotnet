@@ -1,4 +1,11 @@
-﻿using System.Xml.XPath;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Xml.XPath;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Validations.Content.Html.Internals;

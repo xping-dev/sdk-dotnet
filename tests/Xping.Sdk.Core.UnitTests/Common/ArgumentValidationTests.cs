@@ -1,4 +1,11 @@
-﻿namespace XPing365.Sdk.Common.UnitTests;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace XPing365.Sdk.Common.UnitTests;
 
 public sealed class ArgumentValidationTests
 {

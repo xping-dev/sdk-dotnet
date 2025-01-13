@@ -1,4 +1,11 @@
-﻿using System.Net;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+using System.Net;
 
 namespace Xping.Sdk.Core.Clients.Http;
 

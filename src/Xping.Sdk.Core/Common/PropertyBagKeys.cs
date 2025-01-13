@@ -1,4 +1,11 @@
-﻿namespace Xping.Sdk.Core.Common;
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * This file is part of the Xping SDK.
+ *
+ * License: [MIT]
+ */
+
+namespace Xping.Sdk.Core.Common;
 
 /// <summary>
 /// This class is used to provide a set of predefined keys that can be used with the <see cref="PropertyBag{TValue}"/> 
