@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Core.Session.Collector;
 using Xping.Sdk.UnitTests.TestFixtures;
 using TestContext = Xping.Sdk.Core.Components.TestContext;
 
@@ -110,7 +111,12 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
         sessionBuilder.SetupGet(b => b.HasFailed).Returns(!testComponentPasses);
 
         var serviceProvider = new Mock<IServiceProvider>();
-        serviceProvider.Setup(s => s.GetService(typeof(ITestSessionBuilder))).Returns(sessionBuilder.Object);
+        serviceProvider
+            .Setup(s => s.GetService(typeof(ITestSessionBuilder)))
+            .Returns(sessionBuilder.Object);
+        serviceProvider
+            .Setup(s => s.GetService(typeof(ITestSessionUploader)))
+            .Returns(Mock.Of<ITestSessionUploader>());
 
         TestComponent component = new TestComponentUnderTest();
 

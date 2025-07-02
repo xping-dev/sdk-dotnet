@@ -102,6 +102,7 @@ public sealed class InstrumentationLogTests
         DateTime initialStartTime = log.StartTime;
 
         // Act
+        Thread.Sleep(100); // Give some time for the stopwatch to measure it.
         log.Restart();
 
         // Assert
