@@ -11,6 +11,7 @@ using Xping.Sdk.UnitTests.Helpers;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Core.Session.Collector;
 using Xping.Sdk.Validations.Content.Html;
 using TestContext = Xping.Sdk.Core.Components.TestContext;
 
@@ -40,7 +41,10 @@ public sealed class HtmlContentValidatorTests
     {
         _url = new("http://localhost");
         _settings = new();
-        _context = new(Mock.Of<ITestSessionBuilder>(), Mock.Of<IInstrumentation>());
+        _context = new(
+            Mock.Of<ITestSessionBuilder>(), 
+            Mock.Of<IInstrumentation>(),
+            Mock.Of<ITestSessionUploader>());
         _serviceProvider = Mock.Of<IServiceProvider>();
     }
 

@@ -9,6 +9,7 @@ using Xping.Sdk.Shared;
 using Xping.Sdk.Core.Session;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Session.Collector;
 
 namespace Xping.Sdk.Core.Components;
 
@@ -19,7 +20,7 @@ namespace Xping.Sdk.Core.Components;
 public abstract class TestComponent : ITestComponent
 {
     /// <summary>
-    /// Initializes new instance of the TestComponent class.
+    /// Initializes a new instance of the TestComponent class.
     /// </summary>
     /// <param name="name">Name of the test component.</param>
     /// <param name="type">Type of the test component.</param>
@@ -79,13 +80,15 @@ public abstract class TestComponent : ITestComponent
 
         using var instrumentation = new InstrumentationTimer(startStopwatch: false);
         var sessionBuilder = serviceProvider.GetRequiredService<ITestSessionBuilder>();
+        var sessionUploader = serviceProvider.GetRequiredService<ITestSessionUploader>();
 
         var context = new TestContext(
             sessionBuilder: sessionBuilder,
             instrumentation: instrumentation,
+            sessionUploader: sessionUploader,
             progress: serviceProvider.GetService<IProgress<TestStep>>());
 
-        // Update context with currently executing component.
+        // Update context with a currently executing component.
         context.UpdateExecutionContext(this);
 
         // Initiate the test session by recording its start time, the URL of the page being validated,
@@ -93,7 +96,7 @@ public abstract class TestComponent : ITestComponent
         // execution.
         sessionBuilder.Initiate(url, DateTime.UtcNow, context);
 
-        // Execute test operation by invoking the HandleAsync method of this class.
+        // Execute the test operation by invoking the HandleAsync method of this class.
         await HandleAsync(url, settings, context, serviceProvider, cancellationToken).ConfigureAwait(false);
 
         return !context.SessionBuilder.HasFailed;
@@ -116,9 +119,9 @@ public abstract class TestComponent : ITestComponent
     public bool RemoveComponent(ITestComponent component) => GetComposite()?.RemoveComponent(component) ?? false;
 
     /// <summary>
-    /// Gets a read-only collection of the child TestComponent instances of the current object.
+    /// Gets a read-only test component collection.
     /// </summary>
-    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? Array.Empty<TestComponent>();
+    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? [];
 
     internal virtual ICompositeTests? GetComposite() => null;
 }

@@ -25,7 +25,7 @@ namespace Xping.Sdk.Core.Session;
 /// headless browser interaction. A test session has a start date and a duration that indicate when and how long the 
 /// testing took place. It also has a state that indicates the overall status of the test session, such as completed, 
 /// failed, or declined. A test session can store various data related to the test operation in a 
-/// <see cref="PropertyBag{TValue}"/>, which is a dictionary of key-value pairs of serializable objects. 
+/// <see cref="PropertyBag{TValue}"/>, which is a dictionary of serializable objects. 
 /// The property bag can contain data such as resolved IP addresses from DNS lookup, HTTP response headers, HTML 
 /// content, or captured screenshots from the headless browsers.
 /// A test session can be serialized and deserialized to and from stream, using the 
@@ -40,7 +40,7 @@ public sealed class TestSession :
 {
     private readonly Uri _url = null!;
     private readonly DateTime _startDate;
-    private bool disposedValue;
+    private bool _disposedValue;
 
     /// <summary>
     /// Gets the unique identifier of the test session.
@@ -55,6 +55,23 @@ public sealed class TestSession :
     /// the server.
     /// </summary>
     public Guid UploadToken { get; internal set; }
+    
+    /// <summary>
+    /// Gets the timestamp when the test session was successfully uploaded to the server.
+    /// </summary>
+    /// <value>
+    /// A nullable <see cref="DateTimeOffset"/> value indicating when the test session was uploaded,
+    /// or null if it has not been uploaded yet.
+    /// </value>
+    public DateTimeOffset? UploadedAt { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this test session has been uploaded to the server.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> if the test session has been uploaded; otherwise, <c>false</c>.
+    /// </value>
+    public bool IsUploaded => UploadedAt.HasValue;
 
     /// <summary>
     /// A Uri object that represents the URL of the page being validated.
@@ -84,7 +101,7 @@ public sealed class TestSession :
     }
 
     /// <summary>
-    /// Returns a read-only collection of the test steps executed within current test session.
+    /// Returns a read-only collection of the test steps executed within the current test session.
     /// </summary>
     public required IReadOnlyCollection<TestStep> Steps { get; init; }
 
@@ -107,7 +124,7 @@ public sealed class TestSession :
     public string? DeclineReason { get; init; }
 
     /// <summary>
-    /// Returns a read-only collection of the failed test steps within current test session.
+    /// Returns a read-only collection of the failed test steps within the current test session.
     /// </summary>
     public IReadOnlyCollection<TestStep> Failures =>
         Steps.Where(step => step.Result == TestStepResult.Failed).ToList().AsReadOnly();
@@ -119,7 +136,7 @@ public sealed class TestSession :
     /// Valid test session has all test steps completed successfully. Check <see cref="Failures"/> to get 
     /// failed test steps.
     /// </remarks>
-    public bool IsValid => Steps.Count > 0 && !Steps.Any(step => step.Result == TestStepResult.Failed);
+    public bool IsValid => Steps.Count > 0 && Steps.All(step => step.Result != TestStepResult.Failed);
 
     /// <summary>
     /// Gets the total duration of all the steps in the test session.
@@ -157,6 +174,20 @@ public sealed class TestSession :
         State = Enum.Parse<TestSessionState>(
             value: (string)info.GetValue(nameof(State), typeof(string)).RequireNotNull(nameof(State)));
         DeclineReason = info.GetValue(nameof(DeclineReason), typeof(string)) as string;
+        UploadedAt = info.GetValue(nameof(UploadedAt), typeof(DateTimeOffset?)) as DateTimeOffset?;
+    }
+    
+    /// <summary>
+    /// Marks the test session as uploaded with the specified timestamp.
+    /// </summary>
+    /// <param name="uploadedAt">The timestamp when the test session was successfully uploaded to the server.</param>
+    /// <remarks>
+    /// This method is called internally by the upload process after a successful upload to track when the test session
+    /// data was sent to the server. The upload timestamp can be accessed via the <see cref="UploadedAt"/> property.
+    /// </remarks>
+    internal void MarkAsUploaded(DateTimeOffset uploadedAt)
+    {
+        UploadedAt = uploadedAt;
     }
 
     /// <summary>
@@ -262,7 +293,6 @@ public sealed class TestSession :
     {
         // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
         Dispose(disposing: true);
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -274,7 +304,6 @@ public sealed class TestSession :
         await DisposeAsyncCore().ConfigureAwait(false);
 
         Dispose(disposing: false);
-        GC.SuppressFinalize(this);
     }
 
     void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
@@ -285,6 +314,7 @@ public sealed class TestSession :
         info.AddValue(nameof(Steps), Steps.ToArray(), typeof(TestStep[]));
         info.AddValue(nameof(State), State.ToString(), typeof(string));
         info.AddValue(nameof(DeclineReason), DeclineReason, typeof(string));
+        info.AddValue(nameof(UploadedAt), UploadedAt, typeof(DateTimeOffset?));
     }
 
     void IDeserializationCallback.OnDeserialization(object? sender)
@@ -300,7 +330,7 @@ public sealed class TestSession :
 
     private void Dispose(bool disposing)
     {
-        if (!disposedValue)
+        if (!_disposedValue)
         {
             if (disposing)
             {
@@ -313,7 +343,7 @@ public sealed class TestSession :
                 browserResponseMessage?.Dispose();
             }
 
-            disposedValue = true;
+            _disposedValue = true;
         }
     }
 

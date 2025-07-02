@@ -5,30 +5,63 @@
  * License: [MIT]
  */
 
-using System.Net;
 using System.Net.Http.Headers;
+using Xping.Sdk.Core.Clients.Http;
 using Xping.Sdk.Core.Session.Serialization;
 
 namespace Xping.Sdk.Core.Session.Collector;
 
-internal class TestSessionUploader : ITestSessionUploader
+internal class TestSessionUploader(
+    ITestSessionSerializer serializer,
+    IHttpClientFactory factory) : ITestSessionUploader
 {
-    public async Task<HttpStatusCode> UploadAsync(TestSession testSession, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        TestSession testSession,
+        CancellationToken cancellationToken = default)
     {
-        using var httpClient = new HttpClient();
-        using var form = new MultipartFormDataContent();
-        
-        using MemoryStream memoryStream = new();
-        TestSessionSerializer serializer = new();
-        serializer.Serialize(testSession, memoryStream, SerializationFormat.XML);
-        using var fileContent = new StreamContent(memoryStream);
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/xml");
-        form.Add(fileContent, name: "file", fileName: "test-session.xml");
-        var response = await httpClient.PostAsync(
-            new Uri("https://localhost:7100/api/upload"), form, cancellationToken).ConfigureAwait(false);
-        
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-        return response.StatusCode;
+        try
+        {
+            using var httpClient = factory.CreateClient(HttpClientFactoryConfiguration.HttpClientUploadSession);
+            using var form = new MultipartFormDataContent();
+            using MemoryStream memoryStream = new();
+            
+            serializer.Serialize(testSession, memoryStream, SerializationFormat.XML);
+            memoryStream.Position = 0; // Reset position for reading
+            
+            using var fileContent = new StreamContent(memoryStream);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/xml");
+            form.Add(fileContent, name: "file", fileName: "test-session.xml");
+            
+            var response = await httpClient.PostAsync(
+                // TODO: For Production, we should configure the upload base URL at the HttpClient level
+                new Uri("https://localhost:7100/api/upload"), form, cancellationToken).ConfigureAwait(false);
+            
+            // Update test session with upload timestamp if successful
+            if (response.IsSuccessStatusCode)
+            {
+                testSession.MarkAsUploaded(DateTimeOffset.UtcNow);
+                return UploadResult.Success(response.StatusCode);
+            }
+            
+            return UploadResult.Failure(
+                $"Upload failed with status code: {response.StatusCode}", 
+                statusCode: response.StatusCode);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            return UploadResult.Failure("Upload was cancelled", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            return UploadResult.Failure("Network error occurred during upload", ex);
+        }
+        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            return UploadResult.Failure("Upload request timed out", ex);
+        }
+        catch (Exception ex)
+        {
+            return UploadResult.Failure($"Unexpected error during upload: {ex.Message}", ex);
+        }
     }
 }

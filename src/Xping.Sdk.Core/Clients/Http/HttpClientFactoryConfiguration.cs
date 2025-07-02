@@ -17,6 +17,8 @@ namespace Xping.Sdk.Core.Clients.Http;
 /// </summary>
 public class HttpClientFactoryConfiguration : BaseConfiguration
 {
+    #region Named HTTP Clients
+
     /// <summary>
     /// The name of the HttpClient that does not perform any retry policies.
     /// </summary>
@@ -24,7 +26,7 @@ public class HttpClientFactoryConfiguration : BaseConfiguration
     /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
     /// </remarks>
     public const string HttpClientWithNoRetryPolicy = nameof(HttpClientWithNoRetryPolicy);
-    
+
     /// <summary>
     /// The name of the HttpClient that performs retry policies.
     /// </summary>
@@ -32,6 +34,13 @@ public class HttpClientFactoryConfiguration : BaseConfiguration
     /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
     /// </remarks>
     public const string HttpClientWithRetryPolicy = nameof(HttpClientWithRetryPolicy);
+    
+    /// <summary>
+    /// The name of the HttpClient that performs retry policies for uploading test sessions to Xping.
+    /// </summary>
+    public const string HttpClientUploadSession = nameof(HttpClientUploadSession);
+
+    #endregion Named HTTP Clients
 
     /// <summary>
     /// This constant is set to false, indicating that the HttpClient will not follow redirection responses 

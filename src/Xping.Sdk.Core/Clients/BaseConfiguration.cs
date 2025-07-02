@@ -43,7 +43,7 @@ public abstract class BaseConfiguration
 
     /// <summary>
     /// Gets or sets a value that specifies the maximum time to wait for a network request or a browser operation to
-    /// finish. If the time exceeds this value, current operation is terminated. See  
+    /// finish. If the time exceeds this value, the current operation is terminated. See  
     /// <see cref="DefaultHttpRequestTimeoutInSeconds"/> for its default value.
     /// </summary>
     public TimeSpan HttpRequestTimeout { get; set; } = TimeSpan.FromSeconds(DefaultHttpRequestTimeoutInSeconds);
@@ -59,7 +59,7 @@ public abstract class BaseConfiguration
     public int MaxRedirections { get; set; } = 50;
 
     /// <summary>
-    /// Stores the specified HTTP request headers for subsequent use in requests made by the HttpClient and headless 
+    /// Stores the specified HTTP request headers for later use in requests made by the HttpClient and headless 
     /// browser. This method ensures that all prepared headers are applied to requests, facilitating consistent 
     /// communication with web servers.
     /// </summary>
@@ -110,7 +110,7 @@ public abstract class BaseConfiguration
     }
 
     /// <summary>
-    /// Stores the specified HTTP method in the test settings for use in subsequent HTTP requests.
+    /// Stores the specified HTTP method in the test settings for use in later HTTP requests.
     /// </summary>
     /// <param name="httpMethod">The HTTP method to be used for requests.</param>
     public void SetHttpMethod(HttpMethod httpMethod)
@@ -149,7 +149,7 @@ public abstract class BaseConfiguration
     /// it does not set the HTTP method to POST. If required, the HTTP method should be set independently of the 
     /// HttpContent.
     /// </note>
-    /// This content will be used for all subsequent HTTP requests made through the HttpClient and headless browser.
+    /// This content will be used for all later HTTP requests made through the HttpClient and headless browser.
     /// Additionally, if <paramref name="setContentHeaders"/> is set to <c>true</c>, the 'content-type' header will be 
     /// automatically set based on the <paramref name="httpContent"/> provided:
     /// <list type="bullet">

@@ -5,6 +5,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Session.Collector;
+
 namespace Xping.Sdk.UnitTests.Components;
 
 using Moq;
@@ -20,6 +22,7 @@ internal class TestContextTests
         Assert.Throws<ArgumentNullException>(() => new TestContext(
             sessionBuilder: null!, 
             instrumentation: Mock.Of<IInstrumentation>(), 
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: null));
     }
 
@@ -29,6 +32,7 @@ internal class TestContextTests
         Assert.DoesNotThrow(() => new TestContext(
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: null));
     }
 
@@ -38,6 +42,7 @@ internal class TestContextTests
         Assert.Throws<ArgumentNullException>(() => new TestContext(
             sessionBuilder: Mock.Of<ITestSessionBuilder>(),
             instrumentation: null!,
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: null));
     }
 
@@ -47,6 +52,7 @@ internal class TestContextTests
         Assert.DoesNotThrow(() => new TestContext(
             sessionBuilder: Mock.Of<ITestSessionBuilder>(),
             instrumentation: Mock.Of<IInstrumentation>(),
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: null));
     }
 
@@ -56,6 +62,7 @@ internal class TestContextTests
         Assert.DoesNotThrow(() => new TestContext(
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: null));
     }
 
@@ -65,6 +72,7 @@ internal class TestContextTests
         Assert.DoesNotThrow(() => new TestContext(
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
+            sessionUploader: Mock.Of<ITestSessionUploader>(),
             progress: Mock.Of<IProgress<TestStep>>()));
     }
 }
