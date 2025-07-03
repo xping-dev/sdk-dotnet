@@ -121,7 +121,7 @@ public abstract class TestComponent : ITestComponent
     /// <summary>
     /// Gets a read-only test component collection.
     /// </summary>
-    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? [];
+    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? Array.Empty<ITestComponent>();
 
     internal virtual ICompositeTests? GetComposite() => null;
 }
