@@ -151,10 +151,10 @@ public sealed class TestAgent : IDisposable
             // Update context with a currently executing component.
             context.UpdateExecutionContext(Container);
 
-            // Initiate the test session by recording its start time, the URL of the page being validated,
+            // Initiate the test session builder by recording its start time, the URL of the page being validated,
             // and associating it with the current TestContext responsible for maintaining the state of the test
             // execution.
-            sessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context);
+            sessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken);
 
             // Execute a test operation on the current thread's container or shared instance based on
             // `InstantiatePerThread` property configuration.
@@ -167,14 +167,19 @@ public sealed class TestAgent : IDisposable
             sessionBuilder.Build(agent: this, error: Errors.ExceptionError(ex));
         }
 
-        TestSession testSession = sessionBuilder.GetTestSession(uploadToken: _uploadToken);
-        UploadResult result = await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
+        TestSession testSession = sessionBuilder.GetTestSession();
+        
+        if (_uploadToken == Guid.Empty)
+            return testSession;
+        
+        UploadResult result =
+            await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
 
         if (!result.IsSuccessful)
         {
             OnUploadFailed(new UploadFailedEventArgs(testSession, result));
         }
-        
+
         return testSession;
     }
 

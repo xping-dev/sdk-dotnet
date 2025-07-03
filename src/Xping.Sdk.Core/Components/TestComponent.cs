@@ -14,11 +14,13 @@ using Xping.Sdk.Core.Session.Collector;
 namespace Xping.Sdk.Core.Components;
 
 /// <summary>
-/// This abstract class is designed to execute an action or validate test operation that is defined by the derived 
-/// class.
+/// This abstract class provides the base implementation for executing test operations, either as actions or
+/// validations, as defined by derived classes.
 /// </summary>
 public abstract class TestComponent : ITestComponent
 {
+    private static IReadOnlyCollection<TestComponent> EmptyComponents { get; } = [];
+    
     /// <summary>
     /// Initializes a new instance of the TestComponent class.
     /// </summary>
@@ -48,7 +50,7 @@ public abstract class TestComponent : ITestComponent
     /// <param name="settings">A <see cref="TestSettings"/> object that contains the settings for the test.</param>
     /// <param name="context">A <see cref="TestContext"/> object that represents the test context.</param>
     /// <param name="serviceProvider">An instance object of a mechanism for retrieving a service object.</param>
-    /// <param name="cancellationToken">An optional CancellationToken object that can be used to cancel the 
+    /// <param name="cancellationToken">An optional CancellationToken object that can be used to cancel 
     /// this operation.</param>
     public abstract Task HandleAsync(
         Uri url,
@@ -63,7 +65,7 @@ public abstract class TestComponent : ITestComponent
     /// <param name="url">A Uri object that represents the URL of the page being validated.</param>
     /// <param name="settings">A <see cref="TestSettings"/> object that contains the settings for the test.</param>
     /// <param name="serviceProvider">An instance object of a mechanism for retrieving a service object.</param>
-    /// <param name="cancellationToken">An optional CancellationToken object that can be used to cancel the 
+    /// <param name="cancellationToken">An optional CancellationToken object that can be used to cancel 
     /// this operation.</param>
     /// <returns><c>true</c> if the test succeeded; otherwise, <c>false</c>.</returns>
     /// <remarks>
@@ -93,8 +95,8 @@ public abstract class TestComponent : ITestComponent
 
         // Initiate the test session by recording its start time, the URL of the page being validated,
         // and associating it with the current TestContext responsible for maintaining the state of the test
-        // execution.
-        sessionBuilder.Initiate(url, DateTime.UtcNow, context);
+        // execution. No upload on Probe.
+        sessionBuilder.Initiate(url, DateTime.UtcNow, context, uploadToken: Guid.Empty);
 
         // Execute the test operation by invoking the HandleAsync method of this class.
         await HandleAsync(url, settings, context, serviceProvider, cancellationToken).ConfigureAwait(false);
@@ -121,7 +123,7 @@ public abstract class TestComponent : ITestComponent
     /// <summary>
     /// Gets a read-only test component collection.
     /// </summary>
-    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? Array.Empty<ITestComponent>();
+    public IReadOnlyCollection<ITestComponent> Components => GetComposite()?.Components ?? EmptyComponents;
 
     internal virtual ICompositeTests? GetComposite() => null;
 }

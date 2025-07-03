@@ -5,10 +5,7 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Session;
-using Xping.Sdk.Core.Session.Collector;
-
-namespace Xping.Sdk.Core;
+namespace Xping.Sdk.Core.Session.Collector;
 
 /// <summary>
 /// Provides data for the <see cref="TestAgent.UploadFailed"/> event.
