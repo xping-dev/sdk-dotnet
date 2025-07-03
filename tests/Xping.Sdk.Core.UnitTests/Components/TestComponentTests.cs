@@ -87,7 +87,12 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
         sessionBuilder.SetupGet(b => b.HasFailed).Returns(!testComponentPasses);
 
         var serviceProvider = new Mock<IServiceProvider>();
-        serviceProvider.Setup(s => s.GetService(typeof(ITestSessionBuilder))).Returns(sessionBuilder.Object);
+        serviceProvider
+            .Setup(s => s.GetService(typeof(ITestSessionBuilder)))
+            .Returns(sessionBuilder.Object);
+        serviceProvider
+            .Setup(s => s.GetService(typeof(ITestSessionUploader)))
+            .Returns(Mock.Of<ITestSessionUploader>());
 
         TestComponent component = new TestComponentUnderTest();
 
