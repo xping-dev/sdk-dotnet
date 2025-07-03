@@ -11,6 +11,7 @@ using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Session.Collector;
+using Microsoft.Extensions.Logging;
 
 namespace Xping.Sdk.Core;
 
@@ -67,7 +68,7 @@ public sealed class TestAgent : IDisposable
 
     // ThreadLocal is used to provide a separate instance of the pipeline container for each thread.
     private readonly ThreadLocal<Pipeline> _container = new(valueFactory: () =>
-        new Pipeline($"Pipeline#Thread[{Thread.CurrentThread.Name}:{Environment.CurrentManagedThreadId}]")); 
+        new Pipeline($"Pipeline#Thread[{Thread.CurrentThread.Name}:{Environment.CurrentManagedThreadId}]"));
 
     /// <summary>
     /// Controls whether the TestAgent's pipeline container object should be instantiated for each thread separately.
@@ -105,6 +106,11 @@ public sealed class TestAgent : IDisposable
             "The Pipeline instance for the current thread could not be retrieved. This may occur if the Pipeline " +
             "constructor threw an exception or if the ThreadLocal instance was accessed after disposal.") :
         _sharedContainer.Value;
+
+    /// <summary>
+    /// Occurs when uploading the test session fails.
+    /// </summary>
+    public event EventHandler<UploadFailedEventArgs>? UploadFailed;
 
     /// <summary>
     /// Initializes a new instance of the TestAgent class. For internal use only.
@@ -162,7 +168,12 @@ public sealed class TestAgent : IDisposable
         }
 
         TestSession testSession = sessionBuilder.GetTestSession(uploadToken: _uploadToken);
-        await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
+        UploadResult result = await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
+
+        if (!result.IsSuccessful)
+        {
+            OnUploadFailed(new UploadFailedEventArgs(testSession, result));
+        }
         
         return testSession;
     }
@@ -225,9 +236,9 @@ public sealed class TestAgent : IDisposable
     /// <param name="disposing">A flag indicating whether to release the managed resources.</param>
     private void Dispose(bool disposing)
     {
-        if (_disposedValue) 
+        if (_disposedValue)
             return;
-        
+
         if (disposing)
         {
             Cleanup();
@@ -262,5 +273,14 @@ public sealed class TestAgent : IDisposable
             progress: _serviceProvider.GetService<IProgress<TestStep>>());
 
         return context;
+    }
+
+    /// <summary>
+    /// Raises the <see cref="UploadFailed"/> event.
+    /// </summary>
+    /// <param name="e">The event data.</param>
+    private void OnUploadFailed(UploadFailedEventArgs e)
+    {
+        UploadFailed?.Invoke(this, e);
     }
 }
