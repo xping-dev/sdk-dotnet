@@ -13,6 +13,8 @@ using Xping.Sdk.Core.Clients.Browser;
 using Xping.Sdk.Core.Clients.Browser.Internals;
 using Xping.Sdk.Core.Clients.Http;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Core.Session.Collector;
+using Xping.Sdk.Core.Session.Serialization;
 
 namespace Xping.Sdk.Core.DependencyInjection;
 
@@ -22,7 +24,7 @@ namespace Xping.Sdk.Core.DependencyInjection;
 public static class DependencyInjectionExtension
 {
     /// <summary>
-    /// This extension method adds the IHttpClientFactory service and related services to service collection and 
+    /// This extension method adds the IHttpClientFactory service and related services to a service collection and 
     /// configures a named <see cref="HttpClient"/> clients.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/>.</param>
@@ -36,16 +38,10 @@ public static class DependencyInjectionExtension
         configuration?.Invoke(services.BuildServiceProvider(), factoryConfiguration);
 
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientWithNoRetryPolicy)
-                .ConfigurePrimaryHttpMessageHandler(configureHandler =>
-                {
-                    return CreateSocketsHttpHandler(factoryConfiguration);
-                });
+                .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration));
 
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientWithRetryPolicy)
-                .ConfigurePrimaryHttpMessageHandler(configureHandler =>
-                {
-                    return CreateSocketsHttpHandler(factoryConfiguration);
-                })
+                .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration))
                 .AddTransientHttpErrorPolicy(builder => builder.WaitAndRetryAsync(
                     sleepDurations: factoryConfiguration.SleepDurations))
                 .AddTransientHttpErrorPolicy(builder => builder.CircuitBreakerAsync(
@@ -111,7 +107,7 @@ public static class DependencyInjectionExtension
         string name,
         Action<TestAgent> builder)
     {
-        services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
+        services.AddCommonServices();
         services.AddKeyedTransient(
             serviceKey: name,
             implementationFactory: (IServiceProvider provider, object serviceKey) =>
@@ -135,7 +131,7 @@ public static class DependencyInjectionExtension
         this IServiceCollection services,
         Action<TestAgent> builder)
     {
-        services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
+        services.AddCommonServices();
         services.AddTransient(
             implementationFactory: (IServiceProvider provider) =>
             {
@@ -155,8 +151,8 @@ public static class DependencyInjectionExtension
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddTestAgent(this IServiceCollection services)
     {
-        services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
-        services.AddTransient(implementationFactory: (IServiceProvider provider) => new TestAgent(provider));
+        services.AddCommonServices();
+        services.AddTransient(implementationFactory: provider => new TestAgent(provider));
 
         return services;
     }
@@ -172,6 +168,28 @@ public static class DependencyInjectionExtension
     public static bool IsServiceRegistered<TService>(this IServiceCollection services)
     {
         return services.Any(serviceDescriptor => serviceDescriptor.ServiceType == typeof(TService));
+    }
+
+    private static IServiceCollection AddCommonServices(this IServiceCollection services)
+    {
+        var factoryConfiguration = new HttpClientFactoryConfiguration()
+        {
+            FollowHttpRedirectionResponses = false,
+        };
+        
+        services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientUploadSession)
+            .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration))
+            .AddTransientHttpErrorPolicy(builder => builder.WaitAndRetryAsync(
+                sleepDurations: factoryConfiguration.SleepDurations))
+            .AddTransientHttpErrorPolicy(builder => builder.CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: factoryConfiguration.HandledEventsAllowedBeforeBreaking,
+                durationOfBreak: factoryConfiguration.DurationOfBreak));
+        
+        services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
+        services.TryAddTransient<ITestSessionSerializer, TestSessionSerializer>();
+        services.TryAddTransient<ITestSessionUploader, TestSessionUploader>();
+
+        return services;
     }
 
     private static SocketsHttpHandler CreateSocketsHttpHandler(

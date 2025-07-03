@@ -5,6 +5,7 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Time.Testing;
 using Xping.Sdk.Core.Common;
 
 namespace Xping.Sdk.Common.UnitTests;
@@ -15,10 +16,13 @@ public sealed class InstrumentationLogTests
     public void StartDateIsSetToTodayWhenNewlyInstantiatedAndStartStopWatchIsDisabled()
     {
         // Arrange
-        using var log = new InstrumentationTimer(startStopwatch: false);
-
+        var fakeTimeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        
+        // Act
+        using var log = new InstrumentationTimer(startStopwatch: false, timeProvider: fakeTimeProvider);
+        
         // Assert
-        Assert.That(log.StartTime, Is.EqualTo(DateTime.Today));
+        Assert.That(log.StartTime, Is.EqualTo(fakeTimeProvider.GetUtcNow().DateTime));
     }
 
     [Test]
@@ -98,10 +102,12 @@ public sealed class InstrumentationLogTests
     public void StartTimeChangesAfterRestart()
     {
         // Arrange
-        using var log = new InstrumentationTimer(startStopwatch: true);
+        var fakeTimeProvider = new FakeTimeProvider();
+        using var log = new InstrumentationTimer(startStopwatch: true, timeProvider: fakeTimeProvider);
         DateTime initialStartTime = log.StartTime;
 
         // Act
+        fakeTimeProvider.Advance(TimeSpan.FromSeconds(1));
         log.Restart();
 
         // Assert

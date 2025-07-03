@@ -12,7 +12,6 @@ using Xping.Sdk.Core.Common;
 
 namespace Xping.Sdk.Core.Session.Serialization;
 
-
 /// <summary>
 /// A class that provides serialization and deserialization of test sessions
 /// </summary>
@@ -20,7 +19,7 @@ namespace Xping.Sdk.Core.Session.Serialization;
 /// This class supports two formats: binary and XML. Users can choose the format that suits their needs and preferences, 
 /// depending on the size, readability, and compatibility of the data.
 /// </remarks>
-public sealed class TestSessionSerializer
+public sealed class TestSessionSerializer : ITestSessionSerializer
 {
     private readonly DataContractSerializer _dataContractSerializer = new(
         type: typeof(TestSession),
@@ -33,7 +32,7 @@ public sealed class TestSessionSerializer
     /// <param name="stream">The stream to save the serialized data</param>
     /// <param name="format">The format to use for serialization: Binary or XML</param>
     /// <param name="ownsStream">
-    /// True to indicate that the stream is closed by the writer when done, otherwise false
+    /// True to indicate that the writer closes the stream when done, otherwise false
     /// </param>
     public void Serialize(TestSession session, Stream stream, SerializationFormat format, bool ownsStream = false)
     {

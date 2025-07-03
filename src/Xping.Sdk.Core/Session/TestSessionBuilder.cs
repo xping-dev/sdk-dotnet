@@ -23,6 +23,7 @@ public class TestSessionBuilder : ITestSessionBuilder
 
     private Uri? _url;
     private DateTime _startDate = DateTime.MinValue;
+    private Guid _uploadToken = Guid.Empty;
     private TestContext? _context;
     private Error? _error;
     private PropertyBag<IPropertyBagValue>? _propertyBag;
@@ -56,17 +57,15 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <param name="url">The URL to be used for the test session.</param>
     /// <param name="startDate">The start date of the test session.</param>
     /// <param name="context">The context responsible for maintaining the state of the test execution.</param>
+    /// <param name="uploadToken">
+    /// The upload token that links the TestAgent's results to the project configured on the server.
+    /// </param>
     /// <returns>The initialized test session builder.</returns>
-    public ITestSessionBuilder Initiate(Uri url, DateTime startDate, TestContext context)
+    public ITestSessionBuilder Initiate(Uri url, DateTime startDate, TestContext context, Guid uploadToken)
     {
-        _url = url/*.RequireNotNull(nameof(url))*/;
-        _startDate = startDate/*.RequireCondition(
-            // To prevent a difference between StartDate and this condition, we subtract 60 sec from the present date.
-            // This difference can occur if StartDate is assigned just before 12:00 and this condition executes at
-            // 12:00. 
-            condition: date => date >= (DateTime.Today.ToUniversalTime() - TimeSpan.FromSeconds(60)),
-            parameterName: nameof(startDate),
-            message: Errors.IncorrectStartDate)*/;
+        _url = url;
+        _startDate = startDate;
+        _uploadToken = uploadToken;
         _context = context.RequireNotNull(nameof(context));
 
         // Reset internal state.
@@ -81,15 +80,15 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <summary>
     /// Builds a test session that has been declined by the <see cref="TestAgent"/>. 
     /// </summary>
-    /// <param name="agent">A test agent object wich declined test session.</param>
-    /// <param name="error">The error to be used for the test session as decline reason.</param>
+    /// <param name="agent">A test agent object which declined a test session.</param>
+    /// <param name="error">The error to be used for the test session as a decline reason.</param>
     public void Build(TestAgent agent, Error error)
     {
         _error = error.RequireNotNull(nameof(error));
     }
 
     /// <summary>
-    /// Builds a test session property bag with the speicified <see cref="PropertyBagKey"/> and 
+    /// Builds a test session property bag with the specified <see cref="PropertyBagKey"/> and 
     /// <see cref="ISerializable"/> derived type as a property bag value. 
     /// </summary>
     /// <param name="key">The property bag key that identifies the test session data.</param>
@@ -133,7 +132,7 @@ public class TestSessionBuilder : ITestSessionBuilder
 
         _steps.Add(testStep);
 
-        // Set property bag to null to force its reconstruction when new data is added.
+        // Set the property bag to null to force its reconstruction when new data is added.
         _propertyBag = null;
 
         // Restart the instrumentation timer to measure the elapsed time for a new test step.
@@ -172,7 +171,7 @@ public class TestSessionBuilder : ITestSessionBuilder
 
         _steps.Add(testStep);
 
-        // Set property bag to null to force its reconstruction when new data is added.
+        // Set the property bag to null to force its reconstruction when new data is added.
         _propertyBag = null;
 
         // Restart the instrumentation timer to measure the elapsed time for a new test step.
@@ -211,7 +210,7 @@ public class TestSessionBuilder : ITestSessionBuilder
 
         _steps.Add(testStep);
 
-        // Set property bag to null to force its reconstruction when new data is added.
+        // Set the property bag to null to force its reconstruction when new data is added.
         _propertyBag = null;
 
         // Restart the instrumentation timer to measure the elapsed time for a new test step.
@@ -224,11 +223,8 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <summary>
     /// Gets the test session.
     /// </summary>
-    /// <param name="uploadToken">
-    /// The upload token that links the TestAgent's results to the project configured on the server.
-    /// </param>
     /// <returns>The test session.</returns>
-    public TestSession GetTestSession(Guid uploadToken)
+    public TestSession GetTestSession()
     {
         try
         {
@@ -245,7 +241,7 @@ public class TestSessionBuilder : ITestSessionBuilder
                 // Set the test session status to completed to indicate that no further modifications are allowed.
                 State = TestSessionState.Completed,
                 DeclineReason = null,
-                UploadToken = uploadToken
+                UploadToken = _uploadToken
             };
 
             return session;
@@ -259,7 +255,7 @@ public class TestSessionBuilder : ITestSessionBuilder
                 Steps = _steps,
                 State = TestSessionState.Declined,
                 DeclineReason = ex.Message,
-                UploadToken = uploadToken
+                UploadToken = _uploadToken
             };
 
             return session;

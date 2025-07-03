@@ -5,6 +5,8 @@
  * License: [MIT]
  */
 
+using System.Globalization;
+
 namespace Xping.Sdk.Shared.UnitTests;
 
 public sealed class DateTimeExtensionsTests
@@ -19,7 +21,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("100 ms"));
+        AssertTimeEquals(time, 100, "ms");
     }
 
     [Test]
@@ -32,7 +34,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("10 s"));
+        AssertTimeEquals(time, 10, "s");
     }
 
     [Test]
@@ -45,7 +47,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("1 min"));
+        AssertTimeEquals(time, 1, "min");
     }
 
     [Test]
@@ -58,7 +60,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("5 min"));
+        AssertTimeEquals(time, 5, "min");
     }
 
     [Test]
@@ -71,7 +73,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("1 ms"));
+        AssertTimeEquals(time, 1, "ms");
     }
 
     [Test]
@@ -84,7 +86,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("0 ms"));
+        AssertTimeEquals(time, 0, "ms");
     }
 
     [Test]
@@ -97,7 +99,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("4.47 s"));
+        AssertTimeEquals(time, 4.47, "s");
     }
 
     [Test]
@@ -110,7 +112,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime();
 
         // Assert
-        Assert.That(time, Is.EqualTo("4.47 min"));
+        AssertTimeEquals(time, 4.47, "min");
     }
 
     [Test]
@@ -123,7 +125,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Millisecond);
 
         // Assert
-        Assert.That(time, Is.EqualTo("4469 ms"));
+        AssertTimeEquals(time, 4469, "ms");
     }
 
     [Test]
@@ -136,7 +138,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Second);
 
         // Assert
-        Assert.That(time, Is.EqualTo("4.47 s"));
+        AssertTimeEquals(time, 4.47, "s");
     }
 
     [Test]
@@ -149,7 +151,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Minute);
 
         // Assert
-        Assert.That(time, Is.EqualTo("2.04 min"));
+        AssertTimeEquals(time, 2.04, "min");
     }
 
     [Test]
@@ -162,7 +164,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Hour);
 
         // Assert
-        Assert.That(time, Is.EqualTo("2.04 hours"));
+        AssertTimeEquals(time, 2.04, "hours");
     }
 
     [Test]
@@ -175,7 +177,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Hour);
 
         // Assert
-        Assert.That(time, Is.EqualTo("1.5 hour"));
+        AssertTimeEquals(time, 1.5, "hour");
     }
 
     [Test]
@@ -188,7 +190,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Hour);
 
         // Assert
-        Assert.That(time, Is.EqualTo("0 hours"));
+        AssertTimeEquals(time, 0, "hours");
     }
 
     [Test]
@@ -201,7 +203,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Day);
 
         // Assert
-        Assert.That(time, Is.EqualTo("2.06 days"));
+        AssertTimeEquals(time, 2.06, "days");
     }
 
     [Test]
@@ -214,7 +216,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Day);
 
         // Assert
-        Assert.That(time, Is.EqualTo("1.5 day"));
+        AssertTimeEquals(time, 1.5, "day");
     }
 
     [Test]
@@ -227,7 +229,7 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime(TimeSpanUnit.Day);
 
         // Assert
-        Assert.That(time, Is.EqualTo("0 days"));
+        AssertTimeEquals(time, 0, "days");
     }
 
     [Test]
@@ -240,6 +242,19 @@ public sealed class DateTimeExtensionsTests
         string time = span.GetFormattedTime((TimeSpanUnit)19);
 
         // Assert
-        Assert.That(time, Is.EqualTo("1.5 min"));
+        AssertTimeEquals(time, 1.5, "min");
+    }
+    
+    private static void AssertTimeEquals(string actualTime, double expectedValue, string expectedUnit)
+    {
+        var parts = actualTime.Split(' ');
+        Assert.That(parts, Has.Length.EqualTo(2), $"Time format should be 'number {expectedUnit}'");
+        Assert.That(parts[1], Is.EqualTo(expectedUnit), $"Unit should be '{expectedUnit}'");
+    
+        // Handle both comma and dot as decimal separators
+        var numericPart = parts[0].Replace(',', '.');
+        var numericValue = double.Parse(numericPart, CultureInfo.InvariantCulture);
+        
+        Assert.That(numericValue, Is.EqualTo(expectedValue).Within(0.001));
     }
 }

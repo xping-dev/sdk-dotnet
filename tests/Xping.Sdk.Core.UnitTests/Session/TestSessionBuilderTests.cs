@@ -9,6 +9,8 @@ using Moq;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Core.Session.Collector;
+using Xping.Sdk.Core.Session.Serialization;
 using TestContext = Xping.Sdk.Core.Components.TestContext;
 
 namespace Xping.Sdk.UnitTests.Session;
@@ -42,18 +44,20 @@ public sealed class TestSessionBuilderTests
         const bool expectedResult = true;
 
         var builder = new TestSessionBuilder();
+        var uploader = new TestSessionUploader(Mock.Of<ITestSessionSerializer>(), Mock.Of<IHttpClientFactory>());
         using var instrumentation = new InstrumentationTimer();
         var mockedComponent = new Mock<ITestComponent>();
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, progress: null);
+        var context = new TestContext(builder, instrumentation, uploader, progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         builder.Build(new Error("code", "message"));
@@ -69,18 +73,20 @@ public sealed class TestSessionBuilderTests
         const int expectedCount = 4;
 
         var builder = new TestSessionBuilder();
+        var uploader = new TestSessionUploader(Mock.Of<ITestSessionSerializer>(), Mock.Of<IHttpClientFactory>());
         using var instrumentation = new InstrumentationTimer();
         var mockedComponent = new Mock<ITestComponent>();
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, progress: null);
+        var context = new TestContext(builder, instrumentation, uploader, progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         builder.Build();
@@ -88,7 +94,7 @@ public sealed class TestSessionBuilderTests
         builder.Build();
         builder.Build();
 
-        TestSession session = builder.GetTestSession(Guid.Empty);
+        TestSession session = builder.GetTestSession();
         int counter = 0;
         Assert.Multiple(() =>
         {
@@ -103,18 +109,20 @@ public sealed class TestSessionBuilderTests
     {
         // Arrange
         var builder = new TestSessionBuilder();
+        var uploader = new TestSessionUploader(Mock.Of<ITestSessionSerializer>(), Mock.Of<IHttpClientFactory>());
         using var instrumentation = new InstrumentationTimer();
         var mockedComponent = new Mock<ITestComponent>();
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, progress: null);
+        var context = new TestContext(builder, instrumentation, uploader, progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         TestStep step = builder.Build();
@@ -130,7 +138,7 @@ public sealed class TestSessionBuilderTests
         var builder = new TestSessionBuilder();
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).State, Is.EqualTo(TestSessionState.Declined));
+        Assert.That(builder.GetTestSession().State, Is.EqualTo(TestSessionState.Declined));
     }
 
     [Test]
@@ -140,15 +148,17 @@ public sealed class TestSessionBuilderTests
         string expectedDeclineReason = Errors.MissingUrlInTestSession;
         using var instrumentation = new InstrumentationTimer();
         var builder = new TestSessionBuilder();
+        var uploader = new TestSessionUploader(Mock.Of<ITestSessionSerializer>(), Mock.Of<IHttpClientFactory>());
 
         // Act
         builder.Initiate(
             url: null!, 
             startDate: DateTime.UtcNow, 
-            context: new TestContext(builder, instrumentation, progress: null));
+            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            uploadToken: Guid.Empty);
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 
     [Test]
@@ -158,14 +168,16 @@ public sealed class TestSessionBuilderTests
         string expectedDeclineReason = Errors.IncorrectStartDate;
         using var instrumentation = new InstrumentationTimer();
         var builder = new TestSessionBuilder();
+        var uploader = new TestSessionUploader(Mock.Of<ITestSessionSerializer>(), Mock.Of<IHttpClientFactory>());
 
         // Act
         builder.Initiate(
             url: new Uri("http://test.com"), 
             startDate: DateTime.UtcNow - TimeSpan.FromDays(2),
-            context: new TestContext(builder, instrumentation, progress: null));
+            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            uploadToken: Guid.Empty);
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 }

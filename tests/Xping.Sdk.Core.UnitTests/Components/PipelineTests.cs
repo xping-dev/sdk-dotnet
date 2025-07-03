@@ -5,11 +5,11 @@
  * License: [MIT]
  */
 
-using System.ComponentModel.DataAnnotations;
 using Moq;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Core.Session.Collector;
 using Xping.Sdk.UnitTests.TestFixtures;
 using TestContext = Xping.Sdk.Core.Components.TestContext;
 
@@ -25,30 +25,30 @@ internal class PipelineTests(IServiceProvider serviceProvider)
     public void NameReturnsPipelineNameWhenGivenDuringCreation()
     {
         // Arrange
-        const string PipelineName = "MyCustomName";
+        const string pipelineName = "MyCustomName";
 
         // Act
-        var pipeline = new Pipeline(name: PipelineName);
+        var pipeline = new Pipeline(name: pipelineName);
 
         // Assert
-        Assert.That(pipeline.Name, Is.EqualTo(PipelineName));
+        Assert.That(pipeline.Name, Is.EqualTo(pipelineName));
     }
 
     [Test]
     public void NameReturnsPipelineNameWhenNameHasNotBeenProvided()
     {
         // Arrange
-        const string PipelineName = nameof(Pipeline);
+        const string pipelineName = nameof(Pipeline);
 
         // Act
         var pipeline = new Pipeline();
 
         // Assert
-        Assert.That(pipeline.Name, Is.EqualTo(PipelineName));
+        Assert.That(pipeline.Name, Is.EqualTo(pipelineName));
     }
 
     [Test]
-    public void ComponentsHaveItemsFromContstructorWhenProvided()
+    public void ComponentsHaveItemsFromConstructorWhenProvided()
     {
         // Arrange
         const int expectedItemCount = 2;
@@ -69,8 +69,13 @@ internal class PipelineTests(IServiceProvider serviceProvider)
     public void ConstructorThrowsArgumentNullExceptionWhenAtLeastOneComponentIsNullFromContstructor()
     {
         // Assert
-        Assert.Throws<ArgumentNullException>(() => new Pipeline(components: [
-            Mock.Of<ITestComponent>(), null!, Mock.Of<ITestComponent>()]));
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            var pipeline = new Pipeline(components:
+            [
+                Mock.Of<ITestComponent>(), null!, Mock.Of<ITestComponent>()
+            ]);
+        });
     }
 
     [Test]
@@ -81,7 +86,11 @@ internal class PipelineTests(IServiceProvider serviceProvider)
 
         var url = new Uri("http://test");
         var pipeline = new Pipeline(components: components);
-        var context = new TestContext(Mock.Of<ITestSessionBuilder>(), Mock.Of<IInstrumentation>(), progress: null);
+        var context = new TestContext(
+            Mock.Of<ITestSessionBuilder>(), 
+            Mock.Of<IInstrumentation>(),
+            Mock.Of<ITestSessionUploader>(),
+            progress: null);
         var settings = new TestSettings();
 
         // Arrange
@@ -109,7 +118,11 @@ internal class PipelineTests(IServiceProvider serviceProvider)
         var sessionBuilderMock = new Mock<ITestSessionBuilder>();
         sessionBuilderMock.SetupGet(b => b.HasFailed).Returns(hasFailedResult);
 
-        var context = new TestContext(sessionBuilderMock.Object, Mock.Of<IInstrumentation>(), progress: null);
+        var context = new TestContext(
+            sessionBuilderMock.Object,
+            Mock.Of<IInstrumentation>(),
+            Mock.Of<ITestSessionUploader>(),
+            progress: null);
         var settings = new TestSettings
         {
             ContinueOnFailure = false
@@ -147,7 +160,11 @@ internal class PipelineTests(IServiceProvider serviceProvider)
         var sessionBuilderMock = new Mock<ITestSessionBuilder>();
         sessionBuilderMock.SetupGet(b => b.HasFailed).Returns(hasFailedResult);
 
-        var context = new TestContext(sessionBuilderMock.Object, Mock.Of<IInstrumentation>(), progress: null);
+        var context = new TestContext(
+            sessionBuilderMock.Object,
+            Mock.Of<IInstrumentation>(),
+            Mock.Of<ITestSessionUploader>(),
+            progress: null);
         var settings = new TestSettings
         {
             ContinueOnFailure = true
