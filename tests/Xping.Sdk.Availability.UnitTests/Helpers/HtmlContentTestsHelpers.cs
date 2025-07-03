@@ -168,16 +168,17 @@ internal static class HtmlContentTestsHelpers
     private static void ConfigureSessionBuilderToReturnSelf(ITestSessionBuilder sessionBuilder)
     {
         Mock.Get(sessionBuilder)
-            .Setup(_m => _m.Build(
+            .Setup(m => m.Build(
                 It.IsAny<PropertyBagKey>(),
                 It.IsAny<IPropertyBagValue>()))
             .Returns(sessionBuilder);
 
         Mock.Get(sessionBuilder)
-            .Setup(_m => _m.Initiate(
+            .Setup(m => m.Initiate(
                 It.IsAny<Uri>(),
                 It.IsAny<DateTime>(),
-                It.IsAny<TestContext>()))
+                It.IsAny<TestContext>(),
+                Guid.Empty))
             .Returns(sessionBuilder);
     }
 }

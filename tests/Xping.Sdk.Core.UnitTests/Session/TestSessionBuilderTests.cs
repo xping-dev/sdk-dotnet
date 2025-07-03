@@ -56,7 +56,8 @@ public sealed class TestSessionBuilderTests
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         builder.Build(new Error("code", "message"));
@@ -84,7 +85,8 @@ public sealed class TestSessionBuilderTests
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         builder.Build();
@@ -92,7 +94,7 @@ public sealed class TestSessionBuilderTests
         builder.Build();
         builder.Build();
 
-        TestSession session = builder.GetTestSession(Guid.Empty);
+        TestSession session = builder.GetTestSession();
         int counter = 0;
         Assert.Multiple(() =>
         {
@@ -119,7 +121,8 @@ public sealed class TestSessionBuilderTests
         builder.Initiate(
             url: new Uri("http://localhost/"),
             startDate: DateTime.UtcNow,
-            context: context);
+            context: context,
+            uploadToken: Guid.Empty);
 
         // Act
         TestStep step = builder.Build();
@@ -135,7 +138,7 @@ public sealed class TestSessionBuilderTests
         var builder = new TestSessionBuilder();
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).State, Is.EqualTo(TestSessionState.Declined));
+        Assert.That(builder.GetTestSession().State, Is.EqualTo(TestSessionState.Declined));
     }
 
     [Test]
@@ -151,10 +154,11 @@ public sealed class TestSessionBuilderTests
         builder.Initiate(
             url: null!, 
             startDate: DateTime.UtcNow, 
-            context: new TestContext(builder, instrumentation, uploader, progress: null));
+            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            uploadToken: Guid.Empty);
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 
     [Test]
@@ -170,9 +174,10 @@ public sealed class TestSessionBuilderTests
         builder.Initiate(
             url: new Uri("http://test.com"), 
             startDate: DateTime.UtcNow - TimeSpan.FromDays(2),
-            context: new TestContext(builder, instrumentation, uploader, progress: null));
+            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            uploadToken: Guid.Empty);
 
         // Assert
-        Assert.That(builder.GetTestSession(Guid.Empty).DeclineReason, Does.StartWith(expectedDeclineReason));
+        Assert.That(builder.GetTestSession().DeclineReason, Does.StartWith(expectedDeclineReason));
     }
 }
