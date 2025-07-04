@@ -5,7 +5,6 @@
  * License: [MIT]
  */
 
-using System.Runtime.Serialization;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 
@@ -32,7 +31,7 @@ public interface ITestSessionBuilder
     ITestSessionBuilder Initiate(Uri url, DateTime startDate, TestContext context, Guid uploadToken);
 
     /// <summary>
-    /// Gets a value indicating whether the test session has failed.
+    /// Gets a value indicating whether the test session is in a failed state.
     /// </summary>
     bool HasFailed { get; }
 
@@ -50,7 +49,7 @@ public interface ITestSessionBuilder
 
     /// <summary>
     /// Builds a test session property bag with the specified <see cref="PropertyBagKey"/> and 
-    /// <see cref="ISerializable"/> derived type as a property bag value. 
+    /// <see cref="IPropertyBagValue"/> property bag value. 
     /// </summary>
     /// <param name="key">The property bag key that identifies the test session data.</param>
     /// <param name="value">The property bag value that contains the test session data.</param>

@@ -48,7 +48,7 @@ internal class BrowserRedirectionResponseHandler : IHttpResponseHandler
             // Notify context's progress mechanism about the new test step created.
             _context.Progress?.Report(testStep);
 
-            // Try get HTTP location header to indicate the URL where a client should be redirected.
+            // Try to get an HTTP location header to indicate the URL where a client should be redirected.
             string? redirectUrl = TryGetHttpLocationHeader(httpHeadersBag);
 
             if (IsCircularDependencyDetected(redirectUrl))

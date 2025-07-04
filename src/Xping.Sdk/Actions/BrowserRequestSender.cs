@@ -27,7 +27,7 @@ namespace Xping.Sdk.Actions;
 /// <see cref="Core.DependencyInjection.DependencyInjectionExtension.AddBrowserClientFactory(IServiceCollection)"/> 
 /// method which adds <see cref="IBrowserFactory"/> factory service. The Xping SDK provides a default implementation 
 /// of this interface, called DefaultBrowserFactory, which based on the <see cref="BrowserConfiguration"/> creates a 
-/// Chromium, WebKit or Firefox headless browserClient instance. You can also implement your own custom headless 
+/// Chromium, WebKit, or Firefox headless browserClient instance. You can also implement your own custom headless 
 /// browserClient factory by implementing the <see cref="IBrowserFactory"/> interface and adding its implementation into
 /// services.
 /// </remarks>
@@ -69,7 +69,7 @@ public sealed class BrowserRequestSender : TestComponent
 
         OrderedUrlRedirections urlRedirections = [];
 
-        IBrowserFactory? browserFactory =
+        IBrowserFactory browserFactory =
             serviceProvider.GetService<IBrowserFactory>() ??
             throw new InvalidProgramException(Errors.HeadlessBrowserNotFound);
 

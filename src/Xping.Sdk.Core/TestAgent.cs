@@ -5,13 +5,11 @@
  * License: [MIT]
  */
 
-using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Session.Collector;
-using Microsoft.Extensions.Logging;
 
 namespace Xping.Sdk.Core;
 
@@ -85,7 +83,9 @@ public sealed class TestAgent : IDisposable
     {
         get => _uploadToken.ToString();
         set => _uploadToken = !string.IsNullOrWhiteSpace(value) &&
-                   Guid.TryParse(value, out Guid result) ? result : Guid.Empty;
+                              Guid.TryParse(value, out Guid result)
+            ? result
+            : Guid.Empty;
     }
 
     /// <summary>
@@ -101,11 +101,11 @@ public sealed class TestAgent : IDisposable
     /// This exception is thrown if a per-thread <see cref="Pipeline"/> instance is not available, which 
     /// could indicate an issue with its construction or an attempt to access it post-disposal.
     /// </exception>
-    public Pipeline Container => InstantiatePerThread ?
-        _container.Value ?? throw new InvalidOperationException(
+    public Pipeline Container => InstantiatePerThread
+        ? _container.Value ?? throw new InvalidOperationException(
             "The Pipeline instance for the current thread could not be retrieved. This may occur if the Pipeline " +
-            "constructor threw an exception or if the ThreadLocal instance was accessed after disposal.") :
-        _sharedContainer.Value;
+            "constructor threw an exception or if the ThreadLocal instance was accessed after disposal.")
+        : _sharedContainer.Value;
 
     /// <summary>
     /// Occurs when uploading the test session fails.
@@ -143,41 +143,13 @@ public sealed class TestAgent : IDisposable
 
         using var instrumentation = new InstrumentationTimer(startStopwatch: false);
         var context = CreateTestContext(instrumentation);
-        var sessionBuilder = context.SessionBuilder;
-        var sessionUploader = context.SessionUploader;
 
-        try
+        var testSession = await ExecuteTestAsync(url, settings, context, cancellationToken).ConfigureAwait(false);
+
+        if (_uploadToken != Guid.Empty)
         {
-            // Update context with a currently executing component.
-            context.UpdateExecutionContext(Container);
-
-            // Initiate the test session builder by recording its start time, the URL of the page being validated,
-            // and associating it with the current TestContext responsible for maintaining the state of the test
-            // execution.
-            sessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken);
-
-            // Execute a test operation on the current thread's container or shared instance based on
-            // `InstantiatePerThread` property configuration.
-            await Container
-                .HandleAsync(url, settings ?? new TestSettings(), context, _serviceProvider, cancellationToken)
+            await HandleSessionUploadAsync(testSession, context.SessionUploader, cancellationToken)
                 .ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            sessionBuilder.Build(agent: this, error: Errors.ExceptionError(ex));
-        }
-
-        TestSession testSession = sessionBuilder.GetTestSession();
-        
-        if (_uploadToken == Guid.Empty)
-            return testSession;
-        
-        UploadResult result =
-            await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
-
-        if (!result.IsSuccessful)
-        {
-            OnUploadFailed(new UploadFailedEventArgs(testSession, result));
         }
 
         return testSession;
@@ -278,6 +250,73 @@ public sealed class TestAgent : IDisposable
             progress: _serviceProvider.GetService<IProgress<TestStep>>());
 
         return context;
+    }
+
+    /// <summary>
+    /// Executes the test operations and builds the test session.
+    /// </summary>
+    /// <param name="url">The URL being tested.</param>
+    /// <param name="settings">The test settings.</param>
+    /// <param name="context">The test context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The completed test session.</returns>
+    private async Task<TestSession> ExecuteTestAsync(
+        Uri url,
+        TestSettings? settings,
+        TestContext context,
+        CancellationToken cancellationToken)
+    {
+        var sessionBuilder = context.SessionBuilder;
+
+        try
+        {
+            InitializeExecution(url, context);
+
+            await Container
+                .HandleAsync(url, settings ?? new TestSettings(), context, _serviceProvider, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            sessionBuilder.Build(agent: this, error: Errors.ExceptionError(ex));
+        }
+
+        return sessionBuilder.GetTestSession();
+    }
+
+    /// <summary>
+    /// Initializes and updates the execution context.
+    /// </summary>
+    /// <param name="url">The URL being tested.</param>
+    /// <param name="context">The test context.</param>
+    private void InitializeExecution(Uri url, TestContext context)
+    {
+        // Update context with a currently executing component.
+        context.UpdateExecutionContext(Container);
+
+        // Initiate the test session builder by recording its start time, the URL of the page being validated,
+        // and associating it with the current TestContext responsible for maintaining the state of the test
+        // execution.
+        context.SessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken);
+    }
+
+    /// <summary>
+    /// Handles the uploading of the test session if the upload token is configured.
+    /// </summary>
+    /// <param name="testSession">The test session to upload.</param>
+    /// <param name="sessionUploader">The session uploader service.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task HandleSessionUploadAsync(
+        TestSession testSession,
+        ITestSessionUploader sessionUploader,
+        CancellationToken cancellationToken)
+    {
+        var result = await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
+
+        if (!result.IsSuccessful)
+        {
+            OnUploadFailed(new UploadFailedEventArgs(testSession, result));
+        }
     }
 
     /// <summary>

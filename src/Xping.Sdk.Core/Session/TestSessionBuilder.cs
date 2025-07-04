@@ -99,7 +99,7 @@ public class TestSessionBuilder : ITestSessionBuilder
         ArgumentNullException.ThrowIfNull(key, nameof(key));
         ArgumentNullException.ThrowIfNull(value, nameof(value));
 
-        _propertyBag ??= new();
+        _propertyBag ??= new PropertyBag<IPropertyBagValue>();
         _propertyBag.AddOrUpdateProperty(key, value);
 
         return this;
