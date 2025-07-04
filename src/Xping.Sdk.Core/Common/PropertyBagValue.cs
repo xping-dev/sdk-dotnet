@@ -19,8 +19,8 @@ namespace Xping.Sdk.Core.Common;
 /// <typeparam name="TValue">The type of the value.</typeparam>
 /// <remarks>
 /// This class is used to store serializable values that are associated with test steps as outcomes. It supports four 
-/// types of values: string, string[], byte[], and Dictionary&lt;string, string&gt;. It throws an ArgumentException 
-/// during serialization process if the value to be serialized is not of one of these types.
+/// types of values: string, string[], byte[], and Dictionary&lt;string, string&gt; It throws an ArgumentException 
+/// during a serialization process if the value to be serialized is not of one of these types.
 /// </remarks>
 [Serializable]
 [KnownType(typeof(byte[]))]
