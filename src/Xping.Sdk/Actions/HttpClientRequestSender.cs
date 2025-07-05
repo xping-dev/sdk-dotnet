@@ -58,24 +58,19 @@ public sealed class HttpClientRequestSender : TestComponent
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(url, nameof(url));
-        ArgumentNullException.ThrowIfNull(settings, nameof(settings));
-        ArgumentNullException.ThrowIfNull(context, nameof(context));
-
+        ValidateArguments(url, settings, context);
         _urlRedirections.Clear();
 
-        IHttpClientFactory httpClientFactory =
-            serviceProvider.GetService<IHttpClientFactory>() ??
-            throw new InvalidProgramException(Errors.HttpClientsNotFound);
+        var httpClientFactory = GetHttpClientFactory(serviceProvider);
+        using var httpClient = CreateHttpClient(httpClientFactory);
+        using var request = CreateHttpRequestMessage(url);
 
-        using HttpClient httpClient = CreateHttpClient(httpClientFactory);
-        using HttpRequestMessage request = CreateHttpRequestMessage(url);
+        await BuildRequestContext(context, request, cancellationToken).ConfigureAwait(false);
 
-        TestStep testStep = null!;
+        TestStep? testStep = null;
         try
         {
-            HttpResponseMessage response = await SendRequestAsync(
-                    httpClient, request, context, cancellationToken)
+            var response = await SendRequestAsync(httpClient, request, context, cancellationToken)
                 .ConfigureAwait(false);
 
             if (cancellationToken.IsCancellationRequested)
@@ -84,17 +79,7 @@ public sealed class HttpClientRequestSender : TestComponent
                 return;
             }
 
-            byte[] buffer = await ReadAsByteArrayAsync(response.Content, cancellationToken).ConfigureAwait(false);
-            testStep = context.SessionBuilder
-                .Build(PropertyBagKeys.HttpStatus, new PropertyBagValue<string>($"{(int)response.StatusCode}"))
-                .Build(PropertyBagKeys.HttpVersion, new PropertyBagValue<string>($"{response.Version}"))
-                .Build(PropertyBagKeys.HttpReasonPhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
-                .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
-                .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
-                .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
-                .Build(PropertyBagKeys.HttpContent, new PropertyBagValue<byte[]>(buffer))
-                .Build(PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(response))
-                .Build();
+            testStep = await BuildSuccessResponse(context, response, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -102,8 +87,59 @@ public sealed class HttpClientRequestSender : TestComponent
         }
         finally
         {
-            context.Progress?.Report(testStep);
+            if (testStep != null)
+                context.Progress?.Report(testStep);
         }
+    }
+
+    private static void ValidateArguments(Uri url, TestSettings settings, TestContext context)
+    {
+        ArgumentNullException.ThrowIfNull(url, nameof(url));
+        ArgumentNullException.ThrowIfNull(settings, nameof(settings));
+        ArgumentNullException.ThrowIfNull(context, nameof(context));
+    }
+
+    private static IHttpClientFactory GetHttpClientFactory(IServiceProvider serviceProvider)
+    {
+        return serviceProvider.GetService<IHttpClientFactory>() ??
+               throw new InvalidProgramException(Errors.HttpClientsNotFound);
+    }
+
+    private async Task BuildRequestContext(TestContext context, HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var requestContent = request.Content != null
+            ? await ReadAsByteArrayAsync(request.Content, cancellationToken).ConfigureAwait(false)
+            : [];
+
+        context.SessionBuilder
+            .Build(PropertyBagKeys.HttpRequestHeaders, GetHeaders(request.Headers))
+            .Build(PropertyBagKeys.HttpMethod, new PropertyBagValue<string>(request.Method.ToString()))
+            .Build(PropertyBagKeys.HttpRequestContent, new PropertyBagValue<byte[]>(requestContent))
+            .Build(PropertyBagKeys.HttpFollowRedirect,
+                new PropertyBagValue<bool>(_configuration.FollowHttpRedirectionResponses))
+            .Build(PropertyBagKeys.MaxRedirections, new PropertyBagValue<int>(_configuration.MaxRedirections))
+            .Build(PropertyBagKeys.HttpRetry,
+                new PropertyBagValue<bool>(_configuration.RetryHttpRequestWhenFailed))
+            .Build(PropertyBagKeys.HttpRequestTimeout,
+                new PropertyBagValue<TimeSpan>(_configuration.HttpRequestTimeout));
+    }
+
+    private static async Task<TestStep> BuildSuccessResponse(TestContext context, HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var buffer = await ReadAsByteArrayAsync(response.Content, cancellationToken).ConfigureAwait(false);
+
+        return context.SessionBuilder
+            .Build(PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>($"{(int)response.StatusCode}"))
+            .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{response.Version}"))
+            .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
+            .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
+            .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
+            .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
+            .Build(PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(buffer))
+            .Build(PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(response))
+            .Build();
     }
 
     private static PropertyBagValue<Dictionary<string, string>> GetHeaders(HttpHeaders headers) =>
@@ -211,9 +247,10 @@ public sealed class HttpClientRequestSender : TestComponent
                     response.StatusCode == HttpStatusCode.TemporaryRedirect)
                 {
                     TestStep testStep = context.SessionBuilder
-                        .Build(PropertyBagKeys.HttpStatus, new PropertyBagValue<string>($"{(int)response.StatusCode}"))
-                        .Build(PropertyBagKeys.HttpVersion, new PropertyBagValue<string>($"{response.Version}"))
-                        .Build(PropertyBagKeys.HttpReasonPhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
+                        .Build(PropertyBagKeys.HttpResponseStatus,
+                            new PropertyBagValue<string>($"{(int)response.StatusCode}"))
+                        .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{response.Version}"))
+                        .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
                         .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
                         .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
                         .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
@@ -229,9 +266,10 @@ public sealed class HttpClientRequestSender : TestComponent
                         {
                             string lastAbsoluteUri =
                                 _urlRedirections.FindLastMatchingItem(url => new Uri(url).IsAbsoluteUri) ??
-                                throw new InvalidOperationException("Invalid Redirection Attempt Detected. The server " +
-                                "attempted to redirect to an invalid or unrecognized location. Please check the URL " +
-                                "or contact the site administrator for assistance.");
+                                throw new InvalidOperationException(
+                                    "Invalid Redirection Attempt Detected. The server " +
+                                    "attempted to redirect to an invalid or unrecognized location. Please check the URL " +
+                                    "or contact the site administrator for assistance.");
 
                             redirectUrl = new Uri(baseUri: new Uri(lastAbsoluteUri), relativeUri: redirectUrl);
                         }

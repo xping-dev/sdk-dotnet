@@ -419,7 +419,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
 
         Assert.Multiple(() =>
         {
-            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpContent, out byteArray), Is.True);
+            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpResponseContent, out byteArray), Is.True);
             Assert.That(byteArray is not null);
         });
     }
@@ -435,7 +435,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
                 responseBuilder: JavascriptPageResponseBuilder)
             .ConfigureAwait(false);
 
-        var byteArray = session.GetPropertyBagValue<byte[]>(PropertyBagKeys.HttpContent);
+        var byteArray = session.GetPropertyBagValue<byte[]>(PropertyBagKeys.HttpResponseContent);
         var content = Encoding.UTF8.GetString(byteArray!);
 
         // Assert
@@ -484,11 +484,11 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
             var destinationStep = httpRequestSteps.Last();
 
             var redirectionStatusCode = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-                PropertyBagKeys.HttpStatus).Value;
+                PropertyBagKeys.HttpResponseStatus).Value;
             var redirectionUrl = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<Dictionary<string, string>>>(
                 PropertyBagKeys.HttpResponseHeaders).Value[HeaderNames.Location.ToUpperInvariant()];
             var destinationStatusCode = destinationStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-                PropertyBagKeys.HttpStatus).Value;
+                PropertyBagKeys.HttpResponseStatus).Value;
 
             Assert.Multiple(() =>
             {
@@ -531,7 +531,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
         var destinationStep = httpRequestSteps.Last();
 
         var redirectionStatusCode = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
         var redirectionUrl = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<Dictionary<string, string>>>(
             PropertyBagKeys.HttpResponseHeaders).Value[HeaderNames.Location.ToUpperInvariant()];
 
@@ -666,7 +666,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
         var destinationStep = httpRequestSteps.Last();
 
         var destinationStatusCode = destinationStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
         var destinationUrl = destinationStep.PropertyBag!.GetProperty<NonSerializable<BrowserResponseMessage>>(
             PropertyBagKeys.BrowserResponseMessage).Value;
 

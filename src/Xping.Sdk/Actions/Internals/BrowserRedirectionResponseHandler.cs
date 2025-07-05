@@ -92,8 +92,8 @@ internal class BrowserRedirectionResponseHandler : IHttpResponseHandler
         var httpStatucCode = Enum.Parse<HttpStatusCode>($"{response.Status}", ignoreCase: true);
 
         var testStep = _context.SessionBuilder
-            .Build(PropertyBagKeys.HttpStatus, new PropertyBagValue<string>($"{(int)httpStatucCode}"))
-            .Build(PropertyBagKeys.HttpReasonPhrase, new PropertyBagValue<string?>(response.StatusText))
+            .Build(PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>($"{(int)httpStatucCode}"))
+            .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.StatusText))
             .Build(PropertyBagKeys.HttpResponseHeaders, httpHeadersBag)
             .Build();
 

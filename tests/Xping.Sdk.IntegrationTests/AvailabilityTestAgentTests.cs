@@ -128,7 +128,7 @@ public class AvailabilityTestAgentTests(IServiceProvider serviceProvider)
 
         Assert.Multiple(() =>
         {
-            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpStatus, out code), Is.True);
+            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpResponseStatus, out code), Is.True);
             Assert.That(Enum.Parse<HttpStatusCode>(code!.Value), Is.EqualTo(httpStatusCode));
         });
     }
@@ -388,7 +388,7 @@ public class AvailabilityTestAgentTests(IServiceProvider serviceProvider)
 
         Assert.Multiple(() =>
         {
-            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpContent, out byteArray), Is.True);
+            Assert.That(session.TryGetPropertyBagValue(PropertyBagKeys.HttpResponseContent, out byteArray), Is.True);
             Assert.That(byteArray is not null && Encoding.UTF8.GetString(byteArray.Value) == responseContent);
         });
     }
@@ -464,11 +464,11 @@ public class AvailabilityTestAgentTests(IServiceProvider serviceProvider)
         var destinationStep = httpRequestSteps.Last();
 
         var redirectionStatusCode = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
         var redirectionUrl = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<Dictionary<string, string>>>(
             PropertyBagKeys.HttpResponseHeaders).Value[HeaderNames.Location.ToUpperInvariant()];
         var destinationStatusCode = destinationStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
 
         Assert.Multiple(() =>
         {
@@ -507,7 +507,7 @@ public class AvailabilityTestAgentTests(IServiceProvider serviceProvider)
         var destinationStep = httpRequestSteps.Last();
 
         var redirectionStatusCode = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
         var redirectionUrl = redirectionStep.PropertyBag!.GetProperty<PropertyBagValue<Dictionary<string, string>>>(
             PropertyBagKeys.HttpResponseHeaders).Value[HeaderNames.Location.ToUpperInvariant()];
 
@@ -636,7 +636,7 @@ public class AvailabilityTestAgentTests(IServiceProvider serviceProvider)
         var destinationStep = httpRequestSteps.Last();
 
         var destinationStatusCode = destinationStep.PropertyBag!.GetProperty<PropertyBagValue<string>>(
-            PropertyBagKeys.HttpStatus).Value;
+            PropertyBagKeys.HttpResponseStatus).Value;
         var destinationUrl = destinationStep.PropertyBag!.GetProperty<NonSerializable<HttpResponseMessage>>(
             PropertyBagKeys.HttpResponseMessage).Value;
 

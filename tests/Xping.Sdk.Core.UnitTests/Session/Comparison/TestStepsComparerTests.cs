@@ -518,7 +518,7 @@ public sealed class TestStepsComparerTests : ComparerBaseTests<TestStepsComparer
         const string StepName = "StepName";
         var properties = new Dictionary<PropertyBagKey, IPropertyBagValue>
         {
-            { PropertyBagKeys.HttpStatus, new PropertyBagValue<string>("value") }
+            { PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>("value") }
         };
 
         // Arrange
@@ -547,7 +547,7 @@ public sealed class TestStepsComparerTests : ComparerBaseTests<TestStepsComparer
         const string StepName = "StepName";
         var properties1 = new Dictionary<PropertyBagKey, IPropertyBagValue>
         {
-            { PropertyBagKeys.HttpStatus, new PropertyBagValue<string>("value") }
+            { PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>("value") }
         };
 
         var properties2 = new Dictionary<PropertyBagKey, IPropertyBagValue>
@@ -579,7 +579,7 @@ public sealed class TestStepsComparerTests : ComparerBaseTests<TestStepsComparer
         Assert.That(
             result.Differences.First().PropertyName,
             Is.EqualTo($"{nameof(TestStep)}(\"{StepName}\").{nameof(TestStep.PropertyBag)}" +
-            $"[\"{nameof(PropertyBagKeys.HttpStatus)}\"]"));
+            $"[\"{nameof(PropertyBagKeys.HttpResponseStatus)}\"]"));
 
         Assert.That(result.Differences.Last().Type, Is.EqualTo(DifferenceType.Added));
         Assert.That(result.Differences.Last().Value1, Is.Null);
@@ -594,7 +594,7 @@ public sealed class TestStepsComparerTests : ComparerBaseTests<TestStepsComparer
     public void CompareShouldReturnDiffResultEmptyWhenPropertyBagsHasDifferentValues()
     {
         const string StepName = "StepName";
-        PropertyBagKey key = PropertyBagKeys.HttpStatus;
+        PropertyBagKey key = PropertyBagKeys.HttpResponseStatus;
 
         var properties1 = new Dictionary<PropertyBagKey, IPropertyBagValue>
         {

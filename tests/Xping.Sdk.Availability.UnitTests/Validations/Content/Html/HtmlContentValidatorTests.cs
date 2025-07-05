@@ -130,7 +130,7 @@ public sealed class HtmlContentValidatorTests
     {
         // Arrange
         var testStep = HtmlContentTestsHelpers.CreateTestStep(
-            PropertyBagKeys.HttpContent,
+            PropertyBagKeys.HttpResponseContent,
             new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes("Data")));
 
         var validator = new HtmlContentValidator((IHtmlContent content) => { });
@@ -181,7 +181,7 @@ public sealed class HtmlContentValidatorTests
             new Dictionary<PropertyBagKey, IPropertyBagValue>()
             {
                 { PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(httpResponseMessage) },
-                { PropertyBagKeys.HttpContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes("Data")) }
+                { PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes("Data")) }
             });
 
         bool validationCalled = false;
@@ -209,7 +209,7 @@ public sealed class HtmlContentValidatorTests
             new Dictionary<PropertyBagKey, IPropertyBagValue>()
             {
                 { PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(httpResponseMessage) },
-                { PropertyBagKeys.HttpContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes("Data")) }
+                { PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes("Data")) }
             });
 
         var validator = new HtmlContentValidator((IHtmlContent content) =>
@@ -243,7 +243,7 @@ public sealed class HtmlContentValidatorTests
             new Dictionary<PropertyBagKey, IPropertyBagValue>()
             {
                 { PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(httpResponseMessage) },
-                { PropertyBagKeys.HttpContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes(expectedData)) }
+                { PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(Encoding.UTF8.GetBytes(expectedData)) }
             });
         var receivedContent = string.Empty;
         var validatorUnderTest = new HtmlContentValidatorUnderTest(_ => { })
