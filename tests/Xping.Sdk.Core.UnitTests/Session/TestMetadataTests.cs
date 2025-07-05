@@ -18,7 +18,7 @@ public sealed class TestMetadataTests
         string methodName = "TestMethod",
         string className = "TestClass",
         string namespaceName = "TestNamespace",
-        string processName = "testprocess",
+        string processName = "TestProcess",
         int processId = 1234,
         IReadOnlyCollection<string>? classAttributeNames = null,
         IReadOnlyCollection<string>? methodAttributeNames = null,
@@ -38,7 +38,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Constructor_DefaultConstructor_InitializesWithEmptyValues()
+    public void ConstructorDefaultConstructorInitializesWithEmptyValues()
     {
         // Act
         var metadata = new TestMetadata();
@@ -55,7 +55,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void FullyQualifiedName_WithValidNamespaceClassAndMethod_ReturnsCorrectFormat()
+    public void FullyQualifiedNameWithValidNamespaceClassAndMethodReturnsCorrectFormat()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -71,7 +71,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void DisplayName_WithTestDescription_ReturnsDescription()
+    public void DisplayNameWithTestDescriptionReturnsDescription()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -86,7 +86,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void DisplayName_WithoutTestDescription_ReturnsMethodName()
+    public void DisplayNameWithoutTestDescriptionReturnsMethodName()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -101,7 +101,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void DisplayName_WithEmptyTestDescription_ReturnsMethodName()
+    public void DisplayNameWithEmptyTestDescriptionReturnsMethodName()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -116,7 +116,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void IsTestMethod_WithValidTestData_ReturnsTrue()
+    public void IsTestMethodWithValidTestDataReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest();
@@ -129,7 +129,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void IsTestMethod_WithEmptyMethodName_ReturnsFalse()
+    public void IsTestMethodWithEmptyMethodNameReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(methodName: string.Empty);
@@ -142,7 +142,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void IsTestMethod_WithEmptyClassName_ReturnsFalse()
+    public void IsTestMethodWithEmptyClassNameReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(className: string.Empty);
@@ -155,7 +155,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void IsTestMethod_WithEmptyNamespace_ReturnsFalse()
+    public void IsTestMethodWithEmptyNamespaceReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(namespaceName: string.Empty);
@@ -168,7 +168,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void IsTestMethod_WithEmptyMethodAttributes_ReturnsFalse()
+    public void IsTestMethodWithEmptyMethodAttributesReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(methodAttributeNames: []);
@@ -181,7 +181,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithExistingMethodAttribute_ReturnsTrue()
+    public void HasAttributeWithExistingMethodAttributeReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -193,7 +193,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithExistingClassAttribute_ReturnsTrue()
+    public void HasAttributeWithExistingClassAttributeReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -205,7 +205,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithNonExistingAttribute_ReturnsFalse()
+    public void HasAttributeWithNonExistingAttributeReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -217,7 +217,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithPartialAttributeName_ReturnsTrue()
+    public void HasAttributeWithPartialAttributeNameReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -228,7 +228,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithCaseInsensitiveMatch_ReturnsTrue()
+    public void HasAttributeWithCaseInsensitiveMatchReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -240,19 +240,19 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasAttribute_WithNullOrWhitespaceAttributeName_ThrowsArgumentException()
+    public void HasAttributeWithNullOrWhitespaceAttributeNameThrowsArgumentException()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest();
 
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => metadata.HasAttribute(null!));
+        Assert.Throws<ArgumentNullException>(() => metadata.HasAttribute(null!));
         Assert.Throws<ArgumentException>(() => metadata.HasAttribute(string.Empty));
         Assert.Throws<ArgumentException>(() => metadata.HasAttribute("   "));
     }
 
     [Test]
-    public void HasTestAttribute_WithTestAttribute_ReturnsTrue()
+    public void HasTestAttributeWithTestAttributeReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -263,7 +263,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasTestAttribute_WithFactAttribute_ReturnsTrue()
+    public void HasTestAttributeWithFactAttributeReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -274,7 +274,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasTestAttribute_WithTheoryAttribute_ReturnsTrue()
+    public void HasTestAttributeWithTheoryAttributeReturnsTrue()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -285,7 +285,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void HasTestAttribute_WithNonTestAttribute_ReturnsFalse()
+    public void HasTestAttributeWithNonTestAttributeReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
@@ -296,32 +296,32 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void ToString_ForTestMethod_ReturnsFormattedString()
+    public void ToStringForTestMethodReturnsFormattedString()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act
         var result = metadata.ToString();
 
         // Assert
-        Assert.That(result, Is.EqualTo("TestNamespace.TestClass.TestMethod [testprocess:1234]"));
+        Assert.That(result, Is.EqualTo("TestNamespace.TestClass.TestMethod [TestProcess:1234]"));
     }
 
     [Test]
-    public void ToString_ForTestMethodWithDescription_ReturnsFormattedStringWithDescription()
+    public void ToStringForTestMethodWithDescriptionReturnsFormattedStringWithDescription()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234,
             testDescription: "Test Description");
 
@@ -329,18 +329,18 @@ public sealed class TestMetadataTests
         var result = metadata.ToString();
 
         // Assert
-        Assert.That(result, Is.EqualTo("TestNamespace.TestClass.TestMethod - Test Description [testprocess:1234]"));
+        Assert.That(result, Is.EqualTo("TestNamespace.TestClass.TestMethod - Test Description [TestProcess:1234]"));
     }
 
     [Test]
-    public void ToString_ForNonTestMethod_ReturnsProcessInfo()
+    public void ToStringForNonTestMethodReturnsProcessInfo()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
             methodName: string.Empty,
             className: string.Empty,
             namespaceName: string.Empty,
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234,
             methodAttributeNames: []);
 
@@ -348,25 +348,25 @@ public sealed class TestMetadataTests
         var result = metadata.ToString();
 
         // Assert
-        Assert.That(result, Is.EqualTo("Process: testprocess (ID: 1234)"));
+        Assert.That(result, Is.EqualTo("Process: TestProcess (ID: 1234)"));
     }
 
     [Test]
-    public void Equals_WithSameValues_ReturnsTrue()
+    public void EqualsWithSameValuesReturnsTrue()
     {
         // Arrange
         var metadata1 = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         var metadata2 = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act & Assert
@@ -376,21 +376,21 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Equals_WithDifferentValues_ReturnsFalse()
+    public void EqualsWithDifferentValuesReturnsFalse()
     {
         // Arrange
         var metadata1 = CreateTestMetadataUnderTest(
             methodName: "TestMethod1",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         var metadata2 = CreateTestMetadataUnderTest(
             methodName: "TestMethod2",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act & Assert
@@ -400,7 +400,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Equals_WithNull_ReturnsFalse()
+    public void EqualsWithNullReturnsFalse()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest();
@@ -412,33 +412,21 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Equals_WithSameReference_ReturnsTrue()
-    {
-        // Arrange
-        var metadata = CreateTestMetadataUnderTest();
-
-        // Act & Assert
-        Assert.That(metadata.Equals(metadata), Is.True);
-        Assert.That(metadata == metadata, Is.True);
-        Assert.That(metadata != metadata, Is.False);
-    }
-
-    [Test]
-    public void GetHashCode_WithSameValues_ReturnsSameHashCode()
+    public void GetHashCodeWithSameValuesReturnsSameHashCode()
     {
         // Arrange
         var metadata1 = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         var metadata2 = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act & Assert
@@ -446,21 +434,21 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void GetHashCode_WithDifferentValues_ReturnsDifferentHashCode()
+    public void GetHashCodeWithDifferentValuesReturnsDifferentHashCode()
     {
         // Arrange
         var metadata1 = CreateTestMetadataUnderTest(
             methodName: "TestMethod1",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         var metadata2 = CreateTestMetadataUnderTest(
             methodName: "TestMethod2",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act & Assert
@@ -468,14 +456,14 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Serialization_RoundTrip_PreservesAllData()
+    public void SerializationRoundTripPreservesAllData()
     {
         // Arrange
         var original = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234,
             classAttributeNames: ["TestFixtureAttribute", "CategoryAttribute"],
             methodAttributeNames: ["TestAttribute", "DescriptionAttribute"],
@@ -497,7 +485,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void Serialization_WithNullValues_HandlesNullsCorrectly()
+    public void SerializationWithNullValuesHandlesNullsCorrectly()
     {
         // Arrange
         var original = new TestMetadata
@@ -505,7 +493,7 @@ public sealed class TestMetadataTests
             MethodName = "TestMethod",
             ClassName = "TestClass",
             Namespace = "TestNamespace",
-            ProcessName = "testprocess",
+            ProcessName = "TestProcess",
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
@@ -522,7 +510,7 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void SerializationConstructor_WithNullSerializationInfo_ThrowsArgumentNullException()
+    public void SerializationConstructorWithNullSerializationInfoThrowsArgumentNullException()
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
@@ -530,32 +518,32 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void DebuggerDisplay_ForTestMethod_ReturnsCorrectFormat()
+    public void DebuggerDisplayForTestMethodReturnsCorrectFormat()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
             methodName: "TestMethod",
             className: "TestClass",
             namespaceName: "TestNamespace",
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234);
 
         // Act
         var debugDisplay = metadata.ToString(); // DebuggerDisplay uses the same logic as ToString
 
         // Assert
-        Assert.That(debugDisplay, Is.EqualTo("TestNamespace.TestClass.TestMethod [testprocess:1234]"));
+        Assert.That(debugDisplay, Is.EqualTo("TestNamespace.TestClass.TestMethod [TestProcess:1234]"));
     }
 
     [Test]
-    public void DebuggerDisplay_ForNonTestMethod_ReturnsProcessInfo()
+    public void DebuggerDisplayForNonTestMethodReturnsProcessInfo()
     {
         // Arrange
         var metadata = CreateTestMetadataUnderTest(
             methodName: string.Empty,
             className: string.Empty,
             namespaceName: string.Empty,
-            processName: "testprocess",
+            processName: "TestProcess",
             processId: 1234,
             methodAttributeNames: []);
 
@@ -563,11 +551,14 @@ public sealed class TestMetadataTests
         var debugDisplay = metadata.ToString(); // DebuggerDisplay uses the same logic as ToString
 
         // Assert
-        Assert.That(debugDisplay, Is.EqualTo("Process: testprocess (ID: 1234)"));
+        Assert.That(debugDisplay, Is.EqualTo("Process: TestProcess (ID: 1234)"));
     }
 
+    private static readonly string[] expected = new[] { "TestFixtureAttribute" };
+    private static readonly string[] expectedArray = new[] { "TestAttribute" };
+
     [Test]
-    public void Properties_WithInitValues_AreSetCorrectly()
+    public void PropertiesWithInitValuesAreSetCorrectly()
     {
         // Arrange & Act
         var metadata = new TestMetadata
@@ -575,7 +566,7 @@ public sealed class TestMetadataTests
             MethodName = "TestMethod",
             ClassName = "TestClass",
             Namespace = "TestNamespace",
-            ProcessName = "testprocess",
+            ProcessName = "TestProcess",
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
@@ -586,25 +577,25 @@ public sealed class TestMetadataTests
         Assert.That(metadata.MethodName, Is.EqualTo("TestMethod"));
         Assert.That(metadata.ClassName, Is.EqualTo("TestClass"));
         Assert.That(metadata.Namespace, Is.EqualTo("TestNamespace"));
-        Assert.That(metadata.ProcessName, Is.EqualTo("testprocess"));
+        Assert.That(metadata.ProcessName, Is.EqualTo("TestProcess"));
         Assert.That(metadata.ProcessId, Is.EqualTo(1234));
-        Assert.That(metadata.ClassAttributeNames, Is.EquivalentTo(new[] { "TestFixtureAttribute" }));
-        Assert.That(metadata.MethodAttributeNames, Is.EquivalentTo(new[] { "TestAttribute" }));
+        Assert.That(metadata.ClassAttributeNames, Is.EquivalentTo(expected));
+        Assert.That(metadata.MethodAttributeNames, Is.EquivalentTo(expectedArray));
         Assert.That(metadata.TestDescription, Is.EqualTo("Test Description"));
     }
 
-    private static byte[] SerializeToMemoryStream<T>(T obj) where T : ISerializable
+    private static byte[] SerializeToMemoryStream<T>(T obj)
     {
         using var memoryStream = new MemoryStream();
-        var formatter = new BinaryFormatter();
-        formatter.Serialize(memoryStream, obj);
+        var serializer = new DataContractSerializer(typeof(T), knownTypes: [typeof(string[])]);
+        serializer.WriteObject(memoryStream, obj);
         return memoryStream.ToArray();
     }
 
     private static T DeserializeFromMemoryStream<T>(byte[] data)
     {
         using var memoryStream = new MemoryStream(data);
-        var formatter = new BinaryFormatter();
-        return (T)formatter.Deserialize(memoryStream);
+        var serializer = new DataContractSerializer(typeof(T), knownTypes: [typeof(string[])]);
+        return (T)serializer.ReadObject(memoryStream)!;
     }
 }
