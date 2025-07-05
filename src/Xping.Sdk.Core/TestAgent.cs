@@ -5,6 +5,8 @@
  * License: [MIT]
  */
 
+using System.Diagnostics;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
@@ -143,8 +145,10 @@ public sealed class TestAgent : IDisposable
 
         using var instrumentation = new InstrumentationTimer(startStopwatch: false);
         var context = CreateTestContext(instrumentation);
+        var metadata = GetCurrentTestMetadata();
 
-        var testSession = await ExecuteTestAsync(url, settings, context, cancellationToken).ConfigureAwait(false);
+        var testSession = await ExecuteTestAsync(url, settings, context, metadata, cancellationToken)
+            .ConfigureAwait(false);
 
         if (_uploadToken != Guid.Empty)
         {
@@ -258,19 +262,21 @@ public sealed class TestAgent : IDisposable
     /// <param name="url">The URL being tested.</param>
     /// <param name="settings">The test settings.</param>
     /// <param name="context">The test context.</param>
+    /// <param name="metadata">The test metadata information.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The completed test session.</returns>
     private async Task<TestSession> ExecuteTestAsync(
         Uri url,
         TestSettings? settings,
         TestContext context,
+        TestMetadata metadata,
         CancellationToken cancellationToken)
     {
         var sessionBuilder = context.SessionBuilder;
 
         try
         {
-            InitializeExecution(url, context);
+            InitializeExecution(url, context, metadata);
 
             await Container
                 .HandleAsync(url, settings ?? new TestSettings(), context, _serviceProvider, cancellationToken)
@@ -289,7 +295,8 @@ public sealed class TestAgent : IDisposable
     /// </summary>
     /// <param name="url">The URL being tested.</param>
     /// <param name="context">The test context.</param>
-    private void InitializeExecution(Uri url, TestContext context)
+    /// <param name="metadata">The test metadata information.</param>
+    private void InitializeExecution(Uri url, TestContext context, TestMetadata metadata)
     {
         // Update context with a currently executing component.
         context.UpdateExecutionContext(Container);
@@ -297,7 +304,7 @@ public sealed class TestAgent : IDisposable
         // Initiate the test session builder by recording its start time, the URL of the page being validated,
         // and associating it with the current TestContext responsible for maintaining the state of the test
         // execution.
-        context.SessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken);
+        context.SessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken, metadata);
     }
 
     /// <summary>
@@ -326,5 +333,182 @@ public sealed class TestAgent : IDisposable
     private void OnUploadFailed(UploadFailedEventArgs e)
     {
         UploadFailed?.Invoke(this, e);
+    }
+
+    private static TestMetadata GetCurrentTestMetadata()
+    {
+        var stackTrace = new StackTrace();
+
+
+        // Look for the test method in the stack trace
+        MethodInfo? testMethod = null;
+        Type? testClass = null;
+
+        for (int i = 1; i < stackTrace.FrameCount; i++)
+        {
+            var frame = stackTrace.GetFrame(i);
+            var method = frame?.GetMethod();
+
+            if (method != null && IsTestMethod(method))
+            {
+                testMethod = method as MethodInfo;
+                testClass = method.DeclaringType;
+                break;
+            }
+        }
+
+        // If we found a test method, return detailed metadata
+        if (testMethod != null && testClass != null)
+        {
+            var methodAttributes = testMethod.GetCustomAttributes().ToList();
+            var testDescription = ExtractTestDescription(methodAttributes);
+
+            return new TestMetadata
+            {
+                MethodName = testMethod.Name,
+                ClassName = testClass.Name,
+                Namespace = testClass.Namespace ?? "Unknown",
+                ProcessName = GetFullProcessCommandLine(),
+                ProcessId = Environment.ProcessId,
+                ClassAttributeNames = testClass.GetCustomAttributes().Select(attr => attr.GetType().Name).ToList(),
+                MethodAttributeNames = methodAttributes.Select(attr => attr.GetType().Name).ToList(),
+                TestDescription = testDescription
+            };
+        }
+
+        // Fallback to process information when no test method is found
+        return new TestMetadata
+        {
+            MethodName = string.Empty,
+            ClassName = string.Empty,
+            Namespace = string.Empty,
+            ProcessName = GetFullProcessCommandLine(),
+            ProcessId = Environment.ProcessId,
+            ClassAttributeNames = [],
+            MethodAttributeNames = [],
+            TestDescription = null
+        };
+    }
+
+    /// <summary>
+    /// Extracts the test description from method attributes.
+    /// </summary>
+    /// <param name="methodAttributes">The method attributes to examine.</param>
+    /// <returns>The test description if found; otherwise, null.</returns>
+    private static string? ExtractTestDescription(IEnumerable<Attribute> methodAttributes)
+    {
+        var testAttributes = methodAttributes.Where(attr =>
+            attr.GetType().Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().Name.Contains("Fact", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().Name.Contains("Theory", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        foreach (var attribute in testAttributes)
+        {
+            var descriptionProperty = attribute.GetType().GetProperty("Description");
+            if (descriptionProperty != null)
+            {
+                var description = descriptionProperty.GetValue(attribute) as string;
+                if (!string.IsNullOrEmpty(description))
+                    return description;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Determines if a method is a test method by checking for common test framework attributes.
+    /// This method is framework-agnostic and works with NUnit, MSTest, xUnit, etc.
+    /// </summary>
+    /// <param name="method">The method to check.</param>
+    /// <returns>True if the method appears to be a test method; otherwise, false.</returns>
+    private static bool IsTestMethod(MethodBase method)
+    {
+        var attributes = method.GetCustomAttributes();
+
+        return attributes.Any(attr =>
+            attr.GetType().Name.Equals("TestAttribute", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().Name.Equals("FactAttribute", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().Name.Equals("TheoryAttribute", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().Name.Equals("TestMethodAttribute", StringComparison.OrdinalIgnoreCase) ||
+            attr.GetType().FullName?.Contains("TestAttribute", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    /// <summary>
+    /// Retrieves the full process command line including arguments.
+    /// </summary>
+    /// <remarks>
+    /// Due to OS limitations on macOS and Unix systems where process names are truncated to 15 chars in the process
+    /// table, this method implements platform-specific workarounds to get the complete process name and arguments:
+    /// - On macOS: Uses 'ps' command to get the full command line
+    /// - On Linux: Reads from /proc/{pid}/cmdline
+    /// - On Windows: Gets information via Process.MainModule
+    /// This ensures accurate process identification across all supported platforms.
+    /// </remarks>
+    /// <returns>The full process command line including the executable name and arguments.</returns>
+    private static string GetFullProcessCommandLine()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            var pid = Environment.ProcessId;
+            using Process process = new();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "ps",
+                Arguments = $"-p {pid} -o command=",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            process.Start();
+            string? output = process.StandardOutput.ReadLine();
+            process.WaitForExit();
+
+            // Remove a full path from the command, keep only filename and arguments
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                var parts = output.Trim().Split(' ', 2);
+                var fileName = Path.GetFileName(parts[0]);
+                return parts.Length > 1 ? $"{fileName} {parts[1]}" : fileName;
+            }
+            return string.Empty;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            var cmdline = File.ReadAllText($"/proc/{Environment.ProcessId}/cmdline")
+                .Replace('\0', ' ')
+                .Trim();
+            
+            // Remove a full path from the command, keep only filename and arguments
+            if (!string.IsNullOrWhiteSpace(cmdline))
+            {
+                var parts = cmdline.Split(' ', 2);
+                var fileName = Path.GetFileName(parts[0]);
+                return parts.Length > 1 ? $"{fileName} {parts[1]}" : fileName;
+            }
+            return string.Empty;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var process = Process.GetCurrentProcess();
+                
+                // Remove a full path from the command, keep only filename and arguments
+                var fileName = Path.GetFileName(process.MainModule?.FileName ?? process.ProcessName);
+                var args = Environment.GetCommandLineArgs();
+                if (args.Length > 1)
+                    return $"{fileName} {string.Join(' ', args.Skip(1))}";
+                return fileName;
+            }
+            catch (Exception)
+            {
+                return Process.GetCurrentProcess().ProcessName;
+            }
+        }
+
+        return Process.GetCurrentProcess().ProcessName;
     }
 }
