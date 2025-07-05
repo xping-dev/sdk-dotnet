@@ -75,7 +75,7 @@ public abstract class BaseContentValidator(string name) : TestComponent(name, Te
     /// </remarks>
     protected virtual byte[] GetData(TestContext context)
     {
-        return context.GetPropertyBagValue<byte[]>(PropertyBagKeys.HttpContent) ?? [];
+        return context.GetPropertyBagValue<byte[]>(PropertyBagKeys.HttpResponseContent) ?? [];
     }
     
     /// <summary>

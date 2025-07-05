@@ -185,7 +185,7 @@ public abstract class BaseConfiguration
     {
         ArgumentNullException.ThrowIfNull(httpContent, nameof(httpContent));
 
-        PropertyBag.AddOrUpdateProperty(PropertyBagKeys.HttpContent, httpContent);
+        PropertyBag.AddOrUpdateProperty(PropertyBagKeys.HttpRequestContent, httpContent);
 
         if (!setContentHeaders) 
             return;
@@ -223,7 +223,7 @@ public abstract class BaseConfiguration
     /// </returns>
     public HttpContent? GetHttpContent()
     {
-        if (PropertyBag.TryGetProperty(PropertyBagKeys.HttpContent, out HttpContent? httpContent))
+        if (PropertyBag.TryGetProperty(PropertyBagKeys.HttpRequestContent, out HttpContent? httpContent))
         {
             return httpContent;
         }
@@ -239,7 +239,7 @@ public abstract class BaseConfiguration
     /// </remarks>
     public void ClearHttpContent()
     {
-        PropertyBag.Clear(PropertyBagKeys.HttpContent);
+        PropertyBag.Clear(PropertyBagKeys.HttpRequestContent);
     }
 
     /// <summary>

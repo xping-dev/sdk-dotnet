@@ -103,13 +103,13 @@ public sealed class BrowserRequestSender : TestComponent
 
             HttpResponseMessage Response() => responseMessage.HttpResponseMessage;
             testStep = context.SessionBuilder
-                .Build(PropertyBagKeys.HttpStatus, new PropertyBagValue<string>($"{(int)Response().StatusCode}"))
-                .Build(PropertyBagKeys.HttpVersion, new PropertyBagValue<string>($"{Response().Version}"))
-                .Build(PropertyBagKeys.HttpReasonPhrase, new PropertyBagValue<string?>(Response().ReasonPhrase))
+                .Build(PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>($"{(int)Response().StatusCode}"))
+                .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{Response().Version}"))
+                .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(Response().ReasonPhrase))
                 .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(Response().Headers))
                 .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(Response().TrailingHeaders))
                 .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(Response().Content.Headers))
-                .Build(PropertyBagKeys.HttpContent, new PropertyBagValue<byte[]>(buffer))
+                .Build(PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(buffer))
                 .Build(PropertyBagKeys.BrowserResponseMessage,
                     new NonSerializable<BrowserResponseMessage>(responseMessage))
                 .Build(PropertyBagKeys.HttpResponseMessage, 

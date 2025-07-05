@@ -21,123 +21,139 @@ public static class PropertyBagKeys
     /// <summary>
     /// Represents IP address. See more on <see href="https://learn.microsoft.com/en-us/dotnet/api/system.net.ipaddress"/>.
     /// </summary>
-    public readonly static PropertyBagKey IPAddress = new(nameof(IPAddress));
+    public static readonly PropertyBagKey IPAddress = new(nameof(IPAddress));
     /// <summary>
     /// Represents IP status operation. See more on <see href="https://learn.microsoft.com/en-us/dotnet/api/system.net.networkinformation.ipstatus"/>.
     /// </summary>
-    public readonly static PropertyBagKey IPStatus = new(nameof(IPStatus));
+    public static readonly PropertyBagKey IPStatus = new(nameof(IPStatus));
     #endregion Network Information
 
     #region DNS Lookup
     /// <summary>
     /// Array of matching IP addresses associated with a DNS name of the host.
     /// </summary>
-    public readonly static PropertyBagKey DnsResolvedIPAddresses = new(nameof(DnsResolvedIPAddresses));
+    public static readonly PropertyBagKey DnsResolvedIPAddresses = new(nameof(DnsResolvedIPAddresses));
     #endregion DNS Lookup
 
     #region PING 
     /// <summary>
     /// Represents the number of times the ping data can be forwarded.
     /// </summary>
-    public readonly static PropertyBagKey PingTTLOption = new(nameof(PingTTLOption));
+    public static readonly PropertyBagKey PingTtlOption = new(nameof(PingTtlOption));
 
     /// <summary>
     /// Represents the boolean value that controls fragmentation of the data sent to the remote host.
     /// </summary>
-    public readonly static PropertyBagKey PingDontFragmetOption = new(nameof(PingDontFragmetOption));
+    public static readonly PropertyBagKey PingDontFragmentOption = new(nameof(PingDontFragmentOption));
 
     /// <summary>
     /// Represents the number of milliseconds taken to send an Internet Control Message Protocol (ICMP) echo request and 
     /// receive the corresponding ICMP echo reply message.
     /// </summary>
-    public readonly static PropertyBagKey PingRoundtripTime = new(nameof(PingRoundtripTime));
+    public static readonly PropertyBagKey PingRoundtripTime = new(nameof(PingRoundtripTime));
     #endregion PING
 
     #region HTTP
     /// <summary>
     /// Represents the HTTP response message.
     /// </summary>
-    public readonly static PropertyBagKey HttpResponseMessage = new(nameof(HttpResponseMessage));
+    public static readonly PropertyBagKey HttpResponseMessage = new(nameof(HttpResponseMessage));
 
     /// <summary>
     /// Represents the HTTP method.
     /// </summary>
-    public readonly static PropertyBagKey HttpMethod = new(nameof(HttpMethod));
-
+    public static readonly PropertyBagKey HttpMethod = new(nameof(HttpMethod));
+    
     /// <summary>
     /// Represents the HTTP status. 
     /// </summary>
-    public readonly static PropertyBagKey HttpStatus = new(nameof(HttpStatus));
+    public static readonly PropertyBagKey HttpResponseStatus = new(nameof(HttpResponseStatus));
 
     /// <summary>
     /// Represents the HTTP reason phrase.
     /// </summary>
-    public readonly static PropertyBagKey HttpReasonPhrase = new(nameof(HttpReasonPhrase));
+    public static readonly PropertyBagKey HttpResponsePhrase = new(nameof(HttpResponsePhrase));
 
     /// <summary>
     /// Represents the HTTP version.
     /// </summary>
-    public readonly static PropertyBagKey HttpVersion = new(nameof(HttpVersion));
+    public static readonly PropertyBagKey HttpResponseVersion = new(nameof(HttpResponseVersion));
 
     /// <summary>
     /// Represents the HTTP content.
     /// </summary>
-    public readonly static PropertyBagKey HttpContent = new(nameof(HttpContent));
+    public static readonly PropertyBagKey HttpResponseContent = new(nameof(HttpResponseContent));
+    
+    /// <summary>
+    /// Represents the HTTP content.
+    /// </summary>
+    public static readonly PropertyBagKey HttpRequestContent = new(nameof(HttpRequestContent));
 
     /// <summary>
     /// Represents the HTTP content headers.
     /// </summary>
-    public readonly static PropertyBagKey HttpContentHeaders = new(nameof(HttpContentHeaders));
+    public static readonly PropertyBagKey HttpContentHeaders = new(nameof(HttpContentHeaders));
+    
+    /// <summary>
+    /// Represents a value that specifies the maximum time to wait for a network request or a browser operation to
+    /// finish.
+    /// </summary>
+    public static readonly PropertyBagKey HttpRequestTimeout = new (nameof(HttpRequestTimeout));
 
     /// <summary>
-    /// Represents the boolean value determining whether to retry failing HTTP request.
+    /// Represents the boolean value determining whether to retry a failing HTTP request.
     /// </summary>
-    public readonly static PropertyBagKey HttpRetry = new(nameof(HttpRetry));
+    public static readonly PropertyBagKey HttpRetry = new(nameof(HttpRetry));
 
     /// <summary>
     /// Represents the boolean value that indicates whether to follow redirection responses.
     /// </summary>
-    public readonly static PropertyBagKey HttpFollowRedirect = new(nameof(HttpFollowRedirect));
+    public static readonly PropertyBagKey HttpFollowRedirect = new(nameof(HttpFollowRedirect));
+    
+    /// <summary>
+    /// Represents the maximum number of allowed HTTP redirects.
+    /// </summary>
+    public static readonly PropertyBagKey MaxRedirections = new(nameof(MaxRedirections));
 
     /// <summary>
-    /// Represents the collection of HTTP request headers as IDictionary&lt;string, IEnumerable&lt;string&gt;&gt;. 
+    /// Represents the collection of HTTP request headers as IDictionary&lt;string, IEnumerable&lt;string&gt;&gt; 
     /// </summary>
-    public readonly static PropertyBagKey HttpRequestHeaders = new(nameof(HttpRequestHeaders));
+    public static readonly PropertyBagKey HttpRequestHeaders = new(nameof(HttpRequestHeaders));
 
     /// <summary>
     /// Represents the collection of HTTP response headers as 
     /// <see href="https://learn.microsoft.com/en-us/dotnet/api/system.net.http.headers.httpresponseheaders"/>.
     /// </summary>
-    public readonly static PropertyBagKey HttpResponseHeaders = new(nameof(HttpResponseHeaders));
+    public static readonly PropertyBagKey HttpResponseHeaders = new(nameof(HttpResponseHeaders));
 
     /// <summary>
     /// Represents the collection of trailing headers included in an HTTP response as
     /// <see href="https://learn.microsoft.com/en-us/dotnet/api/system.net.http.headers.httpresponseheaders"/>.
     /// </summary>
-    public readonly static PropertyBagKey HttpResponseTrailingHeaders = new(nameof(HttpResponseTrailingHeaders));
+    public static readonly PropertyBagKey HttpResponseTrailingHeaders = new(nameof(HttpResponseTrailingHeaders));
     #endregion HTTP
 
     #region BROWSER
     /// <summary>
-    /// Represents the coordinates of the geographical location of a device.
+    /// Represents the coordinates of the device geographical location.
     /// </summary>
     /// <remarks>
     /// This property key is used to access the geolocation details in the context of automated browser tests.
-    /// It leverages the Geolocation feature from the Playwright library to simulate the geographical position
+    /// It leverages the Geolocation feature from the Playwright library to simulate the geographical position,
     /// which can be useful for testing location-based functionalities of web applications.
     /// </remarks>
-    public readonly static PropertyBagKey Geolocation = new(nameof(Geolocation));
+    public static readonly PropertyBagKey Geolocation = new(nameof(Geolocation));
 
     /// <summary>
     /// Represents the <see cref="BrowserResponseMessage"/>.
     /// </summary>
-    public readonly static PropertyBagKey BrowserResponseMessage = new(nameof(BrowserResponseMessage));
+    public static readonly PropertyBagKey BrowserResponseMessage = new(nameof(BrowserResponseMessage));
     #endregion BROWSER
 
     #region HTML_VALIDATION
     /// <summary>
-    /// Represents the name of the html validation method invoked.
+    /// Represents the name of the HTML validation method invoked.
     /// </summary>
-    public readonly static PropertyBagKey MethodName = new(nameof(MethodName));
+    public static readonly PropertyBagKey MethodName = new(nameof(MethodName));
     #endregion HTML_VALIDATION
 }

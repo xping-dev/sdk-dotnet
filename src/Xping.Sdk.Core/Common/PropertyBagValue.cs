@@ -6,6 +6,7 @@
  */
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.Serialization;
 using Xping.Sdk.Core.Session.Comparison.Comparers.Internals;
 using Xping.Sdk.Shared;
@@ -18,14 +19,19 @@ namespace Xping.Sdk.Core.Common;
 /// </summary>
 /// <typeparam name="TValue">The type of the value.</typeparam>
 /// <remarks>
-/// This class is used to store serializable values that are associated with test steps as outcomes. It supports four 
-/// types of values: string, string[], byte[], and Dictionary&lt;string, string&gt; It throws an ArgumentException 
-/// during a serialization process if the value to be serialized is not of one of these types.
+/// This class is used to store serializable values that are associated with test steps as outcomes. It supports 
+/// multiple types of values: string, string[], byte[], Dictionary&lt;string, string&gt;, int, double, bool, DateTime, and TimeSpan.
+/// It throws an ArgumentException during a serialization process if the value to be serialized is not of one of these types.
 /// </remarks>
 [Serializable]
 [KnownType(typeof(byte[]))]
 [KnownType(typeof(string[]))]
 [KnownType(typeof(Dictionary<string, string>))]
+[KnownType(typeof(int))]
+[KnownType(typeof(double))]
+[KnownType(typeof(bool))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(TimeSpan))]
 [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
 public sealed class PropertyBagValue<TValue> : IPropertyBagValue, ISerializable
 {
@@ -60,8 +66,8 @@ public sealed class PropertyBagValue<TValue> : IPropertyBagValue, ISerializable
         ArgumentNullException.ThrowIfNull(info, nameof(info));
 
         var type = Type
-            .GetType(info.GetString(nameof(PropertyBagValue<TValue>.Type))
-            .RequireNotNull(nameof(PropertyBagValue<TValue>.Type)));
+            .GetType(info.GetString(nameof(Type))
+            .RequireNotNull(nameof(Type)));
         Value = (TValue)info.GetValue(nameof(Value), type!).RequireNotNull(nameof(Value));
     }
 
@@ -101,6 +107,11 @@ public sealed class PropertyBagValue<TValue> : IPropertyBagValue, ISerializable
                 string[] array1 => otherBag.Value is string[] array2 && ArrayComparer.AreArraysEqual(array1, array2),
                 Dictionary<string, string> dictionary1 => otherBag.Value is Dictionary<string, string> dictionary2 &&
                     DictionaryComparer.CompareDictionaries(dictionary1, dictionary2),
+                int int1 => otherBag.Value is int int2 && int1 == int2,
+                double double1 => otherBag.Value is double double2 && double1.Equals(double2),
+                bool bool1 => otherBag.Value is bool bool2 && bool1 == bool2,
+                DateTime dateTime1 => otherBag.Value is DateTime dateTime2 && dateTime1 == dateTime2,
+                TimeSpan timeSpan1 => otherBag.Value is TimeSpan timeSpan2 && timeSpan1 == timeSpan2,
                 _ => Value.Equals(otherBag.Value)
             };
         }
@@ -143,6 +154,11 @@ public sealed class PropertyBagValue<TValue> : IPropertyBagValue, ISerializable
             string[] array => string.Join("; ", array.Select(a => $"\"{a}\"")),
             Dictionary<string, string> dictionary =>
                 string.Join("; ", dictionary.Select(kvp => $"[{kvp.Key}]:\"{kvp.Value}\"")),
+            int intVal => intVal.ToString(CultureInfo.InvariantCulture),
+            double doubleVal => doubleVal.ToString("G", CultureInfo.InvariantCulture),
+            bool boolVal => $"{boolVal}",
+            DateTime dateTimeVal => dateTimeVal.ToString("O"), // ISO 8601 format
+            TimeSpan timeSpanVal => timeSpanVal.ToString("c"), // Constant format
             _ => base.ToString()
         };
     }
@@ -155,15 +171,20 @@ public sealed class PropertyBagValue<TValue> : IPropertyBagValue, ISerializable
             return;
         }
 
-        info.AddValue(nameof(PropertyBagValue<TValue>.Type), typeof(TValue).FullName);
+        info.AddValue(nameof(Type), typeof(TValue).FullName);
         info.AddValue(nameof(Value), Value switch
         {
             string str => str,
             byte[] bytes => bytes,
             string[] array => array,
             Dictionary<string, string> dictionary => dictionary,
+            int intVal => intVal,
+            double doubleVal => doubleVal,
+            bool boolVal => boolVal,
+            DateTime dateTimeVal => dateTimeVal,
+            TimeSpan timeSpanVal => timeSpanVal,
             _ => throw new ArgumentException(
-                "Invalid type argument. Only byte[], string, string[] and Dictionary<string, string> are supported.")
+                "Invalid type argument. Only byte[], string, string[], Dictionary<string, string>, int, double, bool, DateTime, and TimeSpan are supported.")
         });
     }
 

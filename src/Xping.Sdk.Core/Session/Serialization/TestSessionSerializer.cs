@@ -87,6 +87,11 @@ public sealed class TestSessionSerializer : ITestSessionSerializer
         typeof(PropertyBagValue<byte[]>),
         typeof(PropertyBagValue<string>),
         typeof(PropertyBagValue<string[]>),
-        typeof(PropertyBagValue<Dictionary<string, string>>)
+        typeof(PropertyBagValue<Dictionary<string, string>>),
+        typeof(PropertyBagValue<int>),
+        typeof(PropertyBagValue<double>),
+        typeof(PropertyBagValue<bool>),
+        typeof(PropertyBagValue<DateTime>),
+        typeof(PropertyBagValue<TimeSpan>)
     ];
 }
