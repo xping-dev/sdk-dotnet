@@ -27,8 +27,10 @@ public interface ITestSessionBuilder
     /// <param name="uploadToken">
     /// The upload token that links the TestAgent's results to the project configured on the Xping.io server.
     /// </param>
+    /// <param name="metadata">The test metadata information.</param>
     /// <returns>The initialized test session builder.</returns>
-    ITestSessionBuilder Initiate(Uri url, DateTime startDate, TestContext context, Guid uploadToken);
+    ITestSessionBuilder Initiate(
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null);
 
     /// <summary>
     /// Gets a value indicating whether the test session is in a failed state.

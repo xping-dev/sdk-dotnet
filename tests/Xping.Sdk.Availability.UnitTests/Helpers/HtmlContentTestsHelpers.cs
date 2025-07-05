@@ -178,7 +178,8 @@ internal static class HtmlContentTestsHelpers
                 It.IsAny<Uri>(),
                 It.IsAny<DateTime>(),
                 It.IsAny<TestContext>(),
-                Guid.Empty))
+                Guid.Empty,
+                new TestMetadata()))
             .Returns(sessionBuilder);
     }
 }

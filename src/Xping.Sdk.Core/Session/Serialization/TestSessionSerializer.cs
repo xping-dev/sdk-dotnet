@@ -78,12 +78,15 @@ public sealed class TestSessionSerializer : ITestSessionSerializer
         return result as TestSession;
     }
 
-    private static List<Type> GetKnownTypes() => [
+    private static List<Type> GetKnownTypes() =>
+    [
         typeof(TestStep[]),
-            typeof(PropertyBag<IPropertyBagValue>),
-            typeof(Dictionary<PropertyBagKey, IPropertyBagValue>),
-            typeof(PropertyBagValue<byte[]>),
-            typeof(PropertyBagValue<string>),
-            typeof(PropertyBagValue<string[]>),
-            typeof(PropertyBagValue<Dictionary<string, string>>)];
+        typeof(TestMetadata),
+        typeof(PropertyBag<IPropertyBagValue>),
+        typeof(Dictionary<PropertyBagKey, IPropertyBagValue>),
+        typeof(PropertyBagValue<byte[]>),
+        typeof(PropertyBagValue<string>),
+        typeof(PropertyBagValue<string[]>),
+        typeof(PropertyBagValue<Dictionary<string, string>>)
+    ];
 }

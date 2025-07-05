@@ -27,7 +27,7 @@ public class HomePageTests(TestAgent testAgent) : BaseTest(testAgent)
         TestAgent.Cleanup();
     }
 
-    [Test]
+    [Test(Description = "Ensure that the home page returns a success status code (200)")]
     public async Task EnsureSuccessHttpStatusCode()
     {
         // Arrange

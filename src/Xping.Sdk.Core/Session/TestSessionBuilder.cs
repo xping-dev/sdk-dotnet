@@ -27,6 +27,7 @@ public class TestSessionBuilder : ITestSessionBuilder
     private TestContext? _context;
     private Error? _error;
     private PropertyBag<IPropertyBagValue>? _propertyBag;
+    private TestMetadata? _metadata;
 
     /// <summary>
     /// Gets a value indicating whether the test session has failed.
@@ -58,15 +59,18 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <param name="startDate">The start date of the test session.</param>
     /// <param name="context">The context responsible for maintaining the state of the test execution.</param>
     /// <param name="uploadToken">
-    /// The upload token that links the TestAgent's results to the project configured on the server.
+    ///     The upload token that links the TestAgent's results to the project configured on the server.
     /// </param>
+    /// <param name="metadata">The test metadata information.</param>
     /// <returns>The initialized test session builder.</returns>
-    public ITestSessionBuilder Initiate(Uri url, DateTime startDate, TestContext context, Guid uploadToken)
+    public ITestSessionBuilder Initiate(
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null)
     {
-        _url = url;
+        _url = url.RequireNotNull(nameof(url));
+        _context = context.RequireNotNull(nameof(context));
         _startDate = startDate;
         _uploadToken = uploadToken;
-        _context = context.RequireNotNull(nameof(context));
+        _metadata = metadata;
 
         // Reset internal state.
         _error = null;
@@ -241,7 +245,8 @@ public class TestSessionBuilder : ITestSessionBuilder
                 // Set the test session status to completed to indicate that no further modifications are allowed.
                 State = TestSessionState.Completed,
                 DeclineReason = null,
-                UploadToken = _uploadToken
+                UploadToken = _uploadToken,
+                Metadata = _metadata,
             };
 
             return session;
@@ -255,7 +260,8 @@ public class TestSessionBuilder : ITestSessionBuilder
                 Steps = _steps,
                 State = TestSessionState.Declined,
                 DeclineReason = ex.Message,
-                UploadToken = _uploadToken
+                UploadToken = _uploadToken,
+                Metadata = _metadata
             };
 
             return session;

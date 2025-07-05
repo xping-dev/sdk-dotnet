@@ -35,7 +35,7 @@ namespace Xping.Sdk.Core.Session;
 /// </remarks>
 [Serializable]
 [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
-public sealed class TestSession : 
+public sealed class TestSession :
     IDisposable, IAsyncDisposable, ISerializable, IDeserializationCallback, IEquatable<TestSession>
 {
     private readonly Uri _url = null!;
@@ -55,7 +55,7 @@ public sealed class TestSession :
     /// the server.
     /// </summary>
     public Guid UploadToken { get; internal set; }
-    
+
     /// <summary>
     /// Gets the timestamp when the test session was successfully uploaded to the server.
     /// </summary>
@@ -124,6 +124,15 @@ public sealed class TestSession :
     public string? DeclineReason { get; init; }
 
     /// <summary>
+    /// Gets the metadata information for the test method and its containing class.
+    /// Contains information about method names, class details, process information, and test attributes.
+    /// </summary>
+    /// <value>
+    /// A <see cref="TestMetadata"/> object containing test metadata, or null if no metadata is available.
+    /// </value>
+    public TestMetadata? Metadata { get; init; }
+
+    /// <summary>
     /// Returns a read-only collection of the failed test steps within the current test session.
     /// </summary>
     public IReadOnlyCollection<TestStep> Failures =>
@@ -142,7 +151,7 @@ public sealed class TestSession :
     /// Gets the total duration of all the steps in the test session.
     /// </summary>
     /// <value>
-    /// A <see cref="TimeSpan"/> object that represents the sum of the durations of all the steps.
+    /// Gets the total duration of the test session calculated by summing all individual test step durations.
     /// </value>
     public TimeSpan Duration => Steps.Aggregate(TimeSpan.Zero, (elapsedTime, step) => elapsedTime + step.Duration);
 
@@ -175,8 +184,9 @@ public sealed class TestSession :
             value: (string)info.GetValue(nameof(State), typeof(string)).RequireNotNull(nameof(State)));
         DeclineReason = info.GetValue(nameof(DeclineReason), typeof(string)) as string;
         UploadedAt = info.GetValue(nameof(UploadedAt), typeof(DateTimeOffset?)) as DateTimeOffset?;
+        Metadata = info.GetValue(nameof(Metadata), typeof(TestMetadata)) as TestMetadata;
     }
-    
+
     /// <summary>
     /// Marks the test session as uploaded with the specified timestamp.
     /// </summary>
@@ -197,6 +207,18 @@ public sealed class TestSession :
     public override string ToString()
     {
         var sb = new StringBuilder();
+
+        // Add metadata information if available
+        if (Metadata != null)
+        {
+            if (Metadata.IsTestMethod)
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Test: {Metadata.DisplayName}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Method: {Metadata.FullyQualifiedName}");
+            }
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Process: {Metadata.ProcessName} (ID: {Metadata.ProcessId})");
+            sb.AppendLine();
+        }
 
         sb.AppendFormat(
             CultureInfo.InvariantCulture,
@@ -315,6 +337,7 @@ public sealed class TestSession :
         info.AddValue(nameof(State), State.ToString(), typeof(string));
         info.AddValue(nameof(DeclineReason), DeclineReason, typeof(string));
         info.AddValue(nameof(UploadedAt), UploadedAt, typeof(DateTimeOffset?));
+        info.AddValue(nameof(Metadata), Metadata, typeof(TestMetadata));
     }
 
     void IDeserializationCallback.OnDeserialization(object? sender)
