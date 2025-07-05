@@ -66,9 +66,9 @@ public class TestSessionBuilder : ITestSessionBuilder
     public ITestSessionBuilder Initiate(
         Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null)
     {
-        _url = url.RequireNotNull(nameof(url));
-        _context = context.RequireNotNull(nameof(context));
+        _url = url;
         _startDate = startDate;
+        _context = context.RequireNotNull(nameof(context));
         _uploadToken = uploadToken;
         _metadata = metadata;
 
