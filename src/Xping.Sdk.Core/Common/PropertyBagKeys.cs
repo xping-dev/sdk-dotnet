@@ -134,6 +134,32 @@ public static class PropertyBagKeys
     #endregion HTTP
 
     #region BROWSER
+    
+    /// <summary>
+    /// Represents the name of the browser being used for automation.
+    /// </summary>
+    /// <remarks>
+    /// This property key is used to store the browser type (e.g., Chromium, Firefox, or WebKit) that is
+    /// currently being used for automated testing. It is particularly useful when working with multiple
+    /// browser types and need to track or make decisions based on the active browser.
+    /// </remarks>
+    public static readonly PropertyBagKey BrowserName = new(nameof(BrowserName));
+
+    /// <summary>
+    /// Represents the version of the browser being used for automation.
+    /// </summary>
+    public static readonly PropertyBagKey BrowserVersion = new(nameof(BrowserVersion));
+    
+    /// <summary>
+    /// Represents a boolean flag that determines whether the browser runs in headless mode during automation.
+    /// </summary>
+    /// <remarks>
+    /// When set to true, the browser operates without a graphical user interface (headless mode),
+    /// which is useful for automated testing in CI/CD environments. When false, the browser runs
+    /// with its full graphical interface visible, which can be helpful for debugging and development.
+    /// </remarks>
+    public static readonly PropertyBagKey BrowserHeadless = new(nameof(BrowserHeadless));
+
     /// <summary>
     /// Represents the coordinates of the device geographical location.
     /// </summary>

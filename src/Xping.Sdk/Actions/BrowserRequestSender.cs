@@ -67,54 +67,16 @@ public sealed class BrowserRequestSender : TestComponent
         ArgumentNullException.ThrowIfNull(context, nameof(context));
         ArgumentNullException.ThrowIfNull(settings, nameof(settings));
 
-        OrderedUrlRedirections urlRedirections = [];
-
-        IBrowserFactory browserFactory =
-            serviceProvider.GetService<IBrowserFactory>() ??
-            throw new InvalidProgramException(Errors.HeadlessBrowserNotFound);
-
-        BrowserClient browserClient = await browserFactory
-            .CreateClientAsync(_configuration, settings)
-            .ConfigureAwait(false);
-
-        TestStep testStep = null!;
+        TestStep? testStep = null;
         try
         {
-            urlRedirections.Add(url.AbsoluteUri);
+            var browserClient = await CreateBrowserClientAsync(serviceProvider, settings).ConfigureAwait(false);
+            await AnnotateTestStepWithBrowserRequest(context, browserClient, cancellationToken).ConfigureAwait(false);
+            var responseMessage =
+                await SendRequestAsync(url, browserClient, context, cancellationToken).ConfigureAwait(false);
 
-            BrowserRedirectionResponseHandler responseHandler = CreateHttpResponseHandler(
-                url, context, urlRedirections);
-            BrowserHttpRequestInterceptor requestInterceptor = CreateHttpRequestInterceptor();
-
-            BrowserResponseMessage? responseMessage = await browserClient
-                .SendAsync(url, responseHandler, requestInterceptor, cancellationToken)
+            testStep = await HandleResponseAsync(responseMessage, context, settings, cancellationToken)
                 .ConfigureAwait(false);
-
-            if (cancellationToken.IsCancellationRequested || responseMessage == null)
-            {
-                testStep = context.SessionBuilder.Build(Errors.TestComponentTimeout(this, settings.Timeout));
-                return;
-            }
-
-            byte[] buffer = await ReadAsByteArrayAsync(
-                    responseMessage.HttpResponseMessage.Content,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            HttpResponseMessage Response() => responseMessage.HttpResponseMessage;
-            testStep = context.SessionBuilder
-                .Build(PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>($"{(int)Response().StatusCode}"))
-                .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{Response().Version}"))
-                .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(Response().ReasonPhrase))
-                .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(Response().Headers))
-                .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(Response().TrailingHeaders))
-                .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(Response().Content.Headers))
-                .Build(PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(buffer))
-                .Build(PropertyBagKeys.BrowserResponseMessage,
-                    new NonSerializable<BrowserResponseMessage>(responseMessage))
-                .Build(PropertyBagKeys.HttpResponseMessage, 
-                    new NonSerializable<HttpResponseMessage>(responseMessage.HttpResponseMessage))
-                .Build();
         }
         catch (Exception exception)
         {
@@ -122,18 +84,115 @@ public sealed class BrowserRequestSender : TestComponent
         }
         finally
         {
-            context.Progress?.Report(testStep);
+            if (testStep != null)
+            {
+                context.Progress?.Report(testStep);
+            }
         }
+    }
+
+    private async Task<BrowserClient> CreateBrowserClientAsync(IServiceProvider serviceProvider, TestSettings settings)
+    {
+        var browserFactory = serviceProvider.GetService<IBrowserFactory>() ??
+                             throw new InvalidProgramException(Errors.HeadlessBrowserNotFound);
+
+        return await browserFactory
+            .CreateClientAsync(_configuration, settings)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<BrowserResponseMessage?> SendRequestAsync(
+        Uri url,
+        BrowserClient browserClient,
+        TestContext context,
+        CancellationToken cancellationToken)
+    {
+        var urlRedirections = new OrderedUrlRedirections { url.AbsoluteUri };
+        var responseHandler = CreateHttpResponseHandler(url, context, urlRedirections);
+        var requestInterceptor = CreateHttpRequestInterceptor();
+
+        return await browserClient
+            .SendAsync(url, responseHandler, requestInterceptor, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<TestStep> HandleResponseAsync(
+        BrowserResponseMessage? responseMessage,
+        TestContext context,
+        TestSettings settings,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested || responseMessage == null)
+        {
+            return context.SessionBuilder.Build(Errors.TestComponentTimeout(this, settings.Timeout));
+        }
+
+        var buffer = await ReadAsByteArrayAsync(responseMessage.HttpResponseMessage.Content, cancellationToken)
+            .ConfigureAwait(false);
+
+        return BuildTestStepFromBrowserResponse(responseMessage, buffer, context);
+    }
+
+    private async Task AnnotateTestStepWithBrowserRequest(
+        TestContext context,
+        BrowserClient browserClient,
+        CancellationToken cancellationToken)
+    {
+        var httpContent = _configuration.GetHttpContent();
+        var requestContent = httpContent != null
+            ? await httpContent.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false)
+            : [];
+
+        context.SessionBuilder
+            .Build(PropertyBagKeys.HttpRequestHeaders,
+                new PropertyBagValue<Dictionary<string, string>>(_configuration
+                    .GetHttpRequestHeaders()
+                    .ToDictionary(h => h.Key.ToUpperInvariant(), h => string.Join(";", h.Value))))
+            .Build(PropertyBagKeys.HttpMethod, new PropertyBagValue<string>(_configuration.GetHttpMethod().Method))
+            .Build(PropertyBagKeys.HttpRequestContent, new PropertyBagValue<byte[]>(requestContent))
+            .Build(PropertyBagKeys.HttpFollowRedirect,
+                new PropertyBagValue<bool>(_configuration.FollowHttpRedirectionResponses))
+            .Build(PropertyBagKeys.MaxRedirections, new PropertyBagValue<int>(_configuration.MaxRedirections))
+            .Build(PropertyBagKeys.HttpRequestTimeout,
+                new PropertyBagValue<TimeSpan>(_configuration.HttpRequestTimeout))
+            .Build(PropertyBagKeys.BrowserName, new PropertyBagValue<string>(browserClient.Name))
+            .Build(PropertyBagKeys.BrowserVersion, new PropertyBagValue<string>(browserClient.Version));
+
+        if (_configuration.Headless.HasValue)
+        {
+            context.SessionBuilder
+                .Build(PropertyBagKeys.BrowserHeadless, new PropertyBagValue<bool>(_configuration.Headless.Value));
+        }
+    }
+
+    private static TestStep BuildTestStepFromBrowserResponse(
+        BrowserResponseMessage responseMessage,
+        byte[] buffer,
+        TestContext context)
+    {
+        var response = responseMessage.HttpResponseMessage;
+
+        return context.SessionBuilder
+            .Build(PropertyBagKeys.HttpResponseStatus, new PropertyBagValue<string>($"{(int)response.StatusCode}"))
+            .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{response.Version}"))
+            .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
+            .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
+            .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
+            .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
+            .Build(PropertyBagKeys.HttpResponseContent, new PropertyBagValue<byte[]>(buffer))
+            .Build(PropertyBagKeys.BrowserResponseMessage, new NonSerializable<BrowserResponseMessage>(responseMessage))
+            .Build(PropertyBagKeys.HttpResponseMessage, new NonSerializable<HttpResponseMessage>(response))
+            .Build();
     }
 
     private BrowserRedirectionResponseHandler CreateHttpResponseHandler(
         Uri url,
         TestContext context,
         OrderedUrlRedirections urlRedirections) => new(
-            url,
-            context,
-            urlRedirections,
-            _configuration.MaxRedirections);
+        url,
+        context,
+        urlRedirections,
+        _configuration.MaxRedirections);
 
     private BrowserHttpRequestInterceptor CreateHttpRequestInterceptor() => new(_configuration);
 
