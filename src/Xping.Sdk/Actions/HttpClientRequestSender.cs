@@ -58,14 +58,17 @@ public sealed class HttpClientRequestSender : TestComponent
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
     {
-        ValidateArguments(url, settings, context);
+        ArgumentNullException.ThrowIfNull(url, nameof(url));
+        ArgumentNullException.ThrowIfNull(settings, nameof(settings));
+        ArgumentNullException.ThrowIfNull(context, nameof(context));
+        
         _urlRedirections.Clear();
 
         var httpClientFactory = GetHttpClientFactory(serviceProvider);
         using var httpClient = CreateHttpClient(httpClientFactory);
         using var request = CreateHttpRequestMessage(url);
 
-        await BuildRequestContext(context, request, cancellationToken).ConfigureAwait(false);
+        await AnnotateTestStepWithHttpRequest(context, request, cancellationToken).ConfigureAwait(false);
 
         TestStep? testStep = null;
         try
@@ -79,7 +82,7 @@ public sealed class HttpClientRequestSender : TestComponent
                 return;
             }
 
-            testStep = await BuildSuccessResponse(context, response, cancellationToken).ConfigureAwait(false);
+            testStep = await BuildTestStepFromHttpResponse(context, response, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -88,15 +91,10 @@ public sealed class HttpClientRequestSender : TestComponent
         finally
         {
             if (testStep != null)
+            {
                 context.Progress?.Report(testStep);
+            }
         }
-    }
-
-    private static void ValidateArguments(Uri url, TestSettings settings, TestContext context)
-    {
-        ArgumentNullException.ThrowIfNull(url, nameof(url));
-        ArgumentNullException.ThrowIfNull(settings, nameof(settings));
-        ArgumentNullException.ThrowIfNull(context, nameof(context));
     }
 
     private static IHttpClientFactory GetHttpClientFactory(IServiceProvider serviceProvider)
@@ -105,7 +103,7 @@ public sealed class HttpClientRequestSender : TestComponent
                throw new InvalidProgramException(Errors.HttpClientsNotFound);
     }
 
-    private async Task BuildRequestContext(TestContext context, HttpRequestMessage request,
+    private async Task AnnotateTestStepWithHttpRequest(TestContext context, HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         var requestContent = request.Content != null
@@ -125,7 +123,7 @@ public sealed class HttpClientRequestSender : TestComponent
                 new PropertyBagValue<TimeSpan>(_configuration.HttpRequestTimeout));
     }
 
-    private static async Task<TestStep> BuildSuccessResponse(TestContext context, HttpResponseMessage response,
+    private static async Task<TestStep> BuildTestStepFromHttpResponse(TestContext context, HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
         var buffer = await ReadAsByteArrayAsync(response.Content, cancellationToken).ConfigureAwait(false);
@@ -232,9 +230,9 @@ public sealed class HttpClientRequestSender : TestComponent
 
             while (!response.IsSuccessStatusCode && _urlRedirections.Count <= _configuration.MaxRedirections)
             {
-                // It is not recommended to handle redirects by checking if HTTP status code is between 300 and 399,
+                // It is not recommended to handle redirects by checking if the HTTP status code is between 300 and 399
                 // because it does not account for the different types of redirections and their implications. For
-                // example, some redirects may change the request method from POST to GET, or require user confirmation
+                // example, some redirects may change the request method from POST to GET or require user confirmation
                 // before proceeding. Therefore, it is better to use the StatusCode property of the HttpResponseMessage
                 // class, which returns a value of the HttpStatusCode enum. This way, we can handle each redirection
                 // type appropriately and follow the best practices.
@@ -257,7 +255,7 @@ public sealed class HttpClientRequestSender : TestComponent
                         .Build();
                     context.Progress?.Report(testStep);
 
-                    // Location HTTP header, specifies the absolute or relative URL of the new resource.
+                    // Location HTTP header specifies the absolute or relative URL of the new resource.
                     Uri? redirectUrl = response.Headers.Location;
 
                     if (redirectUrl != null)
