@@ -60,6 +60,10 @@ public sealed class TestAgent : IDisposable
 
     private readonly IServiceProvider _serviceProvider;
 
+    // Asynchronous task that detects the current execution location.
+    // This task is scheduled to run in the background and will not block the test execution.
+    private readonly Lazy<Task<TestLocation?>> _locationDetectionTask;
+
     // Lazy initialization of a shared pipeline container that is thread-safe. This ensures that only a single instance
     // of Pipeline is created and shared across all threads, and it is only created when it is first accessed and
     // the property InstantiatePerThread is disabled.
@@ -121,6 +125,11 @@ public sealed class TestAgent : IDisposable
     internal TestAgent(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
+
+        // Schedule location detection to be performed asynchronously.
+        // This is done to avoid blocking the test execution with location detection.
+        _locationDetectionTask = new Lazy<Task<TestLocation?>>(
+            DetectLocationWithTimeoutAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -144,8 +153,9 @@ public sealed class TestAgent : IDisposable
         ArgumentNullException.ThrowIfNull(url);
 
         using var instrumentation = new InstrumentationTimer(startStopwatch: false);
-        var context = CreateTestContext(instrumentation);
-        var metadata = GetCurrentTestMetadata();
+        var pipeline = Container; // Capture the pipeline instance for this test execution
+        var context = CreateTestContext(instrumentation, pipeline);
+        var metadata = await GetCurrentTestMetadataAsync().ConfigureAwait(false);
 
         var testSession = await ExecuteTestAsync(url, settings, context, metadata, cancellationToken)
             .ConfigureAwait(false);
@@ -224,6 +234,27 @@ public sealed class TestAgent : IDisposable
         {
             Cleanup();
             _container.Dispose();
+
+            try
+            {
+                if (_locationDetectionTask.IsValueCreated && !_locationDetectionTask.Value.IsCompleted)
+                {
+                    // Wait for location detection to complete.
+                    _locationDetectionTask.Value.Wait(TimeSpan.FromMilliseconds(3100));
+                }
+            }
+            catch (Exception)
+            {
+                // Ignore exceptions during disposal
+            }
+            finally
+            {
+                if (_locationDetectionTask.IsValueCreated)
+                {
+                    // Dispose the location detection task if it was created
+                    _locationDetectionTask.Value.Dispose();
+                }
+            }
         }
 
         _disposedValue = true;
@@ -241,16 +272,20 @@ public sealed class TestAgent : IDisposable
     /// An IInstrumentation object that provides mechanisms for monitoring and interacting with the test execution 
     /// process.
     /// </param>
+    /// <param name="pipeline">
+    /// The pipeline instance to be used for the entire test execution to ensure consistency across async operations.
+    /// </param>
     /// <returns>
     /// A <see cref="TestContext"/> object configured with the necessary services and instrumentation for test 
     /// execution.
     /// </returns>
-    private TestContext CreateTestContext(IInstrumentation instrumentation)
+    private TestContext CreateTestContext(IInstrumentation instrumentation, Pipeline pipeline)
     {
         var context = new TestContext(
             sessionBuilder: _serviceProvider.GetRequiredService<ITestSessionBuilder>(),
             instrumentation: instrumentation,
             sessionUploader: _serviceProvider.GetRequiredService<ITestSessionUploader>(),
+            pipeline: pipeline,
             progress: _serviceProvider.GetService<IProgress<TestStep>>());
 
         return context;
@@ -278,7 +313,7 @@ public sealed class TestAgent : IDisposable
         {
             InitializeExecution(url, context, metadata);
 
-            await Container
+            await context.Pipeline
                 .HandleAsync(url, settings ?? new TestSettings(), context, _serviceProvider, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -299,7 +334,7 @@ public sealed class TestAgent : IDisposable
     private void InitializeExecution(Uri url, TestContext context, TestMetadata metadata)
     {
         // Update context with a currently executing component.
-        context.UpdateExecutionContext(Container);
+        context.UpdateExecutionContext(context.Pipeline);
 
         // Initiate the test session builder by recording its start time, the URL of the page being validated,
         // and associating it with the current TestContext responsible for maintaining the state of the test
@@ -335,10 +370,9 @@ public sealed class TestAgent : IDisposable
         UploadFailed?.Invoke(this, e);
     }
 
-    private static TestMetadata GetCurrentTestMetadata()
+    private async Task<TestMetadata> GetCurrentTestMetadataAsync()
     {
         var stackTrace = new StackTrace();
-
 
         // Look for the test method in the stack trace
         MethodInfo? testMethod = null;
@@ -370,9 +404,10 @@ public sealed class TestAgent : IDisposable
                 Namespace = testClass.Namespace ?? "Unknown",
                 ProcessName = GetFullProcessCommandLine(),
                 ProcessId = Environment.ProcessId,
-                ClassAttributeNames = testClass.GetCustomAttributes().Select(attr => attr.GetType().Name).ToList(),
-                MethodAttributeNames = methodAttributes.Select(attr => attr.GetType().Name).ToList(),
-                TestDescription = testDescription
+                ClassAttributeNames = [.. testClass.GetCustomAttributes().Select(attr => attr.GetType().Name)],
+                MethodAttributeNames = [.. methodAttributes.Select(attr => attr.GetType().Name)],
+                TestDescription = testDescription,
+                Location = await _locationDetectionTask.Value.ConfigureAwait(false)
             };
         }
 
@@ -386,7 +421,8 @@ public sealed class TestAgent : IDisposable
             ProcessId = Environment.ProcessId,
             ClassAttributeNames = [],
             MethodAttributeNames = [],
-            TestDescription = null
+            TestDescription = null,
+            Location = await _locationDetectionTask.Value.ConfigureAwait(false)
         };
     }
 
@@ -479,7 +515,7 @@ public sealed class TestAgent : IDisposable
             var cmdline = File.ReadAllText($"/proc/{Environment.ProcessId}/cmdline")
                 .Replace('\0', ' ')
                 .Trim();
-            
+
             // Remove a full path from the command, keep only filename and arguments
             if (!string.IsNullOrWhiteSpace(cmdline))
             {
@@ -495,7 +531,7 @@ public sealed class TestAgent : IDisposable
             try
             {
                 var process = Process.GetCurrentProcess();
-                
+
                 // Remove a full path from the command, keep only filename and arguments
                 var fileName = Path.GetFileName(process.MainModule?.FileName ?? process.ProcessName);
                 var args = Environment.GetCommandLineArgs();
@@ -510,5 +546,33 @@ public sealed class TestAgent : IDisposable
         }
 
         return Process.GetCurrentProcess().ProcessName;
+    }
+
+    /// <summary>
+    /// Detects the current execution location with a timeout to avoid blocking test execution.
+    /// </summary>
+    /// <returns>TestLocation information or null if detection fails or times out.</returns>
+    private async Task<TestLocation?> DetectLocationWithTimeoutAsync()
+    {
+        try
+        {
+            var locationService = _serviceProvider.GetRequiredService<ILocationDetectionService>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)); // 3 second timeout
+
+            return await locationService.DetectLocationAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when timeout occurs. Return null if location detection times out
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Log the exception for debugging purposes, this ensures test execution is not disrupted by 
+            // location detection issues
+            Debug.WriteLine($"Location detection failed: {ex.Message}");
+
+            return null;
+        }
     }
 }

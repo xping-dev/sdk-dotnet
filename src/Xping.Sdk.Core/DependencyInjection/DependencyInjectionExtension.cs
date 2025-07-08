@@ -68,7 +68,7 @@ public static class DependencyInjectionExtension
     /// </param>
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddTestServerHttpClientFactory(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Func<WebApplicationFactoryClientOptions, HttpClient> createClient)
     {
         var factoryConfiguration = new HttpClientFactoryConfiguration();
@@ -172,11 +172,11 @@ public static class DependencyInjectionExtension
 
     private static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        var factoryConfiguration = new HttpClientFactoryConfiguration()
+        var factoryConfiguration = new HttpClientFactoryConfiguration
         {
             FollowHttpRedirectionResponses = false,
         };
-        
+
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientUploadSession)
             .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration))
             .AddTransientHttpErrorPolicy(builder => builder.WaitAndRetryAsync(
@@ -185,9 +185,12 @@ public static class DependencyInjectionExtension
                 handledEventsAllowedBeforeBreaking: factoryConfiguration.HandledEventsAllowedBeforeBreaking,
                 durationOfBreak: factoryConfiguration.DurationOfBreak));
         
+        services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientLocationDetection);
+        
         services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
         services.TryAddTransient<ITestSessionSerializer, TestSessionSerializer>();
         services.TryAddTransient<ITestSessionUploader, TestSessionUploader>();
+        services.TryAddTransient<ILocationDetectionService, LocationDetectionService>();
 
         return services;
     }

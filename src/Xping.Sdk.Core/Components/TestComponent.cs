@@ -83,11 +83,15 @@ public abstract class TestComponent : ITestComponent
         using var instrumentation = new InstrumentationTimer(startStopwatch: false);
         var sessionBuilder = serviceProvider.GetRequiredService<ITestSessionBuilder>();
         var sessionUploader = serviceProvider.GetRequiredService<ITestSessionUploader>();
+        
+        // Create a temporary pipeline containing just this component for probe testing
+        var pipeline = new Pipeline("ProbeTest", this);
 
         var context = new TestContext(
             sessionBuilder: sessionBuilder,
             instrumentation: instrumentation,
             sessionUploader: sessionUploader,
+            pipeline: pipeline,
             progress: serviceProvider.GetService<IProgress<TestStep>>());
 
         // Update context with a currently executing component.

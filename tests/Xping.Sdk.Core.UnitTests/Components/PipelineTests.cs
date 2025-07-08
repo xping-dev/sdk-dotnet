@@ -90,6 +90,7 @@ internal class PipelineTests(IServiceProvider serviceProvider)
             Mock.Of<ITestSessionBuilder>(), 
             Mock.Of<IInstrumentation>(),
             Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null);
         var settings = new TestSettings();
 
@@ -122,6 +123,7 @@ internal class PipelineTests(IServiceProvider serviceProvider)
             sessionBuilderMock.Object,
             Mock.Of<IInstrumentation>(),
             Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null);
         var settings = new TestSettings
         {
@@ -164,6 +166,7 @@ internal class PipelineTests(IServiceProvider serviceProvider)
             sessionBuilderMock.Object,
             Mock.Of<IInstrumentation>(),
             Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null);
         var settings = new TestSettings
         {

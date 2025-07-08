@@ -50,7 +50,8 @@ public sealed class TestSessionBuilderTests
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, uploader, progress: null);
+        var context = new TestContext(
+            builder, instrumentation, uploader, pipeline: new Pipeline("TestPipeline"), progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
@@ -79,7 +80,8 @@ public sealed class TestSessionBuilderTests
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, uploader, progress: null);
+        var context = new TestContext(
+            builder, instrumentation, uploader, pipeline: new Pipeline("TestPipeline"), progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
@@ -115,7 +117,8 @@ public sealed class TestSessionBuilderTests
         mockedComponent.SetupGet(c => c.Name).Returns("ComponentName");
         mockedComponent.SetupGet(c => c.Type).Returns(TestStepType.ActionStep);
 
-        var context = new TestContext(builder, instrumentation, uploader, progress: null);
+        var context = new TestContext(
+            builder, instrumentation, uploader, pipeline: new Pipeline("TestPipeline"), progress: null);
         context.UpdateExecutionContext(mockedComponent.Object);
 
         builder.Initiate(
@@ -152,9 +155,10 @@ public sealed class TestSessionBuilderTests
 
         // Act
         builder.Initiate(
-            url: null!, 
-            startDate: DateTime.UtcNow, 
-            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            url: null!,
+            startDate: DateTime.UtcNow,
+            context: new TestContext(
+                builder, instrumentation, uploader, pipeline: new Pipeline("TestPipeline"), progress: null),
             uploadToken: Guid.Empty);
 
         // Assert
@@ -172,9 +176,10 @@ public sealed class TestSessionBuilderTests
 
         // Act
         builder.Initiate(
-            url: new Uri("http://test.com"), 
+            url: new Uri("http://test.com"),
             startDate: DateTime.UtcNow - TimeSpan.FromDays(2),
-            context: new TestContext(builder, instrumentation, uploader, progress: null),
+            context: new TestContext(
+                builder, instrumentation, uploader, pipeline: new Pipeline("TestPipeline"), progress: null),
             uploadToken: Guid.Empty);
 
         // Assert
