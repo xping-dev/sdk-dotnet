@@ -66,6 +66,12 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     public string? TestDescription { get; init; }
 
     /// <summary>
+    /// Gets or sets the geographic location information where the test is being executed.
+    /// Contains details like country, region, city, timezone, and IP-based location data.
+    /// </summary>
+    public TestLocation? Location { get; init; }
+
+    /// <summary>
     /// Gets the full qualified name of the test method including namespace and class name.
     /// </summary>
     public string FullyQualifiedName => $"{Namespace}.{ClassName}.{MethodName}";
@@ -108,6 +114,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         MethodAttributeNames =
             (info.GetValue(nameof(MethodAttributeNames), typeof(string[])) as string[])?.ToList() ?? [];
         TestDescription = info.GetString(nameof(TestDescription));
+        Location = info.GetValue(nameof(Location), typeof(TestLocation)) as TestLocation;
     }
 
     /// <summary>
@@ -144,10 +151,12 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         if (IsTestMethod)
         {
             var description = !string.IsNullOrEmpty(TestDescription) ? $" - {TestDescription}" : "";
-            return $"{FullyQualifiedName}{description} [{ProcessName}:{ProcessId}]";
+            var location = Location != null ? $" [{Location.Country}/{Location.Region}]" : "";
+            return $"{FullyQualifiedName}{description}{location} [{ProcessName}:{ProcessId}]";
         }
 
-        return $"Process: {ProcessName} (ID: {ProcessId})";
+        var locationInfo = Location != null ? $" [{Location.Country}/{Location.Region}]" : "";
+        return $"Process: {ProcessName} (ID: {ProcessId}){locationInfo}";
     }
 
     /// <summary>
@@ -212,6 +221,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         info.AddValue(nameof(ClassAttributeNames), ClassAttributeNames.ToArray());
         info.AddValue(nameof(MethodAttributeNames), MethodAttributeNames.ToArray());
         info.AddValue(nameof(TestDescription), TestDescription);
+        info.AddValue(nameof(Location), Location);
     }
 
     void IDeserializationCallback.OnDeserialization(object? sender)

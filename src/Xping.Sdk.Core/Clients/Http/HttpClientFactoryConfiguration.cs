@@ -38,7 +38,18 @@ public class HttpClientFactoryConfiguration : BaseConfiguration
     /// <summary>
     /// The name of the HttpClient that performs retry policies for uploading test sessions to Xping.
     /// </summary>
+    /// <remarks>
+    /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
+    /// </remarks>
     public const string HttpClientUploadSession = nameof(HttpClientUploadSession);
+
+    /// <summary>
+    /// The name of the HttpClient that performs requests for location detection services.
+    /// </summary>
+    /// <remarks>
+    /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
+    /// </remarks>
+    public const string HttpClientLocationDetection = nameof(HttpClientLocationDetection);
 
     #endregion Named HTTP Clients
 

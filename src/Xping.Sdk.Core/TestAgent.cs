@@ -335,10 +335,9 @@ public sealed class TestAgent : IDisposable
         UploadFailed?.Invoke(this, e);
     }
 
-    private static TestMetadata GetCurrentTestMetadata()
+    private TestMetadata GetCurrentTestMetadata()
     {
         var stackTrace = new StackTrace();
-
 
         // Look for the test method in the stack trace
         MethodInfo? testMethod = null;
@@ -357,6 +356,9 @@ public sealed class TestAgent : IDisposable
             }
         }
 
+        // Detect location asynchronously (with timeout)
+        var location = DetectLocationWithTimeout().GetAwaiter().GetResult();
+
         // If we found a test method, return detailed metadata
         if (testMethod != null && testClass != null)
         {
@@ -372,7 +374,8 @@ public sealed class TestAgent : IDisposable
                 ProcessId = Environment.ProcessId,
                 ClassAttributeNames = testClass.GetCustomAttributes().Select(attr => attr.GetType().Name).ToList(),
                 MethodAttributeNames = methodAttributes.Select(attr => attr.GetType().Name).ToList(),
-                TestDescription = testDescription
+                TestDescription = testDescription,
+                Location = location
             };
         }
 
@@ -386,7 +389,8 @@ public sealed class TestAgent : IDisposable
             ProcessId = Environment.ProcessId,
             ClassAttributeNames = [],
             MethodAttributeNames = [],
-            TestDescription = null
+            TestDescription = null,
+            Location = location
         };
     }
 
@@ -510,5 +514,26 @@ public sealed class TestAgent : IDisposable
         }
 
         return Process.GetCurrentProcess().ProcessName;
+    }
+
+    /// <summary>
+    /// Detects the current execution location with a timeout to avoid blocking test execution.
+    /// </summary>
+    /// <returns>TestLocation information or null if detection fails or times out.</returns>
+    private async Task<TestLocation?> DetectLocationWithTimeout()
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)); // 3 second timeout
+            var locationService = _serviceProvider.GetRequiredService<ILocationDetectionService>();
+
+            return await locationService.DetectLocationAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Return null if location detection fails or times out
+            // This ensures test execution is not disrupted by location detection issues
+            return null;
+        }
     }
 }
