@@ -44,7 +44,8 @@ public sealed class HtmlContentValidatorTests
         _context = new(
             Mock.Of<ITestSessionBuilder>(), 
             Mock.Of<IInstrumentation>(),
-            Mock.Of<ITestSessionUploader>());
+            Mock.Of<ITestSessionUploader>(),
+            new Pipeline("TestPipeline"));
         _serviceProvider = Mock.Of<IServiceProvider>();
     }
 

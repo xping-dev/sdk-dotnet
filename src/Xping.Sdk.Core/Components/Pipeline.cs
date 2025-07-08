@@ -14,14 +14,6 @@ namespace Xping.Sdk.Core.Components;
 public class Pipeline : CompositeTests
 {
     /// <summary>
-    /// The name of the test component that represents a pipeline of tests.
-    /// </summary>
-    /// <remarks>
-    /// This constant is used to register the Pipeline class in the test framework.
-    /// </remarks>
-    public const string StepName = nameof(Pipeline);
-
-    /// <summary>
     /// Initializes a new instance of the Pipeline class with the specified name and components.
     /// </summary>
     /// <param name="name">The optional name of the pipeline. If null, the StepName constant is used.</param>
@@ -32,7 +24,7 @@ public class Pipeline : CompositeTests
     /// </remarks>
     public Pipeline(
         string? name = null,
-        params ITestComponent[] components) : base(name ?? StepName)
+        params ITestComponent[] components) : base(name ?? nameof(Pipeline))
     {
         if (components != null)
         {

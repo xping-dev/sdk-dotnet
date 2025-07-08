@@ -11,6 +11,7 @@ namespace Xping.Sdk.UnitTests.Components;
 
 using Moq;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using TestContext = Core.Components.TestContext;
 
@@ -23,6 +24,7 @@ internal class TestContextTests
             sessionBuilder: null!, 
             instrumentation: Mock.Of<IInstrumentation>(), 
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null));
     }
 
@@ -33,6 +35,7 @@ internal class TestContextTests
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null));
     }
 
@@ -43,6 +46,7 @@ internal class TestContextTests
             sessionBuilder: Mock.Of<ITestSessionBuilder>(),
             instrumentation: null!,
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null));
     }
 
@@ -53,6 +57,7 @@ internal class TestContextTests
             sessionBuilder: Mock.Of<ITestSessionBuilder>(),
             instrumentation: Mock.Of<IInstrumentation>(),
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null));
     }
 
@@ -63,6 +68,7 @@ internal class TestContextTests
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: null));
     }
 
@@ -73,6 +79,7 @@ internal class TestContextTests
             sessionBuilder: Mock.Of<ITestSessionBuilder>(), 
             instrumentation: Mock.Of<IInstrumentation>(), 
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress: Mock.Of<IProgress<TestStep>>()));
     }
 }

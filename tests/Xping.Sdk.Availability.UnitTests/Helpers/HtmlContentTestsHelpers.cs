@@ -8,6 +8,7 @@
 using HtmlAgilityPack;
 using Moq;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Collector;
 using TestContext = Xping.Sdk.Core.Components.TestContext;
@@ -47,6 +48,7 @@ internal static class HtmlContentTestsHelpers
             sessionBuilder ?? Mock.Of<ITestSessionBuilder>(),
             instrumentation ?? Mock.Of<IInstrumentation>(),
             sessionUploader: Mock.Of<ITestSessionUploader>(),
+            pipeline: new Pipeline("TestPipeline"),
             progress ?? Mock.Of<IProgress<TestStep>>());
 
         ConfigureSessionBuilderToReturnSelf(context.SessionBuilder);

@@ -28,16 +28,19 @@ public class TestContext
     /// <param name="sessionUploader">
     /// The uploader component responsible for uploading test session data to the server.
     /// </param>
+    /// <param name="pipeline">The pipeline instance to use for the test execution.</param>
     /// <param name="progress">Optional progress reporter for tracking test execution progress.</param>
     public TestContext(
         ITestSessionBuilder sessionBuilder,
         IInstrumentation instrumentation,
         ITestSessionUploader sessionUploader,
+        Pipeline pipeline,
         IProgress<TestStep>? progress = null)
     {
         SessionBuilder = sessionBuilder.RequireNotNull(nameof(sessionBuilder));
         Instrumentation = instrumentation.RequireNotNull(nameof(instrumentation));
         SessionUploader = sessionUploader.RequireNotNull(nameof(sessionUploader));
+        Pipeline = pipeline.RequireNotNull(nameof(pipeline));
         Progress = progress;
     }
 
@@ -65,6 +68,13 @@ public class TestContext
     /// Gets the test session collector associated with the current context.
     /// </summary>
     public ITestSessionUploader SessionUploader { get; }
+
+    /// <summary>
+    /// Gets the pipeline instance associated with this test context.
+    /// This ensures the same pipeline is used throughout the entire test execution, 
+    /// even when async operations continue on different threads.
+    /// </summary>
+    public Pipeline Pipeline { get; }
 
     /// <summary>
     /// Updates the TestContext with the currently executing TestComponent and resets the instrumentation timer.
