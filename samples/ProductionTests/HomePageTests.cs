@@ -31,6 +31,7 @@ public class HomePageTests(TestAgent testAgent) : BaseTest(testAgent)
     }
 
     [Test(Description = "Verifies that home page has correct title 'STORE'")]
+    [Xping("homepage-title-verification")]
     public async Task VerifyHomePageTitle()
     {
         TestAgent.UsePageValidation(async page =>
@@ -42,6 +43,7 @@ public class HomePageTests(TestAgent testAgent) : BaseTest(testAgent)
     }
 
     [Test(Description = "Verifies that home page has correct categories")]
+    [Xping("homepage-categories-verification")]
     public async Task VerifyCategories()
     {
         const int expectedCount = 4;
@@ -58,6 +60,7 @@ public class HomePageTests(TestAgent testAgent) : BaseTest(testAgent)
     }
 
     [Test]
+    [Xping("homepage-navigation-verification")]
     public async Task VerifyNavigationBar()
     {
         TestAgent.UsePageValidation(async page =>

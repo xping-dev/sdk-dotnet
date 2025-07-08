@@ -21,7 +21,8 @@ public sealed class TestMetadataTests
         int processId = 1234,
         IReadOnlyCollection<string>? classAttributeNames = null,
         IReadOnlyCollection<string>? methodAttributeNames = null,
-        string? testDescription = null)
+        string? testDescription = null,
+        string? xpingIdentifier = null)
     {
         return new TestMetadata
         {
@@ -32,7 +33,8 @@ public sealed class TestMetadataTests
             ProcessId = processId,
             ClassAttributeNames = classAttributeNames ?? ["TestFixtureAttribute"],
             MethodAttributeNames = methodAttributeNames ?? ["TestAttribute"],
-            TestDescription = testDescription
+            TestDescription = testDescription,
+            XpingIdentifier = xpingIdentifier
         };
     }
 
@@ -51,6 +53,7 @@ public sealed class TestMetadataTests
         Assert.That(metadata.ClassAttributeNames, Is.Empty);
         Assert.That(metadata.MethodAttributeNames, Is.Empty);
         Assert.That(metadata.TestDescription, Is.Null);
+        Assert.That(metadata.XpingIdentifier, Is.Null);
     }
 
     [Test]
@@ -466,7 +469,8 @@ public sealed class TestMetadataTests
             processId: 1234,
             classAttributeNames: ["TestFixtureAttribute", "CategoryAttribute"],
             methodAttributeNames: ["TestAttribute", "DescriptionAttribute"],
-            testDescription: "Test Description");
+            testDescription: "Test Description",
+            xpingIdentifier: "homepage-test-001");
 
         // Act
         var serialized = SerializeToMemoryStream(original);
@@ -481,6 +485,7 @@ public sealed class TestMetadataTests
         Assert.That(deserialized.ClassAttributeNames, Is.EquivalentTo(original.ClassAttributeNames));
         Assert.That(deserialized.MethodAttributeNames, Is.EquivalentTo(original.MethodAttributeNames));
         Assert.That(deserialized.TestDescription, Is.EqualTo(original.TestDescription));
+        Assert.That(deserialized.XpingIdentifier, Is.EqualTo(original.XpingIdentifier));
     }
 
     [Test]
@@ -569,7 +574,8 @@ public sealed class TestMetadataTests
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
-            TestDescription = "Test Description"
+            TestDescription = "Test Description",
+            XpingIdentifier = "test-unique-id"
         };
 
         // Assert
@@ -581,6 +587,7 @@ public sealed class TestMetadataTests
         Assert.That(metadata.ClassAttributeNames, Is.EquivalentTo(expected));
         Assert.That(metadata.MethodAttributeNames, Is.EquivalentTo(expectedArray));
         Assert.That(metadata.TestDescription, Is.EqualTo("Test Description"));
+        Assert.That(metadata.XpingIdentifier, Is.EqualTo("test-unique-id"));
     }
 
     private static byte[] SerializeToMemoryStream<T>(T obj)
@@ -596,5 +603,26 @@ public sealed class TestMetadataTests
         using var memoryStream = new MemoryStream(data);
         var serializer = new DataContractSerializer(typeof(T), knownTypes: [typeof(string[])]);
         return (T)serializer.ReadObject(memoryStream)!;
+    }
+
+    [Test]
+    public void XpingIdentifierIsExtractedFromXpingAttribute()
+    {
+        // Arrange
+        var original = CreateTestMetadataUnderTest(
+            xpingIdentifier: "test-xping-identifier");
+
+        // Act & Assert
+        Assert.That(original.XpingIdentifier, Is.EqualTo("test-xping-identifier"));
+    }
+
+    [Test]
+    public void XpingIdentifierIsNullWhenNotProvided()
+    {
+        // Arrange
+        var original = CreateTestMetadataUnderTest();
+
+        // Act & Assert
+        Assert.That(original.XpingIdentifier, Is.Null);
     }
 }

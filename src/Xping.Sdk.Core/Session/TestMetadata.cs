@@ -66,6 +66,12 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     public string? TestDescription { get; init; }
 
     /// <summary>
+    /// Gets or sets the unique identifier from the XpingAttribute for test session mapping.
+    /// This identifier is extracted from the XpingAttribute applied to the test method or class.
+    /// </summary>
+    public string? XpingIdentifier { get; init; }
+
+    /// <summary>
     /// Gets or sets the geographic location information where the test is being executed.
     /// Contains details like country, region, city, timezone, and IP-based location data.
     /// </summary>
@@ -114,6 +120,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         MethodAttributeNames =
             (info.GetValue(nameof(MethodAttributeNames), typeof(string[])) as string[])?.ToList() ?? [];
         TestDescription = info.GetString(nameof(TestDescription));
+        XpingIdentifier = info.GetString(nameof(XpingIdentifier));
         Location = info.GetValue(nameof(Location), typeof(TestLocation)) as TestLocation;
     }
 
@@ -221,6 +228,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         info.AddValue(nameof(ClassAttributeNames), ClassAttributeNames.ToArray());
         info.AddValue(nameof(MethodAttributeNames), MethodAttributeNames.ToArray());
         info.AddValue(nameof(TestDescription), TestDescription);
+        info.AddValue(nameof(XpingIdentifier), XpingIdentifier);
         info.AddValue(nameof(Location), Location);
     }
 
