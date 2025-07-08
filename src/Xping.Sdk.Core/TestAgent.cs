@@ -395,7 +395,9 @@ public sealed class TestAgent : IDisposable
         if (testMethod != null && testClass != null)
         {
             var methodAttributes = testMethod.GetCustomAttributes().ToList();
+            var classAttributes = testClass.GetCustomAttributes().ToList();
             var testDescription = ExtractTestDescription(methodAttributes);
+            var xpingIdentifier = ExtractXpingIdentifier(methodAttributes, classAttributes);
 
             return new TestMetadata
             {
@@ -404,9 +406,10 @@ public sealed class TestAgent : IDisposable
                 Namespace = testClass.Namespace ?? "Unknown",
                 ProcessName = GetFullProcessCommandLine(),
                 ProcessId = Environment.ProcessId,
-                ClassAttributeNames = [.. testClass.GetCustomAttributes().Select(attr => attr.GetType().Name)],
+                ClassAttributeNames = [.. classAttributes.Select(attr => attr.GetType().Name)],
                 MethodAttributeNames = [.. methodAttributes.Select(attr => attr.GetType().Name)],
                 TestDescription = testDescription,
+                XpingIdentifier = xpingIdentifier,
                 Location = await _locationDetectionTask.Value.ConfigureAwait(false)
             };
         }
@@ -450,6 +453,27 @@ public sealed class TestAgent : IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Extracts the XpingIdentifier from method and class attributes.
+    /// Method-level XpingAttribute takes precedence over class-level XpingAttribute.
+    /// </summary>
+    /// <param name="methodAttributes">The collection of method attributes.</param>
+    /// <param name="classAttributes">The collection of class attributes.</param>
+    /// <returns>The XpingIdentifier if found; otherwise, null.</returns>
+    private static string? ExtractXpingIdentifier(IEnumerable<Attribute> methodAttributes, IEnumerable<Attribute> classAttributes)
+    {
+        // Check method-level XpingAttribute first (higher priority)
+        var methodXpingAttribute = methodAttributes.OfType<XpingAttribute>().FirstOrDefault();
+        if (methodXpingAttribute != null)
+        {
+            return methodXpingAttribute.Identifier;
+        }
+
+        // Fall back to class-level XpingAttribute
+        var classXpingAttribute = classAttributes.OfType<XpingAttribute>().FirstOrDefault();
+        return classXpingAttribute?.Identifier;
     }
 
     /// <summary>
