@@ -235,12 +235,12 @@ public sealed class TestAgent : IDisposable
             Cleanup();
             _container.Dispose();
 
-            // Wait for location detection to complete or cancel it
             try
             {
-                if (!_locationDetectionTask.Value.IsCompleted)
+                if (_locationDetectionTask.IsValueCreated && !_locationDetectionTask.Value.IsCompleted)
                 {
-                    _locationDetectionTask.Value.Wait(TimeSpan.FromMilliseconds(100));
+                    // Wait for location detection to complete.
+                    _locationDetectionTask.Value.Wait(TimeSpan.FromMilliseconds(3100));
                 }
             }
             catch (Exception)
@@ -249,7 +249,11 @@ public sealed class TestAgent : IDisposable
             }
             finally
             {
-                _locationDetectionTask.Value.Dispose();
+                if (_locationDetectionTask.IsValueCreated)
+                {
+                    // Dispose the location detection task if it was created
+                    _locationDetectionTask.Value.Dispose();
+                }
             }
         }
 
