@@ -17,11 +17,19 @@ internal class TestSessionUploader(
 {
     public async Task<UploadResult> UploadAsync(
         TestSession testSession,
+        string? apiKey = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             using var httpClient = factory.CreateClient(HttpClientFactoryConfiguration.HttpClientUploadSession);
+            
+            // Add API key to request headers if provided
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+            }
+            
             using var form = new MultipartFormDataContent();
             using MemoryStream memoryStream = new();
             

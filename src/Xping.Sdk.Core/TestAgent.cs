@@ -57,6 +57,7 @@ public sealed class TestAgent : IDisposable
 {
     private bool _disposedValue;
     private Guid _uploadToken;
+    private string? _apiKey;
 
     private readonly IServiceProvider _serviceProvider;
 
@@ -92,6 +93,17 @@ public sealed class TestAgent : IDisposable
                               Guid.TryParse(value, out Guid result)
             ? result
             : Guid.Empty;
+    }
+
+    /// <summary>
+    /// Gets or sets the API key used for authentication with Xping services when uploading data.
+    /// If not explicitly set, the value is read from the XPING_API_KEY environment variable.
+    /// This key is used to authenticate HTTP requests by adding it as the "x-api-key" header.
+    /// </summary>
+    public string? ApiKey
+    {
+        get => _apiKey ?? Environment.GetEnvironmentVariable("XPING_API_KEY");
+        set => _apiKey = value;
     }
 
     /// <summary>
@@ -353,7 +365,7 @@ public sealed class TestAgent : IDisposable
         ITestSessionUploader sessionUploader,
         CancellationToken cancellationToken)
     {
-        var result = await sessionUploader.UploadAsync(testSession, cancellationToken).ConfigureAwait(false);
+        var result = await sessionUploader.UploadAsync(testSession, ApiKey, cancellationToken).ConfigureAwait(false);
 
         if (!result.IsSuccessful)
         {
