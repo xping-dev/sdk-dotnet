@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 using Xping.Sdk;
 using Xping.Sdk.Core;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.DependencyInjection;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Extensions;
@@ -82,6 +83,11 @@ internal sealed class Program : XpingAssertions
                         .AddTestAgent(agent =>
                         {
                             agent.UploadToken = "--- Your Dashboard Upload Token ---";
+                            // API Key for authentication with Xping services
+                            // Can be set explicitly or read from XPING_API_KEY environment variable
+                            agent.ApiKey = "--- Your Dashboard API Key ---";
+                            // Or alternatively, set the XPING_API_KEY environment variable
+                            // and the API key will be automatically loaded
                         });
             })
             .ConfigureLogging(logging =>

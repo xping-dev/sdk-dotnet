@@ -35,6 +35,7 @@ Host.CreateDefaultBuilder()
         .AddTestAgent(agent =>
         {
             agent.UploadToken = "--- Your Dashboard Upload Token ---";
+            agent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
             agent.UseDnsLookup()
                  .UseIPAddressAccessibilityCheck()
                  .UseHttpClient()
@@ -70,6 +71,7 @@ public class HomePageTests(TestAgent testAgent) : XpingAssertions
     public void OneTimeSetUp()
     {
         TestAgent.UploadToken = "--- Your Dashboard Upload Token ---"; // optional
+        TestAgent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
     }
 
     [Test]

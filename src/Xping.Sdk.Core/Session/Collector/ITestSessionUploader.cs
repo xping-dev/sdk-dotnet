@@ -20,9 +20,10 @@ public interface ITestSessionUploader
     /// Asynchronously uploads a test session to the xping.io server.
     /// </summary>
     /// <param name="testSession">The test session to upload.</param>
+    /// <param name="apiKey">The API key for authentication. If null, no authentication header will be added.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous upload operation, containing the upload result with status information.
     /// </returns>
-    Task<UploadResult> UploadAsync(TestSession testSession, CancellationToken cancellationToken = default);
+    Task<UploadResult> UploadAsync(TestSession testSession, string? apiKey = null, CancellationToken cancellationToken = default);
 }

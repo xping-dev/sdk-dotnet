@@ -81,6 +81,7 @@ Host.CreateDefaultBuilder()
         .AddTestAgent(agent =>
         {
             agent.UploadToken = "--- Your Dashboard Upload Token ---";
+            agent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
             agent.UseDnsLookup()
                  .UseIPAddressAccessibilityCheck()
                  .UseHttpClient()
@@ -117,6 +118,7 @@ public class HomePageTests(TestAgent testAgent) : XpingAssertions
     public void OneTimeSetUp()
     {
         testAgent.UploadToken = "--- Your Dashboard Upload Token ---";
+        testAgent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
     }
 
     [Test]
@@ -143,6 +145,37 @@ That’s it! You’re now ready to start automating your web application tests a
 ## Usage
 
 The `samples` folder in this repository contains various examples of how to use Xping SDK for your testing needs. For a comprehensive guide on how to install, configure, and customize Xping SDK, please refer to the [docs](https://xping-dev.github.io/sdk-dotnet/index.html).
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+
+<!-- CONFIGURATION -->
+## Configuration
+
+### Authentication
+
+Xping SDK supports authentication with Xping services using an API key. This key is used to authenticate requests when uploading test results to your dashboard.
+
+#### Setting the API Key
+
+You can set the API key in two ways:
+
+**Method 1: Explicitly in code**
+```csharp
+services.AddTestAgent(agent =>
+{
+    agent.ApiKey = "your-api-key-here";
+});
+```
+
+**Method 2: Using environment variable (recommended for CI/CD)**
+```bash
+export XPING_API_KEY="your-api-key-here"
+```
+
+When using environment variables, you don't need to set the API key explicitly in your code. The SDK will automatically read the value from the `XPING_API_KEY` environment variable.
+
+**Note:** If you set the API key explicitly in code, it will take precedence over the environment variable.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
