@@ -29,12 +29,17 @@ public sealed class PropertyBag<TValue> : ISerializable, IEquatable<PropertyBag<
     public int Count => _properties.Count;
 
     /// <summary>
-    /// Gets a read-only collection that contains the keys of the collection.
+    /// Gets a read-only collection that contains the key-value pairs in the property bag.
+    /// </summary>
+    public IReadOnlyDictionary<PropertyBagKey, TValue> Properties => _properties.AsReadOnly();
+
+    /// <summary>
+    /// Gets a read-only collection that contains the keys in the property bag.
     /// </summary>
     public IReadOnlyCollection<PropertyBagKey> Keys => _properties.Keys;
 
     /// <summary>
-    /// Gets a read-only collection that contains the values of the collection.
+    /// Gets a read-only collection that contains the values in the property bag.
     /// </summary>
     public IReadOnlyCollection<TValue> Values => _properties.Values;
 

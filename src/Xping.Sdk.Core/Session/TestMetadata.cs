@@ -7,6 +7,7 @@
 
 using System.Diagnostics;
 using System.Runtime.Serialization;
+using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Session;
 
@@ -68,8 +69,9 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     /// <summary>
     /// Gets or sets the unique identifier from the XpingAttribute for test session mapping.
     /// This identifier is extracted from the XpingAttribute applied to the test method or class.
+    /// When cannot be extracted, it is automatically generated.
     /// </summary>
-    public string? XpingIdentifier { get; init; }
+    public string? XpingIdentifier { get; private set; }
 
     /// <summary>
     /// Gets or sets the geographic location information where the test is being executed.
@@ -147,6 +149,16 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
             name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("Fact", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("Theory", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Updates the Xping identifier for this test metadata instance.
+    /// </summary>
+    /// <param name="identifier">The new Xping identifier to set. Cannot be null or empty.</param>
+    /// <exception cref="ArgumentException">Thrown when the identifier is null or empty.</exception>
+    public void UpdateXpingIdentifier(string identifier)
+    {
+        XpingIdentifier = identifier.RequireNotNullOrEmpty(nameof(identifier));
     }
 
     /// <summary>

@@ -15,6 +15,8 @@ internal class TestSessionUploader(
     ITestSessionSerializer serializer,
     IHttpClientFactory factory) : ITestSessionUploader
 {
+    private const string UploadEndpoint = "https://localhost:7100/api/upload";
+
     public async Task<UploadResult> UploadAsync(
         TestSession testSession,
         string? apiKey = null,
@@ -23,36 +25,39 @@ internal class TestSessionUploader(
         try
         {
             using var httpClient = factory.CreateClient(HttpClientFactoryConfiguration.HttpClientUploadSession);
-            
+
             // Add API key to request headers if provided
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
             }
-            
-            using var form = new MultipartFormDataContent();
+
+            using var fileUploadContent = new MultipartFormDataContent();
             using MemoryStream memoryStream = new();
-            
+
             serializer.Serialize(testSession, memoryStream, SerializationFormat.XML);
             memoryStream.Position = 0; // Reset position for reading
-            
+
             using var fileContent = new StreamContent(memoryStream);
             fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/xml");
-            form.Add(fileContent, name: "file", fileName: "test-session.xml");
-            
-            var response = await httpClient.PostAsync(
-                // TODO: For Production, we should configure the upload base URL at the HttpClient level
-                new Uri("https://localhost:7100/api/upload"), form, cancellationToken).ConfigureAwait(false);
-            
+            fileUploadContent.Add(fileContent, name: "file", fileName: "test-session.xml");
+
+            var response = await httpClient
+                .PostAsync(
+                    requestUri: new Uri($"{UploadEndpoint}?token={testSession.UploadToken}&id={testSession.Id}"),
+                    content: fileUploadContent,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
             // Update test session with upload timestamp if successful
             if (response.IsSuccessStatusCode)
             {
-                testSession.MarkAsUploaded(DateTimeOffset.UtcNow);
+                testSession.MarkAsUploaded(DateTime.UtcNow);
                 return UploadResult.Success(response.StatusCode);
             }
-            
+
             return UploadResult.Failure(
-                $"Upload failed with status code: {response.StatusCode}", 
+                $"Upload failed with status code: {response.StatusCode}",
                 statusCode: response.StatusCode);
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)

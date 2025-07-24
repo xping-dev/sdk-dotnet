@@ -61,7 +61,7 @@ public sealed class HttpClientRequestSender : TestComponent
         ArgumentNullException.ThrowIfNull(url, nameof(url));
         ArgumentNullException.ThrowIfNull(settings, nameof(settings));
         ArgumentNullException.ThrowIfNull(context, nameof(context));
-        
+
         _urlRedirections.Clear();
 
         var httpClientFactory = GetHttpClientFactory(serviceProvider);
@@ -228,64 +228,49 @@ public sealed class HttpClientRequestSender : TestComponent
                 return response;
             }
 
-            while (!response.IsSuccessStatusCode && _urlRedirections.Count <= _configuration.MaxRedirections)
+            while (IsRedirection(response) && _urlRedirections.Count <= _configuration.MaxRedirections)
             {
-                // It is not recommended to handle redirects by checking if the HTTP status code is between 300 and 399
-                // because it does not account for the different types of redirections and their implications. For
-                // example, some redirects may change the request method from POST to GET or require user confirmation
-                // before proceeding. Therefore, it is better to use the StatusCode property of the HttpResponseMessage
-                // class, which returns a value of the HttpStatusCode enum. This way, we can handle each redirection
-                // type appropriately and follow the best practices.
+                TestStep testStep = context.SessionBuilder
+                    .Build(PropertyBagKeys.HttpResponseStatus,
+                        new PropertyBagValue<string>($"{(int)response.StatusCode}"))
+                    .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{response.Version}"))
+                    .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
+                    .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
+                    .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
+                    .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
+                    .Build();
+                context.Progress?.Report(testStep);
 
-                // Manually check if the response is a redirection
-                if (response.StatusCode == HttpStatusCode.Redirect ||
-                    response.StatusCode == HttpStatusCode.MovedPermanently ||
-                    response.StatusCode == HttpStatusCode.Found ||
-                    response.StatusCode == HttpStatusCode.SeeOther ||
-                    response.StatusCode == HttpStatusCode.TemporaryRedirect)
+                // Location HTTP header specifies the absolute or relative URL of the new resource.
+                Uri? redirectUrl = response.Headers.Location;
+
+                if (redirectUrl != null)
                 {
-                    TestStep testStep = context.SessionBuilder
-                        .Build(PropertyBagKeys.HttpResponseStatus,
-                            new PropertyBagValue<string>($"{(int)response.StatusCode}"))
-                        .Build(PropertyBagKeys.HttpResponseVersion, new PropertyBagValue<string>($"{response.Version}"))
-                        .Build(PropertyBagKeys.HttpResponsePhrase, new PropertyBagValue<string?>(response.ReasonPhrase))
-                        .Build(PropertyBagKeys.HttpResponseHeaders, GetHeaders(response.Headers))
-                        .Build(PropertyBagKeys.HttpResponseTrailingHeaders, GetHeaders(response.TrailingHeaders))
-                        .Build(PropertyBagKeys.HttpContentHeaders, GetHeaders(response.Content.Headers))
-                        .Build();
-                    context.Progress?.Report(testStep);
-
-                    // Location HTTP header specifies the absolute or relative URL of the new resource.
-                    Uri? redirectUrl = response.Headers.Location;
-
-                    if (redirectUrl != null)
+                    if (!redirectUrl.IsAbsoluteUri)
                     {
-                        if (!redirectUrl.IsAbsoluteUri)
-                        {
-                            string lastAbsoluteUri =
-                                _urlRedirections.FindLastMatchingItem(url => new Uri(url).IsAbsoluteUri) ??
-                                throw new InvalidOperationException(
-                                    "Invalid Redirection Attempt Detected. The server " +
-                                    "attempted to redirect to an invalid or unrecognized location. Please check the URL " +
-                                    "or contact the site administrator for assistance.");
-
-                            redirectUrl = new Uri(baseUri: new Uri(lastAbsoluteUri), relativeUri: redirectUrl);
-                        }
-
-                        if (_urlRedirections.Add(redirectUrl.ToString()) == false)
-                        {
-                            // Circular dependency detected
+                        string lastAbsoluteUri =
+                            _urlRedirections.FindLastMatchingItem(url => new Uri(url).IsAbsoluteUri) ??
                             throw new InvalidOperationException(
-                                $"A circular dependency was detected for the URL {redirectUrl}. " +
-                                $"The redirection chain is: {string.Join(" -> ", _urlRedirections)}");
-                        }
+                                "Invalid Redirection Attempt Detected. The server " +
+                                "attempted to redirect to an invalid or unrecognized location. Please check the URL " +
+                                "or contact the site administrator for assistance.");
 
-                        using HttpRequestMessage redirectRequest = CreateHttpRequestMessage(redirectUrl);
-
-                        response = await httpClient
-                            .SendAsync(redirectRequest, cancellationToken)
-                            .ConfigureAwait(false);
+                        redirectUrl = new Uri(baseUri: new Uri(lastAbsoluteUri), relativeUri: redirectUrl);
                     }
+
+                    if (_urlRedirections.Add(redirectUrl.ToString()) == false)
+                    {
+                        // Circular dependency detected
+                        throw new InvalidOperationException(
+                            $"A circular dependency was detected for the URL {redirectUrl}. " +
+                            $"The redirection chain is: {string.Join(" -> ", _urlRedirections)}");
+                    }
+
+                    using HttpRequestMessage redirectRequest = CreateHttpRequestMessage(redirectUrl);
+
+                    response = await httpClient
+                        .SendAsync(redirectRequest, cancellationToken)
+                        .ConfigureAwait(false);
                 }
             }
 
@@ -307,5 +292,21 @@ public sealed class HttpClientRequestSender : TestComponent
                 .SendAsync(request, cancellationToken)
                 .ConfigureAwait(false);
         }
+    }
+
+    private static bool IsRedirection(HttpResponseMessage response)
+    {
+        // It is not recommended to handle redirects by checking if the HTTP status code is between 300 and 399
+        // because it does not account for the different types of redirections and their implications. For
+        // example, some redirects may change the request method from POST to GET or require user confirmation
+        // before proceeding. Therefore, it is better to use the StatusCode property of the HttpResponseMessage
+        // class, which returns a value of the HttpStatusCode enum. This way, we can handle each redirection
+        // type appropriately and follow the best practices.
+
+        return response.StatusCode == HttpStatusCode.Redirect ||
+               response.StatusCode == HttpStatusCode.MovedPermanently ||
+               response.StatusCode == HttpStatusCode.Found ||
+               response.StatusCode == HttpStatusCode.SeeOther ||
+               response.StatusCode == HttpStatusCode.TemporaryRedirect;
     }
 }

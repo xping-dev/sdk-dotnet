@@ -30,7 +30,7 @@ public interface ITestSessionBuilder
     /// <param name="metadata">The test metadata information.</param>
     /// <returns>The initialized test session builder.</returns>
     ITestSessionBuilder Initiate(
-        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null);
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata metadata);
 
     /// <summary>
     /// Gets a value indicating whether the test session is in a failed state.
