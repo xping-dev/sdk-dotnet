@@ -521,10 +521,10 @@ public sealed class TestAgent : IDisposable
         // Add namespace, class, and method if available (test method context)
         if (!string.IsNullOrEmpty(metadata.Namespace))
             components.Add(metadata.Namespace);
-        
+
         if (!string.IsNullOrEmpty(metadata.ClassName))
             components.Add(metadata.ClassName);
-        
+
         if (!string.IsNullOrEmpty(metadata.MethodName))
             components.Add(metadata.MethodName);
 
@@ -559,9 +559,10 @@ public sealed class TestAgent : IDisposable
             int bytesWritten = System.Text.Encoding.UTF8.GetBytes(identifierString.AsSpan(), utf8Bytes);
 
             // Hash the UTF8 bytes directly using the modern HashData API
-            var hashBytes = SHA256.HashData(utf8Bytes.Slice(0, bytesWritten));
+            var hashBytes = SHA256.HashData(utf8Bytes[..bytesWritten]);
             // Convert to base64 for compact representation (first 12 characters for readability)
-            var base64Hash = Convert.ToBase64String(hashBytes).TrimEnd('=')[..Math.Min(12, Convert.ToBase64String(hashBytes).TrimEnd('=').Length)];
+            var base64Hash = Convert.ToBase64String(hashBytes)
+                .TrimEnd('=')[..Math.Min(12, Convert.ToBase64String(hashBytes).TrimEnd('=').Length)];
 
             // Create readable prefix
             string readablePrefix;
@@ -583,7 +584,7 @@ public sealed class TestAgent : IDisposable
             {
                 return $"{metadata.ClassName}.{metadata.MethodName}#Fallback";
             }
-            
+
             return "Test#Fallback";
         }
     }

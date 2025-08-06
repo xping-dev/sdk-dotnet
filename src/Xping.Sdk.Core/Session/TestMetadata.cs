@@ -71,7 +71,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     /// This identifier is extracted from the XpingAttribute applied to the test method or class.
     /// When cannot be extracted, it is automatically generated.
     /// </summary>
-    public string? XpingIdentifier { get; private set; }
+    public string XpingIdentifier { get; private set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the geographic location information where the test is being executed.
@@ -122,7 +122,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         MethodAttributeNames =
             (info.GetValue(nameof(MethodAttributeNames), typeof(string[])) as string[])?.ToList() ?? [];
         TestDescription = info.GetString(nameof(TestDescription));
-        XpingIdentifier = info.GetString(nameof(XpingIdentifier));
+        XpingIdentifier = info.GetString(nameof(XpingIdentifier)) ?? string.Empty;
         Location = info.GetValue(nameof(Location), typeof(TestLocation)) as TestLocation;
     }
 
@@ -158,7 +158,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     /// <exception cref="ArgumentException">Thrown when the identifier is null or empty.</exception>
     public void UpdateXpingIdentifier(string identifier)
     {
-        XpingIdentifier = identifier.RequireNotNullOrEmpty(nameof(identifier));
+        XpingIdentifier = identifier.RequireNotNullOrEmpty();
     }
 
     /// <summary>

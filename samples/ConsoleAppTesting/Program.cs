@@ -90,10 +90,10 @@ internal sealed class Program : XpingAssertions
                         .AddTestAgent(agent =>
                         {
                             // Token for uploading test sessions
-                            agent.UploadToken = "f3bdf647-3bff-40c1-a69a-e86b82f92fa1";
+                            agent.UploadToken = "--- Your Dashboard Upload Token ---";
                             // API Key for authentication with Xping services
                             // Can be set explicitly or read from XPING_API_KEY environment variable
-                            agent.ApiKey = "xpg_cDgznhrUQ4IuybrWH7hztw";
+                            agent.ApiKey = "--- Your Dashboard Upload Token ---";
                             agent.UploadFailed += (sender, args) =>
                             {
                                 Console.WriteLine($"Upload failed: {args.UploadResult.Message}");

@@ -55,7 +55,7 @@ public sealed class TestMetadataTests
         Assert.That(metadata.ClassAttributeNames, Is.Empty);
         Assert.That(metadata.MethodAttributeNames, Is.Empty);
         Assert.That(metadata.TestDescription, Is.Null);
-        Assert.That(metadata.XpingIdentifier, Is.Null);
+        Assert.That(metadata.XpingIdentifier, Is.Not.Null);
     }
 
     [Test]
@@ -620,12 +620,12 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void XpingIdentifierIsNullWhenNotProvided()
+    public void XpingIdentifierIsNotNullWhenNotProvided()
     {
         // Arrange
         var original = CreateTestMetadataUnderTest();
 
         // Act & Assert
-        Assert.That(original.XpingIdentifier, Is.Null);
+        Assert.That(original.XpingIdentifier, Is.Not.Null);
     }
 }

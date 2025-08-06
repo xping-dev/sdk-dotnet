@@ -7,7 +7,6 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Xping.Sdk.Shared;
 
@@ -17,34 +16,34 @@ namespace Xping.Sdk.Shared;
 internal static class ArgumentValidation
 {
     /// <summary>
-    /// Basic Validation helper to verify parameter null validity.
+    /// Basic Validation helper to verify parameter validity.
     /// </summary>
     /// <typeparam name="T">The instance type</typeparam>
     /// <param name="obj">The parameter instance to verify</param>
-    /// <param name="parameterName">The parameter name to verify</param>
-    /// <param name="memberName">The name of the method or property that calls this method.</param>
-    /// <param name="sourceFilePath">The path of the source file that contains the caller.</param>
-    /// <param name="sourceLineNumber">The line number in the source file at which this method is called.</param>
+    /// <param name="parameterName">The parameter name to verify (automatically captured)</param>
+    /// <param name="memberName">The name of the calling member (automatically captured)</param>
+    /// <param name="sourceFilePath">The source file path of the caller (automatically captured)</param>
+    /// <param name="sourceLineNumber">The line number in the source file of the caller (automatically captured)</param>
     /// <returns>The instance that was passed to verify</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the parameter is null.</exception>
     public static T RequireNotNull<T>(
-        this T? obj, 
-        string parameterName, 
-        [CallerMemberName] string memberName = "", 
-        [CallerFilePath] string sourceFilePath = "", 
-        [CallerLineNumber] int sourceLineNumber = -1)
+        this T? obj,
+        [CallerArgumentExpression(nameof(obj))] string parameterName = "",
+        [CallerMemberName] string memberName = "",
+        [CallerFilePath] string sourceFilePath = "",
+        [CallerLineNumber] int sourceLineNumber = 0)
     {
-        ArgumentNullException.ThrowIfNull(parameterName, nameof(parameterName));
-
         if (obj == null)
         {
-            string errMsg = BuildErrorMessage(
-                $"Argument {parameterName} is null.", memberName, sourceFilePath, sourceLineNumber);
-
-            throw new ArgumentNullException(parameterName, errMsg);
+            throw new ArgumentNullException(parameterName,
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
         }
 
-        return obj;
+        return obj!;
     }
 
     /// <summary>
@@ -53,62 +52,121 @@ internal static class ArgumentValidation
     /// <typeparam name="T">The instance type</typeparam>
     /// <param name="obj">The parameter instance to verify</param>
     /// <param name="condition">The condition to test for</param>
-    /// <param name="parameterName">The parameter name to verify</param>
     /// <param name="message">The message to post when the parameter instance fails validation</param>
-    /// <param name="memberName">The name of the method or property that calls this method.</param>
-    /// <param name="sourceFilePath">The path of the source file that contains the caller.</param>
-    /// <param name="sourceLineNumber">The line number in the source file at which this method is called.</param>
+    /// <param name="parameterName">The parameter name to verify (automatically captured)</param>
+    /// <param name="memberName">The name of the calling member (automatically captured)</param>
+    /// <param name="sourceFilePath">The source file path of the caller (automatically captured)</param>
+    /// <param name="sourceLineNumber">The line number in the source file of the caller (automatically captured)</param>
     /// <returns>The instance that was passed to verify</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the condition is not met.</exception>
     public static T RequireCondition<T>(
         this T obj,
         Func<T, bool> condition,
-        string parameterName,
         string message,
+        [CallerArgumentExpression(nameof(obj))] string parameterName = "",
         [CallerMemberName] string memberName = "",
         [CallerFilePath] string sourceFilePath = "",
-        [CallerLineNumber] int sourceLineNumber = -1)
+        [CallerLineNumber] int sourceLineNumber = 0)
     {
-        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
-        ArgumentException.ThrowIfNullOrEmpty(message, nameof(message));
-        ArgumentNullException.ThrowIfNull(obj, parameterName);
-        ArgumentNullException.ThrowIfNull(condition, nameof(condition));
+        if (obj == null)
+        {
+            throw new ArgumentNullException(
+                nameof(obj),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
+
+        if (condition == null)
+        {
+            throw new ArgumentNullException(
+                nameof(condition),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
+
+        if (parameterName == null)
+        {
+            throw new ArgumentNullException(
+                nameof(parameterName),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
 
         if (!condition(obj))
         {
-            string errMsg = BuildErrorMessage(message, memberName, sourceFilePath, sourceLineNumber);
-
-            throw new ArgumentException(errMsg, parameterName);
+            throw new ArgumentException(
+                message + string.Format(
+                    CultureInfo.InvariantCulture,
+                    ", CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber), parameterName);
         }
 
         return obj;
     }
 
     /// <summary>
-    /// Verify string parameter to make sure it's not null or white space.
+    /// Vefiy string parameter to make sure it's not null or while space.
     /// </summary>
     /// <param name="obj">The parameter instance to verify</param>
-    /// <param name="parameterName">The parameter name to verify</param>
-    /// <param name="memberName">The name of the method or property that calls this method.</param>
-    /// <param name="sourceFilePath">The path of the source file that contains the caller.</param>
-    /// <param name="sourceLineNumber">The line number in the source file at which this method is called.</param>
+    /// <param name="parameterName">The parameter name to verify (automatically captured)</param>
+    /// <param name="memberName">The name of the calling member (automatically captured)</param>
+    /// <param name="sourceFilePath">The source file path of the caller (automatically captured)</param>
+    /// <param name="sourceLineNumber">The line number in the source file of the caller (automatically captured)</param>
     /// <returns>The instance that was passed to verify</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the parameter is null or whitespace.</exception>
     public static string RequireNotNullOrWhiteSpace(
-        this string? obj,
-        string parameterName,
+        this string obj,
+        [CallerArgumentExpression(nameof(obj))] string parameterName = "",
         [CallerMemberName] string memberName = "",
         [CallerFilePath] string sourceFilePath = "",
-        [CallerLineNumber] int sourceLineNumber = -1)
+        [CallerLineNumber] int sourceLineNumber = 0)
     {
-        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
+        if (obj == null)
+        {
+            throw new ArgumentNullException(
+                nameof(obj),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
+
+        if (parameterName == null)
+        {
+            throw new ArgumentNullException(
+                nameof(parameterName),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
 
         if (string.IsNullOrWhiteSpace(obj))
         {
-            string errMsg = BuildErrorMessage(
-                $"Argument {parameterName} is null or white space.", memberName, sourceFilePath, sourceLineNumber);
+            var msg = string.Format(
+                CultureInfo.InvariantCulture,
+                "Argument is null or white space. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                memberName,
+                sourceFilePath,
+                sourceLineNumber);
 
-            throw new ArgumentException(errMsg, parameterName);
+            throw new ArgumentException(msg, parameterName);
         }
 
         return obj;
@@ -118,51 +176,54 @@ internal static class ArgumentValidation
     /// Verify string parameter to make sure it's not null or empty.
     /// </summary>
     /// <param name="obj">The parameter instance to verify</param>
-    /// <param name="parameterName">The parameter name to verify</param>
-    /// <param name="memberName">The name of the method or property that calls this method.</param>
-    /// <param name="sourceFilePath">The path of the source file that contains the caller.</param>
-    /// <param name="sourceLineNumber">The line number in the source file at which this method is called.</param>
+    /// <param name="parameterName">The parameter name to verify (automatically captured)</param>
+    /// <param name="memberName">The name of the calling member (automatically captured)</param>
+    /// <param name="sourceFilePath">The source file path of the caller (automatically captured)</param>
+    /// <param name="sourceLineNumber">The line number in the source file of the caller (automatically captured)</param>
     /// <returns>The instance that was passed to verify</returns>
-    /// <exception cref="ArgumentException">Thrown when the string parameter is null or empty.</exception>
     public static string RequireNotNullOrEmpty(
-        this string? obj,
-        string parameterName,
+        this string obj,
+        [CallerArgumentExpression(nameof(obj))] string parameterName = "",
         [CallerMemberName] string memberName = "",
         [CallerFilePath] string sourceFilePath = "",
-        [CallerLineNumber] int sourceLineNumber = -1)
+        [CallerLineNumber] int sourceLineNumber = 0)
     {
-        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
+        if (obj == null)
+        {
+            throw new ArgumentNullException(
+                nameof(obj),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
+
+        if (parameterName == null)
+        {
+            throw new ArgumentNullException(
+                nameof(parameterName),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    memberName,
+                    sourceFilePath,
+                    sourceLineNumber));
+        }
 
         if (string.IsNullOrEmpty(obj))
         {
-            string errMsg = BuildErrorMessage(
-                $"Argument {parameterName} is null or empty.", memberName, sourceFilePath, sourceLineNumber);
+            var msg = string.Format(
+                CultureInfo.InvariantCulture,
+                "Argument is null or empty. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                memberName,
+                sourceFilePath,
+                sourceLineNumber);
 
-            throw new ArgumentException(errMsg, parameterName);
+            throw new ArgumentException(msg, parameterName);
         }
 
         return obj;
-    }
-
-    private static string BuildErrorMessage(string message, string? memberName, string? sourceFilePath, int sourceLineNumber)
-    {
-        var sb = new StringBuilder(message);
-
-        if (!string.IsNullOrEmpty(memberName))
-        {
-            sb.AppendFormat(CultureInfo.InvariantCulture, " CallerMemberName={0}", memberName);
-        }
-
-        if (!string.IsNullOrEmpty(sourceFilePath))
-        {
-            sb.AppendFormat(CultureInfo.InvariantCulture, " CallerFilePath={0}", sourceFilePath);
-        }
-
-        if (sourceLineNumber >= 0)
-        {
-            sb.AppendFormat(CultureInfo.InvariantCulture, " CallerSourceLineNumber={0}", sourceLineNumber);
-        }
-
-        return sb.ToString();
     }
 }

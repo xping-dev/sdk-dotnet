@@ -91,8 +91,8 @@ public sealed class ArgumentValidationTests
         // Assert
         Assert.Throws<ArgumentNullException>(() => value.RequireCondition(
             obj => true,
-            parameterName: null!,
-            "message"));
+            "message",
+            parameterName: null!));
     }
 
     [Test]
@@ -102,7 +102,7 @@ public sealed class ArgumentValidationTests
         object value = new();
 
         // Assert
-        Assert.Throws<ArgumentNullException>(() => value.RequireCondition(obj => true, nameof(value), message: null!));
+        Assert.Throws<ArgumentNullException>(() => value.RequireCondition(obj => true, message: null!, nameof(value)));
     }
 
     [Test]
@@ -135,8 +135,8 @@ public sealed class ArgumentValidationTests
         // Assert
         var ex = Assert.Throws<ArgumentException>(() => value.RequireCondition(
             obj => false,
-            nameof(value),
-            message: expectedMessage));
+            message: expectedMessage,
+            nameof(value)));
 
         Assert.That(ex.Message.StartsWith(expectedMessage, StringComparison.InvariantCulture));
     }
