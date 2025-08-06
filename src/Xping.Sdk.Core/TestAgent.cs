@@ -557,7 +557,7 @@ public sealed class TestAgent : IDisposable
             var hashBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identifierString));
 
             // Convert to base64 for compact representation (first 12 characters for readability)
-            var base64Hash = Convert.ToBase64String(hashBytes).TrimEnd('=')[..12];
+            var base64Hash = Convert.ToBase64String(hashBytes).TrimEnd('=')[..Math.Min(12, Convert.ToBase64String(hashBytes).TrimEnd('=').Length)];
 
             // Create readable prefix
             string readablePrefix;
