@@ -554,8 +554,12 @@ public sealed class TestAgent : IDisposable
             var identifierString = string.Join("::", components);
 
             // Create a deterministic hash for consistent results
-            var hashBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identifierString));
+            // Use a stack-allocated buffer for UTF8 encoding to avoid heap allocations
+            Span<byte> utf8Bytes = stackalloc byte[System.Text.Encoding.UTF8.GetMaxByteCount(identifierString.Length)];
+            int bytesWritten = System.Text.Encoding.UTF8.GetBytes(identifierString.AsSpan(), utf8Bytes);
 
+            // Hash the UTF8 bytes directly using the modern HashData API
+            var hashBytes = SHA256.HashData(utf8Bytes.Slice(0, bytesWritten));
             // Convert to base64 for compact representation (first 12 characters for readability)
             var base64Hash = Convert.ToBase64String(hashBytes).TrimEnd('=')[..Math.Min(12, Convert.ToBase64String(hashBytes).TrimEnd('=').Length)];
 
