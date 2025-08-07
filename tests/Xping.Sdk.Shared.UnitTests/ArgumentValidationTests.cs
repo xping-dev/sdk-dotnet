@@ -158,7 +158,7 @@ public sealed class ArgumentValidationTests
         string value = null!;
 
         // Assert
-        Assert.Throws<ArgumentException>(() => value.RequireNotNullOrWhiteSpace(nameof(value)));
+        Assert.Throws<ArgumentNullException>(() => value.RequireNotNullOrWhiteSpace(nameof(value)));
     }
 
     [Test]
@@ -209,7 +209,7 @@ public sealed class ArgumentValidationTests
         string value = null!;
 
         // Assert
-        Assert.Throws<ArgumentException>(() => value.RequireNotNullOrEmpty(nameof(value)));
+        Assert.Throws<ArgumentNullException>(() => value.RequireNotNullOrEmpty(nameof(value)));
     }
 
     [Test]

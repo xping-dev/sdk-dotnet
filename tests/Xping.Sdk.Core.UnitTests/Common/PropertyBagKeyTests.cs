@@ -29,7 +29,7 @@ public sealed class PropertyBagKeyTests
     public void ShouldThrowExceptionWhenArgumentIsNull()
     {
         // Assert
-        Assert.Throws<ArgumentException>(() => new PropertyBagKey(key: null!));
+        Assert.Throws<ArgumentNullException>(() => new PropertyBagKey(key: null!));
     }
 
     [Test]

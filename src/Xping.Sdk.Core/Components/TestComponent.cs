@@ -28,7 +28,7 @@ public abstract class TestComponent : ITestComponent
     /// <param name="type">Type of the test component.</param>
     protected TestComponent(string name, TestStepType type)
     {
-        Name = name.RequireNotNullOrEmpty(nameof(name));
+        Name = name.RequireNotNullOrEmpty();
         Type = type;
     }
 

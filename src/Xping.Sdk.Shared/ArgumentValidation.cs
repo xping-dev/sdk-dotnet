@@ -32,12 +32,14 @@ internal static class ArgumentValidation
         [CallerFilePath] string sourceFilePath = "",
         [CallerLineNumber] int sourceLineNumber = 0)
     {
+        ArgumentNullException.ThrowIfNull(parameterName, nameof(parameterName));
+
         if (obj == null)
         {
             throw new ArgumentNullException(parameterName,
                 string.Format(
                     CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                    "Argument value is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
                     memberName,
                     sourceFilePath,
                     sourceLineNumber));
@@ -67,41 +69,10 @@ internal static class ArgumentValidation
         [CallerFilePath] string sourceFilePath = "",
         [CallerLineNumber] int sourceLineNumber = 0)
     {
-        if (obj == null)
-        {
-            throw new ArgumentNullException(
-                nameof(obj),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
-
-        if (condition == null)
-        {
-            throw new ArgumentNullException(
-                nameof(condition),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
-
-        if (parameterName == null)
-        {
-            throw new ArgumentNullException(
-                nameof(parameterName),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
+        ArgumentException.ThrowIfNullOrEmpty(message, nameof(message));
+        ArgumentNullException.ThrowIfNull(obj, parameterName);
+        ArgumentNullException.ThrowIfNull(condition, nameof(condition));
 
         if (!condition(obj))
         {
@@ -133,35 +104,14 @@ internal static class ArgumentValidation
         [CallerFilePath] string sourceFilePath = "",
         [CallerLineNumber] int sourceLineNumber = 0)
     {
-        if (obj == null)
-        {
-            throw new ArgumentNullException(
-                nameof(obj),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
-
-        if (parameterName == null)
-        {
-            throw new ArgumentNullException(
-                nameof(parameterName),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
+        ArgumentNullException.ThrowIfNull(obj, parameterName);
 
         if (string.IsNullOrWhiteSpace(obj))
         {
             var msg = string.Format(
                 CultureInfo.InvariantCulture,
-                "Argument is null or white space. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                "Argument is white space. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
                 memberName,
                 sourceFilePath,
                 sourceLineNumber);
@@ -188,35 +138,14 @@ internal static class ArgumentValidation
         [CallerFilePath] string sourceFilePath = "",
         [CallerLineNumber] int sourceLineNumber = 0)
     {
-        if (obj == null)
-        {
-            throw new ArgumentNullException(
-                nameof(obj),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
-
-        if (parameterName == null)
-        {
-            throw new ArgumentNullException(
-                nameof(parameterName),
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Argument is null. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
-                    memberName,
-                    sourceFilePath,
-                    sourceLineNumber));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(parameterName, nameof(parameterName));
+        ArgumentNullException.ThrowIfNull(obj, parameterName);
 
         if (string.IsNullOrEmpty(obj))
         {
             var msg = string.Format(
                 CultureInfo.InvariantCulture,
-                "Argument is null or empty. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
+                "Argument is empty. CallerMemberName={0}, CallerFilePath={1}, CallerSourceLineNumber={2}",
                 memberName,
                 sourceFilePath,
                 sourceLineNumber);
