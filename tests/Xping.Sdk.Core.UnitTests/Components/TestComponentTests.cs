@@ -48,7 +48,7 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
     public void ThrowsArgumentExceptionWhenNameIsNullOrEmpty()
     {
         // Assert
-        Assert.Throws<ArgumentException>(() => new TestComponentUnderTest(name: null!));
+        Assert.Throws<ArgumentNullException>(() => new TestComponentUnderTest(name: null!));
         Assert.Throws<ArgumentException>(() => new TestComponentUnderTest(name: string.Empty));
     }
 

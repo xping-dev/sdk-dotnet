@@ -12,6 +12,7 @@ using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Session.Collector;
+using System.Security.Cryptography;
 
 namespace Xping.Sdk.Core;
 
@@ -403,6 +404,8 @@ public sealed class TestAgent : IDisposable
             }
         }
 
+        var location = await _locationDetectionTask.Value.ConfigureAwait(false);
+
         // If we found a test method, return detailed metadata
         if (testMethod != null && testClass != null)
         {
@@ -411,7 +414,7 @@ public sealed class TestAgent : IDisposable
             var testDescription = ExtractTestDescription(methodAttributes);
             var xpingIdentifier = ExtractXpingIdentifier(methodAttributes, classAttributes);
 
-            return new TestMetadata
+            TestMetadata testMethodMetadata = new()
             {
                 MethodName = testMethod.Name,
                 ClassName = testClass.Name,
@@ -421,13 +424,16 @@ public sealed class TestAgent : IDisposable
                 ClassAttributeNames = [.. classAttributes.Select(attr => attr.GetType().Name)],
                 MethodAttributeNames = [.. methodAttributes.Select(attr => attr.GetType().Name)],
                 TestDescription = testDescription,
-                XpingIdentifier = xpingIdentifier,
-                Location = await _locationDetectionTask.Value.ConfigureAwait(false)
+                Location = location
             };
+
+            testMethodMetadata.UpdateXpingIdentifier(xpingIdentifier ?? CreateXpingIdentifier(testMethodMetadata));
+
+            return testMethodMetadata;
         }
 
         // Fallback to process information when no test method is found
-        return new TestMetadata
+        TestMetadata metadata = new()
         {
             MethodName = string.Empty,
             ClassName = string.Empty,
@@ -437,8 +443,13 @@ public sealed class TestAgent : IDisposable
             ClassAttributeNames = [],
             MethodAttributeNames = [],
             TestDescription = null,
-            Location = await _locationDetectionTask.Value.ConfigureAwait(false)
+            Location = location
         };
+
+        // Generate a fallback Xping identifier based on the available metadata
+        metadata.UpdateXpingIdentifier(CreateXpingIdentifier(metadata));
+
+        return metadata;
     }
 
     /// <summary>
@@ -474,7 +485,9 @@ public sealed class TestAgent : IDisposable
     /// <param name="methodAttributes">The collection of method attributes.</param>
     /// <param name="classAttributes">The collection of class attributes.</param>
     /// <returns>The XpingIdentifier if found; otherwise, null.</returns>
-    private static string? ExtractXpingIdentifier(IEnumerable<Attribute> methodAttributes, IEnumerable<Attribute> classAttributes)
+    private static string? ExtractXpingIdentifier(
+        IEnumerable<Attribute> methodAttributes,
+        IEnumerable<Attribute> classAttributes)
     {
         // Check method-level XpingAttribute first (higher priority)
         var methodXpingAttribute = methodAttributes.OfType<XpingAttribute>().FirstOrDefault();
@@ -486,6 +499,94 @@ public sealed class TestAgent : IDisposable
         // Fall back to class-level XpingAttribute
         var classXpingAttribute = classAttributes.OfType<XpingAttribute>().FirstOrDefault();
         return classXpingAttribute?.Identifier;
+    }
+
+    /// <summary>
+    /// Creates a unique and deterministic string identifier based on test metadata.
+    /// This method serves as a fallback when XpingIdentifier cannot be extracted from attributes.
+    /// It always returns the same identifier for the same test on the same machine, regardless of time or process.
+    /// </summary>
+    /// <param name="metadata">The test metadata containing information about the test method, class, and execution context.</param>
+    /// <returns>A deterministic string identifier that uniquely identifies the test execution context.</returns>
+    private static string CreateXpingIdentifier(TestMetadata? metadata)
+    {
+        if (metadata == null)
+        {
+            return "Unknown#Fallback";
+        }
+
+        // Build components for the identifier using only stable, deterministic values
+        var components = new List<string>();
+
+        // Add namespace, class, and method if available (test method context)
+        if (!string.IsNullOrEmpty(metadata.Namespace))
+            components.Add(metadata.Namespace);
+
+        if (!string.IsNullOrEmpty(metadata.ClassName))
+            components.Add(metadata.ClassName);
+
+        if (!string.IsNullOrEmpty(metadata.MethodName))
+            components.Add(metadata.MethodName);
+
+        // Add stable location information if available (machine/environment context)
+        if (metadata.Location != null)
+        {
+            if (!string.IsNullOrEmpty(metadata.Location.Country))
+                components.Add(metadata.Location.Country);
+
+            if (!string.IsNullOrEmpty(metadata.Location.Region))
+                components.Add(metadata.Location.Region);
+
+            // Only add city if it provides meaningful distinction
+            if (!string.IsNullOrEmpty(metadata.Location.City))
+                components.Add(metadata.Location.City);
+        }
+
+        // If we don't have test method info, create a generic fallback
+        if (components.Count == 0)
+        {
+            return "Generic#Test";
+        }
+
+        try
+        {
+            // Join components with a delimiter
+            var identifierString = string.Join("::", components);
+
+            // Create a deterministic hash for consistent results
+            // Use a stack-allocated buffer for UTF8 encoding to avoid heap allocations
+            Span<byte> utf8Bytes = stackalloc byte[System.Text.Encoding.UTF8.GetMaxByteCount(identifierString.Length)];
+            int bytesWritten = System.Text.Encoding.UTF8.GetBytes(identifierString.AsSpan(), utf8Bytes);
+
+            // Hash the UTF8 bytes directly using the modern HashData API
+            var hashBytes = SHA256.HashData(utf8Bytes[..bytesWritten]);
+            // Convert to base64 for compact representation (first 12 characters for readability)
+            var base64Hash = Convert.ToBase64String(hashBytes)
+                .TrimEnd('=')[..Math.Min(12, Convert.ToBase64String(hashBytes).TrimEnd('=').Length)];
+
+            // Create readable prefix
+            string readablePrefix;
+            if (metadata.IsTestMethod)
+            {
+                readablePrefix = $"{metadata.ClassName}.{metadata.MethodName}";
+            }
+            else
+            {
+                readablePrefix = "Test";
+            }
+
+            return $"{readablePrefix}#{base64Hash}";
+        }
+        catch (Exception)
+        {
+            // Ultimate fallback - still deterministic based on test method
+            if (metadata.IsTestMethod)
+            {
+                return $"{metadata.ClassName}.{metadata.MethodName}#Fallback";
+            }
+
+            return "Test#Fallback";
+        }
     }
 
     /// <summary>

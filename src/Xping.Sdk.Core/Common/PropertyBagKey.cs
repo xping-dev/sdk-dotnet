@@ -22,7 +22,7 @@ namespace Xping.Sdk.Core.Common;
 [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
 public class PropertyBagKey(string key) : IEquatable<PropertyBagKey?>
 {
-    private readonly string _key = key.RequireNotNullOrEmpty(nameof(key));
+    private readonly string _key = key.RequireNotNullOrEmpty();
 
     /// <summary>
     /// Determines whether the current PropertyBagKey object is equal to a specified object.

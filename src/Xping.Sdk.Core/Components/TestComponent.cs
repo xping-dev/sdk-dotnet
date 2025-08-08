@@ -28,7 +28,7 @@ public abstract class TestComponent : ITestComponent
     /// <param name="type">Type of the test component.</param>
     protected TestComponent(string name, TestStepType type)
     {
-        Name = name.RequireNotNullOrEmpty(nameof(name));
+        Name = name.RequireNotNullOrEmpty();
         Type = type;
     }
 
@@ -100,7 +100,7 @@ public abstract class TestComponent : ITestComponent
         // Initiate the test session by recording its start time, the URL of the page being validated,
         // and associating it with the current TestContext responsible for maintaining the state of the test
         // execution. No upload on Probe.
-        sessionBuilder.Initiate(url, DateTime.UtcNow, context, uploadToken: Guid.Empty);
+        sessionBuilder.Initiate(url, DateTime.UtcNow, context, uploadToken: Guid.Empty, new TestMetadata());
 
         // Execute the test operation by invoking the HandleAsync method of this class.
         await HandleAsync(url, settings, context, serviceProvider, cancellationToken).ConfigureAwait(false);

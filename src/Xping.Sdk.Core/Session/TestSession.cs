@@ -60,10 +60,10 @@ public sealed class TestSession :
     /// Gets the timestamp when the test session was successfully uploaded to the server.
     /// </summary>
     /// <value>
-    /// A nullable <see cref="DateTimeOffset"/> value indicating when the test session was uploaded,
+    /// A nullable <see cref="DateTime"/> value indicating when the test session was uploaded,
     /// or null if it has not been uploaded yet.
     /// </value>
-    public DateTimeOffset? UploadedAt { get; private set; }
+    public DateTime? UploadedAt { get; private set; }
 
     /// <summary>
     /// Gets a value indicating whether this test session has been uploaded to the server.
@@ -183,7 +183,8 @@ public sealed class TestSession :
         State = Enum.Parse<TestSessionState>(
             value: (string)info.GetValue(nameof(State), typeof(string)).RequireNotNull(nameof(State)));
         DeclineReason = info.GetValue(nameof(DeclineReason), typeof(string)) as string;
-        UploadedAt = info.GetValue(nameof(UploadedAt), typeof(DateTimeOffset?)) as DateTimeOffset?;
+        UploadedAt = info.GetValue(nameof(UploadedAt), typeof(DateTime?)) as DateTime?;
+        UploadToken = (Guid)info.GetValue(nameof(UploadToken), typeof(Guid)).RequireNotNull(nameof(UploadToken));
         Metadata = info.GetValue(nameof(Metadata), typeof(TestMetadata)) as TestMetadata;
     }
 
@@ -195,7 +196,7 @@ public sealed class TestSession :
     /// This method is called internally by the upload process after a successful upload to track when the test session
     /// data was sent to the server. The upload timestamp can be accessed via the <see cref="UploadedAt"/> property.
     /// </remarks>
-    internal void MarkAsUploaded(DateTimeOffset uploadedAt)
+    internal void MarkAsUploaded(DateTime uploadedAt)
     {
         UploadedAt = uploadedAt;
     }
@@ -336,7 +337,8 @@ public sealed class TestSession :
         info.AddValue(nameof(Steps), Steps.ToArray(), typeof(TestStep[]));
         info.AddValue(nameof(State), State.ToString(), typeof(string));
         info.AddValue(nameof(DeclineReason), DeclineReason, typeof(string));
-        info.AddValue(nameof(UploadedAt), UploadedAt, typeof(DateTimeOffset?));
+        info.AddValue(nameof(UploadedAt), UploadedAt, typeof(DateTime?));
+        info.AddValue(nameof(UploadToken), UploadToken, typeof(Guid));
         info.AddValue(nameof(Metadata), Metadata, typeof(TestMetadata));
     }
 

@@ -88,7 +88,7 @@ public sealed class InstrumentedHtmlContentTests
     public void CtorThrowsArgumentExceptionWhenTestIdAttributeIsNull()
     {
         // Assert
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<ArgumentNullException>(() =>
         {
             _ = new InstrumentedHtmlContent(data: "<html></html>", _testContext, testIdAttribute: null!);
         });

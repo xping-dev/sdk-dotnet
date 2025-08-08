@@ -24,7 +24,7 @@ public sealed class TestMetadataTests
         string? testDescription = null,
         string? xpingIdentifier = null)
     {
-        return new TestMetadata
+        var metadata = new TestMetadata
         {
             MethodName = methodName,
             ClassName = className,
@@ -33,9 +33,11 @@ public sealed class TestMetadataTests
             ProcessId = processId,
             ClassAttributeNames = classAttributeNames ?? ["TestFixtureAttribute"],
             MethodAttributeNames = methodAttributeNames ?? ["TestAttribute"],
-            TestDescription = testDescription,
-            XpingIdentifier = xpingIdentifier
+            TestDescription = testDescription
         };
+
+        metadata.UpdateXpingIdentifier(xpingIdentifier ?? "default-xping-identifier");
+        return metadata;
     }
 
     [Test]
@@ -53,7 +55,7 @@ public sealed class TestMetadataTests
         Assert.That(metadata.ClassAttributeNames, Is.Empty);
         Assert.That(metadata.MethodAttributeNames, Is.Empty);
         Assert.That(metadata.TestDescription, Is.Null);
-        Assert.That(metadata.XpingIdentifier, Is.Null);
+        Assert.That(metadata.XpingIdentifier, Is.Not.Null);
     }
 
     [Test]
@@ -574,9 +576,10 @@ public sealed class TestMetadataTests
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
-            TestDescription = "Test Description",
-            XpingIdentifier = "test-unique-id"
+            TestDescription = "Test Description"
         };
+
+        metadata.UpdateXpingIdentifier("test-unique-id");
 
         // Assert
         Assert.That(metadata.MethodName, Is.EqualTo("TestMethod"));
@@ -617,12 +620,12 @@ public sealed class TestMetadataTests
     }
 
     [Test]
-    public void XpingIdentifierIsNullWhenNotProvided()
+    public void XpingIdentifierIsNotNullWhenNotProvided()
     {
         // Arrange
         var original = CreateTestMetadataUnderTest();
 
         // Act & Assert
-        Assert.That(original.XpingIdentifier, Is.Null);
+        Assert.That(original.XpingIdentifier, Is.Not.Null);
     }
 }

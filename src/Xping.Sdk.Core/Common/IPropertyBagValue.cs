@@ -16,4 +16,10 @@ namespace Xping.Sdk.Core.Common;
 /// data among various objects that do not need this data to be serialized.
 /// </summary>
 public interface IPropertyBagValue : IEquatable<IPropertyBagValue>
-{}
+{
+    /// <summary>
+    /// Returns a string representation of the property bag value.
+    /// </summary>
+    /// <returns>A string that represents the current property bag value.</returns>
+    string? ToString();
+}
