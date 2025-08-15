@@ -217,7 +217,11 @@ public sealed class TestSession :
                 sb.AppendLine(CultureInfo.InvariantCulture, $"Test: {Metadata.DisplayName}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"Method: {Metadata.FullyQualifiedName}");
             }
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Process: {Metadata.ProcessName} (ID: {Metadata.ProcessId})");
+            
+            var processDisplay = !string.IsNullOrEmpty(Metadata.ProcessArguments) 
+                ? $"{Metadata.ProcessName} {Metadata.ProcessArguments}" 
+                : Metadata.ProcessName;
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Process: {processDisplay} (ID: {Metadata.ProcessId})");
             sb.AppendLine();
         }
 

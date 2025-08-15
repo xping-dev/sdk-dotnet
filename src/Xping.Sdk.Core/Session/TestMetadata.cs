@@ -44,6 +44,11 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     public string ProcessName { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the arguments passed to the process executing the test.
+    /// </summary>
+    public string ProcessArguments { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the process ID of the executing process.
     /// </summary>
     public int ProcessId { get; init; }
@@ -116,6 +121,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         ClassName = info.GetString(nameof(ClassName)) ?? string.Empty;
         Namespace = info.GetString(nameof(Namespace)) ?? string.Empty;
         ProcessName = info.GetString(nameof(ProcessName)) ?? string.Empty;
+        ProcessArguments = info.GetString(nameof(ProcessArguments)) ?? string.Empty;
         ProcessId = info.GetInt32(nameof(ProcessId));
         ClassAttributeNames =
             (info.GetValue(nameof(ClassAttributeNames), typeof(string[])) as string[])?.ToList() ?? [];
@@ -171,11 +177,17 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         {
             var description = !string.IsNullOrEmpty(TestDescription) ? $" - {TestDescription}" : "";
             var location = Location != null ? $" [{Location.Country}/{Location.Region}]" : "";
-            return $"{FullyQualifiedName}{description}{location} [{ProcessName}:{ProcessId}]";
+            var processInfo = !string.IsNullOrEmpty(ProcessArguments) 
+                ? $"{ProcessName} {ProcessArguments}" 
+                : ProcessName;
+            return $"{FullyQualifiedName}{description}{location} [{processInfo}:{ProcessId}]";
         }
 
         var locationInfo = Location != null ? $" [{Location.Country}/{Location.Region}]" : "";
-        return $"Process: {ProcessName} (ID: {ProcessId}){locationInfo}";
+        var processDisplay = !string.IsNullOrEmpty(ProcessArguments) 
+            ? $"{ProcessName} {ProcessArguments}" 
+            : ProcessName;
+        return $"Process: {processDisplay} (ID: {ProcessId}){locationInfo}";
     }
 
     /// <summary>
@@ -202,6 +214,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
                ClassName == other.ClassName &&
                Namespace == other.Namespace &&
                ProcessName == other.ProcessName &&
+               ProcessArguments == other.ProcessArguments &&
                ProcessId == other.ProcessId;
     }
 
@@ -211,7 +224,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
     /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
     public override int GetHashCode()
     {
-        return HashCode.Combine(MethodName, ClassName, Namespace, ProcessName, ProcessId);
+        return HashCode.Combine(MethodName, ClassName, Namespace, ProcessName, ProcessArguments, ProcessId);
     }
 
     /// <summary>
@@ -236,6 +249,7 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
         info.AddValue(nameof(ClassName), ClassName);
         info.AddValue(nameof(Namespace), Namespace);
         info.AddValue(nameof(ProcessName), ProcessName);
+        info.AddValue(nameof(ProcessArguments), ProcessArguments);
         info.AddValue(nameof(ProcessId), ProcessId);
         info.AddValue(nameof(ClassAttributeNames), ClassAttributeNames.ToArray());
         info.AddValue(nameof(MethodAttributeNames), MethodAttributeNames.ToArray());
@@ -251,8 +265,12 @@ public sealed class TestMetadata : ISerializable, IDeserializationCallback, IEqu
 
     private string GetDebuggerDisplay()
     {
+        var processDisplay = !string.IsNullOrEmpty(ProcessArguments) 
+            ? $"{ProcessName} {ProcessArguments}" 
+            : ProcessName;
+        
         return IsTestMethod
-            ? $"{FullyQualifiedName} [{ProcessName}:{ProcessId}]"
-            : $"Process: {ProcessName} (ID: {ProcessId})";
+            ? $"{FullyQualifiedName} [{processDisplay}:{ProcessId}]"
+            : $"Process: {processDisplay} (ID: {ProcessId})";
     }
 }

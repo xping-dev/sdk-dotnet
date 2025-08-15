@@ -413,13 +413,15 @@ public sealed class TestAgent : IDisposable
             var classAttributes = testClass.GetCustomAttributes().ToList();
             var testDescription = ExtractTestDescription(methodAttributes);
             var xpingIdentifier = ExtractXpingIdentifier(methodAttributes, classAttributes);
+            var (processName, processArguments) = GetProcessNameAndArguments();
 
             TestMetadata testMethodMetadata = new()
             {
                 MethodName = testMethod.Name,
                 ClassName = testClass.Name,
                 Namespace = testClass.Namespace ?? "Unknown",
-                ProcessName = GetFullProcessCommandLine(),
+                ProcessName = processName,
+                ProcessArguments = processArguments,
                 ProcessId = Environment.ProcessId,
                 ClassAttributeNames = [.. classAttributes.Select(attr => attr.GetType().Name)],
                 MethodAttributeNames = [.. methodAttributes.Select(attr => attr.GetType().Name)],
@@ -433,12 +435,14 @@ public sealed class TestAgent : IDisposable
         }
 
         // Fallback to process information when no test method is found
+        var (fallbackProcessName, fallbackProcessArguments) = GetProcessNameAndArguments();
         TestMetadata metadata = new()
         {
             MethodName = string.Empty,
             ClassName = string.Empty,
             Namespace = string.Empty,
-            ProcessName = GetFullProcessCommandLine(),
+            ProcessName = fallbackProcessName,
+            ProcessArguments = fallbackProcessArguments,
             ProcessId = Environment.ProcessId,
             ClassAttributeNames = [],
             MethodAttributeNames = [],
@@ -605,6 +609,36 @@ public sealed class TestAgent : IDisposable
             attr.GetType().Name.Equals("TheoryAttribute", StringComparison.OrdinalIgnoreCase) ||
             attr.GetType().Name.Equals("TestMethodAttribute", StringComparison.OrdinalIgnoreCase) ||
             attr.GetType().FullName?.Contains("TestAttribute", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    /// <summary>
+    /// Gets the process name and arguments separately for the current process.
+    /// This method attempts to retrieve the full command line and separate the process name from its arguments.
+    /// </summary>
+    /// <remarks>
+    /// On macOS and Linux systems, this method uses platform-specific approaches to retrieve
+    /// the command line arguments:
+    /// - macOS: Uses the 'ps' command to get the command line
+    /// - Linux: Reads from the /proc/[pid]/cmdline file
+    /// - Windows: Uses Process.GetCurrentProcess() and Environment.GetCommandLineArgs()
+    /// 
+    /// The method returns only the filename (not the full path) to make the output more readable.
+    /// </remarks>
+    /// <returns>A tuple containing the process name and arguments as separate strings.</returns>
+    private static (string ProcessName, string ProcessArguments) GetProcessNameAndArguments()
+    {
+        var fullCommandLine = GetFullProcessCommandLine();
+        
+        if (string.IsNullOrWhiteSpace(fullCommandLine))
+        {
+            return (Process.GetCurrentProcess().ProcessName, string.Empty);
+        }
+
+        var parts = fullCommandLine.Split(' ', 2);
+        var processName = parts[0];
+        var processArguments = parts.Length > 1 ? parts[1] : string.Empty;
+        
+        return (processName, processArguments);
     }
 
     /// <summary>
