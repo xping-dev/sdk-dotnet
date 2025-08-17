@@ -18,6 +18,7 @@ public sealed class TestMetadataTests
         string className = "TestClass",
         string namespaceName = "TestNamespace",
         string processName = "TestProcess",
+        string processArguments = "",
         int processId = 1234,
         IReadOnlyCollection<string>? classAttributeNames = null,
         IReadOnlyCollection<string>? methodAttributeNames = null,
@@ -30,6 +31,7 @@ public sealed class TestMetadataTests
             ClassName = className,
             Namespace = namespaceName,
             ProcessName = processName,
+            ProcessArguments = processArguments,
             ProcessId = processId,
             ClassAttributeNames = classAttributeNames ?? ["TestFixtureAttribute"],
             MethodAttributeNames = methodAttributeNames ?? ["TestAttribute"],
@@ -500,6 +502,7 @@ public sealed class TestMetadataTests
             ClassName = "TestClass",
             Namespace = "TestNamespace",
             ProcessName = "TestProcess",
+            ProcessArguments = "",
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
@@ -573,6 +576,7 @@ public sealed class TestMetadataTests
             ClassName = "TestClass",
             Namespace = "TestNamespace",
             ProcessName = "TestProcess",
+            ProcessArguments = "",
             ProcessId = 1234,
             ClassAttributeNames = ["TestFixtureAttribute"],
             MethodAttributeNames = ["TestAttribute"],
@@ -627,5 +631,49 @@ public sealed class TestMetadataTests
 
         // Act & Assert
         Assert.That(original.XpingIdentifier, Is.Not.Null);
+    }
+
+    [Test]
+    public void ProcessArgumentsAreHandledCorrectly()
+    {
+        // Arrange
+        var metadata = CreateTestMetadataUnderTest(
+            processName: "dotnet",
+            processArguments: "test --logger console");
+
+        // Act & Assert
+        Assert.That(metadata.ProcessName, Is.EqualTo("dotnet"));
+        Assert.That(metadata.ProcessArguments, Is.EqualTo("test --logger console"));
+    }
+
+    [Test]
+    public void ToStringIncludesProcessArgumentsWhenPresent()
+    {
+        // Arrange
+        var metadata = CreateTestMetadataUnderTest(
+            processName: "dotnet",
+            processArguments: "test --logger console");
+
+        // Act
+        var result = metadata.ToString();
+
+        // Assert
+        Assert.That(result, Does.Contain("dotnet test --logger console"));
+    }
+
+    [Test]
+    public void ToStringHandlesEmptyProcessArguments()
+    {
+        // Arrange
+        var metadata = CreateTestMetadataUnderTest(
+            processName: "dotnet",
+            processArguments: "");
+
+        // Act
+        var result = metadata.ToString();
+
+        // Assert
+        Assert.That(result, Does.Contain("dotnet"));
+        Assert.That(result, Does.Not.Contain("dotnet "));
     }
 }
