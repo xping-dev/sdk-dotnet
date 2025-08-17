@@ -635,7 +635,7 @@ public sealed class TestAgent : IDisposable
         }
 
         var parts = fullCommandLine.Split(' ', 2);
-        var processName = parts[0];
+        var processName = Path.GetFileName(parts[0]);
         var processArguments = parts.Length > 1 ? parts[1] : string.Empty;
         var args = Environment.GetCommandLineArgs();
         if (args == null || args.Length == 0)
