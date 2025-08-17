@@ -637,7 +637,13 @@ public sealed class TestAgent : IDisposable
         var parts = fullCommandLine.Split(' ', 2);
         var processName = parts[0];
         var processArguments = parts.Length > 1 ? parts[1] : string.Empty;
-        
+        var args = Environment.GetCommandLineArgs();
+        if (args == null || args.Length == 0)
+        {
+            return (Process.GetCurrentProcess().ProcessName, string.Empty);
+        }
+        var processName = System.IO.Path.GetFileName(args[0]);
+        var processArguments = args.Length > 1 ? string.Join(" ", args, 1, args.Length - 1) : string.Empty;
         return (processName, processArguments);
     }
 
