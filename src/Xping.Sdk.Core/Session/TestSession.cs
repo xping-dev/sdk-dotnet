@@ -157,7 +157,29 @@ public sealed class TestSession :
     public TimeSpan Duration => Steps.Count == 0 
         ? TimeSpan.Zero 
         : (Steps.Max(step => step.StartDate.Add(step.Duration)) - StartDate);
+    private TimeSpan _cachedDuration = TimeSpan.Zero;
+    private bool _isDurationCacheValid = false;
 
+    public TimeSpan Duration
+    {
+        get
+        {
+            if (_isDurationCacheValid)
+                return _cachedDuration;
+
+            if (Steps.Count == 0)
+            {
+                _cachedDuration = TimeSpan.Zero;
+                _isDurationCacheValid = true;
+                return _cachedDuration;
+            }
+
+            var maxEnd = Steps.Max(step => step.StartDate.Add(step.Duration));
+            _cachedDuration = maxEnd - StartDate;
+            _isDurationCacheValid = true;
+            return _cachedDuration;
+        }
+    }
     /// <summary>
     /// Initializes a new instance of the <see cref="TestSession"/> class.
     /// </summary>
