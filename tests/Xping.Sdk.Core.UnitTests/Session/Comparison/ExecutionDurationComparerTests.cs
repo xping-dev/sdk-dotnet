@@ -17,14 +17,17 @@ public sealed class ExecutionDurationComparerTests : ComparerBaseTests<Execution
     public void CompareShouldReturnDiffResultWhenExecutionDurationIsEqual()
     {
         // Arrange
+        var sessionStartDate = DateTime.UtcNow;
+        var stepStartDate = sessionStartDate.AddMilliseconds(100);
+        
         IList<TestStep> steps = [
-            CreateTestStepMock(duration: TimeSpan.FromMilliseconds(100)),
-            CreateTestStepMock(duration: TimeSpan.FromMilliseconds(100)),
-            CreateTestStepMock(duration: TimeSpan.FromMilliseconds(100)),
+            CreateTestStepMock(startDate: stepStartDate, duration: TimeSpan.FromMilliseconds(100)),
+            CreateTestStepMock(startDate: stepStartDate.AddMilliseconds(110), duration: TimeSpan.FromMilliseconds(100)),
+            CreateTestStepMock(startDate: stepStartDate.AddMilliseconds(220), duration: TimeSpan.FromMilliseconds(100)),
         ];
 
-        using TestSession session1 = CreateTestSessionMock(steps: steps);
-        using TestSession session2 = CreateTestSessionMock(steps: steps);
+        using TestSession session1 = CreateTestSessionMock(startDate: sessionStartDate, steps: steps);
+        using TestSession session2 = CreateTestSessionMock(startDate: sessionStartDate, steps: steps);
 
         // Act
         ExecutionDurationComparer comparer = CreateComparer();
