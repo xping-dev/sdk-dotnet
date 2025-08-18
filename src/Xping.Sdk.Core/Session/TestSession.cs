@@ -40,6 +40,8 @@ public sealed class TestSession :
 {
     private readonly Uri _url = null!;
     private readonly DateTime _startDate;
+    private TimeSpan _cachedDuration = TimeSpan.Zero;
+    private bool _isDurationCacheValid;
     private bool _disposedValue;
 
     /// <summary>
@@ -154,12 +156,6 @@ public sealed class TestSession :
     /// Gets the total duration of the test session calculated as the time span from the session start 
     /// to the end of the last completed test step.
     /// </value>
-    public TimeSpan Duration => Steps.Count == 0 
-        ? TimeSpan.Zero 
-        : (Steps.Max(step => step.StartDate.Add(step.Duration)) - StartDate);
-    private TimeSpan _cachedDuration = TimeSpan.Zero;
-    private bool _isDurationCacheValid = false;
-
     public TimeSpan Duration
     {
         get
