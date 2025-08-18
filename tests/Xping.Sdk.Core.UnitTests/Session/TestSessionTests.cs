@@ -143,25 +143,35 @@ public sealed class TestSessionTests
     }
 
     [Test]
-    public void DurationShowsTotalElapsedTimeSpentInAllTestSteps()
+    public void DurationShowsTotalElapsedTimeFromSessionStartToLastStepEnd()
     {
         // Arrange
-        const int testStepDurationInSeconds = 5;
-        const int testStepCount = 5;
-
+        var sessionStartDate = DateTime.UtcNow;
         var steps = new List<TestStep>();
 
-        for (int i = 0; i < testStepCount; i++)
+        // Create steps with realistic timing - each starting after the previous one ends
+        var currentTime = sessionStartDate.AddMilliseconds(100); // First step starts 100ms after session
+        for (int i = 0; i < 3; i++)
         {
-            steps.Add(CreateTestStepMock(duration: TimeSpan.FromSeconds(testStepDurationInSeconds)));
+            steps.Add(CreateTestStepMock(
+                name: $"Step{i + 1}",
+                startDate: currentTime,
+                duration: TimeSpan.FromSeconds(2))); // Each step takes 2 seconds
+            
+            currentTime = currentTime.AddSeconds(2.5); // Next step starts 2.5 seconds later (2s duration + 0.5s gap)
         }
 
+        // Expected duration: from session start to end of last step
+        // Last step ends at: sessionStart + 0.1s + (2.5s * 2) + 2s = sessionStart + 7.1s
+        var expectedDuration = TimeSpan.FromSeconds(7.1);
+
         // Act
-        using var testSession = CreateTestSessionUnderTest(steps: steps);
+        using var testSession = CreateTestSessionUnderTest(
+            startDate: sessionStartDate,
+            steps: steps);
 
         // Assert
-        Assert.That(testSession.Duration,
-            Is.EqualTo(TimeSpan.FromSeconds(testStepCount * testStepDurationInSeconds)));
+        Assert.That(testSession.Duration, Is.EqualTo(expectedDuration));
     }
 
     [Test]

@@ -148,12 +148,15 @@ public sealed class TestSession :
     public bool IsValid => Steps.Count > 0 && Steps.All(step => step.Result != TestStepResult.Failed);
 
     /// <summary>
-    /// Gets the total duration of all the steps in the test session.
+    /// Gets the total duration of the test session from start to completion.
     /// </summary>
     /// <value>
-    /// Gets the total duration of the test session calculated by summing all individual test step durations.
+    /// Gets the total duration of the test session calculated as the time span from the session start 
+    /// to the end of the last completed test step.
     /// </value>
-    public TimeSpan Duration => Steps.Aggregate(TimeSpan.Zero, (elapsedTime, step) => elapsedTime + step.Duration);
+    public TimeSpan Duration => Steps.Count == 0 
+        ? TimeSpan.Zero 
+        : (Steps.Max(step => step.StartDate.Add(step.Duration)) - StartDate);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestSession"/> class.
