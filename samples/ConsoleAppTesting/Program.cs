@@ -98,6 +98,10 @@ internal sealed class Program : XpingAssertions
                             {
                                 Console.WriteLine($"Upload failed: {args.UploadResult.Message}");
                             };
+                            agent.UploadSucceeded += (sender, args) =>
+                            {
+                                Console.WriteLine($"Upload succeeded: Session uploaded at {args.UploadedAt} with token {args.UploadToken}");
+                            };
                         });
             })
             .ConfigureLogging(logging =>

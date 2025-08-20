@@ -132,6 +132,11 @@ public sealed class TestAgent : IDisposable
     public event EventHandler<UploadFailedEventArgs>? UploadFailed;
 
     /// <summary>
+    /// Occurs when uploading the test session succeeds.
+    /// </summary>
+    public event EventHandler<UploadSuccessEventArgs>? UploadSucceeded;
+
+    /// <summary>
     /// Initializes a new instance of the TestAgent class. For internal use only.
     /// </summary>
     /// <param name="serviceProvider">An instance object of a mechanism for retrieving a service object.</param>
@@ -372,6 +377,11 @@ public sealed class TestAgent : IDisposable
         {
             OnUploadFailed(new UploadFailedEventArgs(testSession, result));
         }
+        else
+        {
+            // When upload is successful, testSession.UploadedAt is set by the uploader
+            OnUploadSucceeded(new UploadSuccessEventArgs(testSession, testSession.UploadedAt!.Value, testSession.UploadToken));
+        }
     }
 
     /// <summary>
@@ -381,6 +391,15 @@ public sealed class TestAgent : IDisposable
     private void OnUploadFailed(UploadFailedEventArgs e)
     {
         UploadFailed?.Invoke(this, e);
+    }
+
+    /// <summary>
+    /// Raises the <see cref="UploadSucceeded"/> event.
+    /// </summary>
+    /// <param name="e">The event data.</param>
+    private void OnUploadSucceeded(UploadSuccessEventArgs e)
+    {
+        UploadSucceeded?.Invoke(this, e);
     }
 
     private async Task<TestMetadata> GetCurrentTestMetadataAsync()
