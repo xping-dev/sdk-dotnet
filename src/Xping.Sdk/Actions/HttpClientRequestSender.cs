@@ -99,8 +99,17 @@ public sealed class HttpClientRequestSender : TestComponent
 
     private static IHttpClientFactory GetHttpClientFactory(IServiceProvider serviceProvider)
     {
+        // Check if a keyed service for in-memory web application exists and use it if available
+        var keyedFactory = serviceProvider.GetKeyedService<IHttpClientFactory>(
+            HttpClientFactoryConfiguration.HttpClientFactoryForWebApplication);
+        if (keyedFactory != null)
+        {
+            return keyedFactory;
+        }
+
+        // Fallback to the default IHttpClientFactory
         return serviceProvider.GetService<IHttpClientFactory>() ??
-               throw new InvalidProgramException(Errors.HttpClientsNotFound);
+            throw new InvalidProgramException(Errors.HttpClientsNotFound);
     }
 
     private async Task AnnotateTestStepWithHttpRequest(TestContext context, HttpRequestMessage request,

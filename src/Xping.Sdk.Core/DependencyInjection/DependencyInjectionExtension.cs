@@ -72,8 +72,10 @@ public static class DependencyInjectionExtension
         Func<WebApplicationFactoryClientOptions, HttpClient> createClient)
     {
         var factoryConfiguration = new HttpClientFactoryConfiguration();
-        services.TryAddTransient<IHttpClientFactory>(implementationFactory:
-            serviceProvider => new WebApplicationHttpClientFactory(createClient, factoryConfiguration));
+        services.AddKeyedTransient<IHttpClientFactory>(
+            serviceKey: HttpClientFactoryConfiguration.HttpClientFactoryForWebApplication,
+            implementationFactory: (serviceProvider, serviceKey) =>
+                new WebApplicationHttpClientFactory(createClient, factoryConfiguration));
 
         return services;
     }
@@ -184,9 +186,9 @@ public static class DependencyInjectionExtension
             .AddTransientHttpErrorPolicy(builder => builder.CircuitBreakerAsync(
                 handledEventsAllowedBeforeBreaking: factoryConfiguration.HandledEventsAllowedBeforeBreaking,
                 durationOfBreak: factoryConfiguration.DurationOfBreak));
-        
+
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientLocationDetection);
-        
+
         services.TryAddTransient<ITestSessionBuilder, TestSessionBuilder>();
         services.TryAddTransient<ITestSessionSerializer, TestSessionSerializer>();
         services.TryAddTransient<ITestSessionUploader, TestSessionUploader>();
