@@ -34,7 +34,7 @@ public class HttpClientFactoryConfiguration : BaseConfiguration
     /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
     /// </remarks>
     public const string HttpClientWithRetryPolicy = nameof(HttpClientWithRetryPolicy);
-    
+
     /// <summary>
     /// The name of the HttpClient that performs retry policies for uploading test sessions to Xping.
     /// </summary>
@@ -50,6 +50,15 @@ public class HttpClientFactoryConfiguration : BaseConfiguration
     /// This constant is used to create or resolve a named HttpClient in the DependencyInjection service collection.
     /// </remarks>
     public const string HttpClientLocationDetection = nameof(HttpClientLocationDetection);
+
+    /// <summary>
+    /// The name of the HttpClient factory configured for in memory web application scenarios.
+    /// </summary>
+    /// <remarks>
+    /// This constant is used to create or resolve a named HttpClient factory in the DependencyInjection
+    /// service collection that is specifically configured for in-memory web application use cases.
+    /// </remarks>
+    public const string HttpClientFactoryForWebApplication = nameof(HttpClientFactoryForWebApplication);
 
     #endregion Named HTTP Clients
 
