@@ -61,19 +61,14 @@ internal sealed class Program : XpingAssertions
                 {
                     Expect(html)
                         .ToHaveMaxDocumentSize(MaxHtmlSizeAllowed)
-                        .ToHaveMetaTag(new("property", "og:image"), "https://a.wpimg.pl/a/f/png/37220/wpogimage.png");
+                        .ToHaveMetaTag(new("charset", "utf-8"));
                 });
 
-            await using var session = await testAgent.RunAsync(url, new TestSettings{ ContinueOnFailure = true })
+            await using var session = await testAgent.RunAsync(url, new TestSettings { ContinueOnFailure = true })
                 .ConfigureAwait(false);
 
             context.Console.WriteLine("\nSummary:");
             context.Console.WriteLine($"{session}");
-
-            if (session.IsUploaded)
-            {
-                context.Console.WriteLine($"Test session uploaded successfully at {session.UploadedAt}.");
-            }
 
             context.ExitCode = session.IsValid ? EXIT_SUCCESS : EXIT_FAILURE;
         });
@@ -89,14 +84,17 @@ internal sealed class Program : XpingAssertions
                         .AddHttpClientFactory()
                         .AddTestAgent(agent =>
                         {
-                            // Token for uploading test sessions
+                            // Upload Token - Associates test sessions with your specific project on the Xping services.
+                            // This token links your test results to the correct project for monitoring and analysis.
+                            // Get your project's upload token from the Xping Dashboard at https://app.xping.io
                             agent.UploadToken = "--- Your Dashboard Upload Token ---";
-                            // API Key for authentication with Xping services
-                            // Can be set explicitly or read from XPING_API_KEY environment variable
-                            agent.ApiKey = "--- Your Dashboard Upload Token ---";
+                            // API Key for authentication with Xping services.
+                            // Can be set explicitly or read from XPING_API_KEY environment variable.
+                            // Get your project's API key from the Xping Dashboard at https://app.xping.io/
+                            agent.ApiKey = "--- Your Dashboard API Key ---";
                             agent.UploadFailed += (sender, args) =>
                             {
-                                Console.WriteLine($"Upload failed: {args.UploadResult.Message}");
+                                Console.WriteLine($"{args.UploadResult.Message}");
                             };
                             agent.UploadSucceeded += (sender, args) =>
                             {
