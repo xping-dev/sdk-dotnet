@@ -300,4 +300,76 @@ internal class TestSessionSerializationTests
 
         Assert.Throws<SerializationException>(() => serializer.Deserialize(stream, SerializationFormat.Binary));
     }
+
+    [Test]
+    public void TestSessionUploadedAtShouldBeSerializedToXml()
+    {
+        // Arrange
+        using TestSession session = new()
+        {
+            Url = new Uri("https://test.example.com"),
+            StartDate = DateTime.UtcNow,
+            State = TestSessionState.Completed,
+            Steps = []
+        };
+
+        var uploadedAt = DateTime.UtcNow;
+        session.MarkAsUploaded(uploadedAt);
+
+        var serializer = new TestSessionSerializer();
+        using var stream = new MemoryStream();
+
+        // Act
+        serializer.Serialize(session, stream, SerializationFormat.XML);
+        
+        // Get XML content for inspection
+        stream.Position = 0;
+        using var reader = new StreamReader(stream);
+        var xmlContent = reader.ReadToEnd();
+
+        // Reset stream for deserialization
+        stream.Position = 0;
+        var deserializedSession = serializer.Deserialize(stream, SerializationFormat.XML);
+
+        // Assert
+        Assert.That(session.UploadedAt, Is.EqualTo(uploadedAt), "Original session should have UploadedAt set");
+        Assert.That(xmlContent.Contains("UploadedAt", StringComparison.Ordinal), Is.True, "XML should contain UploadedAt element");
+        Assert.That(deserializedSession?.UploadedAt, Is.EqualTo(uploadedAt), "Deserialized session should preserve UploadedAt");
+        Assert.That(deserializedSession?.IsUploaded, Is.True, "Deserialized session should be marked as uploaded");
+    }
+
+    [Test]
+    public void TestSessionWithoutUploadedAtShouldHaveNullUploadedAtInXml()
+    {
+        // Arrange
+        using TestSession session = new()
+        {
+            Url = new Uri("https://test.example.com"),
+            StartDate = DateTime.UtcNow,
+            State = TestSessionState.Completed,
+            Steps = []
+        };
+
+        // Don't set UploadedAt (should be null)
+
+        var serializer = new TestSessionSerializer();
+        using var stream = new MemoryStream();
+
+        // Act
+        serializer.Serialize(session, stream, SerializationFormat.XML);
+        
+        // Get XML content for inspection
+        stream.Position = 0;
+        using var reader = new StreamReader(stream);
+        var xmlContent = reader.ReadToEnd();
+
+        // Reset stream for deserialization
+        stream.Position = 0;
+        var deserializedSession = serializer.Deserialize(stream, SerializationFormat.XML);
+
+        // Assert
+        Assert.That(session.UploadedAt, Is.Null, "Original session should have UploadedAt as null");
+        Assert.That(deserializedSession?.UploadedAt, Is.Null, "Deserialized session should preserve null UploadedAt");
+        Assert.That(deserializedSession?.IsUploaded, Is.False, "Deserialized session should not be marked as uploaded");
+    }
 }
