@@ -47,8 +47,10 @@ public sealed class IPAddressAccessibilityCheck : TestComponent
     /// Initializes new instance of th
     /// </summary>
     /// <param name="configuration">The ping operation configuration.</param>
-    public IPAddressAccessibilityCheck(PingConfiguration configuration) :
-        base(name: StepName, type: TestStepType.ActionStep)
+    public IPAddressAccessibilityCheck(PingConfiguration configuration) : base(
+        name: StepName,
+        type: TestStepType.ActionStep,
+        description: "Check accessibility of resolved IP addresses using ping")
     {
         _configuration = configuration;
     }

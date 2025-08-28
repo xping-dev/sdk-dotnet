@@ -36,7 +36,10 @@ public sealed class HttpClientRequestSender : TestComponent
     /// </summary>
     /// <param name="configuration">The HttpClient configuration.</param>
     public HttpClientRequestSender(HttpClientConfiguration configuration) :
-        base(nameof(HttpClientRequestSender), type: TestStepType.ActionStep)
+        base(
+        name: nameof(HttpClientRequestSender),
+        type: TestStepType.ActionStep,
+        description: "Send HTTP request to target URL")
     {
         _configuration = configuration.RequireNotNull(nameof(configuration));
     }

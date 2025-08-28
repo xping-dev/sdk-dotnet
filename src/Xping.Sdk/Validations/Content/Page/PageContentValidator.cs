@@ -45,7 +45,9 @@ public class PageContentValidator : BaseContentValidator
     /// A function that determines whether the html content matches a specififed condition.
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation function is null.</exception>
-    public PageContentValidator(Func<IPage, Task> validation) : base(StepName)
+    public PageContentValidator(Func<IPage, Task> validation) : base(
+        name: StepName,
+        description: "Validate page content using browser-rendered DOM")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

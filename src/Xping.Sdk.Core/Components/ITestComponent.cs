@@ -28,6 +28,11 @@ public interface ITestComponent
     TestStepType Type { get; }
 
     /// <summary>
+    /// Gets a brief description of what the test component does.
+    /// </summary>
+    string Description { get; }
+
+    /// <summary>
     /// This method performs the test step operation asynchronously.
     /// </summary>
     /// <param name="url">A Uri object that represents the URL of the page being validated.</param>

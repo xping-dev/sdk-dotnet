@@ -29,6 +29,7 @@ internal static class HtmlContentTestsHelpers
         {
             Duration = TimeSpan.FromSeconds(1),
             Name = "name",
+            Description = "Test step description",
             PropertyBag = new PropertyBag<IPropertyBagValue>(properties),
             Result = TestStepResult.Failed,
             StartDate = DateTime.UtcNow,

@@ -36,7 +36,10 @@ public class HttpResponseValidator : TestComponent
     /// An Action delegate that encapsulates the validation logic for the HTTP response.
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation action is null.</exception>
-    public HttpResponseValidator(Action<IHttpResponse> validation) : base(StepName, TestStepType.ValidateStep)
+    public HttpResponseValidator(Action<IHttpResponse> validation) : base(
+        name: StepName,
+        type: TestStepType.ValidateStep,
+        description: "Validate HTTP response against custom criteria")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

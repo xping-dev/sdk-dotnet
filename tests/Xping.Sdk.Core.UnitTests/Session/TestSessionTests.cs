@@ -32,6 +32,7 @@ public sealed class TestSessionTests
         string? errorMessage = null) => new()
         {
             Name = name,
+            Description = "Test step description",
             TestComponentIteration = 1,
             StartDate = startDate ?? DateTime.UtcNow,
             Duration = duration ?? TimeSpan.Zero,
