@@ -132,18 +132,7 @@ public sealed record TestStep : ISerializable
         ArgumentNullException.ThrowIfNull(info, nameof(info));
 
         _name = (string)info.GetValue(nameof(Name), typeof(string)).RequireNotNull(nameof(Name));
-        
-        // Handle backward compatibility for Description field - if it doesn't exist, use a default value
-        try
-        {
-            Description = (string)info.GetValue(nameof(Description), typeof(string)).RequireNotNull(nameof(Description));
-        }
-        catch (SerializationException)
-        {
-            // For backward compatibility with older serialized data that doesn't have Description
-            Description = "Legacy test step";
-        }
-        
+        Description = (string)info.GetValue(nameof(Description), typeof(string)).RequireNotNull(nameof(Description));
         _startDate = (DateTime)info.GetValue(nameof(StartDate), typeof(DateTime)).RequireNotNull(nameof(StartDate));
         TestComponentIteration = info.GetInt32(nameof(TestComponentIteration));
         Duration = (TimeSpan)info.GetValue(nameof(Duration), typeof(TimeSpan)).RequireNotNull(nameof(Duration));
