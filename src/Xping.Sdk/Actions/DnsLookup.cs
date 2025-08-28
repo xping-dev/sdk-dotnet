@@ -43,7 +43,10 @@ public sealed class DnsLookup : TestComponent
     /// <summary>
     /// Initializes a new instance of the DnsLookup class.
     /// </summary>
-    public DnsLookup() : base(name: ComponentName, type: TestStepType.ActionStep)
+    public DnsLookup() : base(
+        name: ComponentName,
+        type: TestStepType.ActionStep,
+        description: "Resolve domain name to IP addresses using DNS lookup")
     { }
 
     /// <summary>

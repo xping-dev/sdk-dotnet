@@ -26,10 +26,12 @@ public abstract class TestComponent : ITestComponent
     /// </summary>
     /// <param name="name">Name of the test component.</param>
     /// <param name="type">Type of the test component.</param>
-    protected TestComponent(string name, TestStepType type)
+    /// <param name="description">Brief description of what the test component does.</param>
+    protected TestComponent(string name, TestStepType type, string description)
     {
         Name = name.RequireNotNullOrEmpty();
         Type = type;
+        Description = description.RequireNotNullOrEmpty();
     }
 
     /// <summary>
@@ -41,6 +43,11 @@ public abstract class TestComponent : ITestComponent
     /// Gets a test component type.
     /// </summary>
     public TestStepType Type { get; }
+
+    /// <summary>
+    /// Gets a brief description of what the test component does.
+    /// </summary>
+    public string Description { get; protected set; }
 
     /// <summary>
     /// This method performs the test step operation asynchronously. It is an abstract method that must be implemented 

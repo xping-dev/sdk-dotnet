@@ -37,6 +37,7 @@ public abstract class ComparerBaseTests<TComparer> where TComparer : ITestSessio
         string? errorMessage = null) => new()
         {
             Name = name,
+            Description = "Test step description",
             TestComponentIteration = 1,
             StartDate = startDate ?? DateTime.UtcNow,
             Duration = duration ?? TimeSpan.Zero,

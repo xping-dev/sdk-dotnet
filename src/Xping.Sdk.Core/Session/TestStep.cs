@@ -34,6 +34,14 @@ public sealed record TestStep : ISerializable
     }
 
     /// <summary>
+    /// Gets the description of the test step.
+    /// </summary>
+    /// <value>
+    /// A string that provides a brief description of what the test step does.
+    /// </value>
+    public required string Description { get; init; }
+
+    /// <summary>
     /// Gets the iteration count of the test component that created this test step.
     /// </summary>
     /// <value>
@@ -124,6 +132,18 @@ public sealed record TestStep : ISerializable
         ArgumentNullException.ThrowIfNull(info, nameof(info));
 
         _name = (string)info.GetValue(nameof(Name), typeof(string)).RequireNotNull(nameof(Name));
+        
+        // Handle backward compatibility for Description field - if it doesn't exist, use a default value
+        try
+        {
+            Description = (string)info.GetValue(nameof(Description), typeof(string)).RequireNotNull(nameof(Description));
+        }
+        catch (SerializationException)
+        {
+            // For backward compatibility with older serialized data that doesn't have Description
+            Description = "Legacy test step";
+        }
+        
         _startDate = (DateTime)info.GetValue(nameof(StartDate), typeof(DateTime)).RequireNotNull(nameof(StartDate));
         TestComponentIteration = info.GetInt32(nameof(TestComponentIteration));
         Duration = (TimeSpan)info.GetValue(nameof(Duration), typeof(TimeSpan)).RequireNotNull(nameof(Duration));
@@ -162,6 +182,7 @@ public sealed record TestStep : ISerializable
     void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
     {
         info.AddValue(nameof(Name), Name, typeof(string));
+        info.AddValue(nameof(Description), Description, typeof(string));
         info.AddValue(nameof(StartDate), StartDate, typeof(DateTime));
         info.AddValue(nameof(TestComponentIteration), TestComponentIteration, typeof(int));
         info.AddValue(nameof(Duration), Duration, typeof(TimeSpan));

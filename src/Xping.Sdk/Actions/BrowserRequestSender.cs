@@ -39,8 +39,10 @@ public sealed class BrowserRequestSender : TestComponent
     /// Initializes a new instance of the BrowserRequestSender class with the specified bowser configuration.
     /// </summary>
     /// <param name="configuration">The browserClient configuration.</param>
-    public BrowserRequestSender(BrowserConfiguration configuration) :
-        base(nameof(BrowserRequestSender), TestStepType.ActionStep)
+    public BrowserRequestSender(BrowserConfiguration configuration) : base(
+        name: nameof(BrowserRequestSender),
+        type: TestStepType.ActionStep,
+        description: "Navigate to target URL using headless browser")
     {
         _configuration = configuration.RequireNotNull(nameof(configuration));
     }
@@ -94,7 +96,7 @@ public sealed class BrowserRequestSender : TestComponent
     private async Task<BrowserClient> CreateBrowserClientAsync(IServiceProvider serviceProvider, TestSettings settings)
     {
         var browserFactory = serviceProvider.GetService<IBrowserFactory>() ??
-                             throw new InvalidProgramException(Errors.HeadlessBrowserNotFound);
+            throw new InvalidProgramException(Errors.HeadlessBrowserNotFound);
 
         return await browserFactory
             .CreateClientAsync(_configuration, settings)

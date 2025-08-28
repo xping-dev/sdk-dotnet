@@ -551,18 +551,10 @@ public sealed class TestAgent : IDisposable
         if (!string.IsNullOrEmpty(metadata.MethodName))
             components.Add(metadata.MethodName);
 
-        // Add stable location information if available (machine/environment context)
-        if (metadata.Location != null)
+        // If we have no test method info, fall back to process name
+        if (components.Count == 0)
         {
-            if (!string.IsNullOrEmpty(metadata.Location.Country))
-                components.Add(metadata.Location.Country);
-
-            if (!string.IsNullOrEmpty(metadata.Location.Region))
-                components.Add(metadata.Location.Region);
-
-            // Only add city if it provides meaningful distinction
-            if (!string.IsNullOrEmpty(metadata.Location.City))
-                components.Add(metadata.Location.City);
+            components.Add(metadata.ProcessName);
         }
 
         // If we don't have test method info, create a generic fallback

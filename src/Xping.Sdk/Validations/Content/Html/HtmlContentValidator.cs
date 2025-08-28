@@ -8,7 +8,6 @@
 using Xping.Sdk.Actions;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
-using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Shared;
 using Xping.Sdk.Validations.Content.Html.Internals;
@@ -44,7 +43,9 @@ public class HtmlContentValidator : BaseContentValidator
     /// A function that determines whether the html content matches a specified condition.
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation function is null.</exception>
-    public HtmlContentValidator(Action<IHtmlContent> validation) : base(StepName)
+    public HtmlContentValidator(Action<IHtmlContent> validation) : base(
+        name: StepName,
+        description: "Validate HTML content structure and elements")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

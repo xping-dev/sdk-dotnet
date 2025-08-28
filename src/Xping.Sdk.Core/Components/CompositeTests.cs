@@ -29,7 +29,8 @@ public abstract class CompositeTests : TestComponent, ICompositeTests
     /// Initializes a new instance of the CompositeTests class with the specified name and test step type.
     /// </summary>
     /// <param name="name">The name of the composite test component.</param>
-    protected CompositeTests(string name) : base(name, TestStepType.CompositeStep)
+    /// <param name="description">Brief description of what the composite test component does.</param>
+    protected CompositeTests(string name, string description) : base(name, TestStepType.CompositeStep, description)
     { }
 
     /// <summary>

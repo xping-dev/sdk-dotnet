@@ -24,7 +24,7 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
     private sealed class TestComponentUnderTest(
         string name = nameof(TestComponentUnderTest),
         TestStepType type = TestStepType.ActionStep,
-        Mock<ICompositeTests>? compositeMock = null) : TestComponent(name, type)
+        Mock<ICompositeTests>? compositeMock = null) : TestComponent(name, type, "Test component for unit testing")
     {
         public bool HandleAsyncCalled { get; private set; }
 

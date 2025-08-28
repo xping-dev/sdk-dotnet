@@ -24,7 +24,7 @@ public class Pipeline : CompositeTests
     /// </remarks>
     public Pipeline(
         string? name = null,
-        params ITestComponent[] components) : base(name ?? nameof(Pipeline))
+        params ITestComponent[] components) : base(name ?? nameof(Pipeline), "Execute a sequence of test components as a pipeline")
     {
         if (components != null)
         {
