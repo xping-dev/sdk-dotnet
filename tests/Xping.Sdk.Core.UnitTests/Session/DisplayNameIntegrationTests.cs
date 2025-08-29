@@ -9,7 +9,7 @@ using System.Text.Json;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 
-namespace Xping.Sdk.UnitTests.Session;
+namespace Xping.Sdk.Core.UnitTests.Session;
 
 [TestFixture]
 internal class DisplayNameIntegrationTests
@@ -80,7 +80,12 @@ internal class DisplayNameIntegrationTests
         {
         }
 
-        public override Task HandleAsync(Uri url, TestSettings settings, Xping.Sdk.Core.Components.TestContext context, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+        public override Task HandleAsync(
+            Uri url,
+            TestSettings settings,
+            Components.TestContext context,
+            IServiceProvider serviceProvider,
+            CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
