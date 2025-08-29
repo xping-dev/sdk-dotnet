@@ -25,11 +25,6 @@ public class HttpResponseValidator : TestComponent
     private readonly Action<IHttpResponse> _validation;
 
     /// <summary>
-    /// The name of the test component that uniquely identifies a HttpResponseValidator test operation.
-    /// </summary>
-    public const string StepName = nameof(HttpResponseValidator);
-
-    /// <summary>
     /// Initializes a new instance of the HttpResponseValidator class with a specified validation action.
     /// </summary>
     /// <param name="validation">
@@ -37,9 +32,9 @@ public class HttpResponseValidator : TestComponent
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation action is null.</exception>
     public HttpResponseValidator(Action<IHttpResponse> validation) : base(
-        name: StepName,
         type: TestStepType.ValidateStep,
-        description: "Validate HTTP response against custom criteria")
+        description: "Validate HTTP response against custom criteria",
+        displayName: "HTTP Response Validator")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

@@ -40,9 +40,9 @@ public sealed class BrowserRequestSender : TestComponent
     /// </summary>
     /// <param name="configuration">The browserClient configuration.</param>
     public BrowserRequestSender(BrowserConfiguration configuration) : base(
-        name: nameof(BrowserRequestSender),
         type: TestStepType.ActionStep,
-        description: "Navigate to target URL using headless browser")
+        description: "Navigate to target URL using headless browser",
+        displayName: "Browser Request Sender")
     {
         _configuration = configuration.RequireNotNull(nameof(configuration));
     }

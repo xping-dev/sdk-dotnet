@@ -33,20 +33,12 @@ namespace Xping.Sdk.Actions;
 public sealed class DnsLookup : TestComponent
 {
     /// <summary>
-    /// The name of the test component that represents a DnsLookup test operation.
-    /// </summary>
-    /// <remarks>
-    /// This constant is used to register the DnsLookup class in the test framework.
-    /// </remarks>
-    public const string ComponentName = "DNS lookup";
-
-    /// <summary>
     /// Initializes a new instance of the DnsLookup class.
     /// </summary>
     public DnsLookup() : base(
-        name: ComponentName,
         type: TestStepType.ActionStep,
-        description: "Resolve domain name to IP addresses using DNS lookup")
+        description: "Resolve domain name to IP addresses using DNS lookup",
+        displayName: "DNS lookup")
     { }
 
     /// <summary>

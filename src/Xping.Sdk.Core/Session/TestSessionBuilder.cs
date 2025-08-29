@@ -126,6 +126,7 @@ public class TestSessionBuilder : ITestSessionBuilder
         {
             Name = Component.Name,
             Description = Component.Description,
+            DisplayName = Component.DisplayName,
             TestComponentIteration = _componentStepCounts[Component],
             StartDate = Instrumentation.StartTime,
             Duration = Instrumentation.ElapsedTime,
@@ -166,6 +167,7 @@ public class TestSessionBuilder : ITestSessionBuilder
         {
             Name = Component.Name,
             Description = Component.Description,
+            DisplayName = Component.DisplayName,
             TestComponentIteration = _componentStepCounts[Component],
             StartDate = Instrumentation.StartTime,
             Duration = Instrumentation.ElapsedTime,
@@ -206,6 +208,7 @@ public class TestSessionBuilder : ITestSessionBuilder
         {
             Name = Component.Name,
             Description = Component.Description,
+            DisplayName = Component.DisplayName,
             TestComponentIteration = _componentStepCounts[Component],
             StartDate = Instrumentation.StartTime,
             Duration = Instrumentation.ElapsedTime,

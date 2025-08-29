@@ -31,14 +31,6 @@ public class PageContentValidator : BaseContentValidator
     private readonly Func<IPage, Task> _validation;
 
     /// <summary>
-    /// The name of the test component that represents a StringContentValidator test operation.
-    /// </summary>
-    /// <remarks>
-    /// This constant is used to register the StringContentValidator class in the test framework.
-    /// </remarks>
-    public const string StepName = nameof(PageContentValidator);
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="PageContentValidator"/> class.
     /// </summary>
     /// <param name="validation">
@@ -46,8 +38,8 @@ public class PageContentValidator : BaseContentValidator
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation function is null.</exception>
     public PageContentValidator(Func<IPage, Task> validation) : base(
-        name: StepName,
-        description: "Validate page content using browser-rendered DOM")
+        description: "Validate page content using browser-rendered DOM",
+        displayName: "Page Content Validator")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

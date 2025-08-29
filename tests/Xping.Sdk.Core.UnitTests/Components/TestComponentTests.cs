@@ -22,9 +22,8 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
     private readonly IServiceProvider _serviceProvider = serviceProvider;
 
     private sealed class TestComponentUnderTest(
-        string name = nameof(TestComponentUnderTest),
         TestStepType type = TestStepType.ActionStep,
-        Mock<ICompositeTests>? compositeMock = null) : TestComponent(name, type, "Test component for unit testing")
+        Mock<ICompositeTests>? compositeMock = null) : TestComponent(type, "Test component for unit testing", "Test Component Under Test")
     {
         public bool HandleAsyncCalled { get; private set; }
 
@@ -45,11 +44,23 @@ public sealed class TestComponentTests(IServiceProvider serviceProvider)
     }
 
     [Test]
-    public void ThrowsArgumentExceptionWhenNameIsNullOrEmpty()
+    public void NameIsSetToClassName()
     {
+        // Arrange & Act
+        var component = new TestComponentUnderTest();
+
         // Assert
-        Assert.Throws<ArgumentNullException>(() => new TestComponentUnderTest(name: null!));
-        Assert.Throws<ArgumentException>(() => new TestComponentUnderTest(name: string.Empty));
+        Assert.That(component.Name, Is.EqualTo(nameof(TestComponentUnderTest)));
+    }
+
+    [Test]
+    public void DisplayNameIsSetFromConstructor()
+    {
+        // Arrange & Act
+        var component = new TestComponentUnderTest();
+
+        // Assert
+        Assert.That(component.DisplayName, Is.EqualTo("Test Component Under Test"));
     }
 
     [Test]

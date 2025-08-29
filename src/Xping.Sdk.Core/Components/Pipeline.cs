@@ -16,7 +16,7 @@ public class Pipeline : CompositeTests
     /// <summary>
     /// Initializes a new instance of the Pipeline class with the specified name and components.
     /// </summary>
-    /// <param name="name">The optional name of the pipeline. If null, the StepName constant is used.</param>
+    /// <param name="name">The optional display name of the pipeline. If null, "Pipeline" is used.</param>
     /// <param name="components">The test components that make up the pipeline.</param>
     /// <remarks>
     /// The Pipeline class inherits from the CompositeTests class and represents a sequence of tests that can be 
@@ -24,7 +24,8 @@ public class Pipeline : CompositeTests
     /// </remarks>
     public Pipeline(
         string? name = null,
-        params ITestComponent[] components) : base(name ?? nameof(Pipeline), "Execute a sequence of test components as a pipeline")
+        params ITestComponent[] components) : base(
+            description: "Execute a sequence of test components as a pipeline", name ?? "Pipeline")
     {
         if (components != null)
         {

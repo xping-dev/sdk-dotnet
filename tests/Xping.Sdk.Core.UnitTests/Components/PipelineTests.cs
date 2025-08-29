@@ -31,20 +31,19 @@ internal class PipelineTests(IServiceProvider serviceProvider)
         var pipeline = new Pipeline(name: pipelineName);
 
         // Assert
-        Assert.That(pipeline.Name, Is.EqualTo(pipelineName));
+        Assert.That(pipeline.DisplayName, Is.EqualTo(pipelineName));
+        Assert.That(pipeline.Name, Is.EqualTo(nameof(Pipeline)));
     }
 
     [Test]
-    public void NameReturnsPipelineNameWhenNameHasNotBeenProvided()
+    public void NameReturnsClassNameWhenNameHasNotBeenProvided()
     {
-        // Arrange
-        const string pipelineName = nameof(Pipeline);
-
-        // Act
+        // Arrange & Act
         var pipeline = new Pipeline();
 
         // Assert
-        Assert.That(pipeline.Name, Is.EqualTo(pipelineName));
+        Assert.That(pipeline.Name, Is.EqualTo(nameof(Pipeline)));
+        Assert.That(pipeline.DisplayName, Is.EqualTo("Pipeline"));
     }
 
     [Test]

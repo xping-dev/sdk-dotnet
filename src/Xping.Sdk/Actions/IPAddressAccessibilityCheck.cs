@@ -36,21 +36,13 @@ public sealed class IPAddressAccessibilityCheck : TestComponent
     private readonly PingConfiguration _configuration;
 
     /// <summary>
-    /// The name of the test component that represents a IPAddressAccessibilityCheck of tests.
-    /// </summary>
-    /// <remarks>
-    /// This constant is used to register the IPAddressAccessibilityCheck class in the test framework.
-    /// </remarks>
-    public const string StepName = "IPAddress accessibility check";
-
-    /// <summary>
-    /// Initializes new instance of th
+    /// Initializes new instance of the IPAddressAccessibilityCheck class.
     /// </summary>
     /// <param name="configuration">The ping operation configuration.</param>
     public IPAddressAccessibilityCheck(PingConfiguration configuration) : base(
-        name: StepName,
         type: TestStepType.ActionStep,
-        description: "Check accessibility of resolved IP addresses using ping")
+        description: "Check accessibility of resolved IP addresses using ping",
+        displayName: "IP Address Accessibility Check")
     {
         _configuration = configuration;
     }

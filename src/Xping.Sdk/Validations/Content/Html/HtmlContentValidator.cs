@@ -29,14 +29,6 @@ public class HtmlContentValidator : BaseContentValidator
     private readonly Action<IHtmlContent> _validation;
 
     /// <summary>
-    /// The name of the test component that represents a StringContentValidator test operation.
-    /// </summary>
-    /// <remarks>
-    /// This constant is used to register the StringContentValidator class in the test framework.
-    /// </remarks>
-    public const string StepName = nameof(HtmlContentValidator);
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="HtmlContentValidator"/> class.
     /// </summary>
     /// <param name="validation">
@@ -44,8 +36,8 @@ public class HtmlContentValidator : BaseContentValidator
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when the validation function is null.</exception>
     public HtmlContentValidator(Action<IHtmlContent> validation) : base(
-        name: StepName,
-        description: "Validate HTML content structure and elements")
+        description: "Validate HTML content structure and elements",
+        displayName: "HTML Content Validator")
     {
         _validation = validation.RequireNotNull(nameof(validation));
     }

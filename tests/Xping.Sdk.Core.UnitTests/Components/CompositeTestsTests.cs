@@ -13,7 +13,7 @@ namespace Xping.Sdk.UnitTests.Components;
 
 internal class CompositeTestsTests
 {
-    private class CompositeTestsUnderTest(string name = nameof(CompositeTestsUnderTest)) : CompositeTests(name, "Test composite for unit testing")
+    private class CompositeTestsUnderTest() : CompositeTests("Test composite for unit testing", "Test Composite Under Test")
     {
         public override Task HandleAsync(
             Uri url,
