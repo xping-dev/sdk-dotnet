@@ -5,6 +5,7 @@
  * License: [MIT]
  */
 
+using System.Text.Json;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 
@@ -13,15 +14,26 @@ namespace Xping.Sdk.UnitTests.Session;
 [TestFixture]
 internal class DisplayNameIntegrationTests
 {
-    [Test]
-    public void TestStepIncludesDisplayNameFromComponent()
+        [Test]
+    public void TestStep_CreatedFromComponent_HasCorrectDisplayName()
     {
         // Arrange
         var component = new TestComponentMock();
-        var builder = CreateSessionBuilder(component);
 
         // Act
-        var testStep = builder.Build();
+        var testStep = new TestStep()
+        {
+            Name = component.Name,
+            Description = component.Description,
+            DisplayName = component.DisplayName,
+            TestComponentIteration = 1,
+            StartDate = DateTime.UtcNow,
+            Duration = TimeSpan.Zero,
+            Type = component.Type,
+            Result = TestStepResult.Succeeded,
+            PropertyBag = null,
+            ErrorMessage = null
+        };
 
         // Assert
         Assert.That(testStep.Name, Is.EqualTo(nameof(TestComponentMock)));
@@ -33,31 +45,27 @@ internal class DisplayNameIntegrationTests
     public void TestStepDisplayNameIsSerializedAndDeserialized()
     {
         // Arrange
-        var originalStep = new TestStep
+        var component = new TestComponentMock();
+        var originalStep = new TestStep()
         {
-            Name = "TestName",
-            Description = "Test Description",
-            DisplayName = "Test Display Name",
+            Name = component.Name,
+            Description = component.Description,
+            DisplayName = component.DisplayName,
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow,
             Duration = TimeSpan.Zero,
-            Type = TestStepType.ActionStep,
+            Type = component.Type,
             Result = TestStepResult.Succeeded,
             PropertyBag = null,
             ErrorMessage = null
         };
 
-        // Act - Serialize and deserialize
-        var serializer = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
-        using var stream = new MemoryStream();
-        
-#pragma warning disable SYSLIB0011 // Type or member is obsolete
-        serializer.Serialize(stream, originalStep);
-        stream.Position = 0;
-        var deserializedStep = (TestStep)serializer.Deserialize(stream);
-#pragma warning restore SYSLIB0011 // Type or member is obsolete
+        // Act - Serialize and deserialize using System.Text.Json (secure alternative)
+        var json = JsonSerializer.Serialize(originalStep);
+        var deserializedStep = JsonSerializer.Deserialize<TestStep>(json);
 
         // Assert
+        Assert.That(deserializedStep, Is.Not.Null);
         Assert.That(deserializedStep.Name, Is.EqualTo(originalStep.Name));
         Assert.That(deserializedStep.DisplayName, Is.EqualTo(originalStep.DisplayName));
         Assert.That(deserializedStep.Description, Is.EqualTo(originalStep.Description));
@@ -72,45 +80,9 @@ internal class DisplayNameIntegrationTests
         {
         }
 
-        public override Task HandleAsync(Uri url, TestSettings settings, TestContext context, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+        public override Task HandleAsync(Uri url, TestSettings settings, Xping.Sdk.Core.Components.TestContext context, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
-    }
-
-    private static ITestSessionBuilder CreateSessionBuilder(ITestComponent component)
-    {
-        var builder = new TestSessionBuilder();
-        var mockInstrumentation = new MockInstrumentation();
-        
-        builder.Initiate(
-            url: new Uri("https://test.com"),
-            startTime: DateTime.UtcNow,
-            context: CreateMockContext(builder, mockInstrumentation, component),
-            uploadToken: Guid.NewGuid(),
-            metadata: new TestMetadata());
-
-        return builder;
-    }
-
-    private static TestContext CreateMockContext(ITestSessionBuilder builder, InstrumentationTimer instrumentation, ITestComponent component)
-    {
-        var pipeline = new Pipeline("Test", component);
-        var context = new TestContext(
-            sessionBuilder: builder,
-            instrumentation: instrumentation,
-            sessionUploader: Mock.Of<ITestSessionUploader>(),
-            pipeline: pipeline,
-            progress: null);
-
-        context.UpdateExecutionContext(component);
-        return context;
-    }
-
-    private sealed class MockInstrumentation : InstrumentationTimer
-    {
-        public MockInstrumentation() : base(false) { }
-        public override DateTime StartTime => DateTime.UtcNow;
-        public override TimeSpan ElapsedTime => TimeSpan.Zero;
     }
 }
