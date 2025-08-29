@@ -48,7 +48,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByAltTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -75,7 +75,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByAltRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -106,7 +106,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByLabelTextSelector(text);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -133,7 +133,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByLabelRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -163,7 +163,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByPlaceholderTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -190,7 +190,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByPlaceholderRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -220,7 +220,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTestIdTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -247,7 +247,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTestIdRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -277,7 +277,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTitleTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -304,7 +304,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTitleRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
@@ -334,7 +334,7 @@ internal class InstrumentedHtmlContent : IHtmlContent
         XPathSelector xpathSelector = new(selector);
         var nodes = xpathSelector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder

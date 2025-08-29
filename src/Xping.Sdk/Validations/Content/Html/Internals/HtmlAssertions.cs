@@ -182,8 +182,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         {
             throw new ValidationException(
                 $"No {xpath.Name} node available. Ensure that the html content has {xpath.Name} node before " +
-                $"attempting to validate its '{attribute}' text. This error occurred during the validation of " +
-                $"HTML data.");
+                $"attempting to validate its '{attribute}' text.");
         }
 
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, altText, textComparer)))
@@ -229,8 +228,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         {
             throw new ValidationException(
                 $"No {xpath.Name} node available. Ensure that the html content has {xpath.Name} node before " +
-                $"attempting to validate its '{attribute}' value. This error occurred during the validation of " +
-                $"HTML data.");
+                $"attempting to validate its '{attribute}' value.");
         }
 
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, normalizedSrc, textComparer)))
@@ -272,8 +270,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         {
             throw new ValidationException(
                 $"No {xpath.Name} node available. Ensure that the html content has {xpath.Name} node before " +
-                $"attempting to validate its '{attribute}' value. This error occurred during the validation of " +
-                $"HTML data.");
+                $"attempting to validate its '{attribute}' value.");
         }
 
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, src, textComparer)))
@@ -392,8 +389,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         {
             throw new ValidationException(
                 $"No {xpath.Name} node available. Ensure that the html content has {xpath.Name} node before " +
-                $"attempting to validate its '{contentAttr}' value. This error occurred during the validation of " +
-                $"HTML data.");
+                $"attempting to validate its '{contentAttr}' value.");
         }
 
         if (!nodes.Any(n => ValidateAttributeText(n, contentAttr, normalizedExpectedContent, textComparer)))

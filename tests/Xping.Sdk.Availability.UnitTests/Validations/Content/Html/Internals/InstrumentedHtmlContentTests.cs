@@ -419,8 +419,7 @@ public sealed class InstrumentedHtmlContentTests
         var byteCount = document.Encoding.GetByteCount(document.Text).ToString(CultureInfo.InvariantCulture);
 
         Assert.That(exception.Message, Is.EqualTo(
-            $"The expected HTML document size should be equal to or less than 5 bytes; however, " +
-            $"the actual size was {byteCount} bytes. This error occurred during the validation of HTML data."));
+            $"Expected HTML document size \"5 bytes\" or less. Actual \"{byteCount} bytes\"."));
     }
 
     [Test]

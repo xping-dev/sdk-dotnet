@@ -598,8 +598,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(5));
         Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 5th index, but only 3 elements exist. This error occurred during the validation " +
-            $"of HTML data."));
+            $"Expected to access the 5th index, but only 3 elements exist."));
     }
 
     [Test]
@@ -615,8 +614,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(0));
         Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 0th index, but only 0 elements exist. This error occurred during the validation " +
-            $"of HTML data."));
+            $"Expected to access the 0th index, but only 0 elements exist."));
     }
 
     [Test]

@@ -196,8 +196,7 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         if (index >= Nodes.Count)
         {
             throw new ValidationException(
-                $"Expected to access the {FormatIndex(index)} index, but only {Nodes.Count} elements exist." +
-                $" This error occurred during the validation of HTML data.");
+                $"Expected to access the {FormatIndex(index)} index, but only {Nodes.Count} elements exist.");
         }
 
         Iterator.Nth(index);

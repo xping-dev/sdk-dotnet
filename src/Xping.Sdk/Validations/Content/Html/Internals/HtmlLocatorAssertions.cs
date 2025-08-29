@@ -110,7 +110,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualText = currentNode.InnerText.Trim();
@@ -119,7 +119,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner text to match \"{innerText}\" regex, but the actual inner text was " +
-                $"\"{actualText}\". This error occurred during the validation of HTML data.");
+                $"\"{actualText}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -154,7 +154,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         // Check if the lengths of the arrays are different
@@ -162,8 +162,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "The number of inner text values provided does not match the number of HTML nodes located. " +
-                "Ensure that each node corresponds to a unique inner text value. This error occurred during the " +
-                "validation of HTML data.");
+                "Ensure that each node corresponds to a unique inner text value.");
         }
 
         for (int i = 0; i < _iterator.Count; i++)
@@ -176,7 +175,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
             {
                 throw new ValidationException(
                     $"Expected the HTML node's inner text to match \"{expectedText}\" regex, but the actual inner " +
-                    $"text was \"{actualText}\". This error occurred during the validation of HTML data.");
+                    $"text was \"{actualText}\".");
             }
         }
 
@@ -211,7 +210,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualHtml = currentNode.InnerHtml.Trim();
@@ -220,7 +219,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner html to be \"{innerHtml}\", but the actual inner html was " +
-                $"\"{actualHtml}\". This error occurred during the validation of HTML data.");
+                $"\"{actualHtml}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -254,7 +253,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualHtml = currentNode.InnerHtml.Trim();
@@ -263,7 +262,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner html to match \"{innerHtml}\" regex, but the actual inner html was " +
-                $"\"{actualHtml}\". This error occurred during the validation of HTML data.");
+                $"\"{actualHtml}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
