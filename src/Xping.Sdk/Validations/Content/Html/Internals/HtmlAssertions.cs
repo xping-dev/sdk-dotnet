@@ -189,8 +189,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, altText, textComparer)))
         {
             throw new ValidationException(
-                $"Expected the {xpath.Name} node's '{attribute}' attribute to match \"{altText}\" regex, but found " +
-                $"none matching this criteria. This error occurred during the validation of HTML data.");
+                $"Expected {xpath.Name} node \"{attribute}\" attribute matching \"{altText}\" regex. Actual \"none matching\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -237,8 +236,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, normalizedSrc, textComparer)))
         {
             throw new ValidationException(
-                $"Expected the {xpath.Name} node's '{attribute}' attribute to be \"{normalizedSrc}\", but found none " +
-                $"matching this criteria. This error occurred during the validation of HTML data.");
+                $"Expected {xpath.Name} node \"{attribute}\" attribute \"{normalizedSrc}\". Actual \"none matching\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -281,8 +279,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (!nodes.Any(n => ValidateAttributeText(n, attribute, src, textComparer)))
         {
             throw new ValidationException(
-                $"Expected the {xpath.Name} node's '{attribute}' attribute to match \"{src}\" regex, but found none " +
-                $"matching this criteria. This error occurred during the validation of HTML data.");
+                $"Expected {xpath.Name} node \"{attribute}\" attribute matching \"{src}\" regex. Actual \"none matching\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -312,8 +309,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (byteCount > maxSizeInBytes)
         {
             throw new ValidationException(
-                $"The expected HTML document size should be equal to or less than {maxSizeInBytes} bytes; however, " +
-                $"the actual size was {byteCount} bytes. This error occurred during the validation of HTML data.");
+                $"Expected HTML document size \"{maxSizeInBytes} bytes\" or less. Actual \"{byteCount} bytes\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -347,16 +343,13 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
 
         if (nodes == null || nodes.Count == 0)
         {
-            throw new ValidationException(
-                $"No {xpath.Name} node found. Ensure that the HTML content includes a {xpath.Name} node before " +
-                $"attempting to validate its presence. This error occurred during the validation of HTML data.");
+            throw new ValidationException($"Expected {xpath.Name} node. Actual \"not found\".");
         }
 
         if (expectedCount.HasValue && nodes.Count != expectedCount.Value)
         {
             throw new ValidationException(
-                $"Expected {expectedCount.Value} {xpath.Name} node(s), but found {nodes.Count}." +
-                $"This error occurred during the validation of HTML data.");
+                $"Expected \"{expectedCount.Value}\" {xpath.Name} node(s). Actual \"{nodes.Count}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -406,8 +399,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (!nodes.Any(n => ValidateAttributeText(n, contentAttr, normalizedExpectedContent, textComparer)))
         {
             throw new ValidationException(
-                $"Expected the {xpath.Name} node's '{contentAttr}' attribute to be \"{normalizedExpectedContent}\"" +
-                $", but found none matching this criteria. This error occurred during the validation of HTML data.");
+                $"Expected {xpath.Name} node \"{contentAttr}\" attribute \"{normalizedExpectedContent}\". Actual \"none matching\".");
         }
         
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -498,14 +490,10 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         {
             case null:
             case 0:
-                throw new ValidationException(
-                    $"No {xpath.Name} node available. Ensure that the html content has {xpath.Name} node before " +
-                    $"attempting to validate its value. This error occurred during the validation of HTML data.");
+                throw new ValidationException($"Expected {xpath.Name} node. Actual \"not found\".");
             case > 1:
                 throw new ValidationException(
-                    $"Multiple {xpath.Name} nodes were found. The method expects a single {xpath.Name} node under " +
-                    $"the <head> node. Please ensure that the HTML content contains only one {xpath.Name} node for " +
-                    $"proper validation. This error occurred during the validation of HTML data.");
+                    $"Expected single {xpath.Name} node. Actual \"{nodes.Count} nodes found\".");
         }
 
         // The method expects a single <title> node under the <head> node.
@@ -514,8 +502,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         if (!textComparer.CompareWithRegex(actualText, title.ToString()))
         {
             throw new ValidationException(
-                $"Expected the {xpath.Name} node's inner text to be \"{title}\", but the actual {xpath.Name} node's " +
-                $"inner text was \"{actualText}\". This error occurred during the validation of HTML data.");
+                $"Expected {xpath.Name} node inner text \"{title}\". Actual \"{actualText}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.

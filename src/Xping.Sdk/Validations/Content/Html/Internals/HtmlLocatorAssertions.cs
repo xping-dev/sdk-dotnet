@@ -37,9 +37,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
 
         if (actualCount != expectedCount)
         {
-            throw new ValidationException(
-                $"Expected to find {expectedCount} elements, but found {actualCount} instead. This error " +
-                $"occurred as part of validating HTML data.");
+            throw new ValidationException($"Expected \"{expectedCount}\" elements. Actual \"{actualCount}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -71,18 +69,14 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
 
         if (currentNode == null || _nodes.Count == 0)
         {
-            throw new ValidationException(
-                "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+            throw new ValidationException("Expected HTML nodes. Actual \"not found\".");
         }
 
         var actualText = currentNode.InnerText.Trim();
 
         if (!textComparer.Compare(actualText, innerText))
         {
-            throw new ValidationException(
-                $"Expected the HTML node's inner text to be \"{innerText}\", but the actual inner text was " +
-                $"\"{actualText}\". This error occurred during the validation of HTML data.");
+            throw new ValidationException($"Expected HTML node inner text \"{innerText}\". Actual \"{actualText}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.

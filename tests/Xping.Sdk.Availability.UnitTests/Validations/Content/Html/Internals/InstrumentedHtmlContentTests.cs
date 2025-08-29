@@ -263,9 +263,7 @@ public sealed class InstrumentedHtmlContentTests
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => expect.ToHaveTitle("expectedTitle"));
 
-        Assert.That(exception.Message, Is.EqualTo(
-            "No <title> node available. Ensure that the html content has <title> node before attempting " +
-            "to validate its value. This error occurred during the validation of HTML data."));
+        Assert.That(exception.Message, Is.EqualTo("Expected <title> node. Actual \"not found\"."));
     }
 
     [Test]
@@ -291,10 +289,7 @@ public sealed class InstrumentedHtmlContentTests
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => expect.ToHaveTitle("expectedTitle"));
 
-        Assert.That(exception.Message, Is.EqualTo(
-            "Multiple <title> nodes were found. The method expects a single <title> node under the <head> " +
-            "node. Please ensure that the HTML content contains only one <title> node for proper validation. " +
-            "This error occurred during the validation of HTML data."));
+        Assert.That(exception.Message, Is.EqualTo("Expected single <title> node. Actual \"2 nodes found\"."));
     }
 
     [Test]
@@ -319,9 +314,7 @@ public sealed class InstrumentedHtmlContentTests
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => expect.ToHaveTitle("OtherTitle"));
 
-        Assert.That(exception.Message, Is.EqualTo(
-            $"Expected the <title> node's inner text to be \"OtherTitle\", but the actual <title> node's inner " +
-            $"text was \"expectedTitle\". This error occurred during the validation of HTML data."));
+        Assert.That(exception.Message, Is.EqualTo("Expected <title> node inner text \"OtherTitle\". Actual \"expectedTitle\"."));
     }
 
     [Test]
