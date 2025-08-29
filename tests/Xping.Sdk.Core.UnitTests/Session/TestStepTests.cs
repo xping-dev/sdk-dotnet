@@ -19,6 +19,7 @@ public sealed class TestStepTests
         {
             Name = "TestStepName",
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow - TimeSpan.FromDays(2),
             Duration = TimeSpan.Zero,
@@ -37,6 +38,7 @@ public sealed class TestStepTests
         {
             Name = "TestStepName",
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.Today,
             Duration = TimeSpan.Zero,
@@ -55,6 +57,7 @@ public sealed class TestStepTests
         {
             Name = null!,
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow,
             Duration = TimeSpan.Zero,
@@ -73,6 +76,7 @@ public sealed class TestStepTests
         {
             Name = "TestStepName",
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow,
             Duration = TimeSpan.Zero,
@@ -92,6 +96,7 @@ public sealed class TestStepTests
         {
             Name = "TestStepName",
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow,
             Duration = TimeSpan.Zero,
@@ -111,6 +116,7 @@ public sealed class TestStepTests
         {
             Name = "TestStepName",
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = DateTime.UtcNow,
             Duration = TimeSpan.Zero,
@@ -122,5 +128,28 @@ public sealed class TestStepTests
 
         // Assert
         Assert.That(testStep.ErrorMessage, Is.Null);
+    }
+
+    [Test]
+    public void DisplayNameIsCorrectlySetAndPreserved()
+    {
+        // Arrange
+        const string expectedDisplayName = "Custom Display Name";
+        var testStep = new TestStep()
+        {
+            Name = "TestStepName",
+            Description = "Test step description",
+            DisplayName = expectedDisplayName,
+            TestComponentIteration = 1,
+            StartDate = DateTime.UtcNow,
+            Duration = TimeSpan.Zero,
+            Type = TestStepType.ActionStep,
+            Result = TestStepResult.Succeeded,
+            PropertyBag = null,
+            ErrorMessage = null,
+        };
+
+        // Assert
+        Assert.That(testStep.DisplayName, Is.EqualTo(expectedDisplayName));
     }
 }

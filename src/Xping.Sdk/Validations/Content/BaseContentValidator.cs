@@ -22,8 +22,8 @@ namespace Xping.Sdk.Validations.Content;
 /// The BaseContentValidator class inherits from the TestComponent class and provides a common method for decoding 
 /// HTTP content.
 /// </remarks>
-public abstract class BaseContentValidator(string name, string description) : 
-    TestComponent(name, TestStepType.ValidateStep, description)
+public abstract class BaseContentValidator(string description, string displayName) : 
+    TestComponent(TestStepType.ValidateStep, description, displayName)
 {
     /// <summary>
     /// Retrieves the HttpResponseMessage from the TestContext.

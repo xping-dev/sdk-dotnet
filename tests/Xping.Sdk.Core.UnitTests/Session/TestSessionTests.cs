@@ -33,6 +33,7 @@ public sealed class TestSessionTests
         {
             Name = name,
             Description = "Test step description",
+            DisplayName = "Test Step Display Name",
             TestComponentIteration = 1,
             StartDate = startDate ?? DateTime.UtcNow,
             Duration = duration ?? TimeSpan.Zero,

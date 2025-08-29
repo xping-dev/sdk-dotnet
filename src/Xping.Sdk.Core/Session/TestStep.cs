@@ -42,6 +42,14 @@ public sealed record TestStep : ISerializable
     public required string Description { get; init; }
 
     /// <summary>
+    /// Gets the display name of the test step.
+    /// </summary>
+    /// <value>
+    /// A string that provides a user-friendly display name for the test step.
+    /// </value>
+    public required string DisplayName { get; init; }
+
+    /// <summary>
     /// Gets the iteration count of the test component that created this test step.
     /// </summary>
     /// <value>
@@ -133,6 +141,7 @@ public sealed record TestStep : ISerializable
 
         _name = (string)info.GetValue(nameof(Name), typeof(string)).RequireNotNull(nameof(Name));
         Description = (string)info.GetValue(nameof(Description), typeof(string)).RequireNotNull(nameof(Description));
+        DisplayName = (string)info.GetValue(nameof(DisplayName), typeof(string)).RequireNotNull(nameof(DisplayName));
         _startDate = (DateTime)info.GetValue(nameof(StartDate), typeof(DateTime)).RequireNotNull(nameof(StartDate));
         TestComponentIteration = info.GetInt32(nameof(TestComponentIteration));
         Duration = (TimeSpan)info.GetValue(nameof(Duration), typeof(TimeSpan)).RequireNotNull(nameof(Duration));
@@ -172,6 +181,7 @@ public sealed record TestStep : ISerializable
     {
         info.AddValue(nameof(Name), Name, typeof(string));
         info.AddValue(nameof(Description), Description, typeof(string));
+        info.AddValue(nameof(DisplayName), DisplayName, typeof(string));
         info.AddValue(nameof(StartDate), StartDate, typeof(DateTime));
         info.AddValue(nameof(TestComponentIteration), TestComponentIteration, typeof(int));
         info.AddValue(nameof(Duration), Duration, typeof(TimeSpan));

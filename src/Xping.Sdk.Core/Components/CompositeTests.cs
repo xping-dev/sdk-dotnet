@@ -26,11 +26,11 @@ public abstract class CompositeTests : TestComponent, ICompositeTests
     private readonly List<ITestComponent> _components = [];
 
     /// <summary>
-    /// Initializes a new instance of the CompositeTests class with the specified name and test step type.
+    /// Initializes a new instance of the CompositeTests class with the specified description and display name.
     /// </summary>
-    /// <param name="name">The name of the composite test component.</param>
     /// <param name="description">Brief description of what the composite test component does.</param>
-    protected CompositeTests(string name, string description) : base(name, TestStepType.CompositeStep, description)
+    /// <param name="displayName">User-friendly display name for the composite test component.</param>
+    protected CompositeTests(string description, string displayName) : base(TestStepType.CompositeStep, description, displayName)
     { }
 
     /// <summary>

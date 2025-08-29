@@ -33,6 +33,11 @@ public interface ITestComponent
     string Description { get; }
 
     /// <summary>
+    /// Gets a user-friendly display name for the test component.
+    /// </summary>
+    string DisplayName { get; }
+
+    /// <summary>
     /// This method performs the test step operation asynchronously.
     /// </summary>
     /// <param name="url">A Uri object that represents the URL of the page being validated.</param>

@@ -104,7 +104,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(session.Steps.Any(step => step.Name == DnsLookup.ComponentName), Is.True);
+            Assert.That(session.Steps.Any(step => step.Name == nameof(DnsLookup)), Is.True);
             Assert.That(session.TryGetPropertyBagValue(expectedBag, out PropertyBagValue<string[]>? ips), Is.True);
         });
     }
@@ -123,7 +123,7 @@ public class BrowserTestAgentTests(IServiceProvider serviceProvider)
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(session.Steps.Any(step => step.Name == IPAddressAccessibilityCheck.StepName), Is.True);
+            Assert.That(session.Steps.Any(step => step.Name == nameof(IPAddressAccessibilityCheck)), Is.True);
             Assert.That(session.TryGetPropertyBagValue(expectedBag, out PropertyBagValue<string>? ipaddress), Is.True);
         });
     }

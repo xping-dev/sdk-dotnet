@@ -24,14 +24,15 @@ public abstract class TestComponent : ITestComponent
     /// <summary>
     /// Initializes a new instance of the TestComponent class.
     /// </summary>
-    /// <param name="name">Name of the test component.</param>
     /// <param name="type">Type of the test component.</param>
     /// <param name="description">Brief description of what the test component does.</param>
-    protected TestComponent(string name, TestStepType type, string description)
+    /// <param name="displayName">User-friendly display name for the test component.</param>
+    protected TestComponent(TestStepType type, string description, string displayName)
     {
-        Name = name.RequireNotNullOrEmpty();
+        Name = GetType().Name;
         Type = type;
         Description = description.RequireNotNullOrEmpty();
+        DisplayName = displayName.RequireNotNullOrEmpty();
     }
 
     /// <summary>
@@ -48,6 +49,11 @@ public abstract class TestComponent : ITestComponent
     /// Gets a brief description of what the test component does.
     /// </summary>
     public string Description { get; protected set; }
+
+    /// <summary>
+    /// Gets a user-friendly display name for the test component.
+    /// </summary>
+    public string DisplayName { get; protected set; }
 
     /// <summary>
     /// This method performs the test step operation asynchronously. It is an abstract method that must be implemented 
