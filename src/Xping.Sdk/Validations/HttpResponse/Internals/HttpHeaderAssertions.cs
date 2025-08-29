@@ -46,9 +46,7 @@ internal class HttpHeaderAssertions(
         if (!_values.Any(v => textComparer.Compare(v, normalizedValue)))
         {
             throw new ValidationException(
-                $"Expected to find HTTP header \"{_header}\" with value \"{normalizedValue}\", but the actual value" +
-                $"was \"{string.Join(";", _values)}\". This exception occurred as part of validating HTTP response " +
-                $"data.");
+                $"Expected HTTP header \"{_header}\" with value \"{normalizedValue}\". Actual \"{string.Join(";", _values)}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.

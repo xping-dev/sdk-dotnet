@@ -30,9 +30,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
 
         if (!_response.IsSuccessStatusCode)
         {
-            throw new ValidationException("" +
-                $"Expected success status code, but the actual status code was \"{(int)_response.StatusCode}\". This " +
-                $"exception occurred as part of validating HTTP response data.");
+            throw new ValidationException($"Expected success status code. Actual \"{(int)_response.StatusCode}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -55,9 +53,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
 
         if (statusCode != _response.StatusCode)
         {
-            throw new ValidationException("" +
-                $"Expected \"{(int)statusCode}\" status code, but the actual status code was " +
-                $"\"{(int)_response.StatusCode}\". This exception occurred as part of validating HTTP response data.");
+            throw new ValidationException($"Expected \"{(int)statusCode}\" status code. Actual \"{(int)_response.StatusCode}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -93,9 +89,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
             GetNormalizedHeaders(_response.TrailingHeaders));
 
         if (!TryGetHeader(normalizedHeaders, normalizedName, out var header, options) || header == null)
-            throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\", but no such header exists. This exception " +
-                $"occurred as part of validating HTTP response data.");
+            throw new ValidationException($"Expected HTTP header \"{normalizedName}\". Actual \"not found\".");
         
         // Create a successful test step with detailed information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -139,17 +133,13 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
 
         if (!TryGetHeaderValues(normalizedHeaders, normalizedName, out var headerValues, options) ||
             headerValues == null)
-            throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\", but no such header exists. This exception " +
-                $"occurred as part of validating HTTP response data.");
+            throw new ValidationException($"Expected HTTP header \"{normalizedName}\". Actual \"not found\".");
 
         var enumerable = headerValues.ToList();
         if (!enumerable.Any(v => textComparer.Compare(v, normalizedValue)))
         {
             throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\" with value \"{normalizedValue}\", but the " +
-                $"actual value was \"{string.Join(";", enumerable)}\". This exception occurred as part of " +
-                $"validating HTTP response data.");
+                $"Expected HTTP header \"{normalizedName}\" with value \"{normalizedValue}\". Actual \"{string.Join(";", enumerable)}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -189,9 +179,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         var content = reader.ReadToEnd();
 
         if (!textComparer.Compare(content, normalizedExpectedContent))
-            throw new ValidationException(
-                $"Expected HTTP response body to contain \"{normalizedExpectedContent}\", but no such string was " +
-                $"found. This exception occurred as part of validating HTTP response data.");
+            throw new ValidationException($"Expected HTTP response body to contain \"{normalizedExpectedContent}\". Actual \"not found\".");
         
         // Create a successful test step with detailed information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -222,8 +210,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         }
 
         throw new ValidationException(
-            $"Expected HTTP response time to be less than {maxDuration}, but actual response " +
-            $"time was {_responseTime}. This exception occurred as part of validating HTTP response data."
+            $"Expected HTTP response time less than \"{maxDuration}\". Actual \"{_responseTime}\"."
         );
     }
 
