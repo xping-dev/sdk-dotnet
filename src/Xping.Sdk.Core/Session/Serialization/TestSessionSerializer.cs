@@ -83,6 +83,7 @@ public sealed class TestSessionSerializer : ITestSessionSerializer
         typeof(TestStep[]),
         typeof(TestMetadata),
         typeof(TestLocation),
+        typeof(Components.TestSettings),
         typeof(PropertyBag<IPropertyBagValue>),
         typeof(Dictionary<PropertyBagKey, IPropertyBagValue>),
         typeof(PropertyBagValue<byte[]>),

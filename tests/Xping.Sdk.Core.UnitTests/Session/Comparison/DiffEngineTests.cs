@@ -61,7 +61,8 @@ public sealed class DiffEngineTests
             StartDate = DateTime.Now,
             State = TestSessionState.NotStarted,
             Steps = [],
-            Url = new Uri("http://localhost")
+            Url = new Uri("http://localhost"),
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
         TestSession session2 = null!;
 
@@ -79,7 +80,8 @@ public sealed class DiffEngineTests
             StartDate = DateTime.Now,
             State = TestSessionState.NotStarted,
             Steps = [],
-            Url = new Uri("http://localhost")
+            Url = new Uri("http://localhost"),
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
         TestSession session2 = session1;
 
@@ -99,7 +101,8 @@ public sealed class DiffEngineTests
             StartDate = DateTime.Now,
             State = TestSessionState.NotStarted,
             Steps = [],
-            Url = new Uri("http://localhost")
+            Url = new Uri("http://localhost"),
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
 
         using TestSession session2 = new()
@@ -107,7 +110,8 @@ public sealed class DiffEngineTests
             StartDate = DateTime.Now,
             State = TestSessionState.NotStarted,
             Steps = [],
-            Url = new Uri("http://localhost")
+            Url = new Uri("http://localhost"),
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
 
         // Act

@@ -20,7 +20,8 @@ public sealed class TestSessionTests
             Url = url ?? new Uri("https://test"),
             StartDate = startDate ?? DateTime.UtcNow,
             Steps = steps?.ToList().AsReadOnly() ?? new List<TestStep>().AsReadOnly(),
-            State = TestSessionState.NotStarted
+            State = TestSessionState.NotStarted,
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
 
     private static TestStep CreateTestStepMock(
@@ -52,7 +53,8 @@ public sealed class TestSessionTests
             Url = new Uri("http://localhost"),
             StartDate = DateTime.UtcNow,
             Steps = [],
-            State = TestSessionState.NotStarted
+            State = TestSessionState.NotStarted,
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
 
         // Assert
@@ -69,7 +71,8 @@ public sealed class TestSessionTests
             Url = null!,
             StartDate = DateTime.UtcNow,
             Steps = [],
-            State = TestSessionState.NotStarted
+            State = TestSessionState.NotStarted,
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         });
     }
 

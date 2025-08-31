@@ -30,7 +30,23 @@ public interface ITestSessionBuilder
     /// <param name="metadata">The test metadata information.</param>
     /// <returns>The initialized test session builder.</returns>
     ITestSessionBuilder Initiate(
-        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata metadata);
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null);
+
+    /// <summary>
+    /// Initializes the test session builder with the specified URL, start date, <see cref="TestContext"/> object,
+    /// and test settings.
+    /// </summary>
+    /// <param name="url">The URL to be used for the test session.</param>
+    /// <param name="startDate">The start date of the test session.</param>
+    /// <param name="context">The context responsible for maintaining the state of the test execution.</param>
+    /// <param name="uploadToken">
+    /// The upload token that links the TestAgent's results to the project configured on the Xping.io server.
+    /// </param>
+    /// <param name="testSettings">The test settings to be used for the test session.</param>
+    /// <param name="metadata">The test metadata information.</param>
+    /// <returns>The initialized test session builder.</returns>
+    ITestSessionBuilder Initiate(
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, Components.TestSettings testSettings, TestMetadata? metadata = null);
 
     /// <summary>
     /// Gets a value indicating whether the test session is in a failed state.

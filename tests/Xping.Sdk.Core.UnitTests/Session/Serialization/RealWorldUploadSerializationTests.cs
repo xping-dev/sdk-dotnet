@@ -19,6 +19,8 @@ internal class RealWorldUploadSerializationTests
             StartDate = DateTime.UtcNow,
             State = TestSessionState.Completed,
             Steps = []
+        ,
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
 
         // Initially should not be uploaded

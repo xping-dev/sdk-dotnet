@@ -326,13 +326,14 @@ public sealed class TestAgent : IDisposable
         CancellationToken cancellationToken)
     {
         var sessionBuilder = context.SessionBuilder;
+        var testSettings = settings ?? new TestSettings();
 
         try
         {
-            InitializeExecution(url, context, metadata);
+            InitializeExecution(url, context, testSettings, metadata);
 
             await context.Pipeline
-                .HandleAsync(url, settings ?? new TestSettings(), context, _serviceProvider, cancellationToken)
+                .HandleAsync(url, testSettings, context, _serviceProvider, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -348,8 +349,9 @@ public sealed class TestAgent : IDisposable
     /// </summary>
     /// <param name="url">The URL being tested.</param>
     /// <param name="context">The test context.</param>
+    /// <param name="testSettings">The test settings for the session.</param>
     /// <param name="metadata">The test metadata information.</param>
-    private void InitializeExecution(Uri url, TestContext context, TestMetadata metadata)
+    private void InitializeExecution(Uri url, TestContext context, Components.TestSettings testSettings, TestMetadata metadata)
     {
         // Update context with a currently executing component.
         context.UpdateExecutionContext(context.Pipeline);
@@ -357,7 +359,7 @@ public sealed class TestAgent : IDisposable
         // Initiate the test session builder by recording its start time, the URL of the page being validated,
         // and associating it with the current TestContext responsible for maintaining the state of the test
         // execution.
-        context.SessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken, metadata);
+        context.SessionBuilder.Initiate(url, startDate: DateTime.UtcNow, context, _uploadToken, testSettings, metadata);
     }
 
     /// <summary>

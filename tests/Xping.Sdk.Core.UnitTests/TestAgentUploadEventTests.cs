@@ -129,6 +129,8 @@ public sealed class TestAgentUploadEventTests
             StartDate = DateTime.UtcNow,
             Steps = [],
             State = TestSessionState.Completed
+        ,
+            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
         };
         var uploadedAt = DateTime.UtcNow;
         var uploadToken = Guid.NewGuid();
