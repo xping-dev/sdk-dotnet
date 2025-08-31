@@ -5,6 +5,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Serialization;
 
@@ -21,7 +22,7 @@ public sealed class TestSessionTests
             StartDate = startDate ?? DateTime.UtcNow,
             Steps = steps?.ToList().AsReadOnly() ?? new List<TestStep>().AsReadOnly(),
             State = TestSessionState.NotStarted,
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
 
     private static TestStep CreateTestStepMock(
@@ -54,7 +55,7 @@ public sealed class TestSessionTests
             StartDate = DateTime.UtcNow,
             Steps = [],
             State = TestSessionState.NotStarted,
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
 
         // Assert
@@ -72,7 +73,7 @@ public sealed class TestSessionTests
             StartDate = DateTime.UtcNow,
             Steps = [],
             State = TestSessionState.NotStarted,
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         });
     }
 

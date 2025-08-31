@@ -28,7 +28,7 @@ public class TestSessionBuilder : ITestSessionBuilder
     private Error? _error;
     private PropertyBag<IPropertyBagValue>? _propertyBag;
     private TestMetadata? _metadata;
-    private Components.TestSettings? _testSettings;
+    private TestSettings? _testSettings;
 
     /// <summary>
     /// Gets a value indicating whether the test session has failed.
@@ -67,7 +67,7 @@ public class TestSessionBuilder : ITestSessionBuilder
     public ITestSessionBuilder Initiate(
         Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null)
     {
-        return Initiate(url, startDate, context, uploadToken, new Components.TestSettings(), metadata);
+        return Initiate(url, startDate, context, uploadToken, new TestSettings(), metadata);
     }
 
     /// <summary>
@@ -84,13 +84,13 @@ public class TestSessionBuilder : ITestSessionBuilder
     /// <param name="metadata">The test metadata information.</param>
     /// <returns>The initialized test session builder.</returns>
     public ITestSessionBuilder Initiate(
-        Uri url, DateTime startDate, TestContext context, Guid uploadToken, Components.TestSettings testSettings, TestMetadata? metadata = null)
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestSettings testSettings, TestMetadata? metadata = null)
     {
         _url = url;
         _startDate = startDate;
         _context = context.RequireNotNull(nameof(context));
         _uploadToken = uploadToken;
-        _testSettings = testSettings ?? new Components.TestSettings();
+        _testSettings = testSettings ?? new TestSettings();
         _metadata = metadata;
 
         // Reset internal state.
@@ -274,7 +274,7 @@ public class TestSessionBuilder : ITestSessionBuilder
                 DeclineReason = null,
                 UploadToken = _uploadToken,
                 Metadata = _metadata,
-                TestSettings = _testSettings ?? new Components.TestSettings(),
+                TestSettings = _testSettings ?? new TestSettings(),
             };
 
             return session;
@@ -290,7 +290,7 @@ public class TestSessionBuilder : ITestSessionBuilder
                 DeclineReason = ex.Message,
                 UploadToken = _uploadToken,
                 Metadata = _metadata,
-                TestSettings = _testSettings ?? new Components.TestSettings(),
+                TestSettings = _testSettings ?? new TestSettings(),
             };
 
             return session;

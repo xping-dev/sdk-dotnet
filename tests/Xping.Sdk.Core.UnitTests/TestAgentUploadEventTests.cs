@@ -8,6 +8,7 @@
 using Moq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Collector;
 using Xping.Sdk.Core.DependencyInjection;
@@ -130,7 +131,7 @@ public sealed class TestAgentUploadEventTests
             Steps = [],
             State = TestSessionState.Completed
         ,
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
         var uploadedAt = DateTime.UtcNow;
         var uploadToken = Guid.NewGuid();

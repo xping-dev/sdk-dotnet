@@ -6,6 +6,7 @@
  */
 
 using Moq;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Comparison;
 
@@ -62,7 +63,7 @@ public sealed class DiffEngineTests
             State = TestSessionState.NotStarted,
             Steps = [],
             Url = new Uri("http://localhost"),
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
         TestSession session2 = null!;
 
@@ -81,7 +82,7 @@ public sealed class DiffEngineTests
             State = TestSessionState.NotStarted,
             Steps = [],
             Url = new Uri("http://localhost"),
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
         TestSession session2 = session1;
 
@@ -102,7 +103,7 @@ public sealed class DiffEngineTests
             State = TestSessionState.NotStarted,
             Steps = [],
             Url = new Uri("http://localhost"),
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
 
         using TestSession session2 = new()
@@ -111,7 +112,7 @@ public sealed class DiffEngineTests
             State = TestSessionState.NotStarted,
             Steps = [],
             Url = new Uri("http://localhost"),
-            TestSettings = new Xping.Sdk.Core.Components.TestSettings()
+            TestSettings = new TestSettings()
         };
 
         // Act

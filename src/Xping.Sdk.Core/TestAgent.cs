@@ -351,7 +351,7 @@ public sealed class TestAgent : IDisposable
     /// <param name="context">The test context.</param>
     /// <param name="testSettings">The test settings for the session.</param>
     /// <param name="metadata">The test metadata information.</param>
-    private void InitializeExecution(Uri url, TestContext context, Components.TestSettings testSettings, TestMetadata metadata)
+    private void InitializeExecution(Uri url, TestContext context, TestSettings testSettings, TestMetadata metadata)
     {
         // Update context with a currently executing component.
         context.UpdateExecutionContext(context.Pipeline);
