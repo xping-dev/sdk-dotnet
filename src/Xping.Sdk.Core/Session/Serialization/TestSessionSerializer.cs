@@ -9,6 +9,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 
 namespace Xping.Sdk.Core.Session.Serialization;
 
@@ -83,7 +84,7 @@ public sealed class TestSessionSerializer : ITestSessionSerializer
         typeof(TestStep[]),
         typeof(TestMetadata),
         typeof(TestLocation),
-        typeof(Components.TestSettings),
+        typeof(TestSettings),
         typeof(PropertyBag<IPropertyBagValue>),
         typeof(Dictionary<PropertyBagKey, IPropertyBagValue>),
         typeof(PropertyBagValue<byte[]>),
