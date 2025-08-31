@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using NUnit.Framework;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Serialization;
 
@@ -19,6 +20,8 @@ internal class RealWorldUploadSerializationTests
             StartDate = DateTime.UtcNow,
             State = TestSessionState.Completed,
             Steps = []
+        ,
+            TestSettings = new TestSettings()
         };
 
         // Initially should not be uploaded

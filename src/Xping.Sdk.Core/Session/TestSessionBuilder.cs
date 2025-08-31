@@ -28,6 +28,7 @@ public class TestSessionBuilder : ITestSessionBuilder
     private Error? _error;
     private PropertyBag<IPropertyBagValue>? _propertyBag;
     private TestMetadata? _metadata;
+    private TestSettings? _testSettings;
 
     /// <summary>
     /// Gets a value indicating whether the test session has failed.
@@ -66,10 +67,30 @@ public class TestSessionBuilder : ITestSessionBuilder
     public ITestSessionBuilder Initiate(
         Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestMetadata? metadata = null)
     {
+        return Initiate(url, startDate, context, uploadToken, new TestSettings(), metadata);
+    }
+
+    /// <summary>
+    /// Initializes the test session builder with the specified start time, the URL of the page being validated,
+    /// test settings, and associating it with the current TestContext responsible for maintaining the state of the test execution.
+    /// </summary>
+    /// <param name="url">The URL to be used for the test session.</param>
+    /// <param name="startDate">The start date of the test session.</param>
+    /// <param name="context">The context responsible for maintaining the state of the test execution.</param>
+    /// <param name="uploadToken">
+    ///     The upload token that links the TestAgent's results to the project configured on the server.
+    /// </param>
+    /// <param name="testSettings">The test settings to be used for the test session.</param>
+    /// <param name="metadata">The test metadata information.</param>
+    /// <returns>The initialized test session builder.</returns>
+    public ITestSessionBuilder Initiate(
+        Uri url, DateTime startDate, TestContext context, Guid uploadToken, TestSettings testSettings, TestMetadata? metadata = null)
+    {
         _url = url;
         _startDate = startDate;
         _context = context.RequireNotNull(nameof(context));
         _uploadToken = uploadToken;
+        _testSettings = testSettings ?? new TestSettings();
         _metadata = metadata;
 
         // Reset internal state.
@@ -253,6 +274,7 @@ public class TestSessionBuilder : ITestSessionBuilder
                 DeclineReason = null,
                 UploadToken = _uploadToken,
                 Metadata = _metadata,
+                TestSettings = _testSettings ?? new TestSettings(),
             };
 
             return session;
@@ -267,7 +289,8 @@ public class TestSessionBuilder : ITestSessionBuilder
                 State = TestSessionState.Declined,
                 DeclineReason = ex.Message,
                 UploadToken = _uploadToken,
-                Metadata = _metadata
+                Metadata = _metadata,
+                TestSettings = _testSettings ?? new TestSettings(),
             };
 
             return session;

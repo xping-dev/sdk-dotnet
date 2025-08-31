@@ -11,6 +11,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using Xping.Sdk.Core.Clients.Browser;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Shared;
 
@@ -135,6 +136,16 @@ public sealed class TestSession :
     public TestMetadata? Metadata { get; init; }
 
     /// <summary>
+    /// Gets the test settings used for this test session.
+    /// Contains configuration such as timeout duration and failure handling behavior.
+    /// </summary>
+    /// <value>
+    /// A <see cref="TestSettings"/> object containing the test settings.
+    /// This property is never null and always contains default values when not explicitly set.
+    /// </value>
+    public required TestSettings TestSettings { get; init; }
+
+    /// <summary>
     /// Returns a read-only collection of the failed test steps within the current test session.
     /// </summary>
     public IReadOnlyCollection<TestStep> Failures =>
@@ -207,6 +218,7 @@ public sealed class TestSession :
         UploadedAt = info.GetValue(nameof(UploadedAt), typeof(DateTime?)) as DateTime?;
         UploadToken = (Guid)info.GetValue(nameof(UploadToken), typeof(Guid)).RequireNotNull(nameof(UploadToken));
         Metadata = info.GetValue(nameof(Metadata), typeof(TestMetadata)) as TestMetadata;
+        TestSettings = info.GetValue(nameof(TestSettings), typeof(TestSettings)) as TestSettings ?? new TestSettings();
     }
 
     /// <summary>
@@ -365,6 +377,7 @@ public sealed class TestSession :
         info.AddValue(nameof(UploadedAt), UploadedAt, typeof(DateTime?));
         info.AddValue(nameof(UploadToken), UploadToken, typeof(Guid));
         info.AddValue(nameof(Metadata), Metadata, typeof(TestMetadata));
+        info.AddValue(nameof(TestSettings), TestSettings, typeof(TestSettings));
     }
 
     void IDeserializationCallback.OnDeserialization(object? sender)

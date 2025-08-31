@@ -6,6 +6,7 @@
  */
 
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Comparison;
 
@@ -24,7 +25,8 @@ public abstract class ComparerBaseTests<TComparer> where TComparer : ITestSessio
         StartDate = startDate ?? DateTime.UtcNow,
         Steps = steps?.ToList().AsReadOnly() ?? new List<TestStep>().AsReadOnly(),
         State = declineReason != null ? TestSessionState.Declined : state,
-        DeclineReason = declineReason
+        DeclineReason = declineReason,
+        TestSettings = new TestSettings()
     };
 
     protected static TestStep CreateTestStepMock(

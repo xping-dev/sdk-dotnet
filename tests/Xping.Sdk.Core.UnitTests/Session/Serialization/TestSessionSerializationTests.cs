@@ -10,6 +10,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
 using Xping.Sdk.Core.Common;
+using Xping.Sdk.Core.Components;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Serialization;
 
@@ -37,7 +38,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.NotStarted,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
         var serializer = new TestSessionSerializer();
 
@@ -58,7 +60,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.NotStarted,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
         var serializer = new TestSessionSerializer();
 
@@ -78,7 +81,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.NotStarted,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
         var serializer = new TestSessionSerializer();
         using var stream = new MemoryStream();
@@ -128,7 +132,8 @@ internal class TestSessionSerializationTests
                 StartDate = DateTime.UtcNow,
                 TestComponentIteration = expectedCount,
                 Type = TestStepType.ActionStep
-            }]
+            }],
+            TestSettings = new TestSettings()
         };
         var serializer = new TestSessionSerializer();
         using var stream = new MemoryStream();
@@ -175,7 +180,8 @@ internal class TestSessionSerializationTests
                 Result = TestStepResult.Failed,
                 StartDate = DateTime.Now,
                 Type = TestStepType.ActionStep
-            }]
+            }],
+            TestSettings = new TestSettings()
         };
 
         var serializer = new TestSessionSerializer();
@@ -225,7 +231,8 @@ internal class TestSessionSerializationTests
                 Result = TestStepResult.Failed,
                 StartDate = DateTime.Now,
                 Type = TestStepType.ActionStep
-            }]
+            }],
+            TestSettings = new TestSettings()
         };
 
         var serializer = new TestSessionSerializer();
@@ -260,7 +267,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.NotStarted,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
 
         var serializer = new TestSessionSerializer();
@@ -296,7 +304,8 @@ internal class TestSessionSerializationTests
                 Result = TestStepResult.Failed,
                 StartDate = DateTime.Now,
                 Type = TestStepType.ActionStep
-            }]
+            }],
+            TestSettings = new TestSettings()
         };
 
         var serializer = new TestSessionSerializer();
@@ -318,7 +327,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test.example.com"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.Completed,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
 
         var uploadedAt = DateTime.UtcNow;
@@ -355,7 +365,8 @@ internal class TestSessionSerializationTests
             Url = new Uri("https://test.example.com"),
             StartDate = DateTime.UtcNow,
             State = TestSessionState.Completed,
-            Steps = []
+            Steps = [],
+            TestSettings = new TestSettings()
         };
 
         // Don't set UploadedAt (should be null)
