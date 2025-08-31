@@ -61,7 +61,8 @@ internal sealed class Program : XpingAssertions
                 {
                     Expect(html)
                         .ToHaveMaxDocumentSize(MaxHtmlSizeAllowed)
-                        .ToHaveMetaTag(new("charset", "utf-8"));
+                        .ToHaveMetaTag(new("charset", "utf-8"))
+                        .ToHaveTitle("STORE");
                 });
 
             await using var session = await testAgent.RunAsync(url, new TestSettings { ContinueOnFailure = true })
@@ -94,11 +95,13 @@ internal sealed class Program : XpingAssertions
                             agent.ApiKey = "--- Your Dashboard API Key ---";
                             agent.UploadFailed += (sender, args) =>
                             {
-                                Console.WriteLine($"{args.UploadResult.Message}");
+                                WriteErrorMessage(args.UploadResult.Message);
                             };
                             agent.UploadSucceeded += (sender, args) =>
                             {
-                                Console.WriteLine($"Upload succeeded: Session uploaded at {args.UploadedAt} with token {args.UploadToken}");
+                                WriteSuccessMessage(
+                                    $"Upload succeeded: \n" +
+                                    $"Session uploaded at {args.UploadedAt} with token {args.UploadToken}");
                             };
                         });
             })
@@ -106,4 +109,18 @@ internal sealed class Program : XpingAssertions
             {
                 logging.AddFilter(typeof(HttpClient).FullName, LogLevel.Warning);
             });
+
+    private static void WriteErrorMessage(string message)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(message);
+        Console.ResetColor();
+    }
+
+    private static void WriteSuccessMessage(string message)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine(message);
+        Console.ResetColor();
+    }
 }

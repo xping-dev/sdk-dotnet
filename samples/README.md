@@ -14,6 +14,7 @@ This folder contains various examples of how to use Xping SDK for your testing n
         <li><a href="#consoleapptesting-sample">ConsoleApp Testing</a></li>
         <li><a href="#integrationtesting-sample">Integration Testing</a></li>
         <li><a href="#productiontesting-sample">Production Testing</a></li>
+        <li><a href="#sslcertificatesample-sample">SSL Certificate Sample</a></li>
     </ul>
   </ol>
 </details>
@@ -80,6 +81,7 @@ This folder contains the following sample projects:
 |ConsoleAppTesting|This sample demonstrates you how to use the `Xping.Sdk` NuGet package to test a Web Application or a Web API. It runs as a standalone application and gets a web address of the web application to validate from the command line argument `--url`. This kind of testing can help you test multiple web addresses with the same set of test components, verify if the web application is up and running after deployment, or warm up the web application by hitting its different routes. This sample has more details and features that you can explore by clicking <a href="#consoleapptesting-sample">here</a>.|
 |IntegrationTesing|This sample shows you how to test a Web Application or a Web API using the `Xping.Sdk` NuGet package and the `HttpClient` client. It performs integration tests where you can serve the Web Application in memory for testing. This testing will verify if for example the database and the web pages work together correctly and display the right data. This sample has more details and features that you can explore by clicking <a href="#integrationtesting-sample">here</a>.|
 | ProductionTesting | This sample demonstrates how to perform testing on a live production environment using the Xping.Sdk NuGet package. It includes techniques for live site monitoring, real-time data validation, and ensuring the overall health and availability of your Web Application or Web API in a production setting. This approach helps to detect and resolve issues promptly, enhancing the reliability and performance of your application. Explore more details and features by clicking <a href="#productiontesting-sample">here</a>.|
+|SslCertificateSample|This sample demonstrates how to capture and validate SSL certificates using the Xping SDK. It shows you how to use SSL certificate capture functionality to extract certificate information during HTTPS requests, validate certificate properties (such as expiration dates, subjects, and issuers), and ensure the security compliance of your web applications. This sample uses the `UseSslCertificateCapture()` and `UseSslCertificateValidation()` methods to implement comprehensive SSL certificate testing. This sample has more details and features that you can explore by clicking <a href="#sslcertificatesample-sample">here</a>.|
 |WebApp|This project is a simple ASP.NET Core Web Application that serves as a testing target for the `IntegrationTesting`. It has a home page that displays a welcome message and login page. You can use this project to test the functionality and integrity of the Web Application using different test components and scenarios. You can also modify the Web Application to create your own testing targets.|
 
 ### ConsoleAppTesting Sample 
@@ -115,5 +117,25 @@ Production Testing includes the following features and benefits:
 - It employs live site monitoring techniques, which allow you to continuously verify the availability and performance of your web application. You can detect and respond to issues in real-time, enhancing the reliability and user experience of your product.
 - It validates real-time data and responses, ensuring that the live site delivers accurate and expected content. This helps in maintaining the integrity of your application’s data and interactions.
 - It automates the monitoring and testing process, which saves you time and effort. You can set up periodic checks and alerts to notify you of any deviations or failures, allowing for prompt resolution.
+
+We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/xping-dev/sdk-dotnet/discussions/1). 😊
+
+### SslCertificateSample Sample
+
+SSL Certificate Sample includes the following features and benefits:
+
+- It demonstrates SSL certificate capture and validation using the Xping SDK, ensuring that your HTTPS-enabled web applications have valid and secure certificates. This sample shows how to utilize the `UseSslCertificateCapture()` and `UseSslCertificateValidation()` methods for comprehensive SSL testing.
+- It captures SSL certificate information during HTTPS requests, allowing you to extract detailed certificate data such as subject, issuer, expiration dates, and certificate chain information. This helps in monitoring certificate health and compliance.
+- It validates certificate properties automatically, including checking for certificate validity, expiration dates, and trusted certificate authorities. You can ensure that your web applications are using properly configured and up-to-date SSL certificates.
+- It provides real-time SSL certificate monitoring, which helps you detect certificate issues before they affect end users. You can set up alerts for certificates that are expiring soon or have validation issues.
+- It integrates seamlessly with your existing testing pipeline, allowing you to include SSL certificate validation as part of your automated testing process. This ensures that certificate-related issues are caught early in the development lifecycle.
+- It supports custom validation logic, allowing you to implement specific certificate requirements based on your organization's security policies and compliance needs.
+
+This sample is particularly useful for:
+- Security compliance testing and audits
+- Certificate expiration monitoring
+- Validating certificate chain integrity
+- Ensuring proper SSL/TLS configuration
+- Automated security testing in CI/CD pipelines
 
 We hope this project helps you with your testing needs. If you have any feedback or questions, please let us know [here](https://github.com/xping-dev/sdk-dotnet/discussions/1). 😊

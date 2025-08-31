@@ -7,13 +7,17 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
+using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Shared;
 using Xping.Sdk.Actions.Internals;
 using Xping.Sdk.Core.Clients.Http;
+using Xping.Sdk.Core.DependencyInjection;
+using Xping.Sdk.Core.Services;
 
 namespace Xping.Sdk.Actions;
 
@@ -68,7 +72,7 @@ public sealed class HttpClientRequestSender : TestComponent
         _urlRedirections.Clear();
 
         var httpClientFactory = GetHttpClientFactory(serviceProvider);
-        using var httpClient = CreateHttpClient(httpClientFactory);
+        using var httpClient = CreateHttpClient(httpClientFactory, serviceProvider);
         using var request = CreateHttpRequestMessage(url);
 
         await AnnotateTestStepWithHttpRequest(context, request, cancellationToken).ConfigureAwait(false);
@@ -166,8 +170,17 @@ public sealed class HttpClientRequestSender : TestComponent
         return await httpContent.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private HttpClient CreateHttpClient(IHttpClientFactory httpClientFactory)
+    private HttpClient CreateHttpClient(IHttpClientFactory httpClientFactory, IServiceProvider serviceProvider)
     {
+        // Check if certificate capture is enabled through the scoped service
+        var sslCaptureService = serviceProvider.GetService<ISslCaptureConfigurationService>();
+        if (sslCaptureService?.SslCertificateValidationCallback is { } callback)
+        {
+            // Create a custom HttpClient with certificate capture enabled
+            return CreateHttpClientWithCertificateCapture(callback);
+        }
+
+        // Use the standard factory-created HttpClient
         HttpClient httpClient = null!;
 
         if (_configuration.RetryHttpRequestWhenFailed == true)
@@ -180,6 +193,30 @@ public sealed class HttpClientRequestSender : TestComponent
         }
 
         httpClient.Timeout = _configuration.HttpRequestTimeout;
+
+        return httpClient;
+    }
+
+    private HttpClient CreateHttpClientWithCertificateCapture(RemoteCertificateValidationCallback callback)
+    {
+#pragma warning disable CA2000 // Handler is disposed by HttpClient when disposeHandler is true
+        var handler = new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            AutomaticDecompression = DecompressionMethods.All,
+            AllowAutoRedirect = _configuration.FollowHttpRedirectionResponses,
+            UseCookies = false,
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = callback
+            }
+        };
+
+        var httpClient = new HttpClient(handler, disposeHandler: true)
+        {
+            Timeout = _configuration.HttpRequestTimeout
+        };
+#pragma warning restore CA2000
 
         return httpClient;
     }

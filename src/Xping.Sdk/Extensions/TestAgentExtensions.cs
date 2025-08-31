@@ -16,6 +16,7 @@ using Xping.Sdk.Shared;
 using Xping.Sdk.Validations.Content.Html;
 using Xping.Sdk.Validations.Content.Page;
 using Xping.Sdk.Validations.HttpResponse;
+using Xping.Sdk.Validations.SslCertificate;
 
 namespace Xping.Sdk.Extensions;
 
@@ -102,5 +103,29 @@ public static class TestAgentExtensions
     public static TestAgent UseHtmlValidation(this TestAgent testAgent, Action<IHtmlContent> htmlContent)
     {
         return testAgent.RequireNotNull(nameof(testAgent)).Add(new HtmlContentValidator(htmlContent));
+    }
+
+    /// <summary>
+    /// Configures the TestAgent to capture SSL certificate information during HTTP requests.
+    /// The captured certificate data will be stored in the test context for later validation.
+    /// </summary>
+    /// <param name="testAgent">The instance of TestAgent to configure.</param>
+    /// <returns>The configured TestAgent instance.</returns>
+    public static TestAgent UseSslCertificateCapture(this TestAgent testAgent)
+    {
+        return testAgent.RequireNotNull(nameof(testAgent)).Replace(new SslCertificateCapture());
+    }
+
+    /// <summary>
+    /// Configures the TestAgent with an SSL certificate validator.
+    /// </summary>
+    /// <param name="testAgent">The instance of TestAgent to configure.</param>
+    /// <param name="validation">The validation logic to use on the SSL certificate.</param>
+    /// <returns>The configured TestAgent instance.</returns>
+    public static TestAgent UseSslCertificateValidation(
+        this TestAgent testAgent,
+        Action<ISslCertificateResponse> validation)
+    {
+        return testAgent.RequireNotNull(nameof(testAgent)).Add(new SslCertificateValidator(validation));
     }
 }

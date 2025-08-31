@@ -5,6 +5,7 @@
  * License: [MIT]
  */
 
+using System.Net.Security;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -12,6 +13,8 @@ using Polly;
 using Xping.Sdk.Core.Clients.Browser;
 using Xping.Sdk.Core.Clients.Browser.Internals;
 using Xping.Sdk.Core.Clients.Http;
+using Xping.Sdk.Core.Services;
+using Xping.Sdk.Core.Services.Internals;
 using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Session.Collector;
 using Xping.Sdk.Core.Session.Serialization;
@@ -38,10 +41,22 @@ public static class DependencyInjectionExtension
         configuration?.Invoke(services.BuildServiceProvider(), factoryConfiguration);
 
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientWithNoRetryPolicy)
-                .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration));
+                .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+                {
+                    var sslService = serviceProvider.GetService<ISslCaptureConfigurationService>();
+                    return sslService?.SslCertificateValidationCallback != null
+                        ? CreateSocketsHttpHandlerWithSslCapture(factoryConfiguration, sslService.SslCertificateValidationCallback)
+                        : CreateSocketsHttpHandler(factoryConfiguration);
+                });
 
         services.AddHttpClient(HttpClientFactoryConfiguration.HttpClientWithRetryPolicy)
-                .ConfigurePrimaryHttpMessageHandler(_ => CreateSocketsHttpHandler(factoryConfiguration))
+                .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+                {
+                    var sslService = serviceProvider.GetService<ISslCaptureConfigurationService>();
+                    return sslService?.SslCertificateValidationCallback != null
+                        ? CreateSocketsHttpHandlerWithSslCapture(factoryConfiguration, sslService.SslCertificateValidationCallback)
+                        : CreateSocketsHttpHandler(factoryConfiguration);
+                })
                 .AddTransientHttpErrorPolicy(builder => builder.WaitAndRetryAsync(
                     sleepDurations: factoryConfiguration.SleepDurations))
                 .AddTransientHttpErrorPolicy(builder => builder.CircuitBreakerAsync(
@@ -193,6 +208,7 @@ public static class DependencyInjectionExtension
         services.TryAddTransient<ITestSessionSerializer, TestSessionSerializer>();
         services.TryAddTransient<ITestSessionUploader, TestSessionUploader>();
         services.TryAddTransient<ILocationDetectionService, LocationDetectionService>();
+        services.TryAddScoped<ISslCaptureConfigurationService, SslCaptureConfigurationService>();
 
         return services;
     }
@@ -204,5 +220,19 @@ public static class DependencyInjectionExtension
             AutomaticDecompression = factoryConfiguration.AutomaticDecompression,
             AllowAutoRedirect = HttpClientFactoryConfiguration.HttpClientAutoRedirects,
             UseCookies = HttpClientFactoryConfiguration.HttpClientHandleCookies,
+        };
+
+    private static SocketsHttpHandler CreateSocketsHttpHandlerWithSslCapture(
+        HttpClientFactoryConfiguration factoryConfiguration,
+        RemoteCertificateValidationCallback callback) => new()
+        {
+            PooledConnectionLifetime = factoryConfiguration.PooledConnectionLifetime,
+            AutomaticDecompression = factoryConfiguration.AutomaticDecompression,
+            AllowAutoRedirect = HttpClientFactoryConfiguration.HttpClientAutoRedirects,
+            UseCookies = HttpClientFactoryConfiguration.HttpClientHandleCookies,
+            SslOptions = new SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = callback
+            }
         };
 }
