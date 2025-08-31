@@ -12,6 +12,8 @@ using Xping.Sdk.Validations.Content.Html.Internals;
 using Xping.Sdk.Validations.Content.Page.Internals;
 using Xping.Sdk.Validations.HttpResponse;
 using Xping.Sdk.Validations.HttpResponse.Internals;
+using Xping.Sdk.Validations.SslCertificate;
+using Xping.Sdk.Validations.SslCertificate.Internals;
 
 namespace Xping.Sdk;
 
@@ -70,4 +72,12 @@ public abstract class XpingAssertions
     /// </returns>
     protected static IHtmlLocatorAssertions Expect(IHtmlLocator htmlLocator) => 
         new HtmlLocatorAssertions(htmlLocator);
+
+    /// <summary>
+    /// Creates an instance of <see cref="ISslCertificateAssertions"/> for the specified SSL certificate response.
+    /// </summary>
+    /// <param name="sslCertificateResponse">The SSL certificate response to be validated. Must not be null.</param>
+    /// <returns>An instance of <see cref="ISslCertificateAssertions"/> for performing assertions on the SSL certificate response.</returns>
+    protected static ISslCertificateAssertions Expect(ISslCertificateResponse sslCertificateResponse) => 
+        new SslCertificateAssertions(sslCertificateResponse);
 }

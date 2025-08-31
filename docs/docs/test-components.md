@@ -119,4 +119,53 @@ To ensure you have access to the latest documentation and assertion functions pr
  - Page Assertions: For detailed information on page assertion functions, visit Playwright [Page Assertions](https://playwright.dev/dotnet/docs/api/class-pageassertions).
  - Locator Assertions: For detailed information on locator assertion functions, visit Playwright [Locator Assertions](https://playwright.dev/dotnet/docs/api/class-locatorassertions).
 
-These links will provide you with the most up-to-date resources and examples to effectively utilize Playwright’s powerful assertion capabilities.
+These links will provide you with the most up-to-date resources and examples to effectively utilize Playwright's powerful assertion capabilities.
+
+## SSL Certificate Validation
+
+Using `TestAgent.UseSslCertificateCapture()` and `TestAgent.UseSslCertificateValidation(Action<ISslCertificateResponse>)` configures the execution pipeline to capture and validate SSL certificates during HTTPS requests.
+
+The SSL certificate capture component intercepts SSL certificate data during the HTTPS handshake process and stores certificate information including the certificate itself, certificate chain, and any SSL policy errors. The validation component then allows you to perform comprehensive assertions on the captured certificate data.
+
+```csharp
+TestAgent
+    .UseSslCertificateCapture()  // Capture SSL certificate data
+    .UseHttpClient()
+    .UseSslCertificateValidation(ssl =>
+    {
+        Expect(ssl)
+            .ToBeValid()  // No SSL policy errors
+            .ToHaveSubjectContaining("example.com")
+            .ToExpireAfter(DateTime.UtcNow.AddDays(30))  // Valid for at least 30 more days
+            .ToHaveKeySize(2048);  // RSA 2048-bit key
+    });
+```
+
+> [!NOTE]
+> SSL certificate validation requires HTTPS requests. The `UseSslCertificateCapture()` component must be registered before `UseSslCertificateValidation()` in the pipeline. The capture works with both `HttpClient` and `BrowserClient` request mechanisms.
+
+|Assert Function|Description|
+|---------------|-----------|
+|`ToBeValid()`|Validates that the SSL certificate has no policy errors (valid certificate).|
+|`ToHaveSubjectContaining(string, TextOptions?)`|Validates that the certificate subject contains the specified text.|
+|`ToHaveSubjectEqualTo(string, TextOptions?)`|Validates that the certificate subject exactly matches the specified text.|
+|`ToHaveIssuerContaining(string, TextOptions?)`|Validates that the certificate issuer contains the specified text.|
+|`ToHaveIssuerEqualTo(string, TextOptions?)`|Validates that the certificate issuer exactly matches the specified text.|
+|`ToExpireAfter(DateTime)`|Validates that the certificate expires after the specified date/time.|
+|`ToExpireWithinDays(int)`|Validates that the certificate expires within the specified number of days.|
+|`ToHaveThumbprint(string, TextOptions?)`|Validates that the certificate has the specified thumbprint (SHA-1 hash).|
+|`ToHaveSerialNumber(string, TextOptions?)`|Validates that the certificate has the specified serial number.|
+|`ToHaveSignatureAlgorithm(string, TextOptions?)`|Validates that the certificate uses the specified signature algorithm (e.g., "sha256RSA").|
+|`ToHaveSanContaining(string, TextOptions?)`|Validates that the Subject Alternative Names (SAN) contain the specified domain.|
+|`ToHaveKeySize(int)`|Validates that the certificate's public key has the specified size in bits (e.g., 2048, 4096).|
+
+### SSL Certificate Security Best Practices
+
+When validating SSL certificates, consider these security best practices:
+
+- **Certificate Validity**: Always verify the certificate is valid using `ToBeValid()`
+- **Expiration Dates**: Ensure certificates don't expire soon using `ToExpireAfter()` or `ToExpireWithinDays()`
+- **Key Strength**: Validate minimum key sizes (2048-bit RSA minimum) using `ToHaveKeySize()`
+- **Signature Algorithms**: Ensure secure algorithms like SHA-256 using `ToHaveSignatureAlgorithm()`
+- **Domain Validation**: Verify the certificate is issued for the correct domain using `ToHaveSubjectContaining()` or `ToHaveSanContaining()`
+- **Trusted Issuers**: Validate certificates are issued by trusted Certificate Authorities using `ToHaveIssuerContaining()`

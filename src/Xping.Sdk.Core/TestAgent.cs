@@ -13,6 +13,7 @@ using Xping.Sdk.Core.Session;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Session.Collector;
 using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 
 namespace Xping.Sdk.Core;
 
@@ -207,9 +208,11 @@ public sealed class TestAgent : IDisposable
 
         try
         {
+            using var scope = _serviceProvider.CreateScope();
+
             // Execute the test operation by invoking the ProbeAsync method of the Container class.
             return await Container
-                .ProbeAsync(url, settings, _serviceProvider, cancellationToken)
+                .ProbeAsync(url, settings, scope.ServiceProvider, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception)
@@ -332,8 +335,10 @@ public sealed class TestAgent : IDisposable
         {
             InitializeExecution(url, context, testSettings, metadata);
 
+            using var scope = _serviceProvider.CreateScope();
+
             await context.Pipeline
-                .HandleAsync(url, testSettings, context, _serviceProvider, cancellationToken)
+                .HandleAsync(url, testSettings, context, scope.ServiceProvider, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
