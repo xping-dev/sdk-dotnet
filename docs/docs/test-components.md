@@ -142,7 +142,7 @@ TestAgent
 ```
 
 > [!NOTE]
-> SSL certificate validation requires HTTPS requests. The `UseSslCertificateCapture()` component must be registered before `UseSslCertificateValidation()` in the pipeline. The capture works with both `HttpClient` and `BrowserClient` request mechanisms.
+> SSL certificate validation requires HTTPS requests. The `UseSslCertificateCapture()` component must be registered before `UseSslCertificateValidation()` in the pipeline. The capture works with `HttpClient` only.
 
 |Assert Function|Description|
 |---------------|-----------|
