@@ -19,20 +19,20 @@ public interface ISslCertificateResponse
     /// <summary>
     /// Gets the SSL certificate.
     /// </summary>
-    internal X509Certificate2 Certificate { get; }
+    X509Certificate2 Certificate { get; }
 
     /// <summary>
     /// Gets the certificate chain.
     /// </summary>
-    internal X509Chain Chain { get; }
+    X509Chain Chain { get; }
 
     /// <summary>
     /// Gets the SSL policy errors.
     /// </summary>
-    internal SslPolicyErrors SslErrors { get; }
+    SslPolicyErrors SslErrors { get; }
 
     /// <summary>
     /// Gets the test context associated with the SSL certificate validation.
     /// </summary>
-    internal TestContext Context { get; }
+    TestContext Context { get; }
 }
