@@ -245,12 +245,13 @@ public sealed class PropertyBag<TValue> : ISerializable, IEquatable<PropertyBag<
     /// and the value can be converted to type T, or the default value of T if the key is not found or conversion fails.
     /// </param>
     /// <returns>true if a key was found successfully and the value could be converted to type T; otherwise, false</returns>
-    public bool TryGetPropertyValue<T>(PropertyBagKey key, out T? value)
+    public bool TryGetPropertyValue<T>(PropertyBagKey key, out T value)
     {
         ArgumentNullException.ThrowIfNull(key);
-        value = default;
+        value = default!;
 
-        if (_properties.TryGetValue(key, out TValue? bagValue) && 
+        if (_properties.TryGetValue(key, out TValue? bagValue) &&
+            bagValue != null &&
             bagValue is PropertyBagValue<T> propertyBagValue)
         {
             value = propertyBagValue.Value;
