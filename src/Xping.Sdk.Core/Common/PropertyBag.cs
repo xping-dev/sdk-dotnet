@@ -236,6 +236,58 @@ public sealed class PropertyBag<TValue> : ISerializable, IEquatable<PropertyBag<
     }
 
     /// <summary>
+    /// This method attempts to get the value of the specified type T from a PropertyBagValue associated with the specified key.
+    /// </summary>
+    /// <typeparam name="T">The type of value to extract from the PropertyBagValue.</typeparam>
+    /// <param name="key">A key represented as <see cref="PropertyBagKey"/> type.</param>
+    /// <param name="value">
+    /// When this method returns, contains the value of type T extracted from the PropertyBagValue, if the key is found 
+    /// and the value can be converted to type T, or the default value of T if the key is not found or conversion fails.
+    /// </param>
+    /// <returns>true if a key was found successfully and the value could be converted to type T; otherwise, false</returns>
+    public bool TryGetPropertyValue<T>(PropertyBagKey key, out T? value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        value = default;
+
+        if (_properties.TryGetValue(key, out TValue? bagValue) && 
+            bagValue is PropertyBagValue<T> propertyBagValue)
+        {
+            value = propertyBagValue.Value;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the value of the specified type T from a PropertyBagValue associated with the specified key.
+    /// </summary>
+    /// <typeparam name="T">The type of value to extract from the PropertyBagValue.</typeparam>
+    /// <param name="key">A key represented as <see cref="PropertyBagKey"/> type.</param>
+    /// <returns>The value of type T extracted from the PropertyBagValue. If the specified key is not found, this operation
+    /// throws a KeyNotFoundException exception. If the specified key is found, but its type does not match
+    /// with PropertyBagValue&lt;T&gt; it throws InvalidCastException.</returns>
+    /// <exception cref="KeyNotFoundException">If the specified key is not found.</exception>
+    /// <exception cref="InvalidCastException">If the value is not a PropertyBagValue&lt;T&gt; or cannot be converted to type T.</exception>
+    public T GetPropertyValue<T>(PropertyBagKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (!_properties.TryGetValue(key, out TValue? bagValue))
+        {
+            throw new KeyNotFoundException($"The key '{key}' was not found in the property bag.");
+        }
+
+        if (bagValue is not PropertyBagValue<T> propertyBagValue)
+        {
+            throw new InvalidCastException($"The value associated with key '{key}' is not a PropertyBagValue<{typeof(T).Name}>.");
+        }
+
+        return propertyBagValue.Value;
+    }
+
+    /// <summary>
     /// Gets the value associated with the specified key from the collection.
     /// </summary>
     /// <param name="key">A key represented as <see cref="PropertyBagKey"/> type.</param>
