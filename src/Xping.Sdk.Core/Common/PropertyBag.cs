@@ -5,7 +5,6 @@
  * License: [MIT]
  */
 
-using System.Collections.ObjectModel;
 using System.Runtime.Serialization;
 using Xping.Sdk.Core.Session.Comparison.Comparers.Internals;
 
