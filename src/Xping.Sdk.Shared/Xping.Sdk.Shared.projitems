@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ArgumentValidation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DateTimeExtension.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)EnumExtension.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IntegerExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TimeSpanUnit.cs" />
   </ItemGroup>
 </Project>

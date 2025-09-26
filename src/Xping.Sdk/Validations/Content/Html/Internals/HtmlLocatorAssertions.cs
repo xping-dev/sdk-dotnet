@@ -27,19 +27,15 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveCount)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveCount)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedCount)),
-                new PropertyBagValue<string>($"{expectedCount}"))
-            .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(_nodes.Select(n => n.OriginalName.Trim()).ToArray()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have count: {expectedCount}"));
 
         if (actualCount != expectedCount)
         {
             throw new ValidationException(
-                $"Expected to find {expectedCount} elements, but found {actualCount} instead. This error " +
-                $"occurred as part of validating HTML data.");
+                $"Expected to find {expectedCount} elements, but found {actualCount} instead.");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -58,22 +54,19 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveInnerText)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveInnerText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(innerText)),
-                new PropertyBagValue<string>(innerText))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have inner text: {innerText}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"));
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (currentNode == null || _nodes.Count == 0)
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualText = currentNode.InnerText.Trim();
@@ -82,7 +75,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner text to be \"{innerText}\", but the actual inner text was " +
-                $"\"{actualText}\". This error occurred during the validation of HTML data.");
+                $"\"{actualText}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -101,22 +94,19 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveInnerText)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveInnerText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(innerText)),
-                new PropertyBagValue<string>(innerText.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have inner text matching: {innerText}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"));
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (currentNode == null || _nodes.Count == 0)
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualText = currentNode.InnerText.Trim();
@@ -125,7 +115,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner text to match \"{innerText}\" regex, but the actual inner text was " +
-                $"\"{actualText}\". This error occurred during the validation of HTML data.");
+                $"\"{actualText}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -145,22 +135,19 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveInnerText)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveInnerText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(nodeInnerTexts)),
-                new PropertyBagValue<string[]>(innerTexts))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have inner text for multiple nodes: {string.Join(", ", innerTexts)}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"));
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (currentNode == null || _nodes.Count == 0)
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         // Check if the lengths of the arrays are different
@@ -168,8 +155,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 "The number of inner text values provided does not match the number of HTML nodes located. " +
-                "Ensure that each node corresponds to a unique inner text value. This error occurred during the " +
-                "validation of HTML data.");
+                "Ensure that each node corresponds to a unique inner text value.");
         }
 
         for (int i = 0; i < _iterator.Count; i++)
@@ -182,7 +168,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
             {
                 throw new ValidationException(
                     $"Expected the HTML node's inner text to match \"{expectedText}\" regex, but the actual inner " +
-                    $"text was \"{actualText}\". This error occurred during the validation of HTML data.");
+                    $"text was \"{actualText}\".");
             }
         }
 
@@ -202,22 +188,19 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveInnerHtml)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveInnerHtml)}"))
             .Build(
-                new PropertyBagKey(key: nameof(innerHtml)),
-                new PropertyBagValue<string>(innerHtml))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have inner HTML: {innerHtml}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Default"))
-            .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"));
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (currentNode == null || _nodes.Count == 0)
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualHtml = currentNode.InnerHtml.Trim();
@@ -226,7 +209,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner html to be \"{innerHtml}\", but the actual inner html was " +
-                $"\"{actualHtml}\". This error occurred during the validation of HTML data.");
+                $"\"{actualHtml}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -245,22 +228,19 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveInnerHtml)))
+                new PropertyBagValue<string>($"{nameof(HtmlLocatorAssertions)}.{nameof(ToHaveInnerHtml)}"))
             .Build(
-                new PropertyBagKey(key: nameof(innerHtml)),
-                new PropertyBagValue<string>(innerHtml.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have inner HTML matching: {innerHtml}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"));
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (currentNode == null || _nodes.Count == 0)
         {
             throw new ValidationException(
                 "No HTML nodes available. Ensure that the locator has selected at least one node before attempting " +
-                "to validate inner text. This error occurred during the validation of HTML data.");
+                "to validate inner text.");
         }
 
         var actualHtml = currentNode.InnerHtml.Trim();
@@ -269,7 +249,7 @@ internal class HtmlLocatorAssertions(IHtmlLocator htmlLocator) : IHtmlLocatorAss
         {
             throw new ValidationException(
                 $"Expected the HTML node's inner html to match \"{innerHtml}\" regex, but the actual inner html was " +
-                $"\"{actualHtml}\". This error occurred during the validation of HTML data.");
+                $"\"{actualHtml}\".");
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.

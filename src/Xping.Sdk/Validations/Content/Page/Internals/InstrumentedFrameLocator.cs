@@ -33,10 +33,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FrameLocator)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(FrameLocator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Frame locator: {selector}"));
 
         var result = _locator.FrameLocator(selector);
 
@@ -53,10 +53,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by alt text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByAltTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -76,10 +76,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by alt text (regex): {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByAltTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -99,10 +99,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by label: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByLabelOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -122,10 +122,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by label (regex): {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByLabelOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -145,10 +145,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by placeholder: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByPlaceholderOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -168,10 +168,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by placeholder (regex): {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByPlaceholderOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -191,10 +191,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByRole)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByRole)}"))
             .Build(
-                new PropertyBagKey(key: nameof(role)),
-                new PropertyBagValue<string>(role.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by role: {role}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByRoleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -214,10 +214,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByTestId)}"))
             .Build(
-                new PropertyBagKey(key: nameof(testId)),
-                new PropertyBagValue<string>(testId));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by test ID: {testId}"));
 
         var result = _locator.GetByTestId(testId);
 
@@ -234,10 +234,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                  new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(GetByTestId)))
+                 new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByTestId)}"))
             .Build(
-                 new PropertyBagKey(key: nameof(testId)),
-                 new PropertyBagValue<string>(testId.ToString()));
+                 new PropertyBagKey(key: "DisplayName"),
+                 new PropertyBagValue<string>($"Get by test ID (regex): {testId}"));
 
         var result = _locator.GetByTestId(testId);
 
@@ -254,10 +254,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -277,10 +277,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by text (regex): {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -300,10 +300,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by title: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -323,10 +323,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get by title (regex): {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorGetByTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -346,10 +346,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locator)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(Locator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selectorOrLocator)),
-                new PropertyBagValue<string>(selectorOrLocator))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Locator: {selectorOrLocator}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorLocatorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -372,10 +372,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locator)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(Locator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selectorOrLocator)),
-                new PropertyBagValue<string>(argLocator.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Locator: {argLocator}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorLocatorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -396,10 +396,10 @@ internal class InstrumentedFrameLocator(TestContext context, IFrameLocator locat
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Nth)))
+                new PropertyBagValue<string>($"{nameof(FrameLocator)}.{nameof(Nth)}"))
             .Build(
-                new PropertyBagKey(key: nameof(index)),
-                new PropertyBagValue<string>(index.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select {index.ToOrdinal()} element"));
 
         var result = _locator.Nth(index);
 

@@ -13,6 +13,7 @@ using Microsoft.Playwright;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Shared;
+using Xping.Sdk.Validations.Content.Page.Internals.Helpers;
 
 namespace Xping.Sdk.Validations.Content.Page.Internals;
 
@@ -38,12 +39,15 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
     public async Task<IElementHandle> AddScriptTagAsync(FrameAddScriptTagOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(AddScriptTagAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameAddScriptTagOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(AddScriptTagAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Add script tag"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameAddScriptTagOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.AddScriptTagAsync(options).ConfigureAwait(false);
 
@@ -58,12 +62,15 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
     public async Task<IElementHandle> AddStyleTagAsync(FrameAddStyleTagOptions? options = null)
     {
         _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(AddStyleTagAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(FrameAddStyleTagOptions)),
-              new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(AddStyleTagAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Add style tag"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameAddStyleTagOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.AddStyleTagAsync(options).ConfigureAwait(false);
 
@@ -75,20 +82,64 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return new InstrumentedElementHandle(_context, result);
     }
 
-    public Task CheckAsync(string selector, FrameCheckOptions? options = null)
+    public async Task CheckAsync(string selector, FrameCheckOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(CheckAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameCheckOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(CheckAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameCheckOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.CheckAsync(selector, options);
+        await _frame.CheckAsync(selector, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task ClickAsync(string selector, FrameClickOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(ClickAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Click element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameClickOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await _frame.ClickAsync(selector, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task<string> ContentAsync()
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(ContentAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get frame content"));
+
+        var result = await _frame.ContentAsync().ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved content with length: {result.Length}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -98,145 +149,88 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task ClickAsync(string selector, FrameClickOptions? options = null)
+    public async Task DblClickAsync(string selector, FrameDblClickOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ClickAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameClickOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(DblClickAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Double click element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameDblClickOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.ClickAsync(selector, options);
+        await _frame.DblClickAsync(selector, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<string> ContentAsync()
-    {
-        _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ContentAsync)));
-
-        var result = _frame.ContentAsync();
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task DblClickAsync(string selector, FrameDblClickOptions? options = null)
-    {
-        _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(DblClickAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameDblClickOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
-
-        var result = _frame.DblClickAsync(selector, options);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task DispatchEventAsync(
+    public async Task DispatchEventAsync(
         string selector,
         string type,
         object? eventInit = null,
         FrameDispatchEventOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(DispatchEventAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(type)),
-               new PropertyBagValue<string>(type))
-           .Build(
-               new PropertyBagKey(key: nameof(eventInit)),
-               new PropertyBagValue<string>(eventInit?.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameDispatchEventOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(DispatchEventAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Dispatch event '{type}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameDispatchEventOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.DispatchEventAsync(selector, type, eventInit, options);
+        await _frame.DispatchEventAsync(selector, type, eventInit, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task DragAndDropAsync(string source, string target, FrameDragAndDropOptions? options = null)
+    public async Task DragAndDropAsync(string source, string target, FrameDragAndDropOptions? options = null)
     {
         _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(DragAndDropAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(source)),
-              new PropertyBagValue<string>(source))
-          .Build(
-              new PropertyBagKey(key: nameof(target)),
-              new PropertyBagValue<string>(target))
-          .Build(
-              new PropertyBagKey(key: nameof(FrameDragAndDropOptions)),
-              new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(DragAndDropAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Drag and drop element matching selector: {source} to {target}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameDragAndDropOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.DragAndDropAsync(source, target, options);
+        await _frame.DragAndDropAsync(source, target, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<T> EvalOnSelectorAllAsync<T>(string selector, string expression, object? arg = null)
+    public async Task<T> EvalOnSelectorAllAsync<T>(string selector, string expression, object? arg = null)
     {
         _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(EvalOnSelectorAllAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(selector)),
-              new PropertyBagValue<string>(selector))
-          .Build(
-              new PropertyBagKey(key: nameof(expression)),
-              new PropertyBagValue<string>(expression))
-          .Build(
-              new PropertyBagKey(key: nameof(arg)),
-              new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvalOnSelectorAllAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
 
-        var result = _frame.EvalOnSelectorAllAsync<T>(selector, expression, arg);
+        var result = await _frame.EvalOnSelectorAllAsync<T>(selector, expression, arg).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -246,23 +240,21 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task<JsonElement?> EvalOnSelectorAllAsync(string selector, string expression, object? arg = null)
+    public async Task<JsonElement?> EvalOnSelectorAllAsync(string selector, string expression, object? arg = null)
     {
         _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(EvalOnSelectorAllAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(selector)),
-              new PropertyBagValue<string>(selector))
-          .Build(
-              new PropertyBagKey(key: nameof(expression)),
-              new PropertyBagValue<string>(expression))
-          .Build(
-              new PropertyBagKey(key: nameof(arg)),
-              new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvalOnSelectorAllAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
 
-        var result = _frame.EvalOnSelectorAllAsync(selector, expression, arg);
+        var result = await _frame.EvalOnSelectorAllAsync(selector, expression, arg).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -272,151 +264,25 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task<T> EvalOnSelectorAsync<T>(
+    public async Task<T> EvalOnSelectorAsync<T>(
         string selector,
         string expression,
         object? arg = null,
         FrameEvalOnSelectorOptions? options = null)
     {
         _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(selector)),
-              new PropertyBagValue<string>(selector))
-          .Build(
-              new PropertyBagKey(key: nameof(expression)),
-              new PropertyBagValue<string>(expression))
-          .Build(
-              new PropertyBagKey(key: nameof(arg)),
-              new PropertyBagValue<string>(arg?.ToString() ?? "Null"))
-          .Build(
-              new PropertyBagKey(key: nameof(FrameEvalOnSelectorOptions)),
-              new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
-
-        var result = _frame.EvalOnSelectorAsync<T>(selector, expression, arg, options);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<JsonElement?> EvalOnSelectorAsync(string selector, string expression, object? arg = null)
-    {
-        _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(selector)),
-              new PropertyBagValue<string>(selector))
-          .Build(
-              new PropertyBagKey(key: nameof(expression)),
-              new PropertyBagValue<string>(expression))
-          .Build(
-              new PropertyBagKey(key: nameof(arg)),
-              new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
-
-        var result = _frame.EvalOnSelectorAsync(selector, expression, arg);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<T> EvaluateAsync<T>(string expression, object? arg = null)
-    {
-        _context.SessionBuilder
-          .Build(
-              new PropertyBagKey(key: "MethodName"),
-              new PropertyBagValue<string>(nameof(EvaluateAsync)))
-          .Build(
-              new PropertyBagKey(key: nameof(expression)),
-              new PropertyBagValue<string>(expression))
-          .Build(
-              new PropertyBagKey(key: nameof(arg)),
-              new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
-
-        var result = _frame.EvaluateAsync<T>(expression, arg);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<JsonElement?> EvaluateAsync(string expression, object? arg = null)
-    {
-        _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(EvaluateAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(expression)),
-               new PropertyBagValue<string>(expression))
-           .Build(
-               new PropertyBagKey(key: nameof(arg)),
-               new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
-
-        var result = _frame.EvaluateAsync(expression, arg);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<IJSHandle> EvaluateHandleAsync(string expression, object? arg = null)
-    {
-        _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(EvaluateHandleAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(expression)),
-               new PropertyBagValue<string>(expression))
-           .Build(
-               new PropertyBagKey(key: nameof(arg)),
-               new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
-
-        var result = _frame.EvaluateHandleAsync(expression, arg);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task FillAsync(string selector, string value, FrameFillOptions? options = null)
-    {
-        _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FillAsync)))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(value)),
-               new PropertyBagValue<string>(value))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameFillOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvalOnSelectorAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameEvalOnSelectorOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.FillAsync(selector, value, options);
+        var result = await _frame.EvalOnSelectorAsync<T>(selector, expression, arg, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -426,20 +292,21 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task FocusAsync(string selector, FrameFocusOptions? options = null)
+    public async Task<JsonElement?> EvalOnSelectorAsync(string selector, string expression, object? arg = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FocusAsync)))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(FrameFocusOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvalOnSelectorAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
 
-        var result = _frame.FocusAsync(selector, options);
+        var result = await _frame.EvalOnSelectorAsync(selector, expression, arg).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -447,14 +314,128 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.Progress?.Report(testStep);
 
         return result;
+    }
+
+    public async Task<T> EvaluateAsync<T>(string expression, object? arg = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvaluateAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+
+        var result = await _frame.EvaluateAsync<T>(expression, arg).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+
+        return result;
+    }
+
+    public async Task<JsonElement?> EvaluateAsync(string expression, object? arg = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvaluateAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+
+        var result = await _frame.EvaluateAsync(expression, arg).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+
+        return result;
+    }
+
+    public async Task<IJSHandle> EvaluateHandleAsync(string expression, object? arg = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(EvaluateHandleAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression}"))
+            .Build(
+                new PropertyBagKey(key: nameof(arg)),
+                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+
+        var result = await _frame.EvaluateHandleAsync(expression, arg).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+
+        return result;
+    }
+
+    public async Task FillAsync(string selector, string value, FrameFillOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(FillAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Fill element matching selector: {selector} with value: {value}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameFillOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await _frame.FillAsync(selector, value, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task FocusAsync(string selector, FrameFocusOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(FocusAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Focus element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameFocusOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await _frame.FocusAsync(selector, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
     }
 
     public async Task<IElementHandle> FrameElementAsync()
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FrameElementAsync)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(FrameElementAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get frame element"));
 
         var result = await _frame.FrameElementAsync().ConfigureAwait(false);
 
@@ -471,10 +452,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FrameLocator)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(FrameLocator)}"))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector));
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get frame locator for selector: {selector}"));
 
         var result = _frame.FrameLocator(selector);
 
@@ -491,19 +472,16 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetAttributeAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetAttributeAsync)}"))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-            .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name));
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get attribute '{name}' from element matching selector: {selector}"));
 
         var result = await _frame.GetAttributeAsync(selector, name, options).ConfigureAwait(false);
 
         _context.SessionBuilder.Build(
-               new PropertyBagKey(key: "Value"),
-               new PropertyBagValue<string>(result ?? "Null"));
+               new PropertyBagKey(key: "Result"),
+               new PropertyBagValue<string>($"Retrieved attribute value: '{result ?? "null"}'"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -518,10 +496,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByAltText)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByAltText)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by alt text: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByAltTextOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -541,10 +519,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByAltText)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByAltText)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text.ToString()))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by alt text pattern: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByAltTextOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -564,10 +542,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByLabel)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByLabel)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by label: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByLabelOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -587,10 +565,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByLabel)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByLabel)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text.ToString()))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by label pattern: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByLabelOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -610,10 +588,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByPlaceholder)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by placeholder: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByPlaceholderOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -633,10 +611,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByPlaceholder)}"))
             .Build(
-               new PropertyBagKey(key: nameof(text)),
-               new PropertyBagValue<string>(text.ToString()))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Get elements by placeholder pattern: {text}"))
             .Build(
                new PropertyBagKey(key: nameof(FrameGetByPlaceholderOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -656,10 +634,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByRole)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByRole)}"))
             .Build(
-                new PropertyBagKey(key: nameof(role)),
-                new PropertyBagValue<string>(role.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by role: {role}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGetByRoleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -679,10 +657,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByTestId)}"))
             .Build(
-                new PropertyBagKey(key: nameof(testId)),
-                new PropertyBagValue<string>(testId));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by test ID: {testId}"));
 
         var result = _frame.GetByTestId(testId);
 
@@ -699,10 +677,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByTestId)}"))
             .Build(
-                new PropertyBagKey(key: nameof(testId)),
-                new PropertyBagValue<string>(testId.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by test ID: {testId}"));
 
         var result = _frame.GetByTestId(testId);
 
@@ -719,10 +697,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGetByTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -742,10 +720,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGetByTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -765,10 +743,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by title: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGetByTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -788,10 +766,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get elements by title: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGetByTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -806,20 +784,20 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return new InstrumentedLocator(_context, result);
     }
 
-    public Task<IResponse?> GotoAsync(string url, FrameGotoOptions? options = null)
+    public async Task<IResponse?> GotoAsync(string url, FrameGotoOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GotoAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(GotoAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Navigate to URL: {url}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameGotoOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.GotoAsync(url, options);
+        var result = await _frame.GotoAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -829,20 +807,46 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task HoverAsync(string selector, FrameHoverOptions? options = null)
+    public async Task HoverAsync(string selector, FrameHoverOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(HoverAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(HoverAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Hover over element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameHoverOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.HoverAsync(selector, options);
+        await _frame.HoverAsync(selector, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task<string> InnerHTMLAsync(string selector, FrameInnerHTMLOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(InnerHTMLAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get inner HTML of element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameInnerHTMLOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        var result = await _frame.InnerHTMLAsync(selector, options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved inner HTML with length: {result.Length}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -852,43 +856,25 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task<string> InnerHTMLAsync(string selector, FrameInnerHTMLOptions? options = null)
+    public async Task<string> InnerTextAsync(string selector, FrameInnerTextOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerHTMLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(InnerTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get inner text of element matching selector: {selector}"))
             .Build(
-                new PropertyBagKey(key: nameof(FrameInnerHTMLOptions)),
+                new PropertyBagKey(key: nameof(FrameInnerTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.InnerHTMLAsync(selector, options);
+        var result = await _frame.InnerTextAsync(selector, options).ConfigureAwait(false);
 
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<string> InnerTextAsync(string selector, FrameInnerTextOptions? options = null)
-    {
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerTextAsync)))
-            .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(FrameInnerHTMLOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
-
-        var result = _frame.InnerTextAsync(selector, options);
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved inner text with length: {result.Length}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -903,10 +889,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InputValueAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(InputValueAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get input value of element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameInputValueOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -915,8 +901,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved input value: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -931,10 +917,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsCheckedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsCheckedAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is checked"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsCheckedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -943,8 +929,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is checked: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -959,10 +945,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsDisabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsDisabledAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is disabled"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsDisabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -971,8 +957,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is disabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -987,10 +973,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEditableAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsEditableAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is editable"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsEditableOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -999,8 +985,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is editable: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1015,10 +1001,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEnabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsEnabledAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is enabled"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsEnabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1027,8 +1013,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is enabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1043,10 +1029,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsHiddenAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsHiddenAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is hidden"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsHiddenOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1055,8 +1041,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is hidden: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1071,10 +1057,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsVisibleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(IsVisibleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element matching selector: {selector} is visible"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameIsVisibleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1083,8 +1069,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is visible: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1099,10 +1085,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locator)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(Locator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get locator for selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameLocatorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1117,30 +1103,25 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return new InstrumentedLocator(_context, result);
     }
 
-    public Task PressAsync(string selector, string key, FramePressOptions? options = null)
+    public async Task PressAsync(string selector, string key, FramePressOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(PressAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(PressAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(key)),
-                new PropertyBagValue<string>(key))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Press key '{key}' on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FramePressOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.PressAsync(selector, key, options);
+        await _frame.PressAsync(selector, key, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     public async Task<IReadOnlyList<IElementHandle>> QuerySelectorAllAsync(string selector)
@@ -1148,10 +1129,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(QuerySelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query all elements matching selector: {selector}"));
 
         var result = await _frame.QuerySelectorAllAsync(selector).ConfigureAwait(false);
 
@@ -1168,10 +1149,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(QuerySelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameQuerySelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1187,19 +1168,22 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
     }
 
     [Obsolete("Use IFrame.WaitForUrlAsync instead")]
-    public Task<IResponse?> RunAndWaitForNavigationAsync(
+    public async Task<IResponse?> RunAndWaitForNavigationAsync(
         Func<Task> action,
         FrameRunAndWaitForNavigationOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>($"[Obsolete]{nameof(RunAndWaitForNavigationAsync)}"))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(RunAndWaitForNavigationAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for navigation"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameRunAndWaitForNavigationOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.RunAndWaitForNavigationAsync(action, options);
+        var result = await _frame.RunAndWaitForNavigationAsync(action, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1217,13 +1201,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(values))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option '{values}' on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1231,9 +1212,9 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         var result = await _frame.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1251,25 +1232,22 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         var argHandle = values is InstrumentedElementHandle instrumented ? instrumented.ElementHandle : values;
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(values)),
-                 new PropertyBagValue<string>(argHandle.ToString() ?? "Null"))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.SelectOptionAsync(selector, argHandle, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1285,25 +1263,23 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         FrameSelectOptionOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(values)),
-                 new PropertyBagValue<string[]>(values.ToArray()))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                $"Select options '{string.Join(", ", values)}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1319,25 +1295,23 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         FrameSelectOptionOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(values)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(values)))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                $"Select option '{values.FormatSelectOptionValue()}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected option: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1357,25 +1331,22 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
                 instrumented.ElementHandle : v);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(values)),
-                 new PropertyBagValue<string[]>(argValues.Select(v => v.ToString() ?? "Null").ToArray()))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select options on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1391,25 +1362,24 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         FrameSelectOptionOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(values)),
-                 new PropertyBagValue<string[]>(values.Select(v => JsonSerializer.Serialize(v)).ToArray()))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                $"Select options '{string.Join(", ", values.Select(v => v.FormatSelectOptionValue()))}' " +
+                $"on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _frame.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1419,137 +1389,117 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task SetCheckedAsync(string selector, bool checkedState, FrameSetCheckedOptions? options = null)
+    public async Task SetCheckedAsync(string selector, bool checkedState, FrameSetCheckedOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SetCheckedAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(checkedState)),
-                 new PropertyBagValue<string>(checkedState.ToString()))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSetCheckedOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetCheckedAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                $"Set checked state to '{checkedState}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSetCheckedOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.SetCheckedAsync(selector, checkedState, options);
+        await _frame.SetCheckedAsync(selector, checkedState, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetContentAsync(string html, FrameSetContentOptions? options = null)
+    public async Task SetContentAsync(string html, FrameSetContentOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SetContentAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(html)),
-                 new PropertyBagValue<string>(html))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSetContentOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetContentAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set frame content"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSetContentOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.SetContentAsync(html, options);
+        await _frame.SetContentAsync(html, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(string selector, string files, FrameSetInputFilesOptions? options = null)
+    public async Task SetInputFilesAsync(string selector, string files, FrameSetInputFilesOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(files)),
-                 new PropertyBagValue<string>(files))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetInputFilesAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input files '{files}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.SetInputFilesAsync(selector, files, options);
+        await _frame.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(
+    public async Task SetInputFilesAsync(
         string selector,
         IEnumerable<string> files,
         FrameSetInputFilesOptions? options = null)
     {
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "MethodName"),
-                 new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
-             .Build(
-                 new PropertyBagKey(key: nameof(selector)),
-                 new PropertyBagValue<string>(selector))
-             .Build(
-                 new PropertyBagKey(key: nameof(files)),
-                 new PropertyBagValue<string[]>(files.ToArray()))
-             .Build(
-                 new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
-                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
-
-        var result = _frame.SetInputFilesAsync(selector, files, options);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task SetInputFilesAsync(string selector, FilePayload files, FrameSetInputFilesOptions? options = null)
-    {
-        _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string>($"Name: {files.Name}; MimeType: {files.MimeType}"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set input files '{string.Join(", ", files)}' on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.SetInputFilesAsync(selector, files, options);
+        await _frame.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(
+    public async Task SetInputFilesAsync(string selector, FilePayload files, FrameSetInputFilesOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetInputFilesAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input file '{files.Name}' on element matching selector: {selector}"))
+            .Build(
+                new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+
+        await _frame.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task SetInputFilesAsync(
         string selector,
         IEnumerable<FilePayload> files,
         FrameSetInputFilesOptions? options = null)
@@ -1557,49 +1507,43 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string[]>(
-                     files.Select(f => $"Name: {f.Name}; MimeType: {f.MimeType}").ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set input files '{string.Join(", ", files.Select(f => f.Name))}' "+
+                    $"on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.SetInputFilesAsync(selector, files, options);
+        await _frame.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task TapAsync(string selector, FrameTapOptions? options = null)
+    public async Task TapAsync(string selector, FrameTapOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TapAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(TapAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Tap element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameTapOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.TapAsync(selector, options);
+        await _frame.TapAsync(selector, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     public async Task<string?> TextContentAsync(string selector, FrameTextContentOptions? options = null)
@@ -1607,10 +1551,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TextContentAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(TextContentAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get text content of element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameTextContentOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1619,8 +1563,8 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result ?? "Null"));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved text content with length: {result?.Length ?? 0}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1635,14 +1579,17 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TitleAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(TitleAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get the title of the frame"));
 
         var result = await _frame.TitleAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved title: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1653,56 +1600,49 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
     }
 
     [Obsolete("Use ILocator.FillAsync instead")]
-    public Task TypeAsync(string selector, string text, FrameTypeOptions? options = null)
+    public async Task TypeAsync(string selector, string text, FrameTypeOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TitleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(TypeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Type text '{text}' into element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameTypeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.TypeAsync(selector, text, options);
+        await _frame.TypeAsync(selector, text, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UncheckAsync(string selector, FrameUncheckOptions? options = null)
+    public async Task UncheckAsync(string selector, FrameUncheckOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UncheckAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(UncheckAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Uncheck element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameUncheckOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.UncheckAsync(selector, options);
+        await _frame.UncheckAsync(selector, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<IJSHandle> WaitForFunctionAsync(
+    public async Task<IJSHandle> WaitForFunctionAsync(
         string expression,
         object? arg = null,
         FrameWaitForFunctionOptions? options = null)
@@ -1710,18 +1650,15 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForFunctionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForFunctionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for function: {expression} to return a truthy value"))
             .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(FrameUncheckOptions)),
+                new PropertyBagKey(key: nameof(FrameWaitForFunctionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForFunctionAsync(expression, arg, options);
+        var result = await _frame.WaitForFunctionAsync(expression, arg, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1731,41 +1668,42 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result;
     }
 
-    public Task WaitForLoadStateAsync(LoadState? state = null, FrameWaitForLoadStateOptions? options = null)
+    public async Task WaitForLoadStateAsync(LoadState? state = null, FrameWaitForLoadStateOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForLoadStateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForLoadStateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(state)),
-                new PropertyBagValue<string>(state?.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for load state: {state?.ToString() ?? "load"}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForLoadStateOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForLoadStateAsync(state, options);
+        await _frame.WaitForLoadStateAsync(state, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     [Obsolete("Use IFrame.WaitForURLAsync instead")]
-    public Task<IResponse?> WaitForNavigationAsync(FrameWaitForNavigationOptions? options = null)
+    public async Task<IResponse?> WaitForNavigationAsync(FrameWaitForNavigationOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForNavigationAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForNavigationAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for navigation"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForNavigationOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForNavigationAsync(options);
+        var result = await _frame.WaitForNavigationAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1782,10 +1720,10 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForSelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1800,92 +1738,87 @@ internal class InstrumentedFrame(TestContext context, IFrame frame) : IFrame
         return result != null ? new InstrumentedElementHandle(_context, result) : null;
     }
 
-    public Task WaitForTimeoutAsync(float timeout)
+    public async Task WaitForTimeoutAsync(float timeout)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForTimeoutAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForTimeoutAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for timeout: {timeout} ms"))
             .Build(
                 new PropertyBagKey(key: nameof(timeout)),
                 new PropertyBagValue<string>(timeout.ToString(CultureInfo.InvariantCulture)));
 
-        var result = _frame.WaitForTimeoutAsync(timeout);
+        await _frame.WaitForTimeoutAsync(timeout).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(string url, FrameWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(string url, FrameWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for URL: {url}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForURLAsync(url, options);
+        await _frame.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(Regex url, FrameWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(Regex url, FrameWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for URL matching regex: {url}"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForURLAsync(url, options);
+        await _frame.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(Func<string, bool> url, FrameWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(Func<string, bool> url, FrameWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedFrame)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for matching URL"))
             .Build(
                 new PropertyBagKey(key: nameof(FrameWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _frame.WaitForURLAsync(url, options);
+        await _frame.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 }

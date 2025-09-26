@@ -26,7 +26,10 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSuccessStatusCode)));
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveSuccessStatusCode)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("To have success status code"));
 
         if (!_response.IsSuccessStatusCode)
         {
@@ -48,10 +51,10 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveStatusCode)))
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveStatusCode)}"))
             .Build(
-                new PropertyBagKey(key: nameof(statusCode)),
-                new PropertyBagValue<string>(statusCode.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("To have status code: " + (int)statusCode));
 
         if (statusCode != _response.StatusCode)
         {
@@ -76,15 +79,12 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveHeader)))
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveHeader)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("To have HTTP header: " + name))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedName)),
-                new PropertyBagValue<string>(normalizedName))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
+                new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var normalizedHeaders = ConcatenateDictionaries(
@@ -94,9 +94,8 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
 
         if (!TryGetHeader(normalizedHeaders, normalizedName, out var header, options) || header == null)
             throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\", but no such header exists. This exception " +
-                $"occurred as part of validating HTTP response data.");
-        
+                $"Expected to find HTTP header \"{normalizedName}\", but no such header exists.");
+
         // Create a successful test step with detailed information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
@@ -115,21 +114,12 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveHeaderWithValue)))
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveHeaderWithValue)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have HTTP header: {normalizedName} with value: {normalizedValue}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedName)),
-                new PropertyBagValue<string>(normalizedName))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
-            .Build(
-                new PropertyBagKey(key: nameof(normalizedValue)),
-                new PropertyBagValue<string>(normalizedValue))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
+                new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var normalizedHeaders = ConcatenateDictionaries(
@@ -140,16 +130,14 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         if (!TryGetHeaderValues(normalizedHeaders, normalizedName, out var headerValues, options) ||
             headerValues == null)
             throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\", but no such header exists. This exception " +
-                $"occurred as part of validating HTTP response data.");
+                $"Expected to find HTTP header: \"{normalizedName}\", but no such header exists.");
 
         var enumerable = headerValues.ToList();
         if (!enumerable.Any(v => textComparer.Compare(v, normalizedValue)))
         {
             throw new ValidationException(
-                $"Expected to find HTTP header \"{normalizedName}\" with value \"{normalizedValue}\", but the " +
-                $"actual value was \"{string.Join(";", enumerable)}\". This exception occurred as part of " +
-                $"validating HTTP response data.");
+                $"Expected to find HTTP header: \"{normalizedName}\" with value: \"{normalizedValue}\", but the " +
+                $"actual value was: \"{string.Join(";", enumerable)}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -173,15 +161,12 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveBodyContaining)))
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveBodyContaining)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedContent)),
-                new PropertyBagValue<string>(expectedContent))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have body containing: {normalizedExpectedContent}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedContent)),
-                new PropertyBagValue<string>(normalizedExpectedContent))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
+                new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var contentStream = _response.Content.ReadAsStream();
@@ -191,8 +176,8 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         if (!textComparer.Compare(content, normalizedExpectedContent))
             throw new ValidationException(
                 $"Expected HTTP response body to contain \"{normalizedExpectedContent}\", but no such string was " +
-                $"found. This exception occurred as part of validating HTTP response data.");
-        
+                $"found.");
+
         // Create a successful test step with detailed information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
@@ -206,10 +191,10 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveResponseTimeLessThan)))
+                new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveResponseTimeLessThan)}"))
             .Build(
-                new PropertyBagKey(key: nameof(maxDuration)),
-                new PropertyBagValue<string>(maxDuration.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have response time less than: {maxDuration}"));
 
         if (_responseTime < maxDuration)
         {
@@ -223,7 +208,7 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
 
         throw new ValidationException(
             $"Expected HTTP response time to be less than {maxDuration}, but actual response " +
-            $"time was {_responseTime}. This exception occurred as part of validating HTTP response data."
+            $"time was {_responseTime}."
         );
     }
 

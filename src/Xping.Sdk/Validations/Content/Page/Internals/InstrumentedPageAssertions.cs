@@ -26,10 +26,10 @@ internal class InstrumentedPageAssertions(TestContext context, IPageAssertions p
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTitleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPageAssertions)}.{nameof(ToHaveTitleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(titleOrRegExp)),
-                new PropertyBagValue<string>(titleOrRegExp))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have page title: {titleOrRegExp}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAssertionsToHaveTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -48,10 +48,10 @@ internal class InstrumentedPageAssertions(TestContext context, IPageAssertions p
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTitleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPageAssertions)}.{nameof(ToHaveTitleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(titleOrRegExp)),
-                new PropertyBagValue<string>(titleOrRegExp.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have page title (regex): {titleOrRegExp}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAssertionsToHaveTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -70,10 +70,10 @@ internal class InstrumentedPageAssertions(TestContext context, IPageAssertions p
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPageAssertions)}.{nameof(ToHaveURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrRegExp)),
-                new PropertyBagValue<string>(urlOrRegExp))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have page URL: {urlOrRegExp}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAssertionsToHaveURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -92,10 +92,10 @@ internal class InstrumentedPageAssertions(TestContext context, IPageAssertions p
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPageAssertions)}.{nameof(ToHaveURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrRegExp)),
-                new PropertyBagValue<string>(urlOrRegExp.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have page URL (regex): {urlOrRegExp}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAssertionsToHaveURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))

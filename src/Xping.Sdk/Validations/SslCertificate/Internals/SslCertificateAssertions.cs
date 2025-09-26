@@ -30,26 +30,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSubjectContaining)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveSubjectContaining)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedSubject)),
-                new PropertyBagValue<string>(expectedSubject))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have subject containing: {normalizedExpectedSubject}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedSubject)),
-                new PropertyBagValue<string>(normalizedExpectedSubject))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualSubject"),
-                new PropertyBagValue<string>(_certificate.Subject));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(_certificate.Subject, normalizedExpectedSubject))
         {
             throw new ValidationException(
                 $"Expected SSL certificate subject to contain \"{normalizedExpectedSubject}\", but the actual " +
-                $"subject was \"{_certificate.Subject}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"subject was \"{_certificate.Subject}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -72,26 +65,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSubjectEqualTo)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveSubjectEqualTo)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedSubject)),
-                new PropertyBagValue<string>(expectedSubject))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have subject equal to: {normalizedExpectedSubject}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedSubject)),
-                new PropertyBagValue<string>(normalizedExpectedSubject))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualSubject"),
-                new PropertyBagValue<string>(_certificate.Subject));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(_certificate.Subject, normalizedExpectedSubject))
         {
             throw new ValidationException(
                 $"Expected SSL certificate subject to be exactly \"{normalizedExpectedSubject}\", but the actual " +
-                $"subject was \"{_certificate.Subject}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"subject was \"{_certificate.Subject}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -110,26 +96,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveIssuerContaining)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveIssuerContaining)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedIssuer)),
-                new PropertyBagValue<string>(expectedIssuer))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have issuer containing: {normalizedExpectedIssuer}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedIssuer)),
-                new PropertyBagValue<string>(normalizedExpectedIssuer))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualIssuer"),
-                new PropertyBagValue<string>(_certificate.Issuer));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(_certificate.Issuer, normalizedExpectedIssuer))
         {
             throw new ValidationException(
                 $"Expected SSL certificate issuer to contain \"{normalizedExpectedIssuer}\", but the actual " +
-                $"issuer was \"{_certificate.Issuer}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"issuer was \"{_certificate.Issuer}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -152,26 +131,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveIssuerEqualTo)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveIssuerEqualTo)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedIssuer)),
-                new PropertyBagValue<string>(expectedIssuer))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have issuer equal to: {normalizedExpectedIssuer}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedIssuer)),
-                new PropertyBagValue<string>(normalizedExpectedIssuer))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualIssuer"),
-                new PropertyBagValue<string>(_certificate.Issuer));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(_certificate.Issuer, normalizedExpectedIssuer))
         {
             throw new ValidationException(
                 $"Expected SSL certificate issuer to be exactly \"{normalizedExpectedIssuer}\", but the actual " +
-                $"issuer was \"{_certificate.Issuer}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"issuer was \"{_certificate.Issuer}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -187,7 +159,10 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeValid)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToBeValid)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("To be valid"))
             .Build(
                 new PropertyBagKey(key: "SslErrors"),
                 new PropertyBagValue<string>(_sslErrors.ToString()))
@@ -198,8 +173,7 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         if (_sslErrors != SslPolicyErrors.None)
         {
             throw new ValidationException(
-                $"Expected SSL certificate to be valid, but validation failed with errors: {_sslErrors}. " +
-                $"This exception occurred as part of validating SSL certificate data.");
+                $"Expected SSL certificate to be valid, but validation failed with errors: {_sslErrors}.");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -215,20 +189,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToExpireAfter)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToExpireAfter)}"))
             .Build(
-                new PropertyBagKey(key: nameof(minExpirationDate)),
-                new PropertyBagValue<string>(minExpirationDate.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To expire after: {minExpirationDate:yyyy-MM-dd HH:mm:ss}"))
             .Build(
-                new PropertyBagKey(key: "ActualExpirationDate"),
-                new PropertyBagValue<string>(_certificate.NotAfter.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "MinExpirationDate"),
+                new PropertyBagValue<string>(minExpirationDate.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
 
         if (_certificate.NotAfter <= minExpirationDate)
         {
             throw new ValidationException(
                 $"Expected SSL certificate to expire after \"{minExpirationDate:yyyy-MM-dd HH:mm:ss}\", but it " +
-                $"expires on \"{_certificate.NotAfter:yyyy-MM-dd HH:mm:ss}\". This exception occurred as part of " +
-                $"validating SSL certificate data.");
+                $"expires on \"{_certificate.NotAfter:yyyy-MM-dd HH:mm:ss}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -246,23 +219,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToExpireWithinDays)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToExpireWithinDays)}"))
             .Build(
-                new PropertyBagKey(key: nameof(days)),
-                new PropertyBagValue<string>(days.ToString(CultureInfo.InvariantCulture)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To expire within {days} days"))
             .Build(
-                new PropertyBagKey(key: "MaxExpirationDate"),
-                new PropertyBagValue<string>(maxExpirationDate.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)))
-            .Build(
-                new PropertyBagKey(key: "ActualExpirationDate"),
-                new PropertyBagValue<string>(_certificate.NotAfter.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "Days"),
+                new PropertyBagValue<string>(days.ToString(CultureInfo.InvariantCulture)));
 
         if (_certificate.NotAfter > maxExpirationDate)
         {
             throw new ValidationException(
                 $"Expected SSL certificate to expire within {days} days (by {maxExpirationDate:yyyy-MM-dd HH:mm:ss}), " +
-                $"but it expires on \"{_certificate.NotAfter:yyyy-MM-dd HH:mm:ss}\". This exception occurred as part of " +
-                $"validating SSL certificate data.");
+                $"but it expires on \"{_certificate.NotAfter:yyyy-MM-dd HH:mm:ss}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -281,26 +250,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveThumbprint)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveThumbprint)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedThumbprint)),
-                new PropertyBagValue<string>(expectedThumbprint))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have thumbprint: {normalizedExpectedThumbprint}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedThumbprint)),
-                new PropertyBagValue<string>(normalizedExpectedThumbprint))
-            .Build(
-                new PropertyBagKey(key: "ActualThumbprint"),
-                new PropertyBagValue<string>(_certificate.Thumbprint))
-            .Build(
-                new PropertyBagKey(key: nameof(normalizedActualThumbprint)),
-                new PropertyBagValue<string>(normalizedActualThumbprint));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (normalizedActualThumbprint != normalizedExpectedThumbprint)
         {
             throw new ValidationException(
                 $"Expected SSL certificate thumbprint to be \"{normalizedExpectedThumbprint}\", but the actual " +
-                $"thumbprint was \"{normalizedActualThumbprint}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"thumbprint was \"{normalizedActualThumbprint}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -323,26 +285,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSerialNumber)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveSerialNumber)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedSerialNumber)),
-                new PropertyBagValue<string>(expectedSerialNumber))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have serial number: {normalizedExpectedSerialNumber}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedSerialNumber)),
-                new PropertyBagValue<string>(normalizedExpectedSerialNumber))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualSerialNumber"),
-                new PropertyBagValue<string>(_certificate.SerialNumber));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(_certificate.SerialNumber, normalizedExpectedSerialNumber))
         {
             throw new ValidationException(
                 $"Expected SSL certificate serial number to be \"{normalizedExpectedSerialNumber}\", but the actual " +
-                $"serial number was \"{_certificate.SerialNumber}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"serial number was \"{_certificate.SerialNumber}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -362,26 +317,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSignatureAlgorithm)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveSignatureAlgorithm)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedAlgorithm)),
-                new PropertyBagValue<string>(expectedAlgorithm))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have signature algorithm containing: {normalizedExpectedAlgorithm}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedAlgorithm)),
-                new PropertyBagValue<string>(normalizedExpectedAlgorithm))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "ActualSignatureAlgorithm"),
-                new PropertyBagValue<string>(actualAlgorithm));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!textComparer.Compare(actualAlgorithm, normalizedExpectedAlgorithm))
         {
             throw new ValidationException(
                 $"Expected SSL certificate signature algorithm to contain \"{normalizedExpectedAlgorithm}\", but the actual " +
-                $"algorithm was \"{actualAlgorithm}\". This exception occurred as part of validating SSL " +
-                $"certificate data.");
+                $"algorithm was \"{actualAlgorithm}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -412,26 +360,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveSanContaining)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveSanContaining)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedSan)),
-                new PropertyBagValue<string>(expectedSan))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have SAN containing: {normalizedExpectedSan}"))
             .Build(
-                new PropertyBagKey(key: nameof(normalizedExpectedSan)),
-                new PropertyBagValue<string>(normalizedExpectedSan))
-            .Build(
-                new PropertyBagKey(key: nameof(options)),
-                new PropertyBagValue<string>(options?.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: "SanValues"),
-                new PropertyBagValue<string>(string.Join(", ", sanValues)));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!sanValues.Any(san => textComparer.Compare(san, normalizedExpectedSan)))
         {
             throw new ValidationException(
                 $"Expected SSL certificate Subject Alternative Names to contain \"{normalizedExpectedSan}\", but " +
-                $"the actual SAN values were \"{string.Join(", ", sanValues)}\". This exception occurred as part of " +
-                $"validating SSL certificate data.");
+                $"the actual SAN values were \"{string.Join(", ", sanValues)}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
@@ -450,19 +391,19 @@ internal class SslCertificateAssertions(ISslCertificateResponse sslCertificateRe
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveKeySize)))
+                new PropertyBagValue<string>($"{nameof(SslCertificateAssertions)}.{nameof(ToHaveKeySize)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expectedKeySize)),
-                new PropertyBagValue<string>(expectedKeySize.ToString(CultureInfo.InvariantCulture)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have key size: {expectedKeySize} bits"))
             .Build(
-                new PropertyBagKey(key: "ActualKeySize"),
-                new PropertyBagValue<string>(actualKeySize.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "ExpectedKeySize"),
+                new PropertyBagValue<string>(expectedKeySize.ToString(CultureInfo.InvariantCulture)));
 
         if (actualKeySize != expectedKeySize)
         {
             throw new ValidationException(
                 $"Expected SSL certificate key size to be {expectedKeySize} bits, but the actual key size was " +
-                $"{actualKeySize} bits. This exception occurred as part of validating SSL certificate data.");
+                $"{actualKeySize} bits.");
         }
 
         // Create a successful test step with detailed information about the current test operation.

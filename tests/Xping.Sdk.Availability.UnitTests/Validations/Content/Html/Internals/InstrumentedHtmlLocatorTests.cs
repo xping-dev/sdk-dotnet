@@ -10,6 +10,7 @@ using HtmlAgilityPack;
 using Moq;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Session;
+using Xping.Sdk.Shared;
 using Xping.Sdk.UnitTests.Helpers;
 using Xping.Sdk.Validations;
 using Xping.Sdk.Validations.Content.Html.Internals;
@@ -116,18 +117,20 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.First))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.First)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray())))),
+                    p.Equals(new PropertyBagValue<string>("Advance to the first HTML node")))),
                         Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nodes.First().OriginalName.Trim())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"First element: {nodes.First().OriginalName.Trim()}")))),
+                Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -146,18 +149,23 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         // Act
         htmlLocator.First();
 
-        // Assert
-        Assert.That(iterator.IsAdvanced, Is.True);
-        Assert.That(iterator.Current(), Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            // Assert
+            Assert.That(iterator.IsAdvanced, Is.True);
+            Assert.That(iterator.Current(), Is.Not.Null);
+        });
+
         Mock.Get(htmlLocator.Context.SessionBuilder)
-           .Verify(m => m.Build(
-               It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-               It.Is<IPropertyBagValue>(p =>
-                   p.Equals(new PropertyBagValue<string>(nodes.First().OriginalName.Trim())))), Times.Once);
+            .Verify(m => m.Build(
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"First element: {nodes.First().OriginalName.Trim()}")))),
+                Times.Once);
     }
 
     [Test]
-    public void FirstDoesNotAdvanceToFirstItemWhenNodesEmpty()
+    public void FirstThrowsExceptionWhenCollectionIsEmpty()
     {
         // Arrange
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 0);
@@ -167,23 +175,26 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             iterator: iterator,
             context: HtmlContentTestsHelpers.CreateTestContext());
 
-        // Act
-        htmlLocator.First();
-
-        // Assert
-        Assert.That(iterator.IsAdvanced, Is.False);
-        Assert.That(iterator.Current(), Is.Null);
+        // Act && Assert
+        Assert.Throws<ValidationException>(() => htmlLocator.First());
+        Assert.Multiple(() =>
+        {
+            Assert.That(iterator.IsAdvanced, Is.False);
+            Assert.That(iterator.Current(), Is.Null);
+        });
         Mock.Get(htmlLocator.Context.SessionBuilder)
            .Verify(m => m.Build(
-               It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-               It.Is<IPropertyBagValue>(p =>
-                   p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
+               It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+               It.IsAny<IPropertyBagValue>()), Times.Never);
     }
 
     [Test]
     public void FirstInvokesReportOnProgressContextWhenProgressInstanceAvailable()
     {
         // Arrange
+        _iteratorMock.Setup(i => i.Current()).Returns(
+            HtmlNode.CreateNode("<label>Password <input type=\"password\" /></label>"));
+
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 3);
         var htmlLocator = new InstrumentedHtmlLocator(
             nodes: nodes,
@@ -215,18 +226,20 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Last))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Last)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray())))),
+                    p.Equals(new PropertyBagValue<string>("Advance to the last HTML node")))),
                         Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nodes.Last().OriginalName.Trim())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"Last element: {nodes.Last().OriginalName.Trim()}")))),
+                Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -235,6 +248,9 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
     public void LastAdvancesToLastItem()
     {
         // Arrange
+        _iteratorMock.Setup(i => i.Current()).Returns(
+            HtmlNode.CreateNode("<label>Password <input type=\"password\" /></label>"));
+
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 3);
         var htmlLocator = new InstrumentedHtmlLocator(
             nodes: nodes,
@@ -249,7 +265,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
     }
 
     [Test]
-    public void LastDoesNotAdvanceToLastItemWhenNodesEmpty()
+    public void LastThrowsExceptionWhenCollectionIsEmpty()
     {
         // Arrange
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 0);
@@ -259,23 +275,26 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             iterator: iterator,
             context: HtmlContentTestsHelpers.CreateTestContext());
 
-        // Act
-        htmlLocator.Last();
-
-        // Assert
-        Assert.That(iterator.IsAdvanced, Is.False);
-        Assert.That(iterator.Current(), Is.Null);
+        // Act && Assert
+        Assert.Throws<ValidationException>(() => htmlLocator.Last());
+        Assert.Multiple(() =>
+        {
+            Assert.That(iterator.IsAdvanced, Is.False);
+            Assert.That(iterator.Current(), Is.Null);
+        });
         Mock.Get(htmlLocator.Context.SessionBuilder)
            .Verify(m => m.Build(
-               It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-               It.Is<IPropertyBagValue>(p =>
-                   p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
+               It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+               It.IsAny<IPropertyBagValue>()), Times.Never);
     }
 
     [Test]
     public void LastInvokesReportOnProgressContextWhenProgressInstanceAvailable()
     {
         // Arrange
+        _iteratorMock.Setup(i => i.Current()).Returns(
+            HtmlNode.CreateNode("<label>Password <input type=\"password\" /></label>"));
+
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 3);
         var htmlLocator = new InstrumentedHtmlLocator(
             nodes: nodes,
@@ -299,6 +318,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             iterator: new HtmlNodeIterator(nodes),
             context: HtmlContentTestsHelpers.CreateTestContext());
         var options = new FilterOptions { HasText = "Password" };
+
         // Act
         htmlLocator.Filter(options);
 
@@ -307,12 +327,13 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Filter))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Filter)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>("Filter HTML nodes")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("FilterOptions")),
@@ -320,12 +341,13 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("ChildNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Never);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("TextOptions")),
+                It.Is<IPropertyBagValue>(p => p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("FilteredNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Never);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p => p.Equals(new PropertyBagValue<string>("Filtered nodes: Null")))),
+            Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -351,12 +373,13 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Filter))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Filter)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("label")))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>("Filter HTML nodes")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("FilterOptions")),
@@ -364,12 +387,13 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("ChildNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("TextOptions")),
+                It.Is<IPropertyBagValue>(p => p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("FilteredNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                    It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                    It.Is<IPropertyBagValue>(p => p.Equals(new PropertyBagValue<string>("Filtered nodes: #text")))),
+                Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -453,20 +477,18 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Locate))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Locate)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("Null")))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>("Locate HTML nodes using selector: //label")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("ChildNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Never);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("FilteredNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Never);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"Located nodes: [Null]")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -491,25 +513,18 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Locate))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Locate)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("label")))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>("Locate HTML nodes using selector: //label")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("selector")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("//label")))), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("ChildNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("LocatedNodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p => 
+                    p.Equals(new PropertyBagValue<string>($"Located nodes: [label]")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -533,7 +548,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
     }
 
     [Test]
-    public void LocatorReturnsItSelfWhenNoResults()
+    public void LocatorThrowsExceptionWhenNoResults()
     {
         // Arrange
         var nodes = HtmlContentTestsHelpers.CreateHtmlNodeCollection(count: 3);
@@ -543,11 +558,8 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             context: HtmlContentTestsHelpers.CreateTestContext());
         htmlLocator.First();
 
-        // Act
-        var newLocator = htmlLocator.Locate(XPathExpression.Compile("//notfound"));
-
-        // Assert
-        Assert.That(newLocator, Is.EqualTo(htmlLocator));
+        // Act && Assert
+        Assert.Throws<ValidationException>(() => htmlLocator.Locate(XPathExpression.Compile("//notfound")));
     }
 
     [Test]
@@ -597,9 +609,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
 
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(5));
-        Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 5th index, but only 3 elements exist. This error occurred during the validation " +
-            $"of HTML data."));
+        Assert.That(exception.Message, Is.EqualTo($"Expected to access the 5th index, but only 3 elements exist."));
     }
 
     [Test]
@@ -614,9 +624,7 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
 
         // Act & Assert
         var exception = Assert.Throws<ValidationException>(() => htmlLocator.Nth(0));
-        Assert.That(exception.Message, Is.EqualTo(
-            $"Expected to access the 0th index, but only 0 elements exist. This error occurred during the validation " +
-            $"of HTML data."));
+        Assert.That(exception.Message, Is.EqualTo($"Expected to access the 0th index, but the collection is empty."));
     }
 
     [Test]
@@ -637,23 +645,17 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(htmlLocator.Nth))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(htmlLocator.Nth)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("index")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>($"{index}")))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"Advance to the {index.ToOrdinal()} HTML node")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray())))),
-                        Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nodes.Last().OriginalName.Trim())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"Located the {index.ToOrdinal()} node: {nodes.Last().OriginalName.Trim()}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -694,18 +696,14 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveCount))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(HtmlLocatorAssertions)}.{nameof(HtmlLocatorAssertions.ToHaveCount)}")))),
+                    Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("expectedCount")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>($"{count}")))), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray())))),
-                        Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"To have count: {count}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -722,25 +720,24 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
         var count = nodes.Count + 2;
 
         // Act
-        Assert.Throws<ValidationException>(() => Expect(htmlLocator).ToHaveCount(count));
+        var exception = Assert.Throws<ValidationException>(() => Expect(htmlLocator).ToHaveCount(count));
 
         // Assert
+        Assert.That(
+            exception.Message,
+            Is.EqualTo($"Expected to find {count} elements, but found {nodes.Count} instead."));
+
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveCount))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(HtmlLocatorAssertions)}.{nameof(HtmlLocatorAssertions.ToHaveCount)}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("expectedCount")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>($"{count}")))), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray())))),
-                        Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"To have count: {count}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Never);
     }
@@ -784,23 +781,19 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(
-                        new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveInnerText))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(HtmlLocatorAssertions)}.{nameof(HtmlLocatorAssertions.ToHaveInnerText)}")))),
+                    Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("innerText")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(innerText)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"To have inner text: {innerText}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("TextOptions")),
                 It.Is<IPropertyBagValue>(p =>
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("label")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -827,23 +820,19 @@ public sealed class InstrumentedHtmlLocatorTests : XpingAssertions
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(
-                        new PropertyBagValue<string>(nameof(HtmlLocatorAssertions.ToHaveInnerText))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(HtmlLocatorAssertions)}.{nameof(HtmlLocatorAssertions.ToHaveInnerText)}")))),
+                    Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("innerText")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(innerText)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"To have inner text: {innerText}")))), Times.Once);
         Mock.Get(htmlLocator.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("TextOptions")),
                 It.Is<IPropertyBagValue>(p =>
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
-        Mock.Get(htmlLocator.Context.SessionBuilder)
-            .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("CurrentNode")),
-                It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>("label")))), Times.Once);
     }
 
     [Test]

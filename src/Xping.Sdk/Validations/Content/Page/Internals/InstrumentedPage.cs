@@ -6,13 +6,13 @@
  */
 
 using System.Data;
-using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
 using Xping.Sdk.Shared;
+using Xping.Sdk.Validations.Content.Page.Internals.Helpers;
 
 namespace Xping.Sdk.Validations.Content.Page.Internals;
 
@@ -175,13 +175,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AddInitScriptAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(AddInitScriptAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(script)),
-                new PropertyBagValue<string>(script ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(scriptPath)),
-                new PropertyBagValue<string>(scriptPath ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Add initialization script"));
 
         var result = _page.AddInitScriptAsync(script, scriptPath);
 
@@ -198,7 +195,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AddScriptTagAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(AddScriptTagAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Add script tag to page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAddScriptTagOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -218,7 +218,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AddScriptTagAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(AddStyleTagAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Add style tag to page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAddStyleTagOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -238,7 +241,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(BringToFrontAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(BringToFrontAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Bring page to front"));
 
         var result = _page.BringToFrontAsync();
 
@@ -255,10 +261,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(CheckAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(CheckAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageCheckOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -278,7 +284,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ClickAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ClickAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Click element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageClickOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -298,7 +307,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(CloseAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(CloseAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Close page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageCloseOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -318,7 +330,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ContentAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ContentAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get page content"));
 
         var result = await _page.ContentAsync().ConfigureAwait(false);
 
@@ -340,10 +355,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(DblClickAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(DblClickAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Double-click element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageDblClickOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options) ?? "Null"));
@@ -367,16 +382,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(DispatchEventAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(DispatchEventAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(type)),
-                new PropertyBagValue<string>(type))
-            .Build(
-                new PropertyBagKey(key: nameof(eventInit)),
-                new PropertyBagValue<string>(eventInit?.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Dispatch event '{type}' on element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageDispatchEventOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -396,13 +405,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(DragAndDropAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(DragAndDropAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(source)),
-                new PropertyBagValue<string>(source))
-            .Build(
-                new PropertyBagKey(key: nameof(target)),
-                new PropertyBagValue<string>(target))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Drag element from '{source}' to '{target}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageDragAndDropOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -422,7 +428,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EmulateMediaAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EmulateMediaAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Emulate media"))
             .Build(
                 new PropertyBagKey(key: nameof(PageEmulateMediaOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -442,13 +451,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvalOnSelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -468,13 +475,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvalOnSelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -498,13 +503,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvalOnSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"))
@@ -527,13 +530,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvalOnSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on element matching selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -553,10 +554,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvaluateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -576,10 +577,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvaluateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -599,10 +600,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateHandleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(EvaluateHandleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Evaluate expression: {expression} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(arg)),
                 new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
@@ -622,13 +623,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(callback)),
-                new PropertyBagValue<string>(callback.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageEvalOnSelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -648,10 +646,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(callback)),
                 new PropertyBagValue<string>(callback.ToString() ?? "Null"));
@@ -671,13 +669,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(callback)),
-                new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -694,13 +689,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(callback)),
-                new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -717,13 +709,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(callback)),
-                new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -740,13 +729,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(callback)),
-                new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -761,15 +747,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeBindingAsync<T1, T2, TResult>(string name, Func<BindingSource, T1, T2, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
+            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
+            .Build(
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -784,15 +767,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeBindingAsync<T1, T2, T3, TResult>(string name, Func<BindingSource, T1, T2, T3, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
+            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
+            .Build(
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -807,15 +787,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeBindingAsync<T1, T2, T3, T4, TResult>(string name, Func<BindingSource, T1, T2, T3, T4, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeBindingAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeBindingAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose binding: {name} on page"));
 
         var result = _page.ExposeBindingAsync(name, callback);
 
@@ -830,15 +807,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync(string name, Action callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -853,15 +827,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<T>(string name, Action<T> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -876,15 +847,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<TResult>(string name, Func<TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -899,15 +867,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<T, TResult>(string name, Func<T, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -922,15 +887,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<T1, T2, TResult>(string name, Func<T1, T2, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -945,15 +907,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<T1, T2, T3, TResult>(string name, Func<T1, T2, T3, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -968,15 +927,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task ExposeFunctionAsync<T1, T2, T3, T4, TResult>(string name, Func<T1, T2, T3, T4, TResult> callback)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(ExposeFunctionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name))
-           .Build(
-               new PropertyBagKey(key: nameof(callback)),
-               new PropertyBagValue<string>(callback.ToString() ?? "Null"));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ExposeFunctionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Expose function: {name} on page"));
 
         var result = _page.ExposeFunctionAsync(name, callback);
 
@@ -991,18 +947,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task FillAsync(string selector, string value, PageFillOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FillAsync)))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(value)),
-               new PropertyBagValue<string>(value))
-           .Build(
-               new PropertyBagKey(key: nameof(PageFillOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FillAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Fill input: {selector} with value: {value} on page"))
+            .Build(
+                new PropertyBagKey(key: nameof(PageFillOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.FillAsync(selector, value, options);
 
@@ -1017,15 +970,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public Task FocusAsync(string selector, PageFocusOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(FocusAsync)))
             .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(PageFocusOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FocusAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Focus element: {selector} on page"))
+            .Build(
+                new PropertyBagKey(key: nameof(PageFocusOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.FocusAsync(selector, options);
 
@@ -1040,12 +993,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     public IFrame? Frame(string name)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(Frame)))
             .Build(
-               new PropertyBagKey(key: nameof(name)),
-               new PropertyBagValue<string>(name));
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(Frame)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get frame: {name} on page"));
 
         var result = _page.Frame(name);
 
@@ -1062,10 +1015,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FrameByUrl)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FrameByUrl)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get frame by URL: {url} on page"));
 
         var result = _page.FrameByUrl(url);
 
@@ -1082,10 +1035,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FrameByUrl)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FrameByUrl)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get frame by URL: {url} on page"));
 
         var result = _page.FrameByUrl(url);
 
@@ -1102,10 +1055,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FrameByUrl)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FrameByUrl)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get frame by URL: {url} on page"));
 
         var result = _page.FrameByUrl(url);
 
@@ -1122,10 +1075,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FrameLocator)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(FrameLocator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get frame locator: {selector} on page"));
 
         var result = _page.FrameLocator(selector);
 
@@ -1142,13 +1095,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetAttributeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetAttributeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get attribute: {name} on element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetAttributeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1157,7 +1107,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
+                new PropertyBagKey(key: "Result"),
                 new PropertyBagValue<string>(result ?? "Null"));
 
         // Create a successful test step with information about the current test operation.
@@ -1173,15 +1123,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by alt text: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByAltTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByAltText(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1196,15 +1151,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by alt text: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByAltTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByAltText(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1219,15 +1179,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by label: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByLabelOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByLabel(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1242,15 +1207,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by label: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByLabelOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByLabel(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1265,15 +1235,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by placeholder: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByPlaceholderOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByPlaceholder(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1288,15 +1263,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by placeholder: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByPlaceholderOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByPlaceholder(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1311,15 +1291,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByRole)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByRole)}"))
             .Build(
-                new PropertyBagKey(key: nameof(role)),
-                new PropertyBagValue<string>(role.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by role: {role} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByRoleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByRole(role, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1334,12 +1319,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
-        .Build(
-                new PropertyBagKey(key: nameof(testId)),
-                new PropertyBagValue<string>(testId));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByTestId)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by testId: {testId} on page"));
 
         var result = _page.GetByTestId(testId);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1354,12 +1344,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
-        .Build(
-                new PropertyBagKey(key: nameof(testId)),
-                new PropertyBagValue<string>(testId.ToString()));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByTestId)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by testId: {testId} on page"));
 
         var result = _page.GetByTestId(testId);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1374,12 +1369,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by text: {text} on page"));
 
         var result = _page.GetByText(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1394,12 +1394,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by text: {text} on page"));
 
         var result = _page.GetByText(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1414,15 +1419,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
-            .Build(
-                new PropertyBagKey(key: nameof(PageGetByTitleOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by title: {text} on page"));
 
         var result = _page.GetByTitle(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1437,15 +1444,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get element by title: {text} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGetByTitleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.GetByTitle(text, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1460,7 +1472,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GoBackAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GoBackAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Navigate back in history on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGoBackOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1480,7 +1495,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GoForwardAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GoForwardAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Navigate forward in history on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGoForwardOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1500,10 +1518,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GotoAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(GotoAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Navigate to URL: {url} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageGotoOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1523,10 +1541,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(HoverAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(HoverAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Hover over element: {selector} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageHoverOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1546,10 +1564,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerHTMLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(InnerHTMLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get inner HTML of element: {selector} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageInnerHTMLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1558,8 +1576,9 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+            new PropertyBagKey(key: "Result"),
+            new PropertyBagValue<string>(
+                $"Returned HTML length: {System.Text.Encoding.UTF8.GetByteCount(result)} bytes"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1574,10 +1593,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(InnerTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get inner text of element: {selector} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageInnerTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1586,8 +1605,9 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    $"Returned HTML length: {System.Text.Encoding.UTF8.GetByteCount(result)} bytes"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1602,10 +1622,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InputValueAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(InputValueAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get input value of element: {selector} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageInputValueOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1614,8 +1634,9 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    $"Input value: {result}, Length: {System.Text.Encoding.UTF8.GetByteCount(result)} bytes"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1630,10 +1651,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsCheckedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsCheckedAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is checked on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsCheckedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1641,9 +1662,9 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         var result = await _page.IsCheckedAsync(selector, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-            .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+             .Build(
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Is checked: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1658,10 +1679,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsDisabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsDisabledAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is disabled on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsDisabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1670,8 +1691,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is disabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1686,10 +1707,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEditableAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsEditableAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is editable on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsEditableOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1698,8 +1719,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is editable: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1714,10 +1735,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEnabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsEnabledAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is enabled on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsEnabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1726,8 +1747,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is enabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1742,10 +1763,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsHiddenAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsHiddenAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is hidden on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsHiddenOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1754,8 +1775,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is hidden: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1770,10 +1791,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsVisibleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(IsVisibleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Check if element: {selector} is visible on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageIsVisibleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1782,8 +1803,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is visible: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1798,15 +1819,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locator)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(Locator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Locate element: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageLocatorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = _page.Locator(selector, options);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Locator with {result} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1821,7 +1847,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(OpenerAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(OpenerAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get opener for page"));
 
         var result = await _page.OpenerAsync().ConfigureAwait(false);
 
@@ -1833,34 +1862,38 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result != null ? new InstrumentedPage(_context, result) : null;
     }
 
-    public Task PauseAsync()
+    public async Task PauseAsync()
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(PauseAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(PauseAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Pauses script execution"));
 
-        var result = _page.OpenerAsync();
+        await _page.PauseAsync().ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<byte[]> PdfAsync(PagePdfOptions? options = null)
+    public async Task<byte[]> PdfAsync(PagePdfOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(PdfAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(PdfAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Generate PDF for page"))
             .Build(
                 new PropertyBagKey(key: nameof(PagePdfOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.PdfAsync(options);
+        var result = await _page.PdfAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1875,13 +1908,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(PressAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(PressAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(key)),
-                new PropertyBagValue<string>(key))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Press '{key}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PagePressOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1901,12 +1931,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(QuerySelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query all elements matching: {selector} on page"));
 
         var result = await _page.QuerySelectorAllAsync(selector).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Returned {result.Count} matching elements"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1921,15 +1956,21 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(QuerySelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query element matching: {selector} on page"))
             .Build(
                 new PropertyBagKey(key: nameof(PageQuerySelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _page.QuerySelectorAsync(selector, options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    result != null ? "Element found." : "No matching element found."));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1944,10 +1985,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ReloadAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ReloadAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(PageReloadOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Reload page with options: {JsonSerializer.Serialize(options)}"));
 
         var result = _page.ReloadAsync(options);
 
@@ -1959,201 +2000,155 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task RouteAsync(string url, Action<IRoute> handler, PageRouteOptions? options = null)
+    public async Task RouteAsync(string url, Action<IRoute> handler, PageRouteOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteAsync(Regex url, Action<IRoute> handler, PageRouteOptions? options = null)
+    public async Task RouteAsync(Regex url, Action<IRoute> handler, PageRouteOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
+
+        // Create a successful test step with information about the current test operation.
+        var testStep = _context.SessionBuilder.Build();
+
+        // Report the progress of this test step.
+        _context.Progress?.Report(testStep);
+    }
+
+    public async Task RouteAsync(Func<string, bool> url, Action<IRoute> handler, PageRouteOptions? options = null)
+    {
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
+
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteAsync(Func<string, bool> url, Action<IRoute> handler, PageRouteOptions? options = null)
+    public async Task RouteAsync(string url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteAsync(string url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
+    public async Task RouteAsync(Regex url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteAsync(Regex url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
+    public async Task RouteAsync(Func<string, bool> url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route URL: {url} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteAsync(url, handler, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteAsync(Func<string, bool> url, Func<IRoute, Task> handler, PageRouteOptions? options = null)
+    public async Task RouteFromHARAsync(string har, PageRouteFromHAROptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteFromHARAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteOptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Route from HAR: {har} with options: {JsonSerializer.Serialize(options)}"));
 
-        var result = _page.RouteAsync(url, handler, options);
+        await _page.RouteFromHARAsync(har, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task RouteFromHARAsync(string har, PageRouteFromHAROptions? options = null)
-    {
-        _context.SessionBuilder
-            .Build(
-                new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteFromHARAsync)))
-            .Build(
-                new PropertyBagKey(key: nameof(har)),
-                new PropertyBagValue<string>(har))
-            .Build(
-                new PropertyBagKey(key: nameof(PageRouteFromHAROptions)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
-
-        var result = _page.RouteFromHARAsync(har, options);
-
-        // Create a successful test step with information about the current test operation.
-        var testStep = _context.SessionBuilder.Build();
-        // Report the progress of this test step.
-        _context.Progress?.Report(testStep);
-
-        return result;
-    }
-
-    public Task<IConsoleMessage> RunAndWaitForConsoleMessageAsync(
+    public async Task<IConsoleMessage> RunAndWaitForConsoleMessageAsync(
         Func<Task> action,
         PageRunAndWaitForConsoleMessageOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForConsoleMessageAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForConsoleMessageAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for console message"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForConsoleMessageOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForConsoleMessageAsync(action, options);
+        var result = await _page.RunAndWaitForConsoleMessageAsync(action, options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Console message: {result.Text}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2163,22 +2158,28 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IDownload> RunAndWaitForDownloadAsync(
+    public async Task<IDownload> RunAndWaitForDownloadAsync(
         Func<Task> action,
         PageRunAndWaitForDownloadOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForDownloadAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForDownloadAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for download"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForDownloadOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForDownloadAsync(action, options);
+        var result = await _page.RunAndWaitForDownloadAsync(action, options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    $"Download URL: {result.Url}, Suggested filename: {result.SuggestedFilename}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2188,22 +2189,30 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IFileChooser> RunAndWaitForFileChooserAsync(
+    public async Task<IFileChooser> RunAndWaitForFileChooserAsync(
         Func<Task> action,
         PageRunAndWaitForFileChooserOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForFileChooserAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForFileChooserAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for file chooser"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForFileChooserOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForFileChooserAsync(action, options);
+        var result = await _page.RunAndWaitForFileChooserAsync(action, options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    result.IsMultiple
+                        ? $"File chooser with multiple selection enabled."
+                        : $"File chooser with single selection enabled."));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2214,22 +2223,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     }
 
     [Obsolete("Use IPage.WaitForURLAsync instead")]
-    public Task<IResponse?> RunAndWaitForNavigationAsync(
+    public async Task<IResponse?> RunAndWaitForNavigationAsync(
         Func<Task> action,
         PageRunAndWaitForNavigationOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForNavigationAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForNavigationAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for navigation"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForNavigationOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForNavigationAsync(action, options);
+        var result = await _page.RunAndWaitForNavigationAsync(action, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2239,20 +2248,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IPage> RunAndWaitForPopupAsync(Func<Task> action, PageRunAndWaitForPopupOptions? options = null)
+    public async Task<IPage> RunAndWaitForPopupAsync(Func<Task> action, PageRunAndWaitForPopupOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForPopupAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForPopupAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for popup"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForPopupOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForPopupAsync(action, options);
+        var result = await _page.RunAndWaitForPopupAsync(action, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2262,7 +2271,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> RunAndWaitForRequestAsync(
+    public async Task<IRequest> RunAndWaitForRequestAsync(
         Func<Task> action,
         string urlOrPredicate,
         PageRunAndWaitForRequestOptions? options = null)
@@ -2270,18 +2279,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RunAndWaitForRequestAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForRequestAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(action)),
-                new PropertyBagValue<string>(action.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Run action and wait for request"))
             .Build(
                 new PropertyBagKey(key: nameof(PageRunAndWaitForRequestOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2291,7 +2297,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> RunAndWaitForRequestAsync(
+    public async Task<IRequest> RunAndWaitForRequestAsync(
         Func<Task> action,
         Regex urlOrPredicate,
         PageRunAndWaitForRequestOptions? options = null)
@@ -2299,18 +2305,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForRequestAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForRequestAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(urlOrPredicate)),
-               new PropertyBagValue<string>(urlOrPredicate.ToString()))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for request"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForRequestOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2320,7 +2323,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> RunAndWaitForRequestAsync(
+    public async Task<IRequest> RunAndWaitForRequestAsync(
         Func<Task> action,
         Func<IRequest, bool> urlOrPredicate,
         PageRunAndWaitForRequestOptions? options = null)
@@ -2328,18 +2331,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForRequestAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForRequestAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(urlOrPredicate)),
-               new PropertyBagValue<string>(urlOrPredicate.ToString() ?? "Null"))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for request"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForRequestOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForRequestAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2349,22 +2349,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> RunAndWaitForRequestFinishedAsync(
+    public async Task<IRequest> RunAndWaitForRequestFinishedAsync(
         Func<Task> action,
         PageRunAndWaitForRequestFinishedOptions? options = null)
     {
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForRequestFinishedAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForRequestFinishedAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for request to finish"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForRequestFinishedOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForRequestFinishedAsync(action, options);
+        var result = await _page.RunAndWaitForRequestFinishedAsync(action, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2374,7 +2374,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> RunAndWaitForResponseAsync(
+    public async Task<IResponse> RunAndWaitForResponseAsync(
         Func<Task> action,
         string urlOrPredicate,
         PageRunAndWaitForResponseOptions? options = null)
@@ -2382,18 +2382,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForResponseAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForResponseAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(urlOrPredicate)),
-               new PropertyBagValue<string>(urlOrPredicate))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for response"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForResponseOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2403,7 +2400,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> RunAndWaitForResponseAsync(
+    public async Task<IResponse> RunAndWaitForResponseAsync(
         Func<Task> action,
         Regex urlOrPredicate,
         PageRunAndWaitForResponseOptions? options = null)
@@ -2411,18 +2408,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForResponseAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForResponseAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(urlOrPredicate)),
-               new PropertyBagValue<string>(urlOrPredicate.ToString()))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for response"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForResponseOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2432,7 +2426,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> RunAndWaitForResponseAsync(
+    public async Task<IResponse> RunAndWaitForResponseAsync(
         Func<Task> action,
         Func<IResponse, bool> urlOrPredicate,
         PageRunAndWaitForResponseOptions? options = null)
@@ -2440,18 +2434,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForResponseAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForResponseAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
-           .Build(
-               new PropertyBagKey(key: nameof(urlOrPredicate)),
-               new PropertyBagValue<string>(urlOrPredicate.ToString() ?? "Null"))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for response"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForResponseOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options);
+        var result = await _page.RunAndWaitForResponseAsync(action, urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2461,22 +2452,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IWebSocket> RunAndWaitForWebSocketAsync(
+    public async Task<IWebSocket> RunAndWaitForWebSocketAsync(
         Func<Task> action,
         PageRunAndWaitForWebSocketOptions? options = null)
     {
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForWebSocketAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForWebSocketAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for WebSocket"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForWebSocketOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.RunAndWaitForWebSocketAsync(action, options);
+        var result = await _page.RunAndWaitForWebSocketAsync(action, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2491,10 +2482,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
            .Build(
                new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(RunAndWaitForWorkerAsync)))
+               new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RunAndWaitForWorkerAsync)}"))
            .Build(
-               new PropertyBagKey(key: nameof(action)),
-               new PropertyBagValue<string>(action.ToString() ?? "Null"))
+               new PropertyBagKey(key: "DisplayName"),
+               new PropertyBagValue<string>($"Run action and wait for worker"))
            .Build(
                new PropertyBagKey(key: nameof(PageRunAndWaitForWorkerOptions)),
                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2509,17 +2500,25 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<byte[]> ScreenshotAsync(PageScreenshotOptions? options = null)
+    public async Task<byte[]> ScreenshotAsync(PageScreenshotOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ScreenshotAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(ScreenshotAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Take a screenshot"))
             .Build(
                 new PropertyBagKey(key: nameof(PageScreenshotOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.ScreenshotAsync(options);
+        var result = await _page.ScreenshotAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Screenshot taken. Size: {result.Length} bytes"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2535,25 +2534,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         PageSelectOptionOptions? options = null)
     {
         _context.SessionBuilder
-           .Build(
-               new PropertyBagKey(key: "MethodName"),
-               new PropertyBagValue<string>(nameof(SelectOptionAsync)))
-           .Build(
-               new PropertyBagKey(key: nameof(selector)),
-               new PropertyBagValue<string>(selector))
-           .Build(
-               new PropertyBagKey(key: nameof(values)),
-               new PropertyBagValue<string>(values))
-           .Build(
-               new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
-               new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
+            .Build(
+                new PropertyBagKey(key: "MethodName"),
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option '{values}' on element matching '{selector}'"))
+            .Build(
+                new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
+                new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _page.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2573,13 +2569,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(argHandle.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option '{values}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2588,8 +2581,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2607,13 +2600,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(values.ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Select option(s) '{string.Join(',', values)}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2622,8 +2613,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2641,13 +2632,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(values)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Select option {values.FormatSelectOptionValue()} on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2655,9 +2644,9 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         var result = await _page.SelectOptionAsync(selector, values, options).ConfigureAwait(false);
 
         _context.SessionBuilder
-             .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2679,13 +2668,12 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(argValues.Select(v => v.ToString() ?? "Null").ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Select options [{string.Join(", ", argValues.Select(v => v.ToString() ?? "Null"))}] on element " +
+                    $"matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2694,8 +2682,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2713,13 +2701,13 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(values.Select(v => JsonSerializer.Serialize(v)).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Select options [{string.Join(", ",
+                        values.Select(SelectOptionValueFormatter.FormatSelectOptionValue))}] on element " +
+                    $"matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -2728,8 +2716,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
              .Build(
-                 new PropertyBagKey(key: "Options"),
-                 new PropertyBagValue<string[]>([.. result]));
+                 new PropertyBagKey(key: "Result"),
+                 new PropertyBagValue<string>($"Selected options: {string.Join(", ", result)}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -2739,53 +2727,46 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task SetCheckedAsync(string selector, bool checkedState, PageSetCheckedOptions? options = null)
+    public async Task SetCheckedAsync(string selector, bool checkedState, PageSetCheckedOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetCheckedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetCheckedAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(checkedState)),
-                new PropertyBagValue<string>(checkedState.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set checked state to '{checkedState}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetCheckedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetCheckedAsync(selector, checkedState, options);
+        await _page.SetCheckedAsync(selector, checkedState, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetContentAsync(string html, PageSetContentOptions? options = null)
+    public async Task SetContentAsync(string html, PageSetContentOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetContentAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetContentAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(html)),
-                new PropertyBagValue<string>(html))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set page content to HTML of length {html.Length}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetContentOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetContentAsync(html, options);
+        await _page.SetContentAsync(html, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     public void SetDefaultNavigationTimeout(float timeout)
@@ -2793,10 +2774,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetDefaultNavigationTimeout)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetDefaultNavigationTimeout)}"))
             .Build(
-                new PropertyBagKey(key: nameof(timeout)),
-                new PropertyBagValue<string>(timeout.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set default navigation timeout to {timeout} ms")
+            );
 
         _page.SetDefaultNavigationTimeout(timeout);
 
@@ -2811,10 +2793,11 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetDefaultTimeout)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetDefaultTimeout)}"))
             .Build(
-                new PropertyBagKey(key: nameof(timeout)),
-                new PropertyBagValue<string>(timeout.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set default timeout to {timeout} ms")
+            );
 
         _page.SetDefaultTimeout(timeout);
 
@@ -2824,53 +2807,47 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.Progress?.Report(testStep);
     }
 
-    public Task SetExtraHTTPHeadersAsync(IEnumerable<KeyValuePair<string, string>> headers)
+    public async Task SetExtraHTTPHeadersAsync(IEnumerable<KeyValuePair<string, string>> headers)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetExtraHTTPHeadersAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetExtraHTTPHeadersAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(headers)),
-                new PropertyBagValue<string[]>(headers.Select(h => $"{h.Key}:{h.Value}").ToArray()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set extra HTTP headers: {string.Join(", ", headers.Select(h => $"{h.Key}:{h.Value}"))}"));
 
-        var result = _page.SetExtraHTTPHeadersAsync(headers);
+        await _page.SetExtraHTTPHeadersAsync(headers).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(string selector, string files, PageSetInputFilesOptions? options = null)
+    public async Task SetInputFilesAsync(string selector, string files, PageSetInputFilesOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string>(files))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input files '{files}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetInputFilesAsync(selector, files, options);
+        await _page.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(
+    public async Task SetInputFilesAsync(
         string selector,
         IEnumerable<string> files,
         PageSetInputFilesOptions? options = null)
@@ -2878,54 +2855,45 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string[]>(files.ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set input files '[{string.Join(", ", files)}]' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetInputFilesAsync(selector, files, options);
+        await _page.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(string selector, FilePayload files, PageSetInputFilesOptions? options = null)
+    public async Task SetInputFilesAsync(string selector, FilePayload files, PageSetInputFilesOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string>($"Name: {files.Name}; MimeType: {files.MimeType}"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input file '{files.Name}' on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetInputFilesAsync(selector, files, options);
+        await _page.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetInputFilesAsync(
+    public async Task SetInputFilesAsync(
         string selector,
         IEnumerable<FilePayload> files,
         PageSetInputFilesOptions? options = null)
@@ -2933,72 +2901,61 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string[]>(
-                     files.Select(f => $"Name: {f.Name}; MimeType: {f.MimeType}").ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set input files '[{string.Join(", ", files.Select(f => f.Name))}]' " +
+                    $"on element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.SetInputFilesAsync(selector, files, options);
+        await _page.SetInputFilesAsync(selector, files, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task SetViewportSizeAsync(int width, int height)
+    public async Task SetViewportSizeAsync(int width, int height)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetViewportSizeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(SetViewportSizeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(width)),
-                new PropertyBagValue<string>(width.ToString(CultureInfo.InvariantCulture)))
-            .Build(
-                new PropertyBagKey(key: nameof(height)),
-                new PropertyBagValue<string>(height.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set viewport size to {width}x{height}"));
 
-        var result = _page.SetViewportSizeAsync(width, height);
+        await _page.SetViewportSizeAsync(width, height).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task TapAsync(string selector, PageTapOptions? options = null)
+    public async Task TapAsync(string selector, PageTapOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TapAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(TapAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Tap element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageTapOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.TapAsync(selector, options);
+        await _page.TapAsync(selector, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     public async Task<string?> TextContentAsync(string selector, PageTextContentOptions? options = null)
@@ -3006,10 +2963,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TextContentAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(TextContentAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get text content of element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageTextContentOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -3018,8 +2975,8 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result ?? "Null"));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Text content: '{result ?? "null"}'"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3034,14 +2991,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TitleAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(TitleAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get page title"));
 
         var result = await _page.TitleAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Title: '{result}'"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3052,224 +3012,196 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
     }
 
     [Obsolete("Use ILocator.FillAsync instead")]
-    public Task TypeAsync(string selector, string text, PageTypeOptions? options = null)
+    public async Task TypeAsync(string selector, string text, PageTypeOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
                 new PropertyBagValue<string>(nameof(TypeAsync)))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Type text '{text}' into element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageTypeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.TypeAsync(selector, text, options);
+        await _page.TypeAsync(selector, text, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UncheckAsync(string selector, PageUncheckOptions? options = null)
+    public async Task UncheckAsync(string selector, PageUncheckOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UncheckAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UncheckAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Uncheck element matching '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageUncheckOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.UncheckAsync(selector, options);
+        await _page.UncheckAsync(selector, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAllAsync(PageUnrouteAllOptions? options = null)
+    public async Task UnrouteAllAsync(PageUnrouteAllOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAllAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute all routes"))
             .Build(
                 new PropertyBagKey(key: nameof(PageUnrouteAllOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.UnrouteAllAsync(options);
+        await _page.UnrouteAllAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(string url, Action<IRoute>? handler = null)
+    public async Task UnrouteAsync(string url, Action<IRoute>? handler = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(Regex url, Action<IRoute>? handler = null)
+    public async Task UnrouteAsync(Regex url, Action<IRoute>? handler = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL pattern '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(Func<string, bool> url, Action<IRoute>? handler = null)
+    public async Task UnrouteAsync(Func<string, bool> url, Action<IRoute>? handler = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL predicate '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(string url, Func<IRoute, Task> handler)
+    public async Task UnrouteAsync(string url, Func<IRoute, Task> handler)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(Regex url, Func<IRoute, Task> handler)
+    public async Task UnrouteAsync(Regex url, Func<IRoute, Task> handler)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL pattern '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task UnrouteAsync(Func<string, bool> url, Func<IRoute, Task> handler)
+    public async Task UnrouteAsync(Func<string, bool> url, Func<IRoute, Task> handler)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UnrouteAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(UnrouteAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Unroute for URL predicate '{url}'"));
 
-        var result = _page.UnrouteAsync(url, handler);
+        await _page.UnrouteAsync(url, handler).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<IConsoleMessage> WaitForConsoleMessageAsync(PageWaitForConsoleMessageOptions? options = null)
+    public async Task<IConsoleMessage> WaitForConsoleMessageAsync(PageWaitForConsoleMessageOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForConsoleMessageAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForConsoleMessageAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for console message"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForConsoleMessageOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForConsoleMessageAsync(options);
+        var result = await _page.WaitForConsoleMessageAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Console message: '{result.Text}' of type '{result.Type}'"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3279,17 +3211,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IDownload> WaitForDownloadAsync(PageWaitForDownloadOptions? options = null)
+    public async Task<IDownload> WaitForDownloadAsync(PageWaitForDownloadOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForDownloadAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForDownloadAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for download"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForDownloadOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForDownloadAsync(options);
+        var result = await _page.WaitForDownloadAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3299,17 +3234,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IFileChooser> WaitForFileChooserAsync(PageWaitForFileChooserOptions? options = null)
+    public async Task<IFileChooser> WaitForFileChooserAsync(PageWaitForFileChooserOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForFileChooserAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForFileChooserAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for file chooser"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForFileChooserOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForFileChooserAsync(options);
+        var result = await _page.WaitForFileChooserAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3319,7 +3257,7 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IJSHandle> WaitForFunctionAsync(
+    public async Task<IJSHandle> WaitForFunctionAsync(
         string expression,
         object? arg = null,
         PageWaitForFunctionOptions? options = null)
@@ -3327,18 +3265,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForFunctionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForFunctionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for function '{expression}' to return a truthy value"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForFunctionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForFunctionAsync(expression, arg, options);
+        var result = await _page.WaitForFunctionAsync(expression, arg, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3348,41 +3283,48 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task WaitForLoadStateAsync(LoadState? state = null, PageWaitForLoadStateOptions? options = null)
+    public async Task WaitForLoadStateAsync(LoadState? state = null, PageWaitForLoadStateOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForLoadStateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForLoadStateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(state)),
-                new PropertyBagValue<string>(state?.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for load state '{state ?? LoadState.Load}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForLoadStateOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForLoadStateAsync(state, options);
+        await _page.WaitForLoadStateAsync(state, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
     [Obsolete("Use IPage.WaitForURLAsync instead")]
-    public Task<IResponse?> WaitForNavigationAsync(PageWaitForNavigationOptions? options = null)
+    public async Task<IResponse?> WaitForNavigationAsync(PageWaitForNavigationOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForNavigationAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForNavigationAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for navigation"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForNavigationOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForNavigationAsync(options);
+        var result = await _page.WaitForNavigationAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    $"Navigation response: '{result?.Url ?? "null"}' status {result?.Status}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3397,7 +3339,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForPopupAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForPopupAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for popup"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForPopupOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -3412,20 +3357,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return new InstrumentedPage(_context, result);
     }
 
-    public Task<IRequest> WaitForRequestAsync(string urlOrPredicate, PageWaitForRequestOptions? options = null)
+    public async Task<IRequest> WaitForRequestAsync(string urlOrPredicate, PageWaitForRequestOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForRequestAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForRequestAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for request matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForRequestOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForRequestAsync(urlOrPredicate, options);
+        var result = await _page.WaitForRequestAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3435,20 +3380,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> WaitForRequestAsync(Regex urlOrPredicate, PageWaitForRequestOptions? options = null)
+    public async Task<IRequest> WaitForRequestAsync(Regex urlOrPredicate, PageWaitForRequestOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForRequestAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForRequestAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for request matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForRequestOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForRequestAsync(urlOrPredicate, options);
+        var result = await _page.WaitForRequestAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3458,22 +3403,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> WaitForRequestAsync(
+    public async Task<IRequest> WaitForRequestAsync(
         Func<IRequest, bool> urlOrPredicate,
         PageWaitForRequestOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForRequestAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForRequestAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for request matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForRequestOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForRequestAsync(urlOrPredicate, options);
+        var result = await _page.WaitForRequestAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3483,17 +3428,17 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IRequest> WaitForRequestFinishedAsync(PageWaitForRequestFinishedOptions? options = null)
+    public async Task<IRequest> WaitForRequestFinishedAsync(PageWaitForRequestFinishedOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForRequestFinishedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForRequestFinishedAsync)}"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForRequestFinishedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForRequestFinishedAsync(options);
+        var result = await _page.WaitForRequestFinishedAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3503,20 +3448,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> WaitForResponseAsync(string urlOrPredicate, PageWaitForResponseOptions? options = null)
+    public async Task<IResponse> WaitForResponseAsync(string urlOrPredicate, PageWaitForResponseOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForResponseAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForResponseAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for response matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForResponseOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForResponseAsync(urlOrPredicate, options);
+        var result = await _page.WaitForResponseAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3526,20 +3471,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> WaitForResponseAsync(Regex urlOrPredicate, PageWaitForResponseOptions? options = null)
+    public async Task<IResponse> WaitForResponseAsync(Regex urlOrPredicate, PageWaitForResponseOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForResponseAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForResponseAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for response matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForResponseOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForResponseAsync(urlOrPredicate, options);
+        var result = await _page.WaitForResponseAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3549,22 +3494,22 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IResponse> WaitForResponseAsync(
+    public async Task<IResponse> WaitForResponseAsync(
         Func<IResponse, bool> urlOrPredicate,
         PageWaitForResponseOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForResponseAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForResponseAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(urlOrPredicate)),
-                new PropertyBagValue<string>(urlOrPredicate.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for response matching '{urlOrPredicate}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForResponseOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForResponseAsync(urlOrPredicate, options);
+        var result = await _page.WaitForResponseAsync(urlOrPredicate, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3581,10 +3526,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for selector '{selector}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForSelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -3599,106 +3544,101 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result != null ? new InstrumentedElementHandle(_context, result) : null;
     }
 
-    public Task WaitForTimeoutAsync(float timeout)
+    public async Task WaitForTimeoutAsync(float timeout)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForTimeoutAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForTimeoutAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(timeout)),
-                new PropertyBagValue<string>(timeout.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for timeout of {timeout} ms"));
 
-        var result = _page.WaitForTimeoutAsync(timeout);
+        await _page.WaitForTimeoutAsync(timeout).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(string url, PageWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(string url, PageWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for URL '{url}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForURLAsync(url, options);
+        await _page.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(Regex url, PageWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(Regex url, PageWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for URL pattern '{url}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForURLAsync(url, options);
+        await _page.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task WaitForURLAsync(Func<string, bool> url, PageWaitForURLOptions? options = null)
+    public async Task WaitForURLAsync(Func<string, bool> url, PageWaitForURLOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForURLAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForURLAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for URL matching predicate"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForURLOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForURLAsync(url, options);
+        await _page.WaitForURLAsync(url, options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
-
-        return result;
     }
 
-    public Task<IWebSocket> WaitForWebSocketAsync(PageWaitForWebSocketOptions? options = null)
+    public async Task<IWebSocket> WaitForWebSocketAsync(PageWaitForWebSocketOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForWebSocketAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForWebSocketAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for WebSocket"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForWebSocketOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForWebSocketAsync(options);
+        var result = await _page.WaitForWebSocketAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3708,17 +3648,20 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         return result;
     }
 
-    public Task<IWorker> WaitForWorkerAsync(PageWaitForWorkerOptions? options = null)
+    public async Task<IWorker> WaitForWorkerAsync(PageWaitForWorkerOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForWorkerAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(WaitForWorkerAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for worker"))
             .Build(
                 new PropertyBagKey(key: nameof(PageWaitForWorkerOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
-        var result = _page.WaitForWorkerAsync(options);
+        var result = await _page.WaitForWorkerAsync(options).ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -3733,13 +3676,15 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RequestGCAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RequestGCAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Request garbage collection"));
 
         await _page.RequestGCAsync().ConfigureAwait(false);
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
-
         // Report the progress of this test step.
         _context.Progress?.Report(testStep);
     }
@@ -3750,10 +3695,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AddLocatorHandlerAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(AddLocatorHandlerAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(locator)),
-                new PropertyBagValue<string>(locator.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Add locator handler for locator '{locator}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAddLocatorHandlerOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -3771,10 +3716,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RemoveLocatorHandlerAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RemoveLocatorHandlerAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(locator)),
-                new PropertyBagValue<string>(locator.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Remove locator handler for locator '{locator}'"));
 
         // Assuming there is a method to remove locator handler in the _page object
         await _page.RemoveLocatorHandlerAsync(locator).ConfigureAwait(false);
@@ -3790,13 +3735,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteWebSocketAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route WebSocket for URL '{url}'"));
 
         await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
 
@@ -3811,13 +3753,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteWebSocketAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString()))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route WebSocket for URL pattern '{url}'"));
 
         await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
 
@@ -3832,13 +3771,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(RouteWebSocketAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(RouteWebSocketAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(url)),
-                new PropertyBagValue<string>(url.ToString() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(handler)),
-                new PropertyBagValue<string>(handler.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Route WebSocket for URL pattern '{url}'"));
 
         await _page.RouteWebSocketAsync(url, handler).ConfigureAwait(false);
 
@@ -3854,10 +3790,10 @@ internal class InstrumentedPage(TestContext context, IPage page) : IPage
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AddLocatorHandlerAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedPage)}.{nameof(AddLocatorHandlerAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(locator)),
-                new PropertyBagValue<string>(locator.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Add locator handler for locator '{locator}'"))
             .Build(
                 new PropertyBagKey(key: nameof(PageAddLocatorHandlerOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));

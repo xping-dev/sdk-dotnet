@@ -108,28 +108,29 @@ public sealed class InstrumentedHtmlContentTests
     public void HasTitleBuildsTestSession()
     {
         // Arrange
-        const string expectedTitle = "Title";
+        const string expectedDisplayName = "To have title: Title";
         var instrumentedHtml = new InstrumentedHtmlContent(
-            HtmlContentTestsHelpers.GetTitleHtml(title: expectedTitle),
+            HtmlContentTestsHelpers.GetTitleHtml(title: expectedDisplayName),
             HtmlContentTestsHelpers.CreateTestContext(),
             "data-testid");
         var options = new TextOptions() { MatchCase = false, MatchWholeWord = false };
         var expect = new HtmlAssertions(instrumentedHtml);
 
         // Act
-        expect.ToHaveTitle(expectedTitle, options);
+        expect.ToHaveTitle("Title", options);
 
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(HtmlAssertions.ToHaveTitle))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(HtmlAssertions)}.{nameof(HtmlAssertions.ToHaveTitle)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("title")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(expectedTitle)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -265,7 +266,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             "No <title> node available. Ensure that the html content has <title> node before attempting " +
-            "to validate its value. This error occurred during the validation of HTML data."));
+            "to validate its value."));
     }
 
     [Test]
@@ -293,8 +294,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             "Multiple <title> nodes were found. The method expects a single <title> node under the <head> " +
-            "node. Please ensure that the HTML content contains only one <title> node for proper validation. " +
-            "This error occurred during the validation of HTML data."));
+            "node. Please ensure that the HTML content contains only one <title> node for proper validation."));
     }
 
     [Test]
@@ -321,7 +321,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             $"Expected the <title> node's inner text to be \"OtherTitle\", but the actual <title> node's inner " +
-            $"text was \"expectedTitle\". This error occurred during the validation of HTML data."));
+            $"text was \"expectedTitle\"."));
     }
 
     [Test]
@@ -329,6 +329,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         int maxSizeInBytes = 150;
+        string expectedDisplayName = $"To have max document size: {maxSizeInBytes} bytes";
         var instrumentedHtml = new InstrumentedHtmlContent(
             HtmlContentTestsHelpers.GetTitleHtml(),
             HtmlContentTestsHelpers.CreateTestContext(),
@@ -344,12 +345,11 @@ public sealed class InstrumentedHtmlContentTests
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
                     p.Equals(new PropertyBagValue<string>(
-                        nameof(HtmlAssertions.ToHaveMaxDocumentSize))))), Times.Once);
+                        $"{nameof(HtmlAssertions)}.{nameof(HtmlAssertions.ToHaveMaxDocumentSize)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                    It.Is<PropertyBagKey>(p => p == new PropertyBagKey("maxSizeInBytes")),
-                    It.Is<IPropertyBagValue>(p =>
-                        p.Equals(new PropertyBagValue<string>(maxSizeInBytes.ToString(CultureInfo.InvariantCulture))))),
+                    It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
+                    It.Is<IPropertyBagValue>(p => p.Equals(new PropertyBagValue<string>(expectedDisplayName)))),
                 Times.Once);
     }
 
@@ -427,7 +427,7 @@ public sealed class InstrumentedHtmlContentTests
 
         Assert.That(exception.Message, Is.EqualTo(
             $"The expected HTML document size should be equal to or less than 5 bytes; however, " +
-            $"the actual size was {byteCount} bytes. This error occurred during the validation of HTML data."));
+            $"the actual size was {byteCount} bytes."));
     }
 
     [Test]
@@ -449,6 +449,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         const string altText = "logo";
+        const string expectedDisplayName = $"Get HTML elements by alt text: {altText}";
         var instrumentedHtml = new InstrumentedHtmlContent(
             HtmlContentTestsHelpers.GetAltHtml(altText),
             HtmlContentTestsHelpers.CreateTestContext(),
@@ -463,12 +464,13 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByAltText))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByAltText)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(altText)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -476,8 +478,9 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -527,10 +530,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"Retrieved {htmlNodeCollection.Count} node(s)")))),
+                    Times.Once);
     }
 
     [Test]
@@ -588,6 +591,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var regex = new Regex("[a-z]");
+        const string expectedDisplayName = "Get HTML elements by alt text (regex): [a-z]";
         var instrumentedHtml = new InstrumentedHtmlContent(
             HtmlContentTestsHelpers.GetAltHtml("alt-text"),
             HtmlContentTestsHelpers.CreateTestContext(),
@@ -601,16 +605,18 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByAltText))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByAltText)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(regex.ToString())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -639,10 +645,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved {htmlNodeCollection.Count} node(s)")))), Times.Once);
     }
 
     [Test]
@@ -700,6 +706,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var label = "password";
+        const string expectedDisplayName = "Get HTML elements by label text: password";
         var instrumentedHtml = new InstrumentedHtmlContent(
             HtmlContentTestsHelpers.GetLabelHtml(),
             HtmlContentTestsHelpers.CreateTestContext(),
@@ -714,12 +721,13 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByLabel))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByLabel)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(label)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -727,8 +735,9 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -778,10 +787,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>($"Retrieved {htmlNodeCollection.Count} node(s)")))),
+                    Times.Once);
     }
 
     [Test]
@@ -839,6 +848,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var text = "name@example.com";
+        string expectedDisplayName = $"Get HTML elements by placeholder text: {text}";
         var instrumentedHtml = new InstrumentedHtmlContent(
             data: HtmlContentTestsHelpers.GetPlaceholderHtml(),
             context: HtmlContentTestsHelpers.CreateTestContext(),
@@ -853,12 +863,14 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByPlaceholder))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByPlaceholder)}")))),
+                    Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(text)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -866,8 +878,10 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -917,10 +931,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved {htmlNodeCollection.Count} node(s)")))), Times.Once);
     }
 
     [Test]
@@ -978,6 +992,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var text = "directions";
+        string expectedDisplayName = $"Get HTML elements by test ID: {text}";
         var instrumentedHtml = new InstrumentedHtmlContent(
             data: HtmlContentTestsHelpers.GetTestIdHtml(),
             context: HtmlContentTestsHelpers.CreateTestContext(),
@@ -992,12 +1007,13 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByTestId))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByTestId)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(text)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(expectedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -1005,8 +1021,9 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p => p.Equals(
+                    new PropertyBagValue<string>("Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -1056,10 +1073,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved {htmlNodeCollection.Count} node(s)")))), Times.Once);
     }
 
     [Test]
@@ -1117,6 +1134,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var text = "Issues count";
+        string exactedDisplayName = $"Get HTML elements by title attribute: {text}";
         var instrumentedHtml = new InstrumentedHtmlContent(
             data: HtmlContentTestsHelpers.GetTitleAttirbuteHtml(),
             context: HtmlContentTestsHelpers.CreateTestContext(),
@@ -1131,12 +1149,13 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.GetByTitle))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.GetByTitle)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("text")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(text)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(exactedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(TextOptions))),
@@ -1144,8 +1163,9 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>("Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -1195,10 +1215,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved {htmlNodeCollection.Count} node(s)")))), Times.Once);
     }
 
     [Test]
@@ -1256,6 +1276,7 @@ public sealed class InstrumentedHtmlContentTests
     {
         // Arrange
         var selector = XPathExpression.Compile("//button");
+        string exactedDisplayName = $"Get HTML elements by XPath expression: {selector.Expression}";
         var instrumentedHtml = new InstrumentedHtmlContent(
             data: HtmlContentTestsHelpers.GetLocatorHtml(),
             context: HtmlContentTestsHelpers.CreateTestContext(),
@@ -1270,12 +1291,13 @@ public sealed class InstrumentedHtmlContentTests
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey("MethodName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(nameof(instrumentedHtml.Locator))))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"{nameof(InstrumentedHtmlContent)}.{nameof(instrumentedHtml.Locator)}")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("selector")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("DisplayName")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string>(selector.ToString()!)))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(exactedDisplayName)))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
                 It.Is<PropertyBagKey>(p => p == new PropertyBagKey(nameof(FilterOptions))),
@@ -1283,8 +1305,9 @@ public sealed class InstrumentedHtmlContentTests
                     p.Equals(new PropertyBagValue<string>(options.ToString())))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
-                It.IsAny<IPropertyBagValue>()), Times.Once);
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
+                It.Is<IPropertyBagValue>(p =>
+                    p.Equals(new PropertyBagValue<string>($"Retrieved 1 node(s)")))), Times.Once);
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(), Times.Once);
     }
@@ -1334,10 +1357,10 @@ public sealed class InstrumentedHtmlContentTests
         // Assert
         Mock.Get(instrumentedHtml.Context.SessionBuilder)
             .Verify(m => m.Build(
-                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Nodes")),
+                It.Is<PropertyBagKey>(p => p == new PropertyBagKey("Result")),
                 It.Is<IPropertyBagValue>(p =>
-                    p.Equals(new PropertyBagValue<string[]>(
-                        htmlNodeCollection.Select(n => n.OriginalName.Trim()).ToArray())))), Times.Once);
+                    p.Equals(new PropertyBagValue<string>(
+                        $"Retrieved {htmlNodeCollection.Count} node(s)")))), Times.Once);
     }
 
     [Test]

@@ -37,10 +37,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by alt text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -48,13 +48,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByAltTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -67,21 +67,24 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByAltText)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByAltText)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by alt text (regex): {text}"))
+            .Build(
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var selector = CreateByAltRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         
         // Report the progress of this test step.
@@ -95,10 +98,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by label text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -106,13 +109,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByLabelTextSelector(text);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -125,21 +128,24 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByLabel)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByLabel)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by label text (regex): {text}"))
+            .Build(
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var selector = CreateByLabelRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -152,10 +158,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by placeholder text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -163,13 +169,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByPlaceholderTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -182,21 +188,24 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByPlaceholder)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByPlaceholder)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by placeholder text (regex): {text}"))
+            .Build(
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var selector = CreateByPlaceholderRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -209,10 +218,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByTestId)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by test ID: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -220,13 +229,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTestIdTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -239,21 +248,24 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTestId)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByTestId)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by test ID (regex): {text}"))
+            .Build(
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var selector = CreateByTestIdRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -266,10 +278,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by title attribute: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(TextOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -277,13 +289,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         var selector = CreateByTitleTextSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -296,21 +308,24 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetByTitle)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(GetByTitle)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text.ToString()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by title attribute (regex): {text}"))
+            .Build(
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         var selector = CreateByTitleRegexSelector(text, options);
         var nodes = selector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -323,10 +338,10 @@ internal class InstrumentedHtmlContent : IHtmlContent
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locator)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlContent)}.{nameof(Locator)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get HTML elements by XPath expression: {selector.Expression}"))
             .Build(
                 new PropertyBagKey(key: nameof(FilterOptions)),
                 new PropertyBagValue<string>(options?.ToString() ?? "Null"));
@@ -334,13 +349,13 @@ internal class InstrumentedHtmlContent : IHtmlContent
         XPathSelector xpathSelector = new(selector);
         var nodes = xpathSelector.Select(Document.DocumentNode) ?? throw new ValidationException(
             $"No nodes were found using the locator. Ensure that the HTML content has the appropriate nodes " +
-            $"before attempting to perform the selection. This error occurred during the validation of HTML data.");
+            $"before attempting to perform the selection.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(nodes.Select(n => n.OriginalName.Trim()).ToArray()))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Retrieved {nodes.Count} node(s)"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);

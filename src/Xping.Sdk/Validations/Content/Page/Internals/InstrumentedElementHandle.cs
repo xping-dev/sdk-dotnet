@@ -26,7 +26,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(AsElement)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(AsElement)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("As Element"));
 
         var result = _handle.AsElement();
 
@@ -43,7 +46,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(BoundingBoxAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(BoundingBoxAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get bounding box"));
 
         var result = await _handle.BoundingBoxAsync().ConfigureAwait(false);
 
@@ -60,7 +66,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(CheckAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(CheckAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Check element")
+            )
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleCheckOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -78,7 +88,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ClickAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(ClickAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Click element"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleClickOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -96,7 +109,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ContentFrameAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(ContentFrameAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get content frame"));
 
         var result = await _handle.ContentFrameAsync().ConfigureAwait(false);
 
@@ -113,7 +129,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(DblClickAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(DblClickAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Double click element"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleDblClickOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -131,13 +150,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(DispatchEventAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(DispatchEventAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(type)),
-                new PropertyBagValue<string>(type))
-            .Build(
-                new PropertyBagKey(key: nameof(eventInit)),
-                new PropertyBagValue<string>(eventInit?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Dispatch event '{type}'"));
 
         await _handle.DispatchEventAsync(type, eventInit).ConfigureAwait(false);
 
@@ -152,16 +168,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvalOnSelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements matching selector: {selector}"));
 
         var result = await _handle.EvalOnSelectorAllAsync<T>(selector, expression, arg).ConfigureAwait(false);
 
@@ -178,16 +189,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvalOnSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on first element matching selector: {selector}"));
 
         var result = await _handle.EvalOnSelectorAsync<T>(selector, expression, arg).ConfigureAwait(false);
 
@@ -204,16 +210,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvalOnSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvalOnSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
-            .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on first element matching selector: {selector}"));
 
         var result = await _handle.EvalOnSelectorAsync<JsonElement?>(selector, expression, arg).ConfigureAwait(false);
 
@@ -230,13 +231,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvaluateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements"));
 
         var result = await _handle.EvaluateAsync<T>(expression, arg).ConfigureAwait(false);
 
@@ -253,13 +252,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvaluateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements"));
 
         var result = await _handle.EvaluateAsync<JsonElement?>(expression, arg).ConfigureAwait(false);
 
@@ -276,13 +273,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(EvaluateHandleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(EvaluateHandleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expression)),
-                new PropertyBagValue<string>(expression))
-            .Build(
-                new PropertyBagKey(key: nameof(arg)),
-                new PropertyBagValue<string>(arg?.ToString() ?? "Null"));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Evaluate expression: {expression} on all elements"));
 
         var result = await _handle.EvaluateHandleAsync(expression, arg).ConfigureAwait(false);
 
@@ -299,10 +294,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FillAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(FillAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Fill element with value: {value}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleFillOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -320,7 +315,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(FocusAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(FocusAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Focus element"));
 
         await _handle.FocusAsync().ConfigureAwait(false);
 
@@ -335,12 +333,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetAttributeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(GetAttributeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get attribute: {name}"));
 
         var result = await _handle.GetAttributeAsync(name).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(result ?? "null"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -355,14 +358,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetPropertiesAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(GetPropertiesAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get properties"));
 
         var result = await _handle.GetPropertiesAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Properties"),
-                new PropertyBagValue<string>(string.Join(";", result.Keys)));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"[{string.Join(",", result.Keys)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -377,10 +383,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(GetPropertyAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(GetPropertyAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(propertyName)),
-                new PropertyBagValue<string>(propertyName));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Get property: {propertyName}"));
 
         var result = await _handle.GetPropertyAsync(propertyName).ConfigureAwait(false);
 
@@ -397,7 +403,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(HoverAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(HoverAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Hover element"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleHoverOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -415,9 +424,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerHTMLAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(InnerHTMLAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get inner HTML"));
 
         var result = await _handle.InnerHTMLAsync().ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Inner HTML length: {result.Length}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -432,9 +449,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InnerTextAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(InnerTextAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get inner text"));
 
         var result = await _handle.InnerTextAsync().ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Inner text length: {result.Length}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -449,12 +474,20 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(InputValueAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(InputValueAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get input value"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleInputValueOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _handle.InputValueAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Input value: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -469,14 +502,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsCheckedAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsCheckedAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element checked"));
 
         var result = await _handle.IsCheckedAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is checked: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -491,14 +527,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsDisabledAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsDisabledAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element disabled"));
 
         var result = await _handle.IsDisabledAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is disabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -513,14 +552,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEditableAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsEditableAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element editable"));
 
         var result = await _handle.IsEditableAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is editable: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -535,14 +577,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsEnabledAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsEnabledAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element enabled"));
 
         var result = await _handle.IsEnabledAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is enabled: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -557,14 +602,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsHiddenAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsHiddenAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element hidden"));
 
         var result = await _handle.IsHiddenAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is hidden: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -579,14 +627,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(IsVisibleAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(IsVisibleAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Is element visible"));
 
         var result = await _handle.IsVisibleAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Value"),
-                new PropertyBagValue<string>(result.ToString()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Is visible: {result}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -601,7 +652,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(JsonValueAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(JsonValueAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get JSON value"));
 
         var result = await _handle.JsonValueAsync<T>().ConfigureAwait(false);
 
@@ -618,7 +672,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(OwnerFrameAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(OwnerFrameAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get owner frame"));
 
         var result = await _handle.OwnerFrameAsync().ConfigureAwait(false);
 
@@ -635,10 +692,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(PressAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(PressAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(key)),
-                new PropertyBagValue<string>(key))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Press key: {key}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandlePressOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -656,17 +713,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(QuerySelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query selector all: {selector}"));
 
         var result = await _handle.QuerySelectorAllAsync(selector).ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Count"),
-                new PropertyBagValue<string>($"{result.Count}"));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Query result: {result.Count}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -681,10 +738,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(QuerySelectorAllAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(QuerySelectorAllAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Query selector all: {selector}"));
 
         var result = await _handle.QuerySelectorAsync(selector).ConfigureAwait(false);
 
@@ -701,12 +758,20 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ScreenshotAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(ScreenshotAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Take screenshot"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleScreenshotOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
 
         var result = await _handle.ScreenshotAsync(options).ConfigureAwait(false);
+
+        _context.SessionBuilder
+            .Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Screenshot size: {result.Length} bytes"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -721,7 +786,11 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ScrollIntoViewIfNeededAsync)))
+                new PropertyBagValue<string>(
+                    $"{nameof(InstrumentedElementHandle)}.{nameof(ScrollIntoViewIfNeededAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Scroll into view if needed"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleScrollIntoViewIfNeededOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -740,10 +809,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(values))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option: {values}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -752,8 +821,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string>(string.Join(";", result)));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -769,10 +838,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(values.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option: {values}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -781,8 +850,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string>(string.Join(";", result)));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -798,10 +867,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(values.ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select options: {string.Join(", ", values)}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -810,8 +879,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string>(string.Join(";", result)));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -827,10 +896,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string>(JsonSerializer.Serialize(values)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select option: {JsonSerializer.Serialize(values)}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -839,8 +908,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string[]>([.. result]));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected option: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -856,10 +925,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(values.Select(v => v.ToString()!).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select options: {string.Join(", ", values)}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -868,8 +937,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string[]>([.. result]));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -885,10 +954,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectOptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectOptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(values.Select(v => JsonSerializer.Serialize(v)).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Select options: {JsonSerializer.Serialize(values)}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectOptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -897,8 +966,8 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Options"),
-                new PropertyBagValue<string[]>([.. result]));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Selected options: [{string.Join(", ", result)}]"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -913,7 +982,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SelectTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SelectTextAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Select text"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSelectTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -931,10 +1003,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetCheckedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SetCheckedAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(checkedState)),
-                new PropertyBagValue<string>(checkedState.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set checked state to: {checkedState}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSetCheckedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -952,10 +1024,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string>(files))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input files: {files}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -973,10 +1045,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string[]>(files.ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input files: {string.Join(", ", files)}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -994,10 +1066,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string>($"Name: {files.Name}; MimeType: {files.MimeType}"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Set input file: {files.Name}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1010,16 +1082,19 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.Progress?.Report(testStep);
     }
 
-    public async Task SetInputFilesAsync(IEnumerable<FilePayload> files, ElementHandleSetInputFilesOptions? options = null)
+    public async Task SetInputFilesAsync(
+        IEnumerable<FilePayload> files,
+        ElementHandleSetInputFilesOptions? options = null)
     {
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(SetInputFilesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(SetInputFilesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(files)),
-                new PropertyBagValue<string[]>(
-                    files.Select(f => $"Name: {f.Name}; MimeType: {f.MimeType}").ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>(
+                    $"Set input files: " +
+                    $"{ string.Join(", ", files.Select(f => $"Name: {f.Name}; MimeType: {f.MimeType}"))}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleSetInputFilesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1037,7 +1112,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TapAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(TapAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Tap element"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleTapOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1055,14 +1133,17 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TextContentAsync)));
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(TextContentAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Get text content"));
 
         var result = await _handle.TextContentAsync().ConfigureAwait(false);
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "TextContent"),
-                new PropertyBagValue<string>(result ?? "Null"));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Text content length: {result?.Length ?? 0}"));
 
         // Create a successful test step with information about the current test operation.
         var testStep = _context.SessionBuilder.Build();
@@ -1078,10 +1159,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(TypeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(TypeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(text)),
-                new PropertyBagValue<string>(text))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Type text: {text}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleTypeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1099,7 +1180,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(UncheckAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(UncheckAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Uncheck element"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleUncheckOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1117,10 +1201,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForElementStateAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(WaitForElementStateAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(state)),
-                new PropertyBagValue<string>(state.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for element state: {state}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleWaitForElementStateOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));
@@ -1139,10 +1223,10 @@ internal class InstrumentedElementHandle(TestContext context, IElementHandle han
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WaitForSelectorAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedElementHandle)}.{nameof(WaitForSelectorAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Wait for selector: {selector}"))
             .Build(
                 new PropertyBagKey(key: nameof(ElementHandleWaitForSelectorOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options)));

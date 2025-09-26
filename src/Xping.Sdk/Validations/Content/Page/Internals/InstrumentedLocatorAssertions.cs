@@ -29,7 +29,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeAttachedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeAttachedAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be attached"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeAttachedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -48,7 +51,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeCheckedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeCheckedAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be checked"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeCheckedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -67,7 +73,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeDisabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeDisabledAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be disabled"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeDisabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -86,7 +95,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeEditableAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeEditableAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be editable"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeEditableOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -105,7 +117,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeEmptyAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeEmptyAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be empty"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeEmptyOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -124,7 +139,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeEnabledAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeEnabledAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be enabled"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeEnabledOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -143,7 +161,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeFocusedAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeFocusedAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be focused"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeFocusedOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -162,7 +183,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeHiddenAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeHiddenAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be hidden"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeHiddenOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -181,7 +205,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeInViewportAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeInViewportAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be in viewport"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeInViewportOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -200,7 +227,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToBeVisibleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToBeVisibleAsync)}"))
+            .Build(
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To be visible"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToBeVisibleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -219,10 +249,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToContainTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToContainTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To contain text '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToContainTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -241,10 +271,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToContainTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToContainTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To contain text matching pattern '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToContainTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -265,10 +295,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToContainTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToContainTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To contain texts [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToContainTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -289,10 +319,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToContainTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToContainTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values.Select(v => v.ToString()).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To contain texts matching patterns [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToContainTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -312,10 +342,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAccessibleDescriptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAccessibleDescriptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(description)),
-                new PropertyBagValue<string>(description))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have accessible description '{description}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleDescriptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -335,10 +365,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAccessibleDescriptionAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAccessibleDescriptionAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(description)),
-                new PropertyBagValue<string>(description.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have accessible description matching pattern '{description}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleDescriptionOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -358,10 +388,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAccessibleNameAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAccessibleNameAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have accessible name '{name}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleNameOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -381,10 +411,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAccessibleNameAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAccessibleNameAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have accessible name matching pattern '{name}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAccessibleNameOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -404,13 +434,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAttributeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAttributeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have attribute '{name}' with value '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAttributeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -429,13 +456,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveAttributeAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveAttributeAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have attribute '{name}' with value matching pattern '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveAttributeOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -454,10 +478,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveClassAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveClassAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have class '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveClassOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -476,10 +500,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveClassAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveClassAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have class matching pattern '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveClassOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -499,10 +523,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveClassAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveClassAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have classes [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveClassOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -522,10 +546,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveClassAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveClassAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values.Select(v => v.ToString()).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have classes matching patterns [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveClassOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -544,10 +568,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveCountAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveCountAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(count)),
-                new PropertyBagValue<string>(count.ToString(CultureInfo.InvariantCulture)))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have count {count}"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveCountOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -566,13 +590,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveCSSAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveCSSAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have CSS property '{name}' with value '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveCSSOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -591,13 +612,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveCSSAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveCSSAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have CSS property '{name}' with value matching pattern '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveCSSOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -616,10 +634,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveIdAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveIdAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(id)),
-                new PropertyBagValue<string>(id))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have ID '{id}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveIdOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -638,10 +656,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveIdAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveIdAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(id)),
-                new PropertyBagValue<string>(id.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have ID matching pattern '{id}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveIdOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -661,13 +679,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveJSPropertyAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveJSPropertyAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(name)),
-                new PropertyBagValue<string>(name))
-            .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value.ToString() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have JavaScript property '{name}' with value '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveJSPropertyOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -686,10 +701,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveRoleAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveRoleAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(role)),
-                new PropertyBagValue<string>(role.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have role '{role}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveRoleOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -708,10 +723,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have text '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -730,10 +745,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have text matching pattern '{expected}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -753,10 +768,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have texts [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -776,10 +791,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveTextAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveTextAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string[]>(values.Select(v => v.ToString()).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have texts matching patterns [{string.Join(", ", values.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveTextOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -798,10 +813,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveValueAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveValueAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have value '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveValueOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -820,10 +835,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveValueAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveValueAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value.ToString()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have value matching pattern '{value}'"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveValueOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -843,10 +858,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveValuesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveValuesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(enumerable))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have values [{string.Join(", ", enumerable.Select(v => $"'{v}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveValuesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -866,10 +881,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToHaveValuesAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToHaveValuesAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(values)),
-                new PropertyBagValue<string[]>(enumerable.Select(e => e.ToString()).ToArray()))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To have values matching patterns [{string.Join(", ", enumerable.Select(e => $"'{e}'"))}]"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToHaveValuesOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))
@@ -889,10 +904,10 @@ internal class InstrumentedLocatorAssertions(TestContext context, ILocatorAssert
         _context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(ToMatchAriaSnapshotAsync)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedLocatorAssertions)}.{nameof(ToMatchAriaSnapshotAsync)}"))
             .Build(
-                new PropertyBagKey(key: nameof(expected)),
-                new PropertyBagValue<string>(expected))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"To match ARIA snapshot"))
             .Build(
                 new PropertyBagKey(key: nameof(LocatorAssertionsToMatchAriaSnapshotOptions)),
                 new PropertyBagValue<string>(JsonSerializer.Serialize(options))

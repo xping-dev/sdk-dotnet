@@ -44,18 +44,21 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(First)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(First)}"))
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(Nodes.Select(n => n.OriginalName.Trim()).ToArray()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Advance to the first HTML node"));
 
         Iterator.First();
+
+        var currentName = (Iterator.Current()?.OriginalName.Trim())
+            ?? throw new ValidationException("Expected to access the first element, but the collection is empty.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(Iterator.Current()?.OriginalName.Trim() ?? "Null"))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"First element: {currentName}"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -68,18 +71,21 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Last)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(Last)}"))
             .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(Nodes.Select(n => n.OriginalName.Trim()).ToArray()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Advance to the last HTML node"));
 
         Iterator.Last();
+
+        var currentName = (Iterator.Current()?.OriginalName.Trim())
+            ?? throw new ValidationException("Expected to access the last element, but the collection is empty.");
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(Iterator.Current()?.OriginalName.Trim() ?? "Null"))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Last element: {currentName}"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
@@ -94,10 +100,10 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Filter)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(Filter)}"))
             .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>("Filter HTML nodes"))
             .Build(
                 new PropertyBagKey(key: nameof(FilterOptions)),
                 new PropertyBagValue<string>(filter.ToString()))
@@ -109,17 +115,19 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
 
         if (currentNode != null)
         {
-            Context.SessionBuilder.Build(
-                new PropertyBagKey(key: "ChildNodes"),
-                new PropertyBagValue<string[]>(
-                    currentNode.ChildNodes.Select(n => n.OriginalName.Trim()).ToArray()));
-
             FilterSelector filterSelector = new(filter, options);
             filteredNodes = filterSelector.Select(currentNode);
 
             Context.SessionBuilder.Build(
-                new PropertyBagKey(key: "FilteredNodes"),
-                new PropertyBagValue<string[]>(filteredNodes.Select(n => n.OriginalName.Trim()).ToArray()));
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>(
+                    $"Filtered nodes: {string.Join(", ", filteredNodes.Select(n => n.OriginalName.Trim()))}"));
+        }
+        else
+        {
+            Context.SessionBuilder.Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>("Filtered nodes: Null"));
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -139,30 +147,36 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Locate)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(Locate)}"))
             .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(currentNode?.OriginalName.Trim() ?? "Null"))
-            .Build(
-                new PropertyBagKey(key: nameof(selector)),
-                new PropertyBagValue<string>(selector.Expression));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Locate HTML nodes using selector: {selector.Expression}"));
 
         HtmlNodeCollection? locatedNodes = null;
 
         if (currentNode != null)
         {
-            Context.SessionBuilder.Build(
-                new PropertyBagKey(key: "ChildNodes"),
-                new PropertyBagValue<string[]>(
-                    currentNode.ChildNodes.Select(n => n.OriginalName.Trim()).ToArray()));
-
             XPathSelector xpathSelector = new(selector);
             locatedNodes = xpathSelector.Select(currentNode);
 
+            if (locatedNodes == null || locatedNodes.Count == 0)
+            {
+                throw new ValidationException(
+                    $"Expected to locate nodes using the selector '{selector.Expression}', " +
+                    $"but no elements were found.");
+            }
+
             Context.SessionBuilder
                 .Build(
-                    new PropertyBagKey(key: "LocatedNodes"),
-                    new PropertyBagValue<string[]>(locatedNodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
+                    new PropertyBagKey(key: "Result"),
+                    new PropertyBagValue<string>(
+                        $"Located nodes: [{string.Join(", ", locatedNodes.Select(n => n.OriginalName.Trim()))}]"));
+        }
+        else
+        {
+            Context.SessionBuilder.Build(
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>("Located nodes: [Null]"));
         }
 
         // Create a successful test step with detailed information about the current state of the HTML locator.
@@ -185,44 +199,36 @@ internal class InstrumentedHtmlLocator : IHtmlLocator
         Context.SessionBuilder
             .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(Nth)))
+                new PropertyBagValue<string>($"{nameof(InstrumentedHtmlLocator)}.{nameof(Nth)}"))
             .Build(
-                new PropertyBagKey(key: nameof(index)),
-                new PropertyBagValue<string>(index.ToString(CultureInfo.InvariantCulture)))
-            .Build(
-                new PropertyBagKey(key: "Nodes"),
-                new PropertyBagValue<string[]>(Nodes.Select(n => n.OriginalName.Trim()).ToArray()));
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Advance to the {index.ToOrdinal()} HTML node"));
 
-        if (index >= Nodes.Count)
+        if (Nodes.Count == 0)
         {
             throw new ValidationException(
-                $"Expected to access the {FormatIndex(index)} index, but only {Nodes.Count} elements exist." +
-                $" This error occurred during the validation of HTML data.");
+                $"Expected to access the {index.ToOrdinal()} index, but the collection is empty.");
+        }
+        else if (index >= Nodes.Count)
+        {
+            throw new ValidationException(
+                $"Expected to access the {index.ToOrdinal()} index, but only {Nodes.Count} elements exist.");
         }
 
         Iterator.Nth(index);
 
+        var currentName = (Iterator.Current()?.OriginalName.Trim())
+            ?? throw new ValidationException("Expected to access the specified element, but the collection is empty.");
+
         // Create a successful test step with detailed information about the current state of the HTML locator.
         var testStep = Context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "CurrentNode"),
-                new PropertyBagValue<string>(Iterator.Current()?.OriginalName.Trim() ?? "Null"))
+                new PropertyBagKey(key: "Result"),
+                new PropertyBagValue<string>($"Located the {index.ToOrdinal()} node: {currentName}"))
             .Build();
         // Report the progress of this test step.
         Context.Progress?.Report(testStep);
 
         return this;
-
-        static string FormatIndex(int index)
-        {
-            var suffix = (index % 10) switch
-            {
-                1 when index % 100 != 11 => "st",
-                2 when index % 100 != 12 => "nd",
-                3 when index % 100 != 13 => "rd",
-                _ => "th",
-            };
-            return $"{index}{suffix}";
-        }
     }
 }

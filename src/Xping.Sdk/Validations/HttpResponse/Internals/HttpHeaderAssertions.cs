@@ -28,27 +28,20 @@ internal class HttpHeaderAssertions(
 
         _context.SessionBuilder
             .Build(
-                new PropertyBagKey(key: "Class"),
-                new PropertyBagValue<string>(nameof(HttpHeaderAssertions)))
-            .Build(
                 new PropertyBagKey(key: "MethodName"),
-                new PropertyBagValue<string>(nameof(WithValue)))
+                new PropertyBagValue<string>($"{nameof(HttpHeaderAssertions)}.{nameof(WithValue)}"))
             .Build(
-                new PropertyBagKey(key: "header"),
-                new PropertyBagValue<string>(_header))
+                new PropertyBagKey(key: "DisplayName"),
+                new PropertyBagValue<string>($"Validating HTTP header \"{_header}\" contains value \"{normalizedValue}\""))
             .Build(
-                new PropertyBagKey(key: nameof(value)),
-                new PropertyBagValue<string>(value))
-            .Build(
-                new PropertyBagKey(key: "normalizedValue"),
-                new PropertyBagValue<string>(normalizedValue));
+                new PropertyBagKey(key: nameof(TextOptions)),
+                new PropertyBagValue<string>(options?.ToString() ?? "Null"));
 
         if (!_values.Any(v => textComparer.Compare(v, normalizedValue)))
         {
             throw new ValidationException(
                 $"Expected to find HTTP header \"{_header}\" with value \"{normalizedValue}\", but the actual value" +
-                $"was \"{string.Join(";", _values)}\". This exception occurred as part of validating HTTP response " +
-                $"data.");
+                $"was \"{string.Join(";", _values)}\".");
         }
 
         // Create a successful test step with detailed information about the current test operation.
