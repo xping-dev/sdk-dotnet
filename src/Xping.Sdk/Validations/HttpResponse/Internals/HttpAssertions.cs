@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using Microsoft.Net.Http.Headers;
 using Xping.Sdk.Core.Common;
 using Xping.Sdk.Core.Components;
+using Xping.Sdk.Shared;
 using Xping.Sdk.Validations.TextUtils;
 using Xping.Sdk.Validations.TextUtils.Internals;
 
@@ -194,7 +195,8 @@ internal class HttpAssertions(IHttpResponse httpResponse) : IHttpAssertions
                 new PropertyBagValue<string>($"{nameof(HttpAssertions)}.{nameof(ToHaveResponseTimeLessThan)}"))
             .Build(
                 new PropertyBagKey(key: "DisplayName"),
-                new PropertyBagValue<string>($"To have response time less than: {maxDuration}"));
+                new PropertyBagValue<string>(
+                    $"To have response time < {maxDuration.GetFormattedTime(TimeSpanUnit.Millisecond)}"));
 
         if (_responseTime < maxDuration)
         {

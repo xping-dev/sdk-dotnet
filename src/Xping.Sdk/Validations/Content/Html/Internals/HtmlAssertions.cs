@@ -41,10 +41,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
 
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
-
         if (nodes == null || nodes.Count == 0)
         {
             throw new ValidationException(
@@ -86,10 +82,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var selector = CreateXPathSelector(xpath);
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
-
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
 
         if (nodes == null || nodes.Count == 0)
         {
@@ -134,10 +126,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
 
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
-
         if (nodes == null || nodes.Count == 0)
         {
             throw new ValidationException(
@@ -179,10 +167,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var selector = CreateXPathSelector(xpath);
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
-
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
 
         if (nodes == null || nodes.Count == 0)
         {
@@ -227,10 +211,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
 
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
-
         if (nodes == null || nodes.Count == 0)
         {
             throw new ValidationException(
@@ -273,10 +253,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
 
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
-
         if (nodes == null || nodes.Count == 0)
         {
             throw new ValidationException(
@@ -307,10 +283,7 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
                 new PropertyBagValue<string>($"{nameof(HtmlAssertions)}.{nameof(ToHaveMaxDocumentSize)}"))
             .Build(
                 new PropertyBagKey(key: "DisplayName"),
-                new PropertyBagValue<string>($"To have max document size: {maxSizeInBytes} bytes"))
-            .Build(
-                new PropertyBagKey(key: "MaxSizeInBytes"),
-                new PropertyBagValue<string>(maxSizeInBytes.ToString(CultureInfo.InvariantCulture)));
+                new PropertyBagValue<string>($"To have HTML content size ≤ {maxSizeInBytes} bytes"));
 
         var byteCount = _document.Encoding.GetByteCount(_document.Text);
 
@@ -349,10 +322,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var xpath = XPaths.GetMetaTag(attribute);
         var selector = CreateXPathSelector(xpath);
         var nodes = selector.Select(_document.DocumentNode);
-
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
 
         if (nodes == null || nodes.Count == 0)
         {
@@ -396,10 +365,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
 
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
-
         if (nodes == null || nodes.Count == 0)
         {
             throw new ValidationException(
@@ -441,10 +406,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var selector = CreateXPathSelector(xpath);
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
-
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
 
         switch (nodes?.Count)
         {
@@ -495,10 +456,6 @@ internal class HtmlAssertions(IHtmlContent content) : IHtmlAssertions
         var selector = CreateXPathSelector(xpath);
         var nodes = selector.Select(_document.DocumentNode);
         var textComparer = new TextComparer(options);
-
-        _context.SessionBuilder.Build(
-            new PropertyBagKey(key: "Nodes"),
-            new PropertyBagValue<string[]>(nodes?.Select(n => n.OriginalName.Trim()).ToArray() ?? ["Null"]));
 
         switch (nodes?.Count)
         {
