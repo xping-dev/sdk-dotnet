@@ -1,29 +1,55 @@
-name: CI
+name: Test Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main, develop]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['8.0.x', '9.0.x']  # Test against multiple .NET versions
+    
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build -c Release --no-restore
-    - name: Ensure browsers are installed
-      run: pwsh ./tests/Xping.Sdk.IntegrationTests/bin/Release/net8.0/playwright.ps1 install --with-deps
-    - name: Test
-      run: dotnet test -c Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory ./coverage
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+      - uses: actions/checkout@v3
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+      
+      - name: Restore dependencies
+        run: dotnet restore
+        timeout-minutes: 2
+      
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+        timeout-minutes: 2
+      
+      - name: Run Core Tests
+        run: dotnet test tests/Xping.Sdk.Core.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
+        timeout-minutes: 5
+      
+      - name: Run NUnit Adapter Tests
+        run: dotnet test tests/Xping.Sdk.NUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
+        timeout-minutes: 5
+      
+      - name: Run xUnit Adapter Tests
+        run: dotnet test tests/Xping.Sdk.XUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
+        timeout-minutes: 5
+      
+      - name: Run MSTest Adapter Tests
+        run: dotnet test tests/Xping.Sdk.MSTest.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
+        timeout-minutes: 5
+      
+      - name: Run Integration Tests
+        run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
+        timeout-minutes: 10
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
