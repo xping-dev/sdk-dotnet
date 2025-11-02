@@ -509,14 +509,14 @@ public class CalculatorTests
 ### 3.2 xUnit Adapter
 
 **Tasks:**
-- [ ] Create `Xping.Sdk.XUnit` project
-- [ ] Implement custom `ITestFramework`
-- [ ] Create custom `ITestFrameworkExecutor`
-- [ ] Implement message sink for test events
-- [ ] Extract test metadata from xUnit attributes
-- [ ] Handle theory tests with inline/member data
-- [ ] Support async tests
-- [ ] Support collection fixtures
+- [x] Create `Xping.Sdk.XUnit` project
+- [x] Implement custom `ITestFramework`
+- [x] Create custom `ITestFrameworkExecutor`
+- [x] Implement message sink for test events
+- [x] Extract test metadata from xUnit attributes
+- [x] Handle theory tests with inline/member data
+- [x] Support async tests
+- [x] Support collection fixtures
 
 **Architecture:**
 
