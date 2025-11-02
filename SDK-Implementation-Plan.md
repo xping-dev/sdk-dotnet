@@ -404,14 +404,14 @@ public sealed class FileBasedOfflineQueue : IOfflineQueue
 ### 3.1 NUnit Adapter
 
 **Tasks:**
-- [ ] Create `Xping.Sdk.NUnit` project
-- [ ] Implement `[SetUpFixture]` for global hooks
-- [ ] Create `[XpingTrack]` attribute
-- [ ] Implement `ITestAction` for per-test hooks
-- [ ] Extract test metadata from NUnit attributes
-- [ ] Handle parameterized tests
-- [ ] Handle theory tests
-- [ ] Support async tests
+- [x] Create `Xping.Sdk.NUnit` project
+- [x] Implement `[SetUpFixture]` for global hooks
+- [x] Create `[XpingTrack]` attribute
+- [x] Implement `ITestAction` for per-test hooks
+- [x] Extract test metadata from NUnit attributes
+- [x] Handle parameterized tests
+- [x] Handle theory tests
+- [x] Support async tests
 
 **Architecture:**
 
