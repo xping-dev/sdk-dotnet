@@ -187,13 +187,13 @@ public sealed class XpingConfiguration
 ### 2.1 Test Execution Collector
 
 **Tasks:**
-- [ ] Implement `ITestExecutionCollector` interface
-- [ ] Create thread-safe in-memory buffer
-- [ ] Implement automatic batching logic
-- [ ] Add time-based flush triggers
-- [ ] Implement size-based flush triggers
-- [ ] Add graceful shutdown handling
-- [ ] Implement sampling logic
+- [x] Implement `ITestExecutionCollector` interface
+- [x] Create thread-safe in-memory buffer
+- [x] Implement automatic batching logic
+- [x] Add time-based flush triggers
+- [x] Implement size-based flush triggers
+- [x] Add graceful shutdown handling
+- [x] Implement sampling logic
 
 **Interface:**
 
