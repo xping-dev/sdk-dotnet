@@ -1,6 +1,7 @@
-// <copyright file="XpingApiClient.cs" company="Xping.io">
-// Copyright (c) 2025 Xping.io. Licensed under the MIT License.
-// </copyright>
+/*
+ * © 2025 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
 
 namespace Xping.Sdk.Core.Upload;
 

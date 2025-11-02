@@ -5,6 +5,7 @@
 
 namespace Xping.Sdk.Core.Tests.Configuration;
 
+using System;
 using System.IO;
 using Xping.Sdk.Core.Configuration;
 using Microsoft.Extensions.Configuration;
