@@ -55,3 +55,4 @@ public sealed class EnvironmentInfo
     /// </summary>
     public Dictionary<string, string> CustomProperties { get; }
 }
+
