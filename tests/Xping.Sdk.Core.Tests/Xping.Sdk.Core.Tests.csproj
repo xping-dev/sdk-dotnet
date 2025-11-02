@@ -18,4 +18,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+  </ItemGroup>
+
 </Project>

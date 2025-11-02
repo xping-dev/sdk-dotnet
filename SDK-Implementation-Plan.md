@@ -18,12 +18,12 @@ This plan outlines the implementation of the Xping SDK, enabling automated test 
 ### 1.1 Repository & Project Setup
 
 **Tasks:**
-- [X] Create SDK repository structure
+- [x] Create SDK repository structure
 - [x] Set up solution file with project hierarchy
 - [x] Configure EditorConfig and code style rules
-- [X] Set up CI/CD pipeline (GitHub Actions)
+- [x] Set up CI/CD pipeline (GitHub Actions)
 - [x] Configure code coverage tools (Coverlet)
-- [ ] Set up automated testing pipeline
+- [x] Set up automated testing pipeline
 
 **Projects to Create:**
 ```
@@ -55,12 +55,12 @@ Xping.Sdk/
 ### 1.2 Core Domain Models
 
 **Tasks:**
-- [ ] Define `TestExecution` model
-- [ ] Define `TestOutcome` enumeration
-- [ ] Define `EnvironmentInfo` model
-- [ ] Define `TestMetadata` model
-- [ ] Create value objects for test identification
-- [ ] Implement model validation
+- [x] Define `TestExecution` model
+- [x] Define `TestOutcome` enumeration
+- [x] Define `EnvironmentInfo` model
+- [x] Define `TestMetadata` model
+- [x] Create value objects for test identification
+- [x] Implement model validation
 
 **Models:**
 

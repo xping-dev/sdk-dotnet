@@ -45,7 +45,7 @@ trim_trailing_whitespace = false
 [*.cs]
 
 # File header
-file_header_template = /*\n * © 2025 Xping.io. All Rights Reserved.\n * This file is part of the Xping SDK.\n *\n * License: [MIT]\n */
+file_header_template = /*\n * © 2025 Xping.io. All Rights Reserved.\n * License: [MIT]\n */
 
 #### Core EditorConfig Options ####
 

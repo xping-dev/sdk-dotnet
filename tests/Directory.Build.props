@@ -1,0 +1,16 @@
+<Project>
+    <!-- Import parent Directory.Build.props -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <PropertyGroup>
+        <!-- Keep documentation generation enabled to satisfy IDE0005 analyzer -->
+        <!-- but test projects still don't need extensive XML docs -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        
+        <!-- Test projects don't need to be packed -->
+        <IsPackable>false</IsPackable>
+        
+        <!-- Suppress documentation warnings for test projects -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+    </PropertyGroup>
+</Project>
