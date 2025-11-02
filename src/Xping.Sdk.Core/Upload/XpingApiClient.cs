@@ -22,6 +22,7 @@ using Polly.CircuitBreaker;
 using Polly.Retry;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Persistence;
 
 /// <summary>
 /// HTTP client for uploading test executions to the Xping API with resilience policies.
@@ -30,6 +31,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 {
     private const int CompressionThresholdBytes = 1024; // 1KB
     private const string ApiVersion = "v1";
+    private const int MaxDequeueBatchSize = 100;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -39,6 +41,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private readonly HttpClient _httpClient;
     private readonly XpingConfiguration _config;
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
+    private readonly IOfflineQueue _offlineQueue;
     private bool _disposed;
 
     /// <summary>
@@ -46,10 +49,12 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     /// </summary>
     /// <param name="httpClient">The HTTP client to use for API calls.</param>
     /// <param name="config">The Xping configuration.</param>
-    public XpingApiClient(HttpClient httpClient, XpingConfiguration config)
+    /// <param name="offlineQueue">Optional offline queue for failed uploads.</param>
+    public XpingApiClient(HttpClient httpClient, XpingConfiguration config, IOfflineQueue offlineQueue = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _config = config ?? throw new ArgumentNullException(nameof(config));
+        _offlineQueue = offlineQueue;
 
         ConfigureHttpClient();
         _resiliencePipeline = BuildResiliencePipeline();
@@ -57,6 +62,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
     /// <summary>
     /// Uploads a batch of test executions to the Xping API.
+    /// If the upload fails and an offline queue is configured, the executions are queued.
+    /// Before uploading, any queued executions are processed first.
     /// </summary>
     /// <param name="executions">The test executions to upload.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
@@ -81,19 +88,49 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             };
         }
 
+        // Try to process any queued items first
+        if (_offlineQueue != null)
+        {
+            await ProcessQueuedExecutionsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Now upload the current batch
+        var result = await UploadBatchAsync(executionList, cancellationToken).ConfigureAwait(false);
+
+        // If upload failed and we have an offline queue, enqueue for later
+        if (!result.Success && _offlineQueue != null)
+        {
+            try
+            {
+                await _offlineQueue.EnqueueAsync(executionList, cancellationToken).ConfigureAwait(false);
+                result.ErrorMessage += " (queued for retry)";
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage += $" (failed to queue: {ex.Message})";
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<UploadResult> UploadBatchAsync(
+        List<TestExecution> executions,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var response = await _resiliencePipeline.ExecuteAsync(
                 async ct =>
                 {
-                    using var request = CreateUploadRequest(executionList);
+                    using var request = CreateUploadRequest(executions);
                     return await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
                 },
                 cancellationToken).ConfigureAwait(false);
 
             using (response)
             {
-                return await ProcessResponseAsync(response, executionList.Count).ConfigureAwait(false);
+                return await ProcessResponseAsync(response, executions.Count).ConfigureAwait(false);
             }
         }
         catch (BrokenCircuitException ex)
@@ -130,8 +167,47 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
     }
 
+    private async Task ProcessQueuedExecutionsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var queueSize = await _offlineQueue.GetQueueSizeAsync(cancellationToken).ConfigureAwait(false);
+            if (queueSize == 0)
+            {
+                return;
+            }
+
+            // Process queued items in batches
+            while (queueSize > 0)
+            {
+                var batch = (await _offlineQueue.DequeueAsync(MaxDequeueBatchSize, cancellationToken)
+                    .ConfigureAwait(false)).ToList();
+
+                if (batch.Count == 0)
+                {
+                    break;
+                }
+
+                var result = await UploadBatchAsync(batch, cancellationToken).ConfigureAwait(false);
+
+                // If upload failed, re-queue and stop processing
+                if (!result.Success)
+                {
+                    await _offlineQueue.EnqueueAsync(batch, cancellationToken).ConfigureAwait(false);
+                    break;
+                }
+
+                queueSize -= batch.Count;
+            }
+        }
+        catch
+        {
+            // Errors during queue processing should not prevent current upload
+        }
+    }
+
     /// <summary>
-    /// Disposes the HTTP client resources.
+    /// Disposes the HTTP client resources and offline queue.
     /// </summary>
     public void Dispose()
     {
@@ -141,6 +217,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
 
         _httpClient?.Dispose();
+        (_offlineQueue as IDisposable)?.Dispose();
         _disposed = true;
     }
 

@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-#pragma warning disable CA1707 // Identifiers should not contain underscores
-
 namespace Xping.Sdk.Core.Tests.Environment;
 
 using System;

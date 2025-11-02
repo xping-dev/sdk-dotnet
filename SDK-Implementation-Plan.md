@@ -365,12 +365,12 @@ public sealed class EnvironmentDetector
 ### 2.4 Offline Queue & Persistence
 
 **Tasks:**
-- [ ] Implement `IOfflineQueue` interface
-- [ ] Create file-based persistence
-- [ ] Implement queue size limits
-- [ ] Add automatic retry on reconnection
-- [ ] Implement queue cleanup on success
-- [ ] Add queue corruption recovery
+- [x] Implement `IOfflineQueue` interface
+- [x] Create file-based persistence
+- [x] Implement queue size limits
+- [x] Add automatic retry on reconnection
+- [x] Implement queue cleanup on success
+- [x] Add queue corruption recovery
 
 **Implementation:**
 

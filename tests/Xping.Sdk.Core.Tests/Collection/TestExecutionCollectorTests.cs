@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-#pragma warning disable CA1707 // Identifiers should not contain underscores
 #pragma warning disable CA2007 // Do not directly await a Task
 
 namespace Xping.Sdk.Core.Tests.Collection;

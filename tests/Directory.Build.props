@@ -10,7 +10,8 @@
         <!-- Test projects don't need to be packed -->
         <IsPackable>false</IsPackable>
         
-        <!-- Suppress documentation warnings for test projects -->
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!-- Suppress documentation warnings and naming conventions for test projects -->
+        <!-- CA1707: Underscores are standard in xUnit test method names -->
+        <NoWarn>$(NoWarn);CS1591;CA1707</NoWarn>
     </PropertyGroup>
 </Project>
