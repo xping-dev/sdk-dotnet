@@ -13,34 +13,26 @@ using System;
 public sealed class TestExecution
 {
     /// <summary>
-    /// Gets or sets the unique identifier for this test execution.
+    /// Gets or sets the unique identifier for this test execution instance.
+    /// This changes with each execution of the test.
     /// </summary>
     public Guid ExecutionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the test identifier (framework-specific).
+    /// Gets or sets the stable test identity that persists across runs.
+    /// This is the primary identifier for tracking tests over time.
     /// </summary>
-    public string TestId { get; set; } = string.Empty;
+    /// <remarks>
+    /// The TestIdentity contains a stable hash-based ID that remains constant
+    /// for the same test across different environments, machines, and runs.
+    /// Use this for historical analysis and tracking test reliability.
+    /// </remarks>
+    public TestIdentity Identity { get; set; } = new TestIdentity();
 
     /// <summary>
     /// Gets or sets the test name.
     /// </summary>
     public string TestName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the fully qualified test name including namespace and class.
-    /// </summary>
-    public string FullyQualifiedName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the assembly name where the test is defined.
-    /// </summary>
-    public string Assembly { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the namespace where the test is defined.
-    /// </summary>
-    public string Namespace { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the outcome of the test execution.

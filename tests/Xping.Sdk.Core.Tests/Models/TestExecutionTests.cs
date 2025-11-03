@@ -30,11 +30,16 @@ public class TestExecutionTests
         var execution = new TestExecution
         {
             ExecutionId = executionId,
-            TestId = "test-123",
+            Identity = new TestIdentity
+            {
+                TestId = "test-123",
+                FullyQualifiedName = "Calculator.Tests.CalculatorTests.Add_TwoNumbers_ReturnsSum",
+                Assembly = "Calculator.Tests",
+                Namespace = "Calculator.Tests",
+                ClassName = "CalculatorTests",
+                MethodName = "Add_TwoNumbers_ReturnsSum"
+            },
             TestName = "Add_TwoNumbers_ReturnsSum",
-            FullyQualifiedName = "Calculator.Tests.CalculatorTests.Add_TwoNumbers_ReturnsSum",
-            Assembly = "Calculator.Tests",
-            Namespace = "Calculator.Tests",
             Outcome = TestOutcome.Passed,
             Duration = duration,
             StartTimeUtc = startTime,
@@ -46,12 +51,13 @@ public class TestExecutionTests
         };
 
         // Assert
+        Assert.NotNull(execution);
         Assert.Equal(executionId, execution.ExecutionId);
-        Assert.Equal("test-123", execution.TestId);
+        Assert.Equal("test-123", execution.Identity.TestId);
         Assert.Equal("Add_TwoNumbers_ReturnsSum", execution.TestName);
-        Assert.Equal("Calculator.Tests.CalculatorTests.Add_TwoNumbers_ReturnsSum", execution.FullyQualifiedName);
-        Assert.Equal("Calculator.Tests", execution.Assembly);
-        Assert.Equal("Calculator.Tests", execution.Namespace);
+        Assert.Equal("Calculator.Tests.CalculatorTests.Add_TwoNumbers_ReturnsSum", execution.Identity.FullyQualifiedName);
+        Assert.Equal("Calculator.Tests", execution.Identity.Assembly);
+        Assert.Equal("Calculator.Tests", execution.Identity.Namespace);
         Assert.Equal(TestOutcome.Passed, execution.Outcome);
         Assert.Equal(duration, execution.Duration);
         Assert.Equal(startTime, execution.StartTimeUtc);
@@ -73,9 +79,12 @@ public class TestExecutionTests
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = "test-456",
+            Identity = new TestIdentity
+            {
+                TestId = "test-456",
+                FullyQualifiedName = "Calculator.Tests.CalculatorTests.Divide_ByZero_ThrowsException"
+            },
             TestName = "Divide_ByZero_ThrowsException",
-            FullyQualifiedName = "Calculator.Tests.CalculatorTests.Divide_ByZero_ThrowsException",
             Outcome = TestOutcome.Failed,
             ErrorMessage = errorMessage,
             StackTrace = stackTrace
@@ -94,7 +103,7 @@ public class TestExecutionTests
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = "test-789",
+            Identity = new TestIdentity { TestId = "test-789" },
             TestName = "SlowTest_Skipped",
             Outcome = TestOutcome.Skipped
         };
@@ -110,7 +119,7 @@ public class TestExecutionTests
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = "test-101",
+            Identity = new TestIdentity { TestId = "test-101" },
             TestName = "TestWithInconclusiveResult",
             Outcome = TestOutcome.Inconclusive
         };

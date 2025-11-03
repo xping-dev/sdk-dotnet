@@ -276,9 +276,12 @@ public sealed class FileBasedOfflineQueueTests : IDisposable
             new TestExecution
             {
                 ExecutionId = Guid.NewGuid(),
+                Identity = new TestIdentity
+                {
+                    FullyQualifiedName = "MyNamespace.MyClass.MyTest",
+                    Namespace = "MyNamespace"
+                },
                 TestName = "MyTest",
-                FullyQualifiedName = "MyNamespace.MyClass.MyTest",
-                Namespace = "MyNamespace",
                 Outcome = TestOutcome.Failed,
                 Duration = TimeSpan.FromMilliseconds(1234),
                 ErrorMessage = "Test failed",
@@ -294,7 +297,7 @@ public sealed class FileBasedOfflineQueueTests : IDisposable
         Assert.Single(dequeued);
         var item = dequeued[0];
         Assert.Equal("MyTest", item.TestName);
-        Assert.Equal("MyNamespace.MyClass.MyTest", item.FullyQualifiedName);
+        Assert.Equal("MyNamespace.MyClass.MyTest", item.Identity.FullyQualifiedName);
         Assert.Equal(TestOutcome.Failed, item.Outcome);
         Assert.Equal(TimeSpan.FromMilliseconds(1234), item.Duration);
         Assert.Equal("Test failed", item.ErrorMessage);

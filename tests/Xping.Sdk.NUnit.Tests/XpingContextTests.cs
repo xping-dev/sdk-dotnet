@@ -149,9 +149,12 @@ public sealed class XpingContextTests : IDisposable
         return new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = "test-1",
+            Identity = new TestIdentity
+            {
+                TestId = "test-1",
+                FullyQualifiedName = "Namespace.Class.TestMethod"
+            },
             TestName = "TestMethod",
-            FullyQualifiedName = "Namespace.Class.TestMethod",
             Outcome = TestOutcome.Passed,
             Duration = TimeSpan.FromMilliseconds(100),
             StartTimeUtc = DateTime.UtcNow,

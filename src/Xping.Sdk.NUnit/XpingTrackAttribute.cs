@@ -121,14 +121,34 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
         }
 
+        // Generate stable test identity
+        var fullyQualifiedName = test.FullName;
+        var assemblyName = test.TypeInfo?.Assembly.GetName().Name ?? string.Empty;
+
+        // Extract test case arguments if parameterized
+        object[]? parameters = null;
+        if (test.Properties.ContainsKey("Arguments"))
+        {
+            var args = test.Properties["Arguments"];
+            if (args.Count > 0 && args[0] is object[] argsArray)
+            {
+                parameters = argsArray;
+            }
+        }
+
+        var displayName = test.Name;
+
+        var identity = TestIdentityGenerator.Generate(
+            fullyQualifiedName,
+            assemblyName,
+            parameters,
+            displayName);
+
         return new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = test.Id,
+            Identity = identity,
             TestName = test.Name,
-            FullyQualifiedName = test.FullName,
-            Assembly = test.TypeInfo?.Assembly.GetName().Name ?? string.Empty,
-            Namespace = test.TypeInfo?.Namespace ?? string.Empty,
             Outcome = MapOutcome(result.Outcome),
             Duration = duration,
             StartTimeUtc = startTime,

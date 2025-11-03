@@ -88,14 +88,34 @@ public abstract class XpingTestBase
             session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
         }
 
+        // Generate stable test identity
+        var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
+        var assemblyName = ExtractAssemblyName(className);
+
+        // Extract DataRow parameters if present
+        object[]? parameters = null;
+        if (context.Properties != null && context.Properties.Contains("DataRow"))
+        {
+            var dataRowInfo = context.Properties["DataRow"];
+            if (dataRowInfo is object[] dataRowArray)
+            {
+                parameters = dataRowArray;
+            }
+        }
+
+        var displayName = context.TestName ?? "Unknown";
+
+        var identity = TestIdentityGenerator.Generate(
+            fullyQualifiedName,
+            assemblyName,
+            parameters,
+            displayName);
+
         return new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = $"{context.FullyQualifiedTestClassName}.{context.TestName}",
+            Identity = identity,
             TestName = context.TestName ?? "Unknown",
-            FullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}",
-            Assembly = ExtractAssemblyName(className),
-            Namespace = namespaceName,
             Outcome = outcome,
             Duration = duration,
             StartTimeUtc = startTime,

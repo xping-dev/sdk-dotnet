@@ -229,16 +229,27 @@ public sealed class XpingMessageSink : IMessageSink
             session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
         }
 
+        // Generate stable test identity
+        var fullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}";
+        var assemblyName = testClass.Class.Assembly.Name;
+        var parameters = testCase.TestMethodArguments;
+        var displayName = test.DisplayName;
+        var sourceFile = testCase.SourceInformation?.FileName;
+        var sourceLine = testCase.SourceInformation?.LineNumber;
+
+        var identity = TestIdentityGenerator.Generate(
+            fullyQualifiedName,
+            assemblyName,
+            parameters,
+            displayName,
+            sourceFile,
+            sourceLine);
+
         return new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
-            TestId = test.TestCase.UniqueID ?? Guid.NewGuid().ToString(),
+            Identity = identity,
             TestName = test.DisplayName,
-            FullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}",
-            Assembly = testClass.Class.Assembly.Name,
-            Namespace = testClass.Class.Name.Contains('.')
-                ? testClass.Class.Name.Substring(0, testClass.Class.Name.LastIndexOf('.'))
-                : string.Empty,
             Outcome = outcome,
             Duration = duration,
             StartTimeUtc = startTime,
