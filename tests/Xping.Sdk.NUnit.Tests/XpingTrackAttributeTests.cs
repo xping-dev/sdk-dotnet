@@ -47,7 +47,7 @@ public sealed class XpingTrackAttributeTests : IDisposable
         var attribute = new XpingTrackAttribute();
 
         // Act & Assert - BeforeTest accesses test.Properties which will throw on null
-        Assert.Throws<NullReferenceException>(() => attribute.BeforeTest(null!));
+        Assert.Throws<ArgumentNullException>(() => attribute.BeforeTest(null!));
     }
 
     [Fact]

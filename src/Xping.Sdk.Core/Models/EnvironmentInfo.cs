@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+#nullable enable
+
 namespace Xping.Sdk.Core.Models;
 
 using System.Collections.Generic;
@@ -17,6 +19,11 @@ public sealed class EnvironmentInfo
     /// </summary>
     public EnvironmentInfo()
     {
+        MachineName = string.Empty;
+        OperatingSystem = string.Empty;
+        RuntimeVersion = string.Empty;
+        Framework = string.Empty;
+        EnvironmentName = string.Empty;
         CustomProperties = new Dictionary<string, string>();
     }
 
@@ -51,8 +58,13 @@ public sealed class EnvironmentInfo
     public bool IsCIEnvironment { get; set; }
 
     /// <summary>
+    /// Gets or sets the network reliability metrics collected during test execution.
+    /// This property is only populated when network metrics collection is enabled.
+    /// </summary>
+    public NetworkMetrics? NetworkMetrics { get; set; }
+
+    /// <summary>
     /// Gets the custom properties for additional environment information.
     /// </summary>
     public Dictionary<string, string> CustomProperties { get; }
 }
-

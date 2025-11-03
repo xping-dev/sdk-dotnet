@@ -14,7 +14,7 @@ using System.Collections.Generic;
 public sealed class XpingConfiguration
 {
     /// <summary>
-    /// Gets or sets the API endpoint URL.
+    /// Gets or sets the Xping API endpoint URL.
     /// </summary>
     public string ApiEndpoint { get; set; } = "https://api.xping.io";
 
@@ -87,6 +87,12 @@ public sealed class XpingConfiguration
     /// Gets or sets the timeout for upload operations.
     /// </summary>
     public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to collect network reliability metrics.
+    /// Network metrics include latency, connection type, and online status.
+    /// </summary>
+    public bool CollectNetworkMetrics { get; set; } = true;
 
     /// <summary>
     /// Validates the configuration and returns a list of validation errors.

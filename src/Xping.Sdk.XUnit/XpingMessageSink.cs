@@ -190,6 +190,11 @@ public sealed class XpingMessageSink : IMessageSink
         var testCase = test.TestCase;
         var testMethod = testCase.TestMethod;
         var testClass = testMethod.TestClass;
+        var config = XpingContext.Configuration;
+        var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
+        var apiEndpoint = config?.ApiEndpoint;
+
+        var detector = new Xping.Sdk.Core.Environment.EnvironmentDetector();
 
         return new TestExecution
         {
@@ -205,6 +210,7 @@ public sealed class XpingMessageSink : IMessageSink
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
+            Environment = detector.Detect(collectNetworkMetrics, apiEndpoint),
             Metadata = ExtractMetadata(test, output),
             ErrorMessage = errorMessage ?? string.Empty,
             StackTrace = stackTrace ?? string.Empty,

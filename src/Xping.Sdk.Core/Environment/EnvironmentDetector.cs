@@ -4,14 +4,18 @@
  */
 
 #pragma warning disable CA1031 // Do not catch general exception types - we want to handle all errors gracefully
+#nullable enable
 
 namespace Xping.Sdk.Core.Environment;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Network;
 
 /// <summary>
 /// Default implementation of <see cref="IEnvironmentDetector"/> that detects environment information
@@ -19,31 +23,56 @@ using Xping.Sdk.Core.Models;
 /// </summary>
 public sealed class EnvironmentDetector : IEnvironmentDetector
 {
-    private static readonly Lazy<string> CachedOperatingSystem = new(() => DetectOperatingSystem());
-    private static readonly Lazy<string> CachedRuntimeVersion = new(() => DetectRuntimeVersion());
-    private static readonly Lazy<string> CachedFramework = new(() => DetectFramework());
-    private static readonly Lazy<CIPlatform?> CachedCIPlatform = new(() => DetectCIPlatform());
-    private static readonly Lazy<bool> CachedIsContainer = new(() => DetectIsContainer());
+    private static readonly Lazy<string> _cachedMachineName = new(() => GetMachineName());
+    private static readonly Lazy<string> _cachedOperatingSystem = new(() => DetectOperatingSystem());
+    private static readonly Lazy<string> _cachedRuntimeVersion = new(() => DetectRuntimeVersion());
+    private static readonly Lazy<string> _cachedFramework = new(() => DetectFramework());
+    private static readonly Lazy<CIPlatform?> _cachedCIPlatform = new(() => DetectCIPlatform());
+    private static readonly Lazy<string> _cachedEnvironmentName = new(() => DetectEnvironmentName());
+    private static readonly Lazy<bool> _cachedIsContainer = new(() => DetectIsContainer());
+    private static readonly Lazy<Dictionary<string, string>> _cachedCustomProperties =
+        new(() => CollectCustomProperties());
+
+    // Cache network metrics per endpoint (thread-safe)
+    private static readonly ConcurrentDictionary<string, NetworkMetrics?> _cachedNetworkMetrics = new();
 
     /// <inheritdoc/>
-    public EnvironmentInfo Detect()
+    public EnvironmentInfo Detect(bool collectNetworkMetrics = false, string? apiEndpoint = null)
     {
-        var ciPlatform = CachedCIPlatform.Value;
+        var ciPlatform = _cachedCIPlatform.Value;
         var isCI = ciPlatform.HasValue;
 
         var envInfo = new EnvironmentInfo
         {
-            MachineName = GetMachineName(),
-            OperatingSystem = CachedOperatingSystem.Value,
-            RuntimeVersion = CachedRuntimeVersion.Value,
-            Framework = CachedFramework.Value,
-            EnvironmentName = DetectEnvironmentName(isCI),
+            MachineName = _cachedMachineName.Value,
+            OperatingSystem = _cachedOperatingSystem.Value,
+            RuntimeVersion = _cachedRuntimeVersion.Value,
+            Framework = _cachedFramework.Value,
+            EnvironmentName = _cachedEnvironmentName.Value,
             IsCIEnvironment = isCI,
         };
 
-        // Add custom properties to the existing dictionary
-        var customProps = CollectCustomProperties(ciPlatform);
-        foreach (var kvp in customProps)
+        // Collect network metrics if opted in (cached per endpoint)
+        if (collectNetworkMetrics && !string.IsNullOrWhiteSpace(apiEndpoint))
+        {
+            envInfo.NetworkMetrics = _cachedNetworkMetrics.GetOrAdd(apiEndpoint!, endpoint =>
+            {
+                try
+                {
+                    var collector = new NetworkMetricsCollector();
+                    return Task.Run(async () =>
+                        await collector.CollectAsync(endpoint).ConfigureAwait(false)).GetAwaiter().GetResult();
+                }
+                catch
+                {
+                    // If network metrics collection fails, return null
+                    return null;
+                }
+            });
+        }
+
+        // Add custom properties to the existing dictionary (cached)
+        foreach (var kvp in _cachedCustomProperties.Value)
         {
             envInfo.CustomProperties[kvp.Key] = kvp.Value;
         }
@@ -131,7 +160,7 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
         {
             // Detect framework type based on runtime
             var frameworkDescription = RuntimeInformation.FrameworkDescription;
-            var os = CachedOperatingSystem.Value;
+            var os = _cachedOperatingSystem.Value;
 
             // Check for mobile-specific frameworks first
             if (os.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -250,7 +279,7 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
         return null;
     }
 
-    private static string DetectEnvironmentName(bool isCI)
+    private static string DetectEnvironmentName()
     {
         // Check explicit environment variable
         var envName = GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
@@ -260,9 +289,10 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
 
         if (!string.IsNullOrWhiteSpace(envName))
         {
-            return envName;
+            return envName!;
         }
 
+        var isCI = _cachedCIPlatform.Value.HasValue;
         // Infer from CI status
         if (isCI)
         {
@@ -311,18 +341,19 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
         }
     }
 
-    private static Dictionary<string, string> CollectCustomProperties(CIPlatform? ciPlatform)
+    private static Dictionary<string, string> CollectCustomProperties()
     {
+        var ciPlatform = _cachedCIPlatform.Value;
         var properties = new Dictionary<string, string>();
 
         // Add container information
-        if (CachedIsContainer.Value)
+        if (_cachedIsContainer.Value)
         {
             properties["IsContainer"] = "true";
         }
 
         // Add mobile platform detection
-        var os = CachedOperatingSystem.Value;
+        var os = _cachedOperatingSystem.Value;
         if (os.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             properties["Platform"] = "Android";
@@ -444,20 +475,20 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
         properties["ProcessorArchitecture"] = RuntimeInformation.ProcessArchitecture.ToString();
 
         // Add process information
-        properties["ProcessorCount"] = Environment.ProcessorCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        properties["ProcessorCount"] = Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture);
 
         return properties;
     }
 
-    private static void AddIfNotNull(Dictionary<string, string> dictionary, string key, string value)
+    private static void AddIfNotNull(Dictionary<string, string> dictionary, string key, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
         {
-            dictionary[key] = value;
+            dictionary[key] = value!;
         }
     }
 
-    private static string GetEnvironmentVariable(string variable)
+    private static string? GetEnvironmentVariable(string variable)
     {
         try
         {

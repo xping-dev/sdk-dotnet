@@ -34,6 +34,11 @@ public static class XpingContext
     public static bool IsInitialized => _isInitialized;
 
     /// <summary>
+    /// Gets the current configuration.
+    /// </summary>
+    internal static XpingConfiguration? Configuration => _configuration;
+
+    /// <summary>
     /// Initializes the Xping context with default configuration.
     /// </summary>
     /// <returns>The test execution collector.</returns>

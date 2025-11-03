@@ -32,6 +32,11 @@ public static class XpingContext
     public static bool IsInitialized { get; private set; }
 
     /// <summary>
+    /// Gets the current configuration.
+    /// </summary>
+    internal static XpingConfiguration? Configuration => _configuration;
+
+    /// <summary>
     /// Initializes the Xping context with default configuration.
     /// Loads configuration from appsettings.json or environment variables.
     /// </summary>

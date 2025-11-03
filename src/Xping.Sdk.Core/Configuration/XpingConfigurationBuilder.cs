@@ -180,6 +180,17 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets whether to collect network reliability metrics.
+    /// </summary>
+    /// <param name="collectNetworkMetrics">Whether to collect network metrics.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public XpingConfigurationBuilder WithCollectNetworkMetrics(bool collectNetworkMetrics)
+    {
+        _configuration.CollectNetworkMetrics = collectNetworkMetrics;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the configuration instance.
     /// </summary>
     /// <returns>The configured <see cref="XpingConfiguration"/> instance.</returns>

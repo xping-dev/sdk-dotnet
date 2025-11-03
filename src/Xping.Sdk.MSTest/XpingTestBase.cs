@@ -78,6 +78,9 @@ public abstract class XpingTestBase
         var namespaceName = lastDotIndex >= 0 ? className.Substring(0, lastDotIndex) : string.Empty;
 
         var detector = new EnvironmentDetector();
+        var config = XpingContext.Configuration;
+        var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
+        var apiEndpoint = config?.ApiEndpoint;
 
         return new TestExecution
         {
@@ -91,7 +94,7 @@ public abstract class XpingTestBase
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            Environment = detector.Detect(),
+            Environment = detector.Detect(collectNetworkMetrics, apiEndpoint),
             Metadata = metadata,
             ErrorMessage = GetErrorMessage(context),
             StackTrace = GetStackTrace(context)

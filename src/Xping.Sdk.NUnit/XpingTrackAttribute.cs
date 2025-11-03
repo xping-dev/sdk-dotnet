@@ -9,6 +9,7 @@ using System;
 using System.Diagnostics;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Environment;
 using Xping.Sdk.Core.Models;
 
 /// <summary>
@@ -37,6 +38,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             XpingContext.Initialize();
         }
 
+        if (test == null)
+        {
+            throw new ArgumentNullException(nameof(test), "Test cannot be null in BeforeTest.");
+        }
+
         // Store timing data in test properties to avoid thread-safety issues
         // (attribute instances are reused for multiple tests)
         var startTime = DateTime.UtcNow;
@@ -54,6 +60,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     {
         var endTime = DateTime.UtcNow;
         var endTimestamp = Stopwatch.GetTimestamp();
+
+        if (test == null)
+        {
+            return;
+        }
 
         try
         {
@@ -95,6 +106,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         TimeSpan duration)
     {
         var result = TestContext.CurrentContext.Result;
+        var config = XpingContext.Configuration;
+        var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
+        var apiEndpoint = config?.ApiEndpoint;
+
+        var detector = new EnvironmentDetector();
 
         return new TestExecution
         {
@@ -108,6 +124,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
+            Environment = detector.Detect(collectNetworkMetrics, apiEndpoint),
             Metadata = ExtractMetadata(test),
             ErrorMessage = result.Message ?? string.Empty,
             StackTrace = result.StackTrace ?? string.Empty,

@@ -122,6 +122,9 @@ public static class XpingConfigurationLoader
 
         // Timeout Configuration
         config.UploadTimeout = GetEnvironmentVariableTimeSpan("UPLOADTIMEOUT", config.UploadTimeout);
+
+        // Network Metrics Configuration
+        config.CollectNetworkMetrics = GetEnvironmentVariable("COLLECTNETWORKMETRICS", config.CollectNetworkMetrics);
     }
 
     private static string GetEnvironmentVariable(string name, string defaultValue)
