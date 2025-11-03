@@ -43,7 +43,7 @@ public class SampleTests
     [Trait("Category", "Integration")]
     public void SkippedTestIsTracked()
     {
-        Assert.True(false, "This test is skipped");
+        Assert.Fail("This test is skipped");
     }
 
     [Theory]

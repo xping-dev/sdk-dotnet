@@ -16,23 +16,12 @@ using Xping.Sdk.MSTest;
 [TestClass]
 public static class XpingSetup
 {
-    /// <summary>
-    /// Called once before any tests in the assembly run.
-    /// Initializes the Xping SDK context.
-    /// </summary>
-    /// <param name="context">The assembly test context.</param>
     [AssemblyInitialize]
-#pragma warning disable IDE0060 // Remove unused parameter
     public static void AssemblyInit(TestContext context)
-#pragma warning restore IDE0060 // Remove unused parameter
     {
         XpingContext.Initialize();
     }
 
-    /// <summary>
-    /// Called once after all tests in the assembly complete.
-    /// Flushes pending test executions and disposes SDK resources.
-    /// </summary>
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
