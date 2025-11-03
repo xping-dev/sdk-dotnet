@@ -637,14 +637,14 @@ public class CalculatorTests
 ### 3.3 MSTest Adapter
 
 **Tasks:**
-- [ ] Create `Xping.Sdk.MSTest` project
-- [ ] Implement `[AssemblyInitialize]` for setup
-- [ ] Implement `[AssemblyCleanup]` for teardown
-- [ ] Create custom `TestContext` extension methods
-- [ ] Extract test metadata from MSTest attributes
-- [ ] Handle data-driven tests
-- [ ] Support async tests
-- [ ] Support test deployment items
+- [x] Create `Xping.Sdk.MSTest` project
+- [x] Implement `[AssemblyInitialize]` for setup
+- [x] Implement `[AssemblyCleanup]` for teardown
+- [x] Create custom `TestContext` extension methods
+- [x] Extract test metadata from MSTest attributes
+- [x] Handle data-driven tests
+- [x] Support async tests
+- [x] Support test deployment items
 
 **Architecture:**
 
