@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-#nullable enable
-
 namespace Xping.Sdk.Core.Models;
 
 /// <summary>

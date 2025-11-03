@@ -22,10 +22,10 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
     private readonly ConcurrentQueue<TestExecution> _buffer;
     private readonly ITestResultUploader _uploader;
     private readonly XpingConfiguration _config;
-    private readonly Timer _flushTimer;
+    private readonly Timer? _flushTimer;
     private readonly SemaphoreSlim _flushLock;
     private readonly Random _random;
-    private readonly object _statsLock = new object();
+    private readonly object _statsLock = new();
 
     private long _totalRecorded;
     private long _totalUploaded;
@@ -167,10 +167,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         }
 
         // Dispose timer first to stop automatic flushes
-        if (_flushTimer != null)
-        {
-            _flushTimer.Dispose();
-        }
+        _flushTimer?.Dispose();
 
         // Perform final flush before marking as disposed
         try

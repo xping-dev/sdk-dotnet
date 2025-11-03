@@ -213,7 +213,7 @@ public sealed class XpingConfigurationBuilder
     /// <param name="configuration">The built configuration if successful.</param>
     /// <param name="errors">The validation errors if unsuccessful.</param>
     /// <returns><c>true</c> if the configuration is valid; otherwise, <c>false</c>.</returns>
-    public bool TryBuild(out XpingConfiguration configuration, out string[] errors)
+    public bool TryBuild(out XpingConfiguration? configuration, out string[] errors)
     {
         var validationErrors = _configuration.Validate();
         if (validationErrors.Count > 0)
@@ -228,7 +228,7 @@ public sealed class XpingConfigurationBuilder
         }
 
         configuration = _configuration;
-        errors = Array.Empty<string>();
+        errors = [];
         return true;
     }
 }

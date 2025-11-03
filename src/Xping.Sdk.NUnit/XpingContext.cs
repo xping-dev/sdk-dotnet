@@ -20,7 +20,7 @@ using Xping.Sdk.Core.Upload;
 /// </summary>
 public static class XpingContext
 {
-    private static readonly object Lock = new object();
+    private static readonly object _lock = new();
     private static TestExecutionCollector? _collector;
     private static ITestResultUploader? _uploader;
     private static IOfflineQueue? _offlineQueue;
@@ -59,7 +59,7 @@ public static class XpingContext
             throw new ArgumentNullException(nameof(configuration));
         }
 
-        lock (Lock)
+        lock (_lock)
         {
             if (_isInitialized && _collector != null)
             {
@@ -131,7 +131,7 @@ public static class XpingContext
             return;
         }
 
-        lock (Lock)
+        lock (_lock)
         {
             if (!_isInitialized)
             {
@@ -172,7 +172,7 @@ public static class XpingContext
     /// </summary>
     public static void Reset()
     {
-        lock (Lock)
+        lock (_lock)
         {
             _isInitialized = false;
             _collector = null;

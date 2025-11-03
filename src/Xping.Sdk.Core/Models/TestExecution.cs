@@ -20,27 +20,27 @@ public sealed class TestExecution
     /// <summary>
     /// Gets or sets the test identifier (framework-specific).
     /// </summary>
-    public string TestId { get; set; }
+    public string TestId { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the test name.
     /// </summary>
-    public string TestName { get; set; }
+    public string TestName { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the fully qualified test name including namespace and class.
     /// </summary>
-    public string FullyQualifiedName { get; set; }
+    public string FullyQualifiedName { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the assembly name where the test is defined.
     /// </summary>
-    public string Assembly { get; set; }
+    public string Assembly { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the namespace where the test is defined.
     /// </summary>
-    public string Namespace { get; set; }
+    public string Namespace { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the outcome of the test execution.
@@ -65,20 +65,20 @@ public sealed class TestExecution
     /// <summary>
     /// Gets or sets the environment information where the test was executed.
     /// </summary>
-    public EnvironmentInfo Environment { get; set; }
+    public EnvironmentInfo? Environment { get; set; }
 
     /// <summary>
     /// Gets or sets the test metadata including categories, tags, and custom attributes.
     /// </summary>
-    public TestMetadata Metadata { get; set; }
+    public TestMetadata? Metadata { get; set; }
 
     /// <summary>
     /// Gets or sets the error message if the test failed.
     /// </summary>
-    public string ErrorMessage { get; set; }
+    public string? ErrorMessage { get; set; }
 
     /// <summary>
     /// Gets or sets the stack trace if the test failed.
     /// </summary>
-    public string StackTrace { get; set; }
+    public string? StackTrace { get; set; }
 }

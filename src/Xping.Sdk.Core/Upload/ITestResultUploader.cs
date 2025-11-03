@@ -44,10 +44,10 @@ public sealed class UploadResult
     /// <summary>
     /// Gets or sets the error message if the upload failed.
     /// </summary>
-    public string ErrorMessage { get; set; }
+    public string? ErrorMessage { get; set; }
 
     /// <summary>
     /// Gets or sets the receipt ID from the server.
     /// </summary>
-    public string ReceiptId { get; set; }
+    public string? ReceiptId { get; set; }
 }

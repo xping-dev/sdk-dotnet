@@ -4,7 +4,6 @@
  */
 
 #pragma warning disable CA1031 // Do not catch general exception types - we want to handle all errors gracefully
-#nullable enable
 
 namespace Xping.Sdk.Core.Environment;
 

@@ -40,7 +40,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
     /// <param name="maxQueueSize">Maximum number of executions to store. Default is 10,000.</param>
     /// <param name="cleanupAgeDays">Age in days after which queue files are deleted. Default is 7.</param>
     public FileBasedOfflineQueue(
-        string queueDirectory = null,
+        string? queueDirectory = null,
         int maxQueueSize = DefaultMaxQueueSize,
         int cleanupAgeDays = DefaultCleanupAgeDays)
     {
@@ -100,11 +100,13 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task<IEnumerable<TestExecution>> DequeueAsync(int maxCount, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<TestExecution>> DequeueAsync(
+        int maxCount,
+        CancellationToken cancellationToken = default)
     {
         if (maxCount <= 0)
         {
-            return Enumerable.Empty<TestExecution>();
+            return [];
         }
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -113,7 +115,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
             var files = GetQueueFilesOrderedByAge().ToList();
             if (files.Count == 0)
             {
-                return Enumerable.Empty<TestExecution>();
+                return [];
             }
 
             var result = new List<TestExecution>();

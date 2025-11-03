@@ -21,12 +21,12 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the API key for authentication.
     /// </summary>
-    public string ApiKey { get; set; }
+    public string ApiKey { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the project ID.
     /// </summary>
-    public string ProjectId { get; set; }
+    public string ProjectId { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the batch size for uploading test executions.

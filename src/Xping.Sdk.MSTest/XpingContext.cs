@@ -19,7 +19,7 @@ using Xping.Sdk.Core.Upload;
 /// </summary>
 public static class XpingContext
 {
-    private static readonly object InitializationLock = new object();
+    private static readonly object _initializationLock = new();
     private static TestExecutionCollector? _collector;
     private static ITestResultUploader? _uploader;
     private static IOfflineQueue? _offlineQueue;
@@ -43,7 +43,7 @@ public static class XpingContext
     /// <returns>The test execution collector instance.</returns>
     public static TestExecutionCollector Initialize()
     {
-        lock (InitializationLock)
+        lock (_initializationLock)
         {
             if (IsInitialized && _collector != null)
             {
@@ -62,7 +62,7 @@ public static class XpingContext
     /// <returns>The test execution collector instance.</returns>
     public static TestExecutionCollector Initialize(XpingConfiguration configuration)
     {
-        lock (InitializationLock)
+        lock (_initializationLock)
         {
             if (IsInitialized && _collector != null)
             {
@@ -132,7 +132,7 @@ public static class XpingContext
     /// </summary>
     public static void Reset()
     {
-        lock (InitializationLock)
+        lock (_initializationLock)
         {
             _collector = null;
             _uploader = null;

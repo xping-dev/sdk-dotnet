@@ -33,7 +33,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private const string ApiVersion = "v1";
     private const int MaxDequeueBatchSize = 100;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
@@ -41,7 +41,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private readonly HttpClient _httpClient;
     private readonly XpingConfiguration _config;
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
-    private readonly IOfflineQueue _offlineQueue;
+    private readonly IOfflineQueue? _offlineQueue;
     private bool _disposed;
 
     /// <summary>
@@ -50,7 +50,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     /// <param name="httpClient">The HTTP client to use for API calls.</param>
     /// <param name="config">The Xping configuration.</param>
     /// <param name="offlineQueue">Optional offline queue for failed uploads.</param>
-    public XpingApiClient(HttpClient httpClient, XpingConfiguration config, IOfflineQueue offlineQueue = null)
+    public XpingApiClient(HttpClient httpClient, XpingConfiguration config, IOfflineQueue? offlineQueue = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -77,7 +77,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             throw new ArgumentNullException(nameof(executions));
         }
 
-        var executionList = executions as List<TestExecution> ?? executions.ToList();
+        var executionList = executions as List<TestExecution> ?? [.. executions];
 
         if (executionList.Count == 0)
         {
@@ -97,7 +97,9 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
                 Success = false,
                 ErrorMessage = "Upload skipped: API Key and Project ID are required but not configured",
             };
-        }        // Try to process any queued items first
+        }
+
+        // Try to process any queued items first
         if (_offlineQueue != null)
         {
             await ProcessQueuedExecutionsAsync(cancellationToken).ConfigureAwait(false);
@@ -178,6 +180,11 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
     private async Task ProcessQueuedExecutionsAsync(CancellationToken cancellationToken)
     {
+        if (_offlineQueue == null)
+        {
+            return;
+        }
+
         try
         {
             var queueSize = await _offlineQueue.GetQueueSizeAsync(cancellationToken).ConfigureAwait(false);
@@ -280,9 +287,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private HttpRequestMessage CreateUploadRequest(List<TestExecution> executions)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-executions");
-
-        var json = JsonSerializer.Serialize(new { executions }, JsonOptions);
-
+        var json = JsonSerializer.Serialize(new { executions }, _jsonOptions);
         var content = Encoding.UTF8.GetBytes(json);
 
         // Compress if payload is large enough
@@ -306,7 +311,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         return request;
     }
 
-    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
+    private static async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -334,7 +339,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     {
         public int ExecutionCount { get; set; }
 
-        public string ReceiptId { get; set; }
+        public string? ReceiptId { get; set; }
     }
 #pragma warning restore CA1812
 }

@@ -143,7 +143,7 @@ public abstract class XpingTestBase
         {
             foreach (var key in context.Properties.Keys)
             {
-                var keyStr = key?.ToString();
+                var keyStr = key.ToString();
                 if (string.IsNullOrEmpty(keyStr))
                 {
                     continue;
@@ -170,7 +170,7 @@ public abstract class XpingTestBase
         {
             hasDataRow = true;
             var dataRowInfo = context.Properties["DataRow"]?.ToString();
-            if (!string.IsNullOrEmpty(dataRowInfo))
+            if (dataRowInfo != null && !string.IsNullOrEmpty(dataRowInfo))
             {
                 metadata.CustomAttributes["Arguments"] = dataRowInfo;
                 tags.Add("type:datatest");

@@ -20,7 +20,7 @@ using Xunit;
 public sealed class FileBasedOfflineQueueTests : IDisposable
 {
     private readonly string _testDirectory;
-    private readonly List<FileBasedOfflineQueue> _queues = new List<FileBasedOfflineQueue>();
+    private readonly List<FileBasedOfflineQueue> _queues = [];
     private bool _disposed;
 
     public FileBasedOfflineQueueTests()
@@ -99,7 +99,7 @@ public sealed class FileBasedOfflineQueueTests : IDisposable
     {
         var queue = CreateQueue();
 
-        await queue.EnqueueAsync(null);
+        await queue.EnqueueAsync(null!);
 
         var size = await queue.GetQueueSizeAsync();
         Assert.Equal(0, size);

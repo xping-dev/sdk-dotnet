@@ -25,7 +25,7 @@ public static class XpingConfigurationLoader
     /// </summary>
     /// <param name="basePath">The base path for loading configuration files. If null, uses current directory.</param>
     /// <returns>The loaded configuration.</returns>
-    public static XpingConfiguration Load(string basePath = null)
+    public static XpingConfiguration Load(string? basePath = null)
     {
         var config = new ConfigurationBuilder()
             .SetBasePath(basePath ?? Directory.GetCurrentDirectory())
