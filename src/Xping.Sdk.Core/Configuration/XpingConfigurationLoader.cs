@@ -5,9 +5,9 @@
 
 namespace Xping.Sdk.Core.Configuration;
 
-using Microsoft.Extensions.Configuration;
 using System;
 using System.IO;
+using Microsoft.Extensions.Configuration;
 
 /// <summary>
 /// Provides methods for loading <see cref="XpingConfiguration"/> from various sources.

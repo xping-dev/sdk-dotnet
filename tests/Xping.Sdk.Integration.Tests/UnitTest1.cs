@@ -1,4 +1,4 @@
-﻿namespace Xping.Sdk.Integration.Tests;
+namespace Xping.Sdk.Integration.Tests;
 
 public class UnitTest1
 {
