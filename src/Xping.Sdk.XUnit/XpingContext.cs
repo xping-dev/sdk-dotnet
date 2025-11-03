@@ -114,8 +114,15 @@ public static class XpingContext
 
         if (_collector != null)
         {
-            await _collector.FlushAsync().ConfigureAwait(false);
-            await _collector.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                await _collector.FlushAsync().ConfigureAwait(false);
+                await _collector.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore errors during disposal
+            }
         }
 
         _uploader = null;

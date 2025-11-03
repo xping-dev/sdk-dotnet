@@ -58,6 +58,11 @@ public sealed class XpingMessageSink : IMessageSink
             case ITestSkipped testSkipped:
                 HandleTestSkipped(testSkipped);
                 break;
+
+            case ITestAssemblyFinished _:
+                // When assembly finishes, flush all recorded test data
+                HandleTestAssemblyFinished();
+                break;
         }
 
         // Forward to inner sink
@@ -128,20 +133,42 @@ public sealed class XpingMessageSink : IMessageSink
     private void HandleTestSkipped(ITestSkipped testSkipped)
     {
         var testKey = GetTestKey(testSkipped.Test);
-        _testData.TryRemove(testKey, out var data);
+        if (!_testData.TryRemove(testKey, out var data))
+        {
+            return;
+        }
 
-        var now = DateTime.UtcNow;
+        var endTime = DateTime.UtcNow;
+        var endTimestamp = Stopwatch.GetTimestamp();
+        var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
 
         RecordTestExecution(
-            test: testSkipped.Test,
+            test: data.Test,
             outcome: TestOutcome.Skipped,
-            startTime: data?.StartTime ?? now,
-            endTime: now,
-            duration: TimeSpan.Zero,
+            startTime: data.StartTime,
+            endTime: endTime,
+            duration: duration,
             executionTime: 0,
             output: string.Empty,
-            errorMessage: testSkipped.Reason ?? string.Empty,
-            stackTrace: null);
+            errorMessage: $"Test skipped: {testSkipped.Reason}",
+            stackTrace: null
+        );
+    }
+
+    private void HandleTestAssemblyFinished()
+    {
+        // Flush all recorded test data when assembly finishes executing
+        // This ensures data is uploaded even when using VSTest adapter
+        // (which doesn't call Dispose on custom frameworks or collection fixtures)
+        try
+        {
+            XpingContext.FlushAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't throw - we don't want to fail tests due to flush errors
+            Debug.WriteLine($"[Xping] Error flushing data on assembly finished: {ex.Message}");
+        }
     }
 
     private static void RecordTestExecution(

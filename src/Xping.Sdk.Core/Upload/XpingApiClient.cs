@@ -88,19 +88,16 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             };
         }
 
-        // Fast-fail if configuration is invalid (missing credentials)
-        // This prevents unnecessary HTTP timeout delays
+        // Fast-fail if credentials are missing - no need to waste time on HTTP timeouts
+        // This is especially important for test scenarios where credentials aren't configured
         if (string.IsNullOrWhiteSpace(_config.ApiKey) || string.IsNullOrWhiteSpace(_config.ProjectId))
         {
             return new UploadResult
             {
                 Success = false,
                 ErrorMessage = "Upload skipped: API Key and Project ID are required but not configured",
-                ExecutionCount = executionList.Count,
             };
-        }
-
-        // Try to process any queued items first
+        }        // Try to process any queued items first
         if (_offlineQueue != null)
         {
             await ProcessQueuedExecutionsAsync(cancellationToken).ConfigureAwait(false);

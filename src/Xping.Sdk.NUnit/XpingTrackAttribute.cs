@@ -16,7 +16,10 @@ using Xping.Sdk.Core.Models;
 /// NUnit attribute for tracking test execution with Xping.
 /// Can be applied to test methods or test fixtures.
 /// </summary>
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Assembly, AllowMultiple = false, Inherited = true)]
+[AttributeUsage(
+    AttributeTargets.Method
+    | AttributeTargets.Class
+    | AttributeTargets.Assembly, AllowMultiple = false, Inherited = true)]
 public sealed class XpingTrackAttribute : Attribute, ITestAction
 {
     private const string StartTimeKey = "Xping.StartTime";

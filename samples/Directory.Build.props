@@ -10,7 +10,7 @@
         <IsPackable>false</IsPackable>
         
         <!-- Suppress documentation and API visibility warnings for sample projects -->
-        <NoWarn>$(NoWarn);CS1591;CA1515</NoWarn>
+        <NoWarn>$(NoWarn);CS1591;CA1515;CA1816</NoWarn>
         
         <!-- Allow some relaxed rules for samples -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>

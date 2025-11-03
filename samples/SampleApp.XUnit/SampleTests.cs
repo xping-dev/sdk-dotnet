@@ -9,10 +9,11 @@ using global::Xunit;
 
 /// <summary>
 /// Sample tests demonstrating xUnit adapter usage with Xping SDK.
-/// Note: Tests are automatically tracked by configuring the test framework in AssemblyInfo.cs.
+/// The Xping custom test framework automatically tracks and flushes test results.
 /// </summary>
 public class SampleTests
 {
+
     [Fact]
     [Trait("Category", "Integration")]
     public void PassingTestIsTracked()
