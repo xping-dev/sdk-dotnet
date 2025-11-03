@@ -93,16 +93,18 @@ Add to `AssemblyInfo.cs` or any file:
 
 ## Configuration
 
-The adapter uses the standard Xping configuration. Create an `xping.json` file in your project root:
+The adapter uses the standard Xping configuration. Add a `"Xping"` section to your `appsettings.json` file:
 
 ```json
 {
-  "ApiKey": "your-api-key-here",
-  "ProjectId": "your-project-id-here",
-  "ApiEndpoint": "https://api.xping.io",
-  "Environment": "Development",
-  "EnableOfflineQueue": true,
-  "MaxRetries": 3
+  "Xping": {
+    "ApiKey": "your-api-key-here",
+    "ProjectId": "your-project-id-here",
+    "ApiEndpoint": "https://api.xping.io",
+    "Environment": "Development",
+    "EnableOfflineQueue": true,
+    "MaxRetries": 3
+  }
 }
 ```
 
@@ -240,14 +242,14 @@ This design ensures safe execution when NUnit runs tests in parallel (`ParallelS
 
 1. Ensure `XpingSetup` fixture exists and calls `Initialize()`
 2. Verify `[XpingTrack]` attribute is applied
-3. Check `xping.json` configuration or environment variables
+3. Check `appsettings.json` has a `"Xping"` section with configuration, or set environment variables
 4. Verify API key is valid
 
 ### Configuration not found
 
 If no configuration is found, the adapter will:
-1. Look for `xping.json` in the current directory
-2. Check environment variables
+1. Look for `appsettings.json` with a `"Xping"` section in the current directory
+2. Check environment variables (with `XPING_` prefix)
 3. Fall back to default offline-only mode
 
 ### Offline mode
