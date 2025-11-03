@@ -767,7 +767,7 @@ public class CalculatorTests : XpingTestBase
 
 **Test Scenarios:**
 - [ ] End-to-end test execution with real test projects
-- [ ] API communication with mock server
+- [x] API communication with mock server
 - [ ] Retry logic under simulated failures
 - [ ] Offline queue behavior when network unavailable
 - [ ] Configuration loading from multiple sources

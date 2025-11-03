@@ -11,7 +11,7 @@ using System.Collections.ObjectModel;
 /// <summary>
 /// Represents a test session containing environment information and multiple test executions.
 /// A session groups all tests executed together in a single test run, capturing the shared
-/// environment context once rather than duplicating it across each test execution.
+/// environment context.
 /// </summary>
 public sealed class TestSession
 {
@@ -23,7 +23,7 @@ public sealed class TestSession
         SessionId = Guid.NewGuid().ToString();
         StartedAt = DateTime.UtcNow;
         EnvironmentInfo = new EnvironmentInfo();
-        TestExecutions = new Collection<TestExecution>();
+        TestExecutions = [];
     }
 
     /// <summary>
