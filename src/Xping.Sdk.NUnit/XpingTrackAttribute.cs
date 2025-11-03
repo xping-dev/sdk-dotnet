@@ -109,11 +109,17 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         TimeSpan duration)
     {
         var result = TestContext.CurrentContext.Result;
-        var config = XpingContext.Configuration;
-        var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
-        var apiEndpoint = config?.ApiEndpoint;
 
-        var detector = new EnvironmentDetector();
+        // Ensure environment info is populated in the session (only once)
+        var session = XpingContext.CurrentSession;
+        if (session != null && string.IsNullOrEmpty(session.EnvironmentInfo.MachineName))
+        {
+            var detector = new EnvironmentDetector();
+            var config = XpingContext.Configuration;
+            var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
+            var apiEndpoint = config?.ApiEndpoint;
+            session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
+        }
 
         return new TestExecution
         {
@@ -127,7 +133,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            Environment = detector.Detect(collectNetworkMetrics, apiEndpoint),
+            SessionId = session?.SessionId,
             Metadata = ExtractMetadata(test),
             ErrorMessage = result.Message ?? string.Empty,
             StackTrace = result.StackTrace ?? string.Empty,

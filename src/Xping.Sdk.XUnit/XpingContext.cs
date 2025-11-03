@@ -25,6 +25,7 @@ public static class XpingContext
     private static IOfflineQueue? _offlineQueue;
     private static HttpClient? _httpClient;
     private static XpingConfiguration? _configuration;
+    private static TestSession? _currentSession;
 
     /// <summary>
     /// Gets a value indicating whether the context has been initialized.
@@ -35,6 +36,11 @@ public static class XpingContext
     /// Gets the current configuration.
     /// </summary>
     internal static XpingConfiguration? Configuration => _configuration;
+
+    /// <summary>
+    /// Gets the current test session.
+    /// </summary>
+    internal static TestSession? CurrentSession => _currentSession;
 
     /// <summary>
     /// Initializes the Xping context with default configuration.
@@ -125,12 +131,19 @@ public static class XpingContext
             }
         }
 
+        // Mark session as completed
+        if (_currentSession != null)
+        {
+            _currentSession.CompletedAt = System.DateTime.UtcNow;
+        }
+
         _uploader = null;
         _offlineQueue = null;
         _httpClient?.Dispose();
         _httpClient = null;
         _configuration = null;
         _collector = null;
+        _currentSession = null;
         IsInitialized = false;
     }
 
@@ -147,6 +160,7 @@ public static class XpingContext
             _httpClient?.Dispose();
             _httpClient = null;
             _configuration = null;
+            _currentSession = null;
             IsInitialized = false;
         }
     }
@@ -158,6 +172,10 @@ public static class XpingContext
         _offlineQueue = new FileBasedOfflineQueue();
         _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue);
         _collector = new TestExecutionCollector(_uploader, configuration);
+
+        // Initialize the test session
+        _currentSession = new TestSession();
+
         IsInitialized = true;
 
         return _collector;

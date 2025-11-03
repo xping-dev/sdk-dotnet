@@ -30,7 +30,7 @@ public class TestExecutionCollectorTests
             Duration = TimeSpan.FromMilliseconds(100),
             StartTimeUtc = DateTime.UtcNow,
             EndTimeUtc = DateTime.UtcNow,
-            Environment = new EnvironmentInfo(),
+            SessionId = Guid.NewGuid().ToString(),
             Metadata = new TestMetadata(),
         };
     }

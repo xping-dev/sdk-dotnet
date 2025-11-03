@@ -77,10 +77,16 @@ public abstract class XpingTestBase
         var lastDotIndex = className.LastIndexOf('.');
         var namespaceName = lastDotIndex >= 0 ? className.Substring(0, lastDotIndex) : string.Empty;
 
-        var detector = new EnvironmentDetector();
-        var config = XpingContext.Configuration;
-        var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
-        var apiEndpoint = config?.ApiEndpoint;
+        // Ensure environment info is populated in the session (only once)
+        var session = XpingContext.CurrentSession;
+        if (session != null && string.IsNullOrEmpty(session.EnvironmentInfo.MachineName))
+        {
+            var detector = new EnvironmentDetector();
+            var config = XpingContext.Configuration;
+            var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
+            var apiEndpoint = config?.ApiEndpoint;
+            session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
+        }
 
         return new TestExecution
         {
@@ -94,7 +100,7 @@ public abstract class XpingTestBase
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            Environment = detector.Detect(collectNetworkMetrics, apiEndpoint),
+            SessionId = session?.SessionId,
             Metadata = metadata,
             ErrorMessage = GetErrorMessage(context),
             StackTrace = GetStackTrace(context)

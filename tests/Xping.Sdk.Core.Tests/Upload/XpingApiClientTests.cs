@@ -33,7 +33,7 @@ public class XpingApiClientTests
             Duration = TimeSpan.FromMilliseconds(100),
             StartTimeUtc = DateTime.UtcNow,
             EndTimeUtc = DateTime.UtcNow,
-            Environment = new EnvironmentInfo(),
+            SessionId = Guid.NewGuid().ToString(),
             Metadata = new TestMetadata(),
         };
     }

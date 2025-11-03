@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-#nullable enable
-
 namespace Xping.Sdk.Core.Models;
 
 using System.Collections.Generic;
@@ -24,7 +22,7 @@ public sealed class EnvironmentInfo
         RuntimeVersion = string.Empty;
         Framework = string.Empty;
         EnvironmentName = string.Empty;
-        CustomProperties = new Dictionary<string, string>();
+        CustomProperties = [];
     }
 
     /// <summary>

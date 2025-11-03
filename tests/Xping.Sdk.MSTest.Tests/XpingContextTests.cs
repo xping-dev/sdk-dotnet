@@ -144,7 +144,7 @@ public sealed class XpingContextTests : IDisposable
             Duration = TimeSpan.FromMilliseconds(100),
             StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
             EndTimeUtc = DateTime.UtcNow,
-            Environment = new Core.Models.EnvironmentInfo(),
+            SessionId = Guid.NewGuid().ToString(),
             Metadata = new TestMetadata()
         };
     }

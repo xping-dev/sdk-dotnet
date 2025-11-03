@@ -63,9 +63,10 @@ public sealed class TestExecution
     public DateTime EndTimeUtc { get; set; }
 
     /// <summary>
-    /// Gets or sets the environment information where the test was executed.
+    /// Gets or sets the session ID that this test execution belongs to.
+    /// This links the test execution to its parent session which contains the environment information.
     /// </summary>
-    public EnvironmentInfo? Environment { get; set; }
+    public string? SessionId { get; set; }
 
     /// <summary>
     /// Gets or sets the test metadata including categories, tags, and custom attributes.

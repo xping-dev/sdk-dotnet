@@ -14,19 +14,10 @@ public class TestExecutionTests
     {
         // Arrange
         var executionId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid().ToString();
         var startTime = DateTime.UtcNow.AddSeconds(-10);
         var endTime = DateTime.UtcNow;
         var duration = endTime - startTime;
-
-        var environment = new EnvironmentInfo
-        {
-            MachineName = "test-machine",
-            OperatingSystem = "macOS 14.0",
-            RuntimeVersion = ".NET 8.0.0",
-            Framework = "xUnit 2.6.5",
-            EnvironmentName = "Local",
-            IsCIEnvironment = false
-        };
 
         var metadata = new TestMetadata
         {
@@ -48,7 +39,7 @@ public class TestExecutionTests
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            Environment = environment,
+            SessionId = sessionId,
             Metadata = metadata,
             ErrorMessage = null,
             StackTrace = null
@@ -65,7 +56,7 @@ public class TestExecutionTests
         Assert.Equal(duration, execution.Duration);
         Assert.Equal(startTime, execution.StartTimeUtc);
         Assert.Equal(endTime, execution.EndTimeUtc);
-        Assert.Same(environment, execution.Environment);
+        Assert.Equal(sessionId, execution.SessionId);
         Assert.Same(metadata, execution.Metadata);
         Assert.Null(execution.ErrorMessage);
         Assert.Null(execution.StackTrace);
@@ -171,18 +162,18 @@ public class TestExecutionTests
     }
 
     [Fact]
-    public void ShouldAllowNullEnvironment()
+    public void ShouldAllowNullSessionId()
     {
         // Act
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
             TestName = "Test",
-            Environment = null
+            SessionId = null
         };
 
         // Assert
-        Assert.Null(execution.Environment);
+        Assert.Null(execution.SessionId);
     }
 
     [Fact]
