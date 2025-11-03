@@ -746,13 +746,13 @@ public class CalculatorTests : XpingTestBase
 - Integration points: >80%
 
 **Test Categories:**
-- [ ] Model validation tests
-- [ ] Configuration tests
-- [ ] Collector tests (thread-safety)
-- [ ] API client tests (with mocks)
-- [ ] Environment detection tests
-- [ ] Offline queue tests
-- [ ] Adapter tests per framework
+- [x] Model validation tests
+- [x] Configuration tests
+- [x] Collector tests (thread-safety)
+- [x] API client tests (with mocks)
+- [x] Environment detection tests
+- [x] Offline queue tests
+- [x] Adapter tests per framework
 
 **Tools:**
 - xUnit for test framework
