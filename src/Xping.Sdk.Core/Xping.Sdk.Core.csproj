@@ -4,7 +4,18 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Xping.Sdk.Core</PackageId>
+    <Description>Core library for Xping SDK - Test execution tracking and reliability analysis. Provides the foundational infrastructure for collecting, buffering, and uploading test execution data to the Xping platform.</Description>
+    <PackageReleaseNotes>Initial release of Xping SDK Core library with support for test execution tracking, environment detection, offline queuing, and resilient API communication.</PackageReleaseNotes>
   </PropertyGroup>
+
+  <!-- Include icon and README in the package -->
+  <ItemGroup>
+    <None Include="..\..\docs\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.10" />

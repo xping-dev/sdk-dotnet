@@ -1,31 +1,162 @@
-## About The Project
+<!-- 
+  This README is specifically designed for NuGet package display.
+  It uses absolute URLs and formatting optimized for NuGet.org rendering.
+  For the GitHub repository README, see /README.md in the root directory.
+-->
 
-**Xping** SDK provides a set of tools to make it easy to write automated tests for Web Application and Web API, as well as troubleshoot issues that may arise during testing. The library provides a number of features to verify that the Web Application is functioning correctly, such as checking that the correct data is displayed on a page or that the correct error messages are displayed when an error occurs.
+# Xping SDK for .NET
 
-The library is called **Xping**, which stands for e**X**ternal **Ping**s, and is used to verify the availability of a server and monitor its content. 
+**Xping** brings observability to testing. We help developers and teams understand not just whether tests pass, but whether they can be trusted. Our mission is to eliminate wasted time on flaky tests and provide actionable insights that improve test reliability and confidence.
 
-You can find more information about the library, including documentation and examples, on the official website [https://xping.io](https://www.xping.io).
+## Features
 
-<!-- GETTING STARTED -->
-## Getting Started
+- 🔍 **Test Execution Tracking** - Automatic collection of test results, duration, and outcomes
+- 📊 **Flaky Test Detection** - Identify unreliable tests that waste development time
+- 🌐 **CI/CD Integration** - Automatic environment detection for GitHub Actions, Azure DevOps, Jenkins, and more
+- 💪 **Resilient Upload** - Retry logic, circuit breaker, and offline queue for reliable data delivery
+- ⚡ **Low Overhead** - Minimal performance impact on your test execution
+- 🎯 **Multi-Framework Support** - Works with NUnit, xUnit, and MSTest
 
-The library is distributed as a [NuGet packages](https://www.nuget.org/profiles/Xping), which can be installed using the [.NET CLI](https://docs.microsoft.com/en-us/dotnet/core/tools/) command `dotnet add package`. Here are the steps to get started:
+## Installation
 
-### Installation using .NET CLI
+Choose the package for your test framework:
 
-1. Open a command prompt or terminal window.
+### NUnit
+```bash
+dotnet add package Xping.Sdk.NUnit
+```
 
-2. Navigate to the directory where your project is located.
+### xUnit
+```bash
+dotnet add package Xping.Sdk.XUnit
+```
 
-3. Run the following command to install the **Xping** NuGet package:
+### MSTest
+```bash
+dotnet add package Xping.Sdk.MSTest
+```
 
-   ```
-   dotnet add package Xping.Availability
-   ```
+## Quick Start
 
-4. Once the package is installed, you can start using the **Xping** library in your project.
+### NUnit
 
-```c#
+```csharp
+using NUnit.Framework;
+using Xping.Sdk.NUnit;
+
+// Apply at assembly level for all tests
+[assembly: XpingTrack]
+
+// Or apply to specific test fixtures
+[TestFixture]
+[XpingTrack]
+public class CalculatorTests
+{
+    [Test]
+    public void Add_TwoNumbers_ReturnsSum()
+    {
+        var result = Calculator.Add(2, 3);
+        Assert.AreEqual(5, result);
+    }
+}
+```
+
+### xUnit
+
+```csharp
+using Xunit;
+
+// Add to AssemblyInfo.cs or as assembly attribute
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+
+public class CalculatorTests
+{
+    [Fact]
+    public void Add_TwoNumbers_ReturnsSum()
+    {
+        var result = Calculator.Add(2, 3);
+        Assert.Equal(5, result);
+    }
+}
+```
+
+### MSTest
+
+```csharp
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xping.Sdk.MSTest;
+
+[TestClass]
+public class CalculatorTests : XpingTestBase
+{
+    [TestMethod]
+    public void Add_TwoNumbers_ReturnsSum()
+    {
+        var result = Calculator.Add(2, 3);
+        Assert.AreEqual(5, result);
+    }
+}
+```
+
+## Configuration
+
+Configure Xping SDK using `appsettings.json` or environment variables:
+
+### appsettings.json
+
+```json
+{
+  "Xping": {
+    "ApiKey": "your-api-key",
+    "ProjectId": "your-project-id",
+    "Enabled": true,
+    "ApiEndpoint": "https://api.xping.io",
+    "BatchSize": 100,
+    "FlushInterval": "00:00:30"
+  }
+}
+```
+
+### Environment Variables (Recommended for CI/CD)
+
+```bash
+export XPING_API_KEY="your-api-key"
+export XPING_PROJECT_ID="your-project-id"
+export XPING_ENABLED="true"
+```
+
+## Key Benefits
+
+### Detect Flaky Tests
+Automatically identify tests that pass and fail intermittently, helping you focus on real issues rather than debugging unreliable tests.
+
+### Track Test History
+Monitor test execution trends over time to understand test suite health and identify patterns in failures.
+
+### CI/CD Insights
+Get detailed insights into test performance across different environments, branches, and pull requests.
+
+### Performance Analysis
+Track test execution duration to identify slow tests and optimize your test suite.
+
+## Requirements
+
+- .NET Standard 2.0 or higher
+- .NET Framework 4.6.1+ / .NET Core 2.0+ / .NET 5+
+- NUnit 3.14+, xUnit 2.9+, or MSTest 3.2+
+
+## Documentation
+
+For detailed documentation, tutorials, and examples, visit:
+
+- **GitHub Repository**: https://github.com/xping-dev/sdk-dotnet
+- **Getting Started Guide**: https://github.com/xping-dev/sdk-dotnet/blob/main/docs/docs/getting-started.md
+- **API Documentation**: https://xping-dev.github.io/sdk-dotnet/
+
+## Support
+
+- **Issues**: https://github.com/xping-dev/sdk-dotnet/issues
+- **Discussions**: https://github.com/xping-dev/sdk-dotnet/discussions```c#
 using Xping.Sdk.Core.DependencyInjection;
 
 Host.CreateDefaultBuilder()

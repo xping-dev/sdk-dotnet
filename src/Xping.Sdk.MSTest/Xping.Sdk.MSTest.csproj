@@ -4,7 +4,18 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Xping.Sdk.MSTest</PackageId>
+    <Description>MSTest adapter for Xping SDK - Seamlessly integrate test execution tracking into your MSTest projects. Provides base test class and extension methods for automatic test result collection and analysis for MSTest 3.x tests.</Description>
+    <PackageReleaseNotes>Initial release of Xping SDK MSTest adapter with support for base test class integration, automatic tracking via TestContext, and data-driven test support.</PackageReleaseNotes>
   </PropertyGroup>
+
+  <!-- Include icon and README in the package -->
+  <ItemGroup>
+    <None Include="..\..\docs\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MSTest.TestFramework" Version="3.2.0" />

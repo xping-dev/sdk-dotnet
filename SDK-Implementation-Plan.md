@@ -858,12 +858,12 @@ samples/
 ### 5.1 NuGet Package Configuration
 
 **Tasks:**
-- [ ] Configure package metadata
-- [ ] Create package icons
-- [ ] Write README.md for NuGet
-- [ ] Configure package dependencies
-- [ ] Set up versioning strategy (SemVer)
-- [ ] Configure symbol packages
+- [x] Configure package metadata
+- [x] Create package icons
+- [x] Write README.md for NuGet
+- [x] Configure package dependencies
+- [x] Set up versioning strategy (SemVer)
+- [x] Configure symbol packages
 - [ ] Set up package signing
 
 **Package Metadata:**
@@ -880,7 +880,7 @@ samples/
   <PackageLicenseExpression>MIT</PackageLicenseExpression>
   <PackageIcon>icon.png</PackageIcon>
   <PackageReadmeFile>README.md</PackageReadmeFile>
-  <RepositoryUrl>https://github.com/xping-dev/sdk</RepositoryUrl>
+  <RepositoryUrl>https://github.com/xping-dev/sdk-dotnet</RepositoryUrl>
   <RepositoryType>git</RepositoryType>
   <PublishRepositoryUrl>true</PublishRepositoryUrl>
   <IncludeSymbols>true</IncludeSymbols>
