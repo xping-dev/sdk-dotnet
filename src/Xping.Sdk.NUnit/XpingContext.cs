@@ -26,13 +26,12 @@ public static class XpingContext
     private static IOfflineQueue? _offlineQueue;
     private static XpingConfiguration? _configuration;
     private static HttpClient? _httpClient;
-    private static bool _isInitialized;
     private static TestSession? _currentSession;
 
     /// <summary>
     /// Gets a value indicating whether the context is initialized.
     /// </summary>
-    public static bool IsInitialized => _isInitialized;
+    public static bool IsInitialized { get; private set; }
 
     /// <summary>
     /// Gets the current configuration.
@@ -52,7 +51,7 @@ public static class XpingContext
     {
         lock (_lock)
         {
-            if (_isInitialized && _collector != null)
+            if (IsInitialized && _collector != null)
             {
                 return _collector;
             }
@@ -76,7 +75,7 @@ public static class XpingContext
 
         lock (_lock)
         {
-            if (_isInitialized && _collector != null)
+            if (IsInitialized && _collector != null)
             {
                 return _collector;
             }
@@ -91,7 +90,7 @@ public static class XpingContext
     /// <param name="execution">The test execution to record.</param>
     public static void RecordTest(TestExecution execution)
     {
-        if (!_isInitialized)
+        if (!IsInitialized)
         {
             return;
         }
@@ -106,7 +105,7 @@ public static class XpingContext
     /// <returns>A task representing the asynchronous operation.</returns>
     public static async Task FlushAsync(CancellationToken cancellationToken = default)
     {
-        if (!_isInitialized)
+        if (!IsInitialized)
         {
             return;
         }
@@ -123,19 +122,19 @@ public static class XpingContext
     /// <returns>A task representing the asynchronous operation.</returns>
     public static async Task DisposeAsync()
     {
-        if (!_isInitialized)
+        if (!IsInitialized)
         {
             return;
         }
 
         lock (_lock)
         {
-            if (!_isInitialized)
+            if (!IsInitialized)
             {
                 return;
             }
 
-            _isInitialized = false;
+            IsInitialized = false;
         }
 
         try
@@ -172,7 +171,7 @@ public static class XpingContext
     {
         lock (_lock)
         {
-            _isInitialized = false;
+            IsInitialized = false;
             _collector = null;
             _uploader = null;
             _offlineQueue = null;
@@ -206,7 +205,7 @@ public static class XpingContext
         }
         _collector.SetSession(_currentSession);
 
-        _isInitialized = true;
+        IsInitialized = true;
 
         return _collector;
     }

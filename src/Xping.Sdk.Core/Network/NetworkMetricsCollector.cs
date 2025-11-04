@@ -22,7 +22,12 @@ using Xping.Sdk.Core.Models;
 /// </summary>
 public sealed class NetworkMetricsCollector : INetworkMetricsCollector
 {
-    private const int DefaultTimeout = 5000; // 5 seconds
+    /// <summary>
+    /// Network timeout values are intentionally kept low to prevent test execution delays
+    /// when operating in offline or degraded network environments. This ensures graceful
+    /// degradation without impacting overall test suite performance.
+    /// </summary>
+    private const int DefaultTimeout = 200; // 200 milliseconds
     private const int PingCount = 4; // Number of pings for latency calculation
 
     /// <inheritdoc/>
@@ -134,7 +139,7 @@ public sealed class NetworkMetricsCollector : INetworkMetricsCollector
     /// <summary>
     /// Measures latency to the API endpoint using TCP connection.
     /// </summary>
-    private static async Task<(int? latencyMs, int? packetLoss)> MeasureLatencyAsync(
+    private async Task<(int? latencyMs, int? packetLoss)> MeasureLatencyAsync(
         string apiEndpoint,
         CancellationToken cancellationToken)
     {
@@ -196,7 +201,7 @@ public sealed class NetworkMetricsCollector : INetworkMetricsCollector
             var avgLatency = (int)latencies.Average();
 
             // Calculate packet loss percentage
-            var packetLoss = ((PingCount - successCount) * 100) / PingCount;
+            var packetLoss = (PingCount - successCount) * 100 / PingCount;
 
             return (avgLatency, packetLoss);
         }
