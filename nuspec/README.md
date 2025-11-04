@@ -151,76 +151,12 @@ For detailed documentation, tutorials, and examples, visit:
 
 - **GitHub Repository**: https://github.com/xping-dev/sdk-dotnet
 - **Getting Started Guide**: https://github.com/xping-dev/sdk-dotnet/blob/main/docs/docs/getting-started.md
-- **API Documentation**: https://xping-dev.github.io/sdk-dotnet/
+- **API Documentation**: https://docs.xping.io
 
 ## Support
 
 - **Issues**: https://github.com/xping-dev/sdk-dotnet/issues
 - **Discussions**: https://github.com/xping-dev/sdk-dotnet/discussions```c#
-using Xping.Sdk.Core.DependencyInjection;
-
-Host.CreateDefaultBuilder()
-    .ConfigureServices(services =>
-    {
-        .AddHttpClientFactory()
-        .AddTestAgent(agent =>
-        {
-            agent.UploadToken = "--- Your Dashboard Upload Token ---";
-            agent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
-            agent.UseDnsLookup()
-                 .UseIPAddressAccessibilityCheck()
-                 .UseHttpClient()
-                 .UseHttpValidation(response =>
-                 {
-                     Expect(response)
-                         .ToHaveSuccessStatusCode()
-                         .ToHaveHttpHeader(HeaderNames.Server)
-                             .WithValue("Google", new() { Exact = false });
-                 })
-        });
-    });
-```
-
-```c#
-using Xping.Sdk.Core;
-using Xping.Sdk.Core.Session;
-
-var testAgent = _serviceProvider.GetRequiredService<TestAgent>();
-
-TestSession session = await testAgent.RunAsync(new Uri("www.demoblaze.com"));
-```
-
-You can also integrate it with your preferred testing framework, such as NUnit, as shown below:
-
-```c#
-[TestFixtureSource(typeof(XpingTestFixture))]
-public class HomePageTests(TestAgent testAgent) : XpingAssertions
-{
-    public required TestAgent TestAgent { get; init; } = testAgent;
-
-    [OneTimeSetUp]
-    public void OneTimeSetUp()
-    {
-        TestAgent.UploadToken = "--- Your Dashboard Upload Token ---"; // optional
-        TestAgent.ApiKey = "--- Your Dashboard API Key ---"; // For authentication with Xping services
-    }
-
-    [Test]
-    public async Task VerifyHomePageTitle()
-    {
-        TestAgent.UseBrowserClient()
-                 .UsePageValidation(async page =>
-                 {
-                     await Expect(page).ToHaveTitleAsync("STORE");
-                 });
-
-        await using TestSession session = await TestAgent.RunAsync(new Uri("https://demoblaze.com"));
-
-        Assert.That(session.IsValid, Is.True, session.Failures.FirstOrDefault()?.ErrorMessage);
-    }
-```
-
-That’s it! You’re now ready to start automating your web application tests and monitoring your server’s content using **Xping**.
 
 ## License
 
