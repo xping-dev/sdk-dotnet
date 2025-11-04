@@ -48,9 +48,18 @@ public static class XpingContext
     /// Initializes the Xping context with default configuration.
     /// </summary>
     /// <returns>The test execution collector.</returns>
-    public static ITestExecutionCollector Initialize()
+    public static TestExecutionCollector Initialize()
     {
-        return Initialize(XpingConfigurationLoader.Load());
+        lock (_lock)
+        {
+            if (_isInitialized && _collector != null)
+            {
+                return _collector;
+            }
+
+            var config = XpingConfigurationLoader.Load();
+            return InitializeInternal(config);
+        }
     }
 
     /// <summary>
@@ -58,7 +67,7 @@ public static class XpingContext
     /// </summary>
     /// <param name="configuration">The configuration to use.</param>
     /// <returns>The test execution collector.</returns>
-    public static ITestExecutionCollector Initialize(XpingConfiguration configuration)
+    public static TestExecutionCollector Initialize(XpingConfiguration configuration)
     {
         if (configuration == null)
         {
@@ -72,28 +81,7 @@ public static class XpingContext
                 return _collector;
             }
 
-            _configuration = configuration;
-
-            // Initialize offline queue if enabled
-            if (_configuration.EnableOfflineQueue)
-            {
-                _offlineQueue = new FileBasedOfflineQueue();
-            }
-
-            // Initialize HTTP client
-            _httpClient = new HttpClient();
-
-            // Initialize uploader
-            _uploader = new XpingApiClient(_httpClient, _configuration, _offlineQueue);
-
-            // Initialize collector
-            _collector = new TestExecutionCollector(_uploader, _configuration);
-
-            // Initialize the test session
-            _currentSession = new TestSession();
-
-            _isInitialized = true;
-            return _collector;
+            return InitializeInternal(configuration);
         }
     }
 
@@ -159,12 +147,6 @@ public static class XpingContext
                 _collector = null;
             }
 
-            // Mark session as completed
-            if (_currentSession != null)
-            {
-                _currentSession.CompletedAt = DateTime.UtcNow;
-            }
-
             (_uploader as IDisposable)?.Dispose();
             _uploader = null;
 
@@ -198,5 +180,34 @@ public static class XpingContext
             _configuration = null;
             _currentSession = null;
         }
+    }
+
+    private static TestExecutionCollector InitializeInternal(XpingConfiguration configuration)
+    {
+        _configuration = configuration;
+        _httpClient = new HttpClient();
+        // Initialize offline queue if enabled
+        if (_configuration.EnableOfflineQueue)
+        {
+            _offlineQueue = new FileBasedOfflineQueue();
+        }
+        _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue);
+        _collector = new TestExecutionCollector(_uploader, configuration);
+
+        // Initialize the test session and associate it with the collector
+        _currentSession = new TestSession();
+        // Ensure environment info is populated in the session (only once)
+        if (string.IsNullOrEmpty(_currentSession.EnvironmentInfo.MachineName))
+        {
+            var detector = new Core.Environment.EnvironmentDetector();
+            var collectNetworkMetrics = _configuration.CollectNetworkMetrics;
+            var apiEndpoint = _configuration.ApiEndpoint;
+            _currentSession.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
+        }
+        _collector.SetSession(_currentSession);
+
+        _isInitialized = true;
+
+        return _collector;
     }
 }

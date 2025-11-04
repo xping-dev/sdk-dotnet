@@ -26,7 +26,9 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
     private readonly SemaphoreSlim _flushLock;
     private readonly Random _random;
     private readonly object _statsLock = new();
+    private readonly ConcurrentDictionary<string, bool> _uploadedSessions; // Track uploaded sessions
 
+    private TestSession? _currentSession;
     private long _totalRecorded;
     private long _totalUploaded;
     private long _totalFailed;
@@ -48,6 +50,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         _buffer = new ConcurrentQueue<TestExecution>();
         _flushLock = new SemaphoreSlim(1, 1);
         _random = new Random();
+        _uploadedSessions = new ConcurrentDictionary<string, bool>();
 
         // Set up automatic flush timer if enabled
         if (_config.Enabled && _config.FlushInterval > TimeSpan.Zero)
@@ -58,6 +61,20 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
                 _config.FlushInterval,
                 _config.FlushInterval);
         }
+    }
+
+    /// <summary>
+    /// Sets the current test session for this collector.
+    /// </summary>
+    /// <param name="session">The test session to associate with this collector.</param>
+    public void SetSession(TestSession session)
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(TestExecutionCollector));
+        }
+
+        _currentSession = session ?? throw new ArgumentNullException(nameof(session));
     }
 
     /// <summary>
@@ -194,11 +211,70 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         _flushLock?.Dispose();
     }
 
+    /// <summary>
+    /// Uploads the current test session metadata to the API.
+    /// Uses the session set via SetSession().
+    /// </summary>
+    private async Task UploadSessionAsync(CancellationToken cancellationToken = default)
+    {
+        if (_disposed || _currentSession == null)
+        {
+            return;
+        }
+
+        // Check if SDK is disabled
+        if (!_config.Enabled)
+        {
+            return;
+        }
+
+        // Only upload each session once
+        if (_uploadedSessions.ContainsKey(_currentSession.SessionId))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _uploader.UploadSessionAsync(_currentSession, cancellationToken).ConfigureAwait(false);
+
+            if (result.Success)
+            {
+                _uploadedSessions.TryAdd(_currentSession.SessionId, true);
+            }
+            else if (_config.EnableOfflineQueue)
+            {
+                // Could queue session for retry, but since it's typically small,
+                // we can retry on next flush
+            }
+        }
+        catch
+        {
+            if (!_config.EnableOfflineQueue)
+            {
+                throw;
+            }
+            // If offline queue is enabled, swallow and allow retry
+        }
+    }
+
     private async Task FlushInternalAsync(CancellationToken cancellationToken)
     {
         if (_buffer.IsEmpty)
         {
             return;
+        }
+
+        // Upload session first if not already uploaded
+        if (_currentSession != null && !_uploadedSessions.ContainsKey(_currentSession.SessionId))
+        {
+            // Set completion time on first flush (when tests finish)
+            if (_currentSession.CompletedAt == null)
+            {
+                _currentSession.CompletedAt = DateTime.UtcNow;
+            }
+
+            await UploadSessionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         // Dequeue items up to batch size

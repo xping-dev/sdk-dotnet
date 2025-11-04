@@ -218,17 +218,6 @@ public sealed class XpingMessageSink : IMessageSink
         var testMethod = testCase.TestMethod;
         var testClass = testMethod.TestClass;
 
-        // Ensure environment info is populated in the session (only once)
-        var session = XpingContext.CurrentSession;
-        if (session != null && string.IsNullOrEmpty(session.EnvironmentInfo.MachineName))
-        {
-            var detector = new Xping.Sdk.Core.Environment.EnvironmentDetector();
-            var config = XpingContext.Configuration;
-            var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
-            var apiEndpoint = config?.ApiEndpoint;
-            session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
-        }
-
         // Generate stable test identity
         var fullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}";
         var assemblyName = testClass.Class.Assembly.Name;
@@ -254,7 +243,7 @@ public sealed class XpingMessageSink : IMessageSink
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = session?.SessionId,
+            SessionId = XpingContext.CurrentSession?.SessionId,
             Metadata = ExtractMetadata(test, output),
             ErrorMessage = errorMessage ?? string.Empty,
             StackTrace = stackTrace ?? string.Empty,

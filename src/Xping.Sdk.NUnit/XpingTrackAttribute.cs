@@ -9,7 +9,6 @@ using System;
 using System.Diagnostics;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
-using Xping.Sdk.Core.Environment;
 using Xping.Sdk.Core.Models;
 
 /// <summary>
@@ -110,17 +109,6 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     {
         var result = TestContext.CurrentContext.Result;
 
-        // Ensure environment info is populated in the session (only once)
-        var session = XpingContext.CurrentSession;
-        if (session != null && string.IsNullOrEmpty(session.EnvironmentInfo.MachineName))
-        {
-            var detector = new EnvironmentDetector();
-            var config = XpingContext.Configuration;
-            var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
-            var apiEndpoint = config?.ApiEndpoint;
-            session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
-        }
-
         // Generate stable test identity
         var fullyQualifiedName = test.FullName;
         var assemblyName = test.TypeInfo?.Assembly.GetName().Name ?? string.Empty;
@@ -153,7 +141,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = session?.SessionId,
+            SessionId = XpingContext.CurrentSession?.SessionId,
             Metadata = ExtractMetadata(test),
             ErrorMessage = result.Message ?? string.Empty,
             StackTrace = result.StackTrace ?? string.Empty,

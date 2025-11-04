@@ -58,7 +58,9 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task EnqueueAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
+    public async Task EnqueueAsync(
+        IEnumerable<TestExecution> executions,
+        CancellationToken cancellationToken = default)
     {
         var executionsList = executions?.ToList();
         if (executionsList == null || executionsList.Count == 0)
@@ -77,7 +79,8 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
             if (currentSize + newCount > _maxQueueSize)
             {
                 throw new InvalidOperationException(
-                    $"Queue size limit reached. Current: {currentSize}, Attempting to add: {newCount}, Max: {_maxQueueSize}");
+                    $"Queue size limit reached. Current: {currentSize}, " +
+                    $"Attempting to add: {newCount}, Max: {_maxQueueSize}");
             }
 
             // Create unique filename with timestamp and random component for concurrency

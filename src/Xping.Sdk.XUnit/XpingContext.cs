@@ -68,6 +68,11 @@ public static class XpingContext
     /// <returns>The test execution collector instance.</returns>
     public static TestExecutionCollector Initialize(XpingConfiguration configuration)
     {
+        if (configuration == null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
         lock (_initializationLock)
         {
             if (IsInitialized && _collector != null)
@@ -131,12 +136,6 @@ public static class XpingContext
             }
         }
 
-        // Mark session as completed
-        if (_currentSession != null)
-        {
-            _currentSession.CompletedAt = System.DateTime.UtcNow;
-        }
-
         _uploader = null;
         _offlineQueue = null;
         _httpClient?.Dispose();
@@ -169,12 +168,25 @@ public static class XpingContext
     {
         _configuration = configuration;
         _httpClient = new HttpClient();
-        _offlineQueue = new FileBasedOfflineQueue();
+        // Initialize offline queue if enabled
+        if (_configuration.EnableOfflineQueue)
+        {
+            _offlineQueue = new FileBasedOfflineQueue();
+        }
         _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue);
         _collector = new TestExecutionCollector(_uploader, configuration);
 
-        // Initialize the test session
+        // Initialize the test session and associate it with the collector
         _currentSession = new TestSession();
+        // Ensure environment info is populated in the session (only once)
+        if (string.IsNullOrEmpty(_currentSession.EnvironmentInfo.MachineName))
+        {
+            var detector = new Core.Environment.EnvironmentDetector();
+            var collectNetworkMetrics = _configuration.CollectNetworkMetrics;
+            var apiEndpoint = _configuration.ApiEndpoint;
+            _currentSession.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
+        }
+        _collector.SetSession(_currentSession);
 
         IsInitialized = true;
 

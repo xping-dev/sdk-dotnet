@@ -286,11 +286,45 @@ public class TestExecutionCollectorTests
         private readonly TimeSpan _uploadDelay;
 
         public List<List<TestExecution>> UploadedBatches { get; } = new();
+        public List<TestSession> UploadedSessions { get; } = new();
+        public TestSession? CurrentSession { get; private set; }
 
         public MockTestResultUploader(bool shouldFail = false, TimeSpan uploadDelay = default)
         {
             _shouldFail = shouldFail;
             _uploadDelay = uploadDelay;
+        }
+
+        public void SetSession(TestSession session)
+        {
+            CurrentSession = session;
+        }
+
+        public async Task<UploadResult> UploadSessionAsync(
+            TestSession session,
+            CancellationToken cancellationToken = default)
+        {
+            if (_uploadDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(_uploadDelay, cancellationToken);
+            }
+
+            if (_shouldFail)
+            {
+                return new UploadResult
+                {
+                    Success = false,
+                    ErrorMessage = "Simulated session upload failure",
+                };
+            }
+
+            UploadedSessions.Add(session);
+
+            return new UploadResult
+            {
+                Success = true,
+                ReceiptId = session.SessionId,
+            };
         }
 
         public async Task<UploadResult> UploadAsync(

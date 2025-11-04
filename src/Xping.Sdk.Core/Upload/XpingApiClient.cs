@@ -61,6 +61,80 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     }
 
     /// <summary>
+    /// Uploads a test session with environment information to the Xping API.
+    /// </summary>
+    /// <param name="session">The test session to upload.</param>
+    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <returns>A task containing the upload result.</returns>
+    public async Task<UploadResult> UploadSessionAsync(
+        TestSession session,
+        CancellationToken cancellationToken = default)
+    {
+        if (session == null)
+        {
+            throw new ArgumentNullException(nameof(session));
+        }
+
+        // Fast-fail if credentials are missing
+        if (string.IsNullOrWhiteSpace(_config.ApiKey) || string.IsNullOrWhiteSpace(_config.ProjectId))
+        {
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = "Upload skipped: API Key and Project ID are required but not configured",
+            };
+        }
+
+        try
+        {
+            var response = await _resiliencePipeline.ExecuteAsync(
+                async ct =>
+                {
+                    using var request = CreateSessionUploadRequest(session);
+                    return await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            using (response)
+            {
+                return await ProcessSessionResponseAsync(response, session.SessionId).ConfigureAwait(false);
+            }
+        }
+        catch (BrokenCircuitException ex)
+        {
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Circuit breaker is open: {ex.Message}",
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"HTTP request failed: {ex.Message}",
+            };
+        }
+        catch (TaskCanceledException ex)
+        {
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Request timeout: {ex.Message}",
+            };
+        }
+        catch (Exception ex)
+        {
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Unexpected error: {ex.Message}",
+            };
+        }
+    }
+
+    /// <summary>
     /// Uploads a batch of test executions to the Xping API.
     /// If the upload fails and an offline queue is configured, the executions are queued.
     /// Before uploading, any queued executions are processed first.
@@ -284,6 +358,51 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             .Build();
     }
 
+    private HttpRequestMessage CreateSessionUploadRequest(TestSession session)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-sessions");
+
+        // Session initialization occurs before test execution begins.
+        // To ensure only session metadata (not test results) is uploaded,
+        // temporarily clear the TestExecutions collection during serialization.
+        var tempExecutions = session.TestExecutions.ToList();
+        session.TestExecutions.Clear();
+
+        try
+        {
+            var json = JsonSerializer.Serialize(session, _jsonOptions);
+            var content = Encoding.UTF8.GetBytes(json);
+
+            // Compress if payload is large enough
+            if (_config.EnableCompression && content.Length > CompressionThresholdBytes)
+            {
+                using var compressedStream = new MemoryStream();
+                using (var gzipStream = new GZipStream(compressedStream, CompressionLevel.Fastest))
+                {
+                    gzipStream.Write(content, 0, content.Length);
+                }
+
+                request.Content = new ByteArrayContent(compressedStream.ToArray());
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                request.Content.Headers.ContentEncoding.Add("gzip");
+            }
+            else
+            {
+                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            }
+
+            return request;
+        }
+        finally
+        {
+            // Restore the original test executions collection
+            foreach (var execution in tempExecutions)
+            {
+                session.TestExecutions.Add(execution);
+            }
+        }
+    }
+
     private HttpRequestMessage CreateUploadRequest(List<TestExecution> executions)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-executions");
@@ -311,6 +430,29 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         return request;
     }
 
+    private static async Task<UploadResult> ProcessSessionResponseAsync(HttpResponseMessage response, string sessionId)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            var apiResponse = await response.Content.ReadFromJsonAsync<SessionApiResponse>().ConfigureAwait(false);
+
+            return new UploadResult
+            {
+                Success = true,
+                ExecutionCount = 0, // No executions in session upload
+                ReceiptId = apiResponse?.ReceiptId ?? sessionId,
+            };
+        }
+
+        var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        return new UploadResult
+        {
+            Success = false,
+            ErrorMessage = $"API returned {response.StatusCode}: {errorContent}",
+        };
+    }
+
     private static async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
     {
         if (response.IsSuccessStatusCode)
@@ -334,7 +476,14 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         };
     }
 
-#pragma warning disable CA1812 // ApiResponse is instantiated by JSON deserializer
+#pragma warning disable CA1812 // Response classes are instantiated by JSON deserializer
+    private sealed class SessionApiResponse
+    {
+        public string? ReceiptId { get; set; }
+
+        public string? SessionId { get; set; }
+    }
+
     private sealed class ApiResponse
     {
         public int ExecutionCount { get; set; }
