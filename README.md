@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <div align="center">
-  <img src="docs/docs/media/logo.svg" width="400" alt="Xping Logo" />
+  <img src="docs/docs/media/logo.svg" width="100" alt="Xping Logo" />
   
   <h1>Xping SDK for .NET</h1>
   
@@ -22,7 +22,7 @@
     <a href="#-quick-start"><strong>Quick Start</strong></a> •
     <a href="#-why-xping"><strong>Why Xping?</strong></a> •
     <a href="#-features"><strong>Features</strong></a> •
-    <a href="docs/"><strong>Documentation</strong></a> •
+    <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
   </p>
 </div>
@@ -221,17 +221,17 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Your Test Project                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ NUnit Tests  │  │ xUnit Tests  │  │ MSTest Tests │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐          │
+│  │ NUnit Tests  │  │ xUnit Tests  │  │ MSTest Tests  │          │
+│  └──────┬───────┘  └───────┬──────┘  └────────┬──────┘          │
 └─────────┼──────────────────┼──────────────────┼─────────────────┘
           │                  │                  │
           ▼                  ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Test Framework Adapters                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Xping.NUnit  │  │ Xping.XUnit  │  │ Xping.MSTest │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
+│                    Test Framework Adapters                      │
+│  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐          │
+│  │ Xping.NUnit  │  │ Xping.XUnit   │  │ Xping.MSTest │          │
+│  └──────┬───────┘  └───────┬───────┘  └───────┬──────┘          │
 └─────────┼──────────────────┼──────────────────┼─────────────────┘
           │                  │                  │
           └──────────────────┼──────────────────┘
@@ -239,20 +239,20 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
           ┌─────────────────────────────────────┐
           │         Xping.Sdk.Core              │
           │                                     │
-          │  • Test Execution Collector        │
-          │  • Environment Detection           │
-          │  • In-Memory Buffer (Thread-Safe)  │
-          │  • Configuration Management        │
-          │  • Offline Queue                   │
+          │  • Test Execution Collector         │
+          │  • Environment Detection            │
+          │  • In-Memory Buffer (Thread-Safe)   │
+          │  • Configuration Management         │
+          │  • Offline Queue                    │
           └──────────────┬──────────────────────┘
                          ▼
           ┌─────────────────────────────────────┐
           │      API Client (Resilient)         │
           │                                     │
-          │  • Retry Logic (Exponential)       │
-          │  • Circuit Breaker                 │
-          │  • Gzip Compression                │
-          │  • Batch Upload                    │
+          │  • Retry Logic (Exponential)        │
+          │  • Circuit Breaker                  │
+          │  • Gzip Compression                 │
+          │  • Batch Upload                     │
           └──────────────┬──────────────────────┘
                          ▼
                   Xping Platform API
