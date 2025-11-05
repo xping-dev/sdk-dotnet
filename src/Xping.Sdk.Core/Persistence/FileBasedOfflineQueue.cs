@@ -10,10 +10,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Serialization;
 
 /// <summary>
 /// File-based implementation of offline queue for storing test executions.
@@ -31,7 +31,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
     private readonly int _maxQueueSize;
     private readonly int _cleanupAgeDays;
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly IXpingSerializer _serializer;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileBasedOfflineQueue"/> class.
@@ -39,20 +39,17 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
     /// <param name="queueDirectory">Optional custom queue directory. Defaults to system temp directory.</param>
     /// <param name="maxQueueSize">Maximum number of executions to store. Default is 10,000.</param>
     /// <param name="cleanupAgeDays">Age in days after which queue files are deleted. Default is 7.</param>
+    /// <param name="serializer">Optional serializer. If not provided, uses default XpingJsonSerializer with FileOptions.</param>
     public FileBasedOfflineQueue(
         string? queueDirectory = null,
         int maxQueueSize = DefaultMaxQueueSize,
-        int cleanupAgeDays = DefaultCleanupAgeDays)
+        int cleanupAgeDays = DefaultCleanupAgeDays,
+        IXpingSerializer? serializer = null)
     {
         _queueDirectory = queueDirectory ?? Path.Combine(Path.GetTempPath(), DefaultQueueDirectory);
         _maxQueueSize = maxQueueSize;
         _cleanupAgeDays = cleanupAgeDays;
-
-        _jsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        };
+        _serializer = serializer ?? new XpingJsonSerializer(XpingSerializerOptions.FileOptions);
 
         EnsureQueueDirectoryExists();
     }
@@ -90,7 +87,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
             var filePath = Path.Combine(_queueDirectory, fileName);
 
             // Serialize and write to file
-            var json = JsonSerializer.Serialize(executionsList, _jsonOptions);
+            var json = _serializer.Serialize(executionsList);
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
                 await writer.WriteAsync(json).ConfigureAwait(false);
@@ -139,7 +136,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
                         json = await reader.ReadToEndAsync().ConfigureAwait(false);
                     }
 
-                    var executions = JsonSerializer.Deserialize<List<TestExecution>>(json, _jsonOptions);
+                    var executions = _serializer.Deserialize<List<TestExecution>>(json);
 
                     if (executions != null)
                     {
@@ -156,7 +153,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
                         {
                             // Write remaining executions back
                             var remainingExecutions = executions.Skip(toTake).ToList();
-                            var updatedJson = JsonSerializer.Serialize(remainingExecutions, _jsonOptions);
+                            var updatedJson = _serializer.Serialize(remainingExecutions);
                             using (var writer = new StreamWriter(file, false, Encoding.UTF8))
                             {
                                 await writer.WriteAsync(updatedJson).ConfigureAwait(false);
@@ -169,7 +166,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
                         filesToDelete.Add(file);
                     }
                 }
-                catch (JsonException)
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
                 {
                     // Corrupted file, mark for deletion and continue
                     filesToDelete.Add(file);
@@ -320,7 +317,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
                     json = await reader.ReadToEndAsync().ConfigureAwait(false);
                 }
 
-                var executions = JsonSerializer.Deserialize<List<TestExecution>>(json, _jsonOptions);
+                var executions = _serializer.Deserialize<List<TestExecution>>(json);
                 if (executions != null)
                 {
                     totalCount += executions.Count;

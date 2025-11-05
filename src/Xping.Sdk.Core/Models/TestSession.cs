@@ -50,5 +50,5 @@ public sealed class TestSession
     /// <summary>
     /// Gets the collection of test executions in this session.
     /// </summary>
-    public Collection<TestExecution> TestExecutions { get; }
+    internal Collection<TestExecution> TestExecutions { get; }
 }

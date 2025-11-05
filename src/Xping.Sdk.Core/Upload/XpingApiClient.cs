@@ -14,7 +14,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Polly;
@@ -23,6 +22,7 @@ using Polly.Retry;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Persistence;
+using Xping.Sdk.Core.Serialization;
 
 /// <summary>
 /// HTTP client for uploading test executions to the Xping API with resilience policies.
@@ -33,15 +33,11 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private const string ApiVersion = "v1";
     private const int MaxDequeueBatchSize = 100;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     private readonly HttpClient _httpClient;
     private readonly XpingConfiguration _config;
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
     private readonly IOfflineQueue? _offlineQueue;
+    private readonly IXpingSerializer _serializer;
     private bool _disposed;
 
     /// <summary>
@@ -50,11 +46,17 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     /// <param name="httpClient">The HTTP client to use for API calls.</param>
     /// <param name="config">The Xping configuration.</param>
     /// <param name="offlineQueue">Optional offline queue for failed uploads.</param>
-    public XpingApiClient(HttpClient httpClient, XpingConfiguration config, IOfflineQueue? offlineQueue = null)
+    /// <param name="serializer">Optional serializer. If not provided, uses default XpingJsonSerializer with ApiOptions.</param>
+    public XpingApiClient(
+        HttpClient httpClient,
+        XpingConfiguration config,
+        IOfflineQueue? offlineQueue = null,
+        IXpingSerializer? serializer = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _offlineQueue = offlineQueue;
+        _serializer = serializer ?? new XpingJsonSerializer(XpingSerializerOptions.ApiOptions);
 
         ConfigureHttpClient();
         _resiliencePipeline = BuildResiliencePipeline();
@@ -371,7 +373,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
         try
         {
-            var json = JsonSerializer.Serialize(session, _jsonOptions);
+            var json = _serializer.Serialize(session);
             var content = Encoding.UTF8.GetBytes(json);
 
             // Compress if payload is large enough
@@ -407,7 +409,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private HttpRequestMessage CreateUploadRequest(List<TestExecution> executions)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-executions");
-        var json = JsonSerializer.Serialize(new { executions }, _jsonOptions);
+        var json = _serializer.Serialize(new { executions });
         var content = Encoding.UTF8.GetBytes(json);
 
         // Compress if payload is large enough
