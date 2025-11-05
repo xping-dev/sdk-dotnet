@@ -360,7 +360,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
     private HttpRequestMessage CreateSessionUploadRequest(TestSession session)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-sessions");
+        var requestUri = $"/api/{ApiVersion}/test-sessions?sessionId={Uri.EscapeDataString(session.SessionId)}";
+        var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
 
         // Session initialization occurs before test execution begins.
         // To ensure only session metadata (not test results) is uploaded,
