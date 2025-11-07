@@ -195,7 +195,12 @@ public sealed class ApiCommunicationTests : IDisposable
             Duration = TimeSpan.FromMilliseconds(100),
             StartTimeUtc = DateTime.UtcNow.AddSeconds(-1),
             EndTimeUtc = DateTime.UtcNow,
-            SessionId = Guid.NewGuid().ToString(),
+            SessionContext = new TestSession
+            {
+                SessionId = Guid.NewGuid().ToString(),
+                StartedAt = DateTime.UtcNow,
+                EnvironmentInfo = new EnvironmentInfo()
+            },
             Metadata = new TestMetadata()
         };
     }

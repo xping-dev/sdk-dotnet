@@ -9,7 +9,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
-using global::Xunit.Abstractions;
+using Xunit.Abstractions;
 using Xping.Sdk.Core.Models;
 
 #pragma warning disable CA1305 // Specify IFormatProvider for culture-aware ToString conversions
@@ -243,7 +243,7 @@ public sealed class XpingMessageSink : IMessageSink
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = XpingContext.CurrentSession?.SessionId,
+            SessionContext = XpingContext.CurrentSession,
             Metadata = ExtractMetadata(test, output),
             ErrorMessage = errorMessage ?? string.Empty,
             StackTrace = stackTrace ?? string.Empty,
@@ -253,9 +253,9 @@ public sealed class XpingMessageSink : IMessageSink
     private static TestMetadata ExtractMetadata(ITest test, string output)
     {
         var testCase = test.TestCase;
-        var categories = new System.Collections.Generic.List<string>();
-        var tags = new System.Collections.Generic.List<string> { "framework:xunit" };
-        var customAttributes = new System.Collections.Generic.Dictionary<string, string>();
+        var categories = new List<string>();
+        var tags = new List<string> { "framework:xunit" };
+        var customAttributes = new Dictionary<string, string>();
 
         // Extract traits as categories
         if (testCase.Traits != null)

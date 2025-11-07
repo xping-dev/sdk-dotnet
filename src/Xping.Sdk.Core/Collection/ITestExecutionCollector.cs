@@ -16,13 +16,6 @@ using Xping.Sdk.Core.Models;
 public interface ITestExecutionCollector : IAsyncDisposable
 {
     /// <summary>
-    /// Sets the current test session for this collector.
-    /// This session will be uploaded automatically before test executions during flush.
-    /// </summary>
-    /// <param name="session">The test session to associate with this collector.</param>
-    void SetSession(TestSession session);
-
-    /// <summary>
     /// Records a test execution for later upload.
     /// </summary>
     /// <param name="execution">The test execution data to record.</param>

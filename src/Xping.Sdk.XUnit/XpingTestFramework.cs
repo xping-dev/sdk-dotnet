@@ -6,8 +6,8 @@
 namespace Xping.Sdk.XUnit;
 
 using System.Reflection;
-using global::Xunit.Abstractions;
-using global::Xunit.Sdk;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 
 /// <summary>
 /// Custom xUnit test framework that integrates Xping SDK for automatic test tracking.

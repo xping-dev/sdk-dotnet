@@ -141,7 +141,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = XpingContext.CurrentSession?.SessionId,
+            SessionContext = XpingContext.CurrentSession,
             Metadata = ExtractMetadata(test),
             ErrorMessage = result.Message ?? string.Empty,
             StackTrace = result.StackTrace ?? string.Empty,

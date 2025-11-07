@@ -516,7 +516,7 @@ public sealed class XpingJsonSerializerTests
         Assert.Equal(original.Duration, deserialized.Duration);
         Assert.Equal(original.StartTimeUtc, deserialized.StartTimeUtc);
         Assert.Equal(original.EndTimeUtc, deserialized.EndTimeUtc);
-        Assert.Equal(original.SessionId, deserialized.SessionId);
+        Assert.Equal(original.SessionContext?.SessionId, deserialized.SessionContext?.SessionId);
     }
 
     [Fact]
@@ -717,7 +717,12 @@ public sealed class XpingJsonSerializerTests
             Duration = TimeSpan.FromSeconds(1.5),
             StartTimeUtc = new DateTime(2025, 11, 5, 10, 0, 0, DateTimeKind.Utc),
             EndTimeUtc = new DateTime(2025, 11, 5, 10, 0, 1, DateTimeKind.Utc),
-            SessionId = "session-123",
+            SessionContext = new TestSession
+            {
+                SessionId = "session-123",
+                StartedAt = new DateTime(2025, 11, 5, 10, 0, 0, DateTimeKind.Utc),
+                EnvironmentInfo = new EnvironmentInfo()
+            },
             Identity = new TestIdentity
             {
                 TestId = "test-id-123",

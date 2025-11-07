@@ -7,8 +7,8 @@ namespace Xping.Sdk.XUnit;
 
 using System.Collections.Generic;
 using System.Reflection;
-using global::Xunit.Abstractions;
-using global::Xunit.Sdk;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 
 /// <summary>
 /// Custom xUnit test framework executor that wraps test execution with Xping tracking.

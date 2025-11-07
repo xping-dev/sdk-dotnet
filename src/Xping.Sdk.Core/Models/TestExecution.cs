@@ -55,10 +55,15 @@ public sealed class TestExecution
     public DateTime EndTimeUtc { get; set; }
 
     /// <summary>
-    /// Gets or sets the session ID that this test execution belongs to.
-    /// This links the test execution to its parent session which contains the environment information.
+    /// Gets or sets the session context for this test execution.
     /// </summary>
-    public string? SessionId { get; set; }
+    /// <remarks>
+    /// When sending batches of executions, only the first execution in the batch
+    /// contains the complete session context. Subsequent executions have this set to null
+    /// to optimize payload size, as they share the same session context.
+    /// The server rehydrates the context for all executions in the batch.
+    /// </remarks>
+    public TestSession? SessionContext { get; set; }
 
     /// <summary>
     /// Gets or sets the test metadata including categories, tags, and custom attributes.

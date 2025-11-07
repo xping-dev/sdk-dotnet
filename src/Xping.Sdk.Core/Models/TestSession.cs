@@ -6,13 +6,14 @@
 namespace Xping.Sdk.Core.Models;
 
 using System;
-using System.Collections.ObjectModel;
 
 /// <summary>
-/// Represents a test session containing environment information and multiple test executions.
-/// A session groups all tests executed together in a single test run, capturing the shared
-/// environment context.
+/// Represents a test session containing environment information needed for flakiness detection and confidence scoring.
 /// </summary>
+/// <remarks>
+/// In batch operations, this context is sent once with the first execution to optimize
+/// payload size, as all executions in a batch share the same session environment.
+/// </remarks>
 public sealed class TestSession
 {
     /// <summary>
@@ -23,7 +24,6 @@ public sealed class TestSession
         SessionId = Guid.NewGuid().ToString();
         StartedAt = DateTime.UtcNow;
         EnvironmentInfo = new EnvironmentInfo();
-        TestExecutions = [];
     }
 
     /// <summary>
@@ -46,9 +46,4 @@ public sealed class TestSession
     /// This is shared across all test executions in the session.
     /// </summary>
     public EnvironmentInfo EnvironmentInfo { get; set; }
-
-    /// <summary>
-    /// Gets the collection of test executions in this session.
-    /// </summary>
-    internal Collection<TestExecution> TestExecutions { get; }
 }

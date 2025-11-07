@@ -186,7 +186,6 @@ public static class XpingContext
             var apiEndpoint = _configuration.ApiEndpoint;
             _currentSession.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
         }
-        _collector.SetSession(_currentSession);
 
         IsInitialized = true;
 

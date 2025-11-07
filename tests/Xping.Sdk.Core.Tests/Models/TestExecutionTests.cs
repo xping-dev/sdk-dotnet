@@ -44,7 +44,12 @@ public class TestExecutionTests
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = sessionId,
+            SessionContext = new TestSession
+            {
+                SessionId = sessionId,
+                StartedAt = startTime,
+                EnvironmentInfo = new EnvironmentInfo()
+            },
             Metadata = metadata,
             ErrorMessage = null,
             StackTrace = null
@@ -62,7 +67,7 @@ public class TestExecutionTests
         Assert.Equal(duration, execution.Duration);
         Assert.Equal(startTime, execution.StartTimeUtc);
         Assert.Equal(endTime, execution.EndTimeUtc);
-        Assert.Equal(sessionId, execution.SessionId);
+        Assert.Equal(sessionId, execution.SessionContext?.SessionId);
         Assert.Same(metadata, execution.Metadata);
         Assert.Null(execution.ErrorMessage);
         Assert.Null(execution.StackTrace);
@@ -171,18 +176,18 @@ public class TestExecutionTests
     }
 
     [Fact]
-    public void ShouldAllowNullSessionId()
+    public void ShouldAllowNullSessionContext()
     {
         // Act
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
             TestName = "Test",
-            SessionId = null
+            SessionContext = null
         };
 
         // Assert
-        Assert.Null(execution.SessionId);
+        Assert.Null(execution.SessionContext);
     }
 
     [Fact]

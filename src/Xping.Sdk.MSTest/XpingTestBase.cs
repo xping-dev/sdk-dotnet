@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core.Environment;
 using Xping.Sdk.Core.Models;
 
 /// <summary>
@@ -72,25 +71,12 @@ public abstract class XpingTestBase
         var outcome = MapOutcome(context.CurrentTestOutcome);
         var metadata = ExtractMetadata(context);
 
-        // Extract namespace from fully qualified class name
+        // Extract assembly from fully qualified class name
         var className = context.FullyQualifiedTestClassName ?? string.Empty;
-        var lastDotIndex = className.LastIndexOf('.');
-        var namespaceName = lastDotIndex >= 0 ? className.Substring(0, lastDotIndex) : string.Empty;
-
-        // Ensure environment info is populated in the session (only once)
-        var session = XpingContext.CurrentSession;
-        if (session != null && string.IsNullOrEmpty(session.EnvironmentInfo.MachineName))
-        {
-            var detector = new EnvironmentDetector();
-            var config = XpingContext.Configuration;
-            var collectNetworkMetrics = config?.CollectNetworkMetrics ?? false;
-            var apiEndpoint = config?.ApiEndpoint;
-            session.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
-        }
+        var assemblyName = ExtractAssemblyName(className);
 
         // Generate stable test identity
         var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
-        var assemblyName = ExtractAssemblyName(className);
 
         // Extract DataRow parameters if present
         object[]? parameters = null;
@@ -120,7 +106,7 @@ public abstract class XpingTestBase
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
-            SessionId = session?.SessionId,
+            SessionContext = XpingContext.CurrentSession,
             Metadata = metadata,
             ErrorMessage = GetErrorMessage(context),
             StackTrace = GetStackTrace(context)
