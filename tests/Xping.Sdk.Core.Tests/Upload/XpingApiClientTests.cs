@@ -329,12 +329,19 @@ public class XpingApiClientTests
         };
         using var client = new XpingApiClient(httpClient, config);
 
-        await client.UploadAsync(new[] { CreateTestExecution() });
+        var executions = new List<TestExecution>
+        {
+            CreateTestExecution("Test1"),
+        };
+
+        await client.UploadAsync(executions);
 
         var request = handler.LastRequest;
         Assert.NotNull(request);
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Equal("/api/v1/test-executions", request.RequestUri?.PathAndQuery);
+        Assert.Equal(
+            expected: new Uri($"{config.ApiEndpoint}?sessionId={executions[0].SessionContext?.SessionId}").PathAndQuery,
+            actual: request.RequestUri?.PathAndQuery);
     }
 
     private sealed class MockHttpMessageHandler : HttpMessageHandler

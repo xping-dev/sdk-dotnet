@@ -79,7 +79,6 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
 
         var executionList = executions as List<TestExecution> ?? [.. executions];
-
         if (executionList.Count == 0)
         {
             return new UploadResult

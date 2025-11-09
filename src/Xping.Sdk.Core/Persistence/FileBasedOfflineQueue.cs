@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Models;
@@ -166,7 +167,7 @@ public class FileBasedOfflineQueue : IOfflineQueue, IDisposable
                         filesToDelete.Add(file);
                     }
                 }
-                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+                catch (Exception ex) when (ex is JsonException or InvalidOperationException)
                 {
                     // Corrupted file, mark for deletion and continue
                     filesToDelete.Add(file);
