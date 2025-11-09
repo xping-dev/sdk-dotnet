@@ -30,7 +30,6 @@ using Xping.Sdk.Core.Serialization;
 public sealed class XpingApiClient : ITestResultUploader, IDisposable
 {
     private const int CompressionThresholdBytes = 1024; // 1KB
-    private const string ApiVersion = "v1";
     private const int MaxDequeueBatchSize = 100;
 
     private readonly HttpClient _httpClient;
@@ -291,7 +290,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
     private HttpRequestMessage CreateUploadRequest(IReadOnlyList<TestExecution> executions)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/{ApiVersion}/test-executions");
+        var sessionId = executions.Count > 0 ? executions[0]?.SessionContext?.SessionId ?? string.Empty : string.Empty;
+        var request = new HttpRequestMessage(HttpMethod.Post, _config.ApiEndpoint.TrimEnd('/') + "?sessionId=" + sessionId);
         var json = _serializer.Serialize(new { executions });
         var content = Encoding.UTF8.GetBytes(json);
 
