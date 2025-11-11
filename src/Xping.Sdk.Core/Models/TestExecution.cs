@@ -71,6 +71,11 @@ public sealed class TestExecution
     public TestMetadata? Metadata { get; set; }
 
     /// <summary>
+    /// Gets or sets the exception type if the test failed due to an exception.
+    /// </summary>
+    public string? ExceptionType { get; set; }
+
+    /// <summary>
     /// Gets or sets the error message if the test failed.
     /// </summary>
     public string? ErrorMessage { get; set; }
@@ -79,4 +84,24 @@ public sealed class TestExecution
     /// Gets or sets the stack trace if the test failed.
     /// </summary>
     public string? StackTrace { get; set; }
+
+    /// <summary>
+    /// Gets or sets a stable hash of the error message for grouping similar failures.
+    /// </summary>
+    /// <remarks>
+    /// This hash enables grouping of test failures with identical or similar error messages,
+    /// helping identify common failure patterns across test runs and environments.
+    /// The hash is computed using SHA256 for stability and collision resistance.
+    /// </remarks>
+    public string? ErrorMessageHash { get; set; }
+
+    /// <summary>
+    /// Gets or sets a stable hash of the stack trace for grouping similar failures.
+    /// </summary>
+    /// <remarks>
+    /// This hash enables grouping of test failures with identical or similar stack traces,
+    /// helping identify common failure locations and patterns in the codebase.
+    /// The hash is computed using SHA256 for stability and collision resistance.
+    /// </remarks>
+    public string? StackTraceHash { get; set; }
 }

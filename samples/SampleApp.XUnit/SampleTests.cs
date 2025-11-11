@@ -28,6 +28,13 @@ public class SampleTests
         Assert.Equal(84, result);
     }
 
+    [Fact(DisplayName = "Verifies that a test which throws an exception is properly tracked")]
+    [Trait("Category", "Unit")]
+    public void ThrowingTestIsTracked()
+    {
+        throw new InvalidOperationException("This is a test exception for tracking purposes.");
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Fast")]

@@ -241,4 +241,64 @@ public static class TestIdentityGenerator
         var paramHash = GenerateParameterHash(parameters);
         return $"{methodName}({paramHash})";
     }
+
+    /// <summary>
+    /// Generates a stable SHA256 hash for an error message to enable grouping of similar failures.
+    /// </summary>
+    /// <param name="errorMessage">The error message to hash.</param>
+    /// <returns>A 64-character lowercase hex string (SHA256 hash), or null if input is null/empty.</returns>
+    /// <remarks>
+    /// This method creates a stable hash that can be used to group test failures with
+    /// identical error messages, enabling analysis of failure patterns across test runs.
+    /// </remarks>
+    public static string? GenerateErrorMessageHash(string? errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return null;
+        }
+
+        // Non-null after the check above
+        return ComputeSha256Hash(errorMessage!);
+    }
+
+    /// <summary>
+    /// Generates a stable SHA256 hash for a stack trace to enable grouping of similar failures.
+    /// </summary>
+    /// <param name="stackTrace">The stack trace to hash.</param>
+    /// <returns>A 64-character lowercase hex string (SHA256 hash), or null if input is null/empty.</returns>
+    /// <remarks>
+    /// This method creates a stable hash that can be used to group test failures with
+    /// identical stack traces, enabling analysis of failure locations and patterns in the codebase.
+    /// </remarks>
+    public static string? GenerateStackTraceHash(string? stackTrace)
+    {
+        if (string.IsNullOrWhiteSpace(stackTrace))
+        {
+            return null;
+        }
+
+        // Non-null after the check above
+        return ComputeSha256Hash(stackTrace!);
+    }
+
+    /// <summary>
+    /// Computes a SHA256 hash for the given input string.
+    /// </summary>
+    /// <param name="input">The input string to hash.</param>
+    /// <returns>A 64-character lowercase hex string (SHA256 hash).</returns>
+    private static string ComputeSha256Hash(string input)
+    {
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+
+        // Convert to lowercase hex string (using StringBuilder for better performance)
+        var sb = new StringBuilder(hashBytes.Length * 2);
+        foreach (var b in hashBytes)
+        {
+            sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+        }
+
+        return sb.ToString();
+    }
 }

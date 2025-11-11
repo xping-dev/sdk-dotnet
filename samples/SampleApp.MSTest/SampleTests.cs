@@ -24,6 +24,13 @@ public class CalculatorTests : XpingTestBase
         Assert.AreEqual(5, result);
     }
 
+    [TestMethod("Verifies that a test which throws an exception is properly tracked")]
+    [TestCategory("Unit")]
+    public void ThrowingTestIsTracked()
+    {
+        throw new InvalidOperationException("This is a test exception for tracking purposes.");
+    }
+
     [TestMethod]
     [TestCategory("Unit")]
     [TestCategory("Fast")]

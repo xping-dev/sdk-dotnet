@@ -108,8 +108,11 @@ public abstract class XpingTestBase
             EndTimeUtc = endTime,
             SessionContext = XpingContext.CurrentSession,
             Metadata = metadata,
+            ExceptionType = GetExceptionType(context),
             ErrorMessage = GetErrorMessage(context),
-            StackTrace = GetStackTrace(context)
+            StackTrace = GetStackTrace(context),
+            ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(GetErrorMessage(context)),
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(GetStackTrace(context))
         };
     }
 
@@ -218,6 +221,27 @@ public abstract class XpingTestBase
         // Assembly name is typically the first part before the first dot
         var firstDotIndex = fullyQualifiedClassName.IndexOf('.');
         return firstDotIndex >= 0 ? fullyQualifiedClassName.Substring(0, firstDotIndex) : fullyQualifiedClassName;
+    }
+
+    /// <summary>
+    /// Gets the exception type from a failed test.
+    /// </summary>
+    /// <param name="context">The test context.</param>
+    /// <returns>The exception type name or null.</returns>
+    private static string? GetExceptionType(TestContext context)
+    {
+        if (context.CurrentTestOutcome == UnitTestOutcome.Passed)
+        {
+            return null;
+        }
+
+        // Try to get exception type from properties
+        if (context.Properties != null && context.Properties.Contains("ExceptionType"))
+        {
+            return context.Properties["ExceptionType"]?.ToString();
+        }
+
+        return null;
     }
 
     /// <summary>

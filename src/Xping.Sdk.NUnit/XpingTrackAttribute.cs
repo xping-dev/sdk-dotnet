@@ -23,6 +23,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 {
     private const string StartTimeKey = "Xping.StartTime";
     private const string StartTimestampKey = "Xping.StartTimestamp";
+    private static readonly string[] LineSeparators = new[] { "\r\n", "\r", "\n" };
 
     /// <summary>
     /// Gets the action targets (Test level).
@@ -132,6 +133,9 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             parameters,
             displayName);
 
+        var errorMessage = result.Message ?? string.Empty;
+        var stackTrace = result.StackTrace ?? string.Empty;
+
         return new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
@@ -143,9 +147,51 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             EndTimeUtc = endTime,
             SessionContext = XpingContext.CurrentSession,
             Metadata = ExtractMetadata(test),
-            ErrorMessage = result.Message ?? string.Empty,
-            StackTrace = result.StackTrace ?? string.Empty,
+            ExceptionType = ExtractExceptionType(result),
+            ErrorMessage = errorMessage,
+            StackTrace = stackTrace,
+            ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace)
         };
+    }
+
+    private static string? ExtractExceptionType(TestContext.ResultAdapter result)
+    {
+        // NUnit 3 doesn't expose the exception type directly through the public API
+        // We need to parse it from the message or stack trace
+        if (result.Outcome.Status == TestStatus.Passed)
+        {
+            return null;
+        }
+
+        // Try to extract from message - often contains exception type
+        var message = result.Message;
+        if (!string.IsNullOrEmpty(message))
+        {
+            // Non-null after the check above
+            var lines = message!.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length > 0)
+            {
+                var firstLine = lines[0].Trim();
+                // Check if it looks like an exception type (contains namespace and ends with Exception)
+                if (firstLine.Contains('.') && firstLine.Contains("Exception"))
+                {
+                    // Extract just the exception type, not the full message
+                    var colonIndex = firstLine.IndexOf(':');
+                    if (colonIndex > 0)
+                    {
+                        return firstLine.Substring(0, colonIndex).Trim();
+                    }
+                    // If no colon, the whole line might be the exception type
+                    if (!firstLine.Contains(' '))
+                    {
+                        return firstLine;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private static TestOutcome MapOutcome(ResultState resultState)

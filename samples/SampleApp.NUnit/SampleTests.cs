@@ -38,6 +38,14 @@ public class SampleTests
 
     [Test]
     [Category("Unit")]
+    [Description("Verifies that a test which throws an exception is properly tracked")]
+    public void ThrowingTestIsTracked()
+    {
+        throw new InvalidOperationException("This is a test exception for tracking purposes.");
+    }
+
+    [Test]
+    [Category("Unit")]
     [Category("Fast")]
     public void AnotherPassingTest()
     {

@@ -102,6 +102,7 @@ public sealed class XpingMessageSink : IMessageSink
             duration: duration,
             executionTime: testPassed.ExecutionTime,
             output: testPassed.Output,
+            exceptionType: null,
             errorMessage: null,
             stackTrace: null);
     }
@@ -118,6 +119,9 @@ public sealed class XpingMessageSink : IMessageSink
         var endTimestamp = Stopwatch.GetTimestamp();
         var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
 
+        // Extract exception type - XUnit provides array of exception types
+        var exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
+
         RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Failed,
@@ -126,6 +130,7 @@ public sealed class XpingMessageSink : IMessageSink
             duration: duration,
             executionTime: testFailed.ExecutionTime,
             output: testFailed.Output,
+            exceptionType: exceptionType,
             errorMessage: string.Join(Environment.NewLine, testFailed.Messages),
             stackTrace: string.Join(Environment.NewLine, testFailed.StackTraces));
     }
@@ -150,6 +155,7 @@ public sealed class XpingMessageSink : IMessageSink
             duration: duration,
             executionTime: 0,
             output: string.Empty,
+            exceptionType: null,
             errorMessage: $"Test skipped: {testSkipped.Reason}",
             stackTrace: null
         );
@@ -179,6 +185,7 @@ public sealed class XpingMessageSink : IMessageSink
         TimeSpan duration,
         decimal executionTime,
         string output,
+        string? exceptionType,
         string? errorMessage,
         string? stackTrace)
     {
@@ -192,6 +199,7 @@ public sealed class XpingMessageSink : IMessageSink
                 duration,
                 executionTime,
                 output,
+                exceptionType,
                 errorMessage,
                 stackTrace);
 
@@ -211,6 +219,7 @@ public sealed class XpingMessageSink : IMessageSink
         TimeSpan duration,
         decimal executionTime,
         string output,
+        string? exceptionType,
         string? errorMessage,
         string? stackTrace)
     {
@@ -245,8 +254,11 @@ public sealed class XpingMessageSink : IMessageSink
             EndTimeUtc = endTime,
             SessionContext = XpingContext.CurrentSession,
             Metadata = ExtractMetadata(test, output),
+            ExceptionType = exceptionType,
             ErrorMessage = errorMessage ?? string.Empty,
             StackTrace = stackTrace ?? string.Empty,
+            ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace)
         };
     }
 
