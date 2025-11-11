@@ -244,8 +244,19 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
 
     private HttpRequestMessage CreateUploadRequest(IReadOnlyList<TestExecution> executions)
     {
-        var sessionId = executions.Count > 0 ? executions[0]?.SessionContext?.SessionId ?? string.Empty : string.Empty;
-        var request = new HttpRequestMessage(HttpMethod.Post, _config.ApiEndpoint.TrimEnd('/') + "?sessionId=" + sessionId);
+        if (executions == null || executions.Count == 0)
+        {
+            throw new InvalidOperationException("Executions cannot be null or empty");
+        }
+
+        if (executions[0].SessionContext == null)
+        {
+            throw new InvalidOperationException("First execution must contain SessionContext");
+        }
+
+        var sessionId = executions[0].SessionContext!.SessionId; // Non-null due to check above
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, _config.ApiEndpoint.TrimEnd('/') + "?sessionId=" + sessionId);
         var batch = new TestExecutionBatch { Executions = executions.ToList() };
         var json = _serializer.Serialize(batch);
         var content = Encoding.UTF8.GetBytes(json);
