@@ -37,11 +37,6 @@ public sealed class TestSession
     public DateTime StartedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets when the test session completed (UTC).
-    /// </summary>
-    public DateTime? CompletedAt { get; set; }
-
-    /// <summary>
     /// Gets or sets the environment information for this test session.
     /// This is shared across all test executions in the session.
     /// </summary>

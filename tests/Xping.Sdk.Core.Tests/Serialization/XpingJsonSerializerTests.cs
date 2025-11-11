@@ -533,7 +533,6 @@ public sealed class XpingJsonSerializerTests
         Assert.NotNull(deserialized);
         Assert.Equal(original.SessionId, deserialized.SessionId);
         Assert.Equal(original.StartedAt, deserialized.StartedAt);
-        Assert.Equal(original.CompletedAt, deserialized.CompletedAt);
         Assert.NotNull(deserialized.EnvironmentInfo);
         Assert.Equal(original.EnvironmentInfo.MachineName, deserialized.EnvironmentInfo.MachineName);
         Assert.Equal(original.EnvironmentInfo.OperatingSystem, deserialized.EnvironmentInfo.OperatingSystem);
@@ -742,7 +741,6 @@ public sealed class XpingJsonSerializerTests
         {
             SessionId = "session-123",
             StartedAt = new DateTime(2025, 11, 5, 10, 0, 0, DateTimeKind.Utc),
-            CompletedAt = new DateTime(2025, 11, 5, 10, 5, 0, DateTimeKind.Utc),
             EnvironmentInfo = new EnvironmentInfo
             {
                 MachineName = "test-machine",
