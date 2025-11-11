@@ -291,7 +291,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     {
         var sessionId = executions.Count > 0 ? executions[0]?.SessionContext?.SessionId ?? string.Empty : string.Empty;
         var request = new HttpRequestMessage(HttpMethod.Post, _config.ApiEndpoint.TrimEnd('/') + "?sessionId=" + sessionId);
-        var json = _serializer.Serialize(new { executions });
+        var batch = new TestExecutionBatch { Executions = executions.ToList() };
+        var json = _serializer.Serialize(batch);
         var content = Encoding.UTF8.GetBytes(json);
 
         // Compress if payload is large enough
