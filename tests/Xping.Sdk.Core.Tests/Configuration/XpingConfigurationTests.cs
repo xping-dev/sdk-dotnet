@@ -26,7 +26,6 @@ public class XpingConfigurationTests
         Assert.True(config.Enabled);
         Assert.True(config.CaptureStackTraces);
         Assert.True(config.EnableCompression);
-        Assert.True(config.EnableOfflineQueue);
         Assert.Equal(3, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(2), config.RetryDelay);
         Assert.Equal(1.0, config.SamplingRate);
@@ -257,7 +256,6 @@ public class XpingConfigurationTests
             Enabled = false,
             CaptureStackTraces = false,
             EnableCompression = false,
-            EnableOfflineQueue = false,
             MaxRetries = 5,
             RetryDelay = TimeSpan.FromSeconds(5),
             SamplingRate = 0.5,
@@ -275,7 +273,6 @@ public class XpingConfigurationTests
         Assert.False(config.Enabled);
         Assert.False(config.CaptureStackTraces);
         Assert.False(config.EnableCompression);
-        Assert.False(config.EnableOfflineQueue);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
         Assert.Equal(0.5, config.SamplingRate);

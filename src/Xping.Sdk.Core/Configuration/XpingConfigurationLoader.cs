@@ -111,7 +111,6 @@ public static class XpingConfigurationLoader
         config.Enabled = GetEnvironmentVariable("ENABLED", config.Enabled);
         config.CaptureStackTraces = GetEnvironmentVariable("CAPTURESTACKTRACES", config.CaptureStackTraces);
         config.EnableCompression = GetEnvironmentVariable("ENABLECOMPRESSION", config.EnableCompression);
-        config.EnableOfflineQueue = GetEnvironmentVariable("ENABLEOFFLINEQUEUE", config.EnableOfflineQueue);
 
         // Retry Configuration
         config.MaxRetries = GetEnvironmentVariable("MAXRETRIES", config.MaxRetries);

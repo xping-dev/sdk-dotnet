@@ -60,7 +60,7 @@ Traditional test frameworks tell you if a test passed or failed—but they don't
 
 ### For DevOps Engineers
 - 🔧 **CI/CD integration** - Automatic environment detection (GitHub Actions, Azure DevOps, Jenkins, GitLab)
-- 💪 **Resilient by design** - Retry logic, circuit breakers, offline queue
+- 💪 **Resilient by design** - Retry logic, circuit breakers
 - 📦 **Minimal overhead** - <5ms per test, <100 bytes memory footprint
 
 ---
@@ -72,11 +72,10 @@ Traditional test frameworks tell you if a test passed or failed—but they don't
 | 🔍 **Test Execution Tracking** | Automatically collect test results, duration, outcomes, and environment metadata |
 | 📊 **Flaky Test Detection** | Identify unreliable tests with confidence scoring |
 | 🌐 **CI/CD Auto-detection** | Works seamlessly with GitHub Actions, Azure DevOps, Jenkins, GitLab, and more |
-| 💪 **Resilient Upload** | Retry policies, circuit breakers, and offline queuing for reliable data delivery |
+| 💪 **Resilient Upload** | Retry policies and circuit breakers for reliable data delivery |
 | ⚡ **Low Overhead** | <5ms overhead per test, minimal memory footprint |
 | 🎯 **Multi-Framework** | Support for NUnit, xUnit, and MSTest |
 | 🔧 **Flexible Configuration** | JSON, environment variables, or programmatic setup |
-| 📦 **Offline Mode** | Queue results when network is unavailable, upload when reconnected |
 
 ---
 
@@ -196,8 +195,7 @@ Add `appsettings.json` to your test project:
     "ApiEndpoint": "https://api.xping.io",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
-    "MaxRetries": 3,
-    "EnableOfflineQueue": true
+    "MaxRetries": 3
   }
 }
 ```
@@ -243,7 +241,6 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
           │  • Environment Detection            │
           │  • In-Memory Buffer (Thread-Safe)   │
           │  • Configuration Management         │
-          │  • Offline Queue                    │
           └──────────────┬──────────────────────┘
                          ▼
           ┌─────────────────────────────────────┐
@@ -305,7 +302,6 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
     "Enabled": true,
     "CaptureStackTraces": true,
     "EnableCompression": true,
-    "EnableOfflineQueue": true,
     "AutoDetectCIEnvironment": true,
     "CollectNetworkMetrics": true,
     
@@ -488,8 +484,6 @@ PR builds: 92% reliability
 - **API Key Security**: Support for environment variables (never commit keys)
 - **Data Retention**: Configurable retention policies
 - **Open Source**: Full transparency - review the code yourself
-- **No Dependencies on External Services**: Works offline with queue mode
-
 ---
 
 ## 📚 Documentation

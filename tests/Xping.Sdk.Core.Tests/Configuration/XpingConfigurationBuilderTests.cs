@@ -42,7 +42,6 @@ public class XpingConfigurationBuilderTests
             .WithEnabled(false)
             .WithCaptureStackTraces(false)
             .WithEnableCompression(false)
-            .WithEnableOfflineQueue(false)
             .WithMaxRetries(5)
             .WithRetryDelay(TimeSpan.FromSeconds(5))
             .WithSamplingRate(0.5)
@@ -62,7 +61,6 @@ public class XpingConfigurationBuilderTests
         Assert.False(config.Enabled);
         Assert.False(config.CaptureStackTraces);
         Assert.False(config.EnableCompression);
-        Assert.False(config.EnableOfflineQueue);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
         Assert.Equal(0.5, config.SamplingRate);

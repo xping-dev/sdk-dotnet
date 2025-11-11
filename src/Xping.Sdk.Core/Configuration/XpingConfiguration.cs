@@ -65,11 +65,6 @@ public sealed class XpingConfiguration
     public bool EnableCompression { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to enable offline queue for failed uploads.
-    /// </summary>
-    public bool EnableOfflineQueue { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets the maximum number of retry attempts for failed uploads.
     /// </summary>
     public int MaxRetries { get; set; } = 3;

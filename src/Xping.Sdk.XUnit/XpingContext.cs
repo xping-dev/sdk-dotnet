@@ -11,7 +11,6 @@ using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Diagnostics;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Persistence;
 using Xping.Sdk.Core.Upload;
 
 /// <summary>
@@ -23,7 +22,6 @@ public static class XpingContext
     private static readonly object _initializationLock = new();
     private static TestExecutionCollector? _collector;
     private static ITestResultUploader? _uploader;
-    private static IOfflineQueue? _offlineQueue;
     private static HttpClient? _httpClient;
     private static XpingConfiguration? _configuration;
     private static TestSession? _currentSession;
@@ -138,7 +136,6 @@ public static class XpingContext
         }
 
         _uploader = null;
-        _offlineQueue = null;
         _httpClient?.Dispose();
         _httpClient = null;
         _configuration = null;
@@ -156,7 +153,6 @@ public static class XpingContext
         {
             _collector = null;
             _uploader = null;
-            _offlineQueue = null;
             _httpClient?.Dispose();
             _httpClient = null;
             _configuration = null;
@@ -203,13 +199,7 @@ public static class XpingContext
 
         _httpClient = new HttpClient();
 
-        // Initialize offline queue if enabled
-        if (_configuration.EnableOfflineQueue)
-        {
-            _offlineQueue = new FileBasedOfflineQueue();
-        }
-
-        _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue, serializer: null, logger);
+        _uploader = new XpingApiClient(_httpClient, configuration, serializer: null, logger);
         _collector = new TestExecutionCollector(_uploader, configuration, logger);
 
         // Initialize the test session and associate it with the collector
@@ -230,7 +220,7 @@ public static class XpingContext
         logger.LogInfo("Initialized successfully");
         logger.LogInfo($"Project: {configuration.ProjectId} | Environment: {configuration.Environment}");
         logger.LogDebug($"Endpoint: {configuration.ApiEndpoint}");
-        logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0} | Offline Queue: {(configuration.EnableOfflineQueue ? "Enabled" : "Disabled")}");
+        logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0}");
 
         if (configuration.SamplingRate < 1.0)
         {

@@ -260,32 +260,12 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
             {
                 Interlocked.Add(ref _totalFailed, batch.Count);
                 _logger.LogError($"✗ Upload failed: {result.ErrorMessage}");
-
-                // Re-enqueue failed items if offline queue is enabled
-                if (_config.EnableOfflineQueue)
-                {
-                    _logger.LogWarning($"Status: {batch.Count} execution{(batch.Count == 1 ? "" : "s")} queued for retry");
-                    foreach (var execution in batch)
-                    {
-                        _buffer.Enqueue(execution);
-                    }
-                }
             }
         }
         catch (Exception ex)
         {
             Interlocked.Add(ref _totalFailed, batch.Count);
             _logger.LogError($"✗ Upload exception: {ex.Message}");
-
-            // Re-enqueue on exception if offline queue is enabled
-            if (_config.EnableOfflineQueue)
-            {
-                _logger.LogWarning($"Status: {batch.Count} execution{(batch.Count == 1 ? "" : "s")} queued for retry");
-                foreach (var execution in batch)
-                {
-                    _buffer.Enqueue(execution);
-                }
-            }
 
             throw;
         }

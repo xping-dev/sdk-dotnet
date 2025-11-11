@@ -125,17 +125,6 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets whether to enable offline queue for failed uploads.
-    /// </summary>
-    /// <param name="enableOfflineQueue">Whether to enable offline queue.</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithEnableOfflineQueue(bool enableOfflineQueue)
-    {
-        _configuration.EnableOfflineQueue = enableOfflineQueue;
-        return this;
-    }
-
-    /// <summary>
     /// Sets the maximum number of retry attempts for failed uploads.
     /// </summary>
     /// <param name="maxRetries">The maximum number of retries.</param>
