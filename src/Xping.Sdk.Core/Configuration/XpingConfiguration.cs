@@ -7,6 +7,7 @@ namespace Xping.Sdk.Core.Configuration;
 
 using System;
 using System.Collections.Generic;
+using Xping.Sdk.Core.Diagnostics;
 
 /// <summary>
 /// Configuration options for the Xping SDK.
@@ -93,6 +94,19 @@ public sealed class XpingConfiguration
     /// Network metrics include latency, connection type, and online status.
     /// </summary>
     public bool CollectNetworkMetrics { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the minimum log level for SDK diagnostics output.
+    /// Default is Info. Set to None to disable all logging.
+    /// </summary>
+    public XpingLogLevel LogLevel { get; set; } = XpingLogLevel.Info;
+
+    /// <summary>
+    /// Gets or sets a custom logger implementation.
+    /// If null, the SDK will use a default console logger based on the LogLevel setting.
+    /// Set to XpingNullLogger.Instance to completely disable logging.
+    /// </summary>
+    public IXpingLogger? Logger { get; set; }
 
     /// <summary>
     /// Validates the configuration and returns a list of validation errors.

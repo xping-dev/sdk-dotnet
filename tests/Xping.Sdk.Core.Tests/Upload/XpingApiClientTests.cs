@@ -232,7 +232,7 @@ public class XpingApiClientTests
         var result = await client.UploadAsync(new[] { CreateTestExecution() });
 
         Assert.False(result.Success);
-        Assert.Contains("InternalServerError", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Server error (500)", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class XpingApiClientTests
         var result = await client.UploadAsync(new[] { CreateTestExecution() });
 
         Assert.False(result.Success);
-        Assert.Contains("BadRequest", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("400", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]

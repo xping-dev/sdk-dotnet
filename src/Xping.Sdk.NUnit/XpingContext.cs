@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Diagnostics;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Persistence;
 using Xping.Sdk.Core.Upload;
@@ -184,17 +185,53 @@ public static class XpingContext
     private static TestExecutionCollector InitializeInternal(XpingConfiguration configuration)
     {
         _configuration = configuration;
+
+        // Create logger based on configuration
+        var logger = configuration.Logger ?? (configuration.LogLevel == XpingLogLevel.None
+            ? XpingNullLogger.Instance
+            : new XpingConsoleLogger(configuration.LogLevel));
+
+        // Validate configuration and log any issues
+        var errors = configuration.Validate();
+        if (errors.Count > 0)
+        {
+            logger.LogError("Invalid configuration:");
+            foreach (var error in errors)
+            {
+                logger.LogError($"  - {error}");
+            }
+        }
+
+        // Check for common misconfigurations
+        if (!configuration.Enabled)
+        {
+            logger.LogWarning("SDK is disabled (Enabled=false) - test executions will not be tracked");
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration.ApiKey))
+        {
+            logger.LogWarning("API Key not configured - uploads will be skipped");
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration.ProjectId))
+        {
+            logger.LogWarning("Project ID not configured - uploads will be skipped");
+        }
+
         _httpClient = new HttpClient();
+
         // Initialize offline queue if enabled
         if (_configuration.EnableOfflineQueue)
         {
             _offlineQueue = new FileBasedOfflineQueue();
         }
-        _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue);
-        _collector = new TestExecutionCollector(_uploader, configuration);
+
+        _uploader = new XpingApiClient(_httpClient, configuration, _offlineQueue, serializer: null, logger);
+        _collector = new TestExecutionCollector(_uploader, configuration, logger);
 
         // Initialize the test session and associate it with the collector
         _currentSession = new TestSession();
+
         // Ensure environment info is populated in the session (only once)
         if (string.IsNullOrEmpty(_currentSession.EnvironmentInfo.MachineName))
         {
@@ -205,6 +242,17 @@ public static class XpingContext
         }
 
         IsInitialized = true;
+
+        // Log successful initialization
+        logger.LogInfo("Initialized successfully");
+        logger.LogInfo($"Project: {configuration.ProjectId} | Environment: {configuration.Environment}");
+        logger.LogDebug($"Endpoint: {configuration.ApiEndpoint}");
+        logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0} | Offline Queue: {(configuration.EnableOfflineQueue ? "Enabled" : "Disabled")}");
+
+        if (configuration.SamplingRate < 1.0)
+        {
+            logger.LogInfo($"Sampling Rate: {configuration.SamplingRate:P0} (approximately {(int)(configuration.SamplingRate * 100)} out of 100 tests will be tracked)");
+        }
 
         return _collector;
     }

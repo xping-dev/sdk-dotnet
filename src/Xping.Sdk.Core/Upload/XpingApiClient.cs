@@ -20,6 +20,7 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Diagnostics;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Persistence;
 using Xping.Sdk.Core.Serialization;
@@ -37,6 +38,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
     private readonly IOfflineQueue? _offlineQueue;
     private readonly IXpingSerializer _serializer;
+    private readonly IXpingLogger _logger;
     private bool _disposed;
 
     /// <summary>
@@ -46,16 +48,19 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     /// <param name="config">The Xping configuration.</param>
     /// <param name="offlineQueue">Optional offline queue for failed uploads.</param>
     /// <param name="serializer">Optional serializer. If not provided, uses default XpingJsonSerializer with ApiOptions.</param>
+    /// <param name="logger">Optional logger for diagnostics. If null, uses NullLogger.</param>
     public XpingApiClient(
         HttpClient httpClient,
         XpingConfiguration config,
         IOfflineQueue? offlineQueue = null,
-        IXpingSerializer? serializer = null)
+        IXpingSerializer? serializer = null,
+        IXpingLogger? logger = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _offlineQueue = offlineQueue;
         _serializer = serializer ?? new XpingJsonSerializer(XpingSerializerOptions.ApiOptions);
+        _logger = logger ?? XpingNullLogger.Instance;
 
         ConfigureHttpClient();
         _resiliencePipeline = BuildResiliencePipeline();
@@ -92,17 +97,28 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         // This is especially important for test scenarios where credentials aren't configured
         if (string.IsNullOrWhiteSpace(_config.ApiKey) || string.IsNullOrWhiteSpace(_config.ProjectId))
         {
+            var errorMsg = "Upload skipped: API Key and Project ID are required but not configured";
+            _logger.LogError(errorMsg);
+            _logger.LogInfo("Action: Configure credentials in appsettings.json or environment variables");
+            _logger.LogInfo("  - Set XPING__APIKEY and XPING__PROJECTID environment variables");
+            _logger.LogInfo("  - Or add 'Xping' section to appsettings.json");
+
             return new UploadResult
             {
                 Success = false,
-                ErrorMessage = "Upload skipped: API Key and Project ID are required but not configured",
+                ErrorMessage = errorMsg,
             };
         }
 
         // Try to process any queued items first
         if (_offlineQueue != null)
         {
-            await ProcessQueuedExecutionsAsync(cancellationToken).ConfigureAwait(false);
+            var queueSize = await _offlineQueue.GetQueueSizeAsync(cancellationToken).ConfigureAwait(false);
+            if (queueSize > 0)
+            {
+                _logger.LogInfo($"Processing offline queue ({queueSize} pending execution{(queueSize == 1 ? "" : "s")})...");
+                await ProcessQueuedExecutionsAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
 
         // Now upload the current batch
@@ -114,10 +130,11 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             try
             {
                 await _offlineQueue.EnqueueAsync(executionList, cancellationToken).ConfigureAwait(false);
-                result.ErrorMessage += " (queued for retry)";
+                _logger.LogWarning("Executions queued for retry when connection is restored");
             }
             catch (Exception ex)
             {
+                _logger.LogError($"Failed to queue executions: {ex.Message}");
                 result.ErrorMessage += $" (failed to queue: {ex.Message})";
             }
         }
@@ -149,14 +166,20 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
         catch (BrokenCircuitException ex)
         {
+            var errorMsg = "Circuit breaker is open: Too many consecutive failures";
+            _logger.LogError(errorMsg);
+            _logger.LogWarning("Status: Upload attempts will resume after circuit breaker resets (30 seconds)");
+
             return new UploadResult
             {
                 Success = false,
-                ErrorMessage = $"Circuit breaker is open: {ex.Message}",
+                ErrorMessage = $"{errorMsg}: {ex.Message}",
             };
         }
         catch (HttpRequestException ex)
         {
+            _logger.LogError($"Network error: {ex.Message}");
+
             return new UploadResult
             {
                 Success = false,
@@ -165,6 +188,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
         catch (TaskCanceledException ex)
         {
+            _logger.LogError($"Request timeout after {_config.UploadTimeout.TotalSeconds}s");
+
             return new UploadResult
             {
                 Success = false,
@@ -173,6 +198,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
         catch (Exception ex)
         {
+            _logger.LogError($"Unexpected error: {ex.Message}");
+
             return new UploadResult
             {
                 Success = false,
@@ -316,7 +343,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         return request;
     }
 
-    private static async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
+    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -330,12 +357,29 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             };
         }
 
+        var statusCode = (int)response.StatusCode;
         var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // Enhanced error messages with actionable guidance
+        var errorMsg = statusCode switch
+        {
+            401 => "Authentication failed (401): Invalid API Key or Project ID\n" +
+                   "  Action: Verify credentials at https://app.xping.io",
+            403 => "Authorization failed (403): Insufficient permissions\n" +
+                   "  Action: Check project access at https://app.xping.io",
+            429 => "Rate limit exceeded (429): Too many requests\n" +
+                   "  Action: Reduce test execution frequency or contact support",
+            >= 500 => $"Server error ({statusCode}): API temporarily unavailable\n" +
+                      "  Status: Uploads will be retried automatically",
+            _ => $"API returned {statusCode}: {errorContent}"
+        };
+
+        _logger.LogError(errorMsg);
 
         return new UploadResult
         {
             Success = false,
-            ErrorMessage = $"API returned {response.StatusCode}: {errorContent}",
+            ErrorMessage = errorMsg,
         };
     }
 

@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Diagnostics;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Upload;
 
@@ -22,6 +23,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
     private readonly ConcurrentQueue<TestExecution> _buffer;
     private readonly ITestResultUploader _uploader;
     private readonly XpingConfiguration _config;
+    private readonly IXpingLogger _logger;
     private readonly Timer? _flushTimer;
     private readonly SemaphoreSlim _flushLock;
     private readonly Random _random;
@@ -39,11 +41,13 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
     /// </summary>
     /// <param name="uploader">The uploader for sending test results.</param>
     /// <param name="config">The configuration settings.</param>
+    /// <param name="logger">Optional logger for diagnostics. If null, uses NullLogger.</param>
     /// <exception cref="ArgumentNullException">Thrown when uploader or config is null.</exception>
-    public TestExecutionCollector(ITestResultUploader uploader, XpingConfiguration config)
+    public TestExecutionCollector(ITestResultUploader uploader, XpingConfiguration config, IXpingLogger? logger = null)
     {
         _uploader = uploader ?? throw new ArgumentNullException(nameof(uploader));
         _config = config ?? throw new ArgumentNullException(nameof(config));
+        _logger = logger ?? XpingNullLogger.Instance;
 
         _buffer = new ConcurrentQueue<TestExecution>();
         _flushLock = new SemaphoreSlim(1, 1);
@@ -174,6 +178,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         {
             if (!_buffer.IsEmpty)
             {
+                _logger.LogInfo("Flushing remaining test executions...");
                 await _flushLock.WaitAsync().ConfigureAwait(false);
                 try
                 {
@@ -185,10 +190,34 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow exceptions during disposal
+            _logger.LogError($"Error during final flush: {ex.Message}");
         }
+
+        // Log final statistics
+        var stats = await GetStatsAsync().ConfigureAwait(false);
+        _logger.LogInfo("Session Statistics:");
+        _logger.LogInfo($"  - Total Recorded: {stats.TotalRecorded} test{(stats.TotalRecorded == 1 ? "" : "s")}");
+
+        if (stats.TotalSampled < stats.TotalRecorded)
+        {
+            _logger.LogInfo($"  - Total Sampled: {stats.TotalSampled} test{(stats.TotalSampled == 1 ? "" : "s")} ({_config.SamplingRate:P0})");
+        }
+
+        _logger.LogInfo($"  - Total Uploaded: {stats.TotalUploaded} test{(stats.TotalUploaded == 1 ? "" : "s")}");
+
+        if (stats.TotalFailed > 0)
+        {
+            _logger.LogWarning($"  - Total Failed: {stats.TotalFailed} test{(stats.TotalFailed == 1 ? "" : "s")}");
+        }
+
+        if (stats.BufferCount > 0)
+        {
+            _logger.LogWarning($"  - Pending in Queue: {stats.BufferCount} execution{(stats.BufferCount == 1 ? "" : "s")}");
+        }
+
+        _logger.LogDebug($"  - Total Flushes: {stats.TotalFlushes}");
 
         _disposed = true;
         _flushLock?.Dispose();
@@ -224,14 +253,18 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
             if (result.Success)
             {
                 Interlocked.Add(ref _totalUploaded, batch.Count);
+                _logger.LogInfo($"✓ Uploaded {batch.Count} test execution{(batch.Count == 1 ? "" : "s")}" +
+                    (string.IsNullOrEmpty(result.ReceiptId) ? "" : $" (Receipt: {result.ReceiptId})"));
             }
             else
             {
                 Interlocked.Add(ref _totalFailed, batch.Count);
+                _logger.LogError($"✗ Upload failed: {result.ErrorMessage}");
 
                 // Re-enqueue failed items if offline queue is enabled
                 if (_config.EnableOfflineQueue)
                 {
+                    _logger.LogWarning($"Status: {batch.Count} execution{(batch.Count == 1 ? "" : "s")} queued for retry");
                     foreach (var execution in batch)
                     {
                         _buffer.Enqueue(execution);
@@ -239,13 +272,15 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             Interlocked.Add(ref _totalFailed, batch.Count);
+            _logger.LogError($"✗ Upload exception: {ex.Message}");
 
             // Re-enqueue on exception if offline queue is enabled
             if (_config.EnableOfflineQueue)
             {
+                _logger.LogWarning($"Status: {batch.Count} execution{(batch.Count == 1 ? "" : "s")} queued for retry");
                 foreach (var execution in batch)
                 {
                     _buffer.Enqueue(execution);
