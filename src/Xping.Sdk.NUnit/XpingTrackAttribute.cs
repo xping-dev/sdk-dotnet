@@ -93,7 +93,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             var elapsedTicks = endTimestamp - startTimestamp;
             var duration = TimeSpan.FromTicks((long)(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
-            var execution = CreateTestExecution(test, startTime, endTime, duration);
+            // Extract WorkerId from NUnit context (available for parallel execution)
+            var workerId = TestContext.CurrentContext.WorkerId;
+            var fixtureName = test.TypeInfo?.FullName ?? test.ClassName;
+
+            var execution = CreateTestExecution(test, startTime, endTime, duration, workerId, fixtureName);
             XpingContext.RecordTest(execution);
         }
         catch
@@ -106,7 +110,9 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         ITest test,
         DateTime startTime,
         DateTime endTime,
-        TimeSpan duration)
+        TimeSpan duration,
+        string? workerId,
+        string? fixtureName)
     {
         var result = TestContext.CurrentContext.Result;
 
@@ -135,13 +141,18 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
+        var outcome = MapOutcome(result.Outcome);
 
-        return new TestExecution
+        // Create execution context using ExecutionTracker
+        var executionTracker = XpingContext.ExecutionTracker;
+        var context = executionTracker?.CreateContext(workerId, fixtureName);
+
+        var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
             Identity = identity,
             TestName = test.Name,
-            Outcome = MapOutcome(result.Outcome),
+            Outcome = outcome,
             Duration = duration,
             StartTimeUtc = startTime,
             EndTimeUtc = endTime,
@@ -151,8 +162,14 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             ErrorMessage = errorMessage,
             StackTrace = stackTrace,
             ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
-            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace)
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
+            Context = context
         };
+
+        // Record test completion for tracking as previous test
+        executionTracker?.RecordTestCompletion(workerId, identity.TestId, test.Name, outcome);
+
+        return execution;
     }
 
     private static string? ExtractExceptionType(TestContext.ResultAdapter result)

@@ -26,6 +26,7 @@ public static class XpingContext
     private static HttpClient? _httpClient;
     private static XpingConfiguration? _configuration;
     private static TestSession? _currentSession;
+    private static ExecutionTracker? _executionTracker;
 
     /// <summary>
     /// Gets a value indicating whether the context has been initialized.
@@ -36,6 +37,11 @@ public static class XpingContext
     /// Gets the current configuration.
     /// </summary>
     internal static XpingConfiguration? Configuration => _configuration;
+
+    /// <summary>
+    /// Gets the execution tracker for test order and parallelization tracking.
+    /// </summary>
+    internal static ExecutionTracker? ExecutionTracker => _executionTracker;
 
     /// <summary>
     /// Initializes the Xping context with default configuration.
@@ -130,6 +136,8 @@ public static class XpingContext
         _configuration = null;
         _collector = null;
         _currentSession = null;
+        _executionTracker?.Clear();
+        _executionTracker = null;
         IsInitialized = false;
     }
 
@@ -146,6 +154,8 @@ public static class XpingContext
             _httpClient = null;
             _configuration = null;
             _currentSession = null;
+            _executionTracker?.Clear();
+            _executionTracker = null;
             IsInitialized = false;
         }
     }
@@ -195,6 +205,9 @@ public static class XpingContext
 
         _uploader = new XpingApiClient(_httpClient, configuration, serializer: null, logger);
         _collector = new TestExecutionCollector(_uploader, configuration, logger);
+
+        // Initialize the execution tracker for test order and parallelization tracking
+        _executionTracker = new ExecutionTracker();
 
         // Initialize the test session and associate it with the collector
         _currentSession = new TestSession();

@@ -10,6 +10,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using Xunit.Abstractions;
+using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Models;
 
 #pragma warning disable CA1305 // Specify IFormatProvider for culture-aware ToString conversions
@@ -22,6 +23,8 @@ public sealed class XpingMessageSink : IMessageSink
 {
     private readonly IMessageSink _innerSink;
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData;
+    private readonly ExecutionTracker _executionTracker;
+    private readonly ConcurrentDictionary<string, int> _activeCollections;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="XpingMessageSink"/> class.
@@ -31,6 +34,8 @@ public sealed class XpingMessageSink : IMessageSink
     {
         _innerSink = innerSink ?? throw new ArgumentNullException(nameof(innerSink));
         _testData = new ConcurrentDictionary<string, TestExecutionData>();
+        _executionTracker = new ExecutionTracker();
+        _activeCollections = new ConcurrentDictionary<string, int>();
     }
 
     /// <summary>
@@ -72,11 +77,17 @@ public sealed class XpingMessageSink : IMessageSink
     private void HandleTestStarting(ITestStarting testStarting)
     {
         var testKey = GetTestKey(testStarting.Test);
+        var collectionName = testStarting.Test.TestCase.TestMethod.TestClass.TestCollection.DisplayName;
+
+        // Track active collections for parallelization detection
+        _activeCollections.AddOrUpdate(collectionName, 1, (_, count) => count + 1);
+
         var data = new TestExecutionData
         {
             Test = testStarting.Test,
             StartTime = DateTime.UtcNow,
             StartTimestamp = Stopwatch.GetTimestamp(),
+            CollectionName = collectionName,
         };
 
         _testData.TryAdd(testKey, data);
@@ -104,7 +115,9 @@ public sealed class XpingMessageSink : IMessageSink
             output: testPassed.Output,
             exceptionType: null,
             errorMessage: null,
-            stackTrace: null);
+            stackTrace: null,
+            collectionName: data.CollectionName,
+            executionTracker: _executionTracker);
     }
 
     private void HandleTestFailed(ITestFailed testFailed)
@@ -132,7 +145,9 @@ public sealed class XpingMessageSink : IMessageSink
             output: testFailed.Output,
             exceptionType: exceptionType,
             errorMessage: string.Join(Environment.NewLine, testFailed.Messages),
-            stackTrace: string.Join(Environment.NewLine, testFailed.StackTraces));
+            stackTrace: string.Join(Environment.NewLine, testFailed.StackTraces),
+            collectionName: data.CollectionName,
+            executionTracker: _executionTracker);
     }
 
     private void HandleTestSkipped(ITestSkipped testSkipped)
@@ -157,7 +172,9 @@ public sealed class XpingMessageSink : IMessageSink
             output: string.Empty,
             exceptionType: null,
             errorMessage: $"Test skipped: {testSkipped.Reason}",
-            stackTrace: null
+            stackTrace: null,
+            collectionName: data.CollectionName,
+            executionTracker: _executionTracker
         );
     }
 
@@ -187,7 +204,9 @@ public sealed class XpingMessageSink : IMessageSink
         string output,
         string? exceptionType,
         string? errorMessage,
-        string? stackTrace)
+        string? stackTrace,
+        string collectionName,
+        ExecutionTracker executionTracker)
     {
         try
         {
@@ -201,7 +220,9 @@ public sealed class XpingMessageSink : IMessageSink
                 output,
                 exceptionType,
                 errorMessage,
-                stackTrace);
+                stackTrace,
+                collectionName,
+                executionTracker);
 
             XpingContext.RecordTest(execution);
         }
@@ -221,7 +242,9 @@ public sealed class XpingMessageSink : IMessageSink
         string output,
         string? exceptionType,
         string? errorMessage,
-        string? stackTrace)
+        string? stackTrace,
+        string collectionName,
+        ExecutionTracker executionTracker)
     {
         var testCase = test.TestCase;
         var testMethod = testCase.TestMethod;
@@ -243,7 +266,11 @@ public sealed class XpingMessageSink : IMessageSink
             sourceFile,
             sourceLine);
 
-        return new TestExecution
+        // Create execution context using collection name as worker ID
+        var workerId = collectionName;
+        var context = executionTracker.CreateContext(workerId, collectionName);
+
+        var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
             Identity = identity,
@@ -258,8 +285,14 @@ public sealed class XpingMessageSink : IMessageSink
             ErrorMessage = errorMessage ?? string.Empty,
             StackTrace = stackTrace ?? string.Empty,
             ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
-            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace)
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
+            Context = context
         };
+
+        // Record test completion for tracking as previous test
+        executionTracker.RecordTestCompletion(workerId, identity.TestId, test.DisplayName, outcome);
+
+        return execution;
     }
 
     private static TestMetadata ExtractMetadata(ITest test, string output)
@@ -352,6 +385,7 @@ public sealed class XpingMessageSink : IMessageSink
         public ITest Test { get; set; } = null!;
         public DateTime StartTime { get; set; }
         public long StartTimestamp { get; set; }
+        public string CollectionName { get; set; } = string.Empty;
     }
 }
 

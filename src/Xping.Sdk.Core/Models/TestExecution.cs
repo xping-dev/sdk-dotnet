@@ -104,4 +104,14 @@ public sealed class TestExecution
     /// The hash is computed using SHA256 for stability and collision resistance.
     /// </remarks>
     public string? StackTraceHash { get; set; }
+
+    /// <summary>
+    /// Gets or sets the execution context tracking order, parallelization, and suite state.
+    /// </summary>
+    /// <remarks>
+    /// Enables detection of order-dependent failures, parallel execution issues,
+    /// and resource contention patterns. Provides insights into test execution sequence,
+    /// previous test information, and parallelization state.
+    /// </remarks>
+    public ExecutionContext? Context { get; set; }
 }

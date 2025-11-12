@@ -36,7 +36,7 @@ public abstract class XpingTestBase
     }
 
     /// <summary>
-    /// Called after each test method executes. Records the test execution.
+    /// Cleans up after each test and records the test execution.
     /// </summary>
     [TestCleanup]
     public void XpingTestCleanup()
@@ -50,7 +50,11 @@ public abstract class XpingTestBase
         var endTime = DateTime.UtcNow;
         var duration = CalculateDuration(_startTimestamp, endTimestamp);
 
-        var execution = CreateTestExecution(TestContext, _startTime, endTime, duration);
+        // Extract thread ID and class name for execution tracking
+        var threadId = Environment.CurrentManagedThreadId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var className = TestContext.FullyQualifiedTestClassName ?? "Unknown";
+
+        var execution = CreateTestExecution(TestContext, _startTime, endTime, duration, threadId, className);
         XpingContext.RecordTest(execution);
     }
 
@@ -61,19 +65,23 @@ public abstract class XpingTestBase
     /// <param name="startTime">The test start time.</param>
     /// <param name="endTime">The test end time.</param>
     /// <param name="duration">The test duration.</param>
+    /// <param name="threadId">The thread ID for execution tracking.</param>
+    /// <param name="className">The fully qualified class name for execution tracking.</param>
     /// <returns>A populated TestExecution object.</returns>
     private static TestExecution CreateTestExecution(
         TestContext context,
         DateTime startTime,
         DateTime endTime,
-        TimeSpan duration)
+        TimeSpan duration,
+        string threadId,
+        string className)
     {
         var outcome = MapOutcome(context.CurrentTestOutcome);
         var metadata = ExtractMetadata(context);
 
         // Extract assembly from fully qualified class name
-        var className = context.FullyQualifiedTestClassName ?? string.Empty;
-        var assemblyName = ExtractAssemblyName(className);
+        var fullClassName = context.FullyQualifiedTestClassName ?? string.Empty;
+        var assemblyName = ExtractAssemblyName(fullClassName);
 
         // Generate stable test identity
         var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
@@ -97,7 +105,10 @@ public abstract class XpingTestBase
             parameters,
             displayName);
 
-        return new TestExecution
+        // Create execution context using the ExecutionTracker
+        var executionContext = XpingContext.ExecutionTracker?.CreateContext(threadId, className);
+
+        var testExecution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
             Identity = identity,
@@ -112,8 +123,18 @@ public abstract class XpingTestBase
             ErrorMessage = GetErrorMessage(context),
             StackTrace = GetStackTrace(context),
             ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(GetErrorMessage(context)),
-            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(GetStackTrace(context))
+            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(GetStackTrace(context)),
+            Context = executionContext
         };
+
+        // Record test completion for execution tracking
+        XpingContext.ExecutionTracker?.RecordTestCompletion(
+            threadId,
+            testExecution.Identity.TestId,
+            testExecution.TestName,
+            outcome);
+
+        return testExecution;
     }
 
     /// <summary>
