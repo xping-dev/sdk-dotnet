@@ -12,6 +12,7 @@ using System.Linq;
 using Xunit.Abstractions;
 using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.XUnit.Retry;
 
 #pragma warning disable CA1305 // Specify IFormatProvider for culture-aware ToString conversions
 
@@ -25,6 +26,7 @@ public sealed class XpingMessageSink : IMessageSink
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData;
     private readonly ExecutionTracker _executionTracker;
     private readonly ConcurrentDictionary<string, int> _activeCollections;
+    private readonly XUnitRetryDetector _retryDetector;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="XpingMessageSink"/> class.
@@ -36,6 +38,7 @@ public sealed class XpingMessageSink : IMessageSink
         _testData = new ConcurrentDictionary<string, TestExecutionData>();
         _executionTracker = new ExecutionTracker();
         _activeCollections = new ConcurrentDictionary<string, int>();
+        _retryDetector = new XUnitRetryDetector();
     }
 
     /// <summary>
@@ -105,7 +108,7 @@ public sealed class XpingMessageSink : IMessageSink
         var endTimestamp = Stopwatch.GetTimestamp();
         var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
 
-        RecordTestExecution(
+        this.RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Passed,
             startTime: data.StartTime,
@@ -135,7 +138,7 @@ public sealed class XpingMessageSink : IMessageSink
         // Extract exception type - XUnit provides array of exception types
         var exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
 
-        RecordTestExecution(
+        this.RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Failed,
             startTime: data.StartTime,
@@ -162,7 +165,7 @@ public sealed class XpingMessageSink : IMessageSink
         var endTimestamp = Stopwatch.GetTimestamp();
         var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
 
-        RecordTestExecution(
+        this.RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Skipped,
             startTime: data.StartTime,
@@ -194,7 +197,7 @@ public sealed class XpingMessageSink : IMessageSink
         }
     }
 
-    private static void RecordTestExecution(
+    private void RecordTestExecution(
         ITest test,
         TestOutcome outcome,
         DateTime startTime,
@@ -232,7 +235,7 @@ public sealed class XpingMessageSink : IMessageSink
         }
     }
 
-    private static TestExecution CreateTestExecution(
+    private TestExecution CreateTestExecution(
         ITest test,
         TestOutcome outcome,
         DateTime startTime,
@@ -270,6 +273,20 @@ public sealed class XpingMessageSink : IMessageSink
         var workerId = collectionName;
         var context = executionTracker.CreateContext(workerId, collectionName);
 
+        // Detect retry metadata
+        var retryMetadata = _retryDetector.DetectRetryMetadata(test);
+        if (retryMetadata != null)
+        {
+            // Update attempt number with current value
+            retryMetadata.AttemptNumber = _retryDetector.GetCurrentAttemptNumber(test);
+
+            // If test passed and attempt > 1, it passed on retry
+            if (outcome == TestOutcome.Passed && retryMetadata.AttemptNumber > 1)
+            {
+                retryMetadata.PassedOnRetry = true;
+            }
+        }
+
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
@@ -286,7 +303,8 @@ public sealed class XpingMessageSink : IMessageSink
             StackTrace = stackTrace ?? string.Empty,
             ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
             StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
-            Context = context
+            Context = context,
+            Retry = retryMetadata
         };
 
         // Record test completion for tracking as previous test

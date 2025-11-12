@@ -79,6 +79,20 @@ public abstract class XpingTestBase
         var outcome = MapOutcome(context.CurrentTestOutcome);
         var metadata = ExtractMetadata(context);
 
+        // Detect retry metadata using MSTestRetryDetector
+        var retryDetector = new Xping.Sdk.MSTest.Retry.MSTestRetryDetector();
+        var retryMetadata = retryDetector.DetectRetryMetadata(context);
+
+        // If retry is detected and test outcome is passed, update PassedOnRetry flag
+        if (retryMetadata != null && outcome == TestOutcome.Passed)
+        {
+            var attemptNumber = retryDetector.GetCurrentAttemptNumber(context);
+            if (attemptNumber > 1)
+            {
+                retryMetadata.PassedOnRetry = true;
+            }
+        }
+
         // Extract assembly from fully qualified class name
         var fullClassName = context.FullyQualifiedTestClassName ?? string.Empty;
         var assemblyName = ExtractAssemblyName(fullClassName);
@@ -119,6 +133,7 @@ public abstract class XpingTestBase
             EndTimeUtc = endTime,
             SessionContext = XpingContext.CurrentSession,
             Metadata = metadata,
+            Retry = retryMetadata,
             ExceptionType = GetExceptionType(context),
             ErrorMessage = GetErrorMessage(context),
             StackTrace = GetStackTrace(context),

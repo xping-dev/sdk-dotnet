@@ -114,4 +114,16 @@ public sealed class TestExecution
     /// previous test information, and parallelization state.
     /// </remarks>
     public ExecutionContext? Context { get; set; }
+
+    /// <summary>
+    /// Gets or sets retry metadata if the test is configured for retry.
+    /// </summary>
+    /// <remarks>
+    /// Null if the test does not have retry configuration.
+    /// Contains retry attempt information, max retries, and retry strategy details
+    /// when the test is executed with a retry mechanism.
+    /// Helps identify flaky tests that pass only after retry attempts and
+    /// enables analysis of retry patterns and test reliability issues.
+    /// </remarks>
+    public RetryMetadata? Retry { get; set; }
 }

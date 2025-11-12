@@ -9,7 +9,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Threading;
-using Xping.Sdk.Core.Models;
+using Models;
 
 /// <summary>
 /// Tracks test execution order, parallelization, and suite state across test runs.
@@ -56,7 +56,7 @@ public sealed class ExecutionTracker
         var threadId = Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
         var workerKey = workerId ?? threadId;
 
-        // Get position for this worker
+        // Get a position for this worker
         var workerPosition = _workerPositions.AddOrUpdate(
             workerKey,
             _ => 1,
@@ -65,7 +65,7 @@ public sealed class ExecutionTracker
         // Get global position (approximate in parallel scenarios)
         var globalPos = Interlocked.Increment(ref _globalPosition);
 
-        // Get previous test for this worker
+        // Get a previous test for this worker
         _previousTests.TryGetValue(workerKey, out var previousTest);
 
         // Count active workers (approximation of concurrency)

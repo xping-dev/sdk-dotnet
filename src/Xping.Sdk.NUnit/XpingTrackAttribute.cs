@@ -10,6 +10,7 @@ using System.Diagnostics;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.NUnit.Retry;
 
 /// <summary>
 /// NUnit attribute for tracking test execution with Xping.
@@ -147,6 +148,21 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         var executionTracker = XpingContext.ExecutionTracker;
         var context = executionTracker?.CreateContext(workerId, fixtureName);
 
+        // Detect retry metadata
+        var retryDetector = new NUnitRetryDetector();
+        var retryMetadata = retryDetector.DetectRetryMetadata(test);
+        if (retryMetadata != null)
+        {
+            // Update attempt number with current value
+            retryMetadata.AttemptNumber = retryDetector.GetCurrentAttemptNumber(test);
+
+            // If test passed and attempt > 1, it passed on retry
+            if (outcome == TestOutcome.Passed && retryMetadata.AttemptNumber > 1)
+            {
+                retryMetadata.PassedOnRetry = true;
+            }
+        }
+
         var execution = new TestExecution
         {
             ExecutionId = Guid.NewGuid(),
@@ -163,7 +179,8 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             StackTrace = stackTrace,
             ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
             StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
-            Context = context
+            Context = context,
+            Retry = retryMetadata
         };
 
         // Record test completion for tracking as previous test

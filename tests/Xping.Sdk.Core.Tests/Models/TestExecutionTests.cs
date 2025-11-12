@@ -204,4 +204,111 @@ public class TestExecutionTests
         // Assert
         Assert.Null(execution.Metadata);
     }
+
+    [Fact]
+    public void Should_Allow_Null_Retry_Metadata()
+    {
+        // Act
+        var execution = new TestExecution
+        {
+            ExecutionId = Guid.NewGuid(),
+            TestName = "Test",
+            Retry = null
+        };
+
+        // Assert
+        Assert.Null(execution.Retry);
+    }
+
+    [Fact]
+    public void Should_Support_Test_With_Retry_Metadata()
+    {
+        // Arrange
+        var retryMetadata = new RetryMetadata
+        {
+            AttemptNumber = 2,
+            MaxRetries = 3,
+            PassedOnRetry = true,
+            DelayBetweenRetries = TimeSpan.FromMilliseconds(100),
+            RetryReason = "Timeout",
+            RetryAttributeName = "RetryFact"
+        };
+
+        // Act
+        var execution = new TestExecution
+        {
+            ExecutionId = Guid.NewGuid(),
+            Identity = new TestIdentity { TestId = "test-retry-123" },
+            TestName = "FlakyTest_PassesOnRetry",
+            Outcome = TestOutcome.Passed,
+            Retry = retryMetadata
+        };
+
+        // Assert
+        Assert.NotNull(execution.Retry);
+        Assert.Equal(2, execution.Retry.AttemptNumber);
+        Assert.Equal(3, execution.Retry.MaxRetries);
+        Assert.True(execution.Retry.PassedOnRetry);
+        Assert.Equal(TimeSpan.FromMilliseconds(100), execution.Retry.DelayBetweenRetries);
+        Assert.Equal("Timeout", execution.Retry.RetryReason);
+        Assert.Equal("RetryFact", execution.Retry.RetryAttributeName);
+    }
+
+    [Fact]
+    public void Should_Support_First_Attempt_With_Retry_Configuration()
+    {
+        // Arrange - test configured for retry but passes on first attempt
+        var retryMetadata = new RetryMetadata
+        {
+            AttemptNumber = 1,
+            MaxRetries = 3,
+            PassedOnRetry = false,
+            RetryAttributeName = "Retry"
+        };
+
+        // Act
+        var execution = new TestExecution
+        {
+            ExecutionId = Guid.NewGuid(),
+            Identity = new TestIdentity { TestId = "test-stable-123" },
+            TestName = "StableTest_PassesImmediately",
+            Outcome = TestOutcome.Passed,
+            Retry = retryMetadata
+        };
+
+        // Assert
+        Assert.NotNull(execution.Retry);
+        Assert.Equal(1, execution.Retry.AttemptNumber);
+        Assert.False(execution.Retry.PassedOnRetry);
+    }
+
+    [Fact]
+    public void Should_Support_Failed_Test_With_Retry_Metadata()
+    {
+        // Arrange - test that failed even with retry
+        var retryMetadata = new RetryMetadata
+        {
+            AttemptNumber = 4,
+            MaxRetries = 3,
+            PassedOnRetry = false,
+            RetryAttributeName = "RetryTheory"
+        };
+
+        // Act
+        var execution = new TestExecution
+        {
+            ExecutionId = Guid.NewGuid(),
+            Identity = new TestIdentity { TestId = "test-failed-retry-123" },
+            TestName = "AlwaysFailingTest",
+            Outcome = TestOutcome.Failed,
+            ErrorMessage = "Test failed after all retry attempts",
+            Retry = retryMetadata
+        };
+
+        // Assert
+        Assert.NotNull(execution.Retry);
+        Assert.Equal(TestOutcome.Failed, execution.Outcome);
+        Assert.Equal(4, execution.Retry.AttemptNumber);
+        Assert.False(execution.Retry.PassedOnRetry);
+    }
 }
