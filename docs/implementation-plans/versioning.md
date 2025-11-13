@@ -130,7 +130,7 @@ dotnet add package Xping.Sdk.Core --version 2.0.0-beta.1
 
 ## Version History
 
-| Version | Release Date | Notes |
-|---------|--------------|-------|
-| 1.0.0   | TBD          | Initial release |
+| Version | Release Date     | Notes           |
+|---------|------------------|-----------------|
+| 1.0.0   | January 4th 2026 | Initial release |
 
