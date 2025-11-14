@@ -1,4 +1,10 @@
-- name: Docs
-  href: docs/
-- name: API
+- name: Getting Started
+  href: getting-started/
+- name: Configuration
+  href: configuration/
+- name: Guides
+  href: guides/
+- name: Troubleshooting
+  href: troubleshooting/
+- name: API Reference
   href: api/

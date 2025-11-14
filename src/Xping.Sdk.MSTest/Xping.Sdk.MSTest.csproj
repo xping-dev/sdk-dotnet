@@ -13,7 +13,7 @@
 
   <!-- Include icon and README in the package -->
   <ItemGroup>
-    <None Include="..\..\docs\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
     <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 

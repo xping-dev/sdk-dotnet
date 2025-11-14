@@ -899,10 +899,10 @@ samples/
 ### 5.2 Documentation
 
 **Tasks:**
-- [ ] Write getting started guide
-- [ ] Write framework-specific guides
-- [ ] Write configuration reference
-- [ ] Write API documentation (XML docs → DocFX)
+- [x] Write getting started guide
+- [x] Write framework-specific guides
+- [x] Write configuration reference
+- [x] Write API documentation (XML docs → DocFX)
 - [ ] Create troubleshooting guide
 - [ ] Create migration guide
 - [ ] Write contribution guide
@@ -918,12 +918,9 @@ docs/
 │   └── ci-cd-setup.md
 ├── configuration/
 │   ├── configuration-reference.md
-│   ├── environment-variables.md
-│   └── advanced-configuration.md
 ├── guides/
 │   ├── flaky-test-detection.md
 │   ├── performance-tuning.md
-│   ├── offline-mode.md
 │   └── custom-metadata.md
 ├── api/
 │   └── (generated from XML docs)

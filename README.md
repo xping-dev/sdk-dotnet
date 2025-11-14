@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <div align="center">
-  <img src="docs/docs/media/logo.svg" width="100" alt="Xping Logo" />
+  <img src="docs/media/logo.svg" width="100" alt="Xping Logo" />
   
   <h1>Xping SDK for .NET</h1>
   
