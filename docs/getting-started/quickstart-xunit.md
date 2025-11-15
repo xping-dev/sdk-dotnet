@@ -461,7 +461,7 @@ Could not find type 'Xping.Sdk.XUnit.XpingTestFramework' in Xping.Sdk.XUnit
 
 - The test process exited before flushing completed
 - Network issues during upload (check logs for retry attempts)
-- Offline queue is full (default max: 10,000 tests)
+
 
 **Solution:** The Xping test framework handles cleanup automatically. If you're experiencing issues, check:
 

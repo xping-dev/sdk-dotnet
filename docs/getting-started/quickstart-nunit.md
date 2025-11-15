@@ -373,7 +373,6 @@ Categories are automatically captured and visible in the Xping dashboard for fil
 
 - The test process exited before `XpingContext.FlushAsync()` completed
 - Network issues during upload (check logs for retry attempts)
-- Offline queue is full (default max: 10,000 tests)
 
 **Solution:** Ensure `[OneTimeTearDown]` in your setup fixture includes:
 

@@ -333,7 +333,7 @@ The adapter includes comprehensive error handling:
 
 - Exceptions during test tracking are silently caught
 - Test results remain unaffected even if tracking fails
-- Failed uploads are queued for retry when offline queue is enabled
+- Failed uploads are retried automatically with exponential backoff
 - No impact on test execution or outcomes
 
 ## Troubleshooting
@@ -359,7 +359,7 @@ If no configuration is found, the adapter will:
 2. Check environment variables (with `XPING_` prefix)
 3. Fall back to default offline-only mode
 
-### Offline mode
+### Network Issues
 
 When API is unavailable:
 - Tests are queued locally in `~/.xping/queue`

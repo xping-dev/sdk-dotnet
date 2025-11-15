@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Xping.Sdk.Benchmarks.StressTestBenchmarks-20251115-170312</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
+Apple M4, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.203
+  [Host]   : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+  ShortRun : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>Job=ShortRun  IterationCount=3  LaunchCount=1  
+WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                         </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Completed Work Items</th><th>Lock Contentions</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>SustainedLoad_1000Tests</td><td>297.2 &mu;s</td><td>280.00 &mu;s</td><td>15.35 &mu;s</td><td>5.3711</td><td>18.0200</td><td>-</td><td>0.4883</td><td>541.72 KB</td>
+</tr><tr><td>HighVolumeLoad_5000Tests</td><td>1,507.3 &mu;s</td><td>1,266.57 &mu;s</td><td>69.42 &mu;s</td><td>25.3906</td><td>5.1133</td><td>-</td><td>3.9063</td><td>2746.41 KB</td>
+</tr><tr><td>BurstLoad_2000Tests</td><td>598.2 &mu;s</td><td>57.09 &mu;s</td><td>3.13 &mu;s</td><td>9.7656</td><td>30.8184</td><td>0.0107</td><td>0.9766</td><td>1055.52 KB</td>
+</tr><tr><td>MixedWorkload_1500Tests</td><td>481.4 &mu;s</td><td>55.04 &mu;s</td><td>3.02 &mu;s</td><td>9.7656</td><td>18.4873</td><td>-</td><td>0.9766</td><td>986.91 KB</td>
+</tr><tr><td>MemoryStability_10Cycles_100TestsEach</td><td>335.5 &mu;s</td><td>38.35 &mu;s</td><td>2.10 &mu;s</td><td>5.8594</td><td>19.9023</td><td>-</td><td>2.9297</td><td>639.71 KB</td>
+</tr><tr><td>ContinuousPressure_3000Tests</td><td>899.7 &mu;s</td><td>32.34 &mu;s</td><td>1.77 &mu;s</td><td>15.6250</td><td>40.7188</td><td>-</td><td>-</td><td>1698.32 KB</td>
+</tr></tbody></table>
+</body>
+</html>

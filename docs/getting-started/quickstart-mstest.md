@@ -484,7 +484,7 @@ public class ContextTests : XpingTestBase
 
 - The test process exited before `XpingContext.FlushAsync()` completed
 - Network issues during upload (check logs for retry attempts)
-- Offline queue is full (default max: 10,000 tests)
+
 
 **Solution:** Ensure `[AssemblyCleanup]` includes:
 

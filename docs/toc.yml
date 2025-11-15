@@ -4,6 +4,8 @@
   href: configuration/
 - name: Guides
   href: guides/
+- name: Performance
+  href: performance/
 - name: Troubleshooting
   href: troubleshooting/
 - name: API Reference

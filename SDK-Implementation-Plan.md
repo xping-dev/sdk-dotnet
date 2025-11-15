@@ -790,10 +790,10 @@ Xping.Sdk.Integration.Tests/
 ### 4.3 Performance Testing
 
 **Metrics to Measure:**
-- [ ] Test execution overhead (<5ms per test)
-- [ ] Memory footprint (<50MB for 10k tests)
-- [ ] Collection throughput (>10k tests/sec)
-- [ ] Upload batch size optimization
+- [x] Test execution overhead (<5ms per test)
+- [x] Memory footprint (<50MB for 10k tests)
+- [x] Collection throughput (>10k tests/sec)
+- [x] Upload batch size optimization
 - [ ] API call latency impact
 
 **Benchmarks:**
@@ -824,9 +824,9 @@ public class CollectorBenchmarks
 ### 4.4 Sample Applications
 
 **Tasks:**
-- [ ] Create sample NUnit project
-- [ ] Create sample xUnit project
-- [ ] Create sample MSTest project
+- [x] Create sample NUnit project
+- [x] Create sample xUnit project
+- [x] Create sample MSTest project
 - [ ] Create sample CI/CD configurations
 - [ ] Create sample with flaky tests
 - [ ] Document expected behavior

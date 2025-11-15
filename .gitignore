@@ -271,3 +271,7 @@ docs/api
 
 #build results, e.g. *.nupkg
 _build
+# BenchmarkDotNet artifacts
+**/BenchmarkDotNet.Artifacts/
+**/benchmarks/results/current/
+**/*.benchmark.log

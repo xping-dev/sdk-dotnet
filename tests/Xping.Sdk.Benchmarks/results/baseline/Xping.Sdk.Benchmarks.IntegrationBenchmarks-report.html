@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Xping.Sdk.Benchmarks.IntegrationBenchmarks-20251115-165339</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
+Apple M4, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.203
+  [Host]   : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+  ShortRun : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>Job=ShortRun  IterationCount=3  LaunchCount=1  
+WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method              </th><th>Mean </th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Completed Work Items</th><th>Lock Contentions</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>SingleTestEndToEnd</td><td>339.6 ns</td><td>438.35 ns</td><td>24.03 ns</td><td>0.0062</td><td>-</td><td>-</td><td>-</td><td>648 B</td>
+</tr><tr><td>TenPassingTests</td><td>2,895.8 ns</td><td>133.95 ns</td><td>7.34 ns</td><td>0.0572</td><td>-</td><td>-</td><td>-</td><td>5984 B</td>
+</tr><tr><td>MixedOutcomeTests</td><td>5,780.1 ns</td><td>130.84 ns</td><td>7.17 ns</td><td>0.1068</td><td>-</td><td>-</td><td>-</td><td>11584 B</td>
+</tr><tr><td>FailedTestsWithStackTraces</td><td>2,892.6 ns</td><td>49.34 ns</td><td>2.70 ns</td><td>0.0572</td><td>-</td><td>-</td><td>-</td><td>5904 B</td>
+</tr><tr><td>RapidTestExecution</td><td>28,598.8 ns</td><td>7,774.70 ns</td><td>426.16 ns</td><td>0.5493</td><td>-</td><td>-</td><td>0.0305</td><td>56016 B</td>
+</tr></tbody></table>
+</body>
+</html>

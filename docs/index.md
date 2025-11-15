@@ -105,12 +105,17 @@ Comprehensive configuration options and environment setup
 - Environment Variables
 - Advanced Configuration
 
-### 📖 [Guides](guides/flaky-test-detection.md)
-In-depth guides for specific features and use cases
+### 📚 [Guides](guides/flaky-test-detection.md)
+Practical guides for using Xping SDK features
 
-- Flaky Test Detection
-- Performance Tuning
-- Custom Metadata
+- [Flaky Test Detection](guides/flaky-test-detection.md)
+- [Performance Guide](guides/performance.md)
+
+### ⚡ [Performance](performance/overview.md)
+Performance benchmarks and optimization guidelines
+
+- [Performance Overview](performance/overview.md)
+- [Benchmark Results](performance/benchmark-results.md)
 
 ### 🔧 [Troubleshooting](troubleshooting/common-issues.md)
 Common issues and solutions

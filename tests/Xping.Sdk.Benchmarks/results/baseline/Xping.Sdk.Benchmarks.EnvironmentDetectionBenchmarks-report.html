@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Xping.Sdk.Benchmarks.EnvironmentDetectionBenchmarks-20251115-163625</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
+Apple M4, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.203
+  [Host]   : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+  ShortRun : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>Job=ShortRun  IterationCount=3  LaunchCount=1  
+WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                  </th><th>Mean </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Completed Work Items</th><th>Lock Contentions</th><th>Gen0</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>&#39;Detect OS information&#39;</td><td>1.4668 ns</td><td>0.0551 ns</td><td>0.0030 ns</td><td>?</td><td>?</td><td>-</td><td>-</td><td>-</td><td>-</td><td>?</td>
+</tr><tr><td>&#39;Detect runtime version&#39;</td><td>13.6899 ns</td><td>3.7803 ns</td><td>0.2072 ns</td><td>?</td><td>?</td><td>-</td><td>-</td><td>0.0006</td><td>64 B</td><td>?</td>
+</tr><tr><td>&#39;Detect CI environment&#39;</td><td>588.8486 ns</td><td>32.1803 ns</td><td>1.7639 ns</td><td>?</td><td>?</td><td>-</td><td>-</td><td>-</td><td>-</td><td>?</td>
+</tr><tr><td>&#39;Collect all environment info&#39;</td><td>427.6316 ns</td><td>74.4067 ns</td><td>4.0785 ns</td><td>?</td><td>?</td><td>-</td><td>-</td><td>0.0019</td><td>232 B</td><td>?</td>
+</tr><tr><td>&#39;Get processor count&#39;</td><td>0.0000 ns</td><td>0.0000 ns</td><td>0.0000 ns</td><td>?</td><td>?</td><td>-</td><td>-</td><td>-</td><td>-</td><td>?</td>
+</tr></tbody></table>
+</body>
+</html>

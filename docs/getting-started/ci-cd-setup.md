@@ -401,7 +401,7 @@ Only track tests for main branches and pull requests:
 
 ### 5. Handle Network Failures Gracefully
 
-Xping SDK includes offline queue and retry logic, but you can add explicit handling:
+Xping SDK includes retry logic with exponential backoff, but you can add explicit handling:
 
 ```yaml
 - name: Run tests with Xping

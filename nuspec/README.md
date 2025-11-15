@@ -13,7 +13,7 @@
 - 🔍 **Test Execution Tracking** - Automatic collection of test results, duration, and outcomes
 - 📊 **Flaky Test Detection** - Identify unreliable tests that waste development time
 - 🌐 **CI/CD Integration** - Automatic environment detection for GitHub Actions, Azure DevOps, Jenkins, and more
-- 💪 **Resilient Upload** - Retry logic, circuit breaker, and offline queue for reliable data delivery
+- 💪 **Resilient Upload** - Retry logic with exponential backoff and circuit breaker for reliable data delivery
 - ⚡ **Low Overhead** - Minimal performance impact on your test execution
 - 🎯 **Multi-Framework Support** - Works with NUnit, xUnit, and MSTest
 
