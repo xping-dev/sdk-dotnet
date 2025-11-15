@@ -38,7 +38,8 @@
       {
         "files": [
           "**/images/**",
-          "**/media/**"
+          "**/media/**",
+          "public/**"
         ],
         "exclude": [
           "_site/**",
