@@ -2,7 +2,7 @@
 
 Understanding the performance characteristics of the Xping SDK helps you make informed decisions about test observability. This guide explains what to expect, how to optimize, and when to tune performance settings.
 
-## TL;DR
+## At a Glance
 
 The Xping SDK is designed for **negligible performance impact** on your test suite:
 
@@ -46,20 +46,14 @@ Here's what Xping overhead looks like in practice:
 
 Breaking down the 0.7-0.8µs per test:
 
-1. **Data Collection** (~300ns)
-   - Capture test identity and outcome
-   - Record execution timing
-   - Gather environment context
+1. **Data Collection** (~300ns)  
+    Capture test identity and outcome, record execution timing, and gather environment context
 
-2. **Buffering** (~200ns)
-   - Add to in-memory buffer
-   - Check batch threshold
-   - Minimal allocation (Gen0 only)
+2. **Buffering** (~200ns)  
+    Add to in-memory buffer, check batch threshold, minimal allocation (Gen0 only)
 
-3. **Processing** (~200-300ns)
-   - Apply sampling rules
-   - Enrich with metadata
-   - Prepare for upload
+3. **Processing** (~200-300ns)  
+    Apply sampling rules, enrich with metadata, and prepare for upload
 
 **Network upload happens asynchronously** - it never blocks your tests.
 
