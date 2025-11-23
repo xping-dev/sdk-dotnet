@@ -2,7 +2,3 @@
   href: flaky-test-detection.md
 - name: Performance Guide
   href: performance.md
-- name: Performance Tuning
-  href: performance-tuning.md
-- name: Custom Metadata
-  href: custom-metadata.md

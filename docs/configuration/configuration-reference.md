@@ -103,21 +103,21 @@ Your Xping authentication API key. This credential identifies your account and a
 ```json
 {
   "Xping": {
-    "ApiKey": "xpk_live_a1b2c3d4e5f6g7h8i9j0"
+    "ApiKey": "xpg_live_productionkey"
   }
 }
 ```
 
 ```bash
 # Recommended: Use environment variables
-export XPING_APIKEY="xpk_live_a1b2c3d4e5f6g7h8i9j0"
+export XPING_APIKEY="xpg_live_productionkey"
 ```
 
 ```csharp
 // Not recommended: Hard-coding in source
 var config = new XpingConfiguration
 {
-    ApiKey = "xpk_live_a1b2c3d4e5f6g7h8i9j0"
+    ApiKey = "xpg_live_productionkey"
 };
 XpingContext.Initialize(config);
 ```
@@ -707,7 +707,7 @@ XpingContext.Initialize(config);
 ```json
 {
   "Xping": {
-    "ApiKey": "xpk_live_a1b2c3d4e5f6g7h8i9j0",
+    "ApiKey": "xpg_live_productionkey",
     "ProjectId": "my-application",
     "ApiEndpoint": "https://api.xping.io",
     "BatchSize": 100,
@@ -732,7 +732,7 @@ XpingContext.Initialize(config);
 ```json
 {
   "Xping": {
-    "ApiKey": "xpk_test_developmentkey",
+    "ApiKey": "xpg_test_developmentkey",
     "ProjectId": "my-app-dev",
     "Environment": "Development",
     "Enabled": true,
@@ -746,7 +746,7 @@ XpingContext.Initialize(config);
 ```json
 {
   "Xping": {
-    "ApiKey": "xpk_live_productionkey",
+    "ApiKey": "xpg_live_productionkey",
     "ProjectId": "my-app-prod",
     "Environment": "Production",
     "Enabled": true,
@@ -790,7 +790,7 @@ XpingContext.Initialize(config);
 // Direct configuration
 var directConfig = new XpingConfiguration
 {
-    ApiKey = "xpk_live_key",
+    ApiKey = "xpg_live_productionkey",
     ProjectId = "my-app",
     BatchSize = 150,
     EnableCompression = true
@@ -803,7 +803,7 @@ XpingContext.Initialize(directConfig);
 ```json
 {
   "Xping": {
-    "ApiKey": "xpk_live_a1b2c3d4e5f6g7h8i9j0",
+    "ApiKey": "xpg_live_productionkey",
     "ProjectId": "my-app"
   }
 }
@@ -845,8 +845,8 @@ Configuration values are merged from multiple sources in this priority order:
 ```
 ApiKey:
   - Default: null
-  - appsettings.json: "xpk_test_key"
-  - Environment variable: "xpk_live_key"  ← Wins
+  - appsettings.json: "xpg_test_key"
+  - Environment variable: "xpg_live_key"  ← Wins
   - Programmatic: Not set
 
 BatchSize:

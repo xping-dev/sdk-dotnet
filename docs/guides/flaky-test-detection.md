@@ -265,14 +265,39 @@ Failures: 80% occur when PaymentServiceTest also fails
 ## Using Xping Effectively
 
 ### Metadata for Flaky Tests
-Tag tests with relevant metadata to help with analysis:
+Tag tests with relevant metadata to help with analysis using your test framework's native attributes:
 
+**NUnit:**
 ```csharp
 [Test]
-[XpingTrack(
-    Tags = new[] { "external-service", "integration" },
-    CustomData = @"{""service"": ""payment-api"", ""timeout"": ""30s""}"
-)]
+[Category("external-service")]
+[Category("integration")]
+[Description("Payment API integration test with 30s timeout")]
+public void ProcessPayment_Should_Succeed()
+{
+    // Test implementation
+}
+```
+
+**xUnit:**
+```csharp
+[Fact]
+[Trait("Category", "external-service")]
+[Trait("Category", "integration")]
+[Trait("Service", "payment-api")]
+[Trait("Timeout", "30s")]
+public void ProcessPayment_Should_Succeed()
+{
+    // Test implementation
+}
+```
+
+**MSTest:**
+```csharp
+[TestMethod]
+[TestCategory("external-service")]
+[TestCategory("integration")]
+[Description("Payment API integration test with 30s timeout")]
 public void ProcessPayment_Should_Succeed()
 {
     // Test implementation
