@@ -61,7 +61,7 @@ Traditional test frameworks tell you if a test passed or failed—but they don't
 ### For DevOps Engineers
 - 🔧 **CI/CD integration** - Automatic environment detection (GitHub Actions, Azure DevOps, Jenkins, GitLab)
 - 💪 **Resilient by design** - Retry logic, circuit breakers
-- 📦 **Minimal overhead** - <5ms per test, <100 bytes memory footprint
+- 📦 **Minimal overhead** - <5ms per test, <1000 bytes memory footprint
 
 ---
 
@@ -192,7 +192,7 @@ Add `appsettings.json` to your test project:
     "ApiKey": "your-api-key",
     "ProjectId": "your-project-id",
     "Enabled": true,
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
     "MaxRetries": 3
@@ -295,7 +295,7 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
     "ProjectId": "your-project-id",
     
     // API Configuration
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io",
     "UploadTimeout": "00:00:30",
     
     // Feature Flags
@@ -328,7 +328,7 @@ export XPING_PROJECT_ID="your-project-id"
 
 # Optional
 export XPING_ENABLED="true"
-export XPING_API_ENDPOINT="https://api.xping.io"
+export XPING_API_ENDPOINT="https://upload.xping.io"
 export XPING_BATCH_SIZE="100"
 export XPING_MAX_RETRIES="3"
 ```

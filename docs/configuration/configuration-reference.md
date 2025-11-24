@@ -178,16 +178,23 @@ XpingContext.Initialize(config);
 **Valid Range:** `1` to `1000`  
 **Environment Variable:** `XPING_BATCHSIZE`
 
-Number of test executions to accumulate before uploading to Xping. Larger batches reduce API calls but increase memory usage and delay visibility.
+Number of test executions to accumulate before automatically uploading to Xping.
+
+**Upload triggers:**
+1. When `BatchSize` test executions are collected (e.g., 100 tests)
+2. When `FlushInterval` timer fires (e.g., every 30 seconds)
+3. **When test session completes** (via `FlushAsync()` or `DisposeAsync()`)
+
+This means even small test suites (e.g., 10 tests) will upload immediately when the test session ends, regardless of batch size.
 
 **Performance considerations:**
-- **Small batches (10-50):** Faster visibility, more API calls, higher overhead
-- **Medium batches (100-200):** Balanced for most scenarios
-- **Large batches (500-1000):** Fewer API calls, higher memory, delayed visibility
+- **Small batches (10-50):** Faster mid-run visibility, more API calls, higher overhead
+- **Medium batches (100-200):** Balanced for most scenarios (recommended)
+- **Large batches (500-1000):** Fewer API calls during execution, higher memory usage
 
 **When to adjust:**
-- **Increase** for large test suites (1000+ tests) to reduce API overhead
-- **Decrease** for real-time monitoring or small test suites (<100 tests)
+- **Increase** for large test suites (1000+ tests) to reduce API call frequency during test execution
+- **Decrease** for real-time monitoring during development (see results before suite completes)
 
 **Example:**
 
@@ -212,7 +219,9 @@ export XPING_BATCHSIZE="200"
 **Valid Range:** Must be greater than zero  
 **Environment Variable:** `XPING_FLUSHINTERVAL`
 
-Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached.
+Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
+
+**Important:** At the end of your test session, `FlushAsync()` or `DisposeAsync()` will upload any remaining tests immediately, regardless of this interval.
 
 **Format:**
 - JSON: `"HH:MM:SS"` format (e.g., `"00:01:00"` for 1 minute)
@@ -220,9 +229,9 @@ Maximum time to wait before uploading accumulated test executions, even if `Batc
 - Programmatic: `TimeSpan` object
 
 **Usage scenarios:**
-- **Short intervals (5-15s):** Real-time monitoring during development
-- **Medium intervals (30-60s):** Standard CI/CD pipelines
-- **Long intervals (2-5m):** Large batch jobs with thousands of tests
+- **Short intervals (5-15s):** See results quickly during development (uploads every 5-15s)
+- **Medium intervals (30-60s):** Standard CI/CD pipelines (balanced)
+- **Long intervals (2-5m):** Large batch jobs where you only need final results
 
 **Example:**
 
