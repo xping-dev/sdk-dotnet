@@ -137,8 +137,10 @@ A user-defined identifier for your project. Choose any meaningful name—Xping a
 - User-defined, not retrieved from the platform
 - Must be unique within your workspace
 - Can be any string (alphanumeric, hyphens, underscores recommended)
-- Case-sensitive
+- Case-insensitive (e.g., `"my-app"` and `"My-App"` refer to the same project)
 - Commonly follows naming conventions: `"my-app"`, `"payment-service"`, `"frontend"`
+
+> **Important:** Once selected, avoid changing your ProjectId. Modifying it will create a new project in Xping, causing previously uploaded test executions to become disassociated from your current project. There is currently no automated migration path to transfer historical data between projects.
 
 **Example:**
 

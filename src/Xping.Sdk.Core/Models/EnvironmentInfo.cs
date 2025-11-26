@@ -41,7 +41,7 @@ public sealed class EnvironmentInfo
     public string RuntimeVersion { get; set; }
 
     /// <summary>
-    /// Gets or sets the test framework name and version (e.g., "NUnit 4.0.1", "xUnit 2.6.5").
+    /// Gets or sets the test framework name and version (e.g., ".NET").
     /// </summary>
     public string Framework { get; set; }
 
