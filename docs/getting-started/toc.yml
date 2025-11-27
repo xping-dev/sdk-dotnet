@@ -1,5 +1,3 @@
-- name: Getting Started Overview
-  href: index.md
 - name: Quick Start - NUnit
   href: quickstart-nunit.md
 - name: Quick Start - xUnit
