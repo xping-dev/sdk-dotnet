@@ -568,7 +568,7 @@ After setting up CI/CD integration:
 
 - **[Configuration Reference](../configuration/configuration-reference.md)** - All configuration options
 - **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding CI test reliability
-- **[Performance Tuning](../guides/performance-tuning.md)** - Optimize for large builds
+- **[Performance Guide](../guides/performance.md)** - Understanding performance, optimization, and tuning settings
 - **[Troubleshooting](../troubleshooting/common-issues.md)** - Common CI/CD issues
 
 ---

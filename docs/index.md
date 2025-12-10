@@ -82,15 +82,15 @@ dotnet add package Xping.Sdk.MSTest
      }
    }
    ```
-   > **Note:** `ProjectId` is any meaningful identifier you choose (e.g., `"my-app"`). Xping automatically creates the project when tests first run.
-4. **Apply tracking** to your tests (framework-specific)
+  > **Note:** `ProjectId` is any meaningful identifier you choose (e.g., `"my-app"`). Xping automatically creates the project when tests first run to help you organize your tests. You might have multiple projects to better organize your tests across different applications or components.
+  4. **Apply tracking** to your tests (framework-specific)
 5. **Run tests** as normal - Xping works silently in the background
 
 ---
 
 ## Documentation Structure
 
-### 🚀 [Getting Started](getting-started/quickstart-nunit.md)
+#### [Getting Started](getting-started/quickstart-nunit.md)
 Quick start guides for each test framework and CI/CD integration
 
 - [NUnit Quick Start](getting-started/quickstart-nunit.md)
@@ -98,32 +98,28 @@ Quick start guides for each test framework and CI/CD integration
 - [MSTest Quick Start](getting-started/quickstart-mstest.md)
 - [CI/CD Integration](getting-started/ci-cd-setup.md)
 
-### ⚙️ [Configuration](configuration/configuration-reference.md)
+#### [Configuration](configuration/configuration-reference.md)
 Comprehensive configuration options and environment setup
 
-- Configuration Reference
-- Environment Variables
-- Advanced Configuration
-
-### 📚 [Guides](guides/flaky-test-detection.md)
+#### [Guides](guides/flaky-test-detection.md)
 Practical guides for using Xping SDK features
 
 - [Flaky Test Detection](guides/flaky-test-detection.md)
 - [Performance Guide](guides/performance.md)
 
-### ⚡ [Performance](performance/overview.md)
+#### [Performance](performance/overview.md)
 Performance benchmarks and optimization guidelines
 
 - [Performance Overview](performance/overview.md)
 - [Benchmark Results](performance/benchmark-results.md)
 
-### 🔧 [Troubleshooting](troubleshooting/common-issues.md)
+#### [Troubleshooting](troubleshooting/common-issues.md)
 Common issues and solutions
 
-- Common Issues
-- Debugging Guide
+- [Common Issues](troubleshooting/common-issues.md)
+- [Debugging Guide](troubleshooting/debugging.md)
 
-### 📚 [API Reference](api/)
+#### [API Reference](api/)
 Complete API documentation for all SDK components
 
 ---

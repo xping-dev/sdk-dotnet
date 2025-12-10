@@ -20,6 +20,9 @@
 - `performance-tuning.md` (referenced in guides TOC)
 - `custom-metadata.md` (referenced in guides TOC)
 
+### ✅ Recently Completed
+- Understanding Your Data / Dashboard Guide (added to guides)
+
 ---
 
 ## Critical Missing Documentation
@@ -302,6 +305,7 @@
 3. **Understanding Your Data / Dashboard Guide**
    - Bridge between SDK and UI
    - Helps users get value from data collected
+   - Helps users understand confidence score, confidence levels and how to interpret them
    - Drives engagement with platform
 
 4. **Best Practices Guide**

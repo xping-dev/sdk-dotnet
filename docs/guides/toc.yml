@@ -1,3 +1,5 @@
+- name: Understanding Your Data
+  href: understanding-your-data.md
 - name: Flaky Test Detection
   href: flaky-test-detection.md
 - name: Performance Guide

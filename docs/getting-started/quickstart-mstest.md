@@ -535,7 +535,7 @@ Now explore more features:
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding confidence scores
-- **[Performance Tuning](../guides/performance-tuning.md)** - Optimize for large test suites
+- **[Performance Guide](../guides/performance.md)** - Understanding performance, optimization, and tuning settings
 
 ---
 
