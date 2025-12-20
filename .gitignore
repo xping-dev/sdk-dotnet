@@ -275,3 +275,6 @@ _build
 **/BenchmarkDotNet.Artifacts/
 **/benchmarks/results/current/
 **/*.benchmark.log
+
+# Local artifacts for testing
+.artifacts/
