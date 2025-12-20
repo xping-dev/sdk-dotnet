@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Configuration;
+
 #pragma warning disable CA1031 // Do not catch general exception types - we want to handle all errors gracefully
 
 namespace Xping.Sdk.Core.Environment;
@@ -13,8 +15,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Network;
+using Models;
+using Network;
 
 /// <summary>
 /// Default implementation of <see cref="IEnvironmentDetector"/> that detects environment information
@@ -22,22 +24,24 @@ using Xping.Sdk.Core.Network;
 /// </summary>
 public sealed class EnvironmentDetector : IEnvironmentDetector
 {
-    private static readonly Lazy<string> _cachedMachineName = new(() => GetMachineName());
-    private static readonly Lazy<string> _cachedOperatingSystem = new(() => DetectOperatingSystem());
-    private static readonly Lazy<string> _cachedRuntimeVersion = new(() => DetectRuntimeVersion());
-    private static readonly Lazy<string> _cachedFramework = new(() => DetectFramework());
-    private static readonly Lazy<CIPlatform?> _cachedCIPlatform = new(() => DetectCIPlatform());
-    private static readonly Lazy<string> _cachedEnvironmentName = new(() => DetectEnvironmentName());
-    private static readonly Lazy<bool> _cachedIsContainer = new(() => DetectIsContainer());
+    private static readonly Lazy<string> _cachedMachineName = new(GetMachineName);
+    private static readonly Lazy<string> _cachedOperatingSystem = new(DetectOperatingSystem);
+    private static readonly Lazy<string> _cachedRuntimeVersion = new(DetectRuntimeVersion);
+    private static readonly Lazy<string> _cachedFramework = new(DetectFramework);
+    private static readonly Lazy<CIPlatform?> _cachedCIPlatform = new(DetectCIPlatform);
+    private static readonly Lazy<bool> _cachedIsContainer = new(DetectIsContainer);
     private static readonly Lazy<Dictionary<string, string>> _cachedCustomProperties =
-        new(() => CollectCustomProperties());
+        new(CollectCustomProperties);
 
     // Cache network metrics per endpoint (thread-safe)
     private static readonly ConcurrentDictionary<string, NetworkMetrics?> _cachedNetworkMetrics = new();
 
     /// <inheritdoc/>
-    public EnvironmentInfo Detect(bool collectNetworkMetrics = false, string? apiEndpoint = null)
+    public EnvironmentInfo Detect(XpingConfiguration configuration)
     {
+        var collectNetworkMetrics = configuration.CollectNetworkMetrics;
+        var apiEndpoint = configuration.ApiEndpoint;
+
         var ciPlatform = _cachedCIPlatform.Value;
         var isCI = ciPlatform.HasValue;
 
@@ -47,7 +51,7 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
             OperatingSystem = _cachedOperatingSystem.Value,
             RuntimeVersion = _cachedRuntimeVersion.Value,
             Framework = _cachedFramework.Value,
-            EnvironmentName = _cachedEnvironmentName.Value,
+            EnvironmentName = DetectEnvironmentName(configuration),
             IsCIEnvironment = isCI,
         };
 
@@ -64,7 +68,7 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
                 }
                 catch
                 {
-                    // If network metrics collection fails, return null
+                    // If a network metrics collection fails, return null
                     return null;
                 }
             });
@@ -157,7 +161,7 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
     {
         try
         {
-            // Detect framework type based on runtime
+            // Detect a framework type based on runtime
             var frameworkDescription = RuntimeInformation.FrameworkDescription;
             var os = _cachedOperatingSystem.Value;
 
@@ -191,15 +195,15 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
             {
                 return ".NET Framework";
             }
-            else if (frameworkDescription.IndexOf(".NET Core", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.IndexOf(".NET Core", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return ".NET Core";
             }
-            else if (frameworkDescription.IndexOf(".NET Native", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.IndexOf(".NET Native", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return ".NET Native";
             }
-            else if (frameworkDescription.IndexOf(".NET", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.IndexOf(".NET", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 // Modern .NET (5+)
                 return ".NET";
@@ -278,27 +282,38 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
         return null;
     }
 
-    private static string DetectEnvironmentName()
+    private string DetectEnvironmentName(XpingConfiguration configuration)
     {
-        // Check explicit environment variable
-        var envName = GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            ?? GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? GetEnvironmentVariable("ENVIRONMENT")
-            ?? GetEnvironmentVariable("XPING_ENVIRONMENT");
-
-        if (!string.IsNullOrWhiteSpace(envName))
+        // Priority 1: XPING_ENVIRONMENT - explicit Xping environment variable (highest priority)
+        var xpingEnv = GetEnvironmentVariable("XPING_ENVIRONMENT");
+        if (!string.IsNullOrWhiteSpace(xpingEnv))
         {
-            return envName!;
+            return xpingEnv!;
         }
 
-        var isCI = _cachedCIPlatform.Value.HasValue;
-        // Infer from CI status
-        if (isCI)
+        // Priority 2: Auto-detect CI if enabled
+        if (configuration.AutoDetectCIEnvironment && _cachedCIPlatform.Value.HasValue)
         {
             return "CI";
         }
 
-        // Default to Local
+        // Priority 3: Use configuration property
+        if (!string.IsNullOrWhiteSpace(configuration.Environment))
+        {
+            return configuration.Environment;
+        }
+
+        // Priority 4: Framework environment variables (fallback for ASP.NET Core / .NET applications)
+        var frameworkEnv = GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+          ?? GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+          ?? GetEnvironmentVariable("ENVIRONMENT");
+
+        if (!string.IsNullOrWhiteSpace(frameworkEnv))
+        {
+            return frameworkEnv!;
+        }
+
+        // Priority 5: Default to Local
         return "Local";
     }
 

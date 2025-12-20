@@ -7,11 +7,11 @@ namespace Xping.Sdk.XUnit;
 
 using System.Net.Http;
 using System.Threading.Tasks;
-using Xping.Sdk.Core.Collection;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Diagnostics;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
+using Core.Collection;
+using Core.Configuration;
+using Core.Diagnostics;
+using Core.Models;
+using Core.Upload;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in xUnit test assemblies.
@@ -42,7 +42,7 @@ public static class XpingContext
     internal static TestSession? CurrentSession => _currentSession;
 
     /// <summary>
-    /// Initializes the Xping context with default configuration.
+    /// Initializes the Xping context with the default configuration.
     /// Loads configuration from appsettings.json or environment variables.
     /// </summary>
     /// <returns>The test execution collector instance.</returns>
@@ -209,9 +209,7 @@ public static class XpingContext
         if (string.IsNullOrEmpty(_currentSession.EnvironmentInfo.MachineName))
         {
             var detector = new Core.Environment.EnvironmentDetector();
-            var collectNetworkMetrics = _configuration.CollectNetworkMetrics;
-            var apiEndpoint = _configuration.ApiEndpoint;
-            _currentSession.EnvironmentInfo = detector.Detect(collectNetworkMetrics, apiEndpoint);
+            _currentSession.EnvironmentInfo = detector.Detect(_configuration);
         }
 
         IsInitialized = true;

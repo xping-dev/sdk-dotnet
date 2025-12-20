@@ -402,7 +402,17 @@ Descriptive name for the execution environment. Used for filtering and analysis 
 export XPING_ENVIRONMENT="Staging"
 ```
 
-**Note:** If `AutoDetectCIEnvironment` is enabled (default), the SDK automatically sets this to `"CI"` when running in detected CI/CD platforms.
+**Priority Order for Environment Detection:**
+
+The SDK determines the environment name using the following priority (highest to lowest):
+
+1. **`XPING_ENVIRONMENT` environment variable** - Explicit Xping-specific setting (highest priority)
+2. **Auto-detected CI** - Returns `"CI"` when `AutoDetectCIEnvironment=true` and running in a detected CI/CD platform
+3. **`Environment` configuration property** - Value set programmatically or in configuration files
+4. **Framework environment variables** - Falls back to `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, or `ENVIRONMENT` for compatibility with ASP.NET Core/.NET applications
+5. **Default** - Returns `"Local"` when none of the above are set
+
+**Example:** If you set `ASPNETCORE_ENVIRONMENT=Development` for your ASP.NET Core app and `AutoDetectCIEnvironment=false`, Xping will use `"Development"` as the environment name. However, setting `XPING_ENVIRONMENT=Staging` will override this and use `"Staging"` instead.
 
 ---
 
@@ -851,6 +861,8 @@ Configuration values are merged from multiple sources in this priority order:
    ```
 
 5. **Default values** (lowest priority)
+
+**Note:** The `Environment` property has special detection logic that considers multiple sources beyond just configuration values. See the [Environment](#environment) section for the complete priority order used for environment name detection.
 
 **Example resolution:**
 ```
