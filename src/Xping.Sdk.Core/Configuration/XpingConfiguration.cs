@@ -42,7 +42,7 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the environment name (e.g., "Local", "CI", "Staging", "Production").
     /// </summary>
-    public string Environment { get; set; } = "Local";
+    public string Environment { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a value indicating whether to automatically detect CI/CD environments.
