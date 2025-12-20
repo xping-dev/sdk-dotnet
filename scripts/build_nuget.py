@@ -77,7 +77,7 @@ def ensure_output_directory(output_dir: Path) -> bool:
 
 def build_nuget_packages(version: str) -> bool:
     """
-    Build NuGet packages for both Xping.Sdk.Core and Xping.Sdk projects.
+    Build NuGet packages for all Xping.Sdk projects.
 
     Args:
         version: The version string to use for the packages
@@ -95,18 +95,19 @@ def build_nuget_packages(version: str) -> bool:
         repo_root = script_dir
 
     # Define paths relative to repo root
-    core_project = repo_root / "src" / "Xping.Sdk.Core" / "Xping.Sdk.Core.csproj"
-    sdk_project = repo_root / "src" / "Xping.Sdk" / "Xping.Sdk.csproj"
-    output_dir = repo_root / ".artifcats" / "nuget"
+    projects = [
+        ("Xping.Sdk.Core", repo_root / "src" / "Xping.Sdk.Core" / "Xping.Sdk.Core.csproj"),
+        ("Xping.Sdk.NUnit", repo_root / "src" / "Xping.Sdk.NUnit" / "Xping.Sdk.NUnit.csproj"),
+        ("Xping.Sdk.XUnit", repo_root / "src" / "Xping.Sdk.XUnit" / "Xping.Sdk.XUnit.csproj"),
+        ("Xping.Sdk.MSTest", repo_root / "src" / "Xping.Sdk.MSTest" / "Xping.Sdk.MSTest.csproj"),
+    ]
+    output_dir = repo_root / ".artifacts" / "nuget"
     
-    # Verify project files exist
-    if not core_project.exists():
-        print(f"✗ Core project file not found: {core_project}")
-        return False
-
-    if not sdk_project.exists():
-        print(f"✗ SDK project file not found: {sdk_project}")
-        return False
+    # Verify all project files exist
+    for project_name, project_path in projects:
+        if not project_path.exists():
+            print(f"✗ {project_name} project file not found: {project_path}")
+            return False
 
     print(f"Building NuGet packages with version: {version}")
     print(f"Output directory: {output_dir}")
@@ -115,55 +116,35 @@ def build_nuget_packages(version: str) -> bool:
     if not ensure_output_directory(output_dir):
         return False
 
-    # Build Core package
-    print("\n" + "="*50)
-    print("Building Xping.Sdk.Core package...")
-    print("="*50)
+    # Build each package
+    for project_name, project_path in projects:
+        print("\n" + "="*50)
+        print(f"Building {project_name} package...")
+        print("="*50)
 
-    core_command = (
-        f"dotnet pack {core_project} "
-        f"-c Release "
-        f"-p:NuspecProperties=\"version={version}\" "
-        f"-o {output_dir}"
-    )
+        command = (
+            f"dotnet pack {project_path} "
+            f"-c Release "
+            f"-p:Version={version} "
+            f"-o {output_dir}"
+        )
 
-    if not run_command(core_command, cwd=str(repo_root)):
-        print("✗ Failed to build Xping.Sdk.Core package")
-        return False
-
-    # Build SDK package
-    print("\n" + "="*50)
-    print("Building Xping.Sdk package...")
-    print("="*50)
-
-    sdk_command = (
-        f"dotnet pack {sdk_project} "
-        f"-c Release "
-        f"-p:NuspecProperties=\"version={version}\" "
-        f"-o {output_dir}"
-    )
-
-    if not run_command(sdk_command, cwd=str(repo_root)):
-        print("✗ Failed to build Xping.Sdk package")
-        return False
+        if not run_command(command, cwd=str(repo_root)):
+            print(f"✗ Failed to build {project_name} package")
+            return False
 
     # List the created packages
     print("\n" + "="*50)
     print("Build completed successfully!")
     print("="*50)
 
-    expected_core_package = output_dir / f"Xping.Sdk.Core.{version}.nupkg"
-    expected_sdk_package = output_dir / f"Xping.Sdk.{version}.nupkg"
-
-    if expected_core_package.exists():
-        print(f"✓ Created: {expected_core_package}")
-    else:
-        print(f"⚠ Expected package not found: {expected_core_package}")
-
-    if expected_sdk_package.exists():
-        print(f"✓ Created: {expected_sdk_package}")
-    else:
-        print(f"⚠ Expected package not found: {expected_sdk_package}")
+    # Verify expected packages were created
+    for project_name, _ in projects:
+        expected_package = output_dir / f"{project_name}.{version}.nupkg"
+        if expected_package.exists():
+            print(f"✓ Created: {expected_package}")
+        else:
+            print(f"⚠ Expected package not found: {expected_package}")
 
     # List all .nupkg files in the output directory
     nupkg_files = list(output_dir.glob("*.nupkg"))
@@ -232,7 +213,7 @@ Examples:
         repo_root = script_dir
 
     # Check if we can find the solution file in the repo root
-    sln_file = repo_root / "xping-sdk.sln"
+    sln_file = repo_root / "xping.sdk.sln"
 
     if not sln_file.exists():
         print(f"✗ Solution file not found: {sln_file}")
