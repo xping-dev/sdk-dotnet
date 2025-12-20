@@ -313,8 +313,8 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
             return frameworkEnv!;
         }
 
-        // Priority 5: Default to Local
-        return "Local";
+        // Priority 5: Default to default: "Local"
+        return XpingConfiguration.DefaultEnvironment;
     }
 
     private static bool DetectIsContainer()

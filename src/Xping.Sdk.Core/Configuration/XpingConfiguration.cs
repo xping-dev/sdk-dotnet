@@ -15,6 +15,11 @@ using Xping.Sdk.Core.Diagnostics;
 public sealed class XpingConfiguration
 {
     /// <summary>
+    /// Represents the default environment setting for the Xping SDK if none is specified.
+    /// </summary>
+    public const string DefaultEnvironment = "Local";
+
+    /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
     public string ApiEndpoint { get; set; } = "https://api.xping.io";
