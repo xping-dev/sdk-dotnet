@@ -121,7 +121,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     {
         try
         {
-            // Optimize batch: only first execution contains full session context
+            // Optimize batch: only the first execution contains full session context
             var optimizedExecutions = TestExecutionBatchOptimizer.OptimizeForTransport(executions);
 
             var response = await _resiliencePipeline.ExecuteAsync(

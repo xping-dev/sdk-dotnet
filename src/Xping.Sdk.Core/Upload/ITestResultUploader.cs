@@ -8,7 +8,7 @@ namespace Xping.Sdk.Core.Upload;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Xping.Sdk.Core.Models;
+using Models;
 
 /// <summary>
 /// Defines a contract for uploading test execution results.
