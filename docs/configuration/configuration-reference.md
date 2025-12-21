@@ -131,7 +131,7 @@ XpingContext.Initialize(config);
 **Required:** Yes  
 **Environment Variable:** `XPING_PROJECTID`
 
-A user-defined identifier for your project. Choose any meaningful name—Xping automatically creates the project when your tests first run.
+A user-defined identifier for your project. Choose any meaningful name — Xping automatically creates the project when your tests first run.
 
 **Characteristics:**
 - User-defined, not retrieved from the platform

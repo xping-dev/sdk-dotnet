@@ -12,6 +12,7 @@ using Core.Configuration;
 using Core.Diagnostics;
 using Core.Models;
 using Core.Upload;
+using Xping.Sdk.XUnit.Diagnostics;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in xUnit test assemblies.
@@ -166,9 +167,10 @@ public static class XpingContext
         _configuration = configuration;
 
         // Create logger based on configuration
+        // Use xUnit-specific logger for proper test output integration
         var logger = configuration.Logger ?? (configuration.LogLevel == XpingLogLevel.None
             ? XpingNullLogger.Instance
-            : new XpingConsoleLogger(configuration.LogLevel));
+            : new XpingXUnitLogger(configuration.LogLevel));
 
         // Validate configuration and log any issues
         var errors = configuration.Validate();
@@ -215,8 +217,9 @@ public static class XpingContext
         IsInitialized = true;
 
         // Log successful initialization
-        logger.LogInfo("Initialized successfully");
-        logger.LogInfo($"Project: {configuration.ProjectId} | Environment: {configuration.Environment}");
+        logger.LogInfo(
+            $"Project: {configuration.ProjectId} | " +
+            $"Environment: {_currentSession.EnvironmentInfo.EnvironmentName}");
         logger.LogDebug($"Endpoint: {configuration.ApiEndpoint}");
         logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0}");
 

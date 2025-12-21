@@ -474,7 +474,7 @@ public class ContextTests : XpingTestBase
 
 1. **Configuration**: Verify your `ApiKey` and `ProjectId` are correct
 2. **Enabled flag**: Ensure `Xping:Enabled` is `true`
-3. **Network connectivity**: Check that your environment can reach `https://api.xping.io`
+3. **Network connectivity**: Check that your environment can reach `https://xping.io`
 4. **Assembly initialization**: Verify `[AssemblyInitialize]` is being executed (add logging to confirm)
 5. **Base class**: If using `XpingTestBase`, ensure your test classes inherit from it
 

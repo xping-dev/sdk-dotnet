@@ -173,7 +173,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         // Dispose timer first to stop automatic flushes
         _flushTimer?.Dispose();
 
-        // Perform final flush before marking as disposed
+        // Perform the final flush before marking as disposed
         try
         {
             if (!_buffer.IsEmpty)
@@ -195,29 +195,9 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
             _logger.LogError($"Error during final flush: {ex.Message}");
         }
 
-        // Log final statistics
+        // Log final statistics as a single line for easy parsing
         var stats = await GetStatsAsync().ConfigureAwait(false);
-        _logger.LogInfo("Session Statistics:");
-        _logger.LogInfo($"  - Total Recorded: {stats.TotalRecorded} test{(stats.TotalRecorded == 1 ? "" : "s")}");
-
-        if (stats.TotalSampled < stats.TotalRecorded)
-        {
-            _logger.LogInfo($"  - Total Sampled: {stats.TotalSampled} test{(stats.TotalSampled == 1 ? "" : "s")} ({_config.SamplingRate:P0})");
-        }
-
-        _logger.LogInfo($"  - Total Uploaded: {stats.TotalUploaded} test{(stats.TotalUploaded == 1 ? "" : "s")}");
-
-        if (stats.TotalFailed > 0)
-        {
-            _logger.LogWarning($"  - Total Failed: {stats.TotalFailed} test{(stats.TotalFailed == 1 ? "" : "s")}");
-        }
-
-        if (stats.BufferCount > 0)
-        {
-            _logger.LogWarning($"  - Pending in Queue: {stats.BufferCount} execution{(stats.BufferCount == 1 ? "" : "s")}");
-        }
-
-        _logger.LogDebug($"  - Total Flushes: {stats.TotalFlushes}");
+        LogSessionSummary(stats);
 
         _disposed = true;
         _flushLock?.Dispose();
@@ -268,6 +248,39 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
             _logger.LogError($"✗ Upload exception: {ex.Message}");
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Logs a single-line session summary with key metrics for easy parsing.
+    /// </summary>
+    /// <param name="stats">The collector statistics to log.</param>
+    private void LogSessionSummary(CollectorStats stats)
+    {
+        var summaryParts = new List<string>
+        {
+            $"recorded: {stats.TotalRecorded}",
+        };
+
+        // Only include sampled if it differs from recorded (sampling is active)
+        if (stats.TotalSampled < stats.TotalRecorded)
+        {
+            summaryParts.Add($"sampled: {stats.TotalSampled}");
+        }
+
+        summaryParts.Add($"uploaded: {stats.TotalUploaded}");
+        summaryParts.Add($"failed to upload: {stats.TotalFailed}");
+
+        var summary = string.Join(", ", summaryParts);
+
+        // Use warning level if any uploads failed, info otherwise
+        if (stats.TotalFailed > 0)
+        {
+            _logger.LogWarning($"Session summary: {summary}");
+        }
+        else
+        {
+            _logger.LogInfo($"Session summary: {summary}");
         }
     }
 

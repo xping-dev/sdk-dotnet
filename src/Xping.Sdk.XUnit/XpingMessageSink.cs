@@ -184,7 +184,7 @@ public sealed class XpingMessageSink : IMessageSink
     private void HandleTestAssemblyFinished()
     {
         // Flush all recorded test data when assembly finishes executing
-        // This ensures data is uploaded even when using VSTest adapter
+        // This ensures data is uploaded, even when using VSTest adapter
         // (which doesn't call Dispose on custom frameworks or collection fixtures)
         try
         {
@@ -194,6 +194,11 @@ public sealed class XpingMessageSink : IMessageSink
         {
             // Log error but don't throw - we don't want to fail tests due to flush errors
             Debug.WriteLine($"[Xping] Error flushing data on assembly finished: {ex.Message}");
+        }
+        finally
+        {
+            ValueTask result = XpingContext.DisposeAsync();
+            result.GetAwaiter().GetResult();
         }
     }
 

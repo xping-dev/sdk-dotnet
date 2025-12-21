@@ -175,7 +175,7 @@ public static class XpingSetup
 
 #### 5. Silent Upload Failures
 
-If uploads fail (network issues, invalid credentials), the SDK logs errors but doesn't throw exceptions—your tests continue running normally.
+If uploads fail (network issues, invalid credentials), the SDK logs errors but doesn't throw exceptions — your tests continue running normally.
 
 **Solution:** Enable logging to see what's happening. See [Debugging Guide](debugging.md#enabling-sdk-logging).
 

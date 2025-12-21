@@ -48,6 +48,60 @@ The SDK supports four log levels, each including all levels below it:
 - **CI/CD:** `XpingLogLevel.Info`
 - **Production:** `XpingLogLevel.Warning` or `XpingLogLevel.Error`
 
+### Filtering Xping Logs
+
+When troubleshooting, you may want to isolate only Xping SDK logs from the test output. All Xping log messages are prefixed with `[Xping]` for easy filtering.
+
+#### Linux/macOS
+
+Use `grep` to filter Xping-specific output:
+
+```bash
+# Filter only Xping logs
+dotnet test --logger "console;verbosity=detailed" 2>&1 | grep "^\s*\[Xping\]"
+
+# Show only Xping WARNING and ERROR messages
+dotnet test --logger "console;verbosity=detailed" 2>&1 | grep "^\s*\[Xping\] \(WARNING\|ERROR\)"
+
+# Show Xping logs with surrounding context (2 lines before/after)
+dotnet test --logger "console;verbosity=detailed" 2>&1 | grep -B2 -A2 "^\s*\[Xping\]"
+
+# Suppress build output for cleaner view
+dotnet test --logger "console;verbosity=detailed" --nologo 2>&1 | grep "^\s*\[Xping\]"
+```
+
+#### Windows PowerShell
+
+Use `Select-String` to filter Xping-specific output:
+
+```powershell
+# Filter only Xping logs
+dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]"
+
+# Show only Xping WARNING and ERROR messages
+dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\] (WARNING|ERROR)"
+
+# Show Xping logs with surrounding context (2 lines before/after)
+dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]" -Context 2,2
+
+# Save filtered output to file
+dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]" | Out-File xping-logs.txt
+```
+
+#### Windows Command Prompt
+
+Use `findstr` to filter Xping-specific output:
+
+```cmd
+REM Filter only Xping logs
+dotnet test --logger "console;verbosity=detailed" 2>&1 | findstr /R "^ *\[Xping\]"
+
+REM Save to file
+dotnet test --logger "console;verbosity=detailed" 2>&1 | findstr /R "^ *\[Xping\]" > xping-logs.txt
+```
+
+**Note:** For **MSTest** projects, you must use `--logger "console;verbosity=detailed"` to see SDK logs, as MSTest captures console output by default. For **NUnit** and **xUnit** projects, standard verbosity is sufficient as their logs appear in normal test output.
+
 ---
 
 ## Custom Logger Implementation

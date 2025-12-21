@@ -419,7 +419,7 @@ public class ExperimentalTests
 1. **Configuration**: Verify your `ApiKey` and `ProjectId` are correct
 2. **Enabled flag**: Ensure `Xping:Enabled` is `true`
 3. **Test Framework**: Verify `[assembly: TestFramework(...)]` is in `AssemblyInfo.cs`
-4. **Network connectivity**: Check that your environment can reach `https://api.xping.io`
+4. **Network connectivity**: Check that your environment can reach `https://xping.io`
 5. **Build output**: Ensure `appsettings.json` is being copied to output directory
 
 ### "Could not find test framework" error

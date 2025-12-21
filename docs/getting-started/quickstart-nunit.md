@@ -363,7 +363,7 @@ Categories are automatically captured and visible in the Xping dashboard for fil
 
 1. **Configuration**: Verify your `ApiKey` and `ProjectId` are correct
 2. **Enabled flag**: Ensure `Xping:Enabled` is `true`
-3. **Network connectivity**: Check that your environment can reach `https://api.xping.io`
+3. **Network connectivity**: Check that your environment can reach `https://xping.io`
 4. **Setup fixture**: Verify `[SetUpFixture]` is being executed (add logging to confirm)
 5. **Attribute placement**: Ensure `[XpingTrack]` is applied to your test fixture or methods
 
