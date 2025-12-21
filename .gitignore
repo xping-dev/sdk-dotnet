@@ -278,3 +278,6 @@ _build
 
 # Local artifacts for testing
 .artifacts/
+
+# Local claude code settings
+.claude/settings.local.json

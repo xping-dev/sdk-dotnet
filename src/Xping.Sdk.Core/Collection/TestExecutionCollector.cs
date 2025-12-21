@@ -233,19 +233,20 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
             if (result.Success)
             {
                 Interlocked.Add(ref _totalUploaded, batch.Count);
-                _logger.LogInfo($"✓ Uploaded {batch.Count} test execution{(batch.Count == 1 ? "" : "s")}" +
+                _logger.LogInfo($"Uploaded {batch.Count} test execution{(batch.Count == 1 ? "" : "s")}" +
                     (string.IsNullOrEmpty(result.ReceiptId) ? "" : $" (Receipt: {result.ReceiptId})"));
             }
             else
             {
                 Interlocked.Add(ref _totalFailed, batch.Count);
-                _logger.LogError($"✗ Upload failed: {result.ErrorMessage}");
+                // Log at debug level to avoid duplicate error messages (root cause already logged)
+                _logger.LogDebug($"Upload failed: {result.ErrorMessage}");
             }
         }
         catch (Exception ex)
         {
             Interlocked.Add(ref _totalFailed, batch.Count);
-            _logger.LogError($"✗ Upload exception: {ex.Message}");
+            _logger.LogError($"Upload exception: {ex.Message}");
 
             throw;
         }
@@ -273,15 +274,8 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
 
         var summary = string.Join(", ", summaryParts);
 
-        // Use warning level if any uploads failed, info otherwise
-        if (stats.TotalFailed > 0)
-        {
-            _logger.LogWarning($"Session summary: {summary}");
-        }
-        else
-        {
-            _logger.LogInfo($"Session summary: {summary}");
-        }
+        // Always use info level for session summary
+        _logger.LogInfo($"Session summary: {summary}");
     }
 
     /// <summary>

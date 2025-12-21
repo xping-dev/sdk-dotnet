@@ -30,7 +30,7 @@ public sealed class XpingNUnitLogger(XpingLogLevel minLevel = XpingLogLevel.Info
             lock (_lock)
             {
                 // Errors should appear in stderr (will show as MSBuild warnings)
-                WriteToStderr($"{Prefix} {message}");
+                WriteToStderr($"{Prefix} ERROR: {message}");
             }
         }
     }
@@ -43,7 +43,7 @@ public sealed class XpingNUnitLogger(XpingLogLevel minLevel = XpingLogLevel.Info
             lock (_lock)
             {
                 // Warnings should appear in stderr (will show as MSBuild warnings)
-                WriteToStderr($"{Prefix} {message}");
+                WriteToStderr($"{Prefix} WARNING: {message}");
             }
         }
     }
@@ -127,6 +127,7 @@ public sealed class XpingNUnitLogger(XpingLogLevel minLevel = XpingLogLevel.Info
             // This is visible in test output without being treated as a warning
             if (TestContext.CurrentContext != null)
             {
+                // Write to Progress for real-time visibility during test runs
                 TestContext.Progress.WriteLine(message);
             }
             else

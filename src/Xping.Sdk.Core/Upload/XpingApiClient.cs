@@ -106,10 +106,10 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         // Upload the batch
         var result = await UploadBatchAsync(executionList, cancellationToken).ConfigureAwait(false);
 
-        // If upload failed, just log the error
+        // Log upload failures at debug level (root cause already logged at error level)
         if (!result.Success)
         {
-            _logger.LogError($"Upload failed: {result.ErrorMessage}");
+            _logger.LogDebug($"Upload failed: {result.ErrorMessage}");
         }
 
         return result;
@@ -302,14 +302,14 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         // Enhanced error messages with actionable guidance
         var errorMsg = statusCode switch
         {
-            401 => "Authentication failed (401): Invalid API Key or Project ID\n" +
-                   "  Action: Verify credentials at https://app.xping.io",
-            403 => "Authorization failed (403): Insufficient permissions\n" +
-                   "  Action: Check project access at https://app.xping.io",
-            429 => "Rate limit exceeded (429): Too many requests\n" +
-                   "  Action: Reduce test execution frequency or contact support",
-            >= 500 => $"Server error ({statusCode}): API temporarily unavailable\n" +
-                      "  Status: Uploads will be retried automatically",
+            401 => "Authentication failed (401): Invalid API Key. " +
+                   "Action: Verify credentials at https://app.xping.io",
+            403 => "Authorization failed (403): Insufficient permissions. " +
+                   "Action: Check project access at https://app.xping.io",
+            429 => "Rate limit exceeded (429): Too many requests. " +
+                   "Action: Reduce test execution frequency or contact support",
+            >= 500 => $"Server error ({statusCode}): API temporarily unavailable. " +
+                      "Status: Uploads will be retried automatically",
             _ => $"API returned {statusCode}: {errorContent}"
         };
 

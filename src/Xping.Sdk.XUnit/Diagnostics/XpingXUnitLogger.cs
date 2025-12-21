@@ -121,24 +121,19 @@ public sealed class XpingXUnitLogger(
     }
 
     /// <summary>
-    /// Writes INFO and DEBUG messages to stdout or ITestOutputHelper only.
-    /// This avoids inflating MSBuild warning counts with informational messages.
+    /// Writes INFO and DEBUG messages to stdout and ITestOutputHelper.
+    /// Writing to stdout ensures logs appear in piped output and CI/CD environments.
     /// </summary>
     /// <param name="message">The message to write.</param>
     private void WriteToStdout(string message)
     {
         try
         {
-            // Write to ITestOutputHelper if available, otherwise stdout
-            if (_testOutputHelper != null)
-            {
-                _testOutputHelper.WriteLine(message);
-            }
-            else
-            {
-                // Fallback to stdout if no test output helper
-                Console.WriteLine(message);
-            }
+            // Always write to stdout for consistent behavior with other test frameworks
+            Console.WriteLine(message);
+
+            // Also write to ITestOutputHelper if available (for xUnit test results)
+            _testOutputHelper?.WriteLine(message);
         }
         catch
         {
