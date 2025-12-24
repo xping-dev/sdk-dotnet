@@ -119,7 +119,7 @@ Common issues and solutions
 - [Common Issues](troubleshooting/common-issues.md)
 - [Debugging Guide](troubleshooting/debugging.md)
 
-#### [API Reference](api/)
+#### API Reference
 Complete API documentation for all SDK components
 
 ---

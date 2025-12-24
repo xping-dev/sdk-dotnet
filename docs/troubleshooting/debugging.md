@@ -772,7 +772,7 @@ dotnet add package Xping.Sdk.NUnit --version 1.0.4
 - [Common Issues](common-issues.md) - Solutions to frequently encountered problems
 - [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
 - [Performance Testing](../performance/overview.md) - Performance benchmarking and optimization
-- [CI/CD Setup Guide](../guides/cicd-setup.md) - CI/CD integration instructions
+- [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - CI/CD integration instructions
 
 ---
 

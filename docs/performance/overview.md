@@ -28,7 +28,7 @@ The Xping SDK is designed to have minimal impact on test execution. Our performa
 
 ## Running Benchmarks
 
-See [Benchmark README](../../tests/Xping.Sdk.Benchmarks/README.md) for detailed instructions.
+See the benchmark project README (`tests/Xping.Sdk.Benchmarks/README.md`) for detailed instructions.
 
 Quick start:
 ```bash
@@ -118,8 +118,6 @@ cp BenchmarkDotNet.Artifacts/results/* results/baseline/
 ### CI/CD Integration
 
 Benchmarks run automatically on PRs labeled with `performance`. Results are compared against the baseline, and comments are posted if regressions are detected.
-
-> **Implementation Plan:** See the [CI/CD Benchmark Integration Plan](../internals/ci-cd-benchmark-integration.md) for detailed design and rollout strategy.
 
 **Regression Thresholds:**
 - ⚠️ Warning: >10% slower than baseline

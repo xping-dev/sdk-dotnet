@@ -1048,8 +1048,6 @@ else
 
 ## See Also
 
-- **[Environment Variables](environment-variables.md)** - Detailed environment variable reference
-- **[Advanced Configuration](advanced-configuration.md)** - Advanced scenarios and patterns
 - **[Quick Start Guides](../getting-started/quickstart-nunit.md)** - Framework-specific setup
 - **[CI/CD Integration](../getting-started/ci-cd-setup.md)** - Pipeline configuration examples
 - **[Troubleshooting](../troubleshooting/common-issues.md)** - Common configuration issues

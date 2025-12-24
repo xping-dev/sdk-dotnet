@@ -168,7 +168,7 @@ public static class XpingSetup
 ```
 
 **Solution:** 
-- **NUnit/MSTest:** Ensure proper test teardown is implemented as shown above or in the [Getting Started guides](../getting-started/nunit.md)
+- **NUnit/MSTest:** Ensure proper test teardown is implemented as shown above or in the [Getting Started guides](../getting-started/quickstart-nunit.md)
 - **xUnit:** Verify the `[assembly: TestFramework(...)]` attribute is configured in `AssemblyInfo.cs` (see [xUnit Getting Started](../getting-started/quickstart-xunit.md))
 
 ---
@@ -686,7 +686,7 @@ test:
     XPING__PROJECTID: $XPING_PROJECT_ID
 ```
 
-See [CI/CD Setup Guide](../guides/cicd-setup.md) for platform-specific instructions.
+See [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) for platform-specific instructions.
 
 ---
 
@@ -754,7 +754,7 @@ public static class XpingSetup
 [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
 ```
 
-For detailed setup instructions, see the [Getting Started guides](../getting-started/nunit.md) for your test framework.
+For detailed setup instructions, see the [Getting Started guides](../getting-started/quickstart-nunit.md) for your test framework.
 
 ---
 
@@ -848,8 +848,8 @@ If you're still experiencing issues after trying these solutions:
 1. **Enable debug logging** to capture detailed diagnostics (see [Debugging Guide](debugging.md))
 2. **Check the documentation:**
    - [Configuration Reference](../configuration/configuration-reference.md)
-   - [Getting Started Guides](../getting-started/nunit.md)
-   - [CI/CD Setup Guide](../guides/cicd-setup.md)
+   - [Getting Started Guides](../getting-started/quickstart-nunit.md)
+   - [CI/CD Setup Guide](../getting-started/ci-cd-setup.md)
 3. **Contact support:**
    - Email: support@xping.io
    - Include: SDK version, .NET version, test framework, logs, and configuration (redact API keys!)
@@ -861,4 +861,4 @@ If you're still experiencing issues after trying these solutions:
 - [Debugging Guide](debugging.md) - Enable logging and diagnose SDK issues
 - [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
 - [Performance Guide](../guides/performance.md) - Optimize SDK performance
-- [CI/CD Setup Guide](../guides/cicd-setup.md) - Platform-specific CI/CD instructions
+- [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - Platform-specific CI/CD instructions

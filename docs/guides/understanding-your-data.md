@@ -533,12 +533,7 @@ If something still seems incorrect, this may indicate an edge case worth investi
 
 ## Next Steps
 
-Now that you understand how to read and interpret your data:
-
-- **Integrate the SDK**: If you haven't already, follow the [SDK Integration Guide](SDK-Implementation-Plan.md) to start collecting test data
-- **Learn about Flaky Detection**: Read [Flaky Test Detection Requirements](Flaky-Test-Detection-Requirements.md) to understand how Xping identifies problematic tests
-- **Understand Confidence Scoring**: Dive deeper into [Confidence Scoring](xping-confidence-scoring.md) to learn about the algorithm details
-- **Explore Implementation Plans**: Check the [implementation-plans folder](./implementation-plans/) for technical details on specific features
+Now that you understand how to read and interpret your data, you can start using the dashboard to monitor and improve your test suite reliability.
 
 ---
 
