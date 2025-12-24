@@ -15,6 +15,13 @@ using Xping.Sdk.Core.Models;
 /// Base class for MSTest tests that provides automatic test execution tracking.
 /// Inherit from this class to enable automatic tracking of all test methods.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This base class only tracks tests that actually execute. Tests marked with
+/// the [Ignore] attribute are skipped by MSTest before execution begins and
+/// will not be tracked by Xping.
+/// </para>
+/// </remarks>
 public abstract class XpingTestBase
 {
     private DateTime _startTime;

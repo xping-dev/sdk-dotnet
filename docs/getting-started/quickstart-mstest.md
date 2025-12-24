@@ -466,6 +466,17 @@ public class ContextTests : XpingTestBase
 
 ---
 
+## Known Limitations
+
+> **⚠️ Important:** Tests marked with `[Ignore]` attribute are not tracked by Xping.
+>
+> This is because MSTest skips ignored tests before execution begins, and the `[TestInitialize]` and `[TestCleanup]` hooks are never invoked.
+> Only tests that actually execute will be tracked.
+>
+> For more details, see [Known Limitations](../known-limitations.md#mstest).
+
+---
+
 ## Troubleshooting
 
 ### Tests aren't appearing in Xping Dashboard
@@ -532,6 +543,7 @@ To verify, compare test execution times with and without Xping by temporarily re
 
 Now explore more features:
 
+- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and workarounds
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding confidence scores

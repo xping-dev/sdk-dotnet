@@ -16,6 +16,13 @@ using Xping.Sdk.NUnit.Retry;
 /// NUnit attribute for tracking test execution with Xping.
 /// Can be applied to test methods or test fixtures.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This attribute only tracks tests that actually execute. Tests marked with
+/// the [Ignore] attribute are skipped by NUnit before execution begins and
+/// will not be tracked by Xping.
+/// </para>
+/// </remarks>
 [AttributeUsage(
     AttributeTargets.Method
     | AttributeTargets.Class

@@ -23,6 +23,7 @@
     <a href="#-why-xping"><strong>Why Xping?</strong></a> •
     <a href="#-features"><strong>Features</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
+    <a href="docs/known-limitations.md"><strong>Known Limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
   </p>
 </div>
@@ -493,6 +494,7 @@ PR builds: 92% reliability
 - [xUnit Integration](docs/docs/tutorial-unittests.md)
 - [MSTest Integration](docs/docs/tutorial-unittests.md)
 - [Configuration Reference](docs/docs/overview.md)
+- [Known Limitations](docs/known-limitations.md) ⚠️
 - [API Documentation](https://xping-dev.github.io/sdk-dotnet/)
 - [Troubleshooting](docs/docs/overview.md)
 

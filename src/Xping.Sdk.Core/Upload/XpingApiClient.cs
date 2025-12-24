@@ -261,7 +261,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var json = _serializer.Serialize(batch);
         var content = Encoding.UTF8.GetBytes(json);
 
-        // Compress if payload is large enough
+        // Compress if the payload is large enough
         if (_config.EnableCompression && content.Length > CompressionThresholdBytes)
         {
             using var compressedStream = new MemoryStream();

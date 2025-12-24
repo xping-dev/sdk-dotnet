@@ -410,6 +410,17 @@ public class ExperimentalTests
 
 ---
 
+## Known Limitations
+
+> **✅ Good News:** Unlike NUnit and MSTest, xUnit's skipped tests (using `Skip` parameter) **are properly tracked** by Xping.
+>
+> The xUnit adapter uses a message sink pattern that captures all test lifecycle events, including skipped tests.
+> No workarounds needed!
+>
+> For framework comparison and other limitations, see [Known Limitations](../known-limitations.md).
+
+---
+
 ## Troubleshooting
 
 ### Tests aren't appearing in Xping Dashboard
@@ -487,6 +498,7 @@ To verify, compare test execution times with and without Xping by temporarily re
 
 Now explore more features:
 
+- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and comparisons
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding confidence scores

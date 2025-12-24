@@ -355,6 +355,17 @@ Categories are automatically captured and visible in the Xping dashboard for fil
 
 ---
 
+## Known Limitations
+
+> **⚠️ Important:** Tests marked with `[Ignore]` attribute are not tracked by Xping.
+>
+> This is because NUnit skips ignored tests before execution begins, and the tracking hooks are never invoked.
+> Only tests that actually execute will be tracked.
+>
+> For more details, see [Known Limitations](../known-limitations.md#nunit).
+
+---
+
 ## Troubleshooting
 
 ### Tests aren't appearing in Xping Dashboard
@@ -413,6 +424,7 @@ Overhead should be negligible (<1% of total test time).
 
 Now explore more features:
 
+- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and workarounds
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding confidence scores
