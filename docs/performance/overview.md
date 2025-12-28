@@ -7,7 +7,7 @@ title: Performance Testing
 
 This section contains documentation and guidelines for performance testing the Xping SDK.
 
-> **Looking for practical performance guidance?** See the [Performance Guide](../guides/performance.md) for user-facing documentation on SDK overhead, configuration, and optimization tips.
+> **Looking for practical performance guidance?** See the [Performance Overview](../guides/optimization/performance-overview.md) for user-facing documentation on SDK overhead, configuration, and optimization tips.
 
 ## Overview
 

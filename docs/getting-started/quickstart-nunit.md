@@ -427,8 +427,8 @@ Now explore more features:
 - **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and workarounds
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
-- **[Flaky Test Detection](../guides/flaky-test-detection.md)** - Understanding confidence scores
-- **[Performance Guide](~/guides/performance.md)** - Understanding performance, optimization, and tuning settings
+- **[Understanding Confidence Scores](../guides/getting-started/understanding-confidence-scores.md)** - Learn about test reliability scoring
+- **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
 
 ---
 

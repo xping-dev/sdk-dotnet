@@ -860,5 +860,5 @@ If you're still experiencing issues after trying these solutions:
 
 - [Debugging Guide](debugging.md) - Enable logging and diagnose SDK issues
 - [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
-- [Performance Guide](../guides/performance.md) - Optimize SDK performance
+- [Performance Overview](../guides/optimization/performance-overview.md) - Optimize SDK performance
 - [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - Platform-specific CI/CD instructions

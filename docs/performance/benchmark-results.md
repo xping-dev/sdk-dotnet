@@ -10,7 +10,7 @@ title: Benchmark Results & Analysis
 **BenchmarkDotNet Version:** 0.14.0  
 **Test Environment:** Apple M4, 10 cores, macOS Sequoia 15.5, .NET 9.0.4
 
-> **Looking for practical performance guidance?** See the [Performance Guide](../guides/performance.md) for user-facing documentation on SDK overhead, configuration, and troubleshooting.
+> **Looking for practical performance guidance?** See the [Performance Overview](../guides/optimization/performance-overview.md) for user-facing documentation on SDK overhead, configuration, and troubleshooting.
 
 ---
 
