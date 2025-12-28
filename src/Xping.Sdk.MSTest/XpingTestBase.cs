@@ -108,23 +108,17 @@ public abstract class XpingTestBase
         var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
 
         // Extract DataRow parameters if present
-        object[]? parameters = null;
-        if (context.Properties != null && context.Properties.Contains("DataRow"))
-        {
-            var dataRowInfo = context.Properties["DataRow"];
-            if (dataRowInfo is object[] dataRowArray)
-            {
-                parameters = dataRowArray;
-            }
-        }
+        // MSTest exposes parameterized test arguments through TestContext.DataRow (System.Data.DataRow)
+        object[]? parameters = ExtractDataRowParameters(context);
 
-        var displayName = context.TestName ?? "Unknown";
+        // Format test name with parameters to match NUnit and xUnit behavior
+        var testName = FormatTestNameWithParameters(context.TestName ?? "Unknown", parameters);
 
         var identity = TestIdentityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
-            displayName);
+            testName);
 
         // Create execution context using the ExecutionTracker
         var executionContext = XpingContext.ExecutionTracker?.CreateContext(threadId, className);
@@ -133,7 +127,7 @@ public abstract class XpingTestBase
         {
             ExecutionId = Guid.NewGuid(),
             Identity = identity,
-            TestName = context.TestName ?? "Unknown",
+            TestName = testName,
             Outcome = outcome,
             Duration = duration,
             StartTimeUtc = startTime,
@@ -153,7 +147,7 @@ public abstract class XpingTestBase
         XpingContext.ExecutionTracker?.RecordTestCompletion(
             threadId,
             testExecution.Identity.TestId,
-            testExecution.TestName,
+            testName,
             outcome);
 
         return testExecution;
@@ -327,6 +321,111 @@ public abstract class XpingTestBase
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Extracts DataRow parameters from the MSTest TestContext.
+    /// </summary>
+    /// <param name="context">The test context.</param>
+    /// <returns>An array of parameter values, or null if not a parameterized test.</returns>
+    /// <remarks>
+    /// MSTest exposes DataRow parameters through TestContext.TestData (introduced in MSTest 3.7).
+    /// This is different from NUnit (uses Properties["Arguments"]) and xUnit (uses TestMethodArguments).
+    ///
+    /// For DataTestMethod tests with DataRow attributes:
+    /// - TestContext.TestData contains the parameter values as object[]
+    /// - This enables unique test IDs for each DataRow variation
+    /// - For non-parameterized tests, TestData is null
+    ///
+    /// Legacy note: TestContext.DataRow (System.Data.DataRow) is only for [DataSource] attribute,
+    /// not for modern [DataRow] attributes.
+    /// </remarks>
+    private static object[]? ExtractDataRowParameters(TestContext context)
+    {
+        if (context == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // TestContext.TestData contains the parameters for DataRow-based tests (MSTest 3.7+)
+            // For non-parameterized tests, TestData is null
+            var testData = context.TestData;
+
+            // Return null if empty to avoid generating parameter hash for parameterless tests
+            // Cast to object[] to match the expected return type (TestData is object?[])
+            return testData != null && testData.Length > 0 ? (object[])testData : null;
+        }
+        catch
+        {
+            // If we fail to extract parameters, return null to use base test identity
+            // This ensures we don't break test tracking if MSTest internals change
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Formats a test name with parameters to match NUnit and xUnit display format.
+    /// </summary>
+    /// <param name="baseTestName">The base test method name.</param>
+    /// <param name="parameters">The test parameters, or null for non-parameterized tests.</param>
+    /// <returns>The formatted test name with parameters in parentheses (e.g., "TestMethod(1,2,3)").</returns>
+    /// <remarks>
+    /// MSTest's TestContext.TestName does not include parameters, unlike NUnit and xUnit.
+    /// This method formats the test name to match the pattern used by other frameworks,
+    /// making it easier to identify specific test cases on the Xping dashboard.
+    ///
+    /// Examples:
+    /// - Non-parameterized: "Add_TwoNumbers_ReturnsSum" → "Add_TwoNumbers_ReturnsSum"
+    /// - Parameterized: "Add_MultipleInputs_ReturnsExpectedSum" + [2,3,5] → "Add_MultipleInputs_ReturnsExpectedSum (2,3,5)"
+    /// </remarks>
+    private static string FormatTestNameWithParameters(string baseTestName, object[]? parameters)
+    {
+        if (parameters == null || parameters.Length == 0)
+        {
+            return baseTestName;
+        }
+
+        // Format parameters using the same logic as TestIdentityGenerator
+        var formattedParams = new System.Collections.Generic.List<string>();
+        foreach (var param in parameters)
+        {
+            formattedParams.Add(FormatParameterValue(param));
+        }
+
+        var paramString = string.Join(",", formattedParams);
+        return $"{baseTestName} ({paramString})";
+    }
+
+    /// <summary>
+    /// Formats a single parameter value for display.
+    /// </summary>
+    /// <param name="parameter">The parameter value to format.</param>
+    /// <returns>A string representation of the parameter.</returns>
+    private static string FormatParameterValue(object? parameter)
+    {
+        return parameter switch
+        {
+            null => "null",
+            string str => str,
+            bool b => b ? "true" : "false",
+            byte b => b.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            sbyte sb => sb.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            short s => s.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ushort us => us.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            int i => i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            uint ui => ui.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            long l => l.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ulong ul => ul.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            float f => f.ToString("G9", System.Globalization.CultureInfo.InvariantCulture),
+            double d => d.ToString("G17", System.Globalization.CultureInfo.InvariantCulture),
+            decimal dec => dec.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DateTime dt => dt.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("yyyy-MM-ddTHH:mm:ss.fffffffzzz", System.Globalization.CultureInfo.InvariantCulture),
+            Guid g => g.ToString("D"),
+            _ => parameter.ToString() ?? "null"
+        };
     }
 
     /// <summary>

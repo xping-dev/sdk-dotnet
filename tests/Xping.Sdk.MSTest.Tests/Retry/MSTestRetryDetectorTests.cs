@@ -253,21 +253,25 @@ public sealed class MSTestRetryDetectorTests
 
     // Test class with various retry scenarios
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Class is used via reflection in tests")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper class used via reflection")]
     private sealed class TestClass
     {
         [TestMethod]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
         public void TestMethodWithoutRetry()
         {
         }
 
         [TestMethod]
         [Retry(3)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
         public void TestMethodWithRetry()
         {
         }
 
         [TestMethod]
         [Retry(5)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
         public void TestMethodWithFullRetry()
         {
         }

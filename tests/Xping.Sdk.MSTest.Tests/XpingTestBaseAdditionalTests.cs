@@ -172,6 +172,35 @@ public class XpingTestBaseAdditionalTests
         Assert.NotNull(method);
     }
 
+    [Fact]
+    public void ExtractDataRowParameters_MethodExists()
+    {
+        // Arrange
+        var method = typeof(XpingTestBase).GetMethod(
+            "ExtractDataRowParameters",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act & Assert
+        Assert.NotNull(method);
+        Assert.NotNull(method.ReturnType);
+        Assert.Equal(typeof(object[]), method.ReturnType);
+    }
+
+    [Fact]
+    public void ExtractDataRowParameters_WithNullContext_ReturnsNull()
+    {
+        // Arrange
+        var method = typeof(XpingTestBase).GetMethod(
+            "ExtractDataRowParameters",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var result = method!.Invoke(null, new object?[] { null });
+
+        // Assert
+        Assert.Null(result);
+    }
+
     // Test helper class
     private sealed class TestDerivedClass : XpingTestBase
     {
