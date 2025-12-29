@@ -308,8 +308,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
                    "Action: Check project access at https://app.xping.io",
             429 => "Rate limit exceeded (429): Too many requests. " +
                    "Action: Reduce test execution frequency or contact support",
-            >= 500 => $"Server error ({statusCode}): API temporarily unavailable. " +
-                      "Status: Uploads will be retried automatically",
+            >= 500 => $"Server error ({statusCode}): API temporarily unavailable.",
             _ => $"API returned {statusCode}: {errorContent}"
         };
 
