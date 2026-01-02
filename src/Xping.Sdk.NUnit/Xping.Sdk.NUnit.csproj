@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Xping.Sdk.NUnit</PackageId>
+    <Description>NUnit adapter for Xping SDK - Seamlessly integrate test execution tracking into your NUnit test projects. Provides [XpingTrack] attribute and automatic test result collection for NUnit 3.x tests.</Description>
+    <PackageReleaseNotes>Initial release of Xping SDK NUnit adapter with support for test tracking via attributes, automatic environment detection, and integration with NUnit 3.14+.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!-- Include icon and README in the package -->
+  <ItemGroup>
+    <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+  </ItemGroup>
+
+</Project>

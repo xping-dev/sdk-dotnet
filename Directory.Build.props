@@ -8,5 +8,33 @@
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        
+        <!-- Generate XML documentation for all projects by default -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
+
+    <!-- NuGet Package Metadata (shared across all packages) -->
+    <PropertyGroup>
+        <!-- Version can be overridden via command line: dotnet pack -p:Version=1.0.0 -->
+        <Version Condition="'$(Version)' == ''">1.0.0</Version>
+        <Authors>Xping</Authors>
+        <Company>Xping</Company>
+        <Copyright>Copyright © Xping 2025</Copyright>
+        <PackageTags>testing;observability;flaky-tests;reliability;test-tracking;test-analytics;ci-cd</PackageTags>
+        <PackageProjectUrl>https://github.com/xping-dev/sdk-dotnet</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/xping-dev/sdk-dotnet</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    </PropertyGroup>
+
+    <!-- Source Link support for debugging -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+    </ItemGroup>
 </Project>

@@ -8,10 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: dotnet pack core
-      run: dotnet pack ./src/Xping.Sdk.Core/Xping.Sdk.Core.csproj -c Release -p:NuspecProperties="version=${GITHUB_REF_NAME#v}" -o _build/nuget
-    - name: dotnet pack sdk
-      run: dotnet pack ./src/Xping.Sdk/Xping.Sdk.csproj -c Release -p:NuspecProperties="version=${GITHUB_REF_NAME#v}" -o _build/nuget
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.x
+    
+    - name: Extract version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build -c Release --no-restore -p:Version=${{ steps.get_version.outputs.VERSION }}
+    
+    - name: Pack all SDK packages
+      run: dotnet pack -c Release --no-build -p:Version=${{ steps.get_version.outputs.VERSION }} -o _build/nuget
+    
     - uses: actions/upload-artifact@v4
       with:
         name: nuget
@@ -26,18 +41,26 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.x
+      
       - uses: actions/download-artifact@v4
         with:
           name: nuget
           path: _build/nuget
+      
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      
       - name: Publish NuGet packages
         run: |
-          dotnet nuget push _build/nuget/Xping.Sdk.Core.${GITHUB_REF_NAME#v}.nupkg --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
-          dotnet nuget push _build/nuget/Xping.Sdk.${GITHUB_REF_NAME#v}.nupkg --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
-      - name: Upload GitHub release
+          dotnet nuget push "_build/nuget/*.nupkg" --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
+      
+      - name: Upload packages to GitHub release
         run: |
-          gh release upload --repo xping-dev/sdk ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.Core.${GITHUB_REF_NAME#v}.nupkg
-          gh release upload --repo xping-dev/sdk ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.${GITHUB_REF_NAME#v}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.Core.${{ steps.get_version.outputs.VERSION }}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.NUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.XUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.MSTest.${{ steps.get_version.outputs.VERSION }}.nupkg
         env:
           GH_TOKEN: ${{ github.token }}
 

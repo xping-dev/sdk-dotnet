@@ -7,7 +7,7 @@ Provides real-time feedback and execution summaries.
 
 Usage:
     python3 periodic_runner.py "command to run" --interval 30
-    python3 periodic_runner.py "dotnet run --project ./samples/ConsoleAppTesting/" --interval 30
+    python3 periodic_runner.py "dotnet test ./samples/SampleApp.XUnit/" --interval 30
 """
 
 import argparse

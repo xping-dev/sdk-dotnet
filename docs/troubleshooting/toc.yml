@@ -1,0 +1,4 @@
+- name: Common Issues
+  href: common-issues.md
+- name: Debugging Guide
+  href: debugging.md

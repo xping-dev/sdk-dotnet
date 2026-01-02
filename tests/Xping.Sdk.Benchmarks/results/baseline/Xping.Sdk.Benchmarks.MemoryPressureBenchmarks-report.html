@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Xping.Sdk.Benchmarks.MemoryPressureBenchmarks-20251115-170458</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
+Apple M4, 1 CPU, 10 logical and 10 physical cores
+.NET SDK 9.0.203
+  [Host]   : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+  ShortRun : .NET 9.0.4 (9.0.425.16305), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>Job=ShortRun  IterationCount=3  LaunchCount=1  
+WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                                  </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Completed Work Items</th><th>Lock Contentions</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>LargeBatch_10000Tests</td><td>2,938.7 &mu;s</td><td>376.92 &mu;s</td><td>20.66 &mu;s</td><td>50.7813</td><td>12.8398</td><td>-</td><td>7.8125</td><td>5.07 MB</td>
+</tr><tr><td>VeryLargeBatch_25000Tests</td><td>7,453.5 &mu;s</td><td>2,994.48 &mu;s</td><td>164.14 &mu;s</td><td>132.8125</td><td>17.8516</td><td>-</td><td>39.0625</td><td>13.15 MB</td>
+</tr><tr><td>ComplexObjects_1000TestsWithLargeData</td><td>853.5 &mu;s</td><td>27.18 &mu;s</td><td>1.49 &mu;s</td><td>21.4844</td><td>10.5117</td><td>-</td><td>-</td><td>2.24 MB</td>
+</tr><tr><td>RepeatedCycles_50Cycles_200TestsEach</td><td>3,293.6 &mu;s</td><td>250.61 &mu;s</td><td>13.74 &mu;s</td><td>54.6875</td><td>98.9688</td><td>-</td><td>23.4375</td><td>5.66 MB</td>
+</tr><tr><td>AllocationStress_5000RapidTests</td><td>1,532.2 &mu;s</td><td>19.01 &mu;s</td><td>1.04 &mu;s</td><td>27.3438</td><td>177.7949</td><td>0.0117</td><td>3.9063</td><td>2.71 MB</td>
+</tr><tr><td>StringHeavyWorkload_2000Tests</td><td>910.4 &mu;s</td><td>21.78 &mu;s</td><td>1.19 &mu;s</td><td>70.3125</td><td>8.4902</td><td>-</td><td>5.8594</td><td>6.95 MB</td>
+</tr><tr><td>ConcurrentMemoryPressure_8Threads_500TestsEach</td><td>1,477.6 &mu;s</td><td>203.76 &mu;s</td><td>11.17 &mu;s</td><td>31.2500</td><td>35.6680</td><td>0.0039</td><td>3.9063</td><td>3.1 MB</td>
+</tr></tbody></table>
+</body>
+</html>

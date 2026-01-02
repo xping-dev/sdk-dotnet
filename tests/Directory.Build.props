@@ -1,0 +1,17 @@
+<Project>
+    <!-- Import parent Directory.Build.props -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <PropertyGroup>
+        <!-- Keep documentation generation enabled to satisfy IDE0005 analyzer -->
+        <!-- but test projects still don't need extensive XML docs -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        
+        <!-- Test projects don't need to be packed -->
+        <IsPackable>false</IsPackable>
+        
+        <!-- Suppress documentation warnings and naming conventions for test projects -->
+        <!-- CA1707: Underscores are standard in xUnit test method names -->
+        <NoWarn>$(NoWarn);CS1591;CA1707</NoWarn>
+    </PropertyGroup>
+</Project>

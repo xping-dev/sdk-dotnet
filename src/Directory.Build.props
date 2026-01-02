@@ -1,0 +1,13 @@
+<Project>
+    <!-- Import parent Directory.Build.props -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <PropertyGroup>
+        <!-- Source projects should generate XML documentation (inherited from root) -->
+        <!-- Explicitly set to true for clarity -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        
+        <!-- Source projects should be packable -->
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+</Project>

@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Xping.Sdk.XUnit</PackageId>
+    <Description>xUnit adapter for Xping SDK - Seamlessly integrate test execution tracking into your xUnit test projects. Provides custom test framework with automatic test result collection and analysis for xUnit 2.x tests.</Description>
+    <PackageReleaseNotes>Initial release of Xping SDK xUnit adapter with support for custom test framework integration, automatic tracking of [Fact] and [Theory] tests, and environment detection.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!-- Include icon and README in the package -->
+  <ItemGroup>
+    <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.extensibility.core" Version="2.9.2" />
+    <PackageReference Include="xunit.extensibility.execution" Version="2.9.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+  </ItemGroup>
+
+</Project>
