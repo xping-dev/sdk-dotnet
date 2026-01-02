@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <div align="center">
-  <img src="docs/media/logo.svg" width="100" alt="Xping Logo" />
+  <img src="docs/media/logo.svg" width="50" alt="Xping Logo" />
   
   <h1>Xping SDK for .NET</h1>
   
@@ -10,20 +10,22 @@
     <br />
     Stop wasting time on flaky tests. Get actionable insights that improve reliability and confidence.
   </p>
-  
-  <p align="center">
-    [![NuGet](https://img.shields.io/nuget/v/Xping.Sdk.Core?label=Xping.Sdk.Core)](https://www.nuget.org/packages/Xping.Sdk.Core/)
-    [![Build Status](https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml)
-    [![codecov](https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO)](https://codecov.io/gh/xping-dev/sdk-dotnet)
-    [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  </p>
+</div>
 
+<p align="center">
+  <a href="https://www.nuget.org/packages/Xping.Sdk.Core/"><img src="https://img.shields.io/nuget/v/Xping.Sdk.Core?label=Xping.Sdk.Core" alt="NuGet"></a>
+  <a href="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml"><img src="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://codecov.io/gh/xping-dev/sdk-dotnet"><img src="https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO" alt="codecov"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+<div align="center">
   <p align="center">
     <a href="#-quick-start"><strong>Quick Start</strong></a> •
     <a href="#-why-xping"><strong>Why Xping?</strong></a> •
     <a href="#-features"><strong>Features</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
-    <a href="docs/known-limitations.md"><strong>Known Limitations</strong></a> •
+    <a href="https://docs.xping.io/known-limitations.html"><strong>Known Limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
   </p>
 </div>
@@ -62,7 +64,7 @@ Traditional test frameworks tell you if a test passed or failed—but they don't
 ### For DevOps Engineers
 - 🔧 **CI/CD integration** - Automatic environment detection (GitHub Actions, Azure DevOps, Jenkins, GitLab)
 - 💪 **Resilient by design** - Retry logic, circuit breakers
-- 📦 **Minimal overhead** - <5ms per test, <1000 bytes memory footprint
+- 📦 **Minimal overhead** - <5 ms per test, <1 KB memory footprint
 
 ---
 
@@ -74,141 +76,48 @@ Traditional test frameworks tell you if a test passed or failed—but they don't
 | 📊 **Flaky Test Detection** | Identify unreliable tests with confidence scoring |
 | 🌐 **CI/CD Auto-detection** | Works seamlessly with GitHub Actions, Azure DevOps, Jenkins, GitLab, and more |
 | 💪 **Resilient Upload** | Retry policies and circuit breakers for reliable data delivery |
-| ⚡ **Low Overhead** | <5ms overhead per test, minimal memory footprint |
+| ⚡ **Low Overhead** | <5 ms overhead per test, minimal memory footprint |
 | 🎯 **Multi-Framework** | Support for NUnit, xUnit, and MSTest |
 | 🔧 **Flexible Configuration** | JSON, environment variables, or programmatic setup |
 
 ---
 
-## 📦 Installation
-
-Choose the package for your test framework:
-
-```bash
-# For NUnit projects
-dotnet add package Xping.Sdk.NUnit
-
-# For xUnit projects
-dotnet add package Xping.Sdk.XUnit
-
-# For MSTest projects
-dotnet add package Xping.Sdk.MSTest
-```
-
----
-
 ## ⚡ Quick Start
 
-### NUnit
-
-```csharp
-using NUnit.Framework;
-using Xping.Sdk.NUnit;
-
-// Option 1: Track all tests in the assembly
-[assembly: XpingTrack]
-
-// Option 2: Track specific test fixtures
-[TestFixture]
-[XpingTrack]
-public class CalculatorTests
-{
-    [Test]
-    public void Add_TwoNumbers_ReturnsSum()
-    {
-        var result = Calculator.Add(2, 3);
-        Assert.AreEqual(5, result);
-    }
-
-    [Test]
-    public void Divide_ByZero_ThrowsException()
-    {
-        Assert.Throws<DivideByZeroException>(() => Calculator.Divide(10, 0));
-    }
-}
-```
-
-### xUnit
-
-```csharp
-using Xunit;
-
-// Add to AssemblyInfo.cs or any file with [assembly:] attributes
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
-
-public class CalculatorTests
-{
-    [Fact]
-    public void Add_TwoNumbers_ReturnsSum()
-    {
-        var result = Calculator.Add(2, 3);
-        Assert.Equal(5, result);
-    }
-
-    [Theory]
-    [InlineData(2, 3, 5)]
-    [InlineData(10, -5, 5)]
-    public void Add_MultipleInputs_ReturnsExpectedSum(int a, int b, int expected)
-    {
-        var result = Calculator.Add(a, b);
-        Assert.Equal(expected, result);
-    }
-}
-```
-
-### MSTest
-
-```csharp
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.MSTest;
-
-[TestClass]
-public class CalculatorTests : XpingTestBase
-{
-    [TestMethod]
-    public void Add_TwoNumbers_ReturnsSum()
-    {
-        var result = Calculator.Add(2, 3);
-        Assert.AreEqual(5, result);
-    }
-
-    [DataTestMethod]
-    [DataRow(2, 3, 5)]
-    [DataRow(10, -5, 5)]
-    public void Add_MultipleInputs_ReturnsExpectedSum(int a, int b, int expected)
-    {
-        var result = Calculator.Add(a, b);
-        Assert.AreEqual(expected, result);
-    }
-}
-```
-
-### Configuration
-
-Add `appsettings.json` to your test project:
-
-```json
-{
-  "Xping": {
-    "ApiKey": "your-api-key",
-    "ProjectId": "your-project-id",
-    "Enabled": true,
-    "ApiEndpoint": "https://upload.xping.io",
-    "BatchSize": 100,
-    "FlushInterval": "00:00:30",
-    "MaxRetries": 3
-  }
-}
-```
-
-Or use environment variables (recommended for CI/CD):
+Get started in under 2 minutes:
 
 ```bash
+# 1. Install the SDK for your test framework
+dotnet add package Xping.Sdk.NUnit    # or Xping.Sdk.XUnit / Xping.Sdk.MSTest
+
+# 2. Configure with environment variables
 export XPING_API_KEY="your-api-key"
 export XPING_PROJECT_ID="your-project-id"
 ```
 
-That's it! Run your tests and view results at [app.xping.io](https://app.xping.io)
+**NUnit** - Add one attribute to track all tests:
+```csharp
+[assembly: XpingTrack]
+```
+
+**xUnit** - Add one line to AssemblyInfo.cs:
+```csharp
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+```
+
+**MSTest** - Inherit from base class:
+```csharp
+[TestClass]
+public class MyTests : XpingTestBase { }
+```
+
+Run your tests and view insights at [app.xping.io](https://app.xping.io) 🚀
+
+### 📖 Framework-Specific Guides
+
+- **[NUnit Setup Guide →](https://docs.xping.io/getting-started/quickstart-nunit.html)** - Detailed setup, attributes, and best practices
+- **[xUnit Setup Guide →](https://docs.xping.io/getting-started/quickstart-xunit.html)** - Custom framework configuration and examples
+- **[MSTest Setup Guide →](https://docs.xping.io/getting-started/quickstart-mstest.html)** - Base class usage and TestContext integration
 
 ---
 
@@ -238,89 +147,22 @@ That's it! Run your tests and view results at [app.xping.io](https://app.xping.i
           ┌─────────────────────────────────────┐
           │         Xping.Sdk.Core              │
           │                                     │
-          │  • Test Execution Collector         │
+          │  • Test Execution Tracking          │
           │  • Environment Detection            │
-          │  • In-Memory Buffer (Thread-Safe)   │
           │  • Configuration Management         │
-          └──────────────┬──────────────────────┘
-                         ▼
-          ┌─────────────────────────────────────┐
-          │      API Client (Resilient)         │
-          │                                     │
-          │  • Retry Logic (Exponential)        │
-          │  • Circuit Breaker                  │
-          │  • Gzip Compression                 │
-          │  • Batch Upload                     │
-          └──────────────┬──────────────────────┘
-                         ▼
-                  Xping Platform API
+          │  • Resilient Upload                 │
+          └──────────────────┬──────────────────┘
+                             ▼
+                    Xping Platform API
 ```
-
-### Technology Stack
-
-#### Core Dependencies
-- **.NET Standard 2.0** - Broad compatibility (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+)
-- **System.Text.Json** - High-performance JSON serialization
-- **Microsoft.Extensions.Configuration** - Flexible configuration system
-- **Polly 8.x** - Resilience policies (retry, circuit breaker)
-
-#### Test Framework Integration
-- **NUnit 3.14+** - `ITestAction` for per-test hooks, `[SetUpFixture]` for global setup
-- **xUnit 2.9+** - Custom `ITestFramework` and message sink for test tracking
-- **MSTest 3.2+** - Base class pattern with `TestContext` integration
-
-#### Performance Characteristics
-- **Overhead**: <5ms per test execution
-- **Memory**: <100 bytes per test execution record
-- **Throughput**: >10,000 tests/second collection capacity
-- **Network**: Configurable batch size (default: 100 tests per upload)
 
 ---
 
 ## 🔧 Configuration
 
-### Configuration Sources (Priority Order)
+Xping SDK can be configured via **environment variables**, **appsettings.json**, or **programmatically**.
 
-1. **Programmatic** (highest priority)
-2. **Environment Variables**
-3. **appsettings.json**
-4. **Default Values** (lowest priority)
-
-### Complete Configuration Reference
-
-```json
-{
-  "Xping": {
-    // Authentication (Required)
-    "ApiKey": "your-api-key",
-    "ProjectId": "your-project-id",
-    
-    // API Configuration
-    "ApiEndpoint": "https://upload.xping.io",
-    "UploadTimeout": "00:00:30",
-    
-    // Feature Flags
-    "Enabled": true,
-    "CaptureStackTraces": true,
-    "EnableCompression": true,
-    "AutoDetectCIEnvironment": true,
-    "CollectNetworkMetrics": true,
-    
-    // Batching & Performance
-    "BatchSize": 100,
-    "FlushInterval": "00:00:30",
-    
-    // Retry Configuration
-    "MaxRetries": 3,
-    "RetryDelay": "00:00:02",
-    
-    // Sampling (1.0 = 100%, 0.5 = 50%)
-    "SamplingRate": 1.0
-  }
-}    
-```
-
-### Environment Variables
+### Quick Configuration (Environment Variables)
 
 ```bash
 # Required
@@ -329,92 +171,10 @@ export XPING_PROJECT_ID="your-project-id"
 
 # Optional
 export XPING_ENABLED="true"
-export XPING_API_ENDPOINT="https://upload.xping.io"
 export XPING_BATCH_SIZE="100"
-export XPING_MAX_RETRIES="3"
 ```
 
-### CI/CD Configuration Examples
-
-<details>
-<summary><strong>GitHub Actions</strong></summary>
-
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.x'
-      
-      - name: Run Tests with Xping
-        env:
-          XPING_API_KEY: ${{ secrets.XPING_API_KEY }}
-          XPING_PROJECT_ID: ${{ secrets.XPING_PROJECT_ID }}
-        run: dotnet test
-```
-
-</details>
-
-<details>
-<summary><strong>Azure DevOps</strong></summary>
-
-```yaml
-trigger:
-  - main
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  XPING_API_KEY: $(XpingApiKey)
-  XPING_PROJECT_ID: $(XpingProjectId)
-
-steps:
-- task: UseDotNet@2
-  inputs:
-    version: '8.0.x'
-
-- task: DotNetCoreCLI@2
-  displayName: 'Run Tests'
-  inputs:
-    command: 'test'
-    projects: '**/*Tests.csproj'
-```
-
-</details>
-
-<details>
-<summary><strong>Jenkins</strong></summary>
-
-```groovy
-pipeline {
-    agent any
-    
-    environment {
-        XPING_API_KEY = credentials('xping-api-key')
-        XPING_PROJECT_ID = credentials('xping-project-id')
-    }
-    
-    stages {
-        stage('Test') {
-            steps {
-                sh 'dotnet test'
-            }
-        }
-    }
-}
-```
-
-</details>
+For complete configuration reference including JSON config, CI/CD integration examples (GitHub Actions, Azure DevOps, Jenkins), and advanced options, see the [Configuration Guide](https://docs.xping.io/configuration/configuration-reference.html).
 
 ---
 
@@ -436,12 +196,24 @@ pipeline {
 - CI/CD platform detection
 - Build/branch information (from CI environment)
 
-### Privacy & Security
-- ✅ No source code is collected
+---
+
+## 🔒 Privacy & Security
+
+We take data privacy seriously. Here's exactly what we collect and don't collect:
+
+### What We DON'T Collect
+- ✅ No source code
 - ✅ No sensitive data from test assertions
-- ✅ Stack traces are optional (configurable)
-- ✅ All data transmitted over HTTPS
-- ✅ Configurable sampling for large test suites
+- ✅ No credentials or secrets
+- ✅ No personally identifiable information (PII)
+
+### Security Measures
+- 🔐 **Encryption**: All data transmitted over HTTPS
+- 🔑 **API Key Security**: Environment variable support (never commit keys to source control)
+- 🗄️ **Data Retention**: Configurable retention policies
+- 📖 **Open Source**: Full transparency - [review the code yourself](https://github.com/xping-dev/sdk-dotnet)
+- ⚙️ **Configurable Collection**: Stack traces and sampling are optional
 
 ---
 
@@ -457,8 +229,8 @@ Track test outcomes over time to identify tests with inconsistent results:
 ### 2. Monitor Test Duration
 Identify slow tests that impact CI/CD pipeline performance:
 ```
-⚠️ DatabaseIntegrationTest: avg 45s (up from 12s last week)
-✓ UnitTests: avg 150ms (stable)
+⚠️ DatabaseIntegrationTest: avg 45 s (up from 12 s last week)
+✓ UnitTests: avg 150 ms (stable)
 ```
 
 ### 3. Environment Comparison
@@ -479,24 +251,15 @@ PR builds: 92% reliability
 
 ---
 
-## 🔒 Security & Compliance
-
-- **Data Encryption**: All data transmitted over HTTPS/TLS 1.3
-- **API Key Security**: Support for environment variables (never commit keys)
-- **Data Retention**: Configurable retention policies
-- **Open Source**: Full transparency - review the code yourself
----
-
 ## 📚 Documentation
 
-- [Getting Started Guide](docs/docs/overview.md)
-- [NUnit Integration](docs/docs/tutorial-unittests.md)
-- [xUnit Integration](docs/docs/tutorial-unittests.md)
-- [MSTest Integration](docs/docs/tutorial-unittests.md)
-- [Configuration Reference](docs/docs/overview.md)
-- [Known Limitations](docs/known-limitations.md) ⚠️
-- [API Documentation](https://xping-dev.github.io/sdk-dotnet/)
-- [Troubleshooting](docs/docs/overview.md)
+**Essential Resources:**
+- 🚀 [Getting Started Guide](https://docs.xping.io/index.html#quick-start)
+- ⚠️ [Known Limitations](https://docs.xping.io/known-limitations.html)
+- 🔧 [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
+- 📖 [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
+
+**Complete documentation available at [docs.xping.io](https://docs.xping.io)**
 
 ---
 
