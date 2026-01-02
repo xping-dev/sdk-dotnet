@@ -101,11 +101,25 @@ Quick start guides for each test framework and CI/CD integration
 #### [Configuration](configuration/configuration-reference.md)
 Comprehensive configuration options and environment setup
 
-#### [Guides](guides/flaky-test-detection.md)
+#### [Guides](guides/getting-started/understanding-confidence-scores.md)
 Practical guides for using Xping SDK features
 
-- [Flaky Test Detection](guides/flaky-test-detection.md)
-- [Performance Guide](guides/performance.md)
+**Getting Started:**
+- [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md)
+- [Navigating the Dashboard](guides/getting-started/navigating-the-dashboard.md)
+- [Interpreting Test Results](guides/getting-started/interpreting-test-results.md)
+
+**Working with Tests:**
+- [Identifying Flaky Tests](guides/working-with-tests/identifying-flaky-tests.md)
+- [Common Flaky Patterns](guides/working-with-tests/common-flaky-patterns.md)
+- [Fixing Flaky Tests](guides/working-with-tests/fixing-flaky-tests.md)
+- [Monitoring Test Health](guides/working-with-tests/monitoring-test-health.md)
+- [Best Practices](guides/working-with-tests/best-practices.md)
+
+**Optimization:**
+- [Performance Overview](guides/optimization/performance-overview.md)
+- [Performance Configuration](guides/optimization/performance-configuration.md)
+- [Performance Troubleshooting](guides/optimization/performance-troubleshooting.md)
 
 #### [Performance](performance/overview.md)
 Performance benchmarks and optimization guidelines
@@ -145,7 +159,7 @@ Xping provides:
 - **Environment Context**: Understand where tests fail most
 - **Actionable Insights**: Know which tests need attention
 
-> **How Confidence Scores Work**: Xping analyzes test execution history across six weighted factors: pass rate (35%), execution stability (20%), retry behavior (15%), environment consistency (15%), failure patterns (10%), and dependency impact (5%). This produces a 0-1 score that distinguishes truly flaky tests from consistently passing or failing ones. Learn more in the [Flaky Test Detection Guide](guides/flaky-test-detection.md).
+> **How Confidence Scores Work**: Xping analyzes test execution history across six weighted factors: pass rate (35%), execution stability (20%), retry behavior (15%), environment consistency (15%), failure patterns (10%), and dependency impact (5%). This produces a 0-1 score that distinguishes truly flaky tests from consistently passing or failing ones. Learn more in the [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md) guide.
 
 ---
 

@@ -1,6 +1,30 @@
-- name: Understanding Your Data
-  href: understanding-your-data.md
-- name: Flaky Test Detection
-  href: flaky-test-detection.md
-- name: Performance Guide
-  href: performance.md
+- name: Getting Started with Xping
+  items:
+  - name: Understanding Confidence Scores
+    href: getting-started/understanding-confidence-scores.md
+  - name: Navigating the Dashboard
+    href: getting-started/navigating-the-dashboard.md
+  - name: Interpreting Test Results
+    href: getting-started/interpreting-test-results.md
+
+- name: Working with Tests
+  items:
+  - name: Identifying Flaky Tests
+    href: working-with-tests/identifying-flaky-tests.md
+  - name: Common Flaky Patterns
+    href: working-with-tests/common-flaky-patterns.md
+  - name: Fixing Flaky Tests
+    href: working-with-tests/fixing-flaky-tests.md
+  - name: Monitoring Test Health
+    href: working-with-tests/monitoring-test-health.md
+  - name: Best Practices
+    href: working-with-tests/best-practices.md
+
+- name: Optimization
+  items:
+  - name: Performance Overview
+    href: optimization/performance-overview.md
+  - name: Performance Configuration
+    href: optimization/performance-configuration.md
+  - name: Performance Troubleshooting
+    href: optimization/performance-troubleshooting.md
