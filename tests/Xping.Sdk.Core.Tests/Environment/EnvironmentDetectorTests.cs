@@ -10,6 +10,7 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Environment;
 using Xunit;
 
+[Collection("EnvironmentVariableTests")]
 public class EnvironmentDetectorTests
 {
     [Fact]

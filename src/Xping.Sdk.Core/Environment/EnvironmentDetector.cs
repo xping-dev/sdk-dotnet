@@ -303,7 +303,20 @@ public sealed class EnvironmentDetector : IEnvironmentDetector
             return configuration.Environment;
         }
 
-        // Priority 4: Default to default: "Local"
+        // Priority 4: Framework environment variables (ASPNETCORE_ENVIRONMENT, DOTNET_ENVIRONMENT)
+        var aspNetCoreEnv = GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        if (!string.IsNullOrWhiteSpace(aspNetCoreEnv))
+        {
+            return aspNetCoreEnv!;
+        }
+
+        var dotnetEnv = GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        if (!string.IsNullOrWhiteSpace(dotnetEnv))
+        {
+            return dotnetEnv!;
+        }
+
+        // Priority 5: Default to "Local"
         return XpingConfiguration.DefaultEnvironment;
     }
 

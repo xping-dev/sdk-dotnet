@@ -13,7 +13,7 @@ using System;
 /// </summary>
 public sealed class XpingConsoleLogger : IXpingLogger
 {
-    private const string Prefix = "[Xping]";
+    private const string Prefix = "[Xping SDK]";
     private readonly XpingLogLevel _minLevel;
     private readonly object _lock = new();
 

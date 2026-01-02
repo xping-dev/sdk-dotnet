@@ -10,6 +10,7 @@ using System.IO;
 using Microsoft.Extensions.Configuration;
 using Xping.Sdk.Core.Configuration;
 
+[Collection("EnvironmentVariableTests")]
 public class XpingConfigurationLoaderTests
 {
     [Fact]
