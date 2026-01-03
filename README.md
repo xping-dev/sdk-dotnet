@@ -164,7 +164,7 @@ That's it! Run your tests normally and view insights at [app.xping.io](https://a
 
 Xping SDK can be configured via **environment variables**, **appsettings.json**, or **programmatically**.
 
-### Environment Variables (Recommended)
+### Environment Variables
 
 ```bash
 # Required
