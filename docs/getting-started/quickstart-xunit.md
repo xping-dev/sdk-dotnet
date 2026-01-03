@@ -19,7 +19,7 @@ Before you begin, make sure you have:
 
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
-- An **Xping account** with API credentials ([Sign up](https://app.xping.io/signup))
+- An **Xping account** with API credentials ([Sign up](https://app.xping.io))
 - An existing **xUnit test project** or create a new one
 
 > **New to xUnit?** Create a test project with: `dotnet new xunit -n MyTestProject`
@@ -80,7 +80,7 @@ Create or update `appsettings.json` in your test project:
 > **About Project ID:**
 > The `ProjectId` is a user-defined identifier for your project (e.g., `"my-app"`, `"payment-service"`). 
 > Choose any meaningful name—Xping will automatically create the project in your workspace when your tests first run. 
-> The platform only requires that project names are unique within your workspace.
+> The platform requires that project names are unique within your workspace. Check [Configuration Reference](../configuration/configuration-reference.md#projectid) for more information.
 
 Make sure the file is copied to output directory by adding this to your `.csproj`:
 
@@ -288,13 +288,14 @@ Xping SDK runs silently in the background, tracking execution data without affec
 ## Step 6: View Results in Xping Dashboard
 
 1. Open the [Xping Dashboard](https://app.xping.io)
-2. Navigate to your project
-3. View your test executions, including:
-   - **Pass/Fail Status** with execution time
-   - **Flaky Test Detection** across multiple runs
-   - **Confidence Scores** based on historical data
-   - **Environment Information** (OS, .NET version, CI/CD context)
-   - **Trends and Analytics** over time
+2. Explore your test data across multiple tabs:
+   - **Test Sessions** - View uploaded test runs with execution statistics, environment details, and duration
+   - **Tests** - Browse all tests with confidence scores, success rates, and execution history
+   - **Flaky Tests** - Identify unreliable tests that need attention
+
+Each test execution includes comprehensive tracking of pass/fail status, duration, confidence scores, environment information (OS, .NET version, CI/CD context), and trends over time.
+
+> **Learn More:** For detailed information about navigating the dashboard, filtering tests, and understanding the test detail view, see [Navigating the Dashboard](../guides/getting-started/navigating-the-dashboard.md).
 
 ---
 
@@ -423,72 +424,23 @@ public class ExperimentalTests
 
 ## Troubleshooting
 
-### Tests aren't appearing in Xping Dashboard
+If you encounter issues while integrating or using the Xping SDK with xUnit, we have comprehensive troubleshooting resources available:
 
-**Check the following:**
+### Common Issues
 
-1. **Configuration**: Verify your `ApiKey` and `ProjectId` are correct
-2. **Enabled flag**: Ensure `Xping:Enabled` is `true`
-3. **Test Framework**: Verify `[assembly: TestFramework(...)]` is in `AssemblyInfo.cs`
-4. **Network connectivity**: Check that your environment can reach `https://xping.io`
-5. **Build output**: Ensure `appsettings.json` is being copied to output directory
+- **Tests not appearing in dashboard** - Configuration, test framework setup, and connectivity checks
+- **"Could not find test framework" error** - Package installation and AssemblyInfo configuration
+- **Data looks incomplete** - Network stability and flush timing
+- **Performance concerns** - Impact measurement and optimization
 
-### "Could not find test framework" error
+### Get Help
 
-If you see an error like:
+For detailed troubleshooting steps and solutions:
 
-```
-Could not find type 'Xping.Sdk.XUnit.XpingTestFramework' in Xping.Sdk.XUnit
-```
+- **[Common Issues](../troubleshooting/common-issues.md)** - Frequently encountered problems and solutions
+- **[Debugging Guide](../troubleshooting/debugging.md)** - Enable logging and diagnose SDK behavior
 
-**Possible causes:**
-
-- Package not properly installed
-- Project not restored after adding the package
-- Typo in `AssemblyInfo.cs`
-
-**Solution:**
-
-1. Clean and restore:
-   ```bash
-   dotnet clean
-   dotnet restore
-   dotnet build
-   ```
-
-2. Verify the package reference exists in your `.csproj`:
-   ```xml
-   <PackageReference Include="Xping.Sdk.XUnit" Version="1.0.*" />
-   ```
-
-3. Check `AssemblyInfo.cs` has the correct namespace:
-   ```csharp
-   [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
-   ```
-
-### Tests are tracked but data looks incomplete
-
-**Possible causes:**
-
-- The test process exited before flushing completed
-- Network issues during upload (check logs for retry attempts)
-
-
-**Solution:** The Xping test framework handles cleanup automatically. If you're experiencing issues, check:
-
-1. Test runner isn't force-killed
-2. Network is stable during test execution
-3. Increase flush interval if needed (see [Configuration Reference](../configuration/configuration-reference.md))
-
-### Performance overhead concerns
-
-Xping SDK is designed for minimal impact:
-
-- **Tracking overhead**: <5ms per test
-- **Memory usage**: ~100 bytes per test execution
-- **Background processing**: Async batching with configurable intervals
-
-To verify, compare test execution times with and without Xping by temporarily removing the `[assembly: TestFramework(...)]` attribute.
+Still stuck? Reach out through our support channels listed in the "Need Help?" section below.
 
 ---
 
@@ -498,11 +450,11 @@ To verify, compare test execution times with and without Xping by temporarily re
 
 Now explore more features:
 
-- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and comparisons
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Understanding Confidence Scores](../guides/getting-started/understanding-confidence-scores.md)** - Learn about test reliability scoring
 - **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
+- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and comparisons
 
 ---
 

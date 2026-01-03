@@ -53,10 +53,10 @@
       "modern"
     ],
     "globalMetadata": {
-      "_appName": "Xping SDK",
-      "_appTitle": "Xping SDK for .NET",
-      "_appLogoPath": "docs/media/logo.svg",
-      "_appFaviconPath": "docs/media/favicon.ico",
+      "_appName": "Xping",
+      "_appTitle": "Xping for .NET",
+      "_appLogoPath": "media/logo.svg",
+      "_appFaviconPath": "media/favicon.ico",
       "_appFooter": "<span>← <a href=\"https://xping.io\">Back to Xping home</a> | Documentation built with <a href=\"https://dotnet.github.io/docfx\">docfx</a></span>",
       "_enableSearch": true,
       "_enableNewTab": true,
