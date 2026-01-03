@@ -1,35 +1,50 @@
-# Xping SDK for .NET
+# Xping for .NET
 
-**Observability for your test suite. Know which tests you can trust.**
+**Stop guessing. Start knowing which tests you can trust.**
 
 ---
 
 ## Welcome
 
-Welcome to the **Xping SDK** documentation! Xping brings observability to testing, helping developers and teams understand not just whether tests pass, but whether they can be trusted. Our mission is to eliminate wasted time on flaky tests and provide actionable insights that improve test reliability and confidence.
+Welcome to the Xping documentation for .NET! Xping is a test reliability platform that helps you identify flaky tests, understand test quality, and build confidence in your test suite.
 
 ---
 
-## What is Xping SDK?
+## What is Xping?
 
-**Xping SDK** is a lightweight library that integrates seamlessly with your existing .NET test frameworks (NUnit, xUnit, MSTest) to automatically track test executions, detect flaky tests, and provide confidence scores based on historical data.
+**Xping** is a complete test reliability solution consisting of two components that work together:
 
-### Key Features
+### Xping SDK
+A lightweight library that integrates with your test framework (NUnit, xUnit, MSTest) to automatically track test executions. It collects test results, timing, environment data, and outcomes with minimal overhead (less than 5ms per test).
 
-✅ **Automatic Test Tracking** - Zero-touch integration with your existing tests  
-✅ **Flaky Test Detection** - Identify unreliable tests across multiple runs  
-✅ **Confidence Scores** - Know which test results you can trust  
-✅ **Environment Context** - Track tests across CI/CD, local, and production environments  
-✅ **Performance Insights** - Monitor test execution times and trends  
-✅ **Zero Impact** - <5ms overhead per test, runs silently in background
+### Xping Dashboard
+A cloud platform that analyzes your test data to identify flaky tests, calculate confidence scores, and provide actionable insights. Access it at [app.xping.io](https://app.xping.io).
+
+**How they work together:** The SDK collects test execution data and sends it to the Dashboard, where statistical analysis identifies patterns, detects flaky tests, and helps you understand your test suite's reliability.
+
+---
+
+## What You Get
+
+**Automatic Flaky Test Detection** - Statistical analysis identifies unreliable tests before they become a problem
+
+**Test Reliability Insights** - See which tests you can trust and which need attention
+
+**Zero-Config Setup** - Add one attribute or line of code, start tracking immediately
+
+**Minimal Overhead** - Less than 5ms per test, sub-1KB memory footprint
+
+**Environment Comparison** - Understand how tests behave locally vs. CI/CD
+
+**Historical Trends** - See test reliability over time across all environments
 
 ---
 
 ## Quick Start
 
-Get started with Xping in less than 5 minutes:
+Get started in under 5 minutes:
 
-### Choose Your Test Framework
+### 1. Choose Your Test Framework
 
 <table>
 <tr>
@@ -69,22 +84,30 @@ dotnet add package Xping.Sdk.MSTest
 </tr>
 </table>
 
-### Basic Setup
+### 2. Get Your API Key
 
-1. **Install the package** for your test framework
-2. **Get your API key** from [Xping Dashboard](https://app.xping.io): **Account** → **Settings** → **API & Integration**
-3. **Configure with your credentials**:
-   ```json
-   {
-     "Xping": {
-       "ApiKey": "your-api-key",
-       "ProjectId": "your-project-name"
-     }
-   }
-   ```
-  > **Note:** `ProjectId` is any meaningful identifier you choose (e.g., `"my-app"`). Xping automatically creates the project when tests first run to help you organize your tests. You might have multiple projects to better organize your tests across different applications or components.
-  4. **Apply tracking** to your tests (framework-specific)
-5. **Run tests** as normal - Xping works silently in the background
+Sign up at [app.xping.io](https://app.xping.io) and get your API key from **Account** → **Settings** → **API & Integration**
+
+### 3. Configure Your Project
+
+```json
+{
+  "Xping": {
+    "ApiKey": "your-api-key",
+    "ProjectId": "your-project-name"
+  }
+}
+```
+
+> **Note:** `ProjectId` is any meaningful identifier you choose (e.g., `"my-app"`). Xping automatically creates the project when tests first run. You can have multiple projects to organize tests across different applications or components.
+
+### 4. Add Tracking to Your Tests
+
+Add one attribute or line of code (framework-specific - see guides above)
+
+### 5. Run Your Tests
+
+That's it! Run your tests normally and view insights in the [Xping Dashboard](https://app.xping.io)
 
 ---
 
@@ -133,7 +156,7 @@ Common issues and solutions
 - [Common Issues](troubleshooting/common-issues.md)
 - [Debugging Guide](troubleshooting/debugging.md)
 
-#### API Reference
+#### [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
 Complete API documentation for all SDK components
 
 ---
@@ -142,22 +165,26 @@ Complete API documentation for all SDK components
 
 ### The Problem
 
+**How much time did your team waste debugging flaky tests last week?**
+
+We've all been there. Your test passes locally but fails in CI. You re-run it and it passes. You waste hours investigating only to find out the test itself is unreliable, not your code.
+
 Traditional test frameworks tell you if a test passed or failed—but they don't tell you if you can **trust** that result. Teams waste countless hours:
 
-- 🔄 Re-running tests hoping they'll pass
-- 🐛 Debugging tests that fail intermittently  
-- 🤔 Wondering if failures are real bugs or environmental issues
-- 📊 Lacking visibility into test reliability across environments
+- Re-running tests hoping they'll pass
+- Debugging tests that fail intermittently
+- Wondering if failures are real bugs or environmental issues
+- Lacking visibility into test reliability across environments
 
 ### The Solution
 
 Xping provides:
 
-- **Confidence Scores**: Multi-factor analysis combining pass rates, execution stability, retry behavior, environment consistency, failure patterns, and dependency impact
-- **Flaky Test Detection**: Automatically identify unreliable tests using statistical analysis
-- **Trend Analysis**: Visualize test reliability over time
-- **Environment Context**: Understand where tests fail most
-- **Actionable Insights**: Know which tests need attention
+- **Confidence Scores** - Multi-factor analysis combining pass rates, execution stability, retry behavior, environment consistency, failure patterns, and dependency impact
+- **Flaky Test Detection** - Automatically identify unreliable tests using statistical analysis
+- **Trend Analysis** - Visualize test reliability over time
+- **Environment Context** - Understand where tests fail most
+- **Actionable Insights** - Know which tests need attention
 
 > **How Confidence Scores Work**: Xping analyzes test execution history across six weighted factors: pass rate (35%), execution stability (20%), retry behavior (15%), environment consistency (15%), failure patterns (10%), and dependency impact (5%). This produces a 0-1 score that distinguishes truly flaky tests from consistently passing or failing ones. Learn more in the [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md) guide.
 
@@ -165,11 +192,12 @@ Xping provides:
 
 ## How It Works
 
-1. **Track**: Xping SDK captures test execution data (duration, outcome, environment)
-2. **Analyze**: Our platform analyzes patterns across thousands of test runs
-3. **Detect**: Statistical analysis identifies flaky tests and anomalies
-4. **Alert**: Get notified when test reliability drops
-5. **Improve**: Use insights to fix flaky tests and improve suite health
+1. **Track** - Xping SDK captures test execution data (duration, outcome, environment)
+2. **Send** - SDK securely transmits data to Xping Dashboard
+3. **Analyze** - Dashboard analyzes patterns across thousands of test runs
+4. **Detect** - Statistical analysis identifies flaky tests and anomalies
+5. **Alert** - Get notified when test reliability drops
+6. **Improve** - Use insights to fix flaky tests and improve suite health
 
 ---
 
@@ -177,21 +205,19 @@ Xping provides:
 
 Explore complete working examples:
 
-- 📂 [NUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.NUnit)
-- 📂 [xUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
-- 📂 [MSTest Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.MSTest)
+- [NUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.NUnit)
+- [xUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
+- [MSTest Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.MSTest)
 
 ---
 
 ## Support & Community
 
-We're here to help!
-
-- 📚 **[Documentation](https://docs.xping.io)** - Comprehensive guides and references
-- 💬 **[GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions)** - Ask questions and share feedback
-- 🐛 **[Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues)** - Report bugs and request features
-- 📧 **[Email Support](mailto:support@xping.io)** - Direct support from our team
-- 🌐 **[Official Website](https://xping.io)** - Learn more about Xping
+- [Documentation](https://docs.xping.io) - Comprehensive guides and references
+- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) - Ask questions and share feedback
+- [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) - Report bugs and request features
+- [Email Support](mailto:support@xping.io) - Direct support from our team
+- [Xping Dashboard](https://app.xping.io) - View your test insights
 
 ---
 

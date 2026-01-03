@@ -1,14 +1,14 @@
 <div id="top"></div>
 
 <div align="center">
-  <img src="docs/media/logo.svg" width="50" alt="Xping Logo" />
-  
-  <h1>Xping SDK for .NET</h1>
-  
+  <img src="https://raw.githubusercontent.com/xping-dev/sdk-dotnet/main/docs/media/logo.svg" width="50" alt="Xping Logo" />
+
+  <h1>Xping for .NET</h1>
+
   <p align="center">
-    <strong>Observability for your test suite. Know which tests you can trust.</strong>
+    <strong>Stop guessing. Start knowing which tests you can trust.</strong>
     <br />
-    Stop wasting time on flaky tests. Get actionable insights that improve reliability and confidence.
+    Automatic flaky test detection and test reliability insights for .NET teams.
   </p>
 </div>
 
@@ -21,9 +21,9 @@
 
 <div align="center">
   <p align="center">
-    <a href="#-quick-start"><strong>Quick Start</strong></a> •
-    <a href="#-why-xping"><strong>Why Xping?</strong></a> •
-    <a href="#-features"><strong>Features</strong></a> •
+    <a href="#quick-start"><strong>Quick Start</strong></a> •
+    <a href="#the-problem"><strong>The Problem</strong></a> •
+    <a href="#what-you-get"><strong>What You Get</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
     <a href="https://docs.xping.io/known-limitations.html"><strong>Known Limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
@@ -34,66 +34,67 @@
 
 ---
 
-## 🎯 The Problem
+## The Problem
 
 **How much time did your team waste debugging flaky tests last week?**
 
-Traditional test frameworks tell you if a test passed or failed—but they don't tell you if you can **trust** that result. Developers spend countless hours:
+We've all been there. Your test passes locally but fails in CI. You re-run it and it passes. You waste hours investigating only to find out the test itself is unreliable, not your code.
 
-- 🔄 Re-running tests hoping they'll pass
-- 🐛 Debugging tests that fail intermittently
-- 🤔 Wondering if failures are real bugs or environmental issues
-- 📊 Lacking visibility into test reliability across environments
+Traditional test frameworks tell you if a test passed or failed—but they don't tell you if you can **trust** that result. Teams spend countless hours:
+
+- Re-running tests hoping they'll pass
+- Debugging tests that fail intermittently
+- Wondering if failures are real bugs or environmental issues
+- Lacking visibility into test reliability across environments
 
 **Xping solves this.** We bring observability to testing, giving you confidence scores, flaky test detection, and actionable insights—all with minimal setup.
 
 ---
 
-## 🚀 Why Xping?
+## What You Get
+
+### For Everyone
+- **Automatic Flaky Test Detection** - Statistical analysis identifies unreliable tests before they become a problem
+- **Test Reliability Insights** - See which tests you can trust and which need attention
+- **Zero-Config Setup** - Add one attribute or line of code, start tracking immediately
+- **Minimal Overhead** - Less than 5ms per test, sub-1KB memory footprint
 
 ### For Developers
-- ⚡ **Zero-config setup** - Add one attribute, start tracking
-- 🎯 **Focus on real bugs** - Stop chasing flaky tests
-- 📈 **Understand test health** - See reliability trends over time
+- **Focus on Real Bugs** - Stop chasing flaky tests, focus on actual issues
+- **Environment Comparison** - Understand how tests behave locally vs. CI/CD
+- **Historical Trends** - See test reliability over time
 
-### For QA Leaders
-- 📊 **Data-driven decisions** - Quantify test suite reliability
-- 🔍 **Identify problem areas** - Spot flaky tests automatically
-- 🌐 **Environment insights** - Compare local vs. CI/CD test behavior
+### For QA & Engineering Leaders
+- **Data-Driven Decisions** - Quantify test suite quality with hard metrics
+- **Problem Identification** - Automatically spot flaky tests across your entire suite
+- **CI/CD Intelligence** - Works seamlessly with GitHub Actions, Azure DevOps, Jenkins, GitLab, and more
 
-### For DevOps Engineers
-- 🔧 **CI/CD integration** - Automatic environment detection (GitHub Actions, Azure DevOps, Jenkins, GitLab)
-- 💪 **Resilient by design** - Retry logic, circuit breakers
-- 📦 **Minimal overhead** - <5 ms per test, <1 KB memory footprint
-
----
-
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 🔍 **Test Execution Tracking** | Automatically collect test results, duration, outcomes, and environment metadata |
-| 📊 **Flaky Test Detection** | Identify unreliable tests with confidence scoring |
-| 🌐 **CI/CD Auto-detection** | Works seamlessly with GitHub Actions, Azure DevOps, Jenkins, GitLab, and more |
-| 💪 **Resilient Upload** | Retry policies and circuit breakers for reliable data delivery |
-| ⚡ **Low Overhead** | <5 ms overhead per test, minimal memory footprint |
-| 🎯 **Multi-Framework** | Support for NUnit, xUnit, and MSTest |
-| 🔧 **Flexible Configuration** | JSON, environment variables, or programmatic setup |
+### Technical Features
+- **Test Execution Tracking** - Automatically collect test results, duration, outcomes, and environment metadata
+- **Resilient Upload** - Retry policies and circuit breakers for reliable data delivery
+- **Multi-Framework Support** - NUnit, xUnit, and MSTest
+- **Flexible Configuration** - JSON, environment variables, or programmatic setup
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
-Get started in under 2 minutes:
+Get started in under 5 minutes:
+
+### 1. Install the SDK
 
 ```bash
-# 1. Install the SDK for your test framework
 dotnet add package Xping.Sdk.NUnit    # or Xping.Sdk.XUnit / Xping.Sdk.MSTest
+```
 
-# 2. Configure with environment variables
+### 2. Configure with environment variables
+
+```bash
 export XPING_API_KEY="your-api-key"
 export XPING_PROJECT_ID="your-project-id"
 ```
+
+### 3. Add tracking to your tests
 
 **NUnit** - Add one attribute to track all tests:
 ```csharp
@@ -111,20 +112,21 @@ export XPING_PROJECT_ID="your-project-id"
 public class MyTests : XpingTestBase { }
 ```
 
-Run your tests and view insights at [app.xping.io](https://app.xping.io) 🚀
+### 4. Run your tests
 
-### 📖 Framework-Specific Guides
+That's it! Run your tests normally and view insights at [app.xping.io](https://app.xping.io)
 
-- **[NUnit Setup Guide →](https://docs.xping.io/getting-started/quickstart-nunit.html)** - Detailed setup, attributes, and best practices
-- **[xUnit Setup Guide →](https://docs.xping.io/getting-started/quickstart-xunit.html)** - Custom framework configuration and examples
-- **[MSTest Setup Guide →](https://docs.xping.io/getting-started/quickstart-mstest.html)** - Base class usage and TestContext integration
+### Framework-Specific Guides
+
+- [NUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-nunit.html) - Detailed setup, attributes, and best practices
+- [xUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-xunit.html) - Custom framework configuration and examples
+- [MSTest Setup Guide](https://docs.xping.io/getting-started/quickstart-mstest.html) - Base class usage and TestContext integration
 
 ---
 
-## 🏗️ Architecture 
+## Architecture
 
-
-### Three-Layer Architecture
+### How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -158,11 +160,11 @@ Run your tests and view insights at [app.xping.io](https://app.xping.io) 🚀
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 Xping SDK can be configured via **environment variables**, **appsettings.json**, or **programmatically**.
 
-### Quick Configuration (Environment Variables)
+### Environment Variables (Recommended)
 
 ```bash
 # Required
@@ -174,11 +176,11 @@ export XPING_ENABLED="true"
 export XPING_BATCH_SIZE="100"
 ```
 
-For complete configuration reference including JSON config, CI/CD integration examples (GitHub Actions, Azure DevOps, Jenkins), and advanced options, see the [Configuration Guide](https://docs.xping.io/configuration/configuration-reference.html).
+See the [Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html) for complete options including JSON configuration, CI/CD integration examples (GitHub Actions, Azure DevOps, Jenkins), and advanced settings.
 
 ---
 
-## 📊 What Gets Collected?
+## What Gets Collected?
 
 ### Test Execution Data
 - Test name and fully qualified name
@@ -198,79 +200,66 @@ For complete configuration reference including JSON config, CI/CD integration ex
 
 ---
 
-## 🔒 Privacy & Security
+## Privacy & Security
 
 We take data privacy seriously. Here's exactly what we collect and don't collect:
 
 ### What We DON'T Collect
-- ✅ No source code
-- ✅ No sensitive data from test assertions
-- ✅ No credentials or secrets
-- ✅ No personally identifiable information (PII)
+- No source code
+- No sensitive data from test assertions
+- No credentials or secrets
+- No personally identifiable information (PII)
 
 ### Security Measures
-- 🔐 **Encryption**: All data transmitted over HTTPS
-- 🔑 **API Key Security**: Environment variable support (never commit keys to source control)
-- 🗄️ **Data Retention**: Configurable retention policies
-- 📖 **Open Source**: Full transparency - [review the code yourself](https://github.com/xping-dev/sdk-dotnet)
-- ⚙️ **Configurable Collection**: Stack traces and sampling are optional
+- **Encryption** - All data transmitted over HTTPS
+- **API Key Security** - Environment variable support (never commit keys to source control)
+- **Data Retention** - Configurable retention policies
+- **Open Source** - Full transparency, [review the code yourself](https://github.com/xping-dev/sdk-dotnet)
+- **Configurable Collection** - Stack traces and sampling are optional
 
 ---
 
-## 🎯 Use Cases
+## What Problems Does Xping Solve?
 
-### 1. Identify Flaky Tests
-Track test outcomes over time to identify tests with inconsistent results:
-```
-✓ LoginTest: 95% reliability (190/200 passed)
-✗ SearchTest: 60% reliability (120/200 passed) ⚠️ FLAKY
-```
+Xping helps you identify and understand common test reliability issues. The SDK collects test execution data, and the Dashboard analyzes it to detect:
 
-### 2. Monitor Test Duration
-Identify slow tests that impact CI/CD pipeline performance:
-```
-⚠️ DatabaseIntegrationTest: avg 45 s (up from 12 s last week)
-✓ UnitTests: avg 150 ms (stable)
-```
+- **Race Conditions** - Tests that fail intermittently due to timing issues
+- **External Service Dependencies** - Tests affected by network or service availability
+- **Shared State Issues** - Tests that interfere with each other
+- **Time-Based Flakiness** - Tests that fail at specific times or dates
+- **Resource Exhaustion** - Tests that leak resources over time
+- **Non-Deterministic Data** - Tests with random or unpredictable data
 
-### 3. Environment Comparison
-Compare test behavior across environments:
-```
-Production Warmup: 98% reliability
-Staging: 95% reliability  
-Local Development: 85% reliability ⚠️
-```
+Once tests are tracked with the SDK, the [Xping Dashboard](https://app.xping.io) provides:
+- Reliability scores and confidence metrics for each test
+- Automatic flaky test detection with pattern analysis
+- Environment comparison (local vs. CI/CD behavior)
+- Historical trends and performance insights
 
-### 4. CI/CD Pipeline Insights
-Understand test reliability across different build configurations:
-```
-main branch: 97% reliability
-feature branches: 89% reliability
-PR builds: 92% reliability
-```
+For detailed examples of each pattern and how Xping detects them, see the [Common Flaky Patterns Guide](https://docs.xping.io/guides/working-with-tests/common-flaky-patterns.html).
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 **Essential Resources:**
-- 🚀 [Getting Started Guide](https://docs.xping.io/index.html#quick-start)
-- ⚠️ [Known Limitations](https://docs.xping.io/known-limitations.html)
-- 🔧 [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
-- 📖 [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
+- [Getting Started Guide](https://docs.xping.io/index.html#quick-start)
+- [Known Limitations](https://docs.xping.io/known-limitations.html)
+- [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
+- [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
 
-**Complete documentation available at [docs.xping.io](https://docs.xping.io)**
+Complete documentation available at [docs.xping.io](https://docs.xping.io)
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Whether it's:
 
-- 🐛 Bug reports
-- 💡 Feature requests  
-- 📖 Documentation improvements
-- 🔧 Code contributions
+- Bug reports
+- Feature requests
+- Documentation improvements
+- Code contributions
 
 ### Development Setup
 
@@ -296,46 +285,46 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
-## 📈 Roadmap
+## Roadmap
 
 Check our [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones) for planned features:
 
-- **[Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1)** - Currently in progress
-- **[Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2)** - Future considerations
+- [Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1) - Currently in progress
+- [Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2) - Future considerations
 
 ### Planned Features
-- 📊 Enhanced flaky test analytics
-- 🔍 Test failure categorization (infrastructure vs. code)
-- 🌐 Multi-language support (Java, Python, JavaScript)
-- 📦 Self-hosted deployment option
+- Enhanced flaky test analytics
+- Test failure categorization (infrastructure vs. code)
+- Multi-language support (Java, Python, JavaScript)
+- Self-hosted deployment option
 
 ---
 
-## 💬 Support & Community
+## Support & Community
 
-- 💬 [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) - Ask questions, share ideas
-- 🐛 [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) - Report bugs, request features
-- 📧 [Email Support](mailto:support@xping.io) - Direct support
-- 📖 [Documentation](https://docs.xping.io) - Comprehensive guides
+- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) - Ask questions, share ideas
+- [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) - Report bugs, request features
+- [Email Support](mailto:support@xping.io) - Direct support
+- [Documentation](https://docs.xping.io) - Comprehensive guides
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## ⭐ Show Your Support
-
-If Xping helps you build better software, give us a ⭐️ on GitHub!
-
 <div align="center">
   <p>
-    <strong>Built with ❤️ by developers who hate flaky tests</strong>
+    <strong>Built by developers who hate flaky tests</strong>
   </p>
   <p>
     <sub>Made by <a href="https://xping.io">Xping</a> • Follow us on <a href="https://github.com/xping-dev">GitHub</a></sub>
+  </p>
+  <br />
+  <p>
+    If Xping helps you build better software, give us a ⭐ on GitHub!
   </p>
 </div>
 

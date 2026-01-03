@@ -126,9 +126,9 @@ XpingContext.Initialize(config);
 
 ### ProjectId
 
-**Type:** `string`  
-**Default:** *None*  
-**Required:** Yes  
+**Type:** `string`
+**Default:** *None*
+**Required:** Yes
 **Environment Variable:** `XPING_PROJECTID`
 
 A user-defined identifier for your project. Choose any meaningful name — Xping automatically creates the project when your tests first run.
@@ -136,9 +136,16 @@ A user-defined identifier for your project. Choose any meaningful name — Xping
 **Characteristics:**
 - User-defined, not retrieved from the platform
 - Must be unique within your workspace
-- Can be any string (alphanumeric, hyphens, underscores recommended)
-- Case-insensitive (e.g., `"my-app"` and `"My-App"` refer to the same project)
+- Case-insensitive (e.g., `"my-app"` and `"My-App"` refer to the same project and are normalized to lowercase)
 - Commonly follows naming conventions: `"my-app"`, `"payment-service"`, `"frontend"`
+
+**Validation Rules:**
+- **Required:** Cannot be null, empty, or whitespace-only
+- **Character Set:** ASCII alphanumeric characters, hyphens (`-`), and underscores (`_`) only
+- **Format:** Must start with an alphanumeric character (a-z, 0-9), followed by any combination of alphanumeric, hyphens, or underscores
+- **Whitespace:** No spaces or whitespace characters allowed (including internal whitespace)
+- **Maximum Length:** 255 characters
+- **Normalization:** Automatically converted to lowercase
 
 > **Important:** Once selected, avoid changing your ProjectId. Modifying it will create a new project in Xping, causing previously uploaded test executions to become disassociated from your current project. There is currently no automated migration path to transfer historical data between projects.
 

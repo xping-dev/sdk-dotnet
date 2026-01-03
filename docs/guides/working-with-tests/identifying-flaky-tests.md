@@ -30,9 +30,9 @@ The confidence score combines six key factors to give you a complete picture of 
 
 The easiest way to find flaky tests is through the **Flaky Tests** tab in the dashboard:
 
-1. Navigate to the Xping Dashboard
+1. Navigate to the [Xping Dashboard](https://app.xping.io)
 2. Click on the **Flaky Tests** tab
-3. View tests filtered to show only those with confidence scores below 0.60
+3. View tests filtered to show only those detected as flaky (with confidence scores below 0.60)
 4. Sort by confidence score (ascending) to see the most problematic tests first
 
 This filtered view helps you prioritize reliability improvements by showing only tests that need attention.
