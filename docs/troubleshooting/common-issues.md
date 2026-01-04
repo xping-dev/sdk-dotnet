@@ -383,7 +383,7 @@ Environment variables must use double underscores for nested properties:
 ❌ **Incorrect:**
 ```bash
 export XPING.APIKEY="key"           # Wrong: uses dot
-export XPING_API_KEY="key"          # Wrong: snake_case
+export XPING_APIKEY="key"          # Wrong: snake_case
 ```
 
 ✅ **Correct:**
@@ -661,8 +661,8 @@ Use CI/CD secret management:
 ```yaml
 - name: Run Tests
   env:
-    XPING__APIKEY: ${{ secrets.XPING_API_KEY }}
-    XPING__PROJECTID: ${{ secrets.XPING_PROJECT_ID }}
+    XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
+    XPING__PROJECTID: ${{ secrets.XPING_PROJECTID }}
   run: dotnet test
 ```
 
@@ -682,8 +682,8 @@ test:
   script:
     - dotnet test
   variables:
-    XPING__APIKEY: $XPING_API_KEY      # From GitLab CI/CD variables
-    XPING__PROJECTID: $XPING_PROJECT_ID
+    XPING__APIKEY: $XPING_APIKEY      # From GitLab CI/CD variables
+    XPING__PROJECTID: $XPING_PROJECTID
 ```
 
 See [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) for platform-specific instructions.

@@ -13,7 +13,7 @@ using Core.Diagnostics;
 using Xping.Sdk.Core.Environment;
 using Core.Models;
 using Core.Upload;
-using Xping.Sdk.MSTest.Diagnostics;
+using Diagnostics;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in MSTest test assemblies.
@@ -28,6 +28,7 @@ public static class XpingContext
     private static XpingConfiguration? _configuration;
     private static TestSession? _currentSession;
     private static ExecutionTracker? _executionTracker;
+    private static bool _configErrorsLogged;
 
     /// <summary>
     /// Gets a value indicating whether the context has been initialized.
@@ -170,7 +171,7 @@ public static class XpingContext
     {
         _configuration = configuration;
 
-        // Create logger based on configuration
+        // Create a logger based on configuration
         // Use MSTest-specific logger for proper test output integration
         var logger = configuration.Logger ?? (configuration.LogLevel == XpingLogLevel.None
             ? XpingNullLogger.Instance
@@ -178,13 +179,14 @@ public static class XpingContext
 
         // Validate configuration and log any issues
         var errors = configuration.Validate();
-        if (errors.Count > 0)
+        if (!_configErrorsLogged && errors.Count > 0)
         {
             logger.LogError("Invalid configuration:");
             foreach (var error in errors)
             {
                 logger.LogError($"  - {error}");
             }
+            _configErrorsLogged = true;
         }
 
         // Check for common misconfigurations

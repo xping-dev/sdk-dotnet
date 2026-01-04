@@ -787,7 +787,7 @@ XpingContext.Initialize(config);
 
 ```yaml
 env:
-  XPING_APIKEY: ${{ secrets.XPING_API_KEY }}
+  XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
   XPING_PROJECTID: "my-app"
   XPING_ENVIRONMENT: "CI"
   XPING_ENABLED: "true"
@@ -803,7 +803,7 @@ using Xping.Sdk.Core.Configuration;
 
 // Fluent builder pattern
 var config = new XpingConfigurationBuilder()
-    .WithApiKey(Environment.GetEnvironmentVariable("XPING_API_KEY"))
+    .WithApiKey(Environment.GetEnvironmentVariable("XPING_APIKEY"))
     .WithProjectId("my-application")
     .WithBatchSize(200)
     .WithFlushInterval(TimeSpan.FromMinutes(1))

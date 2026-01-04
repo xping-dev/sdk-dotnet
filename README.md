@@ -88,8 +88,8 @@ dotnet add package Xping.Sdk.NUnit    # or Xping.Sdk.XUnit / Xping.Sdk.MSTest
 ### 2. Configure with environment variables
 
 ```bash
-export XPING_API_KEY="your-api-key"
-export XPING_PROJECT_ID="your-project-id"
+export XPING_APIKEY="your-api-key"
+export XPING_PROJECTID="your-project-id"
 ```
 
 ### 3. Add tracking to your tests
@@ -166,8 +166,8 @@ Xping SDK can be configured via **environment variables**, **appsettings.json**,
 
 ```bash
 # Required
-export XPING_API_KEY="your-api-key"
-export XPING_PROJECT_ID="your-project-id"
+export XPING_APIKEY="your-api-key"
+export XPING_PROJECTID="your-project-id"
 
 # Optional
 export XPING_ENABLED="true"

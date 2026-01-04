@@ -49,6 +49,27 @@ public class CalculatorTests : XpingTestBase
         Assert.Fail("Should not run");
     }
 
+    /// <summary>
+    /// FLAKY TEST TYPE 1: Time-based race condition.
+    /// This test fails intermittently based on timing - simulates a race condition
+    /// or timeout issue that occurs unpredictably in real-world scenarios.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Flaky")]
+    [TestCategory("RaceCondition")]
+    public async Task FlakyTest_RaceCondition_FailsIntermittently()
+    {
+        // Simulate a race condition that fails ~40% of the time
+        var delayMs = DateTime.Now.Millisecond % 100;
+        await Task.Delay(delayMs);
+
+        // This assertion fails when the delay is less than 60ms
+        // Simulates a timing-dependent operation that doesn't always complete in time
+        Assert.IsTrue(delayMs >= 60,
+            $"Race condition detected: operation completed too quickly ({delayMs}ms). " +
+            "This simulates a test that depends on timing and fails intermittently.");
+    }
+
     [DataTestMethod]
     [DataRow(2, 3, 5)]
     [DataRow(10, 5, 15)]
