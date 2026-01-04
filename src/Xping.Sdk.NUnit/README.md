@@ -100,7 +100,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
   "Xping": {
     "ApiKey": "your-api-key-here",
     "ProjectId": "your-project-id-here",
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io/api/v1",
     "Environment": "Development",
     "EnableOfflineQueue": true,
     "MaxRetries": 3
@@ -113,7 +113,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 - `ProjectId` - Your Xping project identifier (mandatory)
 
 **Optional Fields:**
-- `ApiEndpoint` - API server URL (default: `https://api.xping.io`)
+- `ApiEndpoint` - API server URL (default: `https://upload.xping.io/api/v1`)
 - `Environment` - Environment name (default: `Local`)
 - `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
 - `MaxRetries` - Maximum retry attempts (default: `3`)

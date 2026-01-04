@@ -97,7 +97,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the minimum log level for SDK diagnostics output.
-    /// Default is Info. Set to None to disable all logging.
+    /// Default is Info. Set XpingLogLevel.None to disable all logging.
     /// </summary>
     public XpingLogLevel LogLevel { get; set; } = XpingLogLevel.Info;
 
