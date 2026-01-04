@@ -230,6 +230,9 @@ If uploads fail (network issues, invalid credentials), the SDK logs errors but d
    }
    ```
 
+  > This functionality has not been tested in production environments. 
+  > It is provided as a troubleshooting option for evaluation purposes only.
+
 ---
 
 ### Circuit Breaker Open

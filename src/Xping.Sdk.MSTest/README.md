@@ -361,10 +361,22 @@ If no configuration is found, the adapter will:
 
 ### Network Issues
 
-When API is unavailable:
-- Tests are queued locally in `~/.xping/queue`
-- Automatic retry on next successful connection
-- No test execution impact
+**Verify API Connectivity**
+
+Check if the Xping API endpoint is accessible from your environment:
+
+```bash
+# Test connectivity to the API endpoint
+curl -I https://upload.xping.io/api/v1/health
+
+# Or using PowerShell
+Invoke-WebRequest -Uri https://upload.xping.io/api/v1/health -Method Head
+```
+
+If the endpoint is unreachable, check:
+- Network connectivity and firewall rules
+- Corporate proxy settings
+- DNS resolution for `upload.xping.io`
 
 ## Sample Project
 
