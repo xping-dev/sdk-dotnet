@@ -27,6 +27,7 @@ public static class XpingContext
     private static XpingConfiguration? _configuration;
     private static TestSession? _currentSession;
     private static bool _configErrorsLogged;
+    private static bool _initializedLogged;
 
     /// <summary>
     /// Gets a value indicating whether the context has been initialized.
@@ -153,13 +154,15 @@ public static class XpingContext
     {
         lock (_initializationLock)
         {
+            IsInitialized = false;
+            _initializedLogged = false;
+            _configErrorsLogged = false;
             _collector = null;
             _uploader = null;
             _httpClient?.Dispose();
             _httpClient = null;
             _configuration = null;
             _currentSession = null;
-            IsInitialized = false;
         }
     }
 
@@ -182,6 +185,7 @@ public static class XpingContext
             {
                 logger.LogError($"  - {error}");
             }
+
             _configErrorsLogged = true;
         }
 
@@ -218,16 +222,21 @@ public static class XpingContext
 
         IsInitialized = true;
 
-        // Log successful initialization
-        logger.LogInfo(
-            $"Project: {configuration.ProjectId} | " +
-            $"Environment: {_currentSession.EnvironmentInfo.EnvironmentName}");
-        logger.LogDebug($"Endpoint: {configuration.ApiEndpoint}");
-        logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0}");
-
-        if (configuration.SamplingRate < 1.0)
+        if (!_initializedLogged)
         {
-            logger.LogInfo($"Sampling Rate: {configuration.SamplingRate:P0} (approximately {(int)(configuration.SamplingRate * 100)} out of 100 tests will be tracked)");
+            // Log successful initialization
+            logger.LogInfo(
+                $"Project: {configuration.ProjectId} | " +
+                $"Environment: {_currentSession.EnvironmentInfo.EnvironmentName}");
+            logger.LogDebug($"Endpoint: {configuration.ApiEndpoint}");
+            logger.LogDebug($"Batch Size: {configuration.BatchSize} | Sampling: {configuration.SamplingRate:P0}");
+
+            if (configuration.SamplingRate < 1.0)
+            {
+                logger.LogInfo(
+                    $"Sampling Rate: {configuration.SamplingRate:P0} (approximately {(int)(configuration.SamplingRate * 100)} out of 100 tests will be tracked)");
+            }
+            _initializedLogged = true;
         }
 
         return _collector;

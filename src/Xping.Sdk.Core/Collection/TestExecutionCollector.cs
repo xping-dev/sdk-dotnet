@@ -53,7 +53,7 @@ public sealed class TestExecutionCollector : ITestExecutionCollector
         _flushLock = new SemaphoreSlim(1, 1);
         _random = new Random();
 
-        // Set up automatic flush timer if enabled
+        // Set up the automatic flush timer if enabled
         if (_config.Enabled && _config.FlushInterval > TimeSpan.Zero)
         {
             _flushTimer = new Timer(

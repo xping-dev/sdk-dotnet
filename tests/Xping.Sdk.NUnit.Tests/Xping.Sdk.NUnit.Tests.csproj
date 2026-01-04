@@ -18,10 +18,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Xping.Sdk.NUnit\Xping.Sdk.NUnit.csproj" />
+    <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

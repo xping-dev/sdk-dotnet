@@ -174,11 +174,32 @@ public class XpingSetup
 
 ## Step 4: Track Your Tests
 
-Apply the `[XpingTrack]` attribute to your test fixtures or individual test methods:
+Apply the `[XpingTrack]` attribute at the assembly, class, or method level depending on your needs:
 
-### Class-Level Tracking (Recommended)
+### Assembly-Level Tracking (Most Convenient)
 
-Track all tests in a fixture:
+Track all tests in your entire test project by adding the attribute to an `AssemblyInfo.cs` file:
+
+```csharp
+using Xping.Sdk.NUnit;
+
+// Track all tests in this assembly
+[assembly: XpingTrack]
+```
+
+Create this file at the root of your test project. Make sure it's included in your `.csproj`:
+
+```xml
+<ItemGroup>
+  <Compile Include="AssemblyInfo.cs" />
+</ItemGroup>
+```
+
+> **💡 Tip:** This is the most convenient option for comprehensive test tracking. All current and future tests in the project will be automatically tracked without additional attributes.
+
+### Class-Level Tracking
+
+Track all tests in a specific fixture:
 
 ```csharp
 using NUnit.Framework;
