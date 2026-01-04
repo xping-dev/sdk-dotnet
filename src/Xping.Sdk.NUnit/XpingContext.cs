@@ -14,7 +14,7 @@ using Core.Configuration;
 using Core.Diagnostics;
 using Core.Models;
 using Core.Upload;
-using Xping.Sdk.NUnit.Diagnostics;
+using Diagnostics;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in NUnit tests.
@@ -28,6 +28,7 @@ public static class XpingContext
     private static HttpClient? _httpClient;
     private static TestSession? _currentSession;
     private static ExecutionTracker? _executionTracker;
+    private static bool _configErrorsLogged;
 
     /// <summary>
     /// Gets a value indicating whether the context is initialized.
@@ -196,13 +197,14 @@ public static class XpingContext
 
         // Validate configuration and log any issues
         var errors = configuration.Validate();
-        if (errors.Count > 0)
+        if (!_configErrorsLogged && errors.Count > 0)
         {
             logger.LogError("Invalid configuration:");
             foreach (var error in errors)
             {
                 logger.LogError($"  - {error}");
             }
+            _configErrorsLogged = true;
         }
 
         // Check for common misconfigurations

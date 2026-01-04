@@ -85,8 +85,8 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 - `MaxRetries` - Maximum retry attempts (default: `3`)
 
 Or use environment variables:
-- `XPING_API_KEY` (required)
-- `XPING_PROJECT_ID` (required)
+- `XPING_APIKEY` (required)
+- `XPING_PROJECTID` (required)
 - `XPING_API_ENDPOINT`
 - `XPING_ENVIRONMENT`
 

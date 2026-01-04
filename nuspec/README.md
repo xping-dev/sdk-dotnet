@@ -120,8 +120,8 @@ Configure Xping SDK using `appsettings.json` or environment variables:
 ### Environment Variables (Recommended for CI/CD)
 
 ```bash
-export XPING_API_KEY="your-api-key"
-export XPING_PROJECT_ID="your-project-id"
+export XPING_APIKEY="your-api-key"
+export XPING_PROJECTID="your-project-id"
 export XPING_ENABLED="true"
 ```
 

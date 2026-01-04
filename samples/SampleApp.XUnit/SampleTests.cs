@@ -5,7 +5,9 @@
 
 namespace SampleApp.XUnit;
 
-using global::Xunit;
+using Xunit;
+
+#pragma warning disable CA1707 // Identifiers should not contain underscores
 
 /// <summary>
 /// Sample tests demonstrating xUnit adapter usage with Xping SDK.
@@ -13,7 +15,6 @@ using global::Xunit;
 /// </summary>
 public class SampleTests
 {
-
     [Fact]
     [Trait("Category", "Integration")]
     public void PassingTestIsTracked()
@@ -33,6 +34,30 @@ public class SampleTests
     public void ThrowingTestIsTracked()
     {
         throw new InvalidOperationException("This is a test exception for tracking purposes.");
+    }
+
+    /// <summary>
+    /// FLAKY TEST TYPE 3: Environment/State-based failure.
+    /// This test fails intermittently based on system state (file system, process count, etc.).
+    /// Simulates tests that depend on machine state, available resources, or global state.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Flaky")]
+    [Trait("Category", "StateDependency")]
+    public void FlakyTest_EnvironmentState_FailsBasedOnSystemState()
+    {
+        // Simulate environment-dependent behavior using process count as proxy
+        // In real scenarios, this could be file locks, port availability, memory pressure, etc.
+        var processCount = System.Diagnostics.Process.GetProcesses().Length;
+        var isEvenSecond = DateTime.Now.Second % 2 == 0;
+
+        // Fails when both conditions are met (approximately 25% of the time)
+        // Simulates tests that depend on external system state
+        var shouldPass = processCount % 3 != 0 || !isEvenSecond;
+
+        Assert.True(shouldPass,
+            $"Environment state conflict detected (processes: {processCount}, second: {DateTime.Now.Second}). " +
+            "This simulates a test that fails due to system state like file locks, port conflicts, or resource contention.");
     }
 
     [Fact]
@@ -75,18 +100,13 @@ public class SampleTests
 
     public static TheoryData<string, int> GetTestData()
     {
-        return new TheoryData<string, int>
-        {
-            { "hello", 5 },
-            { "world", 5 },
-            { "xunit", 5 },
-        };
+        return new TheoryData<string, int> { { "hello", 5 }, { "world", 5 }, { "xunit", 5 }, };
     }
 }
 
-/// <summary>
-/// Sample tests demonstrating test collections and fixtures.
-/// </summary>
+// <summary>
+// Sample tests demonstrating test collections and fixtures.
+// </summary>
 [Collection("Sample Collection")]
 public class CollectionTests
 {

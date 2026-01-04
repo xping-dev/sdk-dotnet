@@ -8,11 +8,13 @@ namespace SampleApp.NUnit;
 using global::NUnit.Framework;
 using Xping.Sdk.NUnit;
 
+#pragma warning disable CA1707 // Identifiers should not contain underscores
+
 /// <summary>
 /// Sample tests demonstrating NUnit adapter usage with Xping SDK.
 /// </summary>
 [TestFixture]
-[XpingTrack] // Apply to entire fixture - tracks all tests in this class
+[XpingTrack] // Apply to the entire fixture-tracks all tests in this class
 public class SampleTests
 {
     [SetUp]
@@ -42,6 +44,33 @@ public class SampleTests
     public void ThrowingTestIsTracked()
     {
         throw new InvalidOperationException("This is a test exception for tracking purposes.");
+    }
+
+    /// <summary>
+    /// FLAKY TEST TYPE 2: Random/Probabilistic failure.
+    /// This test fails randomly ~30% of the time, simulating tests that depend
+    /// on non-deterministic behavior like network calls, external APIs, or random data.
+    /// </summary>
+    [Test]
+    [Category("Flaky")]
+    [Category("Random")]
+    [Description("Demonstrates a flaky test that fails randomly due to probabilistic behavior")]
+    public void FlakyTest_RandomFailure_FailsProbabilistically()
+    {
+        // Use a pseudo-random seed based on time to get different results per run
+        var seed = DateTime.Now.Millisecond + DateTime.Now.Second * 1000;
+        var random = new Random(seed);
+        // CA5394 suppressed: Random generator used intentionally to simulate non-deterministic test behavior
+        // for observability testing
+#pragma warning disable CA5394 // Do not use insecure randomness
+        var randomValue = random.Next(0, 100);
+#pragma warning restore CA5394 // Do not use insecure randomness
+
+        // Fails approximately 30% of the time
+        // Simulates unreliable external dependencies or non-deterministic operations
+        Assert.That(randomValue, Is.GreaterThan(30),
+            $"Random failure occurred (value: {randomValue}). " +
+            "This simulates a test with non-deterministic behavior like flaky network calls or database connections.");
     }
 
     [Test]
@@ -84,7 +113,7 @@ public class SampleTests
 public class MethodLevelTracking
 {
     [Test]
-    [XpingTrack] // Apply to specific method only
+    [XpingTrack] // Apply to a specific method only
     [Description("Only this test will be tracked")]
     public void TrackedTest()
     {

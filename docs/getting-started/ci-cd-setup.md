@@ -37,8 +37,8 @@ Store your Xping credentials as GitHub Secrets:
 
 1. Go to **Repository Settings** → **Secrets and variables** → **Actions**
 2. Add the following secrets:
-   - `XPING_API_KEY`: Your Xping API key (from Account → Settings → API & Integration)
-   - `XPING_PROJECT_ID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_APIKEY`: Your Xping API key (from Account → Settings → API & Integration)
+   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
 
 ### Workflow Example
 
@@ -72,8 +72,8 @@ jobs:
       
       - name: Run tests with Xping
         env:
-          XPING__APIKEY: ${{ secrets.XPING_API_KEY }}
-          XPING__PROJECTID: ${{ secrets.XPING_PROJECT_ID }}
+          XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
+          XPING__PROJECTID: ${{ secrets.XPING_PROJECTID }}
           XPING__ENABLED: true
           XPING__AUTODETECTCIENVIRONMENT: true
         run: dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
@@ -169,8 +169,8 @@ Store your Xping credentials as CI/CD Variables:
 
 1. Go to **Settings** → **CI/CD** → **Variables**
 2. Add the following variables:
-   - `XPING_API_KEY`: Your Xping API key (mark as masked)
-   - `XPING_PROJECT_ID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_APIKEY`: Your Xping API key (mark as masked)
+   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
 
 ### Pipeline Example (.gitlab-ci.yml)
 
@@ -205,8 +205,8 @@ test:
   script:
     - dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
   variables:
-    XPING__APIKEY: $XPING_API_KEY
-    XPING__PROJECTID: $XPING_PROJECT_ID
+    XPING__APIKEY: $XPING_APIKEY
+    XPING__PROJECTID: $XPING_PROJECTID
 ```
 
 ### Captured Metadata
@@ -296,8 +296,8 @@ Store your Xping credentials as Environment Variables:
 
 1. Go to **Project Settings** → **Environment Variables**
 2. Add the following variables:
-   - `XPING_API_KEY`: Your Xping API key
-   - `XPING_PROJECT_ID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_APIKEY`: Your Xping API key
+   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
 
 ### Pipeline Example (.circleci/config.yml)
 
@@ -313,8 +313,8 @@ jobs:
       - image: mcr.microsoft.com/dotnet/sdk:8.0
     
     environment:
-      XPING__APIKEY: $XPING_API_KEY
-      XPING__PROJECTID: $XPING_PROJECT_ID
+      XPING__APIKEY: $XPING_APIKEY
+      XPING__PROJECTID: $XPING_PROJECTID
       XPING__ENABLED: "true"
       XPING__AUTODETECTCIENVIRONMENT: "true"
     
@@ -358,7 +358,7 @@ Xping automatically captures:
 **✅ Do:**
 ```yaml
 env:
-  XPING__APIKEY: ${{ secrets.XPING_API_KEY }}
+  XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
 ```
 
 **❌ Don't:**
@@ -543,7 +543,7 @@ Track different branches in different Xping projects:
 
 - name: Run tests
   env:
-    XPING__APIKEY: ${{ secrets.XPING_API_KEY }}
+    XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
   run: dotnet test
 ```
 

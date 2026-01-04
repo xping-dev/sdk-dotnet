@@ -42,8 +42,8 @@ public class ConfigurationBenchmarks
         // Prepare environment variables simulation
         _envVariables = new Dictionary<string, string?>
         {
-            ["XPING_API_KEY"] = "test-api-key",
-            ["XPING_PROJECT_ID"] = "test-project-id",
+            ["XPING_APIKEY"] = "test-api-key",
+            ["XPING_PROJECTID"] = "test-project-id",
             ["XPING_ENABLED"] = "true",
             ["XPING_BATCH_SIZE"] = "100"
         };

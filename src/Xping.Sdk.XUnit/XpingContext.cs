@@ -12,7 +12,7 @@ using Core.Configuration;
 using Core.Diagnostics;
 using Core.Models;
 using Core.Upload;
-using Xping.Sdk.XUnit.Diagnostics;
+using Diagnostics;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in xUnit test assemblies.
@@ -26,6 +26,7 @@ public static class XpingContext
     private static HttpClient? _httpClient;
     private static XpingConfiguration? _configuration;
     private static TestSession? _currentSession;
+    private static bool _configErrorsLogged;
 
     /// <summary>
     /// Gets a value indicating whether the context has been initialized.
@@ -166,7 +167,7 @@ public static class XpingContext
     {
         _configuration = configuration;
 
-        // Create logger based on configuration
+        // Create a logger based on configuration
         // Use xUnit-specific logger for proper test output integration
         var logger = configuration.Logger ?? (configuration.LogLevel == XpingLogLevel.None
             ? XpingNullLogger.Instance
@@ -174,29 +175,30 @@ public static class XpingContext
 
         // Validate configuration and log any issues
         var errors = configuration.Validate();
-        if (errors.Count > 0)
+        if (!_configErrorsLogged && errors.Count > 0)
         {
             logger.LogError("Invalid configuration:");
             foreach (var error in errors)
             {
                 logger.LogError($"  - {error}");
             }
+            _configErrorsLogged = true;
         }
 
         // Check for common misconfigurations
         if (!configuration.Enabled)
         {
-            logger.LogWarning("SDK is disabled (Enabled=false) - test executions will not be tracked");
+            logger.LogDebug("SDK is disabled (Enabled=false) - test executions will not be tracked");
         }
 
         if (string.IsNullOrWhiteSpace(configuration.ApiKey))
         {
-            logger.LogWarning("API Key not configured - uploads will be skipped");
+            logger.LogDebug("API Key not configured - uploads will be skipped");
         }
 
         if (string.IsNullOrWhiteSpace(configuration.ProjectId))
         {
-            logger.LogWarning("Project ID not configured - uploads will be skipped");
+            logger.LogDebug("Project ID not configured - uploads will be skipped");
         }
 
         _httpClient = new HttpClient();
