@@ -1,10 +1,14 @@
 <div id="top"></div>
 
 <div align="center">
+  <p align="center">
+    <a href="https://www.nuget.org/packages/Xping.Sdk.Core/"><img src="https://img.shields.io/nuget/v/Xping.Sdk.Core?label=Xping.Sdk.Core" alt="NuGet"></a>
+    <a href="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml"><img src="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+    <a href="https://codecov.io/gh/xping-dev/sdk-dotnet"><img src="https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO" alt="codecov"></a>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  </p>
   <img src="https://raw.githubusercontent.com/xping-dev/sdk-dotnet/main/docs/media/logo.svg" width="50" alt="Xping Logo" />
-
   <h1>Xping for .NET</h1>
-
   <p align="center">
     <strong>Stop guessing. Start knowing which tests you can trust.</strong>
     <br />
@@ -12,12 +16,6 @@
   </p>
 </div>
 
-<p align="center">
-  <a href="https://www.nuget.org/packages/Xping.Sdk.Core/"><img src="https://img.shields.io/nuget/v/Xping.Sdk.Core?label=Xping.Sdk.Core" alt="NuGet"></a>
-  <a href="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml"><img src="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://codecov.io/gh/xping-dev/sdk-dotnet"><img src="https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO" alt="codecov"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-</p>
 
 <div align="center">
   <p align="center">
@@ -155,7 +153,7 @@ That's it! Run your tests normally and view insights at [app.xping.io](https://a
           │  • Resilient Upload                 │
           └──────────────────┬──────────────────┘
                              ▼
-                    Xping Platform API
+                    Xping Cloud Platform
 ```
 
 ---

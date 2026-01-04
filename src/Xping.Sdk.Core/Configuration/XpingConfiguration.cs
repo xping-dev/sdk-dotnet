@@ -22,7 +22,7 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
-    public string ApiEndpoint { get; set; } = "https://api.xping.io";
+    public string ApiEndpoint { get; set; } = "https://upload.xping.io/api/v1";
 
     /// <summary>
     /// Gets or sets the API key for authentication.
@@ -97,7 +97,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the minimum log level for SDK diagnostics output.
-    /// Default is Info. Set to None to disable all logging.
+    /// Default is Info. Set XpingLogLevel.None to disable all logging.
     /// </summary>
     public XpingLogLevel LogLevel { get; set; } = XpingLogLevel.Info;
 

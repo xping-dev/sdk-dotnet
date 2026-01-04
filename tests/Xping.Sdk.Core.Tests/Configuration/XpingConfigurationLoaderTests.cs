@@ -27,7 +27,7 @@ public class XpingConfigurationLoaderTests
 
             // Assert
             Assert.NotNull(config);
-            Assert.Equal("https://api.xping.io", config.ApiEndpoint);
+            Assert.Equal("https://upload.xping.io/api/v1", config.ApiEndpoint);
             Assert.Equal("Local", config.Environment);
         }
         finally

@@ -110,7 +110,7 @@ Configure Xping SDK using `appsettings.json` or environment variables:
     "ApiKey": "your-api-key",
     "ProjectId": "your-project-id",
     "Enabled": true,
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io/api/v1",
     "BatchSize": 100,
     "FlushInterval": "00:00:30"
   }
