@@ -254,10 +254,22 @@ If no configuration is found, the adapter will:
 
 ### Network Issues
 
-When API is unavailable:
-- Uploads are retried automatically with exponential backoff
-- Tests continue executing without interruption
-- No test execution impact
+**Verify API Connectivity**
+
+Check if the Xping API endpoint is accessible from your environment:
+
+```bash
+# Test connectivity to the API endpoint
+curl -I https://upload.xping.io/api/v1/health
+
+# Or using PowerShell
+Invoke-WebRequest -Uri https://upload.xping.io/api/v1/health -Method Head
+```
+
+If the endpoint is unreachable, check:
+- Network connectivity and firewall rules
+- Corporate proxy settings
+- DNS resolution for `upload.xping.io`
 
 ## Sample Project
 
@@ -267,6 +279,16 @@ See the complete sample project at `samples/SampleApp.NUnit` for working example
 - Parameterized tests
 - Category and metadata usage
 - Skipped test tracking
+
+## Comparison with Other Frameworks
+
+| Feature | MSTest | NUnit | xUnit |
+|---------|--------|-------|-------|
+| Setup | Base class | Attribute | AssemblyInfo |
+| Tracking | Automatic (base class) | Opt-in (attribute) | Automatic (all tests) |
+| Configuration | Inherit once | Per fixture/test | One-time |
+| Data Tests | DataTestMethod | TestCase | Theory |
+| Overhead | Minimal | Minimal | Minimal |
 
 ## License
 

@@ -166,16 +166,7 @@ dotnet-counters monitor --process-id <pid> --counters System.Runtime
 
 #### 2. Firewall or Proxy Blocking Requests
 
-- Check network policies allow HTTPS to api.xping.io
-- Configure proxy if needed:
-
-```json
-{
-  "Xping": {
-    "ProxyUrl": "http://proxy.company.com:8080"
-  }
-}
-```
+- Check network policies allow HTTPS to upload.xping.io
 
 #### 3. API Key Invalid or Expired
 

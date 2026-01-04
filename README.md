@@ -171,7 +171,7 @@ export XPING_PROJECTID="your-project-id"
 
 # Optional
 export XPING_ENABLED="true"
-export XPING_BATCH_SIZE="100"
+export XPING_BATCHSIZE="100"
 ```
 
 See the [Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html) for complete options including JSON configuration, CI/CD integration examples (GitHub Actions, Azure DevOps, Jenkins), and advanced settings.
