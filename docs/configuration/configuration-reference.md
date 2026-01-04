@@ -19,7 +19,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 
 | Setting | Type | Default | Environment Variable | Description |
 |---------|------|---------|---------------------|-------------|
-| `ApiEndpoint` | string | `https://api.xping.io` | `XPING_APIENDPOINT` | Xping API base URL |
+| `ApiEndpoint` | string | `https://upload.xping.io/api/v1` | `XPING_APIENDPOINT` | Xping API base URL |
 | `ApiKey` | string | **(required)** | `XPING_APIKEY` | Authentication API key |
 | `ProjectId` | string | **(required)** | `XPING_PROJECTID` | User-defined project identifier |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |

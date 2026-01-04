@@ -22,7 +22,7 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
-    public string ApiEndpoint { get; set; } = "https://api.xping.io";
+    public string ApiEndpoint { get; set; } = "https://upload.xping.io/api/v1";
 
     /// <summary>
     /// Gets or sets the API key for authentication.
