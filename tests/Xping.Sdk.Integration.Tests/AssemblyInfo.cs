@@ -4,4 +4,4 @@
  */
 
 // Configure xUnit to use the Xping test framework
-[assembly: Xunit.TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]

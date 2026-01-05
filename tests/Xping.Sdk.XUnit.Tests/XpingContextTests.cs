@@ -8,37 +8,38 @@ namespace Xping.Sdk.XUnit.Tests;
 using System;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Models;
-using Xunit;
-using Assert = Xunit.Assert;
 
 /// <summary>
 /// Tests for XpingContext lifecycle management.
 /// </summary>
-public sealed class XpingContextTests : IDisposable
+#pragma warning disable CA1515 // Test classes must be public for NUnit
+public sealed class XpingContextTests
+#pragma warning restore CA1515
 {
-    public XpingContextTests()
+    [SetUp]
+    public void Setup()
     {
         XpingContext.Reset();
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         XpingContext.Reset();
-        GC.SuppressFinalize(this);
     }
 
-    [Fact]
+    [Test]
     public void Initialize_FirstCall_ReturnsCollector()
     {
         // Act
         var collector = XpingContext.Initialize();
 
         // Assert
-        Assert.NotNull(collector);
-        Assert.True(XpingContext.IsInitialized);
+        Assert.That(collector, Is.Not.Null);
+        Assert.That(XpingContext.IsInitialized, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Initialize_SecondCall_ReturnsSameInstance()
     {
         // Arrange
@@ -48,38 +49,37 @@ public sealed class XpingContextTests : IDisposable
         var second = XpingContext.Initialize();
 
         // Assert
-        Assert.Same(first, second);
+        Assert.That(second, Is.SameAs(first));
     }
 
-    [Fact]
+    [Test]
     public void IsInitialized_BeforeInitialize_ReturnsFalse()
     {
         // Assert
-        Assert.False(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void IsInitialized_AfterInitialize_ReturnsTrue()
     {
         // Act
         XpingContext.Initialize();
 
         // Assert
-        Assert.True(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void RecordTest_BeforeInitialize_DoesNotThrow()
     {
         // Arrange
         var execution = CreateTestExecution();
 
         // Act & Assert
-        var exception = Record.Exception(() => XpingContext.RecordTest(execution));
-        Assert.Null(exception);
+        Assert.DoesNotThrow(() => XpingContext.RecordTest(execution));
     }
 
-    [Fact]
+    [Test]
     public void RecordTest_AfterInitialize_DoesNotThrow()
     {
         // Arrange
@@ -87,38 +87,34 @@ public sealed class XpingContextTests : IDisposable
         var execution = CreateTestExecution();
 
         // Act & Assert
-        var exception = Record.Exception(() => XpingContext.RecordTest(execution));
-        Assert.Null(exception);
+        Assert.DoesNotThrow(() => XpingContext.RecordTest(execution));
     }
 
-    [Fact]
-    public async Task FlushAsync_BeforeInitialize_DoesNotThrow()
+    [Test]
+    public void FlushAsync_BeforeInitialize_DoesNotThrow()
     {
         // Act & Assert
-        var exception = await Record.ExceptionAsync(async () => await XpingContext.FlushAsync());
-        Assert.Null(exception);
+        Assert.DoesNotThrowAsync(async () => await XpingContext.FlushAsync());
     }
 
-    [Fact]
-    public async Task FlushAsync_AfterInitialize_DoesNotThrow()
+    [Test]
+    public void FlushAsync_AfterInitialize_DoesNotThrow()
     {
         // Arrange
         XpingContext.Initialize();
 
         // Act & Assert
-        var exception = await Record.ExceptionAsync(async () => await XpingContext.FlushAsync());
-        Assert.Null(exception);
+        Assert.DoesNotThrowAsync(async () => await XpingContext.FlushAsync());
     }
 
-    [Fact]
-    public async Task DisposeAsync_BeforeInitialize_DoesNotThrow()
+    [Test]
+    public void DisposeAsync_BeforeInitialize_DoesNotThrow()
     {
         // Act & Assert
-        var exception = await Record.ExceptionAsync(async () => await XpingContext.DisposeAsync());
-        Assert.Null(exception);
+        Assert.DoesNotThrowAsync(async () => await XpingContext.DisposeAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task DisposeAsync_AfterInitialize_ResetsContext()
     {
         // Arrange
@@ -128,10 +124,10 @@ public sealed class XpingContextTests : IDisposable
         await XpingContext.DisposeAsync();
 
         // Assert
-        Assert.False(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task DisposeAsync_MultipleCalls_DoesNotThrow()
     {
         // Arrange
@@ -139,22 +135,21 @@ public sealed class XpingContextTests : IDisposable
         await XpingContext.DisposeAsync();
 
         // Act & Assert
-        var exception = await Record.ExceptionAsync(async () => await XpingContext.DisposeAsync());
-        Assert.Null(exception);
+        Assert.DoesNotThrowAsync(async () => await XpingContext.DisposeAsync());
     }
 
-    [Fact]
+    [Test]
     public void Reset_ClearsInitializedState()
     {
         // Arrange
         XpingContext.Initialize();
-        Assert.True(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.True);
 
         // Act
         XpingContext.Reset();
 
         // Assert
-        Assert.False(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.False);
     }
 
     private static TestExecution CreateTestExecution()

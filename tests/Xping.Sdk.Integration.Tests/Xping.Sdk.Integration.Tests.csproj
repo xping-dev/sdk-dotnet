@@ -20,6 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
     <ProjectReference Include="..\..\src\Xping.Sdk.NUnit\Xping.Sdk.NUnit.csproj" />
     <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />

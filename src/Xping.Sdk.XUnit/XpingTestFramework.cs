@@ -22,7 +22,7 @@ public sealed class XpingTestFramework : XunitTestFramework
     public XpingTestFramework(IMessageSink messageSink)
         : base(messageSink)
     {
-        // Initialize Xping SDK when framework is created
+        // Initialize Xping SDK when a framework is created
         XpingContext.Initialize();
     }
 

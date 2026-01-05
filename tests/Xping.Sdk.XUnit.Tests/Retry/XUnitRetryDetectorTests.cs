@@ -15,21 +15,23 @@ using Xunit.Abstractions;
 using Xping.Sdk.Core.Retry;
 using Xping.Sdk.XUnit.Retry;
 
+#pragma warning disable CA1515 // Test classes must be public for NUnit
 public sealed class XUnitRetryDetectorTests
+#pragma warning restore CA1515
 {
     private readonly XUnitRetryDetector _detector = new();
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithNullTest_ReturnsNull()
     {
         // Act
         var result = _detector.DetectRetryMetadata(null!);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithTestWithoutRetryAttribute_ReturnsNull()
     {
         // Arrange
@@ -39,10 +41,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithRetryFactAttribute_ReturnsMetadata()
     {
         // Arrange - This test verifies detection of RetryFact from xunit.extensions.retry
@@ -52,12 +54,12 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("RetryFact", result.RetryAttributeName);
-        Assert.Equal(3, result.MaxRetries);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.RetryAttributeName, Is.EqualTo("RetryFact"));
+        Assert.That(result.MaxRetries, Is.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithRetryTheoryAttribute_ReturnsMetadata()
     {
         // Arrange
@@ -67,12 +69,12 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("RetryTheory", result.RetryAttributeName);
-        Assert.Equal(5, result.MaxRetries);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.RetryAttributeName, Is.EqualTo("RetryTheory"));
+        Assert.That(result.MaxRetries, Is.EqualTo(5));
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithCustomRetryAttribute_ReturnsMetadata()
     {
         // Arrange - Register custom retry attribute
@@ -83,12 +85,12 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("CustomRetry", result.RetryAttributeName);
-        Assert.Equal(10, result.MaxRetries);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.RetryAttributeName, Is.EqualTo("CustomRetry"));
+        Assert.That(result.MaxRetries, Is.EqualTo(10));
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithDelayProperty_ExtractsDelay()
     {
         // Arrange
@@ -98,11 +100,11 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(TimeSpan.FromMilliseconds(1000), result.DelayBetweenRetries);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.DelayBetweenRetries, Is.EqualTo(TimeSpan.FromMilliseconds(1000)));
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithReasonProperty_ExtractsReason()
     {
         // Arrange
@@ -112,11 +114,11 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Flaky test", result.RetryReason);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.RetryReason, Is.EqualTo("Flaky test"));
     }
 
-    [Fact]
+    [Test]
     public void HasRetryAttribute_WithRetryAttribute_ReturnsTrue()
     {
         // Arrange
@@ -126,10 +128,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.HasRetryAttribute(test);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void HasRetryAttribute_WithoutRetryAttribute_ReturnsFalse()
     {
         // Arrange
@@ -139,10 +141,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.HasRetryAttribute(test);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void GetCurrentAttemptNumber_WithDefaultTest_ReturnsOne()
     {
         // Arrange
@@ -152,10 +154,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.GetCurrentAttemptNumber(test);
 
         // Assert
-        Assert.Equal(1, result);
+        Assert.That(result, Is.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public void GetCurrentAttemptNumber_WithRetryAttemptTrait_ReturnsAttemptNumber()
     {
         // Arrange
@@ -168,10 +170,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.GetCurrentAttemptNumber(test);
 
         // Assert
-        Assert.Equal(3, result);
+        Assert.That(result, Is.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public void GetCurrentAttemptNumber_WithAttemptInDisplayName_ReturnsAttemptNumber()
     {
         // Arrange
@@ -181,10 +183,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.GetCurrentAttemptNumber(test);
 
         // Assert
-        Assert.Equal(2, result);
+        Assert.That(result, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public void GetCurrentAttemptNumber_WithRetryInDisplayName_ReturnsAttemptNumber()
     {
         // Arrange
@@ -194,10 +196,10 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.GetCurrentAttemptNumber(test);
 
         // Assert
-        Assert.Equal(4, result);
+        Assert.That(result, Is.EqualTo(4));
     }
 
-    [Fact]
+    [Test]
     public void DetectRetryMetadata_WithAdditionalProperties_ExtractsAdditionalMetadata()
     {
         // Arrange
@@ -207,8 +209,8 @@ public sealed class XUnitRetryDetectorTests
         var result = _detector.DetectRetryMetadata(test);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Contains("Timeout", result.AdditionalMetadata.Keys);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.AdditionalMetadata.Keys, Does.Contain("Timeout"));
     }
 
     // Helper methods to create mock tests

@@ -12,39 +12,43 @@ jobs:
     strategy:
       matrix:
         dotnet-version: ['8.0.x', '9.0.x']  # Test against multiple .NET versions
-    
+
+    env:
+      XPING_ENABLED: true
+      XPING_APIKEY: ${{ secrets.XPING_API_KEY }}
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
-      
+
       - name: Restore dependencies
         run: dotnet restore
         timeout-minutes: 2
-      
+
       - name: Build
         run: dotnet build --no-restore --configuration Release
         timeout-minutes: 2
-      
+
       - name: Run Core Tests
         run: dotnet test tests/Xping.Sdk.Core.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
         timeout-minutes: 5
-      
+
       - name: Run NUnit Adapter Tests
         run: dotnet test tests/Xping.Sdk.NUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
         timeout-minutes: 5
-      
+
       - name: Run xUnit Adapter Tests
         run: dotnet test tests/Xping.Sdk.XUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
         timeout-minutes: 5
-      
+
       - name: Run MSTest Adapter Tests
         run: dotnet test tests/Xping.Sdk.MSTest.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
         timeout-minutes: 5
-      
+
       - name: Run Integration Tests
         run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --results-directory ./coverage
         timeout-minutes: 10

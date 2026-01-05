@@ -8,8 +8,6 @@ namespace Xping.Sdk.XUnit.Tests;
 using System;
 using System.Reflection;
 using global::Xunit.Abstractions;
-using Xunit;
-using Assert = Xunit.Assert;
 
 #pragma warning disable xUnit3000 // Test classes must derive from LongLivedMarshalByRefObject
 
@@ -18,20 +16,23 @@ using Assert = Xunit.Assert;
 /// Note: Deep integration testing with actual xUnit execution is done in sample projects.
 /// These unit tests verify the framework's contract and basic behavior.
 /// </summary>
-public sealed class XpingTestFrameworkTests : IDisposable
+#pragma warning disable CA1515 // Test classes must be public for NUnit
+public sealed class XpingTestFrameworkTests
+#pragma warning restore CA1515
 {
-    public XpingTestFrameworkTests()
+    [SetUp]
+    public void Setup()
     {
         XpingContext.Reset();
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         XpingContext.Reset();
-        GC.SuppressFinalize(this);
     }
 
-    [Fact]
+    [Test]
     public void Constructor_InitializesContext()
     {
         // Arrange
@@ -41,25 +42,25 @@ public sealed class XpingTestFrameworkTests : IDisposable
         using var framework = new XpingTestFramework(messageSink);
 
         // Assert
-        Assert.True(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.True);
     }
 
-    [Fact]
+    [Test]
     public void Dispose_CleansUpContext()
     {
         // Arrange
         var messageSink = new MockMessageSink();
         using var framework = new XpingTestFramework(messageSink);
-        Assert.True(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.True);
 
         // Act
         framework.Dispose();
 
         // Assert
-        Assert.False(XpingContext.IsInitialized);
+        Assert.That(XpingContext.IsInitialized, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void CreateExecutor_ReturnsXpingTestFrameworkExecutor()
     {
         // Arrange
@@ -74,8 +75,8 @@ public sealed class XpingTestFrameworkTests : IDisposable
         var executor = method!.Invoke(framework, new object[] { assemblyName });
 
         // Assert
-        Assert.NotNull(executor);
-        Assert.IsType<XpingTestFrameworkExecutor>(executor);
+        Assert.That(executor, Is.Not.Null);
+        Assert.That(executor, Is.InstanceOf<XpingTestFrameworkExecutor>());
 
         // Cleanup executor
         if (executor is IDisposable disposable)
