@@ -13,6 +13,7 @@ using Core.Diagnostics;
 using Core.Models;
 using Core.Upload;
 using Diagnostics;
+using Xping.Sdk.Core.Environment;
 
 /// <summary>
 /// Global context for managing Xping SDK lifecycle in xUnit test assemblies.
@@ -175,6 +176,7 @@ public static class XpingContext
         var logger = configuration.Logger ?? (configuration.LogLevel == XpingLogLevel.None
             ? XpingNullLogger.Instance
             : new XpingXUnitLogger(configuration.LogLevel));
+        logger.LogDebug("Initializing Xping SDK...");
 
         // Validate configuration and log any issues
         var errors = configuration.Validate();
@@ -189,24 +191,7 @@ public static class XpingContext
             _configErrorsLogged = true;
         }
 
-        // Check for common misconfigurations
-        if (!configuration.Enabled)
-        {
-            logger.LogDebug("SDK is disabled (Enabled=false) - test executions will not be tracked");
-        }
-
-        if (string.IsNullOrWhiteSpace(configuration.ApiKey))
-        {
-            logger.LogDebug("API Key not configured - uploads will be skipped");
-        }
-
-        if (string.IsNullOrWhiteSpace(configuration.ProjectId))
-        {
-            logger.LogDebug("Project ID not configured - uploads will be skipped");
-        }
-
         _httpClient = new HttpClient();
-
         _uploader = new XpingApiClient(_httpClient, configuration, serializer: null, logger);
         _collector = new TestExecutionCollector(_uploader, configuration, logger);
 
@@ -216,7 +201,7 @@ public static class XpingContext
         // Ensure environment info is populated in the session (only once)
         if (string.IsNullOrEmpty(_currentSession.EnvironmentInfo.MachineName))
         {
-            var detector = new Core.Environment.EnvironmentDetector();
+            var detector = new EnvironmentDetector();
             _currentSession.EnvironmentInfo = detector.Detect(_configuration);
         }
 
@@ -234,7 +219,8 @@ public static class XpingContext
             if (configuration.SamplingRate < 1.0)
             {
                 logger.LogInfo(
-                    $"Sampling Rate: {configuration.SamplingRate:P0} (approximately {(int)(configuration.SamplingRate * 100)} out of 100 tests will be tracked)");
+                    $"Sampling Rate: {configuration.SamplingRate:P0} " +
+                    $"(approximately {(int)(configuration.SamplingRate * 100)} out of 100 tests will be tracked)");
             }
             _initializedLogged = true;
         }
