@@ -24,7 +24,7 @@ public class XpingConfigurationBuilderTests
         Assert.NotNull(config);
         Assert.Equal("test-key", config.ApiKey);
         Assert.Equal("test-project", config.ProjectId);
-        Assert.Equal("https://upload.xping.io/api/v1", config.ApiEndpoint);
+        Assert.Equal("https://upload.xping.io/v1", config.ApiEndpoint);
     }
 
     [Fact]

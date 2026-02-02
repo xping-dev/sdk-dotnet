@@ -269,7 +269,7 @@ After successful setup, view test results at [Xping Dashboard](https://app.xping
    - Check secret is not expired
 
 3. **Network issues**
-   - Verify `ApiEndpoint` is `https://upload.xping.io/api/v1`
+   - Verify `ApiEndpoint` is `https://upload.xping.io/v1`
    - Check GitHub Actions runner has internet access
 
 4. **Tracking not applied**
@@ -367,7 +367,7 @@ public async Task Xping_UploadsSuccessfully_WhenEnabled()
     // Arrange
     var config = new XpingConfiguration
     {
-        ApiEndpoint = "https://upload.xping.io/api/v1",
+        ApiEndpoint = "https://upload.xping.io/v1",
         ApiKey = Environment.GetEnvironmentVariable("XPING_APIKEY"),
         ProjectId = "sdk-dotnet-integration-test",
         Enabled = true

@@ -19,7 +19,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 
 | Setting | Type | Default | Environment Variable | Description |
 |---------|------|---------|---------------------|-------------|
-| `ApiEndpoint` | string | `https://upload.xping.io/api/v1` | `XPING_APIENDPOINT` | Xping API base URL |
+| `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
 | `ApiKey` | string | **(required)** | `XPING_APIKEY` | Authentication API key |
 | `ProjectId` | string | **(required)** | `XPING_PROJECTID` | User-defined project identifier |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
@@ -144,7 +144,7 @@ A user-defined identifier for your project. Choose any meaningful name — Xping
 - **Character Set:** ASCII alphanumeric characters, hyphens (`-`), and underscores (`_`) only
 - **Format:** Must start with an alphanumeric character (a-z, 0-9), followed by any combination of alphanumeric, hyphens, or underscores
 - **Whitespace:** No spaces or whitespace characters allowed (including internal whitespace)
-- **Maximum Length:** 255 characters
+- **Maximum Length:** 128 characters
 - **Normalization:** Automatically converted to lowercase
 
 > **Important:** Once selected, avoid changing your ProjectId. Modifying it will create a new project in Xping, causing previously uploaded test executions to become disassociated from your current project. There is currently no automated migration path to transfer historical data between projects.

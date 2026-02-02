@@ -16,7 +16,7 @@ public class XpingConfigurationTests
         var config = new XpingConfiguration();
 
         // Assert
-        Assert.Equal("https://upload.xping.io/api/v1", config.ApiEndpoint);
+        Assert.Equal("https://upload.xping.io/v1", config.ApiEndpoint);
         Assert.Null(config.ApiKey);
         Assert.Null(config.ProjectId);
         Assert.Equal(100, config.BatchSize);

@@ -100,7 +100,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
   "Xping": {
     "ApiKey": "your-api-key-here",
     "ProjectId": "your-project-id-here",
-    "ApiEndpoint": "https://upload.xping.io/api/v1",
+    "ApiEndpoint": "https://upload.xping.io/v1",
     "Environment": "Development",
     "EnableOfflineQueue": true,
     "MaxRetries": 3
@@ -113,7 +113,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 - `ProjectId` - Your Xping project identifier (mandatory)
 
 **Optional Fields:**
-- `ApiEndpoint` - API server URL (default: `https://upload.xping.io/api/v1`)
+- `ApiEndpoint` - API server URL (default: `https://upload.xping.io/v1`)
 - `Environment` - Environment name (default: `Local`)
 - `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
 - `MaxRetries` - Maximum retry attempts (default: `3`)
@@ -260,10 +260,10 @@ Check if the Xping API endpoint is accessible from your environment:
 
 ```bash
 # Test connectivity to the API endpoint
-curl -I https://upload.xping.io/api/v1/health
+curl -I https://upload.xping.io/v1/health
 
 # Or using PowerShell
-Invoke-WebRequest -Uri https://upload.xping.io/api/v1/health -Method Head
+Invoke-WebRequest -Uri https://upload.xping.io/v1/health -Method Head
 ```
 
 If the endpoint is unreachable, check:
