@@ -306,10 +306,14 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
                    "Action: Verify credentials at https://app.xping.io",
             403 => "Authorization failed (403): Insufficient permissions. " +
                    "Action: Check project access at https://app.xping.io",
+            404 => "API endpoint not found (404): The configured endpoint may be incorrect. " +
+                   "Action: Verify the ApiEndpoint configuration",
             429 => "Rate limit exceeded (429): Too many requests. " +
                    "Action: Reduce test execution frequency or contact support",
             >= 500 => $"Server error ({statusCode}): API temporarily unavailable.",
-            _ => $"API returned {statusCode}: {errorContent}"
+            _ => string.IsNullOrWhiteSpace(errorContent)
+                ? $"API returned {statusCode}: No additional error details provided"
+                : $"API returned {statusCode}: {errorContent}"
         };
 
         _logger.LogError(errorMsg);
