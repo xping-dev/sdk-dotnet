@@ -258,6 +258,51 @@ public class XpingApiClientTests
     }
 
     [Fact]
+    public async Task UploadAsync_WithNotFoundError_ReturnsSpecificErrorMessage()
+    {
+        using var handler = new MockHttpMessageHandler(
+            HttpStatusCode.NotFound,
+            "Endpoint not found");
+
+        using var httpClient = new HttpClient(handler);
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test",
+            ProjectId = "test",
+            ApiEndpoint = "https://api.test.com",
+        };
+        using var client = new XpingApiClient(httpClient, config);
+
+        var result = await client.UploadAsync(new[] { CreateTestExecution() });
+
+        Assert.False(result.Success);
+        Assert.Contains("API endpoint not found (404)", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Verify the ApiEndpoint configuration", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithEmptyErrorContent_ReturnsFallbackMessage()
+    {
+        using var handler = new MockHttpMessageHandler(
+            HttpStatusCode.BadRequest,
+            string.Empty);
+
+        using var httpClient = new HttpClient(handler);
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test",
+            ProjectId = "test",
+            ApiEndpoint = "https://api.test.com",
+        };
+        using var client = new XpingApiClient(httpClient, config);
+
+        var result = await client.UploadAsync(new[] { CreateTestExecution() });
+
+        Assert.False(result.Success);
+        Assert.Contains("API returned 400: No additional error details provided", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UploadAsync_WithNetworkError_ReturnsFailure()
     {
         using var handler = new MockHttpMessageHandler(throwException: true);
