@@ -332,7 +332,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         }
         else
         {
-            var abbreviatedMsg = $"Same {statusCode} error ({GetOrdinal(occurrenceCount)} occurrence, {executionCount} executions affected)";
+            var abbreviatedMsg = $"Same {statusCode} error ({GetOrdinal(occurrenceCount)} occurrence, batch size: {executionCount})";
             _logger.LogError(abbreviatedMsg);
         }
 
