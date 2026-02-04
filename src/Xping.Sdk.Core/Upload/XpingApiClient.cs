@@ -6,6 +6,7 @@
 namespace Xping.Sdk.Core.Upload;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -36,6 +37,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
     private readonly IXpingSerializer _serializer;
     private readonly IXpingLogger _logger;
+    private readonly ConcurrentDictionary<string, int> _errorOccurrences = new();
     private bool _disposed;
 
     /// <summary>
@@ -286,6 +288,9 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     {
         if (response.IsSuccessStatusCode)
         {
+            // Reset error tracking on successful upload
+            _errorOccurrences.Clear();
+
             var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse>().ConfigureAwait(false);
 
             return new UploadResult
@@ -299,8 +304,12 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var statusCode = (int)response.StatusCode;
         var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
+        // Create error key for deduplication (status code + normalized content)
+        var errorKey = $"{statusCode}:{(string.IsNullOrWhiteSpace(errorContent) ? "empty" : errorContent.Trim())}";
+        var occurrenceCount = _errorOccurrences.AddOrUpdate(errorKey, 1, (_, count) => count + 1);
+
         // Enhanced error messages with actionable guidance
-        var errorMsg = statusCode switch
+        var detailedErrorMsg = statusCode switch
         {
             401 => "Authentication failed (401): Invalid API Key. " +
                    "Action: Verify credentials at https://app.xping.io",
@@ -316,12 +325,39 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
                 : $"API returned {statusCode}: {errorContent}"
         };
 
-        _logger.LogError(errorMsg);
+        // Log detailed message on first occurrence, abbreviated on subsequent
+        if (occurrenceCount == 1)
+        {
+            _logger.LogError(detailedErrorMsg);
+        }
+        else
+        {
+            var abbreviatedMsg = $"Same {statusCode} error ({GetOrdinal(occurrenceCount)} occurrence, {executionCount} executions affected)";
+            _logger.LogError(abbreviatedMsg);
+        }
 
         return new UploadResult
         {
             Success = false,
-            ErrorMessage = errorMsg,
+            ErrorMessage = detailedErrorMsg,
+        };
+    }
+
+    private static string GetOrdinal(int number)
+    {
+        if (number <= 0)
+            return $"{number}";
+
+        return (number % 100) switch
+        {
+            11 or 12 or 13 => $"{number}th",
+            _ => (number % 10) switch
+            {
+                1 => $"{number}st",
+                2 => $"{number}nd",
+                3 => $"{number}rd",
+                _ => $"{number}th"
+            }
         };
     }
 
