@@ -304,8 +304,8 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var statusCode = (int)response.StatusCode;
         var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        // Create error key for deduplication (status code + normalized content)
-        var errorKey = $"{statusCode}:{(string.IsNullOrWhiteSpace(errorContent) ? "empty" : errorContent.Trim())}";
+        // Create error key for deduplication (status code + truncated normalized content)
+        var errorKey = $"{statusCode}:{GetErrorContentKey(errorContent)}";
         var occurrenceCount = _errorOccurrences.AddOrUpdate(errorKey, 1, (_, count) => count + 1);
 
         // Enhanced error messages with actionable guidance
@@ -341,6 +341,21 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             Success = false,
             ErrorMessage = detailedErrorMsg,
         };
+    }
+
+    private static string GetErrorContentKey(string? errorContent)
+    {
+        if (string.IsNullOrWhiteSpace(errorContent))
+        {
+            return "empty";
+        }
+
+        const int maxLength = 200;
+        var trimmed = errorContent!.Trim();
+
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : trimmed.Substring(0, maxLength);
     }
 
     private static string GetOrdinal(int number)
