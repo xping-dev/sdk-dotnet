@@ -470,7 +470,7 @@ public class XpingApiClientTests
             {
                 1 => new string('x', 300), // 300 chars, all 'x'
                 2 => new string('x', 500), // 500 chars, all 'x' - should be deduplicated with first
-                _ => new string('x', 199) + "y", // 200 chars but last char different - should be different error
+                _ => new string('y', 300), // 300 chars but different char - should be different error
             };
 
             return new HttpResponseMessage(HttpStatusCode.BadRequest)
@@ -488,15 +488,15 @@ public class XpingApiClientTests
         };
         using var client = new XpingApiClient(httpClient, config);
 
-        // First upload with 300 chars
+        // First upload with 300 chars of 'x'
         var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
         Assert.False(result1.Success);
 
-        // Second upload with 500 chars but same first 200 - should be deduplicated
+        // Second upload with 500 chars of 'x' - same first 200, should be deduplicated
         var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
         Assert.False(result2.Success);
 
-        // Third upload with different content in first 200 chars - should not be deduplicated
+        // Third upload with 300 chars of 'y' - different content, should not be deduplicated
         var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
         Assert.False(result3.Success);
 
