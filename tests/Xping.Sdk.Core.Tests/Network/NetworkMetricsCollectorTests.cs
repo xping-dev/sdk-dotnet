@@ -12,7 +12,7 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Network;
 using Xunit;
 
-public class NetworkMetricsCollectorTests
+public sealed class NetworkMetricsCollectorTests
 {
     [Fact]
     public async Task CollectAsync_WithValidEndpoint_ReturnsNetworkMetrics()

@@ -517,25 +517,33 @@ public sealed class XpingApiClientTests
         using var handler = new MockHttpMessageHandler((req) =>
         {
             callCount++;
+            // First upload: fails on both attempts (original + 1 retry)
             if (callCount == 1 || callCount == 2)
             {
-                // First two calls fail with 500
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Server error", Encoding.UTF8, "application/json"),
                 };
             }
-            else if (callCount == 3)
+            // Second upload: fails on both attempts (original + 1 retry)
+            else if (callCount == 3 || callCount == 4)
             {
-                // Third call succeeds
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent("Server error", Encoding.UTF8, "application/json"),
+                };
+            }
+            // Third upload: succeeds on first attempt
+            else if (callCount == 5)
+            {
                 return new HttpResponseMessage(HttpStatusCode.Created)
                 {
                     Content = new StringContent(JsonSerializer.Serialize(new { executionCount = 1 }), Encoding.UTF8, "application/json"),
                 };
             }
+            // Fourth upload: fails on both attempts (original + 1 retry)
             else
             {
-                // Fourth call fails again with same 500 error
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Server error", Encoding.UTF8, "application/json"),

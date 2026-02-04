@@ -11,7 +11,7 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Upload;
 using Xunit;
 
-public class TestExecutionBatchOptimizerTests
+public sealed class TestExecutionBatchOptimizerTests
 {
     [Fact]
     public void OptimizeForTransport_WithNullExecutions_ThrowsArgumentNullException()

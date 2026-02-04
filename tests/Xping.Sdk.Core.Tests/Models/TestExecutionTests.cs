@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Models;
 
 using Xping.Sdk.Core.Models;
 
-public class TestExecutionTests
+public sealed class TestExecutionTests
 {
     [Fact]
     public void ShouldAllowSettingAllProperties()

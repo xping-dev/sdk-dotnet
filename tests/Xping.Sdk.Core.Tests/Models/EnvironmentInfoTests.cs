@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Models;
 
 using Xping.Sdk.Core.Models;
 
-public class EnvironmentInfoTests
+public sealed class EnvironmentInfoTests
 {
     [Fact]
     public void ConstructorShouldInitializeCustomProperties()
