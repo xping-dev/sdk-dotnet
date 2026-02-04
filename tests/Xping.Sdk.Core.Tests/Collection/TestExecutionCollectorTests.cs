@@ -18,7 +18,7 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Upload;
 using Xunit;
 
-public class TestExecutionCollectorTests
+public sealed class TestExecutionCollectorTests
 {
     private static TestExecution CreateTestExecution(string testName = "Test1")
     {

@@ -11,7 +11,7 @@ using Xping.Sdk.Core.Environment;
 using Xunit;
 
 [Collection("EnvironmentVariableTests")]
-public class EnvironmentDetectorTests
+public sealed class EnvironmentDetectorTests
 {
     [Fact]
     public void Detect_ReturnsNonNullEnvironmentInfo()

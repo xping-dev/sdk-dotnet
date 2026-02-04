@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Configuration;
 
 using Xping.Sdk.Core.Configuration;
 
-public class XpingConfigurationBuilderTests
+public sealed class XpingConfigurationBuilderTests
 {
     [Fact]
     public void BuilderShouldCreateConfigurationWithDefaultValues()
