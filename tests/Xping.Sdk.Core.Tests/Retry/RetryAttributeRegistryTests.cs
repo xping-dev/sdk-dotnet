@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Retry;
 
 using Xping.Sdk.Core.Retry;
 
-public class RetryAttributeRegistryTests
+public sealed class RetryAttributeRegistryTests
 {
     [Fact]
     public void Should_Recognize_All_XUnit_Retry_Attributes()

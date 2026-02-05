@@ -9,7 +9,7 @@ using System;
 using System.Text.Json;
 using Xping.Sdk.Core.Models;
 
-public class RetryMetadataTests
+public sealed class RetryMetadataTests
 {
     [Fact]
     public void Constructor_Should_Initialize_With_Default_Values()

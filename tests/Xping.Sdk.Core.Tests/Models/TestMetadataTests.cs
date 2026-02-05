@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Models;
 
 using Xping.Sdk.Core.Models;
 
-public class TestMetadataTests
+public sealed class TestMetadataTests
 {
     [Fact]
     public void ConstructorShouldInitializeCollections()

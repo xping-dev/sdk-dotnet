@@ -304,8 +304,11 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var statusCode = (int)response.StatusCode;
         var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        // Create error key for deduplication (status code + truncated normalized content)
-        var errorKey = $"{statusCode}:{GetErrorContentKey(errorContent)}";
+        // Track error occurrences across different upload attempts (not within a single upload's retry cycle).
+        // This helps reduce log noise for persistent errors (e.g., invalid credentials, authorization issues)
+        // that occur repeatedly across multiple separate calls to UploadAsync.
+        // Note: Retry attempts within a single upload happen inside the resilience pipeline before this method is called.
+        var errorKey = $"{statusCode}:{(string.IsNullOrWhiteSpace(errorContent) ? "empty" : errorContent.Trim())}";
         var occurrenceCount = _errorOccurrences.AddOrUpdate(errorKey, 1, (_, count) => count + 1);
 
         // Enhanced error messages with actionable guidance
