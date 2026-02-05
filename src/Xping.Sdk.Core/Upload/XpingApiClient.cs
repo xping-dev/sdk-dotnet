@@ -346,6 +346,24 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         };
     }
 
+    private static string GetErrorContentKey(string? errorContent)
+    {
+        if (string.IsNullOrWhiteSpace(errorContent))
+        {
+            return "empty";
+        }
+
+        const int maxLength = 200;
+        var trimmedStart = errorContent!.TrimStart();
+
+        // Truncate first to avoid trimming unnecessary characters
+        var truncated = trimmedStart.Length <= maxLength
+            ? trimmedStart
+            : trimmedStart.Substring(0, maxLength);
+
+        return truncated.TrimEnd();
+    }
+
     private static string GetOrdinal(int number)
     {
         if (number <= 0)

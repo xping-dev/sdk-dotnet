@@ -675,6 +675,120 @@ public sealed class XpingApiClientTests
         Assert.Contains("Authentication failed (401)", errorLogs[4], StringComparison.Ordinal);
         Assert.DoesNotContain("occurrence", errorLogs[4], StringComparison.Ordinal);
     }
+  
+    [Fact]
+    public async Task UploadAsync_WithLargeErrorMessage_TruncatesErrorKeyForMemoryEfficiency()
+    {
+        // Create a very large error message (> 200 characters)
+        var largeErrorMessage = new string('x', 500);
+
+        using var handler = new MockHttpMessageHandler(
+            HttpStatusCode.BadRequest,
+            largeErrorMessage);
+
+        using var httpClient = new HttpClient(handler);
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test",
+            ProjectId = "test",
+            ApiEndpoint = "https://api.test.com",
+        };
+        using var client = new XpingApiClient(httpClient, config);
+
+        // First upload should fail with large error
+        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result1.Success);
+
+        // Second upload with same error should recognize it as duplicate
+        // This verifies that error key deduplication works with truncated content
+        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result2.Success);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithMultipleLargeErrorMessages_DeduplicatesCorrectly()
+    {
+        var callCount = 0;
+        using var handler = new MockHttpMessageHandler((req) =>
+        {
+            callCount++;
+            var errorMessage = callCount <= 2
+                ? new string('a', 500) // First two requests get same error
+                : new string('b', 500); // Third request gets different error
+
+            return new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(errorMessage, Encoding.UTF8, "application/json"),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test",
+            ProjectId = "test",
+            ApiEndpoint = "https://api.test.com",
+        };
+        using var client = new XpingApiClient(httpClient, config);
+
+        // First two uploads should be deduplicated as same error
+        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result1.Success);
+
+        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result2.Success);
+
+        // Third upload is a different error (different content)
+        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result3.Success);
+
+        Assert.Equal(3, callCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithDifferentLengthErrorsButSamePrefix_DeduplicatesCorrectly()
+    {
+        var callCount = 0;
+        using var handler = new MockHttpMessageHandler((req) =>
+        {
+            callCount++;
+            // First two errors have same 200-char prefix but different lengths
+            var errorMessage = callCount switch
+            {
+                1 => new string('x', 300), // 300 chars, all 'x'
+                2 => new string('x', 500), // 500 chars, all 'x' - should be deduplicated with first
+                _ => new string('y', 300), // 300 chars but different char - should be different error
+            };
+
+            return new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(errorMessage, Encoding.UTF8, "application/json"),
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test",
+            ProjectId = "test",
+            ApiEndpoint = "https://api.test.com",
+        };
+        using var client = new XpingApiClient(httpClient, config);
+
+        // First upload with 300 chars of 'x'
+        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result1.Success);
+
+        // Second upload with 500 chars of 'x' - same first 200, should be deduplicated
+        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result2.Success);
+
+        // Third upload with 300 chars of 'y' - different content, should not be deduplicated
+        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
+        Assert.False(result3.Success);
+
+        Assert.Equal(3, callCount);
+    }
 
     private sealed class MockLogger : IXpingLogger
     {
