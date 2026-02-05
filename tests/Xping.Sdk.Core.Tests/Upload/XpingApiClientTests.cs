@@ -675,7 +675,7 @@ public sealed class XpingApiClientTests
         Assert.Contains("Authentication failed (401)", errorLogs[4], StringComparison.Ordinal);
         Assert.DoesNotContain("occurrence", errorLogs[4], StringComparison.Ordinal);
     }
-  
+
     [Fact]
     public async Task UploadAsync_WithLargeErrorMessage_TruncatesErrorKeyForMemoryEfficiency()
     {
