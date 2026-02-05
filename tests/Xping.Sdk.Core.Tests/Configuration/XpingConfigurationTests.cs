@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Configuration;
 
 using Xping.Sdk.Core.Configuration;
 
-public class XpingConfigurationTests
+public sealed class XpingConfigurationTests
 {
     [Fact]
     public void DefaultConfigurationShouldHaveCorrectValues()

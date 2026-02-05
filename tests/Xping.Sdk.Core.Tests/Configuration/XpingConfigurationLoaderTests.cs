@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Xping.Sdk.Core.Configuration;
 
 [Collection("EnvironmentVariableTests")]
-public class XpingConfigurationLoaderTests
+public sealed class XpingConfigurationLoaderTests
 {
     [Fact]
     public void LoadShouldReturnDefaultConfigurationWhenNoFilesExist()

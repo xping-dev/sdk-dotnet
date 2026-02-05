@@ -27,14 +27,15 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryUrl>https://github.com/xping-dev/sdk-dotnet</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <!-- Only enable SourceLink in CI/CD environments to avoid local build warnings -->
+        <PublishRepositoryUrl Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</PublishRepositoryUrl>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <EmbedUntrackedSources Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</EmbedUntrackedSources>
     </PropertyGroup>
 
-    <!-- Source Link support for debugging -->
-    <ItemGroup>
+    <!-- Source Link support for debugging (only in CI/CD) -->
+    <ItemGroup Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
     </ItemGroup>
 </Project>

@@ -7,7 +7,7 @@ namespace Xping.Sdk.Core.Tests.Models;
 
 using Xping.Sdk.Core.Models;
 
-public class TestOutcomeTests
+public sealed class TestOutcomeTests
 {
     [Fact]
     public void TestOutcomeShouldHaveCorrectValues()

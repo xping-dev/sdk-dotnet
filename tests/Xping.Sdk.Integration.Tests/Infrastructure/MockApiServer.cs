@@ -26,7 +26,7 @@ internal sealed class MockApiServer : IDisposable
     private readonly CancellationTokenSource _cts;
     private readonly Task _listenerTask;
     private readonly List<ReceivedRequest> _receivedRequests;
-    private readonly Lock _lock = new();
+    private readonly object _lock = new();
 
     public string BaseUrl { get; }
     public MockApiServerBehavior Behavior { get; set; }

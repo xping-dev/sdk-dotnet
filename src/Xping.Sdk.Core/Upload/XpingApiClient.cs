@@ -6,6 +6,7 @@
 namespace Xping.Sdk.Core.Upload;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -36,6 +37,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
     private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
     private readonly IXpingSerializer _serializer;
     private readonly IXpingLogger _logger;
+    private readonly ConcurrentDictionary<string, int> _errorOccurrences = new();
     private bool _disposed;
 
     /// <summary>
@@ -124,17 +126,19 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             // Optimize batch: only the first execution contains full session context
             var optimizedExecutions = TestExecutionBatchOptimizer.OptimizeForTransport(executions);
 
+            string requestUrl = string.Empty;
             var response = await _resiliencePipeline.ExecuteAsync(
                 async ct =>
                 {
                     using var request = CreateUploadRequest(optimizedExecutions);
+                    requestUrl = request.RequestUri?.ToString() ?? _config.ApiEndpoint;
                     return await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
                 },
                 cancellationToken).ConfigureAwait(false);
 
             using (response)
             {
-                return await ProcessResponseAsync(response, executions.Count).ConfigureAwait(false);
+                return await ProcessResponseAsync(response, executions.Count, requestUrl).ConfigureAwait(false);
             }
         }
         catch (BrokenCircuitException ex)
@@ -282,10 +286,13 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         return request;
     }
 
-    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
+    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount, string requestUrl)
     {
         if (response.IsSuccessStatusCode)
         {
+            // Reset error tracking on successful upload
+            _errorOccurrences.Clear();
+
             var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse>().ConfigureAwait(false);
 
             return new UploadResult
@@ -299,15 +306,25 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var statusCode = (int)response.StatusCode;
         var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
+        // Track error occurrences across different upload attempts (not within a single upload's retry cycle).
+        // This helps reduce log noise for persistent errors (e.g., invalid credentials, authorization issues)
+        // that occur repeatedly across multiple separate calls to UploadAsync.
+        // Note: Retry attempts within a single upload happen inside the resilience pipeline before this method is called.
+        var errorKey = $"{statusCode}:{(string.IsNullOrWhiteSpace(errorContent) ? "empty" : errorContent.Trim())}";
+        var occurrenceCount = _errorOccurrences.AddOrUpdate(errorKey, 1, (_, count) => count + 1);
+
+        // Extract base URL without query parameters for cleaner error messages
+        var baseUrl = GetBaseUrl(requestUrl);
+
         // Enhanced error messages with actionable guidance
-        var errorMsg = statusCode switch
+        var detailedErrorMsg = statusCode switch
         {
-            401 => "Authentication failed (401): Invalid API Key. " +
+            401 => $"Authentication failed (401) for {baseUrl}: Invalid API Key. " +
                    "Action: Verify credentials at https://app.xping.io",
-            403 => "Authorization failed (403): Insufficient permissions. " +
+            403 => $"Authorization failed (403) for {baseUrl}: Insufficient permissions. " +
                    "Action: Check project access at https://app.xping.io",
-            404 => "API endpoint not found (404): The configured endpoint may be incorrect. " +
-                   "Action: Verify the ApiEndpoint configuration",
+            404 => $"API endpoint not found (404): {baseUrl}. " +
+                   "Action: Verify the ApiEndpoint configuration matches your deployment",
             429 => "Rate limit exceeded (429): Too many requests. " +
                    "Action: Reduce test execution frequency or contact support",
             >= 500 => $"Server error ({statusCode}): API temporarily unavailable.",
@@ -316,12 +333,72 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
                 : $"API returned {statusCode}: {errorContent}"
         };
 
-        _logger.LogError(errorMsg);
+        // Log detailed message on first occurrence, abbreviated on subsequent
+        if (occurrenceCount == 1)
+        {
+            _logger.LogError(detailedErrorMsg);
+        }
+        else
+        {
+            var abbreviatedMsg = $"Same {statusCode} error ({GetOrdinal(occurrenceCount)} occurrence, batch size: {executionCount})";
+            _logger.LogError(abbreviatedMsg);
+        }
 
         return new UploadResult
         {
             Success = false,
-            ErrorMessage = errorMsg,
+            ErrorMessage = detailedErrorMsg,
+        };
+    }
+
+    private static string GetBaseUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return url;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}";
+        }
+
+        return url;
+    }
+
+    private static string GetErrorContentKey(string? errorContent)
+    {
+        if (string.IsNullOrWhiteSpace(errorContent))
+        {
+            return "empty";
+        }
+
+        const int maxLength = 200;
+        var trimmedStart = errorContent!.TrimStart();
+
+        // Truncate first to avoid trimming unnecessary characters
+        var truncated = trimmedStart.Length <= maxLength
+            ? trimmedStart
+            : trimmedStart.Substring(0, maxLength);
+
+        return truncated.TrimEnd();
+    }
+
+    private static string GetOrdinal(int number)
+    {
+        if (number <= 0)
+            return $"{number}";
+
+        return (number % 100) switch
+        {
+            11 or 12 or 13 => $"{number}th",
+            _ => (number % 10) switch
+            {
+                1 => $"{number}st",
+                2 => $"{number}nd",
+                3 => $"{number}rd",
+                _ => $"{number}th"
+            }
         };
     }
 
