@@ -55,7 +55,7 @@ Every C# file must include:
 
 ```csharp
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 ```
