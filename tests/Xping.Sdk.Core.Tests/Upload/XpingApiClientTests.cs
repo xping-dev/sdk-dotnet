@@ -277,7 +277,7 @@ public sealed class XpingApiClientTests
         var result = await client.UploadAsync(new[] { CreateTestExecution() });
 
         Assert.False(result.Success);
-        Assert.Contains("API endpoint not found (404)", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("API endpoint not found (404): https://api.test.com", result.ErrorMessage, StringComparison.Ordinal);
         Assert.Contains("Verify the ApiEndpoint configuration", result.ErrorMessage, StringComparison.Ordinal);
     }
 
@@ -412,12 +412,13 @@ public sealed class XpingApiClientTests
         var result = await client.UploadAsync(new[] { CreateTestExecution() });
 
         Assert.False(result.Success);
-        Assert.Contains("Authentication failed (401): Invalid API Key", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Authentication failed (401) for https://api.test.com", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Invalid API Key", result.ErrorMessage, StringComparison.Ordinal);
 
         // Verify detailed message is logged on first occurrence
         var errorLogs = mockLogger.ErrorMessages;
         Assert.Single(errorLogs);
-        Assert.Contains("Authentication failed (401): Invalid API Key", errorLogs[0], StringComparison.Ordinal);
+        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[0], StringComparison.Ordinal);
         Assert.Contains("Verify credentials at https://app.xping.io", errorLogs[0], StringComparison.Ordinal);
     }
 
@@ -456,7 +457,7 @@ public sealed class XpingApiClientTests
         Assert.Equal(3, errorLogs.Count);
 
         // First occurrence - detailed message
-        Assert.Contains("API endpoint not found (404)", errorLogs[0], StringComparison.Ordinal);
+        Assert.Contains("API endpoint not found (404): https://api.test.com", errorLogs[0], StringComparison.Ordinal);
         Assert.Contains("Verify the ApiEndpoint configuration", errorLogs[0], StringComparison.Ordinal);
 
         // Second occurrence - abbreviated message with ordinal
@@ -658,11 +659,11 @@ public sealed class XpingApiClientTests
         Assert.Equal(5, errorLogs.Count);
 
         // First 401 - detailed message
-        Assert.Contains("Authentication failed (401)", errorLogs[0], StringComparison.Ordinal);
+        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[0], StringComparison.Ordinal);
         Assert.DoesNotContain("occurrence", errorLogs[0], StringComparison.Ordinal);
 
         // First 404 - detailed message
-        Assert.Contains("API endpoint not found (404)", errorLogs[1], StringComparison.Ordinal);
+        Assert.Contains("API endpoint not found (404): https://api.test.com", errorLogs[1], StringComparison.Ordinal);
         Assert.DoesNotContain("occurrence", errorLogs[1], StringComparison.Ordinal);
 
         // Second 401 with same content - abbreviated
@@ -672,7 +673,7 @@ public sealed class XpingApiClientTests
         Assert.Contains("Same 404 error (2nd occurrence", errorLogs[3], StringComparison.Ordinal);
 
         // First 401 with different content - detailed message (new error key)
-        Assert.Contains("Authentication failed (401)", errorLogs[4], StringComparison.Ordinal);
+        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[4], StringComparison.Ordinal);
         Assert.DoesNotContain("occurrence", errorLogs[4], StringComparison.Ordinal);
     }
 

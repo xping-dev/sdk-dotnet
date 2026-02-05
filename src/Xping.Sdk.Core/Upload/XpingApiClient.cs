@@ -126,17 +126,19 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             // Optimize batch: only the first execution contains full session context
             var optimizedExecutions = TestExecutionBatchOptimizer.OptimizeForTransport(executions);
 
+            string requestUrl = string.Empty;
             var response = await _resiliencePipeline.ExecuteAsync(
                 async ct =>
                 {
                     using var request = CreateUploadRequest(optimizedExecutions);
+                    requestUrl = request.RequestUri?.ToString() ?? _config.ApiEndpoint;
                     return await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
                 },
                 cancellationToken).ConfigureAwait(false);
 
             using (response)
             {
-                return await ProcessResponseAsync(response, executions.Count).ConfigureAwait(false);
+                return await ProcessResponseAsync(response, executions.Count, requestUrl).ConfigureAwait(false);
             }
         }
         catch (BrokenCircuitException ex)
@@ -284,7 +286,7 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         return request;
     }
 
-    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount)
+    private async Task<UploadResult> ProcessResponseAsync(HttpResponseMessage response, int executionCount, string requestUrl)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -314,12 +316,12 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         // Enhanced error messages with actionable guidance
         var detailedErrorMsg = statusCode switch
         {
-            401 => "Authentication failed (401): Invalid API Key. " +
+            401 => $"Authentication failed (401) for {requestUrl}: Invalid API Key. " +
                    "Action: Verify credentials at https://app.xping.io",
-            403 => "Authorization failed (403): Insufficient permissions. " +
+            403 => $"Authorization failed (403) for {requestUrl}: Insufficient permissions. " +
                    "Action: Check project access at https://app.xping.io",
-            404 => "API endpoint not found (404): The configured endpoint may be incorrect. " +
-                   "Action: Verify the ApiEndpoint configuration",
+            404 => $"API endpoint not found (404): {requestUrl}. " +
+                   "Action: Verify the ApiEndpoint configuration matches your deployment",
             429 => "Rate limit exceeded (429): Too many requests. " +
                    "Action: Reduce test execution frequency or contact support",
             >= 500 => $"Server error ({statusCode}): API temporarily unavailable.",
