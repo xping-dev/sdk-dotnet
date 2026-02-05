@@ -18,7 +18,6 @@ Xping SDK provides observability and reliability tracking for .NET test framewor
 - **Testing:** NUnit (primary), xUnit, MSTest
 - **Networking:** HttpClient with Polly retry policies
 - **Serialization:** System.Text.Json
-- **Dependency Injection:** Microsoft.Extensions.DependencyInjection
 - **Performance Testing:** BenchmarkDotNet
 
 ## Project Structure
@@ -131,25 +130,6 @@ internal sealed class XpingApiClientTests
 
 ## Architecture Patterns
 
-### Dependency Injection
-
-All services are registered via extension methods in `DependencyInjectionExtension`:
-
-```csharp
-services.AddHttpClientFactory();
-services.AddTestAgent(agent =>
-{
-    agent.UseDnsLookup()
-         .UseIPAddressAccessibilityCheck()
-         .UseHttpClient();
-});
-```
-
-**Service Lifetimes:**
-- `Singleton`: Factories, stateless services
-- `Scoped`: Per-request services
-- `Transient`: Stateful services
-
 ### Retry Policies
 
 Use Polly for transient failure handling in HTTP clients:
@@ -174,11 +154,10 @@ services.AddHttpClient("XpingApi")
 1. Define domain models in `src/Xping.Sdk.Core/Models/`
 2. Create interface for the service contract
 3. Implement service in appropriate project
-4. Register service in `DependencyInjectionExtension`
-5. Add comprehensive unit tests (>80% coverage)
-6. Add integration tests if touching external systems
-7. Update XML documentation
-8. Update conceptual documentation in `docs/`
+4. Add comprehensive unit tests (>80% coverage)
+5. Add integration tests if touching external systems
+6. Update XML documentation
+7. Update conceptual documentation in `docs/`
 
 ### Before Submitting PR
 
