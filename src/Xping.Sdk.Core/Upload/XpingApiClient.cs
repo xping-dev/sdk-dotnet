@@ -313,14 +313,17 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
         var errorKey = $"{statusCode}:{(string.IsNullOrWhiteSpace(errorContent) ? "empty" : errorContent.Trim())}";
         var occurrenceCount = _errorOccurrences.AddOrUpdate(errorKey, 1, (_, count) => count + 1);
 
+        // Extract base URL without query parameters for cleaner error messages
+        var baseUrl = GetBaseUrl(requestUrl);
+
         // Enhanced error messages with actionable guidance
         var detailedErrorMsg = statusCode switch
         {
-            401 => $"Authentication failed (401) for {requestUrl}: Invalid API Key. " +
+            401 => $"Authentication failed (401) for {baseUrl}: Invalid API Key. " +
                    "Action: Verify credentials at https://app.xping.io",
-            403 => $"Authorization failed (403) for {requestUrl}: Insufficient permissions. " +
+            403 => $"Authorization failed (403) for {baseUrl}: Insufficient permissions. " +
                    "Action: Check project access at https://app.xping.io",
-            404 => $"API endpoint not found (404): {requestUrl}. " +
+            404 => $"API endpoint not found (404): {baseUrl}. " +
                    "Action: Verify the ApiEndpoint configuration matches your deployment",
             429 => "Rate limit exceeded (429): Too many requests. " +
                    "Action: Reduce test execution frequency or contact support",
@@ -346,6 +349,21 @@ public sealed class XpingApiClient : ITestResultUploader, IDisposable
             Success = false,
             ErrorMessage = detailedErrorMsg,
         };
+    }
+
+    private static string GetBaseUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return url;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}";
+        }
+
+        return url;
     }
 
     private static string GetErrorContentKey(string? errorContent)
