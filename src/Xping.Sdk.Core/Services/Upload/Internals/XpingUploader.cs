@@ -4,6 +4,7 @@
  */
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -62,13 +63,20 @@ internal sealed class XpingUploader(
             int executionsCount = testSession.Executions.Count;
             string requestUrl = _configuration.ApiEndpoint;
 
-            using HttpRequestMessage request = CreateUploadRequest(testSession);
-            using HttpResponseMessage? response =
-                await httpClient
-                    .SendAsync(request, cancellationToken)
-                    .ConfigureAwait(false);
+            var (request, payloadSizeBytes) = CreateUploadRequest(testSession);
+            using (request)
+            {
+                var sw = Stopwatch.StartNew();
+                using HttpResponseMessage? response =
+                    await httpClient
+                        .SendAsync(request, cancellationToken)
+                        .ConfigureAwait(false);
+                sw.Stop();
 
-            return await ProcessResponseAsync(response, executionsCount, requestUrl).ConfigureAwait(false);
+                return await ProcessResponseAsync(
+                    response, executionsCount, requestUrl,
+                    sw.ElapsedMilliseconds, payloadSizeBytes).ConfigureAwait(false);
+            }
         }
         catch (BrokenCircuitException ex)
         {
@@ -115,7 +123,7 @@ internal sealed class XpingUploader(
         }
     }
 
-    private HttpRequestMessage CreateUploadRequest(TestSession testSession)
+    private (HttpRequestMessage Request, long PayloadSizeBytes) CreateUploadRequest(TestSession testSession)
     {
         if (testSession == null || testSession.Executions.Count == 0)
         {
@@ -123,12 +131,15 @@ internal sealed class XpingUploader(
         }
 
         string sessionId = testSession.SessionId;
+#pragma warning disable CA2000 // Caller owns and disposes the request via using (request)
         HttpRequestMessage request = new(
             HttpMethod.Post,
             requestUri: _configuration.ApiEndpoint.TrimEnd('/') + "?sessionId=" + sessionId);
+#pragma warning restore CA2000
 
         string json = serializer.Serialize(testSession);
         byte[] content = Encoding.UTF8.GetBytes(json);
+        long payloadSizeBytes = content.Length;
 
         // Compress if the payload is large enough and enabled
         if (_configuration.EnableCompression && content.Length > CompressionThresholdBytes)
@@ -148,13 +159,15 @@ internal sealed class XpingUploader(
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         }
 
-        return request;
+        return (request, payloadSizeBytes);
     }
 
     private async Task<UploadResult> ProcessResponseAsync(
         HttpResponseMessage response,
         int executionCount,
-        string requestUrl)
+        string requestUrl,
+        long durationMs,
+        long payloadSizeBytes)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -163,11 +176,26 @@ internal sealed class XpingUploader(
 
             ApiResponse? apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse>().ConfigureAwait(false);
 
+            int confirmedCount = apiResponse?.ExecutionCount ?? executionCount;
+            string? receiptId = apiResponse?.ReceiptId;
+            string shortReceipt = receiptId is { Length: > 8 }
+                ? receiptId.Substring(0, 8)
+                : receiptId ?? "n/a";
+
+            logger.LogInformation(
+                "Published {ExecutionCount} tests in {DurationMs}ms ({PayloadKB:F1} KB) · receipt {ReceiptId}",
+                confirmedCount,
+                durationMs,
+                payloadSizeBytes / 1024.0,
+                shortReceipt);
+
             return new UploadResult
             {
                 Success = true,
-                ExecutionCount = apiResponse?.ExecutionCount ?? executionCount,
-                ReceiptId = apiResponse?.ReceiptId,
+                ExecutionCount = confirmedCount,
+                ReceiptId = receiptId,
+                DurationMs = (int)durationMs,
+                PayloadSizeBytes = payloadSizeBytes,
             };
         }
 

@@ -29,4 +29,14 @@ public sealed class UploadResult
     /// Gets or sets the receipt ID from the server.
     /// </summary>
     public string? ReceiptId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the HTTP round-trip duration in milliseconds.
+    /// </summary>
+    public int DurationMs { get; set; }
+
+    /// <summary>
+    /// Gets or sets the uncompressed payload size in bytes.
+    /// </summary>
+    public long PayloadSizeBytes { get; set; }
 }
