@@ -64,7 +64,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected XpingContextOrchestrator(IHost host)
     {
         _host = host.RequireNotNull();
+        
+        // 
         SessionId = Guid.NewGuid();
+        StartedAt = DateTime.UtcNow;
 
         var services = _host.Services;
         _collector = services.GetRequiredService<ITestExecutionCollector>();
@@ -100,22 +103,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Initializes the test session by invoking the pre- and post-initialization lifecycle hooks.
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation.</param>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
-    {
-        await OnSessionInitializingAsync(cancellationToken).ConfigureAwait(false);
-        await OnSessionInitializedAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Drains the collector buffer, builds a test session snapshot, and uploads it to the Xping platform.
     /// Concurrent flush calls are serialized via an internal lock.
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The result of the upload operation.</returns>
-    public async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
+    protected async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
     {
         // Ensure only one flush happens at a time
         await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -205,26 +198,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected virtual int? GetTotalTestsExpected()
     {
         return null;
-    }
-
-    /// <summary>
-    /// Called before session initialization completes. Sets <see cref="StartedAt"/> to the current UTC time.
-    /// Override to perform pre-initialization work.
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation.</param>
-    protected virtual Task OnSessionInitializingAsync(CancellationToken cancellationToken)
-    {
-        StartedAt = DateTime.UtcNow;
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Called after session initialization completes. Override to perform post-initialization work.
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation.</param>
-    protected virtual Task OnSessionInitializedAsync(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
     }
 
     /// <summary>

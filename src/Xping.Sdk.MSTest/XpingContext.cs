@@ -162,20 +162,6 @@ public class XpingContext : XpingContextOrchestrator
     }
 
     /// <inheritdoc/>
-    protected override Task OnSessionInitializingAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("Initializing");
-        return base.OnSessionInitializingAsync(cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    protected override Task OnSessionInitializedAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("Initialized");
-        return base.OnSessionInitializedAsync(cancellationToken);
-    }
-
-    /// <inheritdoc/>
     protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
     {
         _logger.LogDebug("Finalizing");
