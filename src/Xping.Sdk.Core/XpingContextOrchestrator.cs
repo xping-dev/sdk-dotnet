@@ -64,8 +64,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected XpingContextOrchestrator(IHost host)
     {
         _host = host.RequireNotNull();
-        
-        // 
+
+        // Initialize session metadata
         SessionId = Guid.NewGuid();
         StartedAt = DateTime.UtcNow;
 

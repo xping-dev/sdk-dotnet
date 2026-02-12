@@ -14,5 +14,6 @@
         
         <!-- Allow some relaxed rules for samples -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
     </PropertyGroup>
 </Project>
