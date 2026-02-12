@@ -3,6 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Upload;
+
 #pragma warning disable CA1515 // Consider making public types internal
 #pragma warning disable CA5394 // Do not use insecure randomness
 #pragma warning disable CA1001 // Types that own disposable fields should be disposable
@@ -12,10 +15,8 @@
 namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,11 +31,11 @@ using System.Threading.Tasks;
 public class IntegrationBenchmarks
 {
     private TestExecutionCollector? _collector;
-    private ITestResultUploader? _uploader;
+    private IXpingUploader? _uploader;
     private XpingConfiguration? _config;
     private readonly Random _random = new();
 
-    private sealed class NoOpUploader : ITestResultUploader
+    private sealed class NoOpUploader : IXpingUploader
     {
         public Task<UploadResult> UploadAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
         {

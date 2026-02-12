@@ -25,7 +25,7 @@ public static class XpingSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync().ConfigureAwait(false);
-        await XpingContext.DisposeAsync().ConfigureAwait(false);
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }

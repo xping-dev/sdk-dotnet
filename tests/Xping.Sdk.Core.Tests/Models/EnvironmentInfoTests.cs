@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+
 namespace Xping.Sdk.Core.Tests.Models;
 
 using Xping.Sdk.Core.Models;

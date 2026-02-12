@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services.Retry;
+
 #pragma warning disable xUnit1000, xUnit1026, xUnit3000, xUnit3001, CA1812, CA1859
 
 namespace Xping.Sdk.XUnit.Tests.Retry;
@@ -12,7 +14,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using Xunit;
 using Xunit.Abstractions;
-using Xping.Sdk.Core.Retry;
 using Xping.Sdk.XUnit.Retry;
 
 #pragma warning disable CA1515 // Test classes must be public for NUnit

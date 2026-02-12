@@ -3,13 +3,14 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+
 namespace Xping.Sdk.Core.Tests.Network;
 
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Network;
 using Xunit;
 
 public sealed class NetworkMetricsCollectorTests

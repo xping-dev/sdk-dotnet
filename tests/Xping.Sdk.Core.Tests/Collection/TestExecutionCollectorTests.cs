@@ -3,6 +3,10 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Upload;
+
 #pragma warning disable CA2007 // Do not directly await a Task
 
 namespace Xping.Sdk.Core.Tests.Collection;
@@ -12,10 +16,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
 using Xunit;
 
 public sealed class TestExecutionCollectorTests
@@ -50,14 +52,14 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public void Constructor_WithNullConfig_ThrowsArgumentNullException()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         Assert.Throws<ArgumentNullException>(() => new TestExecutionCollector(uploader, null!));
     }
 
     [Fact]
     public async Task RecordTest_WithNullTestExecution_ThrowsArgumentNullException()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
         await using var collector = new TestExecutionCollector(uploader, config);
 
@@ -67,7 +69,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task RecordTest_WithValidTestExecution_BuffersTest()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test", SamplingRate = 1.0 };
         await using var collector = new TestExecutionCollector(uploader, config);
 
@@ -82,7 +84,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task FlushAsync_WithBufferedTests_UploadsAll()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -104,7 +106,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task GetStatsAsync_InitialState_ReturnsZeros()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
         await using var collector = new TestExecutionCollector(uploader, config);
 
@@ -119,7 +121,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task GetStatsAsync_AfterRecording_UpdatesCorrectly()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -142,7 +144,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task GetStatsAsync_AfterFlush_UpdatesCorrectly()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -167,7 +169,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task SamplingRate_Zero_DropsAllTests()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -193,7 +195,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task SamplingRate_One_RecordsAllTests()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -219,7 +221,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task DisposeAsync_WithBufferedTests_FlushesBeforeDisposing()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -241,7 +243,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task UploadFailure_UpdatesFailedCount()
     {
-        var uploader = new MockTestResultUploader(shouldFail: true);
+        var uploader = new MockXpingUploader(shouldFail: true);
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -263,7 +265,7 @@ public sealed class TestExecutionCollectorTests
     [Fact]
     public async Task RecordTest_ConcurrentCalls_AllTestsRecorded()
     {
-        var uploader = new MockTestResultUploader();
+        var uploader = new MockXpingUploader();
         var config = new XpingConfiguration
         {
             ApiKey = "test",
@@ -285,7 +287,7 @@ public sealed class TestExecutionCollectorTests
         Assert.Equal(100, uploader.UploadedBatches[0].Count);
     }
 
-    private sealed class MockTestResultUploader : ITestResultUploader
+    private sealed class MockXpingUploader : IXpingUploader
     {
         private readonly bool _shouldFail;
         private readonly TimeSpan _uploadDelay;
@@ -294,7 +296,7 @@ public sealed class TestExecutionCollectorTests
         public List<TestSession> UploadedSessions { get; } = new();
         public TestSession? CurrentSession { get; private set; }
 
-        public MockTestResultUploader(bool shouldFail = false, TimeSpan uploadDelay = default)
+        public MockXpingUploader(bool shouldFail = false, TimeSpan uploadDelay = default)
         {
             _shouldFail = shouldFail;
             _uploadDelay = uploadDelay;

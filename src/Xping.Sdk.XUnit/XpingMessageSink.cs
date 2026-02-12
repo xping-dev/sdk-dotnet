@@ -3,50 +3,46 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.XUnit;
-
-using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
+using System.Globalization;
+using Microsoft.Extensions.Logging;
+using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
-using Xping.Sdk.Core.Collection;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.XUnit.Retry;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.Shared;
 
-#pragma warning disable CA1305 // Specify IFormatProvider for culture-aware ToString conversions
+namespace Xping.Sdk.XUnit;
 
 /// <summary>
 /// Message sink that intercepts xUnit test execution messages and records them to Xping.
 /// Tracks test start/end times and outcomes in a thread-safe manner.
 /// </summary>
-public sealed class XpingMessageSink : IMessageSink
+public sealed class XpingMessageSink(
+    IMessageSink innerSink,
+    IExecutionTracker executionTracker,
+    IRetryDetector<ITest> retryDetector,
+    ITestIdentityGenerator identityGenerator,
+    ILogger<XpingMessageSink> logger) : IMessageSink
 {
-    private readonly IMessageSink _innerSink;
-    private readonly ConcurrentDictionary<string, TestExecutionData> _testData;
-    private readonly ExecutionTracker _executionTracker;
-    private readonly ConcurrentDictionary<string, int> _activeCollections;
-    private readonly XUnitRetryDetector _retryDetector;
+    private readonly IMessageSink _innerSink = innerSink.RequireNotNull();
+    private readonly IExecutionTracker _executionTracker = executionTracker.RequireNotNull();
+    private readonly IRetryDetector<ITest> _retryDetector = retryDetector.RequireNotNull();
+    private readonly ITestIdentityGenerator _identityGenerator = identityGenerator.RequireNotNull();
+    private readonly ILogger<XpingMessageSink> _logger = logger.RequireNotNull();
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="XpingMessageSink"/> class.
-    /// </summary>
-    /// <param name="innerSink">The inner message sink to forward messages to.</param>
-    public XpingMessageSink(IMessageSink innerSink)
-    {
-        _innerSink = innerSink ?? throw new ArgumentNullException(nameof(innerSink));
-        _testData = new ConcurrentDictionary<string, TestExecutionData>();
-        _executionTracker = new ExecutionTracker();
-        _activeCollections = new ConcurrentDictionary<string, int>();
-        _retryDetector = new XUnitRetryDetector();
-    }
+    private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
+    private readonly ConcurrentDictionary<string, int> _activeCollections = new();
 
     /// <summary>
     /// Handles incoming messages from xUnit test execution.
     /// </summary>
     /// <param name="message">The message to process.</param>
     /// <returns>True if the message was processed successfully.</returns>
-    public bool OnMessage(IMessageSinkMessage message)
+    bool IMessageSink.OnMessage(IMessageSinkMessage message)
     {
         // Handle test lifecycle messages
         switch (message)
@@ -73,19 +69,19 @@ public sealed class XpingMessageSink : IMessageSink
                 break;
         }
 
-        // Forward to inner sink
+        // Forward to the inner sink
         return _innerSink.OnMessage(message);
     }
 
     private void HandleTestStarting(ITestStarting testStarting)
     {
-        var testKey = GetTestKey(testStarting.Test);
-        var collectionName = testStarting.Test.TestCase.TestMethod.TestClass.TestCollection.DisplayName;
+        string testKey = GetTestKey(testStarting.Test);
+        string? collectionName = testStarting.Test.TestCase.TestMethod.TestClass.TestCollection.DisplayName;
 
         // Track active collections for parallelization detection
         _activeCollections.AddOrUpdate(collectionName, 1, (_, count) => count + 1);
 
-        var data = new TestExecutionData
+        TestExecutionData data = new()
         {
             Test = testStarting.Test,
             StartTime = DateTime.UtcNow,
@@ -98,107 +94,94 @@ public sealed class XpingMessageSink : IMessageSink
 
     private void HandleTestPassed(ITestPassed testPassed)
     {
-        var testKey = GetTestKey(testPassed.Test);
-        if (!_testData.TryRemove(testKey, out var data))
+        string testKey = GetTestKey(testPassed.Test);
+        if (!_testData.TryRemove(testKey, out TestExecutionData? data))
         {
             return;
         }
 
-        var endTime = DateTime.UtcNow;
-        var endTimestamp = Stopwatch.GetTimestamp();
-        var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
+        DateTime endTime = DateTime.UtcNow;
+        TimeSpan duration = CalculateDuration(testPassed.ExecutionTime);
 
-        this.RecordTestExecution(
+        RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Passed,
             startTime: data.StartTime,
             endTime: endTime,
             duration: duration,
-            executionTime: testPassed.ExecutionTime,
             output: testPassed.Output,
             exceptionType: null,
             errorMessage: null,
             stackTrace: null,
-            collectionName: data.CollectionName,
-            executionTracker: _executionTracker);
+            collectionName: data.CollectionName);
     }
 
     private void HandleTestFailed(ITestFailed testFailed)
     {
-        var testKey = GetTestKey(testFailed.Test);
-        if (!_testData.TryRemove(testKey, out var data))
+        string testKey = GetTestKey(testFailed.Test);
+        if (!_testData.TryRemove(testKey, out TestExecutionData? data))
         {
             return;
         }
 
-        var endTime = DateTime.UtcNow;
-        var endTimestamp = Stopwatch.GetTimestamp();
-        var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
+        DateTime endTime = DateTime.UtcNow;
+        TimeSpan duration = CalculateDuration(testFailed.ExecutionTime);
 
-        // Extract exception type - XUnit provides array of exception types
-        var exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
+        // Extract exception type - XUnit provides an array of exception types
+        string? exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
 
-        this.RecordTestExecution(
+        RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Failed,
             startTime: data.StartTime,
             endTime: endTime,
             duration: duration,
-            executionTime: testFailed.ExecutionTime,
             output: testFailed.Output,
             exceptionType: exceptionType,
             errorMessage: string.Join(Environment.NewLine, testFailed.Messages),
             stackTrace: string.Join(Environment.NewLine, testFailed.StackTraces),
-            collectionName: data.CollectionName,
-            executionTracker: _executionTracker);
+            collectionName: data.CollectionName);
     }
 
     private void HandleTestSkipped(ITestSkipped testSkipped)
     {
-        var testKey = GetTestKey(testSkipped.Test);
-        if (!_testData.TryRemove(testKey, out var data))
+        string testKey = GetTestKey(testSkipped.Test);
+        if (!_testData.TryRemove(testKey, out TestExecutionData? data))
         {
             return;
         }
 
-        var endTime = DateTime.UtcNow;
-        var endTimestamp = Stopwatch.GetTimestamp();
-        var duration = CalculateDuration(data.StartTimestamp, endTimestamp);
+        DateTime endTime = DateTime.UtcNow;
+        long endTimestamp = Stopwatch.GetTimestamp();
+        TimeSpan duration = CalculateDuration(data.StartTimestamp, endTimestamp);
 
-        this.RecordTestExecution(
+        RecordTestExecution(
             test: data.Test,
             outcome: TestOutcome.Skipped,
             startTime: data.StartTime,
             endTime: endTime,
             duration: duration,
-            executionTime: 0,
             output: string.Empty,
             exceptionType: null,
             errorMessage: $"Test skipped: {testSkipped.Reason}",
             stackTrace: null,
-            collectionName: data.CollectionName,
-            executionTracker: _executionTracker
-        );
+            collectionName: data.CollectionName);
     }
 
     private void HandleTestAssemblyFinished()
     {
-        // Flush all recorded test data when assembly finishes executing
-        // This ensures data is uploaded, even when using VSTest adapter
-        // (which doesn't call Dispose on custom frameworks or collection fixtures)
+        // Finalize the session when the assembly finishes. FinalizeAsync includes an
+        // internal flush and is idempotent, so it is safe to call here even if
+        // XpingTestFramework.Dispose later calls DisposeAsync (which also finalizes).
+        // This path is the primary safeguard for VSTest adapter runs, where Dispose
+        // is not reliably called on custom frameworks.
         try
         {
-            XpingContext.FlushAsync().GetAwaiter().GetResult();
+            XpingContext.FinalizeAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            // Log error but don't throw - we don't want to fail tests due to flush errors
-            Debug.WriteLine($"[Xping] Error flushing data on assembly finished: {ex.Message}");
-        }
-        finally
-        {
-            ValueTask result = XpingContext.DisposeAsync();
-            result.GetAwaiter().GetResult();
+            _logger.LogError(ex, "Error finalizing Xping session on assembly finished");
         }
     }
 
@@ -208,29 +191,25 @@ public sealed class XpingMessageSink : IMessageSink
         DateTime startTime,
         DateTime endTime,
         TimeSpan duration,
-        decimal executionTime,
         string output,
         string? exceptionType,
         string? errorMessage,
         string? stackTrace,
-        string collectionName,
-        ExecutionTracker executionTracker)
+        string collectionName)
     {
         try
         {
-            var execution = CreateTestExecution(
+            TestExecution execution = CreateTestExecution(
                 test,
                 outcome,
                 startTime,
                 endTime,
                 duration,
-                executionTime,
                 output,
                 exceptionType,
                 errorMessage,
                 stackTrace,
-                collectionName,
-                executionTracker);
+                collectionName);
 
             XpingContext.RecordTest(execution);
         }
@@ -246,27 +225,25 @@ public sealed class XpingMessageSink : IMessageSink
         DateTime startTime,
         DateTime endTime,
         TimeSpan duration,
-        decimal executionTime,
         string output,
         string? exceptionType,
         string? errorMessage,
         string? stackTrace,
-        string collectionName,
-        ExecutionTracker executionTracker)
+        string collectionName)
     {
-        var testCase = test.TestCase;
-        var testMethod = testCase.TestMethod;
-        var testClass = testMethod.TestClass;
+        ITestCase? testCase = test.TestCase;
+        ITestMethod? testMethod = testCase.TestMethod;
+        ITestClass? testClass = testMethod.TestClass;
 
         // Generate stable test identity
-        var fullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}";
-        var assemblyName = testClass.Class.Assembly.Name;
-        var parameters = testCase.TestMethodArguments;
-        var displayName = test.DisplayName;
-        var sourceFile = testCase.SourceInformation?.FileName;
-        var sourceLine = testCase.SourceInformation?.LineNumber;
+        string fullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}";
+        string? assemblyName = testClass.Class.Assembly.Name;
+        object[]? parameters = testCase.TestMethodArguments;
+        string? displayName = test.DisplayName;
+        string? sourceFile = testCase.SourceInformation?.FileName;
+        int? sourceLine = testCase.SourceInformation?.LineNumber;
 
-        var identity = TestIdentityGenerator.Generate(
+        TestIdentity identity = _identityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
@@ -274,64 +251,51 @@ public sealed class XpingMessageSink : IMessageSink
             sourceFile,
             sourceLine);
 
+        // Extract test metadata
+        TestMetadata metadata = ExtractMetadata(test, output);
         // Create execution context using collection name as worker ID
-        var workerId = collectionName;
-        var context = executionTracker.CreateContext(workerId, collectionName);
-
+        TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(workerId: collectionName);
         // Detect retry metadata
-        var retryMetadata = _retryDetector.DetectRetryMetadata(test);
-        if (retryMetadata != null)
-        {
-            // Update attempt number with current value
-            retryMetadata.AttemptNumber = _retryDetector.GetCurrentAttemptNumber(test);
+        RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
 
-            // If test passed and attempt > 1, it passed on retry
-            if (outcome == TestOutcome.Passed && retryMetadata.AttemptNumber > 1)
-            {
-                retryMetadata.PassedOnRetry = true;
-            }
-        }
-
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = identity,
-            TestName = test.DisplayName,
-            Outcome = outcome,
-            Duration = duration,
-            StartTimeUtc = startTime,
-            EndTimeUtc = endTime,
-            SessionContext = XpingContext.CurrentSession,
-            Metadata = ExtractMetadata(test, output),
-            ExceptionType = exceptionType,
-            ErrorMessage = errorMessage ?? string.Empty,
-            StackTrace = stackTrace ?? string.Empty,
-            ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
-            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
-            Context = context,
-            Retry = retryMetadata
-        };
+        TestExecution testExecution = new TestExecutionBuilder()
+            .WithExecutionId(Guid.NewGuid())
+            .WithIdentity(identity)
+            .WithTestName(test.DisplayName)
+            .WithOutcome(outcome)
+            .WithDuration(duration)
+            .WithStartTime(startTime)
+            .WithEndTime(endTime)
+            .WithMetadata(metadata)
+            .WithException(exceptionType, errorMessage, stackTrace)
+            .WithErrorMessageHash(_identityGenerator.GenerateErrorMessageHash(errorMessage))
+            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(stackTrace))
+            .WithTestOrchestrationRecord(orchestrationRecord)
+            .WithRetry(retryMetadata)
+            .Build();
 
         // Record test completion for tracking as previous test
-        executionTracker.RecordTestCompletion(workerId, identity.TestId, test.DisplayName, outcome);
+        _executionTracker.RecordTestCompletion(workerId: collectionName, identity.TestId, test.DisplayName, outcome);
 
-        return execution;
+        return testExecution;
     }
 
     private static TestMetadata ExtractMetadata(ITest test, string output)
     {
-        var testCase = test.TestCase;
-        var categories = new List<string>();
-        var tags = new List<string> { "framework:xunit" };
-        var customAttributes = new Dictionary<string, string>();
+        TestMetadataBuilder builder = new();
+
+        ITestCase? testCase = test.TestCase;
+        List<string> categories = [];
+        List<string> tags = ["framework:xunit"];
+        Dictionary<string, string> customAttributes = [];
 
         // Extract traits as categories
         if (testCase.Traits != null)
         {
-            foreach (var trait in testCase.Traits)
+            foreach (KeyValuePair<string, List<string>> trait in testCase.Traits)
             {
-                var key = trait.Key;
-                foreach (var value in trait.Value)
+                string? key = trait.Key;
+                foreach (string? value in trait.Value)
                 {
                     if (key.Equals("Category", StringComparison.OrdinalIgnoreCase))
                     {
@@ -346,9 +310,9 @@ public sealed class XpingMessageSink : IMessageSink
         }
 
         // Add test method parameters if present
-        if (testCase.TestMethodArguments != null && testCase.TestMethodArguments.Length > 0)
+        if (testCase.TestMethodArguments is { Length: > 0 })
         {
-            var args = string.Join(", ", testCase.TestMethodArguments.Select(a => a?.ToString() ?? "null"));
+            string args = string.Join(", ", testCase.TestMethodArguments.Select(a => a?.ToString() ?? "null"));
             customAttributes.Add("Arguments", args);
             tags.Add("type:theory");
         }
@@ -362,12 +326,14 @@ public sealed class XpingMessageSink : IMessageSink
         {
             if (!string.IsNullOrEmpty(testCase.SourceInformation.FileName))
             {
-                customAttributes.Add("SourceFile", testCase.SourceInformation.FileName!);
+                string fileName = testCase.SourceInformation.FileName;
+                customAttributes.Add("SourceFile", fileName);
             }
 
             if (testCase.SourceInformation.LineNumber.HasValue)
             {
-                customAttributes.Add("SourceLine", testCase.SourceInformation.LineNumber.Value.ToString());
+                string lineNumber = testCase.SourceInformation.LineNumber.Value.ToString(CultureInfo.InvariantCulture);
+                customAttributes.Add("SourceLine", lineNumber);
             }
         }
 
@@ -377,25 +343,27 @@ public sealed class XpingMessageSink : IMessageSink
             customAttributes.Add("Output", output);
         }
 
-        var metadata = new TestMetadata
-        {
-            Categories = categories,
-            Tags = tags,
-            Description = test.DisplayName,
-        };
-
-        foreach (var kvp in customAttributes)
-        {
-            metadata.CustomAttributes[kvp.Key] = kvp.Value;
-        }
+        TestMetadata metadata = builder
+            .AddCategories(categories)
+            .AddTags(tags)
+            .WithDescription(test.DisplayName)
+            .AddCustomAttributes(customAttributes)
+            .Build();
 
         return metadata;
     }
 
     private static TimeSpan CalculateDuration(long startTimestamp, long endTimestamp)
     {
-        var elapsedTicks = endTimestamp - startTimestamp;
-        return TimeSpan.FromTicks((long)(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+        long elapsedTicks = endTimestamp - startTimestamp;
+        return TimeSpan.FromTicks(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
+    }
+
+    private static TimeSpan CalculateDuration(decimal executionTime)
+    {
+        // xUnit ExecutionTime is in seconds (decimal); convert to TimeSpan via ticks for precision
+        long ticks = (long)(executionTime * TimeSpan.TicksPerSecond);
+        return TimeSpan.FromTicks(ticks);
     }
 
     private static string GetTestKey(ITest test)

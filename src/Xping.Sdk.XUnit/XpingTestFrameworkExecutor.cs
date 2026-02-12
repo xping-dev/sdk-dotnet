@@ -3,33 +3,32 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.XUnit;
-
-using System.Collections.Generic;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.Retry;
 using Xunit.Abstractions;
 using Xunit.Sdk;
+
+namespace Xping.Sdk.XUnit;
 
 /// <summary>
 /// Custom xUnit test framework executor that wraps test execution with Xping tracking.
 /// Intercepts test execution messages and records them via XpingMessageSink.
 /// </summary>
-public sealed class XpingTestFrameworkExecutor : XunitTestFrameworkExecutor
+public sealed class XpingTestFrameworkExecutor(
+    AssemblyName assemblyName,
+    ISourceInformationProvider sourceInformationProvider,
+    IMessageSink diagnosticMessageSink,
+    IExecutionTracker executionTracker,
+    IRetryDetector<ITest> retryDetector,
+    ITestIdentityGenerator identityGenerator,
+    ILogger<XpingMessageSink> logger) : XunitTestFrameworkExecutor(
+        assemblyName,
+        sourceInformationProvider,
+        diagnosticMessageSink)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="XpingTestFrameworkExecutor"/> class.
-    /// </summary>
-    /// <param name="assemblyName">The assembly containing the tests.</param>
-    /// <param name="sourceInformationProvider">The source information provider.</param>
-    /// <param name="diagnosticMessageSink">The diagnostic message sink.</param>
-    public XpingTestFrameworkExecutor(
-        AssemblyName assemblyName,
-        ISourceInformationProvider sourceInformationProvider,
-        IMessageSink diagnosticMessageSink)
-        : base(assemblyName, sourceInformationProvider, diagnosticMessageSink)
-    {
-    }
-
     /// <summary>
     /// Runs test cases with Xping tracking enabled.
     /// </summary>
@@ -42,7 +41,12 @@ public sealed class XpingTestFrameworkExecutor : XunitTestFrameworkExecutor
         ITestFrameworkExecutionOptions executionOptions)
     {
         // Wrap the message sink with our tracking sink
-        var trackingSink = new XpingMessageSink(executionMessageSink);
+        var trackingSink = new XpingMessageSink(
+            executionMessageSink,
+            executionTracker,
+            retryDetector,
+            identityGenerator,
+            logger);
 
         // Run tests with tracking enabled
         base.RunTestCases(testCases, trackingSink, executionOptions);

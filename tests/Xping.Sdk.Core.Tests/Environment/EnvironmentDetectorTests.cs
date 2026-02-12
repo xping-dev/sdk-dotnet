@@ -7,7 +7,6 @@ namespace Xping.Sdk.Core.Tests.Environment;
 
 using System;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Environment;
 using Xunit;
 
 [Collection("EnvironmentVariableTests")]
@@ -626,7 +625,7 @@ public sealed class EnvironmentDetectorTests
 
             var result = detector.Detect(config);
 
-            // Configuration property should win over framework environment variable
+            // Options property should win over framework environment variable
             Assert.Equal("Production", result.EnvironmentName);
         }
         finally
@@ -726,7 +725,7 @@ public sealed class EnvironmentDetectorTests
             };
             Assert.Equal("Development", detector.Detect(config2).EnvironmentName);
 
-            // Level 3: Configuration property (overrides framework env vars)
+            // Level 3: Options property (overrides framework env vars)
             var config3 = new XpingConfiguration
             {
                 ApiKey = "test-key",

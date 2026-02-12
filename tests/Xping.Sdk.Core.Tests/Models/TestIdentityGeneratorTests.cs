@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services;
+
 #pragma warning disable CA1305 // Specify IFormatProvider
 #pragma warning disable CA1307 // Specify StringComparison
 #pragma warning disable CA1308 // ToLowerInvariant

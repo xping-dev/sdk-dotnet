@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
-namespace SampleApp.NUnit;
-
-using global::NUnit.Framework;
 using Xping.Sdk.NUnit;
+
+namespace SampleApp.NUnit;
 
 /// <summary>
 /// Global setup fixture for Xping SDK initialization.
@@ -25,7 +24,7 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }

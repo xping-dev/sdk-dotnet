@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services.Retry;
+
 #pragma warning disable NUnit1028, CA1812, CA1859, CA1515
 
 namespace Xping.Sdk.NUnit.Tests.Retry;
@@ -11,7 +13,6 @@ using System;
 using System.Reflection;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Internal;
-using Xping.Sdk.Core.Retry;
 using Xping.Sdk.NUnit.Retry;
 using Xunit;
 using Assert = Xunit.Assert;

@@ -3,11 +3,12 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services.Retry;
+
 namespace Xping.Sdk.MSTest.Tests.Retry;
 
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core.Retry;
 using Xping.Sdk.MSTest.Retry;
 using Xunit;
 using Assert = Xunit.Assert;

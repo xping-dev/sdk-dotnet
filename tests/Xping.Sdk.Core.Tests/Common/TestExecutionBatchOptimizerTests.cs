@@ -3,12 +3,14 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+
 namespace Xping.Sdk.Core.Tests.Common;
 
 using System;
 using System.Collections.Generic;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
 using Xunit;
 
 public sealed class TestExecutionBatchOptimizerTests

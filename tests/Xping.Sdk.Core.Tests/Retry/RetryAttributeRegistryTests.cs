@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Tests.Retry;
+using Xping.Sdk.Core.Services.Retry;
 
-using Xping.Sdk.Core.Retry;
+namespace Xping.Sdk.Core.Tests.Retry;
 
 public sealed class RetryAttributeRegistryTests
 {

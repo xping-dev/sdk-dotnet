@@ -3,11 +3,9 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Configuration;
+using System.ComponentModel.DataAnnotations;
 
-using System;
-using System.Collections.Generic;
-using Xping.Sdk.Core.Diagnostics;
+namespace Xping.Sdk.Core.Configuration;
 
 /// <summary>
 /// Configuration options for the Xping SDK.
@@ -22,22 +20,35 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
+    [Required(ErrorMessage = "ApiEndpoint is required")]
+    [Url(ErrorMessage = "ApiEndpoint must be a valid HTTP or HTTPS URL")]
     public string ApiEndpoint { get; set; } = "https://upload.xping.io/v1";
 
     /// <summary>
     /// Gets or sets the API key for authentication.
     /// </summary>
+    [Required(ErrorMessage = "ApiKey is required")]
+    [MinLength(1, ErrorMessage = "ApiKey cannot be empty")]
     public string ApiKey { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the project ID.
     /// </summary>
+    [Required(ErrorMessage = "ProjectId is required")]
+    [MinLength(1, ErrorMessage = "ProjectId cannot be empty")]
     public string ProjectId { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the batch size for uploading test executions.
     /// </summary>
+    [Range(1, 1000, ErrorMessage = "BatchSize must be between 1 and 1000")]
     public int BatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// Gets or sets the sampling rate (0.0 to 1.0, where 1.0 means 100% of tests are tracked).
+    /// </summary>
+    [Range(0.0, 1.0, ErrorMessage = "SamplingRate must be between 0.0 and 1.0")]
+    public double SamplingRate { get; set; } = 1.0;
 
     /// <summary>
     /// Gets or sets the flush interval for automatically uploading batches.
@@ -72,17 +83,13 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the maximum number of retry attempts for failed uploads.
     /// </summary>
+    [Range(0, 10, ErrorMessage = "MaxRetries must be between 0 and 10")]
     public int MaxRetries { get; set; } = 3;
 
     /// <summary>
     /// Gets or sets the delay between retry attempts.
     /// </summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
-
-    /// <summary>
-    /// Gets or sets the sampling rate (0.0 to 1.0, where 1.0 means 100% of tests are tracked).
-    /// </summary>
-    public double SamplingRate { get; set; } = 1.0;
 
     /// <summary>
     /// Gets or sets the timeout for upload operations.
@@ -94,19 +101,6 @@ public sealed class XpingConfiguration
     /// Network metrics include latency, connection type, and online status.
     /// </summary>
     public bool CollectNetworkMetrics { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the minimum log level for SDK diagnostics output.
-    /// Default is Info. Set XpingLogLevel.None to disable all logging.
-    /// </summary>
-    public XpingLogLevel LogLevel { get; set; } = XpingLogLevel.Info;
-
-    /// <summary>
-    /// Gets or sets a custom logger implementation.
-    /// If null, the SDK will use a default console logger based on the LogLevel setting.
-    /// Set to XpingNullLogger.Instance to completely disable logging.
-    /// </summary>
-    public IXpingLogger? Logger { get; set; }
 
     /// <summary>
     /// Validates the configuration and returns a list of validation errors.

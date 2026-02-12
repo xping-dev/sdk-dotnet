@@ -3,6 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+
 #pragma warning disable CA1307 // Specify StringComparison for clarity
 #pragma warning disable CA1849 // Call async methods when in an async method
 
@@ -16,7 +19,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Serialization;
 using Xunit;
 
 /// <summary>

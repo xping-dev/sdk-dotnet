@@ -3,6 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services;
+
 namespace Xping.Sdk.Core.Tests.Models;
 
 using Xunit;

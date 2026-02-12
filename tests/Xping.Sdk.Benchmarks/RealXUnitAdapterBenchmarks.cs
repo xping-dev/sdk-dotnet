@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
+
 #pragma warning disable CA1515 // Consider making public types internal
 #pragma warning disable CA5394 // Do not use insecure randomness
 #pragma warning disable CA1001 // Types that own disposable fields should be disposable

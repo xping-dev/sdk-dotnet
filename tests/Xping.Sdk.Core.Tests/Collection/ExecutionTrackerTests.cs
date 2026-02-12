@@ -3,13 +3,16 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
+
 namespace Xping.Sdk.Core.Tests.Collection;
 
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
-using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Models;
 using Xunit;
 
@@ -52,7 +55,7 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal(1, context.PositionInSuite);
@@ -66,7 +69,7 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Null(context.PreviousTestId);
@@ -81,7 +84,7 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.False(context.WasParallelized);
@@ -95,9 +98,9 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context1 = tracker.CreateContext();
-        var context2 = tracker.CreateContext();
-        var context3 = tracker.CreateContext();
+        var context1 = tracker.CreateExecutionContext();
+        var context2 = tracker.CreateExecutionContext();
+        var context3 = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal(1, context1.PositionInSuite);
@@ -112,9 +115,9 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context1 = tracker.CreateContext();
-        var context2 = tracker.CreateContext();
-        var context3 = tracker.CreateContext();
+        var context1 = tracker.CreateExecutionContext();
+        var context2 = tracker.CreateExecutionContext();
+        var context3 = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal(1, context1.GlobalPosition);
@@ -129,7 +132,7 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.NotEmpty(context.ThreadId);
@@ -144,7 +147,7 @@ public sealed class ExecutionTrackerTests
         const string workerId = "worker-123";
 
         // Act
-        var context = tracker.CreateContext(workerId);
+        var context = tracker.CreateExecutionContext(workerId);
 
         // Assert
         Assert.Equal(workerId, context.WorkerId);
@@ -158,7 +161,7 @@ public sealed class ExecutionTrackerTests
         const string collectionName = "MyTestCollection";
 
         // Act
-        var context = tracker.CreateContext(collectionName: collectionName);
+        var context = tracker.CreateExecutionContext(collectionName: collectionName);
 
         // Assert
         Assert.Equal(collectionName, context.CollectionName);
@@ -171,8 +174,8 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context1 = tracker.CreateContext();
-        var context2 = tracker.CreateContext();
+        var context1 = tracker.CreateExecutionContext();
+        var context2 = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal(tracker.SuiteId, context1.TestSuiteId);
@@ -187,7 +190,7 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.True(context.SuiteElapsedTime >= TimeSpan.Zero);
@@ -205,7 +208,7 @@ public sealed class ExecutionTrackerTests
 
         // Act
         tracker.RecordTestCompletion(null, testId, testName, outcome);
-        var context = tracker.CreateContext();
+        var context = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal(testId, context.PreviousTestId);
@@ -225,8 +228,8 @@ public sealed class ExecutionTrackerTests
         tracker.RecordTestCompletion(worker1, "test-1", "Test1", TestOutcome.Passed);
         tracker.RecordTestCompletion(worker2, "test-2", "Test2", TestOutcome.Failed);
 
-        var context1 = tracker.CreateContext(worker1);
-        var context2 = tracker.CreateContext(worker2);
+        var context1 = tracker.CreateExecutionContext(worker1);
+        var context2 = tracker.CreateExecutionContext(worker2);
 
         // Assert
         Assert.Equal("test-1", context1.PreviousTestId);
@@ -246,10 +249,10 @@ public sealed class ExecutionTrackerTests
 
         // Act
         tracker.RecordTestCompletion(null, "test-1", "Test1", TestOutcome.Passed);
-        var context1 = tracker.CreateContext();
+        var context1 = tracker.CreateExecutionContext();
 
         tracker.RecordTestCompletion(null, "test-2", "Test2", TestOutcome.Failed);
-        var context2 = tracker.CreateContext();
+        var context2 = tracker.CreateExecutionContext();
 
         // Assert
         Assert.Equal("test-1", context1.PreviousTestId);
@@ -263,8 +266,8 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        _ = tracker.CreateContext();
-        _ = tracker.CreateContext();
+        _ = tracker.CreateExecutionContext();
+        _ = tracker.CreateExecutionContext();
         var position = tracker.GlobalPosition;
 
         // Assert
@@ -291,10 +294,10 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        _ = tracker.CreateContext("worker-1");
+        _ = tracker.CreateExecutionContext("worker-1");
         var count1 = tracker.ActiveWorkerCount;
 
-        _ = tracker.CreateContext("worker-2");
+        _ = tracker.CreateExecutionContext("worker-2");
         var count2 = tracker.ActiveWorkerCount;
 
         // Assert
@@ -323,8 +326,8 @@ public sealed class ExecutionTrackerTests
         const string workerId = "worker-1";
 
         // Act
-        _ = tracker.CreateContext(workerId);
-        _ = tracker.CreateContext(workerId);
+        _ = tracker.CreateExecutionContext(workerId);
+        _ = tracker.CreateExecutionContext(workerId);
         var position = tracker.GetWorkerPosition(workerId);
 
         // Assert
@@ -370,8 +373,8 @@ public sealed class ExecutionTrackerTests
     {
         // Arrange
         var tracker = new ExecutionTracker();
-        _ = tracker.CreateContext("worker-1");
-        _ = tracker.CreateContext("worker-2");
+        _ = tracker.CreateExecutionContext("worker-1");
+        _ = tracker.CreateExecutionContext("worker-2");
         tracker.RecordTestCompletion("worker-1", "test-1", "Test1", TestOutcome.Passed);
 
         // Act
@@ -389,13 +392,13 @@ public sealed class ExecutionTrackerTests
     {
         // Arrange
         var tracker = new ExecutionTracker();
-        var contexts = new ConcurrentBag<Core.Models.ExecutionContext>();
+        var contexts = new ConcurrentBag<TestOrchestrationRecord>();
 
         // Act - Create contexts from multiple threads simultaneously
         var tasks = Enumerable.Range(1, 5).Select(i => Task.Run(() =>
         {
             var workerId = $"worker-{i}";
-            var context = tracker.CreateContext(workerId);
+            var context = tracker.CreateExecutionContext(workerId);
             contexts.Add(context);
         }));
 
@@ -411,7 +414,7 @@ public sealed class ExecutionTrackerTests
     {
         // Arrange
         var tracker = new ExecutionTracker();
-        var contexts = new ConcurrentBag<Core.Models.ExecutionContext>();
+        var contexts = new ConcurrentBag<TestOrchestrationRecord>();
 
         // Act - Each worker creates multiple contexts
         var tasks = Enumerable.Range(1, 3).Select(i => Task.Run(() =>
@@ -419,7 +422,7 @@ public sealed class ExecutionTrackerTests
             var workerId = $"worker-{i}";
             for (var j = 0; j < 5; j++)
             {
-                var context = tracker.CreateContext(workerId);
+                var context = tracker.CreateExecutionContext(workerId);
                 contexts.Add(context);
             }
         }));
@@ -440,13 +443,13 @@ public sealed class ExecutionTrackerTests
     {
         // Arrange
         var tracker = new ExecutionTracker();
-        var contexts = new ConcurrentBag<Core.Models.ExecutionContext>();
+        var contexts = new ConcurrentBag<TestOrchestrationRecord>();
 
         // Act - Create contexts from multiple threads
         var tasks = Enumerable.Range(1, 10).Select(i => Task.Run(() =>
         {
             var workerId = $"worker-{i}";
-            var context = tracker.CreateContext(workerId);
+            var context = tracker.CreateExecutionContext(workerId);
             contexts.Add(context);
         }));
 
@@ -493,13 +496,13 @@ public sealed class ExecutionTrackerTests
         const string workerId = "worker-1";
 
         // Act - Simulate sequential test execution
-        var context1 = tracker.CreateContext(workerId);
+        var context1 = tracker.CreateExecutionContext(workerId);
         tracker.RecordTestCompletion(workerId, "test-1", "Test1", TestOutcome.Passed);
 
-        var context2 = tracker.CreateContext(workerId);
+        var context2 = tracker.CreateExecutionContext(workerId);
         tracker.RecordTestCompletion(workerId, "test-2", "Test2", TestOutcome.Failed);
 
-        var context3 = tracker.CreateContext(workerId);
+        var context3 = tracker.CreateExecutionContext(workerId);
 
         // Assert
         Assert.Null(context1.PreviousTestId);
@@ -519,10 +522,10 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var worker1Context1 = tracker.CreateContext("worker-1");
-        var worker2Context1 = tracker.CreateContext("worker-2");
-        var worker1Context2 = tracker.CreateContext("worker-1");
-        var worker2Context2 = tracker.CreateContext("worker-2");
+        var worker1Context1 = tracker.CreateExecutionContext("worker-1");
+        var worker2Context1 = tracker.CreateExecutionContext("worker-2");
+        var worker1Context2 = tracker.CreateExecutionContext("worker-1");
+        var worker2Context2 = tracker.CreateExecutionContext("worker-2");
 
         // Assert
         Assert.Equal(1, worker1Context1.PositionInSuite);
@@ -538,9 +541,9 @@ public sealed class ExecutionTrackerTests
         var tracker = new ExecutionTracker();
 
         // Act
-        var context1 = tracker.CreateContext();
+        var context1 = tracker.CreateExecutionContext();
         System.Threading.Thread.Sleep(10);
-        var context2 = tracker.CreateContext();
+        var context2 = tracker.CreateExecutionContext();
 
         // Assert
         Assert.True(context2.SuiteElapsedTime > context1.SuiteElapsedTime);

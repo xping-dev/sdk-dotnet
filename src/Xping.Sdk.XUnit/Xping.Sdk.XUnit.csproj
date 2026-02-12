@@ -16,14 +16,16 @@
     <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
     <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-
+  
   <ItemGroup>
-    <PackageReference Include="xunit.extensibility.core" Version="2.9.2" />
-    <PackageReference Include="xunit.extensibility.execution" Version="2.9.2" />
+    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+    <ProjectReference Include="..\Xping.Sdk.Shared\Xping.Sdk.Shared.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+    <PackageReference Include="xunit.extensibility.core" Version="2.9.2" />
+    <PackageReference Include="xunit.extensibility.execution" Version="2.9.2" />
   </ItemGroup>
 
 </Project>

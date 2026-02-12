@@ -8,6 +8,7 @@
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Benchmarks;
 

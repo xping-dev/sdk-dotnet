@@ -45,7 +45,7 @@ trim_trailing_whitespace = false
 [*.cs]
 
 # File header
-file_header_template = /*\n * © 2025 Xping.io. All Rights Reserved.\n * License: [MIT]\n */
+file_header_template = /*\n * © 2026 Xping.io. All Rights Reserved.\n * License: [MIT]\n */
 
 #### Core EditorConfig Options ####
 
@@ -295,6 +295,13 @@ dotnet_naming_style.ends_with_async.required_prefix =
 dotnet_naming_style.ends_with_async.required_suffix = Async
 dotnet_naming_style.ends_with_async.word_separator = 
 dotnet_naming_style.ends_with_async.capitalization = pascal_case
+
+#### Path-specific Rules ####
+
+# CA1812: Internal classes registered via DI are never directly instantiated by user code;
+# the analyzer cannot see through service registration calls, so suppress for Internals/ folders.
+[**/Internals/**.cs]
+dotnet_diagnostic.CA1812.severity = none
 
 #### Code Quality Rules ####
 

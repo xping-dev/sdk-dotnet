@@ -99,7 +99,7 @@ public class ConfigurationBenchmarks
     }
 
     /// <summary>
-    /// Benchmark: Configuration object instantiation.
+    /// Benchmark: Options object instantiation.
     /// </summary>
     [Benchmark(Baseline = true, Description = "Instantiate default configuration")]
     public XpingConfiguration InstantiateDefault()

@@ -6,10 +6,10 @@
  */
 
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Upload;
 
 namespace Xping.Sdk.Benchmarks;
 
@@ -158,7 +158,7 @@ public class CollectorBenchmarks
     /// <summary>
     /// No-op uploader for benchmarking (doesn't actually upload).
     /// </summary>
-    private sealed class NoOpUploader : ITestResultUploader
+    private sealed class NoOpUploader : IXpingUploader
     {
         public Task<UploadResult> UploadAsync(
             IEnumerable<TestExecution> executions,

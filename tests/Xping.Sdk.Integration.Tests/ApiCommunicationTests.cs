@@ -3,16 +3,17 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+
 namespace Xping.Sdk.Integration.Tests;
 
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
-using Xping.Sdk.Core.Collection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
 using Xping.Sdk.Integration.Tests.Infrastructure;
 using Xunit;
 
@@ -41,7 +42,7 @@ public sealed class ApiCommunicationTests : IDisposable
         };
 
         using var httpClient = new HttpClient();
-        using var uploader = new XpingApiClient(httpClient, config);
+        using var uploader = new XpingUploader(httpClient, config);
         var testExecution = CreateTestExecution();
 
         // Act
@@ -77,7 +78,7 @@ public sealed class ApiCommunicationTests : IDisposable
         };
 
         using var httpClient = new HttpClient();
-        using var uploader = new XpingApiClient(httpClient, config);
+        using var uploader = new XpingUploader(httpClient, config);
         var executions = Enumerable.Range(0, 5).Select(_ => CreateTestExecution()).ToArray();
 
         // Act
@@ -102,7 +103,7 @@ public sealed class ApiCommunicationTests : IDisposable
         };
 
         using var httpClient = new HttpClient();
-        using var uploader = new XpingApiClient(httpClient, config);
+        using var uploader = new XpingUploader(httpClient, config);
         await using var collector = new TestExecutionCollector(uploader, config);
 
         // Act
@@ -133,7 +134,7 @@ public sealed class ApiCommunicationTests : IDisposable
         };
 
         using var httpClient = new HttpClient();
-        using var uploader = new XpingApiClient(httpClient, config);
+        using var uploader = new XpingUploader(httpClient, config);
         await using var collector = new TestExecutionCollector(uploader, config);
 
         // Act
@@ -165,7 +166,7 @@ public sealed class ApiCommunicationTests : IDisposable
         };
 
         using var httpClient = new HttpClient();
-        using var uploader = new XpingApiClient(httpClient, config);
+        using var uploader = new XpingUploader(httpClient, config);
         var testExecution = CreateTestExecution();
 
         // Act

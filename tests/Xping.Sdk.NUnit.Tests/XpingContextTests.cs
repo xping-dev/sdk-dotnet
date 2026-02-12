@@ -3,6 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+
 namespace Xping.Sdk.NUnit.Tests;
 
 using System;

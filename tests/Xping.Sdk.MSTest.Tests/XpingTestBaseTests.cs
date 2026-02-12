@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
+
 namespace Xping.Sdk.MSTest.Tests;
 
 using System;

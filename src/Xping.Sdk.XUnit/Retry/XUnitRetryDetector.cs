@@ -3,14 +3,14 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.XUnit.Retry;
-
-using System;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Retry;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Retry;
+
+namespace Xping.Sdk.XUnit.Retry;
 
 /// <summary>
 /// Detects retry attributes and metadata for xUnit tests.
@@ -21,72 +21,36 @@ using Xping.Sdk.Core.Retry;
 /// - Custom retry implementations
 /// This detector uses reflection to identify and extract metadata from these retry attributes.
 /// </remarks>
-public sealed class XUnitRetryDetector : IRetryDetector<ITest>
+[SuppressMessage("Performance", "CA1812", Justification = "Instantiated by the DI container.")]
+internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
 {
-    private static readonly string[] AttemptSeparators = ["(attempt", ")"];
+    private static readonly string[] _attemptSeparators = ["(attempt", ")"];
+
     /// <inheritdoc/>
-    public RetryMetadata? DetectRetryMetadata(ITest test)
+    RetryMetadata? IRetryDetector<ITest>.DetectRetryMetadata(ITest test, TestOutcome testOutcome)
     {
-        if (test?.TestCase?.TestMethod?.Method == null)
+        if (test.TestCase?.TestMethod?.Method == null)
         {
             return null;
         }
 
-        var method = test.TestCase.TestMethod.Method;
+        IMethodInfo? method = test.TestCase.TestMethod.Method;
 
         // Try to get reflection-based method info
-        var methodInfo = GetMethodInfo(method);
+        MethodInfo? methodInfo = GetMethodInfo(method);
         if (methodInfo == null)
         {
             return null;
         }
 
         // Look for retry attributes
-        var retryAttribute = FindRetryAttribute(methodInfo);
+        Attribute? retryAttribute = FindRetryAttribute(methodInfo);
         if (retryAttribute == null)
         {
             return null;
         }
 
-        return ExtractRetryMetadata(retryAttribute, test);
-    }
-
-    /// <inheritdoc/>
-    public bool HasRetryAttribute(ITest test)
-    {
-        return DetectRetryMetadata(test) != null;
-    }
-
-    /// <inheritdoc/>
-    public int GetCurrentAttemptNumber(ITest test)
-    {
-        // xUnit doesn't expose retry attempt count directly in ITest
-        // We need to look for custom properties or trait data
-
-        if (test?.TestCase == null)
-        {
-            return 1;
-        }
-
-        // Check for retry attempt in traits (some retry libraries set this)
-        var traits = test.TestCase.Traits;
-        if (traits.TryGetValue("RetryAttempt", out var attemptValues))
-        {
-            if (attemptValues.Count > 0 && int.TryParse(attemptValues.First(), out var attempt))
-            {
-                return attempt;
-            }
-        }
-
-        // Try to extract from display name (some retry libraries append attempt number)
-        var attemptFromDisplayName = GetAttemptNumberFromDisplayName(test.DisplayName);
-        if (attemptFromDisplayName > 1)
-        {
-            return attemptFromDisplayName;
-        }
-
-        // Default to first attempt
-        return 1;
+        return ExtractRetryMetadata(retryAttribute, test, testOutcome);
     }
 
     private static MethodInfo? GetMethodInfo(IMethodInfo method)
@@ -94,8 +58,8 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
         try
         {
             // xUnit's IMethodInfo can be converted to reflection MethodInfo
-            var typeName = method.Type.Name;
-            var type = Type.GetType(typeName);
+            string? typeName = method.Type.Name;
+            Type? type = Type.GetType(typeName);
 
             if (type == null)
             {
@@ -105,12 +69,7 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
                     .FirstOrDefault(t => t.FullName == typeName);
             }
 
-            if (type == null)
-            {
-                return null;
-            }
-
-            var methodInfo = type.GetMethod(
+            MethodInfo? methodInfo = type?.GetMethod(
                 method.Name,
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
@@ -125,13 +84,13 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
     private static Attribute? FindRetryAttribute(MethodInfo methodInfo)
     {
         // Get all attributes
-        var attributes = methodInfo.GetCustomAttributes(true);
+        object[] attributes = methodInfo.GetCustomAttributes(true);
 
         // Look for known retry attributes
-        foreach (var attr in attributes)
+        foreach (object attr in attributes)
         {
-            var attrType = attr.GetType();
-            var attrName = attrType.Name.Replace("Attribute", "");
+            Type attrType = attr.GetType();
+            string attrName = attrType.Name.Replace("Attribute", "");
 
             if (RetryAttributeRegistry.IsRegisteredForFramework("xunit", attrName))
             {
@@ -142,65 +101,96 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
         return null;
     }
 
-    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, ITest test)
+    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, ITest test, TestOutcome testOutcome)
     {
-        var attrType = retryAttribute.GetType();
-        var metadata = new RetryMetadata
-        {
-            RetryAttributeName = attrType.Name.Replace("Attribute", ""),
-            AttemptNumber = 1, // Will be updated during execution
-        };
+        RetryMetadataBuilder builder = new();
+        Type attrType = retryAttribute.GetType();
 
         // Extract MaxRetries property (common in retry attributes)
-        var maxRetriesProperty = attrType.GetProperty("MaxRetries") ?? attrType.GetProperty("Count");
+        PropertyInfo? maxRetriesProperty =
+            attrType.GetProperty("MaxRetries") ??
+            attrType.GetProperty("Count");
+
         if (maxRetriesProperty != null)
         {
-            var value = maxRetriesProperty.GetValue(retryAttribute);
+            object? value = maxRetriesProperty.GetValue(retryAttribute);
             if (value is int maxRetries)
             {
-                metadata.MaxRetries = maxRetries;
+                builder.WithMaxRetries(maxRetries);
             }
         }
 
         // Extract Delay property if available
-        var delayProperty = attrType.GetProperty("DelayMilliseconds") ?? attrType.GetProperty("Delay");
+        PropertyInfo? delayProperty =
+            attrType.GetProperty("DelayMilliseconds") ??
+            attrType.GetProperty("Delay");
+
         if (delayProperty != null)
         {
-            var value = delayProperty.GetValue(retryAttribute);
+            object? value = delayProperty.GetValue(retryAttribute);
             if (value is int delayMs)
             {
-                metadata.DelayBetweenRetries = TimeSpan.FromMilliseconds(delayMs);
+                builder.WithDelayBetweenRetries(TimeSpan.FromMilliseconds(delayMs));
             }
         }
 
         // Extract Reason property if available
-        var reasonProperty = attrType.GetProperty("Reason") ?? attrType.GetProperty("RetryReason");
+        PropertyInfo? reasonProperty =
+            attrType.GetProperty("Reason") ??
+            attrType.GetProperty("RetryReason");
+
         if (reasonProperty != null)
         {
-            var value = reasonProperty.GetValue(retryAttribute);
+            object? value = reasonProperty.GetValue(retryAttribute);
             if (value is string reason && !string.IsNullOrWhiteSpace(reason))
             {
-                metadata.RetryReason = reason;
+                builder.WithRetryReason(reason);
             }
         }
 
-        // Get current attempt number
-        metadata.AttemptNumber = GetAttemptNumberFromTest(test);
+        // Get the current attempt number
+        int attemptNumber = GetCurrentAttemptNumber(test);
 
-        // Determine if passed on retry
-        metadata.PassedOnRetry = metadata.AttemptNumber > 1 && test.TestCase != null;
-
-        // Store additional metadata from other properties
-        ExtractAdditionalMetadata(retryAttribute, metadata);
+        RetryMetadata metadata = builder
+            .Reset()
+            .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
+            .WithAttemptNumber(attemptNumber)
+            .WithPassedOnRetry(attemptNumber > 1 && test.TestCase != null && testOutcome == TestOutcome.Passed)
+            .AddMetadata(ExtractAdditionalMetadata(retryAttribute)) // Store additional metadata from other properties
+            .Build();
 
         return metadata;
     }
 
-    private static int GetAttemptNumberFromTest(ITest test)
+    private static int GetCurrentAttemptNumber(ITest test)
     {
-        // Try to extract from display name
-        var displayName = test.DisplayName;
-        return GetAttemptNumberFromDisplayName(displayName);
+        // xUnit doesn't expose retry attempt count directly in ITest
+        // We need to look for custom properties or trait data
+
+        if (test.TestCase == null)
+        {
+            return 1;
+        }
+
+        // Check for a retry attempt in traits (some retry libraries set this)
+        Dictionary<string, List<string>>? traits = test.TestCase.Traits;
+        if (traits.TryGetValue("RetryAttempt", out List<string>? attemptValues))
+        {
+            if (attemptValues.Count > 0 && int.TryParse(attemptValues.First(), out int attempt))
+            {
+                return attempt;
+            }
+        }
+
+        // Try to extract from the display name (some retry libraries append attempt number)
+        int attemptFromDisplayName = GetAttemptNumberFromDisplayName(test.DisplayName);
+        if (attemptFromDisplayName > 1)
+        {
+            return attemptFromDisplayName;
+        }
+
+        // Default to the first attempt
+        return 1;
     }
 
     private static int GetAttemptNumberFromDisplayName(string displayName)
@@ -213,28 +203,31 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
         // Some retry libraries append attempt number like: TestName (attempt 2)
         if (displayName.IndexOf("(attempt", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            var parts = displayName.Split(AttemptSeparators, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = displayName.Split(_attemptSeparators, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2)
             {
-                // After split, parts[1] contains the attempt number before the closing ")"
-                var attemptStr = parts[1].Trim();
-                if (int.TryParse(attemptStr, out var attempt))
+                // After split, parts[1] contain the attempt number before the closing ")"
+                string attemptStr = parts[1].Trim();
+                if (int.TryParse(attemptStr, out int attempt))
                 {
                     return attempt;
                 }
             }
         }
 
-        // Some libraries use format: TestName [Retry 2]
-        var retryIndex = displayName.IndexOf("[retry", StringComparison.OrdinalIgnoreCase);
+        // Some libraries use a format: TestName [Retry 2]
+        int retryIndex = displayName.IndexOf("[retry", StringComparison.OrdinalIgnoreCase);
         if (retryIndex >= 0)
         {
-            var endIndex = displayName.IndexOf(']', retryIndex);
+            int endIndex = displayName.IndexOf(']', retryIndex);
             if (endIndex > retryIndex)
             {
                 // Extract text between "[retry" and "]"
-                var retryText = displayName.Substring(retryIndex + 6, endIndex - (retryIndex + 6)).Trim();
-                if (int.TryParse(retryText, out var attempt))
+                string retryText = displayName
+                    .Substring(retryIndex + 6, endIndex - (retryIndex + 6))
+                    .Trim();
+
+                if (int.TryParse(retryText, out int attempt))
                 {
                     return attempt;
                 }
@@ -244,31 +237,32 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
         return 1;
     }
 
-    private static void ExtractAdditionalMetadata(Attribute retryAttribute, RetryMetadata metadata)
+    private static Dictionary<string, string> ExtractAdditionalMetadata(Attribute retryAttribute)
     {
-        var attrType = retryAttribute.GetType();
+        Dictionary<string, string> additionalMetadata = [];
+        Type attrType = retryAttribute.GetType();
 
         // Look for common retry-related properties
-        var propertiesToCheck = new[]
-        {
+        string[] propertiesToCheck =
+        [
             "ExceptionTypes",
             "Filter",
             "OnlyRetryOn",
             "Skip",
             "Timeout"
-        };
+        ];
 
-        foreach (var propertyName in propertiesToCheck)
+        foreach (string propertyName in propertiesToCheck)
         {
-            var property = attrType.GetProperty(propertyName);
+            PropertyInfo? property = attrType.GetProperty(propertyName);
             if (property != null)
             {
                 try
                 {
-                    var value = property.GetValue(retryAttribute);
+                    object? value = property.GetValue(retryAttribute);
                     if (value != null)
                     {
-                        metadata.AdditionalMetadata[propertyName] = value.ToString() ?? string.Empty;
+                        additionalMetadata[propertyName] = value.ToString() ?? string.Empty;
                     }
                 }
                 catch
@@ -277,5 +271,7 @@ public sealed class XUnitRetryDetector : IRetryDetector<ITest>
                 }
             }
         }
+
+        return additionalMetadata;
     }
 }
