@@ -3,9 +3,7 @@
  * License: [MIT]
  */
 
-#if !DEBUG
 using Xping.Sdk.Core.Extensions.Internals;
-#endif
 
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +15,7 @@ using Polly.CircuitBreaker;
 using Polly.Retry;
 using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Display;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
@@ -182,11 +181,12 @@ public static class XpingServiceCollectionExtensions
                 .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Fatal)
                 .MinimumLevel.Override("Polly", LogEventLevel.Fatal);
 #if DEBUG
-            loggerConfig.WriteTo.Console(
-                outputTemplate: "[Xping {Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}",
-                formatProvider: CultureInfo.InvariantCulture);
+            loggerConfig.WriteTo.Sink(new RawConsoleSink(
+                new MessageTemplateTextFormatter(
+                    "[Xping {Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}",
+                    CultureInfo.InvariantCulture)));
 #else
-            loggerConfig.WriteTo.Console(formatter: new XpingConsoleFormatter());
+            loggerConfig.WriteTo.Sink(new RawConsoleSink(new XpingConsoleFormatter()));
 #endif
 
             builder.AddSerilog(loggerConfig.CreateLogger(), dispose: true);
