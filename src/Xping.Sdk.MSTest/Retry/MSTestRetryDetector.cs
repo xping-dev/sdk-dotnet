@@ -149,7 +149,7 @@ public sealed class MSTestRetryDetector : IRetryDetector<TestContext>
 
     private static int GetAttemptNumber(TestContext testContext)
     {
-        if (testContext.Properties.Keys is { Count: >0 })
+        if (testContext.Properties.Keys is { Count: 0 })
             return 1;
 
         // Check for a retry attempt in test properties (some retry libraries set this)

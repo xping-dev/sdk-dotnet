@@ -5,6 +5,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using NUnit.Framework;
 using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
@@ -141,7 +142,6 @@ internal sealed class NUnitRetryDetector : IRetryDetector<ITest>
         int attemptNumber = GetCurrentAttemptNumber(test);
 
         RetryMetadata metadata = builder
-            .Reset()
             .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
             .WithAttemptNumber(attemptNumber)
             .WithPassedOnRetry(attemptNumber > 1 && testOutcome == TestOutcome.Passed)
@@ -153,23 +153,20 @@ internal sealed class NUnitRetryDetector : IRetryDetector<ITest>
 
     private static int GetCurrentAttemptNumber(ITest test)
     {
-        if (test.Properties.Keys.Count == 0)
+        // NUnit tracks the current attempt in TestContext.CurrentContext.CurrentRepeatCount,
+        // which is zero-based and updated by both RetryCommand and RepeatedTestCommand.
+        try
         {
-            return 1;
+            int repeatCount = TestContext.CurrentContext.CurrentRepeatCount;
+            return repeatCount + 1;
+        }
+        catch
+        {
+            // TestContext may not be available outside a live test execution (e.g. in unit tests
+            // of the detector itself). Fall through to display-name parsing.
         }
 
-        // NUnit stores retry count in test properties
-        if (test.Properties.ContainsKey("_RETRY_COUNT"))
-        {
-            object? retryCountObj = test.Properties.Get("_RETRY_COUNT");
-            if (retryCountObj != null && int.TryParse(retryCountObj.ToString(), out int retryCount))
-            {
-                // _RETRY_COUNT is 0-indexed, so add 1 for the attempt number
-                return retryCount + 1;
-            }
-        }
-
-        // Try to extract from the test name (NUnit appends retry info to test name)
+        // Fallback: some custom retry libraries append attempt info to the test name.
         int attemptFromName = GetAttemptNumberFromTestName(test.Name);
         if (attemptFromName > 1)
         {

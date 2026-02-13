@@ -152,7 +152,6 @@ internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
         int attemptNumber = GetCurrentAttemptNumber(test);
 
         RetryMetadata metadata = builder
-            .Reset()
             .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
             .WithAttemptNumber(attemptNumber)
             .WithPassedOnRetry(attemptNumber > 1 && test.TestCase != null && testOutcome == TestOutcome.Passed)
