@@ -176,14 +176,14 @@ internal sealed class XpingUploader(
 
             ApiResponse? apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse>().ConfigureAwait(false);
 
-            int confirmedCount = apiResponse?.ExecutionCount ?? executionCount;
+            int confirmedCount = apiResponse?.TotalRecords ?? executionCount;
             string? receiptId = apiResponse?.ReceiptId;
             string shortReceipt = receiptId is { Length: > 8 }
                 ? receiptId.Substring(0, 8)
                 : receiptId ?? "n/a";
 
             logger.LogInformation(
-                "Published {ExecutionCount} tests in {DurationMs}ms ({PayloadKB:F1} KB) · receipt {ReceiptId}",
+                "Published {TotalRecords} tests in {DurationMs}ms ({PayloadKB:F1} KB) · receipt {ReceiptId}",
                 confirmedCount,
                 durationMs,
                 payloadSizeBytes / 1024.0,
@@ -236,7 +236,7 @@ internal sealed class XpingUploader(
         }
         else
         {
-            logger.LogError("Same {StatusCode} error ({Ordinal} occurrence, batch size: {ExecutionCount})",
+            logger.LogError("Same {StatusCode} error ({Ordinal} occurrence, batch size: {TotalRecords})",
                 statusCode, GetOrdinal(occurrenceCount), executionCount);
         }
 
@@ -301,7 +301,7 @@ internal sealed class XpingUploader(
 #pragma warning disable CA1812 // Response classes are instantiated by JSON deserializer
     private sealed class ApiResponse
     {
-        public int ExecutionCount { get; set; }
+        public int TotalRecords { get; set; }
 
         public string? ReceiptId { get; set; }
     }
