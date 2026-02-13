@@ -32,10 +32,15 @@ public interface IExecutionTracker
     /// Falls back to the current managed thread ID if <see langword="null"/>.
     /// </param>
     /// <param name="collectionName">Optional collection or fixture name for framework-specific grouping.</param>
+    /// <param name="attemptNumber">
+    /// The 1-based attempt number for this test execution. When greater than 1 (i.e., a retry),
+    /// position counters are not incremented — the record reuses the position claimed by the
+    /// first attempt so that retried tests do not shift the positions of subsequent tests.
+    /// </param>
     /// <returns>
     /// An <see cref="TestOrchestrationRecord"/> containing order, parallelization, and suite state information.
     /// </returns>
-    TestOrchestrationRecord CreateExecutionContext(string? workerId = null, string? collectionName = null);
+    TestOrchestrationRecord CreateExecutionContext(string? workerId = null, string? collectionName = null, int attemptNumber = 1);
 
     /// <summary>
     /// Records a completed test so it can be referenced as the previous test in subsequent executions

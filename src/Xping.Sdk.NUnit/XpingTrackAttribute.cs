@@ -158,11 +158,13 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
 
-        // Create an execution context using ExecutionTracker
-        var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(workerId, fixtureName);
-
-        // Detect retry metadata
+        // Detect retry metadata first so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
+
+        // Create an execution context using ExecutionTracker.
+        // Pass the attempt number so retried executions reuse the position of the first attempt.
+        var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(
+            workerId, fixtureName, retryMetadata?.AttemptNumber ?? 1);
 
         TestMetadata metadata = ExtractMetadata(test);
 

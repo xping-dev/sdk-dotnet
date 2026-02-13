@@ -28,19 +28,31 @@ internal sealed class ExecutionTracker : IExecutionTracker
     int IExecutionTracker.ActiveWorkerCount => _workerPositions.Count;
 
     /// <inheritdoc/>
-    TestOrchestrationRecord IExecutionTracker.CreateExecutionContext(string? workerId, string? collectionName)
+    TestOrchestrationRecord IExecutionTracker.CreateExecutionContext(string? workerId, string? collectionName, int attemptNumber)
     {
         string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
         string workerKey = workerId ?? threadId;
 
-        // Get a position for this worker
-        int workerPosition = _workerPositions.AddOrUpdate(
-            workerKey,
-            _ => 1,
-            updateValueFactory: (_, current) => current + 1);
+        int workerPosition;
+        int globalPosition;
 
-        // Get global position (approximate in parallel scenarios)
-        int globalPosition = Interlocked.Increment(ref _globalPosition);
+        if (attemptNumber > 1)
+        {
+            // Retry attempt: reuse the position claimed by attempt 1 so that retried tests
+            // do not displace the positions of subsequent distinct tests in the suite.
+            workerPosition = _workerPositions.TryGetValue(workerKey, out int existing) ? existing : 1;
+            globalPosition = Volatile.Read(ref _globalPosition);
+        }
+        else
+        {
+            // First attempt: claim a new position slot on this worker and globally.
+            workerPosition = _workerPositions.AddOrUpdate(
+                workerKey,
+                _ => 1,
+                updateValueFactory: (_, current) => current + 1);
+
+            globalPosition = Interlocked.Increment(ref _globalPosition);
+        }
 
         // Get a previous test for this worker
         _previousTests.TryGetValue(workerKey, out PrecedingTestRecord? previousTest);

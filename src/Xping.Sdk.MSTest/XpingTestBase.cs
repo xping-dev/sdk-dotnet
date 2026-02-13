@@ -115,11 +115,13 @@ public abstract class XpingTestBase
         var errorMessage = GetErrorMessage(context) ?? string.Empty;
         var stackTrace = GetStackTrace(context) ?? string.Empty;
 
-        // Create an execution context using ExecutionTracker
-        var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(threadId, className);
-
-        // Detect retry metadata
+        // Detect retry metadata first so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(context, outcome);
+
+        // Create an execution context using ExecutionTracker.
+        // Pass the attempt number so retried executions reuse the position of the first attempt.
+        var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(
+            threadId, className, retryMetadata?.AttemptNumber ?? 1);
 
         TestMetadata metadata = ExtractMetadata(context);
 

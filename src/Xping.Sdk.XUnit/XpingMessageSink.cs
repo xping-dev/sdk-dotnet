@@ -253,10 +253,12 @@ public sealed class XpingMessageSink(
 
         // Extract test metadata
         TestMetadata metadata = ExtractMetadata(test, output);
-        // Create execution context using collection name as worker ID
-        TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(workerId: collectionName);
-        // Detect retry metadata
+        // Detect retry metadata first so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
+        // Create execution context using collection name as worker ID.
+        // Pass the attempt number so retried executions reuse the position of the first attempt.
+        TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
+            workerId: collectionName, attemptNumber: retryMetadata?.AttemptNumber ?? 1);
 
         TestExecution testExecution = new TestExecutionBuilder()
             .WithExecutionId(Guid.NewGuid())
