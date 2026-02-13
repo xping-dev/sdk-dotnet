@@ -100,10 +100,11 @@ public static class XpingServiceCollectionExtensions
     {
         return services
             .AddXpingInfrastructure()
+            .AddXpingSerialization()
             .AddXpingConfigurationFromConfiguration(configuration)
             .AddXpingEnvironment()
-            .AddXpingCollection()
-            .AddXpingUpload();
+            .AddXpingCollectors()
+            .AddXpingUploader();
     }
 
     /// <summary>
@@ -125,10 +126,11 @@ public static class XpingServiceCollectionExtensions
 
         return services
             .AddXpingInfrastructure()
+            .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(config)
             .AddXpingEnvironment()
-            .AddXpingCollection()
-            .AddXpingUpload();
+            .AddXpingCollectors()
+            .AddXpingUploader();
     }
 
     /// <summary>
@@ -149,10 +151,11 @@ public static class XpingServiceCollectionExtensions
 
         return services
             .AddXpingInfrastructure()
+            .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(configuration)
             .AddXpingEnvironment()
-            .AddXpingCollection()
-            .AddXpingUpload();
+            .AddXpingCollectors()
+            .AddXpingUploader();
     }
 
     #region Feature: Infrastructure (Logging, Serialization, HTTP)
@@ -189,9 +192,20 @@ public static class XpingServiceCollectionExtensions
             builder.AddSerilog(loggerConfig.CreateLogger(), dispose: true);
         });
 
+        return services;
+    }
+
+    /// <summary>
+    /// Adds Xping serialization support to the service collection.
+    /// Registers the default JSON serializer using API-specific options,
+    /// including compact formatting and camelCase naming.
+    /// </summary>
+    /// <param name="services">The service collection to which the Xping serializer is added.</param>
+    /// <returns>The modified service collection.</returns>
+    public static IServiceCollection AddXpingSerialization(this IServiceCollection services)
+    {
         // Register JSON serializer with API options (compact, camelCase)
         services.AddSingleton<IXpingSerializer>(_ => new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
-
         return services;
     }
 
@@ -280,7 +294,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingCollection(this IServiceCollection services)
+    public static IServiceCollection AddXpingCollectors(this IServiceCollection services)
     {
         // Register a test execution collector for batching and sampling
         services.AddSingleton<ITestExecutionCollector, TestExecutionCollector>();
@@ -302,7 +316,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingUpload(this IServiceCollection services)
+    public static IServiceCollection AddXpingUploader(this IServiceCollection services)
     {
         // Register HttpClient for XpingUploader with proper configuration and resilience policies
         services.AddHttpClient<IXpingUploader, XpingUploader>((serviceProvider, client) =>
