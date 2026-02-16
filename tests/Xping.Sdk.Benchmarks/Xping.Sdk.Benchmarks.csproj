@@ -9,7 +9,7 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <!-- Disable analyzers that are not relevant for benchmark projects -->
-    <NoWarn>$(NoWarn);CA1515;CA5394;CA1001;CA1024;IDE0055</NoWarn>
+    <NoWarn>$(NoWarn);CA1515;CA5394;CA1001;CA1024;IDE0055;CA1822;CA2007</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

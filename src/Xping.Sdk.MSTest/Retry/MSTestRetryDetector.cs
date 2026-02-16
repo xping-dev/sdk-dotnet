@@ -3,13 +3,13 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.MSTest.Retry;
-
-using System;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Retry;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Retry;
+
+namespace Xping.Sdk.MSTest.Retry;
 
 /// <summary>
 /// Detects retry attributes and metadata for MSTest tests.
@@ -21,131 +21,61 @@ using Xping.Sdk.Core.Retry;
 public sealed class MSTestRetryDetector : IRetryDetector<TestContext>
 {
     /// <inheritdoc/>
-    public RetryMetadata? DetectRetryMetadata(TestContext testContext)
+    RetryMetadata? IRetryDetector<TestContext>.DetectRetryMetadata(TestContext testContext, TestOutcome testOutcome)
     {
         if (testContext == null)
-        {
             return null;
-        }
 
         // Get the test method via reflection
-        var methodInfo = GetTestMethod(testContext);
+        MethodInfo? methodInfo = GetTestMethod(testContext);
         if (methodInfo == null)
-        {
             return null;
-        }
 
         // Look for retry attributes
-        var retryAttribute = FindRetryAttribute(methodInfo);
+        Attribute? retryAttribute = FindRetryAttribute(methodInfo);
         if (retryAttribute == null)
-        {
             return null;
-        }
 
-        return ExtractRetryMetadata(retryAttribute, testContext);
-    }
-
-    /// <inheritdoc/>
-    public bool HasRetryAttribute(TestContext testContext)
-    {
-        return DetectRetryMetadata(testContext) != null;
-    }
-
-    /// <inheritdoc/>
-    public int GetCurrentAttemptNumber(TestContext testContext)
-    {
-        if (testContext?.Properties == null)
-        {
-            return 1;
-        }
-
-        // Check for retry attempt in test properties (some retry libraries set this)
-        if (testContext.Properties.Contains("RetryAttempt"))
-        {
-            var attemptObj = testContext.Properties["RetryAttempt"];
-            if (attemptObj != null && int.TryParse(attemptObj.ToString(), out var attempt))
-            {
-                return attempt;
-            }
-        }
-
-        // Check for retry count property
-        if (testContext.Properties.Contains("RetryCount"))
-        {
-            var countObj = testContext.Properties["RetryCount"];
-            if (countObj != null && int.TryParse(countObj.ToString(), out var count))
-            {
-                // RetryCount is typically 0-indexed
-                return count + 1;
-            }
-        }
-
-        // Try to extract from test name
-        var attemptFromName = GetAttemptNumberFromTestName(testContext.TestName);
-        if (attemptFromName > 1)
-        {
-            return attemptFromName;
-        }
-
-        return 1;
+        return ExtractRetryMetadata(retryAttribute, testContext, testOutcome);
     }
 
     private static MethodInfo? GetTestMethod(TestContext testContext)
     {
         try
         {
-            // Get the test class type
             var fullClassName = testContext.FullyQualifiedTestClassName;
             if (string.IsNullOrEmpty(fullClassName))
-            {
                 return null;
-            }
 
             // Find the type in loaded assemblies
-            var type = Type.GetType(fullClassName);
+            Type? type = Type.GetType(fullClassName);
             if (type == null)
             {
-                // Try to find in all loaded assemblies
                 type = AppDomain.CurrentDomain.GetAssemblies()
                     .SelectMany(a =>
                     {
-                        try
-                        {
-                            return a.GetTypes();
-                        }
-                        catch
-                        {
-                            return Array.Empty<Type>();
-                        }
+                        try { return a.GetTypes(); }
+                        catch { return Array.Empty<Type>(); }
                     })
                     .FirstOrDefault(t => t.FullName == fullClassName);
             }
 
             if (type == null)
-            {
                 return null;
-            }
 
-            // Get the test method
             var testName = testContext.TestName;
             if (string.IsNullOrEmpty(testName))
-            {
                 return null;
-            }
 
-            // For data-driven tests, test name may include parameters in parentheses
+            // For data-driven tests, the test name may include parameters in parentheses
             var methodName = testName!;
             var parenIndex = methodName.IndexOf('(');
             if (parenIndex > 0)
-            {
                 methodName = methodName.Substring(0, parenIndex).Trim();
-            }
 
-            var method = type.GetMethod(
+            return type.GetMethod(
                 methodName,
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-
-            return method;
         }
         catch
         {
@@ -155,184 +85,141 @@ public sealed class MSTestRetryDetector : IRetryDetector<TestContext>
 
     private static Attribute? FindRetryAttribute(MethodInfo methodInfo)
     {
-        // Get all attributes
-        var attributes = methodInfo.GetCustomAttributes(true);
+        object[] attributes = methodInfo.GetCustomAttributes(true);
 
-        // Look for known retry attributes
-        foreach (var attr in attributes)
+        foreach (object attr in attributes)
         {
-            var attrType = attr.GetType();
-            var attrName = attrType.Name.Replace("Attribute", "");
+            Type attrType = attr.GetType();
+            string attrName = attrType.Name.Replace("Attribute", "");
 
             if (RetryAttributeRegistry.IsRegisteredForFramework("mstest", attrName))
-            {
                 return attr as Attribute;
-            }
         }
 
         return null;
     }
 
-    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, TestContext testContext)
+    private static RetryMetadata ExtractRetryMetadata(
+        Attribute retryAttribute,
+        TestContext testContext,
+        TestOutcome testOutcome)
     {
-        var attrType = retryAttribute.GetType();
-        var metadata = new RetryMetadata
-        {
-            RetryAttributeName = attrType.Name.Replace("Attribute", ""),
-            AttemptNumber = 1, // Will be updated during execution
-        };
+        Type attrType = retryAttribute.GetType();
 
-        // Extract MaxRetries property (common names: Count, MaxRetries, RetryCount)
-        var maxRetriesProperty = attrType.GetProperty("MaxRetries", BindingFlags.Public | BindingFlags.Instance)
+        // Extract MaxRetries property (common names: MaxRetries, Count, RetryCount)
+        PropertyInfo? maxRetriesProperty =
+            attrType.GetProperty("MaxRetries", BindingFlags.Public | BindingFlags.Instance)
             ?? attrType.GetProperty("Count", BindingFlags.Public | BindingFlags.Instance)
             ?? attrType.GetProperty("RetryCount", BindingFlags.Public | BindingFlags.Instance);
 
-        if (maxRetriesProperty != null)
-        {
-            var value = maxRetriesProperty.GetValue(retryAttribute);
-            if (value is int maxRetries)
-            {
-                metadata.MaxRetries = maxRetries;
-            }
-        }
+        int maxRetries = maxRetriesProperty?.GetValue(retryAttribute) is int mr ? mr : 0;
 
         // Extract Delay property if available
-        var delayProperty = attrType.GetProperty("DelayMilliseconds", BindingFlags.Public | BindingFlags.Instance)
+        PropertyInfo? delayProperty =
+            attrType.GetProperty("DelayMilliseconds", BindingFlags.Public | BindingFlags.Instance)
             ?? attrType.GetProperty("Delay", BindingFlags.Public | BindingFlags.Instance);
 
-        if (delayProperty != null)
-        {
-            var value = delayProperty.GetValue(retryAttribute);
-            if (value is int delayMs)
-            {
-                metadata.DelayBetweenRetries = TimeSpan.FromMilliseconds(delayMs);
-            }
-        }
+        TimeSpan delay = delayProperty?.GetValue(retryAttribute) is int delayMs
+            ? TimeSpan.FromMilliseconds(delayMs)
+            : TimeSpan.Zero;
 
         // Extract Reason property if available
-        var reasonProperty = attrType.GetProperty("Reason", BindingFlags.Public | BindingFlags.Instance)
+        PropertyInfo? reasonProperty =
+            attrType.GetProperty("Reason", BindingFlags.Public | BindingFlags.Instance)
             ?? attrType.GetProperty("RetryReason", BindingFlags.Public | BindingFlags.Instance);
 
-        if (reasonProperty != null)
-        {
-            var value = reasonProperty.GetValue(retryAttribute);
-            if (value is string reason && !string.IsNullOrWhiteSpace(reason))
-            {
-                metadata.RetryReason = reason;
-            }
-        }
+        string? reason = reasonProperty?.GetValue(retryAttribute) is string r && !string.IsNullOrWhiteSpace(r)
+            ? r
+            : null;
 
-        // Get current attempt number from test context
-        var attemptNumber = GetAttemptNumberFromTestContext(testContext);
-        metadata.AttemptNumber = attemptNumber;
+        int attemptNumber = GetAttemptNumber(testContext);
 
-        // Determine if passed on retry
-        metadata.PassedOnRetry = attemptNumber > 1;
-
-        // Store additional metadata from other properties
-        ExtractAdditionalMetadata(retryAttribute, metadata);
+        RetryMetadata metadata = new RetryMetadataBuilder()
+            .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
+            .WithAttemptNumber(attemptNumber)
+            .WithMaxRetries(maxRetries)
+            .WithDelayBetweenRetries(delay)
+            .WithRetryReason(reason ?? string.Empty)
+            .WithPassedOnRetry(attemptNumber > 1 && testOutcome == TestOutcome.Passed)
+            .AddMetadata(ExtractAdditionalMetadata(retryAttribute))
+            .Build();
 
         return metadata;
     }
 
-    private static int GetAttemptNumberFromTestContext(TestContext testContext)
+    private static int GetAttemptNumber(TestContext testContext)
     {
-        if (testContext?.Properties == null)
-        {
-            return 1;
-        }
-
-        // Check for retry attempt in test properties
+        // Check for a retry attempt in test properties (some retry libraries set this)
         if (testContext.Properties.Contains("RetryAttempt"))
         {
             var attemptObj = testContext.Properties["RetryAttempt"];
-            if (attemptObj != null && int.TryParse(attemptObj.ToString(), out var attempt))
-            {
+            if (attemptObj != null && int.TryParse(attemptObj.ToString(), out int attempt))
                 return attempt;
-            }
         }
 
-        // Check for retry count property
+        // Check for retry count property (0-indexed)
         if (testContext.Properties.Contains("RetryCount"))
         {
             var countObj = testContext.Properties["RetryCount"];
-            if (countObj != null && int.TryParse(countObj.ToString(), out var count))
-            {
+            if (countObj != null && int.TryParse(countObj.ToString(), out int count))
                 return count + 1;
-            }
         }
 
-        // Try to extract from test name
+        // Try to extract from the test name
         return GetAttemptNumberFromTestName(testContext.TestName);
     }
 
     private static int GetAttemptNumberFromTestName(string? testName)
     {
         if (string.IsNullOrEmpty(testName))
-        {
             return 1;
-        }
 
         // Some retry libraries append retry info like: TestName (Retry 2)
-        var retryIndex = testName!.IndexOf("(retry", StringComparison.OrdinalIgnoreCase);
+        int retryIndex = testName!.IndexOf("(retry", StringComparison.OrdinalIgnoreCase);
         if (retryIndex >= 0)
         {
-            var endIndex = testName.IndexOf(')', retryIndex);
+            int endIndex = testName.IndexOf(')', retryIndex);
             if (endIndex > retryIndex)
             {
-                // Extract text between "(retry" and ")"
-                var retryText = testName.Substring(retryIndex + 6, endIndex - (retryIndex + 6)).Trim();
-                if (int.TryParse(retryText, out var attempt))
-                {
+                string retryText = testName.Substring(retryIndex + 6, endIndex - (retryIndex + 6)).Trim();
+                if (int.TryParse(retryText, out int attempt))
                     return attempt;
-                }
             }
         }
 
         // Some libraries use format: TestName [Attempt 2]
-        var attemptIndex = testName.IndexOf("[attempt", StringComparison.OrdinalIgnoreCase);
+        int attemptIndex = testName.IndexOf("[attempt", StringComparison.OrdinalIgnoreCase);
         if (attemptIndex >= 0)
         {
-            var endIndex = testName.IndexOf(']', attemptIndex);
+            int endIndex = testName.IndexOf(']', attemptIndex);
             if (endIndex > attemptIndex)
             {
-                var attemptText = testName.Substring(attemptIndex + 8, endIndex - (attemptIndex + 8)).Trim();
-                if (int.TryParse(attemptText, out var attempt))
-                {
+                string attemptText = testName.Substring(attemptIndex + 8, endIndex - (attemptIndex + 8)).Trim();
+                if (int.TryParse(attemptText, out int attempt))
                     return attempt;
-                }
             }
         }
 
         return 1;
     }
 
-    private static void ExtractAdditionalMetadata(Attribute retryAttribute, RetryMetadata metadata)
+    private static Dictionary<string, string> ExtractAdditionalMetadata(Attribute retryAttribute)
     {
-        var attrType = retryAttribute.GetType();
+        Dictionary<string, string> additionalMetadata = [];
+        Type attrType = retryAttribute.GetType();
 
-        // Look for common retry-related properties
-        var propertiesToCheck = new[]
-        {
-            "ExceptionTypes",
-            "Filter",
-            "OnlyRetryOn",
-            "Skip",
-            "Timeout"
-        };
+        string[] propertiesToCheck = ["ExceptionTypes", "Filter", "OnlyRetryOn", "Skip", "Timeout"];
 
-        foreach (var propertyName in propertiesToCheck)
+        foreach (string propertyName in propertiesToCheck)
         {
-            var property = attrType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+            PropertyInfo? property = attrType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
             if (property != null)
             {
                 try
                 {
-                    var value = property.GetValue(retryAttribute);
+                    object? value = property.GetValue(retryAttribute);
                     if (value != null)
-                    {
-                        metadata.AdditionalMetadata[propertyName] = value.ToString() ?? string.Empty;
-                    }
+                        additionalMetadata[propertyName] = value.ToString() ?? string.Empty;
                 }
                 catch
                 {
@@ -340,5 +227,7 @@ public sealed class MSTestRetryDetector : IRetryDetector<TestContext>
                 }
             }
         }
+
+        return additionalMetadata;
     }
 }

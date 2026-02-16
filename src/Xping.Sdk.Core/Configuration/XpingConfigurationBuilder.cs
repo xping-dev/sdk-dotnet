@@ -5,8 +5,6 @@
 
 namespace Xping.Sdk.Core.Configuration;
 
-using System;
-
 /// <summary>
 /// Provides a fluent API for building <see cref="XpingConfiguration"/> instances.
 /// </summary>

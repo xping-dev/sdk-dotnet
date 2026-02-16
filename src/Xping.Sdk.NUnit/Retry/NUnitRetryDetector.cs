@@ -3,13 +3,15 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.NUnit.Retry;
-
-using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using global::NUnit.Framework.Interfaces;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Retry;
+using NUnit.Framework;
+using NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Retry;
+
+namespace Xping.Sdk.NUnit.Retry;
 
 /// <summary>
 /// Detects retry attributes and metadata for NUnit tests.
@@ -18,66 +20,32 @@ using Xping.Sdk.Core.Retry;
 /// NUnit has native retry support via the [Retry] attribute.
 /// This detector uses reflection to identify and extract metadata from retry attributes.
 /// </remarks>
-public sealed class NUnitRetryDetector : IRetryDetector<ITest>
+[SuppressMessage("Performance", "CA1812", Justification = "Instantiated by the DI container.")]
+internal sealed class NUnitRetryDetector : IRetryDetector<ITest>
 {
     /// <inheritdoc/>
-    public RetryMetadata? DetectRetryMetadata(ITest test)
+    RetryMetadata? IRetryDetector<ITest>.DetectRetryMetadata(ITest test, TestOutcome testOutcom)
     {
-        if (test?.Method == null)
+        if (test.Method == null)
         {
             return null;
         }
 
         // Get the MethodInfo from the test
-        var methodInfo = GetMethodInfo(test);
+        MethodInfo? methodInfo = GetMethodInfo(test);
         if (methodInfo == null)
         {
             return null;
         }
 
         // Look for retry attributes
-        var retryAttribute = FindRetryAttribute(methodInfo);
+        Attribute? retryAttribute = FindRetryAttribute(methodInfo);
         if (retryAttribute == null)
         {
             return null;
         }
 
-        return ExtractRetryMetadata(retryAttribute, test);
-    }
-
-    /// <inheritdoc/>
-    public bool HasRetryAttribute(ITest test)
-    {
-        return DetectRetryMetadata(test) != null;
-    }
-
-    /// <inheritdoc/>
-    public int GetCurrentAttemptNumber(ITest test)
-    {
-        if (test?.Properties == null)
-        {
-            return 1;
-        }
-
-        // NUnit stores retry count in test properties
-        if (test.Properties.ContainsKey("_RETRY_COUNT"))
-        {
-            var retryCountObj = test.Properties.Get("_RETRY_COUNT");
-            if (retryCountObj != null && int.TryParse(retryCountObj.ToString(), out var retryCount))
-            {
-                // _RETRY_COUNT is 0-indexed, so add 1 for attempt number
-                return retryCount + 1;
-            }
-        }
-
-        // Try to extract from test name (NUnit appends retry info to test name)
-        var attemptFromName = GetAttemptNumberFromTestName(test.Name);
-        if (attemptFromName > 1)
-        {
-            return attemptFromName;
-        }
-
-        return 1;
+        return ExtractRetryMetadata(retryAttribute, test, testOutcom);
     }
 
     private static MethodInfo? GetMethodInfo(ITest test)
@@ -91,10 +59,10 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
             }
 
             // Fallback: try to get via reflection
-            if (test.TypeInfo != null && test.Method != null)
+            if (test is { TypeInfo: not null, Method: not null })
             {
-                var type = test.TypeInfo.Type;
-                var method = type.GetMethod(
+                Type type = test.TypeInfo.Type;
+                MethodInfo? method = type.GetMethod(
                     test.Method.Name,
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
                 return method;
@@ -111,13 +79,13 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
     private static Attribute? FindRetryAttribute(MethodInfo methodInfo)
     {
         // Get all attributes
-        var attributes = methodInfo.GetCustomAttributes(true);
+        object[] attributes = methodInfo.GetCustomAttributes(true);
 
         // Look for known retry attributes
-        foreach (var attr in attributes)
+        foreach (object attr in attributes)
         {
-            var attrType = attr.GetType();
-            var attrName = attrType.Name.Replace("Attribute", "");
+            Type attrType = attr.GetType();
+            string attrName = attrType.Name.Replace("Attribute", "");
 
             if (RetryAttributeRegistry.IsRegisteredForFramework("nunit", attrName))
             {
@@ -128,86 +96,84 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
         return null;
     }
 
-    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, ITest test)
+    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, ITest test, TestOutcome testOutcome)
     {
-        var attrType = retryAttribute.GetType();
-        var metadata = new RetryMetadata
-        {
-            RetryAttributeName = attrType.Name.Replace("Attribute", ""),
-            AttemptNumber = 1, // Will be updated during execution
-        };
+        RetryMetadataBuilder builder = new();
+        Type attrType = retryAttribute.GetType();
 
         // Extract MaxRetries property (NUnit Retry uses constructor parameter)
         // Try to get via properties
-        var tryCountProperty = attrType.GetProperty("TryCount", BindingFlags.Public | BindingFlags.Instance);
+        PropertyInfo? tryCountProperty = attrType.GetProperty("TryCount", BindingFlags.Public | BindingFlags.Instance);
         if (tryCountProperty != null)
         {
-            var value = tryCountProperty.GetValue(retryAttribute);
+            object? value = tryCountProperty.GetValue(retryAttribute);
             if (value is int tryCount)
             {
-                metadata.MaxRetries = tryCount;
+                builder.WithMaxRetries(tryCount);
             }
         }
-
-        // Fallback: try Count property for custom retry attributes
-        if (metadata.MaxRetries == 0)
+        else // Fallback: try Count property for custom retry attributes
         {
-            var countProperty = attrType.GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
+            PropertyInfo? countProperty = attrType.GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
             if (countProperty != null)
             {
-                var value = countProperty.GetValue(retryAttribute);
+                object? value = countProperty.GetValue(retryAttribute);
                 if (value is int count)
                 {
-                    metadata.MaxRetries = count;
+                    builder.WithMaxRetries(count);
                 }
             }
-        }
-
-        // Last resort: try accessing private field (NUnit stores constructor param as private field)
-        if (metadata.MaxRetries == 0)
-        {
-            var tryCountField = attrType.GetField("_tryCount", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (tryCountField != null)
+            else // Last resort: try accessing a private field (NUnit stores constructor param as private field)
             {
-                var value = tryCountField.GetValue(retryAttribute);
-                if (value is int tryCount)
+                FieldInfo? tryCountField =
+                    attrType.GetField("_tryCount", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (tryCountField != null)
                 {
-                    metadata.MaxRetries = tryCount;
+                    object? value = tryCountField.GetValue(retryAttribute);
+                    if (value is int tryCount)
+                    {
+                        builder.WithMaxRetries(tryCount);
+                    }
                 }
             }
         }
 
-        // Get current attempt number
-        metadata.AttemptNumber = GetAttemptNumberFromTest(test);
+        // Get the current attempt number
+        int attemptNumber = GetCurrentAttemptNumber(test);
 
-        // Determine if passed on retry
-        metadata.PassedOnRetry = metadata.AttemptNumber > 1;
-
-        // Store additional metadata from other properties
-        ExtractAdditionalMetadata(retryAttribute, metadata);
+        RetryMetadata metadata = builder
+            .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
+            .WithAttemptNumber(attemptNumber)
+            .WithPassedOnRetry(attemptNumber > 1 && testOutcome == TestOutcome.Passed)
+            .AddMetadata(ExtractAdditionalMetadata(retryAttribute)) // Store additional metadata from other properties
+            .Build();
 
         return metadata;
     }
 
-    private static int GetAttemptNumberFromTest(ITest test)
+    private static int GetCurrentAttemptNumber(ITest test)
     {
-        if (test?.Properties == null)
+        // NUnit tracks the current attempt in TestContext.CurrentContext.CurrentRepeatCount,
+        // which is zero-based and updated by both RetryCommand and RepeatedTestCommand.
+        try
         {
-            return 1;
+            int repeatCount = TestContext.CurrentContext.CurrentRepeatCount;
+            return repeatCount + 1;
+        }
+        catch
+        {
+            // TestContext may not be available outside a live test execution (e.g. in unit tests
+            // of the detector itself). Fall through to display-name parsing.
         }
 
-        // Check for retry count in properties
-        if (test.Properties.ContainsKey("_RETRY_COUNT"))
+        // Fallback: some custom retry libraries append attempt info to the test name.
+        int attemptFromName = GetAttemptNumberFromTestName(test.Name);
+        if (attemptFromName > 1)
         {
-            var retryCountObj = test.Properties.Get("_RETRY_COUNT");
-            if (retryCountObj != null && int.TryParse(retryCountObj.ToString(), out var retryCount))
-            {
-                return retryCount + 1;
-            }
+            return attemptFromName;
         }
 
-        // Try to extract from test name
-        return GetAttemptNumberFromTestName(test.Name);
+        return 1;
     }
 
     private static int GetAttemptNumberFromTestName(string testName)
@@ -218,15 +184,15 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
         }
 
         // NUnit may append retry info like: TestName (Retry 2)
-        var retryIndex = testName.IndexOf("(retry", StringComparison.OrdinalIgnoreCase);
+        int retryIndex = testName.IndexOf("(retry", StringComparison.OrdinalIgnoreCase);
         if (retryIndex >= 0)
         {
-            var endIndex = testName.IndexOf(')', retryIndex);
+            int endIndex = testName.IndexOf(')', retryIndex);
             if (endIndex > retryIndex)
             {
                 // Extract text between "(retry" and ")"
-                var retryText = testName.Substring(retryIndex + 6, endIndex - (retryIndex + 6)).Trim();
-                if (int.TryParse(retryText, out var attempt))
+                string retryText = testName.Substring(retryIndex + 6, endIndex - (retryIndex + 6)).Trim();
+                if (int.TryParse(retryText, out int attempt))
                 {
                     return attempt;
                 }
@@ -236,30 +202,25 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
         return 1;
     }
 
-    private static void ExtractAdditionalMetadata(Attribute retryAttribute, RetryMetadata metadata)
+    private static Dictionary<string, string> ExtractAdditionalMetadata(Attribute retryAttribute)
     {
-        var attrType = retryAttribute.GetType();
+        Dictionary<string, string> additionalMetadata = [];
+        Type attrType = retryAttribute.GetType();
 
         // Look for common retry-related properties
-        var propertiesToCheck = new[]
-        {
-            "OnlyOnce",
-            "Reason",
-            "Skip",
-            "Timeout"
-        };
+        string[] propertiesToCheck = ["OnlyOnce", "Reason", "Skip", "Timeout"];
 
-        foreach (var propertyName in propertiesToCheck)
+        foreach (string propertyName in propertiesToCheck)
         {
-            var property = attrType.GetProperty(propertyName);
+            PropertyInfo? property = attrType.GetProperty(propertyName);
             if (property != null)
             {
                 try
                 {
-                    var value = property.GetValue(retryAttribute);
+                    object? value = property.GetValue(retryAttribute);
                     if (value != null)
                     {
-                        metadata.AdditionalMetadata[propertyName] = value.ToString() ?? string.Empty;
+                        additionalMetadata[propertyName] = value.ToString() ?? string.Empty;
                     }
                 }
                 catch
@@ -268,5 +229,7 @@ public sealed class NUnitRetryDetector : IRetryDetector<ITest>
                 }
             }
         }
+
+        return additionalMetadata;
     }
 }

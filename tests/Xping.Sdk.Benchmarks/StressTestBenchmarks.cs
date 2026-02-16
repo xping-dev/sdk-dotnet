@@ -12,13 +12,13 @@
 namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Collection;
+using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 /// <summary>
@@ -31,25 +31,12 @@ public class StressTestBenchmarks
 {
     private readonly Random _random = new();
 
-    private sealed class NoOpUploader : ITestResultUploader
-    {
-        public Task<UploadResult> UploadAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
-        {
-            var count = executions.Count();
-            return Task.FromResult(new UploadResult 
-            { 
-                Success = true, 
-                ExecutionCount = count 
-            });
-        }
-    }
-
     /// <summary>
     /// Sustained load: 1,000 tests continuously.
     /// Validates: No degradation over time, memory stability, consistent performance.
     /// </summary>
     [Benchmark]
-    public async Task SustainedLoad_1000Tests()
+    public void SustainedLoad_1000Tests()
     {
         var config = new XpingConfiguration
         {
@@ -60,41 +47,33 @@ public class StressTestBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 1000; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"stress-1k-{i}",
-                    FullyQualifiedName = $"Stress.Load.Test{i}"
-                },
-                TestName = $"Stress Test {i}",
-                Outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(10, 200)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+            var builder = new TestExecutionBuilder()
+                .WithTestName($"Stress Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 200)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+                .WithEndTime(DateTime.UtcNow);
 
-            if (i % 10 == 0)
+            if (outcome == TestOutcome.Failed)
             {
-                execution.ErrorMessage = $"Test {i} failed under load";
-                execution.StackTrace = "   at Stress.Test.Method() in StressTest.cs:line 42";
+                builder.WithException(null, $"Test {i} failed under load", "   at Stress.Test.Method() in StressTest.cs:line 42");
             }
 
-            collector.RecordTest(execution);
+            collector.RecordTest(builder.Build());
 
-            // Trigger periodic flushes
+            // Trigger periodic drains
             if (i % 100 == 99)
             {
-                await collector.FlushAsync().ConfigureAwait(false);
+                _ = collector.Drain();
             }
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -102,7 +81,7 @@ public class StressTestBenchmarks
     /// Validates: Scalability to large test suites, memory efficiency at scale.
     /// </summary>
     [Benchmark]
-    public async Task HighVolumeLoad_5000Tests()
+    public void HighVolumeLoad_5000Tests()
     {
         var config = new XpingConfiguration
         {
@@ -113,35 +92,26 @@ public class StressTestBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 5000; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"stress-5k-{i}",
-                    FullyQualifiedName = $"Stress.HighVolume.Test{i}"
-                },
-                TestName = $"High Volume Test {i}",
-                Outcome = i % 20 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(5, 150)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-75),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"High Volume Test {i}")
+                .WithOutcome(i % 20 == 0 ? TestOutcome.Failed : TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 150)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-75))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
 
-            collector.RecordTest(execution);
-
-            // Periodic flushes
+            // Periodic drains
             if (i % 500 == 499)
             {
-                await collector.FlushAsync().ConfigureAwait(false);
+                _ = collector.Drain();
             }
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -149,7 +119,7 @@ public class StressTestBenchmarks
     /// Validates: Peak throughput handling, buffer management under pressure.
     /// </summary>
     [Benchmark]
-    public async Task BurstLoad_2000Tests()
+    public void BurstLoad_2000Tests()
     {
         var config = new XpingConfiguration
         {
@@ -160,30 +130,21 @@ public class StressTestBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         // Rapid-fire recording (no artificial delays)
         for (int i = 0; i < 2000; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"burst-{i}",
-                    FullyQualifiedName = $"Stress.Burst.Test{i}"
-                },
-                TestName = $"Burst Test {i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(5, 50)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-25),
-                EndTimeUtc = DateTime.UtcNow
-            };
-
-            collector.RecordTest(execution);
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Burst Test {i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 50)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-25))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -191,7 +152,7 @@ public class StressTestBenchmarks
     /// Validates: Real-world scenario handling, no bottlenecks with diverse test patterns.
     /// </summary>
     [Benchmark]
-    public async Task MixedWorkload_1500Tests()
+    public void MixedWorkload_1500Tests()
     {
         var config = new XpingConfiguration
         {
@@ -202,53 +163,53 @@ public class StressTestBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 1500; i++)
         {
             var isComplexTest = i % 5 == 0;
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"mixed-{i}",
-                    FullyQualifiedName = $"Stress.Mixed.{(isComplexTest ? "Complex" : "Simple")}.Test{i}",
-                    ClassName = isComplexTest ? "ComplexTestClass" : "SimpleTestClass",
-                    MethodName = $"TestMethod{i}"
-                },
-                TestName = $"Mixed Test {i}",
-                Outcome = i % 15 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(isComplexTest ? _random.Next(100, 500) : _random.Next(5, 50)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var outcome = i % 15 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+
+            var identity = new TestIdentityBuilder()
+                .WithTestId($"mixed-{i}")
+                .WithFullyQualifiedName($"Stress.Mixed.{(isComplexTest ? "Complex" : "Simple")}.Test{i}")
+                .WithClassName(isComplexTest ? "ComplexTestClass" : "SimpleTestClass")
+                .WithMethodName($"TestMethod{i}")
+                .Build();
+
+            var builder = new TestExecutionBuilder()
+                .WithTestName($"Mixed Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(isComplexTest ? _random.Next(100, 500) : _random.Next(5, 50)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+                .WithEndTime(DateTime.UtcNow)
+                .WithIdentity(identity);
 
             if (isComplexTest)
             {
-                execution.Metadata = new TestMetadata
-                {
-                    Categories = new[] { "Integration", "Slow" }
-                };
-                execution.Metadata.CustomAttributes["Priority"] = "High";
+                builder.WithMetadata(new TestMetadataBuilder()
+                    .AddCategory("Integration")
+                    .AddCategory("Slow")
+                    .AddCustomAttribute("Priority", "High")
+                    .Build());
             }
 
-            if (i % 15 == 0)
+            if (outcome == TestOutcome.Failed)
             {
-                execution.ErrorMessage = "Complex failure scenario";
-                execution.StackTrace = @"   at Complex.Method.Call() in Complex.cs:line 123
-   at Integration.Test.Execute() in Test.cs:line 456";
+                builder.WithException(null, "Complex failure scenario",
+                    @"   at Complex.Method.Call() in Complex.cs:line 123
+   at Integration.Test.Execute() in Test.cs:line 456");
             }
 
-            collector.RecordTest(execution);
+            collector.RecordTest(builder.Build());
 
             if (i % 150 == 149)
             {
-                await collector.FlushAsync().ConfigureAwait(false);
+                _ = collector.Drain();
             }
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -256,7 +217,7 @@ public class StressTestBenchmarks
     /// Validates: No memory accumulation, proper disposal, GC behavior.
     /// </summary>
     [Benchmark]
-    public async Task MemoryStability_10Cycles_100TestsEach()
+    public void MemoryStability_10Cycles_100TestsEach()
     {
         var config = new XpingConfiguration
         {
@@ -270,30 +231,21 @@ public class StressTestBenchmarks
         // 10 cycles of 100 tests each
         for (int cycle = 0; cycle < 10; cycle++)
         {
-            await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+            using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
             for (int i = 0; i < 100; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"memory-cycle{cycle}-test{i}",
-                        FullyQualifiedName = $"Memory.Stability.Cycle{cycle}.Test{i}"
-                    },
-                    TestName = $"Memory Test C{cycle} T{i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(10, 100)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                    EndTimeUtc = DateTime.UtcNow
-                };
-
-                collector.RecordTest(execution);
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Memory Test C{cycle} T{i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 100)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
-            await collector.FlushAsync().ConfigureAwait(false);
-            // Collector disposed at end of iteration
+            _ = collector.Drain();
+            // Collector disposed at end of using block
         }
     }
 
@@ -302,7 +254,7 @@ public class StressTestBenchmarks
     /// Validates: Sustained throughput, no performance degradation over time.
     /// </summary>
     [Benchmark]
-    public async Task ContinuousPressure_3000Tests()
+    public void ContinuousPressure_3000Tests()
     {
         var config = new XpingConfiguration
         {
@@ -313,26 +265,19 @@ public class StressTestBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 3000; i++)
         {
-            collector.RecordTest(new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"continuous-{i}",
-                    FullyQualifiedName = $"Stress.Continuous.Test{i}"
-                },
-                TestName = $"Continuous Test {i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(10, 80)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-45),
-                EndTimeUtc = DateTime.UtcNow
-            });
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Continuous Test {i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 80)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-45))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 }

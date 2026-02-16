@@ -12,12 +12,13 @@
 namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Collection;
+using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -30,19 +31,6 @@ using System.Threading.Tasks;
 public class ConcurrencyBenchmarks
 {
     private readonly Random _random = new();
-
-    private sealed class NoOpUploader : ITestResultUploader
-    {
-        public Task<UploadResult> UploadAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
-        {
-            var count = executions.Count();
-            return Task.FromResult(new UploadResult 
-            { 
-                Success = true, 
-                ExecutionCount = count 
-            });
-        }
-    }
 
     /// <summary>
     /// Low parallelism: 4 threads recording simultaneously.
@@ -60,35 +48,26 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 4).Select(async threadId =>
         {
             for (int i = 0; i < 100; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Low.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(10, 100)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                    EndTimeUtc = DateTime.UtcNow
-                };
-
-                collector.RecordTest(execution);
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 100)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
             await Task.Yield();
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -107,40 +86,33 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 8).Select(async threadId =>
         {
             for (int i = 0; i < 100; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Medium.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Thread {threadId} Test {i}",
-                    Outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(5, 80)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-40),
-                    EndTimeUtc = DateTime.UtcNow
-                };
+                var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+                var builder = new TestExecutionBuilder()
+                    .WithTestName($"Thread {threadId} Test {i}")
+                    .WithOutcome(outcome)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 80)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-40))
+                    .WithEndTime(DateTime.UtcNow);
 
                 if (i % 10 == 0)
                 {
-                    execution.ErrorMessage = $"Thread {threadId} test {i} failed";
+                    builder.WithException(null, $"Thread {threadId} test {i} failed", null);
                 }
 
-                collector.RecordTest(execution);
+                collector.RecordTest(builder.Build());
             }
 
             await Task.Yield();
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -159,35 +131,26 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 16).Select(async threadId =>
         {
             for (int i = 0; i < 100; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.High.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(5, 60)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-30),
-                    EndTimeUtc = DateTime.UtcNow
-                };
-
-                collector.RecordTest(execution);
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 60)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-30))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
             await Task.Yield();
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -206,43 +169,34 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 32).Select(async threadId =>
         {
             for (int i = 0; i < 50; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Extreme.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(5, 50)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-25),
-                    EndTimeUtc = DateTime.UtcNow
-                };
-
-                collector.RecordTest(execution);
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 50)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-25))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
             await Task.Yield();
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
-    /// Contended flush: Multiple threads triggering flush simultaneously.
-    /// Validates: Flush operation thread-safety, no race conditions during flush.
+    /// Contended drain: Multiple threads triggering drain simultaneously.
+    /// Validates: Drain operation thread-safety, no race conditions.
     /// </summary>
     [Benchmark]
-    public async Task ContendedFlush_8Threads_FlushAfterEach10Tests()
+    public async Task ContendedDrain_8Threads_DrainAfterEach10Tests()
     {
         var config = new XpingConfiguration
         {
@@ -253,33 +207,24 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 8).Select(async threadId =>
         {
             for (int i = 0; i < 50; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"flush-thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Flush.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Flush Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(10, 80)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-45),
-                    EndTimeUtc = DateTime.UtcNow
-                };
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Flush Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 80)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-45))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
 
-                collector.RecordTest(execution);
-
-                // Trigger flush every 10 tests
+                // Trigger drain every 10 tests
                 if (i % 10 == 9)
                 {
-                    await collector.FlushAsync().ConfigureAwait(false);
+                    _ = collector.Drain();
                 }
             }
 
@@ -287,15 +232,15 @@ public class ConcurrencyBenchmarks
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
-    /// Mixed operations: Threads recording tests while others are flushing.
-    /// Validates: Read/write concurrency, no blocking on flush operations.
+    /// Mixed operations: Threads recording tests while others are draining.
+    /// Validates: Read/write concurrency, no blocking on drain operations.
     /// </summary>
     [Benchmark]
-    public async Task MixedOperations_RecordAndFlush_12Threads()
+    public async Task MixedOperations_RecordAndDrain_12Threads()
     {
         var config = new XpingConfiguration
         {
@@ -306,44 +251,36 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
-        // 8 threads recording, 4 threads periodically flushing
+        // 8 threads recording, 4 threads periodically draining
         var recordTasks = Enumerable.Range(0, 8).Select(async threadId =>
         {
             for (int i = 0; i < 100; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"record-thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Mixed.Record.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Record Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(10, 70)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-40),
-                    EndTimeUtc = DateTime.UtcNow
-                };
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Record Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 70)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-40))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
 
-                collector.RecordTest(execution);
                 await Task.Yield();
             }
         }).ToArray();
 
-        var flushTasks = Enumerable.Range(0, 4).Select(async flushId =>
+        var drainTasks = Enumerable.Range(0, 4).Select(async drainId =>
         {
             for (int i = 0; i < 10; i++)
             {
-                await Task.Delay(5).ConfigureAwait(false); // Stagger flushes
-                await collector.FlushAsync().ConfigureAwait(false);
+                await Task.Delay(5).ConfigureAwait(false); // Stagger drains
+                _ = collector.Drain();
             }
         }).ToArray();
 
-        await Task.WhenAll(recordTasks.Concat(flushTasks)).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        await Task.WhenAll(recordTasks.Concat(drainTasks)).ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -362,32 +299,25 @@ public class ConcurrencyBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         var tasks = Enumerable.Range(0, 20).Select(async threadId =>
         {
             for (int i = 0; i < 20; i++)
             {
-                collector.RecordTest(new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"burst-thread{threadId}-test{i}",
-                        FullyQualifiedName = $"Concurrency.Burst.Thread{threadId}.Test{i}"
-                    },
-                    TestName = $"Burst Thread {threadId} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(5, 40)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-20),
-                    EndTimeUtc = DateTime.UtcNow
-                });
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Burst Thread {threadId} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 40)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-20))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
             await Task.Yield();
         }).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 }

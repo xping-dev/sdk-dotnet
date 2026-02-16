@@ -1,11 +1,13 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
 namespace Xping.Sdk.NUnit.Tests;
 
+using global::NUnit.Framework;
 using System;
+using System.Threading.Tasks;
 using Xunit;
 using Assert = Xunit.Assert;
 
@@ -14,122 +16,106 @@ using Assert = Xunit.Assert;
 /// Note: Deep integration testing with actual NUnit test execution is done in sample projects.
 /// These unit tests verify the attribute's contract and error handling.
 /// </summary>
-public sealed class XpingTrackAttributeTests : IDisposable
+[Collection("XpingContext")]
+public sealed class XpingTrackAttributeTests : IAsyncLifetime
 {
-    public XpingTrackAttributeTests()
+    public Task InitializeAsync()
     {
-        XpingContext.Reset();
+        return XpingContext.ShutdownAsync().AsTask();
     }
 
-    public void Dispose()
+    public Task DisposeAsync()
     {
-        XpingContext.Reset();
-        GC.SuppressFinalize(this);
+        return XpingContext.ShutdownAsync().AsTask();
     }
 
     [Fact]
     public void Targets_ReturnsTestLevel()
     {
-        // Arrange
         var attribute = new XpingTrackAttribute();
 
-        // Act
-        var targets = attribute.Targets;
+        var targets = ((ITestAction)attribute).Targets;
 
-        // Assert - Verify it returns Test level (value 1)
+        // ActionTargets.Test has value 1
         Assert.Equal(1, (int)targets);
     }
 
     [Fact]
-    public void BeforeTest_WithNullTest_ThrowsNullReferenceException()
+    public void BeforeTest_WithNullTest_ThrowsArgumentNullException()
     {
-        // Arrange
         var attribute = new XpingTrackAttribute();
 
-        // Act & Assert - BeforeTest accesses test.Properties which will throw on null
-        Assert.Throws<ArgumentNullException>(() => attribute.BeforeTest(null!));
+        Assert.Throws<ArgumentNullException>(() => ((ITestAction)attribute).BeforeTest(null!));
     }
 
     [Fact]
     public void AfterTest_WithNullTest_DoesNotThrow()
     {
-        // Arrange
         var attribute = new XpingTrackAttribute();
 
-        // Act & Assert - AfterTest has try-catch that swallows exceptions
-        var exception = Record.Exception(() => attribute.AfterTest(null!));
+        // AfterTest returns early when test is null
+        var exception = Record.Exception(() => ((ITestAction)attribute).AfterTest(null!));
+
         Assert.Null(exception);
     }
 
     [Fact]
     public void AfterTest_WithoutBeforeTest_DoesNotThrow()
     {
-        // Arrange
         var attribute = new XpingTrackAttribute();
 
-        // Act & Assert - Should handle gracefully when BeforeTest wasn't called
-        // (the private fields will be default values)
-        var exception = Record.Exception(() => attribute.AfterTest(null!));
+        var exception = Record.Exception(() => ((ITestAction)attribute).AfterTest(null!));
+
         Assert.Null(exception);
     }
 
     [Fact]
     public void AttributeUsage_CanBeAppliedToMethod()
     {
-        // Arrange
         var attributeType = typeof(XpingTrackAttribute);
         var attributes = attributeType.GetCustomAttributes(typeof(AttributeUsageAttribute), false);
         var usage = (AttributeUsageAttribute)attributes[0];
 
-        // Assert
         Assert.True((usage.ValidOn & AttributeTargets.Method) == AttributeTargets.Method);
     }
 
     [Fact]
     public void AttributeUsage_CanBeAppliedToClass()
     {
-        // Arrange
         var attributeType = typeof(XpingTrackAttribute);
         var attributes = attributeType.GetCustomAttributes(typeof(AttributeUsageAttribute), false);
         var usage = (AttributeUsageAttribute)attributes[0];
 
-        // Assert
         Assert.True((usage.ValidOn & AttributeTargets.Class) == AttributeTargets.Class);
     }
 
     [Fact]
     public void AttributeUsage_CanBeAppliedToAssembly()
     {
-        // Arrange
         var attributeType = typeof(XpingTrackAttribute);
         var attributes = attributeType.GetCustomAttributes(typeof(AttributeUsageAttribute), false);
         var usage = (AttributeUsageAttribute)attributes[0];
 
-        // Assert
         Assert.True((usage.ValidOn & AttributeTargets.Assembly) == AttributeTargets.Assembly);
     }
 
     [Fact]
     public void AttributeUsage_IsInherited()
     {
-        // Arrange
         var attributeType = typeof(XpingTrackAttribute);
         var attributes = attributeType.GetCustomAttributes(typeof(AttributeUsageAttribute), false);
         var usage = (AttributeUsageAttribute)attributes[0];
 
-        // Assert
         Assert.True(usage.Inherited);
     }
 
     [Fact]
     public void AttributeUsage_AllowsOnlyOneInstance()
     {
-        // Arrange
         var attributeType = typeof(XpingTrackAttribute);
         var attributes = attributeType.GetCustomAttributes(typeof(AttributeUsageAttribute), false);
         var usage = (AttributeUsageAttribute)attributes[0];
 
-        // Assert
         Assert.False(usage.AllowMultiple);
     }
 }

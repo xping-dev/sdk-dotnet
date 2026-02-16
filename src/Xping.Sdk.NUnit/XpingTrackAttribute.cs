@@ -3,14 +3,13 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.NUnit;
-
-using System;
 using System.Diagnostics;
-using global::NUnit.Framework;
-using global::NUnit.Framework.Interfaces;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.NUnit.Retry;
+using NUnit.Framework;
+using NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+
+namespace Xping.Sdk.NUnit;
 
 /// <summary>
 /// NUnit attribute for tracking test execution with Xping.
@@ -26,28 +25,38 @@ using Xping.Sdk.NUnit.Retry;
 [AttributeUsage(
     AttributeTargets.Method
     | AttributeTargets.Class
-    | AttributeTargets.Assembly, AllowMultiple = false, Inherited = true)]
+    | AttributeTargets.Assembly)]
 public sealed class XpingTrackAttribute : Attribute, ITestAction
 {
     private const string StartTimeKey = "Xping.StartTime";
     private const string StartTimestampKey = "Xping.StartTimestamp";
-    private static readonly string[] LineSeparators = new[] { "\r\n", "\r", "\n" };
+    private static readonly string[] _lineSeparators = ["\r\n", "\r", "\n"];
+
+    // Resolved once in BeforeTest() and reused for every AfterTest() on this attribute instance.
+    // The attribute can be applied at assembly, class, or method scope; in all cases the same
+    // DI singletons are returned each time, so a single resolution per instance is enough.
+    private XpingAttributeServices? _services;
 
     /// <summary>
     /// Gets the action targets (Test level).
     /// </summary>
-    public ActionTargets Targets => ActionTargets.Test;
+    ActionTargets ITestAction.Targets => ActionTargets.Test;
 
     /// <summary>
     /// Called before each test execution.
     /// </summary>
     /// <param name="test">The test being executed.</param>
-    public void BeforeTest(ITest test)
+    void ITestAction.BeforeTest(ITest test)
     {
         if (!XpingContext.IsInitialized)
         {
             XpingContext.Initialize();
         }
+
+        // Resolve and cache services once per attribute instance. GetAttributeServices()
+        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
+        // later calls on the same instance are a no-op field read.
+        _services ??= XpingContext.GetAttributeServices();
 
         if (test == null)
         {
@@ -67,15 +76,15 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     /// Called after each test execution.
     /// </summary>
     /// <param name="test">The test that was executed.</param>
-    public void AfterTest(ITest test)
+    void ITestAction.AfterTest(ITest? test)
     {
-        var endTime = DateTime.UtcNow;
-        var endTimestamp = Stopwatch.GetTimestamp();
-
         if (test == null)
         {
             return;
         }
+
+        var endTime = DateTime.UtcNow;
+        var endTimestamp = Stopwatch.GetTimestamp();
 
         try
         {
@@ -99,13 +108,13 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
             // Calculate accurate duration using high-resolution timestamps
             var elapsedTicks = endTimestamp - startTimestamp;
-            var duration = TimeSpan.FromTicks((long)(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+            var duration = TimeSpan.FromTicks(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
 
             // Extract WorkerId from NUnit context (available for parallel execution)
             var workerId = TestContext.CurrentContext.WorkerId;
             var fixtureName = test.TypeInfo?.FullName ?? test.ClassName;
 
-            var execution = CreateTestExecution(test, startTime, endTime, duration, workerId, fixtureName);
+            var execution = CreateTestExecution(_services!, test, startTime, endTime, duration, workerId, fixtureName);
             XpingContext.RecordTest(execution);
         }
         catch
@@ -115,6 +124,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     }
 
     private static TestExecution CreateTestExecution(
+        XpingAttributeServices services,
         ITest test,
         DateTime startTime,
         DateTime endTime,
@@ -123,6 +133,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         string? fixtureName)
     {
         var result = TestContext.CurrentContext.Result;
+        var outcome = MapOutcome(result.Outcome);
 
         // Generate stable test identity
         var fullyQualifiedName = test.FullName;
@@ -141,76 +152,59 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         var displayName = test.Name;
 
-        var identity = TestIdentityGenerator.Generate(
-            fullyQualifiedName,
-            assemblyName,
-            parameters,
-            displayName);
+        TestIdentity identity = services.IdentityGenerator.Generate(
+            fullyQualifiedName, assemblyName, parameters, displayName);
 
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
-        var outcome = MapOutcome(result.Outcome);
 
-        // Create execution context using ExecutionTracker
-        var executionTracker = XpingContext.ExecutionTracker;
-        var context = executionTracker?.CreateContext(workerId, fixtureName);
+        // Detect retry metadata first so the attempt number is available when claiming a position.
+        RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
 
-        // Detect retry metadata
-        var retryDetector = new NUnitRetryDetector();
-        var retryMetadata = retryDetector.DetectRetryMetadata(test);
-        if (retryMetadata != null)
-        {
-            // Update attempt number with current value
-            retryMetadata.AttemptNumber = retryDetector.GetCurrentAttemptNumber(test);
+        // Create an execution context using ExecutionTracker.
+        // Pass the attempt number so retried executions reuse the position of the first attempt.
+        var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(
+            workerId, fixtureName, retryMetadata?.AttemptNumber ?? 1);
 
-            // If test passed and attempt > 1, it passed on retry
-            if (outcome == TestOutcome.Passed && retryMetadata.AttemptNumber > 1)
-            {
-                retryMetadata.PassedOnRetry = true;
-            }
-        }
+        TestMetadata metadata = ExtractMetadata(test);
 
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = identity,
-            TestName = test.Name,
-            Outcome = outcome,
-            Duration = duration,
-            StartTimeUtc = startTime,
-            EndTimeUtc = endTime,
-            SessionContext = XpingContext.CurrentSession,
-            Metadata = ExtractMetadata(test),
-            ExceptionType = ExtractExceptionType(result),
-            ErrorMessage = errorMessage,
-            StackTrace = stackTrace,
-            ErrorMessageHash = TestIdentityGenerator.GenerateErrorMessageHash(errorMessage),
-            StackTraceHash = TestIdentityGenerator.GenerateStackTraceHash(stackTrace),
-            Context = context,
-            Retry = retryMetadata
-        };
+        TestExecution execution = new TestExecutionBuilder()
+            .WithExecutionId(Guid.NewGuid())
+            .WithIdentity(identity)
+            .WithTestName(test.Name)
+            .WithOutcome(outcome)
+            .WithDuration(duration)
+            .WithStartTime(startTime)
+            .WithEndTime(endTime)
+            .WithMetadata(metadata)
+            .WithException(ExtractExceptionType(result), errorMessage, stackTrace)
+            .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
+            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(stackTrace))
+            .WithTestOrchestrationRecord(orchestrationRecord)
+            .WithRetry(retryMetadata)
+            .Build();
 
         // Record test completion for tracking as previous test
-        executionTracker?.RecordTestCompletion(workerId, identity.TestId, test.Name, outcome);
+        services.ExecutionTracker.RecordTestCompletion(workerId, identity.TestId, test.Name, outcome);
 
         return execution;
     }
 
     private static string? ExtractExceptionType(TestContext.ResultAdapter result)
     {
-        // NUnit 3 doesn't expose the exception type directly through the public API
+        // NUnit 3 doesn't expose the exception type directly through the public API.
         // We need to parse it from the message or stack trace
         if (result.Outcome.Status == TestStatus.Passed)
         {
             return null;
         }
 
-        // Try to extract from message - often contains exception type
+        // Try to extract from the message - often contains an exception type
         var message = result.Message;
         if (!string.IsNullOrEmpty(message))
         {
             // Non-null after the check above
-            var lines = message!.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
+            var lines = message!.Split(_lineSeparators, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length > 0)
             {
                 var firstLine = lines[0].Trim();
@@ -265,21 +259,22 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             return TestOutcome.Inconclusive;
         }
 
-        if (resultState == ResultState.NotRunnable ||
-            resultState == ResultState.Cancelled)
-        {
-            return TestOutcome.NotExecuted;
-        }
-
         return TestOutcome.NotExecuted;
     }
 
     private static TestMetadata ExtractMetadata(ITest test)
     {
-        var categories = new System.Collections.Generic.List<string>();
-        var tags = new System.Collections.Generic.List<string>();
-        var customAttributes = new System.Collections.Generic.Dictionary<string, string>();
-        string? description = null;
+        TestMetadataBuilder builder = new();
+
+        // Add common tags
+        builder.AddTag("framework:nunit");
+        builder.AddTag(test.IsSuite ? "type:suite" : "type:test");
+
+        // Add a fixture type name if available
+        if (test.TypeInfo != null)
+        {
+            builder.AddCustomAttribute("FixtureType", test.TypeInfo.FullName);
+        }
 
         // Extract categories
         if (test.Properties.ContainsKey("Category"))
@@ -289,7 +284,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             {
                 if (category != null)
                 {
-                    categories.Add(category.ToString()!);
+                    builder.AddCategory(category.ToString()!);
                 }
             }
         }
@@ -300,7 +295,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             var descriptions = test.Properties["Description"];
             if (descriptions.Count > 0 && descriptions[0] != null)
             {
-                description = descriptions[0].ToString();
+                builder.WithDescription(descriptions[0].ToString());
             }
         }
 
@@ -312,7 +307,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             {
                 if (author != null)
                 {
-                    tags.Add($"author:{author}");
+                    builder.AddTag($"author:{author}");
                 }
             }
         }
@@ -323,42 +318,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             var args = test.Properties["Arguments"];
             if (args.Count > 0 && args[0] != null)
             {
-                customAttributes.Add("Arguments", args[0].ToString()!);
+                builder.AddCustomAttribute("Arguments", args[0].ToString()!);
             }
         }
 
-        // Add framework identifier
-        tags.Add("framework:nunit");
-
-        // Add test type
-        if (test.IsSuite)
-        {
-            tags.Add("type:suite");
-        }
-        else
-        {
-            tags.Add("type:test");
-        }
-
-        // Add fixture type name if available
-        if (test.TypeInfo != null)
-        {
-            customAttributes.Add("FixtureType", test.TypeInfo.FullName ?? test.TypeInfo.Name);
-        }
-
-        var metadata = new TestMetadata
-        {
-            Categories = categories,
-            Tags = tags,
-            Description = description,
-        };
-
-        // Copy custom attributes
-        foreach (var kvp in customAttributes)
-        {
-            metadata.CustomAttributes[kvp.Key] = kvp.Value;
-        }
-
+        TestMetadata metadata = builder.Build();
         return metadata;
     }
 }

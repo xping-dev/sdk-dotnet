@@ -30,10 +30,7 @@ public static class XpingTestSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        // Flush any pending test executions to Xping Cloud
-        await XpingContext.FlushAsync();
-
-        // Dispose of Xping resources
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }

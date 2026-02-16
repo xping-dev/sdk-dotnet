@@ -13,7 +13,8 @@ namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.NUnit;
 using System;
 using System.Threading.Tasks;
@@ -32,20 +33,18 @@ public class RealNUnitAdapterBenchmarks
     public void GlobalSetup()
     {
         // Reset any existing context
-        XpingContext.Reset();
+        XpingContext.ShutdownAsync().AsTask().GetAwaiter().GetResult();
 
-        // Initialize with a NoOp uploader
+        // Initialize with benchmark configuration
         var config = new XpingConfiguration
         {
-            Enabled = true, // Must be enabled for tracking
+            Enabled = true,
             ApiKey = "benchmark-key",
             ProjectId = "benchmark-project",
             BatchSize = 100,
             FlushInterval = TimeSpan.FromSeconds(30)
         };
 
-        // Since XpingContext doesn't expose a way to pass custom uploader in Initialize(),
-        // we initialize normally - the benchmarks will use XpingContext.RecordTest() API
         XpingContext.Initialize(config);
     }
 
@@ -54,8 +53,8 @@ public class RealNUnitAdapterBenchmarks
     {
         if (XpingContext.IsInitialized)
         {
-            await XpingContext.FlushAsync();
-            await XpingContext.DisposeAsync();
+            await XpingContext.FinalizeAsync().ConfigureAwait(false);
+            await XpingContext.ShutdownAsync().ConfigureAwait(false);
         }
     }
 
@@ -66,23 +65,13 @@ public class RealNUnitAdapterBenchmarks
     [Benchmark]
     public void MinimalTestRecording()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "nunit-simple-test",
-                FullyQualifiedName = "NUnit.Tests.SimpleTests.SimpleTest",
-                ClassName = "SimpleTests",
-                MethodName = "SimpleTest",
-                Namespace = "NUnit.Tests"
-            },
-            TestName = "SimpleTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("SimpleTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -93,27 +82,20 @@ public class RealNUnitAdapterBenchmarks
     [Benchmark]
     public void TestRecording_WithCategories()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "nunit-categorized-test",
-                FullyQualifiedName = "NUnit.Tests.CategoryTests.CategorizedTest",
-                ClassName = "CategoryTests",
-                MethodName = "CategorizedTest",
-                Namespace = "NUnit.Tests"
-            },
-            TestName = "CategorizedTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow,
-            Metadata = new TestMetadata
-            {
-                Categories = new[] { "Integration", "API", "Slow" }
-            }
-        };
+        var metadata = new TestMetadataBuilder()
+            .AddCategory("Integration")
+            .AddCategory("API")
+            .AddCategory("Slow")
+            .Build();
+
+        var execution = new TestExecutionBuilder()
+            .WithTestName("CategorizedTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .WithMetadata(metadata)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -126,23 +108,13 @@ public class RealNUnitAdapterBenchmarks
     {
         for (int i = 0; i < 10; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"nunit-batch-test-{i}",
-                    FullyQualifiedName = $"NUnit.Tests.BatchTests.Test{i}",
-                    ClassName = "BatchTests",
-                    MethodName = $"Test{i}",
-                    Namespace = "NUnit.Tests"
-                },
-                TestName = $"Test{i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(1),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var execution = new TestExecutionBuilder()
+                .WithTestName($"Test{i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(1))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+                .WithEndTime(DateTime.UtcNow)
+                .Build();
 
             XpingContext.RecordTest(execution);
         }
@@ -159,25 +131,24 @@ public class RealNUnitAdapterBenchmarks
 
         foreach (var (a, b) in testCases)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"nunit-parameterized-test-{a}-{b}",
-                    FullyQualifiedName = "NUnit.Tests.ParameterTests.ParameterizedTest",
-                    ClassName = "ParameterTests",
-                    MethodName = "ParameterizedTest",
-                    Namespace = "NUnit.Tests",
-                    ParameterHash = $"hash-{a}-{b}",
-                    DisplayName = $"ParameterizedTest({a},{b})"
-                },
-                TestName = $"ParameterizedTest({a},{b})",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(1),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var identity = new TestIdentityBuilder()
+                .WithTestId($"nunit-parameterized-test-{a}-{b}")
+                .WithFullyQualifiedName("NUnit.Tests.ParameterTests.ParameterizedTest")
+                .WithClassName("ParameterTests")
+                .WithMethodName("ParameterizedTest")
+                .WithNamespace("NUnit.Tests")
+                .WithParameterHash($"hash-{a}-{b}")
+                .WithDisplayName($"ParameterizedTest({a},{b})")
+                .Build();
+
+            var execution = new TestExecutionBuilder()
+                .WithTestName($"ParameterizedTest({a},{b})")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(1))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+                .WithEndTime(DateTime.UtcNow)
+                .WithIdentity(identity)
+                .Build();
 
             XpingContext.RecordTest(execution);
         }
@@ -189,26 +160,17 @@ public class RealNUnitAdapterBenchmarks
     [Benchmark]
     public void FailedTestRecording_WithException()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "nunit-failed-test",
-                FullyQualifiedName = "NUnit.Tests.FailureTests.FailingTest",
-                ClassName = "FailureTests",
-                MethodName = "FailingTest",
-                Namespace = "NUnit.Tests"
-            },
-            TestName = "FailingTest",
-            Outcome = TestOutcome.Failed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow,
-            ExceptionType = "System.InvalidOperationException",
-            ErrorMessage = "Test failed for demonstration",
-            StackTrace = "at NUnit.Tests.FailureTests.FailingTest() in FailureTests.cs:line 42"
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("FailingTest")
+            .WithOutcome(TestOutcome.Failed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .WithException(
+                "System.InvalidOperationException",
+                "Test failed for demonstration",
+                "at NUnit.Tests.FailureTests.FailingTest() in FailureTests.cs:line 42")
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -219,23 +181,11 @@ public class RealNUnitAdapterBenchmarks
     [Benchmark]
     public void SkippedTestRecording()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "nunit-skipped-test",
-                FullyQualifiedName = "NUnit.Tests.SkippedTests.SkippedTest",
-                ClassName = "SkippedTests",
-                MethodName = "SkippedTest",
-                Namespace = "NUnit.Tests"
-            },
-            TestName = "SkippedTest",
-            Outcome = TestOutcome.Skipped,
-            Duration = TimeSpan.Zero,
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("SkippedTest")
+            .WithOutcome(TestOutcome.Skipped)
+            .WithDuration(TimeSpan.Zero)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -246,31 +196,21 @@ public class RealNUnitAdapterBenchmarks
     [Benchmark]
     public void TestRecording_WithCustomAttributes()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "nunit-custom-attributes-test",
-                FullyQualifiedName = "NUnit.Tests.CustomTests.CustomAttributesTest",
-                ClassName = "CustomTests",
-                MethodName = "CustomAttributesTest",
-                Namespace = "NUnit.Tests"
-            },
-            TestName = "CustomAttributesTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(_random.Next(50, 200)),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-            EndTimeUtc = DateTime.UtcNow,
-            Metadata = new TestMetadata
-            {
-                Categories = new[] { "Integration" }
-            }
-        };
+        var metadata = new TestMetadataBuilder()
+            .AddCategory("Integration")
+            .AddCustomAttribute("Framework", "NUnit")
+            .AddCustomAttribute("Author", "TeamA")
+            .AddCustomAttribute("Priority", "High")
+            .Build();
 
-        execution.Metadata.CustomAttributes["Framework"] = "NUnit";
-        execution.Metadata.CustomAttributes["Author"] = "TeamA";
-        execution.Metadata.CustomAttributes["Priority"] = "High";
+        var execution = new TestExecutionBuilder()
+            .WithTestName("CustomAttributesTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(_random.Next(50, 200)))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+            .WithEndTime(DateTime.UtcNow)
+            .WithMetadata(metadata)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }

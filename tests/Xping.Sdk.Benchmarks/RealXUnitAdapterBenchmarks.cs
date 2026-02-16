@@ -13,7 +13,8 @@ namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.XUnit;
 using System;
 using System.Threading.Tasks;
@@ -32,7 +33,7 @@ public class RealXUnitAdapterBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        XpingContext.Reset();
+        XpingContext.ShutdownAsync().AsTask().GetAwaiter().GetResult();
 
         var config = new XpingConfiguration
         {
@@ -51,8 +52,8 @@ public class RealXUnitAdapterBenchmarks
     {
         if (XpingContext.IsInitialized)
         {
-            await XpingContext.FlushAsync();
-            await XpingContext.DisposeAsync();
+            await XpingContext.FinalizeAsync().ConfigureAwait(false);
+            await XpingContext.ShutdownAsync().ConfigureAwait(false);
         }
     }
 
@@ -63,23 +64,13 @@ public class RealXUnitAdapterBenchmarks
     [Benchmark]
     public void MinimalTestRecording()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "xunit-simple-test",
-                FullyQualifiedName = "XUnit.Tests.SimpleTests.SimpleTest",
-                ClassName = "SimpleTests",
-                MethodName = "SimpleTest",
-                Namespace = "XUnit.Tests"
-            },
-            TestName = "SimpleTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("SimpleTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -90,27 +81,20 @@ public class RealXUnitAdapterBenchmarks
     [Benchmark]
     public void TestRecording_WithTraits()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "xunit-trait-test",
-                FullyQualifiedName = "XUnit.Tests.TraitTests.TraitTest",
-                ClassName = "TraitTests",
-                MethodName = "TraitTest",
-                Namespace = "XUnit.Tests"
-            },
-            TestName = "TraitTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow,
-            Metadata = new TestMetadata
-            {
-                Categories = new[] { "Integration", "API", "Fast" }
-            }
-        };
+        var metadata = new TestMetadataBuilder()
+            .AddCategory("Integration")
+            .AddCategory("API")
+            .AddCategory("Fast")
+            .Build();
+
+        var execution = new TestExecutionBuilder()
+            .WithTestName("TraitTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .WithMetadata(metadata)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -123,23 +107,13 @@ public class RealXUnitAdapterBenchmarks
     {
         for (int i = 0; i < 10; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"xunit-batch-test-{i}",
-                    FullyQualifiedName = $"XUnit.Tests.BatchTests.Test{i}",
-                    ClassName = "BatchTests",
-                    MethodName = $"Test{i}",
-                    Namespace = "XUnit.Tests"
-                },
-                TestName = $"Test{i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(1),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var execution = new TestExecutionBuilder()
+                .WithTestName($"Test{i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(1))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+                .WithEndTime(DateTime.UtcNow)
+                .Build();
 
             XpingContext.RecordTest(execution);
         }
@@ -156,25 +130,24 @@ public class RealXUnitAdapterBenchmarks
 
         foreach (var (a, b, expected) in testCases)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"xunit-theory-test-{a}-{b}-{expected}",
-                    FullyQualifiedName = "XUnit.Tests.TheoryTests.AdditionTheory",
-                    ClassName = "TheoryTests",
-                    MethodName = "AdditionTheory",
-                    Namespace = "XUnit.Tests",
-                    ParameterHash = $"hash-{a}-{b}-{expected}",
-                    DisplayName = $"AdditionTheory(a: {a}, b: {b}, expected: {expected})"
-                },
-                TestName = $"AdditionTheory(a: {a}, b: {b}, expected: {expected})",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(1),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var identity = new TestIdentityBuilder()
+                .WithTestId($"xunit-theory-test-{a}-{b}-{expected}")
+                .WithFullyQualifiedName("XUnit.Tests.TheoryTests.AdditionTheory")
+                .WithClassName("TheoryTests")
+                .WithMethodName("AdditionTheory")
+                .WithNamespace("XUnit.Tests")
+                .WithParameterHash($"hash-{a}-{b}-{expected}")
+                .WithDisplayName($"AdditionTheory(a: {a}, b: {b}, expected: {expected})")
+                .Build();
+
+            var execution = new TestExecutionBuilder()
+                .WithTestName($"AdditionTheory(a: {a}, b: {b}, expected: {expected})")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(1))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+                .WithEndTime(DateTime.UtcNow)
+                .WithIdentity(identity)
+                .Build();
 
             XpingContext.RecordTest(execution);
         }
@@ -186,26 +159,17 @@ public class RealXUnitAdapterBenchmarks
     [Benchmark]
     public void FailedTestRecording_WithException()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "xunit-failed-test",
-                FullyQualifiedName = "XUnit.Tests.FailureTests.FailingTest",
-                ClassName = "FailureTests",
-                MethodName = "FailingTest",
-                Namespace = "XUnit.Tests"
-            },
-            TestName = "FailingTest",
-            Outcome = TestOutcome.Failed,
-            Duration = TimeSpan.FromMilliseconds(1),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-1),
-            EndTimeUtc = DateTime.UtcNow,
-            ExceptionType = "System.InvalidOperationException",
-            ErrorMessage = "Test failed for demonstration",
-            StackTrace = "at XUnit.Tests.FailureTests.FailingTest() in FailureTests.cs:line 42"
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("FailingTest")
+            .WithOutcome(TestOutcome.Failed)
+            .WithDuration(TimeSpan.FromMilliseconds(1))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-1))
+            .WithEndTime(DateTime.UtcNow)
+            .WithException(
+                "System.InvalidOperationException",
+                "Test failed for demonstration",
+                "at XUnit.Tests.FailureTests.FailingTest() in FailureTests.cs:line 42")
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -216,23 +180,11 @@ public class RealXUnitAdapterBenchmarks
     [Benchmark]
     public void SkippedTestRecording()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "xunit-skipped-test",
-                FullyQualifiedName = "XUnit.Tests.SkippedTests.SkippedTest",
-                ClassName = "SkippedTests",
-                MethodName = "SkippedTest",
-                Namespace = "XUnit.Tests"
-            },
-            TestName = "SkippedTest",
-            Outcome = TestOutcome.Skipped,
-            Duration = TimeSpan.Zero,
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow
-        };
+        var execution = new TestExecutionBuilder()
+            .WithTestName("SkippedTest")
+            .WithOutcome(TestOutcome.Skipped)
+            .WithDuration(TimeSpan.Zero)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }
@@ -244,30 +196,20 @@ public class RealXUnitAdapterBenchmarks
     [Benchmark]
     public void TestRecording_WithFixture()
     {
-        var execution = new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = "xunit-fixture-test",
-                FullyQualifiedName = "XUnit.Tests.FixtureTests.FixtureTest",
-                ClassName = "FixtureTests",
-                MethodName = "FixtureTest",
-                Namespace = "XUnit.Tests"
-            },
-            TestName = "FixtureTest",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(_random.Next(50, 200)),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-            EndTimeUtc = DateTime.UtcNow,
-            Metadata = new TestMetadata
-            {
-                Categories = new[] { "Integration" }
-            }
-        };
+        var metadata = new TestMetadataBuilder()
+            .AddCategory("Integration")
+            .AddCustomAttribute("Framework", "xUnit")
+            .AddCustomAttribute("Collection", "DatabaseFixture")
+            .Build();
 
-        execution.Metadata.CustomAttributes["Framework"] = "xUnit";
-        execution.Metadata.CustomAttributes["Collection"] = "DatabaseFixture";
+        var execution = new TestExecutionBuilder()
+            .WithTestName("FixtureTest")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(_random.Next(50, 200)))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+            .WithEndTime(DateTime.UtcNow)
+            .WithMetadata(metadata)
+            .Build();
 
         XpingContext.RecordTest(execution);
     }

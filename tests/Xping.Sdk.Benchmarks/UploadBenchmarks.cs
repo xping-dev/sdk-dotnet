@@ -7,7 +7,8 @@
 
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Benchmarks;
 
@@ -97,30 +98,36 @@ public class UploadBenchmarks
     private static List<TestExecution> CreateTestExecutions(int count)
     {
         var executions = new List<TestExecution>(count);
-        
+
         for (int i = 0; i < count; i++)
         {
-            executions.Add(new TestExecution
+            var start = DateTime.UtcNow.AddMinutes(-i);
+            var duration = TimeSpan.FromMilliseconds(50 + (i % 200));
+            var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+
+            var identity = new TestIdentityBuilder()
+                .WithTestId(Guid.NewGuid().ToString("N"))
+                .WithFullyQualifiedName($"Benchmark.Tests.TestClass.TestMethod{i}")
+                .WithAssembly("Benchmark.Tests")
+                .WithNamespace("Benchmark.Tests")
+                .WithClassName("TestClass")
+                .WithMethodName($"TestMethod{i}")
+                .Build();
+
+            var builder = new TestExecutionBuilder()
+                .WithTestName($"TestMethod{i}")
+                .WithOutcome(outcome)
+                .WithDuration(duration)
+                .WithStartTime(start)
+                .WithEndTime(start.Add(duration))
+                .WithIdentity(identity);
+
+            if (outcome == TestOutcome.Failed)
             {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity
-                {
-                    TestId = Guid.NewGuid().ToString("N"),
-                    FullyQualifiedName = $"Benchmark.Tests.TestClass.TestMethod{i}",
-                    Assembly = "Benchmark.Tests",
-                    Namespace = "Benchmark.Tests",
-                    ClassName = "TestClass",
-                    MethodName = $"TestMethod{i}"
-                },
-                TestName = $"TestMethod{i}",
-                Outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(50 + (i % 200)),
-                StartTimeUtc = DateTime.UtcNow.AddMinutes(-i),
-                EndTimeUtc = DateTime.UtcNow.AddMinutes(-i).AddMilliseconds(50 + (i % 200)),
-                SessionContext = null, // Typically null except for first in batch
-                ErrorMessage = i % 10 == 0 ? $"Test failed with error {i}" : null,
-                StackTrace = i % 10 == 0 ? "  at TestMethod() in TestClass.cs:line 42" : null
-            });
+                builder.WithException(null, $"Test failed with error {i}", "  at TestMethod() in TestClass.cs:line 42");
+            }
+
+            executions.Add(builder.Build());
         }
 
         return executions;

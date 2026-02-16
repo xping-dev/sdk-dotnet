@@ -108,7 +108,7 @@ public class XpingTestBaseAdditionalTests
 
         // Actually instantiate it to satisfy CA1812
         var instance = new TestDerivedClass();
-        instance.TestMethod();
+        TestDerivedClass.TestMethod();
         Assert.NotNull(instance);
     }
 
@@ -130,18 +130,6 @@ public class XpingTestBaseAdditionalTests
         // Arrange
         var method = typeof(XpingTestBase).GetMethod(
             "MapOutcome",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        // Act & Assert
-        Assert.NotNull(method);
-    }
-
-    [Fact]
-    public void CalculateDuration_MethodExists()
-    {
-        // Arrange
-        var method = typeof(XpingTestBase).GetMethod(
-            "CalculateDuration",
             BindingFlags.NonPublic | BindingFlags.Static);
 
         // Act & Assert
@@ -204,7 +192,7 @@ public class XpingTestBaseAdditionalTests
     // Test helper class
     private sealed class TestDerivedClass : XpingTestBase
     {
-        public void TestMethod()
+        public static void TestMethod()
         {
             // Method to avoid CA1812
         }

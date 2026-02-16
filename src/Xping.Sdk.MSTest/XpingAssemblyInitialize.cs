@@ -30,12 +30,12 @@ public static class XpingAssemblyInitialize
 
     /// <summary>
     /// Called once after all tests in the assembly complete.
-    /// Flushes pending test executions and disposes SDK resources.
+    /// Finalizes the session by uploading all buffered executions, then disposes SDK resources.
     /// </summary>
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync().ConfigureAwait(false);
-        await XpingContext.DisposeAsync().ConfigureAwait(false);
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }

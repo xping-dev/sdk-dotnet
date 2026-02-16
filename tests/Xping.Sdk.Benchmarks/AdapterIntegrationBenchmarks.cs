@@ -12,13 +12,14 @@
 namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
-using Xping.Sdk.Core.Collection;
+using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Upload;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 /// <summary>
@@ -29,23 +30,9 @@ using System.Threading.Tasks;
 [ThreadingDiagnoser]
 public class AdapterIntegrationBenchmarks
 {
-    private TestExecutionCollector? _collector;
-    private ITestResultUploader? _uploader;
+    private ITestExecutionCollector? _collector;
     private XpingConfiguration? _config;
     private readonly Random _random = new();
-
-    private sealed class NoOpUploader : ITestResultUploader
-    {
-        public Task<UploadResult> UploadAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
-        {
-            var count = executions.Count();
-            return Task.FromResult(new UploadResult 
-            { 
-                Success = true, 
-                ExecutionCount = count 
-            });
-        }
-    }
 
     [GlobalSetup]
     public void Setup()
@@ -55,13 +42,18 @@ public class AdapterIntegrationBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 100, // Typical batch size for adapters
+            BatchSize = 100,
             FlushInterval = TimeSpan.FromSeconds(5),
             SamplingRate = 1.0
         };
 
-        _uploader = new NoOpUploader();
-        _collector = new TestExecutionCollector(_uploader, _config);
+        _collector = new TestExecutionCollector(Options.Create(_config));
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _collector?.Dispose();
     }
 
     /// <summary>
@@ -69,39 +61,38 @@ public class AdapterIntegrationBenchmarks
     /// Validates: Metadata handling, property serialization.
     /// </summary>
     [Benchmark]
-    public async Task NUnitPatternWithCategories()
+    public void NUnitPatternWithCategories()
     {
         for (int i = 0; i < 20; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"nunit-test-{i}",
-                    FullyQualifiedName = $"NUnit.Tests.TestClass.TestMethod{i}",
-                    ClassName = "TestClass",
-                    MethodName = $"TestMethod{i}",
-                    Namespace = "NUnit.Tests"
-                },
-                TestName = $"NUnit Test {i}",
-                Outcome = i % 5 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(50, 200)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-                EndTimeUtc = DateTime.UtcNow,
-                Metadata = new TestMetadata
-                {
-                    Categories = new[] { "Integration", "Slow" }
-                }
-            };
+            var metadata = new TestMetadataBuilder()
+                .AddCategory("Integration")
+                .AddCategory("Slow")
+                .AddCustomAttribute("Framework", "NUnit")
+                .AddCustomAttribute("Author", "TeamA")
+                .Build();
 
-            execution.Metadata.CustomAttributes["Framework"] = "NUnit";
-            execution.Metadata.CustomAttributes["Author"] = "TeamA";
+            var identity = new TestIdentityBuilder()
+                .WithTestId($"nunit-test-{i}")
+                .WithFullyQualifiedName($"NUnit.Tests.TestClass.TestMethod{i}")
+                .WithClassName("TestClass")
+                .WithMethodName($"TestMethod{i}")
+                .WithNamespace("NUnit.Tests")
+                .Build();
 
-            _collector!.RecordTest(execution);
+            var outcome = i % 5 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+            _collector!.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"NUnit Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(50, 200)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+                .WithEndTime(DateTime.UtcNow)
+                .WithIdentity(identity)
+                .WithMetadata(metadata)
+                .Build());
         }
 
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 
     /// <summary>
@@ -109,38 +100,35 @@ public class AdapterIntegrationBenchmarks
     /// Validates: Parameterized test identity, parameter hash handling.
     /// </summary>
     [Benchmark]
-    public async Task XUnitTheoryPattern()
+    public void XUnitTheoryPattern()
     {
         // Simulate 3 theory tests, each with 5 parameter sets
         for (int testIdx = 0; testIdx < 3; testIdx++)
         {
             for (int paramSet = 0; paramSet < 5; paramSet++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity 
-                    { 
-                        TestId = $"xunit-theory-{testIdx}-{paramSet}",
-                        FullyQualifiedName = $"XUnit.Tests.TheoryClass.TheoryMethod{testIdx}",
-                        ClassName = "TheoryClass",
-                        MethodName = $"TheoryMethod{testIdx}",
-                        Namespace = "XUnit.Tests",
-                        ParameterHash = $"param-hash-{paramSet}",
-                        DisplayName = $"TheoryMethod{testIdx}(param{paramSet})"
-                    },
-                    TestName = $"Theory Test {testIdx} [param{paramSet}]",
-                    Outcome = (testIdx + paramSet) % 7 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(_random.Next(20, 100)),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                    EndTimeUtc = DateTime.UtcNow
-                };
+                var identity = new TestIdentityBuilder()
+                    .WithTestId($"xunit-theory-{testIdx}-{paramSet}")
+                    .WithFullyQualifiedName($"XUnit.Tests.TheoryClass.TheoryMethod{testIdx}")
+                    .WithClassName("TheoryClass")
+                    .WithMethodName($"TheoryMethod{testIdx}")
+                    .WithNamespace("XUnit.Tests")
+                    .WithParameterHash($"param-hash-{paramSet}")
+                    .WithDisplayName($"TheoryMethod{testIdx}(param{paramSet})")
+                    .Build();
 
-                _collector!.RecordTest(execution);
+                _collector!.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Theory Test {testIdx} [param{paramSet}]")
+                    .WithOutcome((testIdx + paramSet) % 7 == 0 ? TestOutcome.Failed : TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(_random.Next(20, 100)))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                    .WithEndTime(DateTime.UtcNow)
+                    .WithIdentity(identity)
+                    .Build());
             }
         }
 
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 
     /// <summary>
@@ -148,39 +136,38 @@ public class AdapterIntegrationBenchmarks
     /// Validates: MSTest-specific metadata, test context serialization.
     /// </summary>
     [Benchmark]
-    public async Task MSTestPatternWithContext()
+    public void MSTestPatternWithContext()
     {
         for (int i = 0; i < 15; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"mstest-test-{i}",
-                    FullyQualifiedName = $"MSTest.Tests.UnitTestClass.TestMethod{i}",
-                    ClassName = "UnitTestClass",
-                    MethodName = $"TestMethod{i}",
-                    Namespace = "MSTest.Tests",
-                    SourceFile = $"UnitTestClass.cs",
-                    SourceLineNumber = 42 + i
-                },
-                TestName = $"MSTest Method {i}",
-                Outcome = i % 6 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(30, 150)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-75),
-                EndTimeUtc = DateTime.UtcNow,
-                Metadata = new TestMetadata()
-            };
+            var metadata = new TestMetadataBuilder()
+                .AddCustomAttribute("Owner", "Developer1")
+                .AddCustomAttribute("Priority", (i % 3).ToString(System.Globalization.CultureInfo.InvariantCulture))
+                .AddCustomAttribute("WorkItem", $"WI-{1000 + i}")
+                .Build();
 
-            execution.Metadata.CustomAttributes["Owner"] = "Developer1";
-            execution.Metadata.CustomAttributes["Priority"] = (i % 3).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            execution.Metadata.CustomAttributes["WorkItem"] = $"WI-{1000 + i}";
+            var identity = new TestIdentityBuilder()
+                .WithTestId($"mstest-test-{i}")
+                .WithFullyQualifiedName($"MSTest.Tests.UnitTestClass.TestMethod{i}")
+                .WithClassName("UnitTestClass")
+                .WithMethodName($"TestMethod{i}")
+                .WithNamespace("MSTest.Tests")
+                .WithSourceFile("UnitTestClass.cs")
+                .WithSourceLineNumber(42 + i)
+                .Build();
 
-            _collector!.RecordTest(execution);
+            _collector!.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"MSTest Method {i}")
+                .WithOutcome(i % 6 == 0 ? TestOutcome.Failed : TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(30, 150)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-75))
+                .WithEndTime(DateTime.UtcNow)
+                .WithIdentity(identity)
+                .WithMetadata(metadata)
+                .Build());
         }
 
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 
     /// <summary>
@@ -200,22 +187,13 @@ public class AdapterIntegrationBenchmarks
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    var execution = new TestExecution
-                    {
-                        ExecutionId = Guid.NewGuid(),
-                        Identity = new TestIdentity 
-                        { 
-                            TestId = $"parallel-adapter{capturedId}-test-{i}",
-                            FullyQualifiedName = $"Parallel.Adapter{capturedId}.TestMethod{i}"
-                        },
-                        TestName = $"Adapter {capturedId} Test {i}",
-                        Outcome = TestOutcome.Passed,
-                        Duration = TimeSpan.FromMilliseconds(_random.Next(10, 50)),
-                        StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-25),
-                        EndTimeUtc = DateTime.UtcNow
-                    };
-
-                    _collector!.RecordTest(execution);
+                    _collector!.RecordTest(new TestExecutionBuilder()
+                        .WithTestName($"Adapter {capturedId} Test {i}")
+                        .WithOutcome(TestOutcome.Passed)
+                        .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 50)))
+                        .WithStartTime(DateTime.UtcNow.AddMilliseconds(-25))
+                        .WithEndTime(DateTime.UtcNow)
+                        .Build());
                 }
 
                 await Task.Delay(10).ConfigureAwait(false);
@@ -223,7 +201,7 @@ public class AdapterIntegrationBenchmarks
         }
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 
     /// <summary>
@@ -231,83 +209,62 @@ public class AdapterIntegrationBenchmarks
     /// Validates: Retry information serialization, flaky test patterns.
     /// </summary>
     [Benchmark]
-    public async Task TestsWithRetryMetadata()
+    public void TestsWithRetryMetadata()
     {
         for (int i = 0; i < 10; i++)
         {
             var isFlaky = i % 3 == 0;
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"retry-test-{i}",
-                    FullyQualifiedName = $"Retry.Tests.FlakyTest{i}"
-                },
-                TestName = $"Retry Test {i}",
-                Outcome = isFlaky ? (i % 2 == 0 ? TestOutcome.Passed : TestOutcome.Failed) : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(50, 150)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-100),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var outcome = isFlaky
+                ? (i % 2 == 0 ? TestOutcome.Passed : TestOutcome.Failed)
+                : TestOutcome.Passed;
+
+            var builder = new TestExecutionBuilder()
+                .WithTestName($"Retry Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(50, 150)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+                .WithEndTime(DateTime.UtcNow);
 
             if (isFlaky)
             {
-                execution.Retry = new RetryMetadata
-                {
-                    AttemptNumber = (i % 3) + 1,
-                    MaxRetries = 3,
-                    PassedOnRetry = i % 3 > 0
-                };
+                var retry = new RetryMetadataBuilder()
+                    .WithAttemptNumber((i % 3) + 1)
+                    .WithMaxRetries(3)
+                    .WithPassedOnRetry(i % 3 > 0)
+                    .Build();
+                builder.WithRetry(retry);
             }
 
-            _collector!.RecordTest(execution);
+            _collector!.RecordTest(builder.Build());
         }
 
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 
     /// <summary>
-    /// Session context scenario: Tests sharing session information.
-    /// Validates: Session context optimization (first test has full context, rest null).
+    /// Metadata-rich scenario: Tests with extensive custom attributes.
+    /// Validates: Custom attribute serialization, metadata overhead.
     /// </summary>
     [Benchmark]
-    public async Task TestsWithSessionContext()
+    public void TestsWithExtensiveMetadata()
     {
-        var sessionContext = new TestSession
-        {
-            SessionId = Guid.NewGuid().ToString(),
-            StartedAt = DateTime.UtcNow,
-            EnvironmentInfo = new EnvironmentInfo
-            {
-                MachineName = "BenchmarkMachine",
-                OperatingSystem = "macOS 15.5",
-                RuntimeVersion = ".NET 9.0",
-                Framework = "BenchmarkDotNet"
-            }
-        };
-
         for (int i = 0; i < 20; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity 
-                { 
-                    TestId = $"session-test-{i}",
-                    FullyQualifiedName = $"Session.Tests.TestMethod{i}"
-                },
-                TestName = $"Session Test {i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(20, 80)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                EndTimeUtc = DateTime.UtcNow,
-                SessionContext = i == 0 ? sessionContext : null // Optimization: only first test has full context
-            };
+            var metadataBuilder = new TestMetadataBuilder()
+                .AddCustomAttribute("SessionId", Guid.NewGuid().ToString())
+                .AddCustomAttribute("MachineName", "BenchmarkMachine")
+                .AddCustomAttribute("Framework", "BenchmarkDotNet");
 
-            _collector!.RecordTest(execution);
+            _collector!.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Session Test {i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(20, 80)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                .WithEndTime(DateTime.UtcNow)
+                .WithMetadata(metadataBuilder.Build())
+                .Build());
         }
 
-        await _collector!.FlushAsync().ConfigureAwait(false);
+        _ = _collector!.Drain();
     }
 }

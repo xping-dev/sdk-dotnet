@@ -32,7 +32,7 @@ public class XpingSetupFixture
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        await XpingContext.FlushAsync().ConfigureAwait(false);
-        await XpingContext.DisposeAsync().ConfigureAwait(false);
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }
