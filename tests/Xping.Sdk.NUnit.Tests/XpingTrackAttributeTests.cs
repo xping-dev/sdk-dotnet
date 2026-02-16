@@ -16,6 +16,7 @@ using Assert = Xunit.Assert;
 /// Note: Deep integration testing with actual NUnit test execution is done in sample projects.
 /// These unit tests verify the attribute's contract and error handling.
 /// </summary>
+[Collection("XpingContext")]
 public sealed class XpingTrackAttributeTests : IAsyncLifetime
 {
     public Task InitializeAsync()

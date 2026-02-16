@@ -15,6 +15,7 @@ using Xunit;
 /// <summary>
 /// Tests for XpingContext lifecycle management in the NUnit adapter.
 /// </summary>
+[Collection("XpingContext")]
 public sealed class XpingContextTests : IAsyncLifetime
 {
     public Task InitializeAsync()
