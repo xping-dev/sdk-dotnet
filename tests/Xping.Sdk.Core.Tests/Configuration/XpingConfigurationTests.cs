@@ -241,6 +241,70 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
+    public void ValidateShouldReturnErrorsWhenApiEndpointIsWhitespace()
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            ApiEndpoint = "   "
+        };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Contains("ApiEndpoint is required.", errors);
+    }
+
+    [Fact]
+    public void ValidateShouldReturnErrorsWhenRetryDelayIsNegative()
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            RetryDelay = TimeSpan.FromSeconds(-1)
+        };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Contains("RetryDelay cannot be negative.", errors);
+    }
+
+    [Fact]
+    public void ValidateShouldReturnErrorsWhenUploadTimeoutIsZeroOrNegative()
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            UploadTimeout = TimeSpan.Zero
+        };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Contains("UploadTimeout must be greater than zero.", errors);
+    }
+
+    [Fact]
+    public void CollectNetworkMetrics_ShouldBeSettable()
+    {
+        // Arrange
+        var config = new XpingConfiguration { CollectNetworkMetrics = false };
+
+        // Act & Assert
+        Assert.False(config.CollectNetworkMetrics);
+    }
+
+    [Fact]
     public void ShouldAllowSettingAllProperties()
     {
         // Arrange & Act

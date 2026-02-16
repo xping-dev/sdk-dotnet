@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
 
 namespace Xping.Sdk.MSTest.Tests.Retry;
@@ -18,7 +19,7 @@ using Assert = Xunit.Assert;
 /// </summary>
 public sealed class MSTestRetryDetectorTests
 {
-    private readonly MSTestRetryDetector _detector;
+    private readonly IRetryDetector<TestContext> _detector;
 
     public MSTestRetryDetectorTests()
     {
@@ -33,112 +34,20 @@ public sealed class MSTestRetryDetectorTests
     [Fact]
     public void DetectRetryMetadata_WithNullTestContext_ReturnsNull()
     {
-        // Act
-        var result = _detector.DetectRetryMetadata(null!);
+        var result = _detector.DetectRetryMetadata(null!, TestOutcome.Passed);
 
-        // Assert
         Assert.Null(result);
-    }
-
-    [Fact]
-    public void HasRetryAttribute_WithNullTestContext_ReturnsFalse()
-    {
-        // Act
-        var result = _detector.HasRetryAttribute(null!);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithNullTestContext_ReturnsOne()
-    {
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(null!);
-
-        // Assert
-        Assert.Equal(1, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithRetryAttemptProperty_ReturnsCorrectNumber()
-    {
-        // Arrange
-        var testContext = CreateMockTestContext("TestMethod");
-        testContext.Properties["RetryAttempt"] = 3;
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(testContext);
-
-        // Assert
-        Assert.Equal(3, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithRetryCountProperty_ReturnsCorrectNumber()
-    {
-        // Arrange
-        var testContext = CreateMockTestContext("TestMethod");
-        testContext.Properties["RetryCount"] = 2; // 0-indexed, so attempt 3
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(testContext);
-
-        // Assert
-        Assert.Equal(3, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithRetryInTestName_ReturnsCorrectNumber()
-    {
-        // Arrange
-        var testContext = CreateMockTestContext("TestMethod (Retry 2)");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(testContext);
-
-        // Assert
-        Assert.Equal(2, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithAttemptInTestName_ReturnsCorrectNumber()
-    {
-        // Arrange
-        var testContext = CreateMockTestContext("TestMethod [Attempt 4]");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(testContext);
-
-        // Assert
-        Assert.Equal(4, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithNoRetryInfo_ReturnsOne()
-    {
-        // Arrange
-        var testContext = CreateMockTestContext("TestMethod");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(testContext);
-
-        // Assert
-        Assert.Equal(1, result);
     }
 
     [Fact]
     public void DetectRetryMetadata_WithRetryAttribute_ReturnsMetadata()
     {
-        // Arrange
         var testContext = CreateMockTestContext(
             nameof(TestClass.TestMethodWithRetry),
             typeof(TestClass).FullName!);
 
-        // Act
-        var result = _detector.DetectRetryMetadata(testContext);
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal("Retry", result.RetryAttributeName);
         Assert.Equal(3, result.MaxRetries);
@@ -147,16 +56,13 @@ public sealed class MSTestRetryDetectorTests
     [Fact]
     public void DetectRetryMetadata_WithRetryAttributeAndProperties_ExtractsAllMetadata()
     {
-        // Arrange
         var testContext = CreateMockTestContext(
             nameof(TestClass.TestMethodWithFullRetry),
             typeof(TestClass).FullName!);
         testContext.Properties["RetryAttempt"] = 2;
 
-        // Act
-        var result = _detector.DetectRetryMetadata(testContext);
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal("Retry", result.RetryAttributeName);
         Assert.Equal(5, result.MaxRetries);
@@ -165,33 +71,84 @@ public sealed class MSTestRetryDetectorTests
     }
 
     [Fact]
-    public void HasRetryAttribute_WithRetryAttribute_ReturnsTrue()
+    public void DetectRetryMetadata_WithRetryAttribute_PassedOnRetry_IsTrue_WhenAttemptAboveOne()
     {
-        // Arrange
+        var testContext = CreateMockTestContext(
+            nameof(TestClass.TestMethodWithRetry),
+            typeof(TestClass).FullName!);
+        testContext.Properties["RetryAttempt"] = 2;
+
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.True(result.PassedOnRetry);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithRetryAttribute_PassedOnRetry_IsFalse_WhenFirstAttempt()
+    {
         var testContext = CreateMockTestContext(
             nameof(TestClass.TestMethodWithRetry),
             typeof(TestClass).FullName!);
 
-        // Act
-        var result = _detector.HasRetryAttribute(testContext);
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
 
-        // Assert
-        Assert.True(result);
+        Assert.NotNull(result);
+        Assert.False(result.PassedOnRetry);
+        Assert.Equal(1, result.AttemptNumber);
     }
 
     [Fact]
-    public void HasRetryAttribute_WithoutRetryAttribute_ReturnsFalse()
+    public void DetectRetryMetadata_WithoutRetryAttribute_ReturnsNull()
     {
-        // Arrange
         var testContext = CreateMockTestContext(
             nameof(TestClass.TestMethodWithoutRetry),
             typeof(TestClass).FullName!);
 
-        // Act
-        var result = _detector.HasRetryAttribute(testContext);
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
 
-        // Assert
-        Assert.False(result);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithRetryCountProperty_ExtractsAttemptNumber()
+    {
+        var testContext = CreateMockTestContext(
+            nameof(TestClass.TestMethodWithRetry),
+            typeof(TestClass).FullName!);
+        testContext.Properties["RetryCount"] = 2; // 0-indexed, so attempt 3
+
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.AttemptNumber);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithRetryInTestName_ExtractsAttemptNumber()
+    {
+        var testContext = CreateMockTestContext(
+            "TestMethodWithRetry (Retry 2)",
+            typeof(TestClass).FullName!);
+
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.AttemptNumber);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithFailedOutcome_PassedOnRetry_IsFalse()
+    {
+        var testContext = CreateMockTestContext(
+            nameof(TestClass.TestMethodWithRetry),
+            typeof(TestClass).FullName!);
+        testContext.Properties["RetryAttempt"] = 2;
+
+        var result = _detector.DetectRetryMetadata(testContext, TestOutcome.Failed);
+
+        Assert.NotNull(result);
+        Assert.False(result.PassedOnRetry);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "Must return TestContext for API compatibility with detector")]
@@ -203,7 +160,6 @@ public sealed class MSTestRetryDetectorTests
     /// <summary>
     /// Mock implementation of TestContext for testing.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "Must return TestContext for API compatibility")]
     private sealed class MockTestContext : TestContext
     {
         private readonly string _testName;
@@ -223,33 +179,17 @@ public sealed class MSTestRetryDetectorTests
 
         public override string? FullyQualifiedTestClassName => _fullClassName;
 
-        // Override other required members with minimal implementations
         public override UnitTestOutcome CurrentTestOutcome => UnitTestOutcome.Passed;
 
-        public override void AddResultFile(string fileName)
-        {
-            // Not used in tests
-        }
+        public override void AddResultFile(string fileName) { }
 
-        public override void WriteLine(string? message)
-        {
-            // Not used in tests
-        }
+        public override void WriteLine(string? message) { }
 
-        public override void WriteLine(string format, params object?[]? args)
-        {
-            // Not used in tests
-        }
+        public override void WriteLine(string format, params object?[]? args) { }
 
-        public override void Write(string? message)
-        {
-            // Not used in tests
-        }
+        public override void Write(string? message) { }
 
-        public override void Write(string format, params object?[]? args)
-        {
-            // Not used in tests
-        }
+        public override void Write(string format, params object?[]? args) { }
     }
 
     // Test class with various retry scenarios
@@ -259,23 +199,17 @@ public sealed class MSTestRetryDetectorTests
     {
         [TestMethod]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
-        public void TestMethodWithoutRetry()
-        {
-        }
+        public void TestMethodWithoutRetry() { }
 
         [TestMethod]
         [Retry(3)]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
-        public void TestMethodWithRetry()
-        {
-        }
+        public void TestMethodWithRetry() { }
 
         [TestMethod]
         [Retry(5)]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "MSTEST0003:Test method signature is invalid", Justification = "Test helper method")]
-        public void TestMethodWithFullRetry()
-        {
-        }
+        public void TestMethodWithFullRetry() { }
     }
 
     /// <summary>

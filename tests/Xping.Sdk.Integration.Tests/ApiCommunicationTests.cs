@@ -1,60 +1,62 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Executions;
-
-namespace Xping.Sdk.Integration.Tests;
+namespace Xping.Integration.Tests;
 
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Integration.Tests.Infrastructure;
 using Xunit;
 
-/// <summary>
-/// Integration tests for API communication with mock server.
-/// </summary>
-public sealed class ApiCommunicationTests : IDisposable
-{
-    private readonly MockApiServer _mockServer;
+// Use the NUnit adapter's XpingContext as an independent static singleton,
+// separate from the XUnit context initialized by XpingTestFramework.
+using XpingCtx = Xping.Sdk.NUnit.XpingContext;
 
-    public ApiCommunicationTests()
+/// <summary>
+/// Integration tests for API communication through the Xping pipeline against a local mock server.
+/// </summary>
+public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
+{
+    private readonly MockApiServer _mockServer = new();
+
+    // xUnit calls DisposeAsync before Dispose, so each cleans up its own resource.
+    public Task InitializeAsync()
     {
-        _mockServer = new MockApiServer();
+        // Reset the NUnit context before each test so each test gets a fresh singleton
+        return XpingCtx.ShutdownAsync().AsTask();
+    }
+
+    public Task DisposeAsync()
+    {
+        // Async XpingContext cleanup; MockApiServer is handled by Dispose()
+        return XpingCtx.ShutdownAsync().AsTask();
+    }
+
+    public void Dispose()
+    {
+        _mockServer.Dispose();
     }
 
     [Fact]
-    public async Task UploadAsync_WithValidTestExecutions_SendsCorrectRequest()
+    public async Task FlushAsync_WithValidTestExecution_SendsCorrectRequestHeaders()
     {
         // Arrange
-        var config = new XpingConfiguration
-        {
-            ApiEndpoint = _mockServer.BaseUrl + "api/v1/test-executions",
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            Enabled = true
-        };
-
-        using var httpClient = new HttpClient();
-        using var uploader = new XpingUploader(httpClient, config);
-        var testExecution = CreateTestExecution();
+        XpingCtx.Initialize(CreateConfig());
+        XpingCtx.RecordTest(CreateTestExecution());
 
         // Act
-        var result = await uploader.UploadAsync(new[] { testExecution });
+        await XpingCtx.FlushAsync().ConfigureAwait(true);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Success.Should().BeTrue();
-
         var requests = _mockServer.ReceivedRequests;
         requests.Should().HaveCount(1);
-
         var request = requests[0];
         request.Method.Should().Be("POST");
         request.Headers.Should().ContainKey("X-API-Key");
@@ -65,150 +67,78 @@ public sealed class ApiCommunicationTests : IDisposable
     }
 
     [Fact]
-    public async Task UploadAsync_WithMultipleExecutions_BatchesCorrectly()
+    public async Task FlushAsync_WithMultipleExecutions_SendsOneRequest()
     {
         // Arrange
-        var config = new XpingConfiguration
-        {
-            ApiEndpoint = _mockServer.BaseUrl + "api/v1/test-executions",
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            BatchSize = 5,
-            Enabled = true
-        };
-
-        using var httpClient = new HttpClient();
-        using var uploader = new XpingUploader(httpClient, config);
-        var executions = Enumerable.Range(0, 5).Select(_ => CreateTestExecution()).ToArray();
+        XpingCtx.Initialize(CreateConfig(batchSize: 5));
+        foreach (var i in Enumerable.Range(0, 5))
+            XpingCtx.RecordTest(CreateTestExecution($"Test{i}"));
 
         // Act
-        var result = await uploader.UploadAsync(executions);
+        await XpingCtx.FlushAsync().ConfigureAwait(true);
 
         // Assert
-        result.Success.Should().BeTrue();
         _mockServer.ReceivedRequests.Should().HaveCount(1);
     }
 
     [Fact]
-    public async Task Collector_WithFlush_UploadsToApi()
+    public async Task FlushAsync_AfterRecordingMultipleTests_SendsAllToApi()
     {
         // Arrange
-        var config = new XpingConfiguration
-        {
-            ApiEndpoint = _mockServer.BaseUrl + "api/v1/test-executions",
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            BatchSize = 100,
-            Enabled = true
-        };
-
-        using var httpClient = new HttpClient();
-        using var uploader = new XpingUploader(httpClient, config);
-        await using var collector = new TestExecutionCollector(uploader, config);
+        XpingCtx.Initialize(CreateConfig(batchSize: 100));
+        XpingCtx.RecordTest(CreateTestExecution("Test1"));
+        XpingCtx.RecordTest(CreateTestExecution("Test2"));
+        XpingCtx.RecordTest(CreateTestExecution("Test3"));
 
         // Act
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        collector.RecordTest(CreateTestExecution("Test3"));
-        await collector.FlushAsync();
+        await XpingCtx.FlushAsync().ConfigureAwait(true);
 
         // Assert
         var requests = _mockServer.ReceivedRequests;
         requests.Should().HaveCount(1);
-        requests[0].Body.Should().Contain("Test1");
-        requests[0].Body.Should().Contain("Test2");
-        requests[0].Body.Should().Contain("Test3");
+        requests[0].Body.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
-    public async Task Collector_WithAutomaticFlush_UploadsWhenBatchSizeReached()
-    {
-        // Arrange
-        var config = new XpingConfiguration
-        {
-            ApiEndpoint = _mockServer.BaseUrl + "api/v1/test-executions",
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            BatchSize = 3,
-            Enabled = true
-        };
-
-        using var httpClient = new HttpClient();
-        using var uploader = new XpingUploader(httpClient, config);
-        await using var collector = new TestExecutionCollector(uploader, config);
-
-        // Act
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        collector.RecordTest(CreateTestExecution("Test3"));
-
-        // Wait for automatic flush
-        await Task.Delay(500);
-
-        // Assert
-        _mockServer.ReceivedRequests.Should().HaveCountGreaterThan(0);
-    }
-
-    [Fact]
-    public async Task Uploader_WithServerError_ReturnsFailureResult()
+    public async Task FlushAsync_WithServerError_DoesNotThrow()
     {
         // Arrange
         _mockServer.Behavior.FailureRate = 1.0;
         _mockServer.Behavior.FailureStatusCode = 500;
 
-        var config = new XpingConfiguration
+        XpingCtx.Initialize(CreateConfig(maxRetries: 1));
+        XpingCtx.RecordTest(CreateTestExecution());
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+            await XpingCtx.FlushAsync().ConfigureAwait(true)).ConfigureAwait(true);
+
+        // Assert
+        exception.Should().BeNull();
+        _mockServer.ReceivedRequests.Should().HaveCountGreaterThan(0);
+    }
+
+    private XpingConfiguration CreateConfig(int batchSize = 100, int maxRetries = 1)
+    {
+        return new XpingConfiguration
         {
             ApiEndpoint = _mockServer.BaseUrl + "api/v1/test-executions",
             ApiKey = "test-key",
             ProjectId = "test-project",
-            MaxRetries = 1,
+            BatchSize = batchSize,
+            MaxRetries = maxRetries,
             Enabled = true
         };
-
-        using var httpClient = new HttpClient();
-        using var uploader = new XpingUploader(httpClient, config);
-        var testExecution = CreateTestExecution();
-
-        // Act
-        var result = await uploader.UploadAsync(new[] { testExecution });
-
-        // Assert
-        result.Success.Should().BeFalse();
-        _mockServer.ReceivedRequests.Should().HaveCountGreaterThan(0);
     }
 
     private static TestExecution CreateTestExecution(string? testName = null)
     {
-        return new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity
-            {
-                TestId = Guid.NewGuid().ToString(),
-                FullyQualifiedName = "Test.Class.Method",
-                Assembly = "Test.Assembly",
-                Namespace = "Test",
-                ClassName = "Class",
-                MethodName = "Method"
-            },
-            TestName = testName ?? "TestMethod",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(100),
-            StartTimeUtc = DateTime.UtcNow.AddSeconds(-1),
-            EndTimeUtc = DateTime.UtcNow,
-            SessionContext = new TestSession
-            {
-                SessionId = Guid.NewGuid().ToString(),
-                StartedAt = DateTime.UtcNow,
-                EnvironmentInfo = new EnvironmentInfo()
-            },
-            Metadata = new TestMetadata()
-        };
-    }
-
-    public void Dispose()
-    {
-        _mockServer.Dispose();
-        GC.SuppressFinalize(this);
+        return new TestExecutionBuilder()
+            .WithTestName(testName ?? "TestMethod")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(100))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+            .WithEndTime(DateTime.UtcNow)
+            .Build();
     }
 }

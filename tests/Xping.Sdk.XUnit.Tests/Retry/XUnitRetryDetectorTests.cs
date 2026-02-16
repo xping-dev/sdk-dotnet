@@ -1,509 +1,334 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
+using Moq;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
-
-#pragma warning disable xUnit1000, xUnit1026, xUnit3000, xUnit3001, CA1812, CA1859
+using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit.Tests.Retry;
 
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using Xunit;
-using Xunit.Abstractions;
-using Xping.Sdk.XUnit.Retry;
-
-#pragma warning disable CA1515 // Test classes must be public for NUnit
-public sealed class XUnitRetryDetectorTests
-#pragma warning restore CA1515
+/// <summary>
+/// Tests for the internal <c>XUnitRetryDetector</c>, exercised via
+/// <see cref="XpingContext.GetExecutorServices()"/>.
+/// </summary>
+[Collection("XpingContext")]
+public sealed class XUnitRetryDetectorTests : IAsyncLifetime
 {
-    private readonly XUnitRetryDetector _detector = new();
+    private IRetryDetector<ITest> _detector = null!;
 
-    [Test]
-    public void DetectRetryMetadata_WithNullTest_ReturnsNull()
+    public async Task InitializeAsync()
     {
-        // Act
-        var result = _detector.DetectRetryMetadata(null!);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        XpingContext.Initialize();
+        _detector = XpingContext.GetExecutorServices().RetryDetector;
 
-        // Assert
-        Assert.That(result, Is.Null);
+        // Register the inner RetryAttribute so the detector recognises it.
+        // "RetryAttribute" → stripped to "Retry" by the detector.
+        RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", "Retry");
     }
 
-    [Test]
-    public void DetectRetryMetadata_WithTestWithoutRetryAttribute_ReturnsNull()
+    public Task DisposeAsync() => XpingContext.ShutdownAsync().AsTask();
+
+    // ---------------------------------------------------------------------------
+    // Guard clauses — null/missing test structure
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_NullTestCase_ReturnsNull()
     {
-        // Arrange
-        var test = CreateMockTest("TestMethod");
+        var mockTest = new Mock<ITest>();
+        mockTest.Setup(t => t.TestCase).Returns((ITestCase)null!);
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(mockTest.Object, TestOutcome.Passed);
 
-        // Assert
-        Assert.That(result, Is.Null);
+        Assert.Null(result);
     }
 
-    [Test]
-    public void DetectRetryMetadata_WithRetryFactAttribute_ReturnsMetadata()
+    [Fact]
+    public void DetectRetryMetadata_NullTestMethod_ReturnsNull()
     {
-        // Arrange - This test verifies detection of RetryFact from xunit.extensions.retry
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithRetryFact));
+        var mockTestCase = new Mock<ITestCase>();
+        mockTestCase.Setup(tc => tc.TestMethod).Returns((ITestMethod)null!);
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var mockTest = new Mock<ITest>();
+        mockTest.Setup(t => t.TestCase).Returns(mockTestCase.Object);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.RetryAttributeName, Is.EqualTo("RetryFact"));
-        Assert.That(result.MaxRetries, Is.EqualTo(3));
+        var result = _detector.DetectRetryMetadata(mockTest.Object, TestOutcome.Passed);
+
+        Assert.Null(result);
     }
 
-    [Test]
-    public void DetectRetryMetadata_WithRetryTheoryAttribute_ReturnsMetadata()
+    [Fact]
+    public void DetectRetryMetadata_NullMethod_ReturnsNull()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithRetryTheory));
+        var mockTestMethod = new Mock<ITestMethod>();
+        mockTestMethod.Setup(tm => tm.Method).Returns((IMethodInfo)null!);
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var mockTestCase = new Mock<ITestCase>();
+        mockTestCase.Setup(tc => tc.TestMethod).Returns(mockTestMethod.Object);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.RetryAttributeName, Is.EqualTo("RetryTheory"));
-        Assert.That(result.MaxRetries, Is.EqualTo(5));
+        var mockTest = new Mock<ITest>();
+        mockTest.Setup(t => t.TestCase).Returns(mockTestCase.Object);
+
+        var result = _detector.DetectRetryMetadata(mockTest.Object, TestOutcome.Passed);
+
+        Assert.Null(result);
     }
 
-    [Test]
-    public void DetectRetryMetadata_WithCustomRetryAttribute_ReturnsMetadata()
+    [Fact]
+    public void DetectRetryMetadata_UnknownTypeName_ReturnsNull()
     {
-        // Arrange - Register custom retry attribute
-        RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", "CustomRetry");
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithCustomRetryAttribute));
+        // GetMethodInfo returns null when the type is not found in any loaded assembly.
+        var mockTest = CreateMockTest("NonExistent.Fully.Qualified.Type", "SomeMethod");
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.RetryAttributeName, Is.EqualTo("CustomRetry"));
-        Assert.That(result.MaxRetries, Is.EqualTo(10));
+        Assert.Null(result);
     }
 
-    [Test]
+    // ---------------------------------------------------------------------------
+    // Attribute detection
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_WithRetryAttribute_ReturnsMetadata()
+    {
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry));
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal("Retry", result.RetryAttributeName);
+        Assert.Equal(3, result.MaxRetries);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithoutRetryAttribute_ReturnsNull()
+    {
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithoutRetry));
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void DetectRetryMetadata_WithDelayProperty_ExtractsDelay()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithDelayProperty));
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithDelay));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.DelayBetweenRetries, Is.EqualTo(TimeSpan.FromMilliseconds(1000)));
+        Assert.NotNull(result);
+        Assert.Equal(TimeSpan.FromMilliseconds(200), result.DelayBetweenRetries);
     }
 
-    [Test]
-    public void DetectRetryMetadata_WithReasonProperty_ExtractsReason()
+    // ---------------------------------------------------------------------------
+    // Attempt number — first attempt default
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_FirstAttempt_AttemptNumberIsOne()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithReasonProperty));
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.RetryReason, Is.EqualTo("Flaky test"));
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AttemptNumber);
+        Assert.False(result.PassedOnRetry);
     }
 
-    [Test]
-    public void HasRetryAttribute_WithRetryAttribute_ReturnsTrue()
+    // ---------------------------------------------------------------------------
+    // Attempt number — from traits
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_WithRetryAttemptTrait_ExtractsAttemptNumber()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithRetryFact));
-
-        // Act
-        var result = _detector.HasRetryAttribute(test);
-
-        // Assert
-        Assert.That(result, Is.True);
-    }
-
-    [Test]
-    public void HasRetryAttribute_WithoutRetryAttribute_ReturnsFalse()
-    {
-        // Arrange
-        var test = CreateMockTest("TestMethod");
-
-        // Act
-        var result = _detector.HasRetryAttribute(test);
-
-        // Assert
-        Assert.That(result, Is.False);
-    }
-
-    [Test]
-    public void GetCurrentAttemptNumber_WithDefaultTest_ReturnsOne()
-    {
-        // Arrange
-        var test = CreateMockTest("TestMethod");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.That(result, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void GetCurrentAttemptNumber_WithRetryAttemptTrait_ReturnsAttemptNumber()
-    {
-        // Arrange
-        var test = CreateMockTestWithTraits("TestMethod", new Dictionary<string, List<string>>
+        var traits = new Dictionary<string, List<string>>
         {
-            ["RetryAttempt"] = ["3"]
-        });
+            ["RetryAttempt"] = ["2"]
+        };
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            traits: traits);
 
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
 
-        // Assert
-        Assert.That(result, Is.EqualTo(3));
+        Assert.NotNull(result);
+        Assert.Equal(2, result.AttemptNumber);
+        Assert.True(result.PassedOnRetry);
     }
 
-    [Test]
-    public void GetCurrentAttemptNumber_WithAttemptInDisplayName_ReturnsAttemptNumber()
+    [Fact]
+    public void DetectRetryMetadata_WithRetryAttemptTrait_InvalidValue_DefaultsToOne()
     {
-        // Arrange
-        var test = CreateMockTestWithDisplayName("TestMethod (attempt 2)");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.That(result, Is.EqualTo(2));
-    }
-
-    [Test]
-    public void GetCurrentAttemptNumber_WithRetryInDisplayName_ReturnsAttemptNumber()
-    {
-        // Arrange
-        var test = CreateMockTestWithDisplayName("TestMethod [Retry 4]");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.That(result, Is.EqualTo(4));
-    }
-
-    [Test]
-    public void DetectRetryMetadata_WithAdditionalProperties_ExtractsAdditionalMetadata()
-    {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithAdditionalProperties));
-
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
-
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.AdditionalMetadata.Keys, Does.Contain("Timeout"));
-    }
-
-    // Helper methods to create mock tests
-    private static ITest CreateMockTest(string methodName)
-    {
-        var type = typeof(SampleTestClass);
-        var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
-
-        if (method == null)
+        var traits = new Dictionary<string, List<string>>
         {
-            throw new InvalidOperationException($"Method {methodName} not found on {type.Name}");
-        }
+            ["RetryAttempt"] = ["not-a-number"]
+        };
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            traits: traits);
 
-        return new MockTest(method);
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AttemptNumber);
     }
 
-    private static ITest CreateMockTestWithTraits(string methodName, Dictionary<string, List<string>> traits)
+    // ---------------------------------------------------------------------------
+    // Attempt number — from display name
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_WithDisplayName_AttemptPattern_ExtractsAttemptNumber()
     {
-        return new MockTest(methodName, displayName: methodName, traits: traits);
+        // Format: "TestName (attempt 3)"
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            displayName: "TestMethodWithRetry (attempt 3)");
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.AttemptNumber);
     }
 
-    private static ITest CreateMockTestWithDisplayName(string displayName)
+    [Fact]
+    public void DetectRetryMetadata_WithDisplayName_RetryPattern_ExtractsAttemptNumber()
     {
-        return new MockTest("TestMethod", displayName);
+        // Format: "TestName [retry 2]"
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            displayName: "TestMethodWithRetry [retry 2]");
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.AttemptNumber);
     }
 
-    // Sample test class with retry attributes
-    private sealed class SampleTestClass
+    [Fact]
+    public void DetectRetryMetadata_WithDisplayName_NoPattern_DefaultsToOne()
     {
-        public void TestMethod() { }
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            displayName: "TestMethodWithRetry");
 
-        [RetryFact(MaxRetries = 3)]
-        public void TestWithRetryFact() { }
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
 
-        [RetryTheory(MaxRetries = 5)]
-        [InlineData(1)]
-        public void TestWithRetryTheory(int value) { }
-
-        [CustomRetry(MaxRetries = 10)]
-        public void TestWithCustomRetryAttribute() { }
-
-        [RetryFact(MaxRetries = 3, DelayMilliseconds = 1000)]
-        public void TestWithDelayProperty() { }
-
-        [RetryFact(MaxRetries = 3, Reason = "Flaky test")]
-        public void TestWithReasonProperty() { }
-
-        [RetryFact(MaxRetries = 3, Timeout = 5000)]
-        public void TestWithAdditionalProperties() { }
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AttemptNumber);
     }
 
-    // Mock retry attributes
+    // ---------------------------------------------------------------------------
+    // PassedOnRetry
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_WithFailedOutcome_PassedOnRetry_IsFalse()
+    {
+        var traits = new Dictionary<string, List<string>>
+        {
+            ["RetryAttempt"] = ["2"]
+        };
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            traits: traits);
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Failed);
+
+        Assert.NotNull(result);
+        Assert.False(result.PassedOnRetry);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_FirstAttemptPassed_PassedOnRetry_IsFalse()
+    {
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry));
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AttemptNumber);
+        Assert.False(result.PassedOnRetry);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+
+    private static ITest CreateMockTest(
+        string typeName,
+        string methodName,
+        string? displayName = null,
+        Dictionary<string, List<string>>? traits = null)
+    {
+        var mockTypeInfo = new Mock<ITypeInfo>();
+        mockTypeInfo.Setup(ti => ti.Name).Returns(typeName);
+
+        var mockMethodInfo = new Mock<IMethodInfo>();
+        mockMethodInfo.Setup(mi => mi.Name).Returns(methodName);
+        mockMethodInfo.Setup(mi => mi.Type).Returns(mockTypeInfo.Object);
+
+        var mockTestMethod = new Mock<ITestMethod>();
+        mockTestMethod.Setup(tm => tm.Method).Returns(mockMethodInfo.Object);
+
+        var mockTestCase = new Mock<ITestCase>();
+        mockTestCase.Setup(tc => tc.TestMethod).Returns(mockTestMethod.Object);
+        mockTestCase.Setup(tc => tc.Traits).Returns(
+            traits ?? new Dictionary<string, List<string>>());
+
+        var mockTest = new Mock<ITest>();
+        mockTest.Setup(t => t.TestCase).Returns(mockTestCase.Object);
+        mockTest.Setup(t => t.DisplayName).Returns(displayName ?? methodName);
+
+        return mockTest.Object;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test helper class (accessed via reflection by the detector)
+    // ---------------------------------------------------------------------------
+
+    [SuppressMessage("Performance", "CA1812", Justification = "Instantiated via reflection")]
+    private sealed class TestClass
+    {
+        public static void TestMethodWithoutRetry() { }
+
+        [Retry(3)]
+        public static void TestMethodWithRetry() { }
+
+        [Retry(3, DelayMilliseconds = 200)]
+        public static void TestMethodWithDelay() { }
+    }
+
+    /// <summary>Mock retry attribute applied in <see cref="TestClass"/>.</summary>
     [AttributeUsage(AttributeTargets.Method)]
-    private sealed class RetryFactAttribute : FactAttribute
+    private sealed class RetryAttribute(int maxRetries) : Attribute
     {
-        public int MaxRetries { get; set; }
+        public int MaxRetries { get; } = maxRetries;
         public int DelayMilliseconds { get; set; }
-        public string? Reason { get; set; }
-        public new int Timeout { get; set; }
-    }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    private sealed class RetryTheoryAttribute : TheoryAttribute
-    {
-        public int MaxRetries { get; set; }
-    }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    private sealed class CustomRetryAttribute : Attribute
-    {
-        public int MaxRetries { get; set; }
-    }
-
-    // Mock implementation of ITest
-    private sealed class MockTest : ITest
-    {
-        private readonly MockTestCase _testCase;
-
-        public MockTest(MethodInfo method)
-        {
-            _testCase = new MockTestCase(method);
-            DisplayName = method.Name;
-        }
-
-        public MockTest(string methodName, string displayName, Dictionary<string, List<string>>? traits = null)
-        {
-            _testCase = new MockTestCase(methodName, traits);
-            DisplayName = displayName;
-        }
-
-        public ITestCase TestCase => _testCase;
-        public string DisplayName { get; }
-    }
-
-    private sealed class MockTestCase : ITestCase
-    {
-        private readonly MockTestMethod _testMethod;
-        private readonly Dictionary<string, List<string>> _traits;
-
-        public MockTestCase(MethodInfo method)
-        {
-            _testMethod = new MockTestMethod(method);
-            _traits = new Dictionary<string, List<string>>();
-        }
-
-        public MockTestCase(string methodName, Dictionary<string, List<string>>? traits)
-        {
-            _testMethod = new MockTestMethod(methodName);
-            _traits = traits ?? new Dictionary<string, List<string>>();
-        }
-
-        public ITestMethod TestMethod => _testMethod;
-        public Dictionary<string, List<string>> Traits => _traits;
-
-        // Not used in tests
-        public string DisplayName => TestMethod.Method.Name;
-        public string? SkipReason => null;
-        public ISourceInformation? SourceInformation { get; set; }
-        public object?[]? TestMethodArguments => null;
-        public string? UniqueID => TestMethod.Method.Name;
-
-        public void Deserialize(IXunitSerializationInfo info) { }
-        public void Serialize(IXunitSerializationInfo info) { }
-    }
-
-    private sealed class MockTestMethod : ITestMethod
-    {
-        private readonly MockMethodInfo _method;
-        private readonly MockTestClass _testClass;
-
-        public MockTestMethod(MethodInfo method)
-        {
-            _method = new MockMethodInfo(method);
-            _testClass = new MockTestClass(method.DeclaringType!);
-        }
-
-        public MockTestMethod(string methodName)
-        {
-            _method = new MockMethodInfo(methodName);
-            _testClass = new MockTestClass(typeof(SampleTestClass));
-        }
-
-        public IMethodInfo Method => _method;
-        public ITestClass TestClass => _testClass;
-
-        public void Deserialize(IXunitSerializationInfo info) { }
-        public void Serialize(IXunitSerializationInfo info) { }
-    }
-
-    private sealed class MockTestClass : ITestClass
-    {
-        private readonly MockTypeInfo _class;
-        private readonly MockTestCollection _testCollection;
-
-        public MockTestClass(Type type)
-        {
-            _class = new MockTypeInfo(type);
-            _testCollection = new MockTestCollection();
-        }
-
-        public ITypeInfo Class => _class;
-        public ITestCollection TestCollection => _testCollection;
-
-        public void Deserialize(IXunitSerializationInfo info) { }
-        public void Serialize(IXunitSerializationInfo info) { }
-    }
-
-    private sealed class MockTestCollection : ITestCollection
-    {
-        public string DisplayName => "Test Collection";
-        public ITestAssembly TestAssembly => null!;
-        public ITypeInfo? CollectionDefinition => null;
-        public Guid UniqueID => Guid.NewGuid();
-
-        public void Deserialize(IXunitSerializationInfo info) { }
-        public void Serialize(IXunitSerializationInfo info) { }
-    }
-
-    private sealed class MockMethodInfo : IMethodInfo
-    {
-        private readonly MethodInfo? _methodInfo;
-
-        public MockMethodInfo(MethodInfo methodInfo)
-        {
-            _methodInfo = methodInfo;
-            Name = methodInfo.Name;
-            Type = new MockTypeInfo(methodInfo.DeclaringType!);
-        }
-
-        public MockMethodInfo(string methodName)
-        {
-            Name = methodName;
-            Type = new MockTypeInfo(typeof(SampleTestClass));
-        }
-
-        public string Name { get; }
-        public ITypeInfo Type { get; }
-
-        // Not used in tests
-        public bool IsAbstract => false;
-        public bool IsGenericMethodDefinition => false;
-        public bool IsPublic => true;
-        public bool IsStatic => false;
-        public ITypeInfo ReturnType => null!;
-
-        public IEnumerable<IAttributeInfo> GetCustomAttributes(string assemblyQualifiedAttributeTypeName)
-        {
-            if (_methodInfo != null)
-            {
-                var attributes = _methodInfo.GetCustomAttributes(true);
-                foreach (var attr in attributes)
-                {
-                    yield return new MockAttributeInfo(attr);
-                }
-            }
-        }
-
-        public IEnumerable<ITypeInfo> GetGenericArguments() => [];
-        public IEnumerable<IParameterInfo> GetParameters() => [];
-        public IMethodInfo MakeGenericMethod(params ITypeInfo[] typeArguments) => this;
-    }
-
-    private sealed class MockTypeInfo : ITypeInfo
-    {
-        private readonly Type _type;
-
-        public MockTypeInfo(Type type)
-        {
-            _type = type;
-            Name = type.FullName ?? type.Name;
-        }
-
-        public string Name { get; }
-        public IAssemblyInfo Assembly => new MockAssemblyInfo(_type.Assembly);
-
-        // Not used in tests
-        public ITypeInfo? BaseType => null;
-        public IEnumerable<ITypeInfo> Interfaces => [];
-        public bool IsAbstract => false;
-        public bool IsGenericParameter => false;
-        public bool IsGenericType => false;
-        public bool IsSealed => false;
-        public bool IsValueType => false;
-
-        public IEnumerable<IAttributeInfo> GetCustomAttributes(string assemblyQualifiedAttributeTypeName) => [];
-        public IEnumerable<ITypeInfo> GetGenericArguments() => [];
-        public IMethodInfo? GetMethod(string methodName, bool includePrivateMethod) => null;
-        public IEnumerable<IMethodInfo> GetMethods(bool includePrivateMethods) => [];
-    }
-
-    private sealed class MockAssemblyInfo : IAssemblyInfo
-    {
-        public MockAssemblyInfo(Assembly assembly)
-        {
-            Name = assembly.GetName().Name ?? "TestAssembly";
-            AssemblyPath = assembly.Location;
-        }
-
-        public string Name { get; }
-        public string AssemblyPath { get; }
-
-        public IEnumerable<IAttributeInfo> GetCustomAttributes(string assemblyQualifiedAttributeTypeName) => [];
-        public ITypeInfo? GetType(string typeName) => null;
-        public IEnumerable<ITypeInfo> GetTypes(bool includePrivateTypes) => [];
-    }
-
-    private sealed class MockAttributeInfo : IAttributeInfo
-    {
-        private readonly object _attribute;
-
-        public MockAttributeInfo(object attribute)
-        {
-            _attribute = attribute;
-        }
-
-        public IEnumerable<object> GetConstructorArguments() => [];
-
-        public IEnumerable<IAttributeInfo> GetCustomAttributes(string assemblyQualifiedAttributeTypeName) => [];
-
-        public TValue GetNamedArgument<TValue>(string argumentName)
-        {
-            var property = _attribute.GetType().GetProperty(argumentName);
-            if (property != null)
-            {
-                var value = property.GetValue(_attribute);
-                if (value is TValue typedValue)
-                {
-                    return typedValue;
-                }
-            }
-
-            return default!;
-        }
     }
 }

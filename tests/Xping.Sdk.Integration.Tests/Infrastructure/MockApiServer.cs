@@ -90,7 +90,7 @@ internal sealed class MockApiServer : IDisposable
         {
             try
             {
-                var context = await _listener.GetContextAsync();
+                var context = await _listener.GetContextAsync().ConfigureAwait(false);
                 _ = Task.Run(() => HandleRequestAsync(context), cancellationToken);
             }
             catch (HttpListenerException) when (cancellationToken.IsCancellationRequested)
@@ -120,7 +120,7 @@ internal sealed class MockApiServer : IDisposable
                     ? new GZipStream(request.InputStream, CompressionMode.Decompress)
                     : request.InputStream;
                 using var reader = new StreamReader(stream, request.ContentEncoding ?? Encoding.UTF8);
-                requestBody = await reader.ReadToEndAsync();
+                requestBody = await reader.ReadToEndAsync().ConfigureAwait(false);
             }
 
             // Store received request
@@ -139,13 +139,13 @@ internal sealed class MockApiServer : IDisposable
             }
 
             // Apply behavior
-            await ApplyBehaviorAsync(response, receivedRequest);
+            await ApplyBehaviorAsync(response, receivedRequest).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             response.StatusCode = 500;
             var errorBytes = Encoding.UTF8.GetBytes(ex.Message);
-            await response.OutputStream.WriteAsync(errorBytes);
+            await response.OutputStream.WriteAsync(errorBytes).ConfigureAwait(false);
         }
         finally
         {
@@ -158,7 +158,7 @@ internal sealed class MockApiServer : IDisposable
         // Check for delay
         if (Behavior.DelayMs > 0)
         {
-            await Task.Delay(Behavior.DelayMs);
+            await Task.Delay(Behavior.DelayMs).ConfigureAwait(false);
         }
 
         // Check for failure rate
@@ -171,7 +171,7 @@ internal sealed class MockApiServer : IDisposable
             {
                 response.StatusCode = Behavior.FailureStatusCode;
                 var errorResponse = new { error = "Simulated failure" };
-                await WriteJsonResponseAsync(response, errorResponse);
+                await WriteJsonResponseAsync(response, errorResponse).ConfigureAwait(false);
                 return;
             }
         }
@@ -180,7 +180,7 @@ internal sealed class MockApiServer : IDisposable
         if (Behavior.CustomResponse != null)
         {
             response.StatusCode = Behavior.CustomStatusCode;
-            await WriteJsonResponseAsync(response, Behavior.CustomResponse);
+            await WriteJsonResponseAsync(response, Behavior.CustomResponse).ConfigureAwait(false);
             return;
         }
 
@@ -191,7 +191,7 @@ internal sealed class MockApiServer : IDisposable
             executionCount = 1,
             receiptId = Guid.NewGuid().ToString()
         };
-        await WriteJsonResponseAsync(response, successResponse);
+        await WriteJsonResponseAsync(response, successResponse).ConfigureAwait(false);
     }
 
     private static async Task WriteJsonResponseAsync(HttpListenerResponse response, object data)
@@ -200,7 +200,7 @@ internal sealed class MockApiServer : IDisposable
         var json = JsonSerializer.Serialize(data);
         var bytes = Encoding.UTF8.GetBytes(json);
         response.ContentLength64 = bytes.Length;
-        await response.OutputStream.WriteAsync(bytes);
+        await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
     }
 
     public void ClearRequests()

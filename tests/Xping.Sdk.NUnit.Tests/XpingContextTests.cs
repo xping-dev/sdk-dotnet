@@ -1,61 +1,34 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.NUnit.Tests;
 
 using System;
 using System.Threading.Tasks;
-using Xping.Sdk.Core.Models;
 using Xunit;
 
 /// <summary>
-/// Unit tests for <see cref="XpingContext"/>.
+/// Tests for XpingContext lifecycle management in the NUnit adapter.
 /// </summary>
-public sealed class XpingContextTests : IDisposable
+public sealed class XpingContextTests : IAsyncLifetime
 {
-    public XpingContextTests()
+    public Task InitializeAsync()
     {
-        // Ensure clean state before each test
-        XpingContext.Reset();
+        return XpingContext.ShutdownAsync().AsTask();
     }
 
-    public void Dispose()
+    public Task DisposeAsync()
     {
-        // Clean up after each test
-        XpingContext.Reset();
-    }
-
-    [Fact]
-    public void Initialize_FirstCall_ReturnsCollector()
-    {
-        var collector = XpingContext.Initialize();
-
-        Assert.NotNull(collector);
-        Assert.True(XpingContext.IsInitialized);
+        return XpingContext.ShutdownAsync().AsTask();
     }
 
     [Fact]
-    public void Initialize_SecondCall_ReturnsSameCollector()
-    {
-        var collector1 = XpingContext.Initialize();
-        var collector2 = XpingContext.Initialize();
-
-        Assert.Same(collector1, collector2);
-    }
-
-    [Fact]
-    public void IsInitialized_BeforeInit_ReturnsFalse()
-    {
-        Assert.False(XpingContext.IsInitialized);
-    }
-
-    [Fact]
-    public void IsInitialized_AfterInit_ReturnsTrue()
+    public void Initialize_FirstCall_SetsIsInitializedTrue()
     {
         XpingContext.Initialize();
 
@@ -63,18 +36,30 @@ public sealed class XpingContextTests : IDisposable
     }
 
     [Fact]
-    public void RecordTest_BeforeInit_DoesNotThrow()
+    public void Initialize_SecondCall_IsIdempotent()
     {
-        var execution = CreateTestExecution();
+        XpingContext.Initialize();
+        XpingContext.Initialize();
 
-        // Should not throw, just silently ignore
-        var exception = Record.Exception(() => XpingContext.RecordTest(execution));
-
-        Assert.Null(exception);
+        Assert.True(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public void RecordTest_AfterInit_RecordsSuccessfully()
+    public void IsInitialized_BeforeInitialize_ReturnsFalse()
+    {
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public void IsInitialized_AfterInitialize_ReturnsTrue()
+    {
+        XpingContext.Initialize();
+
+        Assert.True(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public void RecordTest_AfterInitialize_DoesNotThrow()
     {
         XpingContext.Initialize();
         var execution = CreateTestExecution();
@@ -85,90 +70,76 @@ public sealed class XpingContextTests : IDisposable
     }
 
     [Fact]
-    public async Task FlushAsync_BeforeInit_DoesNotThrow()
-    {
-        var exception = await Record.ExceptionAsync(async () =>
-            await XpingContext.FlushAsync());
-
-        Assert.Null(exception);
-    }
-
-    [Fact]
-    public async Task FlushAsync_AfterInit_CompletesSuccessfully()
+    public async Task FlushAsync_AfterInitialize_DoesNotThrow()
     {
         XpingContext.Initialize();
 
         var exception = await Record.ExceptionAsync(async () =>
-            await XpingContext.FlushAsync());
+            await XpingContext.FlushAsync().ConfigureAwait(true)).ConfigureAwait(true);
 
         Assert.Null(exception);
     }
 
     [Fact]
-    public async Task DisposeAsync_BeforeInit_DoesNotThrow()
-    {
-        var exception = await Record.ExceptionAsync(async () =>
-            await XpingContext.DisposeAsync());
-
-        Assert.Null(exception);
-    }
-
-    [Fact]
-    public async Task DisposeAsync_AfterInit_ResetsContext()
+    public async Task ShutdownAsync_AfterInitialize_ResetsContext()
     {
         XpingContext.Initialize();
         Assert.True(XpingContext.IsInitialized);
 
-        await XpingContext.DisposeAsync();
+        await XpingContext.ShutdownAsync().ConfigureAwait(true);
 
         Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public async Task DisposeAsync_MultipleCalls_DoesNotThrow()
+    public async Task ShutdownAsync_MultipleCallsSafe()
     {
         XpingContext.Initialize();
 
-        await XpingContext.DisposeAsync();
+        await XpingContext.ShutdownAsync().ConfigureAwait(true);
         var exception = await Record.ExceptionAsync(async () =>
-            await XpingContext.DisposeAsync());
+            await XpingContext.ShutdownAsync().ConfigureAwait(true)).ConfigureAwait(true);
 
         Assert.Null(exception);
     }
 
     [Fact]
-    public void Reset_ClearsInitializedState()
+    public async Task ShutdownAsync_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = await Record.ExceptionAsync(async () =>
+            await XpingContext.ShutdownAsync().ConfigureAwait(true)).ConfigureAwait(true);
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = await Record.ExceptionAsync(async () =>
+            await XpingContext.FinalizeAsync().ConfigureAwait(true)).ConfigureAwait(true);
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_AfterInitialize_DoesNotThrow()
     {
         XpingContext.Initialize();
-        Assert.True(XpingContext.IsInitialized);
 
-        XpingContext.Reset();
+        var exception = await Record.ExceptionAsync(async () =>
+            await XpingContext.FinalizeAsync().ConfigureAwait(true)).ConfigureAwait(true);
 
-        Assert.False(XpingContext.IsInitialized);
+        Assert.Null(exception);
     }
 
     private static TestExecution CreateTestExecution()
     {
-        return new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity
-            {
-                TestId = "test-1",
-                FullyQualifiedName = "Namespace.Class.TestMethod"
-            },
-            TestName = "TestMethod",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(100),
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow,
-            SessionContext = new TestSession
-            {
-                SessionId = Guid.NewGuid().ToString(),
-                StartedAt = DateTime.UtcNow,
-                EnvironmentInfo = new EnvironmentInfo()
-            },
-            Metadata = new TestMetadata()
-        };
+        return new TestExecutionBuilder()
+            .WithTestName("TestMethod")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(100))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+            .WithEndTime(DateTime.UtcNow)
+            .Build();
     }
 }

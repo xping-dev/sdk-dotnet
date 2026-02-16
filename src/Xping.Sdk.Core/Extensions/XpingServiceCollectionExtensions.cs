@@ -477,7 +477,7 @@ public static class XpingServiceCollectionExtensions
             config.CollectNetworkMetrics = cm;
         return;
 
-        string? GetEnv(string name) => System.Environment.GetEnvironmentVariable(prefix + name);
+        string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
     }
 
     private static void CopyConfiguration(XpingConfiguration source, XpingConfiguration target)

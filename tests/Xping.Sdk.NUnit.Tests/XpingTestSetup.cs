@@ -35,9 +35,9 @@ public class XpingTestSetup
     public async Task AfterAllTests()
     {
         // Flush any pending test executions to Xping Cloud
-        await XpingContext.FlushAsync();
+        await XpingContext.FlushAsync().ConfigureAwait(true);
 
         // Dispose of Xping resources
-        await XpingContext.DisposeAsync();
+        await XpingContext.ShutdownAsync().ConfigureAwait(true);
     }
 }

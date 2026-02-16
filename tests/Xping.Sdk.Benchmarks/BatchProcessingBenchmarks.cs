@@ -3,9 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Upload;
-
 #pragma warning disable CA1515 // Consider making public types internal
 #pragma warning disable CA5394 // Do not use insecure randomness
 #pragma warning disable CA1001 // Types that own disposable fields should be disposable
@@ -15,11 +12,13 @@ using Xping.Sdk.Core.Services.Upload;
 namespace Xping.Sdk.Benchmarks;
 
 using BenchmarkDotNet.Attributes;
+using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 /// <summary>
@@ -32,25 +31,12 @@ public class BatchProcessingBenchmarks
 {
     private readonly Random _random = new();
 
-    private sealed class NoOpUploader : IXpingUploader
-    {
-        public Task<UploadResult> UploadAsync(IEnumerable<TestExecution> executions, CancellationToken cancellationToken = default)
-        {
-            var count = executions.Count();
-            return Task.FromResult(new UploadResult 
-            { 
-                Success = true, 
-                ExecutionCount = count 
-            });
-        }
-    }
-
     /// <summary>
     /// Small batch (10 tests): Optimized for fast feedback.
     /// Validates: Quick flush overhead, minimal batching.
     /// </summary>
     [Benchmark]
-    public async Task SmallBatch_10Tests()
+    public void SmallBatch_10Tests()
     {
         var config = new XpingConfiguration
         {
@@ -61,25 +47,20 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 10; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity { TestId = $"batch-small-{i}", FullyQualifiedName = $"Batch.Small.Test{i}" },
-                TestName = $"Small Batch Test {i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(50),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                EndTimeUtc = DateTime.UtcNow
-            };
-
-            collector.RecordTest(execution);
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Small Batch Test {i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(50))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -87,7 +68,7 @@ public class BatchProcessingBenchmarks
     /// Validates: Moderate batching efficiency, reasonable flush frequency.
     /// </summary>
     [Benchmark]
-    public async Task MediumBatch_50Tests()
+    public void MediumBatch_50Tests()
     {
         var config = new XpingConfiguration
         {
@@ -98,25 +79,21 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 50; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity { TestId = $"batch-medium-{i}", FullyQualifiedName = $"Batch.Medium.Test{i}" },
-                TestName = $"Medium Batch Test {i}",
-                Outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(20, 100)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                EndTimeUtc = DateTime.UtcNow
-            };
-
-            collector.RecordTest(execution);
+            var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Medium Batch Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(20, 100)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -124,7 +101,7 @@ public class BatchProcessingBenchmarks
     /// Validates: Maximum batching efficiency, reduced flush overhead.
     /// </summary>
     [Benchmark]
-    public async Task LargeBatch_100Tests()
+    public void LargeBatch_100Tests()
     {
         var config = new XpingConfiguration
         {
@@ -135,25 +112,21 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 100; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity { TestId = $"batch-large-{i}", FullyQualifiedName = $"Batch.Large.Test{i}" },
-                TestName = $"Large Batch Test {i}",
-                Outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(10, 150)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                EndTimeUtc = DateTime.UtcNow
-            };
-
-            collector.RecordTest(execution);
+            var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Large Batch Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 150)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -161,7 +134,7 @@ public class BatchProcessingBenchmarks
     /// Validates: Scalability, memory efficiency, no degradation at high volume.
     /// </summary>
     [Benchmark]
-    public async Task ExtraLargeBatch_500Tests()
+    public void ExtraLargeBatch_500Tests()
     {
         var config = new XpingConfiguration
         {
@@ -172,31 +145,27 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         for (int i = 0; i < 500; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity { TestId = $"batch-xlarge-{i}", FullyQualifiedName = $"Batch.XLarge.Test{i}" },
-                TestName = $"XLarge Batch Test {i}",
-                Outcome = i % 20 == 0 ? TestOutcome.Failed : TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(_random.Next(5, 100)),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-50),
-                EndTimeUtc = DateTime.UtcNow
-            };
+            var outcome = i % 20 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
+            var builder = new TestExecutionBuilder()
+                .WithTestName($"XLarge Batch Test {i}")
+                .WithOutcome(outcome)
+                .WithDuration(TimeSpan.FromMilliseconds(_random.Next(5, 100)))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-50))
+                .WithEndTime(DateTime.UtcNow);
 
             if (i % 20 == 0)
             {
-                execution.ErrorMessage = $"Test {i} failed with assertion error";
-                execution.StackTrace = "   at Test.Method() in Test.cs:line 42";
+                builder.WithException(null, $"Test {i} failed with assertion error", "   at Test.Method() in Test.cs:line 42");
             }
 
-            collector.RecordTest(execution);
+            collector.RecordTest(builder.Build());
         }
 
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -204,7 +173,7 @@ public class BatchProcessingBenchmarks
     /// Validates: Flush overhead, buffer reuse, GC pressure.
     /// </summary>
     [Benchmark]
-    public async Task MultipleSmallBatches_5x10Tests()
+    public void MultipleSmallBatches_5x10Tests()
     {
         var config = new XpingConfiguration
         {
@@ -215,28 +184,23 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         // 5 batches of 10 tests each
         for (int batch = 0; batch < 5; batch++)
         {
             for (int i = 0; i < 10; i++)
             {
-                var execution = new TestExecution
-                {
-                    ExecutionId = Guid.NewGuid(),
-                    Identity = new TestIdentity { TestId = $"batch-multi-{batch}-{i}", FullyQualifiedName = $"Batch.Multi.Test{batch}_{i}" },
-                    TestName = $"Multi Batch {batch} Test {i}",
-                    Outcome = TestOutcome.Passed,
-                    Duration = TimeSpan.FromMilliseconds(30),
-                    StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-30),
-                    EndTimeUtc = DateTime.UtcNow
-                };
-
-                collector.RecordTest(execution);
+                collector.RecordTest(new TestExecutionBuilder()
+                    .WithTestName($"Multi Batch {batch} Test {i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .WithDuration(TimeSpan.FromMilliseconds(30))
+                    .WithStartTime(DateTime.UtcNow.AddMilliseconds(-30))
+                    .WithEndTime(DateTime.UtcNow)
+                    .Build());
             }
 
-            await collector.FlushAsync().ConfigureAwait(false);
+            _ = collector.Drain();
         }
     }
 
@@ -245,38 +209,33 @@ public class BatchProcessingBenchmarks
     /// Validates: Automatic batching, no manual flush needed.
     /// </summary>
     [Benchmark]
-    public async Task AutoFlush_BatchSize50()
+    public void AutoFlush_BatchSize50()
     {
         var config = new XpingConfiguration
         {
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 25, // Will auto-flush after 25 tests
+            BatchSize = 25, // Will trigger BufferFull after 25 tests
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
-        // Record 50 tests - should trigger 2 automatic flushes
+        // Record 50 tests
         for (int i = 0; i < 50; i++)
         {
-            var execution = new TestExecution
-            {
-                ExecutionId = Guid.NewGuid(),
-                Identity = new TestIdentity { TestId = $"batch-auto-{i}", FullyQualifiedName = $"Batch.Auto.Test{i}" },
-                TestName = $"Auto Flush Test {i}",
-                Outcome = TestOutcome.Passed,
-                Duration = TimeSpan.FromMilliseconds(20),
-                StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-20),
-                EndTimeUtc = DateTime.UtcNow
-            };
-
-            collector.RecordTest(execution);
+            collector.RecordTest(new TestExecutionBuilder()
+                .WithTestName($"Auto Flush Test {i}")
+                .WithOutcome(TestOutcome.Passed)
+                .WithDuration(TimeSpan.FromMilliseconds(20))
+                .WithStartTime(DateTime.UtcNow.AddMilliseconds(-20))
+                .WithEndTime(DateTime.UtcNow)
+                .Build());
         }
 
-        // Final flush for any remaining tests
-        await collector.FlushAsync().ConfigureAwait(false);
+        // Final drain for any remaining tests
+        _ = collector.Drain();
     }
 
     /// <summary>
@@ -284,7 +243,7 @@ public class BatchProcessingBenchmarks
     /// Validates: Adaptability to varying workloads.
     /// </summary>
     [Benchmark]
-    public async Task MixedSizeBatches_Variable()
+    public void MixedSizeBatches_Variable()
     {
         var config = new XpingConfiguration
         {
@@ -295,45 +254,38 @@ public class BatchProcessingBenchmarks
             FlushInterval = TimeSpan.Zero
         };
 
-        await using var collector = new TestExecutionCollector(new NoOpUploader(), config);
+        using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
 
         // Batch 1: 5 tests
         for (int i = 0; i < 5; i++)
         {
             collector.RecordTest(CreateTestExecution(i, "Batch1"));
         }
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
 
         // Batch 2: 15 tests
         for (int i = 0; i < 15; i++)
         {
             collector.RecordTest(CreateTestExecution(i, "Batch2"));
         }
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
 
         // Batch 3: 30 tests
         for (int i = 0; i < 30; i++)
         {
             collector.RecordTest(CreateTestExecution(i, "Batch3"));
         }
-        await collector.FlushAsync().ConfigureAwait(false);
+        _ = collector.Drain();
     }
 
     private TestExecution CreateTestExecution(int index, string batchName)
     {
-        return new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity 
-            { 
-                TestId = $"mixed-{batchName}-{index}", 
-                FullyQualifiedName = $"Batch.Mixed.{batchName}.Test{index}" 
-            },
-            TestName = $"{batchName} Test {index}",
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(_random.Next(10, 80)),
-            StartTimeUtc = DateTime.UtcNow.AddMilliseconds(-40),
-            EndTimeUtc = DateTime.UtcNow
-        };
+        return new TestExecutionBuilder()
+            .WithTestName($"{batchName} Test {index}")
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(_random.Next(10, 80)))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-40))
+            .WithEndTime(DateTime.UtcNow)
+            .Build();
     }
 }

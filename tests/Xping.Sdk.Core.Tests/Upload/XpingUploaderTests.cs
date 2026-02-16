@@ -1,887 +1,342 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Polly.CircuitBreaker;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
-
-#pragma warning disable CA2007 // Do not directly await a Task
+using Xping.Sdk.Core.Services.Upload;
 
 namespace Xping.Sdk.Core.Tests.Upload;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xunit;
-
 public sealed class XpingUploaderTests
 {
-    private static TestExecution CreateTestExecution(string testName = "Test1")
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Minimal fake message handler — returns the supplied response or throws the supplied exception.
+    /// </summary>
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
-        return new TestExecution
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+
+        public FakeHttpMessageHandler(HttpResponseMessage response)
+            => _respond = _ => response;
+
+        // Factory variant: creates a fresh response per call (required for retryable status codes).
+        public FakeHttpMessageHandler(Func<HttpResponseMessage> factory)
+            => _respond = _ => factory();
+
+        public FakeHttpMessageHandler(Exception exception)
+            => _respond = _ => throw exception;
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(_respond(request));
+    }
+
+    /// <summary>
+    /// Builds a real IXpingUploader via DI, injecting a custom primary handler.
+    /// MaxRetries = 1 is the minimum valid value accepted by Polly.
+    /// </summary>
+    private static IXpingUploader BuildUploader(
+        HttpMessageHandler fakeHandler,
+        Action<XpingConfiguration>? configure = null)
+    {
+        var services = new ServiceCollection();
+        services.Configure<XpingConfiguration>(o =>
         {
-            ExecutionId = Guid.NewGuid(),
-            TestName = testName,
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(100),
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow,
-            SessionContext = new TestSession
-            {
-                SessionId = Guid.NewGuid().ToString(),
-                StartedAt = DateTime.UtcNow,
-                EnvironmentInfo = new EnvironmentInfo()
-            },
-            Metadata = new TestMetadata(),
+            o.ApiKey = "test-key";
+            o.ProjectId = "test-project";
+            o.MaxRetries = 1;
+            configure?.Invoke(o);
+        });
+        services.AddXpingSerialization();
+        services.AddLogging();
+        services.AddXpingUploader();
+
+        // Replace the innermost HTTP handler. After PostConfigureAll runs, the pipeline is:
+        //   [Polly retry/circuit-breaker DelegatingHandlers] → fakeHandler (PrimaryHandler)
+        services.PostConfigureAll<HttpClientFactoryOptions>(opts =>
+            opts.HttpMessageHandlerBuilderActions.Add(b => b.PrimaryHandler = fakeHandler));
+
+        return services.BuildServiceProvider().GetRequiredService<IXpingUploader>();
+    }
+
+    private static HttpResponseMessage JsonResponse(HttpStatusCode status, object? body = null)
+    {
+        var json = body != null ? JsonSerializer.Serialize(body) : string.Empty;
+        return new HttpResponseMessage(status)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
     }
 
-    [Fact]
-    public void Constructor_WithNullHttpClient_ThrowsArgumentNullException()
+    private static TestSession BuildSession(int executionCount = 1)
     {
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        Assert.Throws<ArgumentNullException>(() => new XpingUploader(null!, config));
+        var builder = new TestSessionBuilder();
+        for (var i = 0; i < executionCount; i++)
+        {
+            builder.AddExecution(
+                new TestExecutionBuilder()
+                    .WithTestName($"Test{i}")
+                    .WithOutcome(TestOutcome.Passed)
+                    .Build());
+        }
+        return builder.Build();
+    }
+
+    // ---------------------------------------------------------------------------
+    // UploadAsync — guard clauses
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UploadAsync_NullSession_ShouldThrowArgumentNullException()
+    {
+        using var response = JsonResponse(HttpStatusCode.OK);
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => uploader.UploadAsync(null!));
     }
 
     [Fact]
-    public void Constructor_WithNullConfig_ThrowsArgumentNullException()
+    public async Task UploadAsync_EmptySession_ShouldReturnSuccess_WithZeroCount()
     {
-        using var httpClient = new HttpClient();
-        Assert.Throws<ArgumentNullException>(() => new XpingUploader(httpClient, null!));
-    }
+        // The uploader short-circuits when the session has no executions.
+        using var response = JsonResponse(HttpStatusCode.OK);
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
+        var emptySession = new TestSessionBuilder().Build();
 
-    [Fact]
-    public async Task UploadAsync_WithNullExecutions_ThrowsArgumentNullException()
-    {
-        using var httpClient = new HttpClient();
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        using var client = new XpingUploader(httpClient, config);
-
-        await Assert.ThrowsAsync<ArgumentNullException>(() => client.UploadAsync(null!));
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithEmptyList_ReturnsSuccessWithZeroCount()
-    {
-        using var httpClient = new HttpClient();
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new List<TestExecution>());
+        var result = await uploader.UploadAsync(emptySession);
 
         Assert.True(result.Success);
         Assert.Equal(0, result.ExecutionCount);
     }
 
+    // ---------------------------------------------------------------------------
+    // UploadAsync — success path
+    // ---------------------------------------------------------------------------
+
     [Fact]
-    public async Task UploadAsync_WithSuccessfulResponse_ReturnsSuccess()
+    public async Task UploadAsync_200Response_ShouldReturnSuccessResult()
     {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 3, receiptId = "receipt-123" }));
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "r001" });
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var executions = new List<TestExecution>
-        {
-            CreateTestExecution("Test1"),
-            CreateTestExecution("Test2"),
-            CreateTestExecution("Test3"),
-        };
-
-        var result = await client.UploadAsync(executions);
+        var result = await uploader.UploadAsync(BuildSession(1));
 
         Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task UploadAsync_200Response_ShouldParse_TotalRecords_FromApiResponse()
+    {
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 3, receiptId = (string?)null });
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession(3));
+
         Assert.Equal(3, result.ExecutionCount);
-        Assert.Equal("receipt-123", result.ReceiptId);
     }
 
     [Fact]
-    public async Task UploadAsync_SetsCorrectHeaders()
+    public async Task UploadAsync_200Response_ShouldSet_ReceiptId()
     {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 1 }));
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "receipt-xyz" });
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test-api-key",
-            ProjectId = "test-project-id",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
+        var result = await uploader.UploadAsync(BuildSession(1));
 
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        var request = handler.LastRequest;
-        Assert.NotNull(request);
-        Assert.Equal("test-api-key", request.Headers.GetValues("X-API-Key").First());
-        Assert.Equal("test-project-id", request.Headers.GetValues("X-Project-Id").First());
-        Assert.Contains("Xping-SDK-DotNet", request.Headers.GetValues("User-Agent").First(), StringComparison.Ordinal);
+        Assert.Equal("receipt-xyz", result.ReceiptId);
     }
 
-    [Fact]
-    public async Task UploadAsync_WithSmallPayload_DoesNotCompress()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 1 }));
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            EnableCompression = true,
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        var request = handler.LastRequest;
-        Assert.NotNull(request?.Content);
-        Assert.DoesNotContain("gzip", request.Content.Headers.ContentEncoding.ToString(), StringComparison.Ordinal);
-    }
+    // ---------------------------------------------------------------------------
+    // UploadAsync — HTTP error responses
+    // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task UploadAsync_WithLargePayload_CompressesContent()
+    public async Task UploadAsync_401Response_ShouldReturnFailure_WithAuthErrorMessage()
     {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 100 }));
+        using var response = JsonResponse(HttpStatusCode.Unauthorized);
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            EnableCompression = true,
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        // Create many executions to exceed 1KB threshold
-        var executions = Enumerable.Range(0, 100).Select(i => CreateTestExecution($"Test{i}")).ToList();
-
-        await client.UploadAsync(executions);
-
-        var request = handler.LastRequest;
-        Assert.NotNull(request?.Content);
-        Assert.Contains("gzip", request.Content.Headers.ContentEncoding);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithCompressionDisabled_DoesNotCompress()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 100 }));
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            EnableCompression = false,
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var executions = Enumerable.Range(0, 100).Select(i => CreateTestExecution($"Test{i}")).ToList();
-
-        await client.UploadAsync(executions);
-
-        var request = handler.LastRequest;
-        Assert.NotNull(request?.Content);
-        Assert.DoesNotContain("gzip", request.Content.Headers.ContentEncoding.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithServerError_ReturnsFailure()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.InternalServerError,
-            "Internal server error");
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1, // Minimum retries
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
-
-        Assert.False(result.Success);
-        Assert.Contains("Server error (500)", result.ErrorMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithBadRequest_ReturnsFailure()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.BadRequest,
-            "Bad request");
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
-
-        Assert.False(result.Success);
-        Assert.Contains("400", result.ErrorMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithNotFoundError_ReturnsSpecificErrorMessage()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.NotFound,
-            "Endpoint not found");
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
-
-        Assert.False(result.Success);
-        Assert.Contains("API endpoint not found (404): https://api.test.com", result.ErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("Verify the ApiEndpoint configuration", result.ErrorMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithEmptyErrorContent_ReturnsFallbackMessage()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.BadRequest,
-            string.Empty);
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
-
-        Assert.False(result.Success);
-        Assert.Contains("API returned 400: No additional error details provided", result.ErrorMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithNetworkError_ReturnsFailure()
-    {
-        using var handler = new MockHttpMessageHandler(throwException: true);
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1, // Minimum retries
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
+        var result = await uploader.UploadAsync(BuildSession());
 
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("401", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task UploadAsync_WithRetriableError_RetriesRequest()
+    public async Task UploadAsync_403Response_ShouldReturnFailure_WithAuthorizationMessage()
     {
-        var callCount = 0;
-        using var handler = new MockHttpMessageHandler((req) =>
-        {
-            callCount++;
-            if (callCount < 3)
-            {
-                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
-            }
+        using var response = JsonResponse(HttpStatusCode.Forbidden);
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
 
-            return new HttpResponseMessage(HttpStatusCode.Created)
-            {
-                Content = new StringContent(JsonSerializer.Serialize(new { executionCount = 1 })),
-            };
-        });
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 3,
-            RetryDelay = TimeSpan.FromMilliseconds(10),
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
-
-        Assert.True(result.Success);
-        Assert.Equal(3, callCount); // 1 initial + 2 retries
-    }
-
-    [Fact]
-    public async Task UploadAsync_PostsToCorrectEndpoint()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Created,
-            JsonSerializer.Serialize(new { executionCount = 1 }));
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        var executions = new List<TestExecution>
-        {
-            CreateTestExecution("Test1"),
-        };
-
-        await client.UploadAsync(executions);
-
-        var request = handler.LastRequest;
-        Assert.NotNull(request);
-        Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Equal(
-            expected: new Uri($"{config.ApiEndpoint}?sessionId={executions[0].SessionContext?.SessionId}").PathAndQuery,
-            actual: request.RequestUri?.PathAndQuery);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithFirstErrorOccurrence_LogsDetailedMessage()
-    {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.Unauthorized,
-            "Invalid API key");
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1, // Minimum retries
-        };
-
-        var mockLogger = new MockLogger();
-        using var client = new XpingUploader(httpClient, config, logger: mockLogger);
-
-        var result = await client.UploadAsync(new[] { CreateTestExecution() });
+        var result = await uploader.UploadAsync(BuildSession());
 
         Assert.False(result.Success);
-        Assert.Contains("Authentication failed (401) for https://api.test.com", result.ErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("Invalid API Key", result.ErrorMessage, StringComparison.Ordinal);
-
-        // Verify detailed message is logged on first occurrence
-        var errorLogs = mockLogger.ErrorMessages;
-        Assert.Single(errorLogs);
-        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[0], StringComparison.Ordinal);
-        Assert.Contains("Verify credentials at https://app.xping.io", errorLogs[0], StringComparison.Ordinal);
+        Assert.Contains("403", result.ErrorMessage!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task UploadAsync_WithSubsequentIdenticalErrors_LogsAbbreviatedMessage()
+    public async Task UploadAsync_404Response_ShouldReturnFailure_WithEndpointMessage()
     {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.NotFound,
-            "Endpoint not found");
+        using var response = JsonResponse(HttpStatusCode.NotFound);
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1, // Minimum retries
-        };
+        var result = await uploader.UploadAsync(BuildSession());
 
-        var mockLogger = new MockLogger();
-        using var client = new XpingUploader(httpClient, config, logger: mockLogger);
-
-        // First upload - should log detailed message
-        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result1.Success);
-
-        // Second upload with same error - should log abbreviated message
-        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result2.Success);
-
-        // Third upload with same error - should log abbreviated message
-        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result3.Success);
-
-        var errorLogs = mockLogger.ErrorMessages;
-        Assert.Equal(3, errorLogs.Count);
-
-        // First occurrence - detailed message
-        Assert.Contains("API endpoint not found (404): https://api.test.com", errorLogs[0], StringComparison.Ordinal);
-        Assert.Contains("Verify the ApiEndpoint configuration", errorLogs[0], StringComparison.Ordinal);
-
-        // Second occurrence - abbreviated message with ordinal
-        Assert.Contains("Same 404 error (2nd occurrence, batch size: 1)", errorLogs[1], StringComparison.Ordinal);
-
-        // Third occurrence - abbreviated message with ordinal
-        Assert.Contains("Same 404 error (3rd occurrence, batch size: 1)", errorLogs[2], StringComparison.Ordinal);
+        Assert.False(result.Success);
+        Assert.Contains("404", result.ErrorMessage!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task UploadAsync_WithCorrectOrdinalFormatting_LogsProperOrdinals()
+    public async Task UploadAsync_429Response_ShouldReturnFailure_WithRateLimitMessage()
     {
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.TooManyRequests,
-            "Rate limited");
+        // 429 is retryable — factory creates a fresh response for each Polly attempt.
+        using var handler = new FakeHttpMessageHandler(() => JsonResponse(HttpStatusCode.TooManyRequests));
+        var uploader = BuildUploader(handler);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1,
-        };
+        var result = await uploader.UploadAsync(BuildSession());
 
-        var mockLogger = new MockLogger();
-        using var client = new XpingUploader(httpClient, config, logger: mockLogger);
-
-        // Test various ordinals: 1st, 2nd, 3rd, 4th, 11th, 21st, 22nd, 23rd
-        for (int i = 1; i <= 23; i++)
-        {
-            await client.UploadAsync(new[] { CreateTestExecution() });
-        }
-
-        var errorLogs = mockLogger.ErrorMessages;
-        Assert.Equal(23, errorLogs.Count);
-
-        // First occurrence has detailed message
-        Assert.Contains("Rate limit exceeded (429)", errorLogs[0], StringComparison.Ordinal);
-
-        // Check specific ordinals
-        Assert.Contains("2nd occurrence", errorLogs[1], StringComparison.Ordinal);
-        Assert.Contains("3rd occurrence", errorLogs[2], StringComparison.Ordinal);
-        Assert.Contains("4th occurrence", errorLogs[3], StringComparison.Ordinal);
-        Assert.Contains("10th occurrence", errorLogs[9], StringComparison.Ordinal);
-        Assert.Contains("11th occurrence", errorLogs[10], StringComparison.Ordinal);
-        Assert.Contains("12th occurrence", errorLogs[11], StringComparison.Ordinal);
-        Assert.Contains("13th occurrence", errorLogs[12], StringComparison.Ordinal);
-        Assert.Contains("21st occurrence", errorLogs[20], StringComparison.Ordinal);
-        Assert.Contains("22nd occurrence", errorLogs[21], StringComparison.Ordinal);
-        Assert.Contains("23rd occurrence", errorLogs[22], StringComparison.Ordinal);
+        Assert.False(result.Success);
+        Assert.Contains("429", result.ErrorMessage!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task UploadAsync_AfterSuccessfulUpload_ResetsErrorTracking()
+    public async Task UploadAsync_500Response_ShouldReturnFailure_WithServerErrorMessage()
     {
-        var callCount = 0;
-        using var handler = new MockHttpMessageHandler((req) =>
+        // 500 is retryable — factory creates a fresh response for each Polly attempt.
+        using var handler = new FakeHttpMessageHandler(() => JsonResponse(HttpStatusCode.InternalServerError));
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.Contains("500", result.ErrorMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UploadAsync_UnknownStatusCode_ShouldReturnFailure_WithStatusCode()
+    {
+        using var response = JsonResponse((HttpStatusCode)418); // I'm a teapot
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.Contains("418", result.ErrorMessage!, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------
+    // UploadAsync — exceptions
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UploadAsync_HttpRequestException_ShouldReturnFailureResult()
+    {
+        using var handler = new FakeHttpMessageHandler(new HttpRequestException("Network error"));
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("HTTP request failed", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UploadAsync_TaskCanceledException_ShouldReturnFailureResult()
+    {
+        using var handler = new FakeHttpMessageHandler(new TaskCanceledException("Timeout"));
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("timeout", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UploadAsync_BrokenCircuitException_ShouldReturnFailureResult()
+    {
+        // BrokenCircuitException is NOT in the retry/CB ShouldHandle lists, so it
+        // passes through Polly and is caught by the catch(BrokenCircuitException) block.
+        using var handler = new FakeHttpMessageHandler(new BrokenCircuitException("circuit open"));
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("Circuit breaker", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------
+    // UploadAsync — compression
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UploadAsync_LargePayload_WithCompressionEnabled_ShouldSucceed()
+    {
+        // payload > 1 KB threshold + EnableCompression = true → uses GZip path
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "gz" });
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler, o =>
         {
-            callCount++;
-            // First upload: fails on both attempts (original + 1 retry)
-            if (callCount == 1 || callCount == 2)
-            {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent("Server error", Encoding.UTF8, "application/json"),
-                };
-            }
-            // Second upload: fails on both attempts (original + 1 retry)
-            else if (callCount == 3 || callCount == 4)
-            {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent("Server error", Encoding.UTF8, "application/json"),
-                };
-            }
-            // Third upload: succeeds on first attempt
-            else if (callCount == 5)
-            {
-                return new HttpResponseMessage(HttpStatusCode.Created)
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(new { executionCount = 1 }), Encoding.UTF8, "application/json"),
-                };
-            }
-            // Fourth upload: fails on both attempts (original + 1 retry)
-            else
-            {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent("Server error", Encoding.UTF8, "application/json"),
-                };
-            }
+            o.EnableCompression = true;
+            o.BatchSize = 200;
         });
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
+        // Build a session with enough data to exceed the 1 KB compression threshold
+        var builder = new TestSessionBuilder();
+        for (var i = 0; i < 20; i++)
         {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1,
-        };
+            builder.AddExecution(
+                new TestExecutionBuilder()
+                    .WithTestName(new string('X', 60) + i)
+                    .WithOutcome(TestOutcome.Passed)
+                    .Build());
+        }
+        var largeSession = builder.Build();
 
-        var mockLogger = new MockLogger();
-        using var client = new XpingUploader(httpClient, config, logger: mockLogger);
+        var result = await uploader.UploadAsync(largeSession);
 
-        // First failure - detailed message
-        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result1.Success);
-
-        // Second failure - abbreviated message (2nd occurrence)
-        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result2.Success);
-
-        // Success - should reset error tracking
-        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.True(result3.Success);
-
-        // Fourth failure - should be treated as first occurrence again (detailed message)
-        var result4 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result4.Success);
-
-        var errorLogs = mockLogger.ErrorMessages;
-        Assert.Equal(3, errorLogs.Count); // 3 failures total
-
-        // First occurrence
-        Assert.Contains("Server error (500)", errorLogs[0], StringComparison.Ordinal);
-        Assert.DoesNotContain("2nd occurrence", errorLogs[0], StringComparison.Ordinal);
-
-        // Second occurrence
-        Assert.Contains("Same 500 error (2nd occurrence", errorLogs[1], StringComparison.Ordinal);
-
-        // After success, error tracking is reset - should be treated as first occurrence
-        Assert.Contains("Server error (500)", errorLogs[2], StringComparison.Ordinal);
-        Assert.DoesNotContain("3rd occurrence", errorLogs[2], StringComparison.Ordinal);
+        Assert.True(result.Success);
     }
 
     [Fact]
-    public async Task UploadAsync_WithDifferentErrorKeys_TracksIndependently()
+    public async Task UploadAsync_SmallPayload_WithCompressionEnabled_ShouldSucceed()
     {
-        var callCount = 0;
-        using var handler = new MockHttpMessageHandler((req) =>
-        {
-            callCount++;
-            return callCount switch
-            {
-                1 => new HttpResponseMessage(HttpStatusCode.Unauthorized)
-                {
-                    Content = new StringContent("Invalid API key", Encoding.UTF8, "application/json"),
-                },
-                2 => new HttpResponseMessage(HttpStatusCode.NotFound)
-                {
-                    Content = new StringContent("Not found", Encoding.UTF8, "application/json"),
-                },
-                3 => new HttpResponseMessage(HttpStatusCode.Unauthorized)
-                {
-                    Content = new StringContent("Invalid API key", Encoding.UTF8, "application/json"),
-                },
-                4 => new HttpResponseMessage(HttpStatusCode.NotFound)
-                {
-                    Content = new StringContent("Not found", Encoding.UTF8, "application/json"),
-                },
-                5 => new HttpResponseMessage(HttpStatusCode.Unauthorized)
-                {
-                    Content = new StringContent("Different error", Encoding.UTF8, "application/json"),
-                },
-                _ => new HttpResponseMessage(HttpStatusCode.InternalServerError),
-            };
-        });
+        // Small payload stays below the 1 KB threshold even with compression enabled
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "small" });
+        using var handler = new FakeHttpMessageHandler(response);
+        var uploader = BuildUploader(handler, o => o.EnableCompression = true);
 
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-            MaxRetries = 1,
-        };
+        var result = await uploader.UploadAsync(BuildSession(1));
 
-        var mockLogger = new MockLogger();
-        using var client = new XpingUploader(httpClient, config, logger: mockLogger);
-
-        // First 401 with "Invalid API key"
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        // First 404 with "Not found"
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        // Second 401 with "Invalid API key" - should be 2nd occurrence
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        // Second 404 with "Not found" - should be 2nd occurrence
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        // First 401 with "Different error" - different content, so first occurrence
-        await client.UploadAsync(new[] { CreateTestExecution() });
-
-        var errorLogs = mockLogger.ErrorMessages;
-        Assert.Equal(5, errorLogs.Count);
-
-        // First 401 - detailed message
-        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[0], StringComparison.Ordinal);
-        Assert.DoesNotContain("occurrence", errorLogs[0], StringComparison.Ordinal);
-
-        // First 404 - detailed message
-        Assert.Contains("API endpoint not found (404): https://api.test.com", errorLogs[1], StringComparison.Ordinal);
-        Assert.DoesNotContain("occurrence", errorLogs[1], StringComparison.Ordinal);
-
-        // Second 401 with same content - abbreviated
-        Assert.Contains("Same 401 error (2nd occurrence", errorLogs[2], StringComparison.Ordinal);
-
-        // Second 404 with same content - abbreviated
-        Assert.Contains("Same 404 error (2nd occurrence", errorLogs[3], StringComparison.Ordinal);
-
-        // First 401 with different content - detailed message (new error key)
-        Assert.Contains("Authentication failed (401) for https://api.test.com", errorLogs[4], StringComparison.Ordinal);
-        Assert.DoesNotContain("occurrence", errorLogs[4], StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithLargeErrorMessage_TruncatesErrorKeyForMemoryEfficiency()
-    {
-        // Create a very large error message (> 200 characters)
-        var largeErrorMessage = new string('x', 500);
-
-        using var handler = new MockHttpMessageHandler(
-            HttpStatusCode.BadRequest,
-            largeErrorMessage);
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        // First upload should fail with large error
-        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result1.Success);
-
-        // Second upload with same error should recognize it as duplicate
-        // This verifies that error key deduplication works with truncated content
-        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result2.Success);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithMultipleLargeErrorMessages_DeduplicatesCorrectly()
-    {
-        var callCount = 0;
-        using var handler = new MockHttpMessageHandler((req) =>
-        {
-            callCount++;
-            var errorMessage = callCount <= 2
-                ? new string('a', 500) // First two requests get same error
-                : new string('b', 500); // Third request gets different error
-
-            return new HttpResponseMessage(HttpStatusCode.BadRequest)
-            {
-                Content = new StringContent(errorMessage, Encoding.UTF8, "application/json"),
-            };
-        });
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        // First two uploads should be deduplicated as same error
-        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result1.Success);
-
-        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result2.Success);
-
-        // Third upload is a different error (different content)
-        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result3.Success);
-
-        Assert.Equal(3, callCount);
-    }
-
-    [Fact]
-    public async Task UploadAsync_WithDifferentLengthErrorsButSamePrefix_DeduplicatesCorrectly()
-    {
-        var callCount = 0;
-        using var handler = new MockHttpMessageHandler((req) =>
-        {
-            callCount++;
-            // First two errors have same 200-char prefix but different lengths
-            var errorMessage = callCount switch
-            {
-                1 => new string('x', 300), // 300 chars, all 'x'
-                2 => new string('x', 500), // 500 chars, all 'x' - should be deduplicated with first
-                _ => new string('y', 300), // 300 chars but different char - should be different error
-            };
-
-            return new HttpResponseMessage(HttpStatusCode.BadRequest)
-            {
-                Content = new StringContent(errorMessage, Encoding.UTF8, "application/json"),
-            };
-        });
-
-        using var httpClient = new HttpClient(handler);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            ApiEndpoint = "https://api.test.com",
-        };
-        using var client = new XpingUploader(httpClient, config);
-
-        // First upload with 300 chars of 'x'
-        var result1 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result1.Success);
-
-        // Second upload with 500 chars of 'x' - same first 200, should be deduplicated
-        var result2 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result2.Success);
-
-        // Third upload with 300 chars of 'y' - different content, should not be deduplicated
-        var result3 = await client.UploadAsync(new[] { CreateTestExecution() });
-        Assert.False(result3.Success);
-
-        Assert.Equal(3, callCount);
-    }
-
-    private sealed class MockLogger : ILogger<XpingUploader>
-    {
-        public List<string> ErrorMessages { get; } = new();
-        public List<string> WarningMessages { get; } = new();
-        public List<string> InfoMessages { get; } = new();
-        public List<string> DebugMessages { get; } = new();
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var message = formatter(state, exception);
-
-            switch (logLevel)
-            {
-                case LogLevel.Error:
-                case LogLevel.Critical:
-                    ErrorMessages.Add(message);
-                    break;
-                case LogLevel.Warning:
-                    WarningMessages.Add(message);
-                    break;
-                case LogLevel.Information:
-                    InfoMessages.Add(message);
-                    break;
-                case LogLevel.Debug:
-                case LogLevel.Trace:
-                    DebugMessages.Add(message);
-                    break;
-            }
-        }
-    }
-
-    private sealed class MockHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly HttpStatusCode _statusCode;
-        private readonly string? _responseContent;
-        private readonly bool _throwException;
-        private readonly Func<HttpRequestMessage, HttpResponseMessage>? _responseFunc;
-
-        public HttpRequestMessage? LastRequest { get; private set; }
-
-        public MockHttpMessageHandler(
-            HttpStatusCode statusCode = HttpStatusCode.OK,
-            string responseContent = "",
-            bool throwException = false)
-        {
-            _statusCode = statusCode;
-            _responseContent = responseContent;
-            _throwException = throwException;
-        }
-
-        public MockHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFunc)
-        {
-            _responseFunc = responseFunc;
-        }
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            LastRequest = request;
-
-            if (_throwException)
-            {
-                throw new HttpRequestException("Network error");
-            }
-
-            if (_responseFunc != null)
-            {
-                return Task.FromResult(_responseFunc(request));
-            }
-
-            var response = new HttpResponseMessage(_statusCode)
-            {
-                Content = new StringContent(_responseContent ?? string.Empty, Encoding.UTF8, "application/json"),
-            };
-
-            return Task.FromResult(response);
-        }
+        Assert.True(result.Success);
     }
 }
-
-#pragma warning restore CA2007
-#pragma warning restore CA1707

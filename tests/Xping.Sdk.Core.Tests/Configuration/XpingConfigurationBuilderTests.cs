@@ -184,4 +184,46 @@ public sealed class XpingConfigurationBuilderTests
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
         Assert.Contains("SamplingRate must be between 0.0 and 1.0", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void WithCollectNetworkMetrics_ShouldSetProperty()
+    {
+        // Arrange & Act
+        var config = new XpingConfigurationBuilder()
+            .WithApiKey("test-key")
+            .WithProjectId("test-project")
+            .WithCollectNetworkMetrics(false)
+            .Build();
+
+        // Assert
+        Assert.False(config.CollectNetworkMetrics);
+    }
+
+    [Fact]
+    public void BuilderShouldValidateNegativeRetryDelay()
+    {
+        // Arrange
+        var builder = new XpingConfigurationBuilder()
+            .WithApiKey("test-key")
+            .WithProjectId("test-project")
+            .WithRetryDelay(TimeSpan.FromSeconds(-1));
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Contains("RetryDelay cannot be negative", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuilderShouldValidateUploadTimeoutZero()
+    {
+        // Arrange
+        var builder = new XpingConfigurationBuilder()
+            .WithApiKey("test-key")
+            .WithProjectId("test-project")
+            .WithUploadTimeout(TimeSpan.Zero);
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Contains("UploadTimeout must be greater than zero", exception.Message, StringComparison.Ordinal);
+    }
 }

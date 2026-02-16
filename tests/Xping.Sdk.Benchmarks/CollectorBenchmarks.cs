@@ -6,10 +6,12 @@
  */
 
 using BenchmarkDotNet.Attributes;
+using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Upload;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 
 namespace Xping.Sdk.Benchmarks;
 
@@ -27,7 +29,7 @@ namespace Xping.Sdk.Benchmarks;
 [ThreadingDiagnoser]
 public class CollectorBenchmarks
 {
-    private TestExecutionCollector? _collector;
+    private ITestExecutionCollector? _collector;
     private TestExecution? _sampleExecution;
     private List<TestExecution>? _executions100;
     private List<TestExecution>? _executions1000;
@@ -47,8 +49,7 @@ public class CollectorBenchmarks
             SamplingRate = 1.0 // 100% sampling
         };
 
-        var uploader = new NoOpUploader();
-        _collector = new TestExecutionCollector(uploader, _config);
+        _collector = new TestExecutionCollector(Options.Create(_config));
 
         // Create sample test execution
         _sampleExecution = CreateTestExecution("Sample.Test.Method");
@@ -64,12 +65,9 @@ public class CollectorBenchmarks
     }
 
     [GlobalCleanup]
-    public async Task Cleanup()
+    public void Cleanup()
     {
-        if (_collector != null)
-        {
-            await _collector.DisposeAsync();
-        }
+        _collector?.Dispose();
     }
 
     /// <summary>
@@ -134,42 +132,22 @@ public class CollectorBenchmarks
     /// </summary>
     private static TestExecution CreateTestExecution(string testName)
     {
-        return new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            Identity = new TestIdentity
-            {
-                TestId = Guid.NewGuid().ToString("N"),
-                FullyQualifiedName = $"Benchmark.Tests.{testName}",
-                Assembly = "Benchmark.Tests",
-                Namespace = "Benchmark.Tests",
-                ClassName = "BenchmarkTests",
-                MethodName = testName
-            },
-            TestName = testName,
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(100),
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow.AddMilliseconds(100),
-            SessionContext = null // Null for benchmarking - not required
-        };
-    }
+        var identity = new TestIdentityBuilder()
+            .WithTestId(Guid.NewGuid().ToString("N"))
+            .WithFullyQualifiedName($"Benchmark.Tests.{testName}")
+            .WithAssembly("Benchmark.Tests")
+            .WithNamespace("Benchmark.Tests")
+            .WithClassName("BenchmarkTests")
+            .WithMethodName(testName)
+            .Build();
 
-    /// <summary>
-    /// No-op uploader for benchmarking (doesn't actually upload).
-    /// </summary>
-    private sealed class NoOpUploader : IXpingUploader
-    {
-        public Task<UploadResult> UploadAsync(
-            IEnumerable<TestExecution> executions,
-            CancellationToken cancellationToken = default)
-        {
-            // No-op implementation for benchmarking
-            return Task.FromResult(new UploadResult
-            {
-                Success = true,
-                ExecutionCount = executions.Count()
-            });
-        }
+        return new TestExecutionBuilder()
+            .WithTestName(testName)
+            .WithOutcome(TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(100))
+            .WithStartTime(DateTime.UtcNow.AddMilliseconds(-100))
+            .WithEndTime(DateTime.UtcNow)
+            .WithIdentity(identity)
+            .Build();
     }
 }

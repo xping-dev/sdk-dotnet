@@ -127,7 +127,7 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Register_Custom_XUnit_Retry_Attribute()
     {
         // Arrange
-        var customAttribute = "MyCustomXunitRetry";
+        var customAttribute = "MyCustomXunitRetry_" + Guid.NewGuid();
 
         // Act
         RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", customAttribute);
@@ -141,7 +141,7 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Register_Custom_NUnit_Retry_Attribute()
     {
         // Arrange
-        var customAttribute = "MyCustomNUnitRetry";
+        var customAttribute = "MyCustomNUnitRetry_" + Guid.NewGuid();
 
         // Act
         RetryAttributeRegistry.RegisterCustomRetryAttribute("nunit", customAttribute);
@@ -155,7 +155,7 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Register_Custom_MSTest_Retry_Attribute()
     {
         // Arrange
-        var customAttribute = "MyCustomMSTestRetry";
+        var customAttribute = "MyCustomMSTestRetry_" + Guid.NewGuid();
 
         // Act
         RetryAttributeRegistry.RegisterCustomRetryAttribute("mstest", customAttribute);
@@ -169,7 +169,7 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Handle_Case_Insensitive_Framework_Names()
     {
         // Arrange
-        var customAttribute = "CaseInsensitiveTest";
+        var customAttribute = "CaseInsensitiveTest_" + Guid.NewGuid();
 
         // Act
         RetryAttributeRegistry.RegisterCustomRetryAttribute("XUNIT", customAttribute);
@@ -196,7 +196,7 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Ignore_Registration_With_Invalid_Framework_Name()
     {
         // Arrange
-        var customAttribute = "ShouldNotBeRegistered";
+        var customAttribute = "ShouldNotBeRegistered_" + Guid.NewGuid();
 
         // Act
         RetryAttributeRegistry.RegisterCustomRetryAttribute("InvalidFramework", customAttribute);
@@ -321,14 +321,8 @@ public sealed class RetryAttributeRegistryTests
     public void Should_Have_Default_Attributes_Registered()
     {
         // Assert - verify that defaults are always available
-
-        // XUnit defaults
         Assert.True(RetryAttributeRegistry.XUnitRetryAttributes.Count >= 4);
-
-        // NUnit defaults
         Assert.True(RetryAttributeRegistry.NUnitRetryAttributes.Count >= 3);
-
-        // MSTest defaults
         Assert.True(RetryAttributeRegistry.MSTestRetryAttributes.Count >= 3);
     }
 

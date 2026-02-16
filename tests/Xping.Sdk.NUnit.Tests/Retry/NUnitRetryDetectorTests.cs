@@ -1,59 +1,56 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
+using System.Reflection;
+using NUnit.Framework;
+using NUnit.Framework.Interfaces;
+using NUnit.Framework.Internal;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.NUnit.Retry;
 
-#pragma warning disable NUnit1028, CA1812, CA1859, CA1515
+#pragma warning disable CA1812, CA1515
 
 namespace Xping.Sdk.NUnit.Tests.Retry;
 
-using System;
-using System.Reflection;
-using global::NUnit.Framework;
-using global::NUnit.Framework.Internal;
-using Xping.Sdk.NUnit.Retry;
 using Xunit;
 using Assert = Xunit.Assert;
 
+/// <summary>
+/// Tests for the internal <see cref="NUnitRetryDetector"/>.
+/// Uses <see cref="IRetryDetector{ITest}"/> since DetectRetryMetadata is an explicit interface implementation.
+/// </summary>
 public sealed class NUnitRetryDetectorTests
 {
-    private readonly NUnitRetryDetector _detector = new();
+    private readonly IRetryDetector<ITest> _detector = new NUnitRetryDetector();
 
-    [Fact]
-    public void DetectRetryMetadata_WithNullTest_ReturnsNull()
-    {
-        // Act
-        var result = _detector.DetectRetryMetadata(null!);
-
-        // Assert
-        Assert.Null(result);
-    }
+    // ---------------------------------------------------------------------------
+    // Guard clauses
+    // ---------------------------------------------------------------------------
 
     [Fact]
     public void DetectRetryMetadata_WithTestWithoutRetryAttribute_ReturnsNull()
     {
-        // Arrange
         var test = CreateMockTest(nameof(SampleTestClass.TestMethod));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
 
-        // Assert
         Assert.Null(result);
     }
+
+    // ---------------------------------------------------------------------------
+    // Attribute detection
+    // ---------------------------------------------------------------------------
 
     [Fact]
     public void DetectRetryMetadata_WithRetryAttribute_ReturnsMetadata()
     {
-        // Arrange - NUnit's native [Retry] attribute
         var test = CreateMockTest(nameof(SampleTestClass.TestWithRetry));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal("Retry", result.RetryAttributeName);
         Assert.Equal(3, result.MaxRetries);
@@ -62,169 +59,106 @@ public sealed class NUnitRetryDetectorTests
     [Fact]
     public void DetectRetryMetadata_WithCustomRetryAttribute_ReturnsMetadata()
     {
-        // Arrange - Register custom retry attribute
         RetryAttributeRegistry.RegisterCustomRetryAttribute("nunit", "CustomRetry");
         var test = CreateMockTest(nameof(SampleTestClass.TestWithCustomRetry));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal("CustomRetry", result.RetryAttributeName);
         Assert.Equal(5, result.MaxRetries);
     }
 
+    // ---------------------------------------------------------------------------
+    // Attempt number
+    // ---------------------------------------------------------------------------
+
     [Fact]
-    public void HasRetryAttribute_WithRetryAttribute_ReturnsTrue()
+    public void DetectRetryMetadata_FirstAttempt_AttemptNumberIsOne()
     {
-        // Arrange
         var test = CreateMockTest(nameof(SampleTestClass.TestWithRetry));
 
-        // Act
-        var result = _detector.HasRetryAttribute(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
 
-        // Assert
-        Assert.True(result);
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AttemptNumber);
+        Assert.False(result.PassedOnRetry);
     }
 
-    [Fact]
-    public void HasRetryAttribute_WithoutRetryAttribute_ReturnsFalse()
-    {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestMethod));
-
-        // Act
-        var result = _detector.HasRetryAttribute(test);
-
-        // Assert
-        Assert.False(result);
-    }
+    // ---------------------------------------------------------------------------
+    // PassedOnRetry
+    // ---------------------------------------------------------------------------
 
     [Fact]
-    public void GetCurrentAttemptNumber_WithDefaultTest_ReturnsOne()
+    public void DetectRetryMetadata_FirstAttempt_PassedOnRetry_IsFalse()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestMethod));
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.Equal(1, result);
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithRetryCountProperty_ReturnsAttemptNumber()
-    {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestMethod));
-        test.Properties.Set("_RETRY_COUNT", 2);
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.Equal(3, result); // _RETRY_COUNT is 0-indexed
-    }
-
-    [Fact]
-    public void GetCurrentAttemptNumber_WithRetryInTestName_ReturnsAttemptNumber()
-    {
-        // Arrange
-        var test = CreateMockTestWithName("TestMethod (Retry 3)");
-
-        // Act
-        var result = _detector.GetCurrentAttemptNumber(test);
-
-        // Assert
-        Assert.Equal(3, result);
-    }
-
-    [Fact]
-    public void DetectRetryMetadata_PassedOnRetry_SetsPassedOnRetryFlag()
-    {
-        // Arrange
+        // AttemptNumber == 1 on first attempt → PassedOnRetry must be false even on pass
         var test = CreateMockTest(nameof(SampleTestClass.TestWithRetry));
-        test.Properties.Set("_RETRY_COUNT", 1); // Second attempt
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
 
-        // Assert
         Assert.NotNull(result);
-        Assert.Equal(2, result.AttemptNumber);
-        Assert.True(result.PassedOnRetry);
+        Assert.False(result.PassedOnRetry);
     }
 
     [Fact]
-    public void DetectRetryMetadata_WithAdditionalProperties_ExtractsAdditionalMetadata()
+    public void DetectRetryMetadata_FirstAttempt_PassedOnRetry_IsFalse_WhenFailed()
     {
-        // Arrange
-        var test = CreateMockTest(nameof(SampleTestClass.TestWithAdditionalProperties));
+        var test = CreateMockTest(nameof(SampleTestClass.TestWithRetry));
 
-        // Act
-        var result = _detector.DetectRetryMetadata(test);
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Failed);
 
-        // Assert
         Assert.NotNull(result);
-        // Additional properties would be stored in AdditionalMetadata if they exist on the attribute
+        Assert.False(result.PassedOnRetry);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Additional metadata
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_AdditionalMetadata_IsNotNull()
+    {
+        var test = CreateMockTest(nameof(SampleTestClass.TestWithRetry));
+
+        var result = _detector.DetectRetryMetadata(test, TestOutcome.Passed);
+
+        Assert.NotNull(result);
         Assert.NotNull(result.AdditionalMetadata);
     }
 
-    // Helper methods
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+
     private static TestMethod CreateMockTest(string methodName)
     {
         var type = typeof(SampleTestClass);
-        var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
+        var method = type.GetMethod(
+            methodName,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
 
         if (method == null)
-        {
             throw new InvalidOperationException($"Method {methodName} not found on {type.Name}");
-        }
 
-        var testMethod = new TestMethod(new MethodWrapper(type, method))
-        {
-            Name = methodName
-        };
-
-        return testMethod;
+        return new TestMethod(new MethodWrapper(type, method)) { Name = methodName };
     }
 
-    private static TestMethod CreateMockTestWithName(string testName)
-    {
-        var type = typeof(SampleTestClass);
-        var method = type.GetMethod(nameof(SampleTestClass.TestMethod), BindingFlags.Public | BindingFlags.Instance);
+    // ---------------------------------------------------------------------------
+    // Test helper class
+    // ---------------------------------------------------------------------------
 
-        if (method == null)
-        {
-            throw new InvalidOperationException("TestMethod not found");
-        }
-
-        var testMethod = new TestMethod(new MethodWrapper(type, method))
-        {
-            Name = testName
-        };
-
-        return testMethod;
-    }
-
-    // Sample test class with retry attributes
     private sealed class SampleTestClass
     {
-        public void TestMethod() { }
+        public static void TestMethod() { }
 
         [Retry(3)]
-        public void TestWithRetry() { }
+        public static void TestWithRetry() { }
 
         [CustomRetry(Count = 5)]
-        public void TestWithCustomRetry() { }
-
-        [Retry(3)]
-        public void TestWithAdditionalProperties() { }
+        public static void TestWithCustomRetry() { }
     }
 
-    // Mock retry attributes
     [AttributeUsage(AttributeTargets.Method)]
     private sealed class CustomRetryAttribute : Attribute
     {

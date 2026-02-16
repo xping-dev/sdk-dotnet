@@ -1,368 +1,267 @@
 /*
- * © 2025 Xping.io. All Rights Reserved.
+ * © 2026 Xping.io. All Rights Reserved.
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Upload;
-
-#pragma warning disable CA2007 // Do not directly await a Task
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Collection;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xunit;
-
 public sealed class TestExecutionCollectorTests
 {
-    private static TestExecution CreateTestExecution(string testName = "Test1")
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+
+    private static ITestExecutionCollector BuildCollector(Action<XpingConfiguration>? configure = null)
+        => ServiceHelper.BuildCollector(configure);
+
+    private static TestExecution BuildExecution(string testName = "SomeTest")
+        => new TestExecutionBuilder()
+            .WithTestName(testName)
+            .WithOutcome(TestOutcome.Passed)
+            .Build();
+
+    // ---------------------------------------------------------------------------
+    // RecordTest
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void RecordTest_ShouldEnqueueExecution_WhenEnabledAndSampled()
     {
-        return new TestExecution
-        {
-            ExecutionId = Guid.NewGuid(),
-            TestName = testName,
-            Outcome = TestOutcome.Passed,
-            Duration = TimeSpan.FromMilliseconds(100),
-            StartTimeUtc = DateTime.UtcNow,
-            EndTimeUtc = DateTime.UtcNow,
-            SessionContext = new TestSession
-            {
-                SessionId = Guid.NewGuid().ToString(),
-                StartedAt = DateTime.UtcNow,
-                EnvironmentInfo = new EnvironmentInfo()
-            },
-            Metadata = new TestMetadata(),
-        };
+        // Arrange
+        using var collector = BuildCollector();
+        var execution = BuildExecution();
+
+        // Act
+        collector.RecordTest(execution);
+        var drained = collector.Drain();
+
+        // Assert
+        Assert.Single(drained);
+        Assert.Equal(execution.ExecutionId, drained[0].ExecutionId);
     }
 
     [Fact]
-    public void Constructor_WithNullUploader_ThrowsArgumentNullException()
+    public void RecordTest_ShouldNotEnqueue_WhenSdkDisabled()
     {
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        Assert.Throws<ArgumentNullException>(() => new TestExecutionCollector(null!, config));
+        // Arrange
+        using var collector = BuildCollector(o => o.Enabled = false);
+        var execution = BuildExecution();
+
+        // Act
+        collector.RecordTest(execution);
+        var drained = collector.Drain();
+
+        // Assert
+        Assert.Empty(drained);
     }
 
     [Fact]
-    public void Constructor_WithNullConfig_ThrowsArgumentNullException()
+    public void RecordTest_ShouldThrowArgumentNullException_ForNullExecution()
     {
-        var uploader = new MockXpingUploader();
-        Assert.Throws<ArgumentNullException>(() => new TestExecutionCollector(uploader, null!));
-    }
+        // Arrange
+        using var collector = BuildCollector();
 
-    [Fact]
-    public async Task RecordTest_WithNullTestExecution_ThrowsArgumentNullException()
-    {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        await using var collector = new TestExecutionCollector(uploader, config);
-
+        // Act & Assert
         Assert.Throws<ArgumentNullException>(() => collector.RecordTest(null!));
     }
 
     [Fact]
-    public async Task RecordTest_WithValidTestExecution_BuffersTest()
+    public void RecordTest_ShouldThrowObjectDisposedException_AfterDispose()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test", SamplingRate = 1.0 };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        var collector = BuildCollector();
+        collector.Dispose();
 
-        collector.RecordTest(CreateTestExecution());
-
-        var stats = await collector.GetStatsAsync();
-        Assert.Equal(1, stats.TotalRecorded);
-        Assert.Equal(1, stats.TotalSampled);
-        Assert.Equal(1, stats.BufferCount);
+        // Act & Assert
+        Assert.Throws<ObjectDisposedException>(() => collector.RecordTest(BuildExecution()));
     }
 
     [Fact]
-    public async Task FlushAsync_WithBufferedTests_UploadsAll()
+    public void RecordTest_ShouldDropAll_WhenSamplingRateIsZero()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        using var collector = BuildCollector(o => o.SamplingRate = 0.0);
 
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        collector.RecordTest(CreateTestExecution("Test3"));
-        await collector.FlushAsync();
+        // Act
+        for (int i = 0; i < 10; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        Assert.Single(uploader.UploadedBatches);
-        Assert.Equal(3, uploader.UploadedBatches[0].Count);
+        // Assert
+        Assert.Empty(collector.Drain());
     }
 
     [Fact]
-    public async Task GetStatsAsync_InitialState_ReturnsZeros()
+    public void RecordTest_ShouldIncludeAll_WhenSamplingRateIsOne()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration { ApiKey = "test", ProjectId = "test" };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        using var collector = BuildCollector(o => o.SamplingRate = 1.0);
 
-        var stats = await collector.GetStatsAsync();
+        // Act
+        for (int i = 0; i < 5; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        Assert.Equal(0, stats.TotalRecorded);
-        Assert.Equal(0, stats.TotalUploaded);
-        Assert.Equal(0, stats.TotalFailed);
-        Assert.Equal(0, stats.BufferCount);
+        // Assert
+        Assert.Equal(5, collector.Drain().Count);
     }
 
     [Fact]
-    public async Task GetStatsAsync_AfterRecording_UpdatesCorrectly()
+    public void RecordTest_ShouldFireBufferFull_WhenBatchSizeReached()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        using var collector = BuildCollector(o => o.BatchSize = 3);
+        bool fired = false;
+        collector.BufferFull += (_, _) => fired = true;
 
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        var stats = await collector.GetStatsAsync();
+        // Act — add exactly BatchSize items
+        for (int i = 0; i < 3; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        Assert.Equal(2, stats.TotalRecorded);
-        Assert.Equal(2, stats.TotalSampled);
-        Assert.Equal(2, stats.BufferCount);
-        Assert.Equal(0, stats.TotalUploaded);
+        // Assert
+        Assert.True(fired);
     }
 
     [Fact]
-    public async Task GetStatsAsync_AfterFlush_UpdatesCorrectly()
+    public void RecordTest_ShouldNotFireBufferFull_WhenBelowBatchSize()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        using var collector = BuildCollector(o => o.BatchSize = 10);
+        bool fired = false;
+        collector.BufferFull += (_, _) => fired = true;
 
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        await collector.FlushAsync();
-        var stats = await collector.GetStatsAsync();
+        // Act — add fewer than BatchSize items
+        for (int i = 0; i < 5; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        Assert.Equal(2, stats.TotalRecorded);
-        Assert.Equal(2, stats.TotalSampled);
-        Assert.Equal(2, stats.TotalUploaded);
-        Assert.Equal(0, stats.BufferCount);
-        Assert.Equal(0, stats.TotalFailed);
+        // Assert
+        Assert.False(fired);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Drain
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Drain_ShouldReturnEmpty_WhenBufferIsEmpty()
+    {
+        // Arrange
+        using var collector = BuildCollector();
+
+        // Act
+        var drained = collector.Drain();
+
+        // Assert
+        Assert.Empty(drained);
     }
 
     [Fact]
-    public async Task SamplingRate_Zero_DropsAllTests()
+    public void Drain_ShouldReturnEmpty_AfterDispose()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 0.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        var collector = BuildCollector();
+        collector.RecordTest(BuildExecution());
+        collector.Dispose();
+
+        // Act
+        var drained = collector.Drain();
+
+        // Assert
+        Assert.Empty(drained);
+    }
+
+    [Fact]
+    public void Drain_ShouldReturnAtMostBatchSize_Items()
+    {
+        // Arrange
+        using var collector = BuildCollector(o => o.BatchSize = 3);
 
         for (int i = 0; i < 10; i++)
-        {
-            collector.RecordTest(CreateTestExecution($"Test{i}"));
-        }
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        await collector.FlushAsync();
+        // Act
+        var drained = collector.Drain();
+
+        // Assert
+        Assert.Equal(3, drained.Count);
+    }
+
+    [Fact]
+    public void Drain_ShouldRemoveItemsFromBuffer()
+    {
+        // Arrange
+        using var collector = BuildCollector();
+        collector.RecordTest(BuildExecution("First"));
+        collector.RecordTest(BuildExecution("Second"));
+
+        // Act
+        collector.Drain();
+        var secondDrain = collector.Drain();
+
+        // Assert
+        Assert.Empty(secondDrain);
+    }
+
+    // ---------------------------------------------------------------------------
+    // GetStatsAsync
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetStatsAsync_ShouldReflectRecordedAndSampledCounts()
+    {
+        // Arrange
+        using var collector = BuildCollector(o => { o.SamplingRate = 1.0; o.BatchSize = 100; });
+
+        for (int i = 0; i < 4; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
+
+        // Act
         var stats = await collector.GetStatsAsync();
 
-        Assert.Equal(10, stats.TotalRecorded);
+        // Assert
+        Assert.Equal(4, stats.TotalRecorded);
+        Assert.Equal(4, stats.TotalSampled);
+        Assert.Equal(4, stats.BufferCount);
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_ShouldReflectZeroSampled_WhenSamplingRateIsZero()
+    {
+        // Arrange
+        using var collector = BuildCollector(o => o.SamplingRate = 0.0);
+
+        for (int i = 0; i < 5; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
+
+        // Act
+        var stats = await collector.GetStatsAsync();
+
+        // Assert
+        Assert.Equal(5, stats.TotalRecorded);
         Assert.Equal(0, stats.TotalSampled);
-        Assert.Empty(uploader.UploadedBatches);
+        Assert.Equal(0, stats.BufferCount);
     }
 
     [Fact]
-    public async Task SamplingRate_One_RecordsAllTests()
+    public async Task GetStatsAsync_ShouldReflectDecreasedBufferCount_AfterDrain()
     {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
+        // Arrange
+        using var collector = BuildCollector(o => o.BatchSize = 100);
 
-        for (int i = 0; i < 10; i++)
-        {
-            collector.RecordTest(CreateTestExecution($"Test{i}"));
-        }
+        for (int i = 0; i < 3; i++)
+            collector.RecordTest(BuildExecution($"Test{i}"));
 
-        await collector.FlushAsync();
+        collector.Drain();
+
+        // Act
         var stats = await collector.GetStatsAsync();
 
-        Assert.Equal(10, stats.TotalRecorded);
-        Assert.Equal(10, stats.TotalSampled);
-        Assert.Single(uploader.UploadedBatches);
-    }
-
-    [Fact]
-    public async Task DisposeAsync_WithBufferedTests_FlushesBeforeDisposing()
-    {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-        };
-        var collector = new TestExecutionCollector(uploader, config);
-
-        collector.RecordTest(CreateTestExecution("Test1"));
-        collector.RecordTest(CreateTestExecution("Test2"));
-        await collector.DisposeAsync();
-
-        // Verify upload happened
-        Assert.Single(uploader.UploadedBatches);
-        Assert.Equal(2, uploader.UploadedBatches[0].Count);
-    }
-
-    [Fact]
-    public async Task UploadFailure_UpdatesFailedCount()
-    {
-        var uploader = new MockXpingUploader(shouldFail: true);
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 100,
-            SamplingRate = 1.0,
-            MaxRetries = 0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
-
-        collector.RecordTest(CreateTestExecution("Test1"));
-        await collector.FlushAsync();
-        var stats = await collector.GetStatsAsync();
-
-        Assert.Equal(1, stats.TotalRecorded);
-        Assert.Equal(1, stats.TotalFailed);
-    }
-
-    [Fact]
-    public async Task RecordTest_ConcurrentCalls_AllTestsRecorded()
-    {
-        var uploader = new MockXpingUploader();
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test",
-            ProjectId = "test",
-            BatchSize = 1000,
-            SamplingRate = 1.0,
-        };
-        await using var collector = new TestExecutionCollector(uploader, config);
-
-        var tasks = Enumerable.Range(0, 100).Select(i => Task.Run(() =>
-        {
-            collector.RecordTest(CreateTestExecution($"Test{i}"));
-        })).ToArray();
-
-        await Task.WhenAll(tasks);
-        await collector.FlushAsync();
-
-        Assert.Single(uploader.UploadedBatches);
-        Assert.Equal(100, uploader.UploadedBatches[0].Count);
-    }
-
-    private sealed class MockXpingUploader : IXpingUploader
-    {
-        private readonly bool _shouldFail;
-        private readonly TimeSpan _uploadDelay;
-
-        public List<List<TestExecution>> UploadedBatches { get; } = new();
-        public List<TestSession> UploadedSessions { get; } = new();
-        public TestSession? CurrentSession { get; private set; }
-
-        public MockXpingUploader(bool shouldFail = false, TimeSpan uploadDelay = default)
-        {
-            _shouldFail = shouldFail;
-            _uploadDelay = uploadDelay;
-        }
-
-        public void SetSession(TestSession session)
-        {
-            CurrentSession = session;
-        }
-
-        public async Task<UploadResult> UploadSessionAsync(
-            TestSession session,
-            CancellationToken cancellationToken = default)
-        {
-            if (_uploadDelay > TimeSpan.Zero)
-            {
-                await Task.Delay(_uploadDelay, cancellationToken);
-            }
-
-            if (_shouldFail)
-            {
-                return new UploadResult
-                {
-                    Success = false,
-                    ErrorMessage = "Simulated session upload failure",
-                };
-            }
-
-            UploadedSessions.Add(session);
-
-            return new UploadResult
-            {
-                Success = true,
-                ReceiptId = session.SessionId,
-            };
-        }
-
-        public async Task<UploadResult> UploadAsync(
-            IEnumerable<TestExecution> executions,
-            CancellationToken cancellationToken = default)
-        {
-            if (_uploadDelay > TimeSpan.Zero)
-            {
-                await Task.Delay(_uploadDelay, cancellationToken);
-            }
-
-            if (_shouldFail)
-            {
-                return new UploadResult
-                {
-                    Success = false,
-                    ErrorMessage = "Simulated upload failure",
-                };
-            }
-
-            var batch = executions as List<TestExecution> ?? executions.ToList();
-            UploadedBatches.Add(batch);
-
-            return new UploadResult
-            {
-                Success = true,
-                ExecutionCount = batch.Count,
-            };
-        }
+        // Assert
+        Assert.Equal(3, stats.TotalRecorded);
+        Assert.Equal(0, stats.BufferCount);
     }
 }
-
-#pragma warning restore CA2007
-#pragma warning restore CA1707
