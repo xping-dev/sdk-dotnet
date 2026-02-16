@@ -49,7 +49,14 @@ public abstract class XpingTestBase
         // Resolve and cache services once per test class instance. GetBaseServices()
         // materializes the Lazy<XpingContext> on the first call (building the DI host), so
         // later calls on the same instance are a no-op field read.
-        _services ??= XpingContext.GetBaseServices();
+        try
+        {
+            _services ??= XpingContext.GetBaseServices();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
+        }
 
         _startTime = DateTime.UtcNow;
         _startTimestamp = Stopwatch.GetTimestamp();
