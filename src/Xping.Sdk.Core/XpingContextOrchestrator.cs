@@ -177,15 +177,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         // Loop until the buffer is fully drained. The sentinel for "nothing left to drain" is
-        // { Success = true, ExecutionCount = 0 }, which the uploader returns when Drain() gave
-        // it an empty session. A failed upload also returns ExecutionCount = 0, but Success =
+        // { Success = true, TotalRecordsCount = 0 }, which the uploader returns when Drain() gave
+        // it an empty session. A failed upload also returns TotalRecordsCount = 0, but Success =
         // false — items were already dequeued, so we keep looping to drain remaining batches
         // rather than silently abandoning them.
         UploadResult uploadResult;
         do
         {
             uploadResult = await FlushSessionAsync(cancellationToken).ConfigureAwait(false);
-        } while (uploadResult.ExecutionCount > 0 || !uploadResult.Success);
+        } while (uploadResult.TotalRecordsCount > 0 || !uploadResult.Success);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 

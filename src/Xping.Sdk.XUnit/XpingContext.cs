@@ -164,19 +164,16 @@ public class XpingContext : XpingContextOrchestrator
     /// <inheritdoc/>
     protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Finalizing session {SessionId}", SessionId);
+        _logger.LogInformation("Finalizing session");
         return base.OnSessionFinalizingAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
     protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
     {
-        if (result == null)
-            throw new ArgumentNullException(nameof(result));
-
         _logger.LogInformation(
-            "Session {SessionId} finalized. Success: {Success}, Executions: {ExecutionCount}, ReceiptId: {ReceiptId}",
-            SessionId, result.Success, result.ExecutionCount, result.ReceiptId);
+            "Session finalized. Total tests recorded: {TotalRecordsCount}",
+            result.RequireNotNull().TotalRecordsCount);
         return base.OnSessionFinalizedAsync(result, cancellationToken);
     }
 

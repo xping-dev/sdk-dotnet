@@ -26,8 +26,8 @@ public sealed class XpingTestFramework : XunitTestFramework
         XpingContext.Initialize();
 
         // Get Xping SDK executor services for xUnit test execution.
-        // Any exception here (e.g. OptionsValidationException from invalid config) is caught,
-        // written to stderr so CI always has an [Xping] line, and then re-thrown so xUnit
+        // Any exception here (e.g., OptionsValidationException from invalid config) is caught,
+        // written to stderr so CI always has a [Xping] line, and then re-thrown so xUnit
         // surfaces the failure rather than silently skipping all tests.
         try
         {

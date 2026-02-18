@@ -16,9 +16,9 @@ public sealed class UploadResult
     public bool Success { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of executions uploaded.
+    /// Gets or sets the number of test executions recorded.
     /// </summary>
-    public int ExecutionCount { get; set; }
+    public int TotalRecordsCount { get; set; }
 
     /// <summary>
     /// Gets or sets the error message if the upload failed.

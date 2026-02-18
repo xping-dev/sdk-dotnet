@@ -44,7 +44,7 @@ internal sealed class XpingUploader(
             return new UploadResult
             {
                 Success = true,
-                ExecutionCount = 0,
+                TotalRecordsCount = 0,
             };
         }
 
@@ -192,7 +192,7 @@ internal sealed class XpingUploader(
             return new UploadResult
             {
                 Success = true,
-                ExecutionCount = confirmedCount,
+                TotalRecordsCount = confirmedCount,
                 ReceiptId = receiptId,
                 DurationMs = (int)durationMs,
                 PayloadSizeBytes = payloadSizeBytes,

@@ -123,7 +123,7 @@ public sealed class XpingUploaderTests
         var result = await uploader.UploadAsync(emptySession);
 
         Assert.True(result.Success);
-        Assert.Equal(0, result.ExecutionCount);
+        Assert.Equal(0, result.TotalRecordsCount);
     }
 
     // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ public sealed class XpingUploaderTests
 
         var result = await uploader.UploadAsync(BuildSession(3));
 
-        Assert.Equal(3, result.ExecutionCount);
+        Assert.Equal(3, result.TotalRecordsCount);
     }
 
     [Fact]

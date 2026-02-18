@@ -165,7 +165,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
 
-        // Detect retry metadata first so the attempt number is available when claiming a position.
+        // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
 
         // Create an execution context using ExecutionTracker.

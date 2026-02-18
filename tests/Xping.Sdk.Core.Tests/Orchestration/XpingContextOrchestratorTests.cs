@@ -191,7 +191,7 @@ public sealed class XpingContextOrchestratorTests
         uploaderMock
             .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
             .Callback<TestSession, CancellationToken>((s, _) => capturedSession = s)
-            .ReturnsAsync(new UploadResult { Success = true, ExecutionCount = 0 });
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 0 });
 
         var envDetectorMock = new Mock<IEnvironmentDetector>();
         envDetectorMock
@@ -270,7 +270,7 @@ public sealed class XpingContextOrchestratorTests
             .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
             .Callback<TestSession, CancellationToken>((s, _) => capturedCounts.Add(s.Executions.Count))
             .ReturnsAsync((TestSession s, CancellationToken _) =>
-                new UploadResult { Success = true, ExecutionCount = s.Executions.Count });
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
 
         var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock, o => o.BatchSize = 100);
         var orchestrator = new TestOrchestrator(host);
