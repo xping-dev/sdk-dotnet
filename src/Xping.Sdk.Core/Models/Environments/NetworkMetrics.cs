@@ -40,20 +40,20 @@ public sealed class NetworkMetrics
     /// <summary>
     /// Gets the network latency in milliseconds (ping to Xping API).
     /// </summary>
-    public int? LatencyMs { get; private set; }
+    public int? LatencyMs { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the network is available.
     /// </summary>
-    public bool? IsOnline { get; private set; }
+    public bool? IsOnline { get; init; }
 
     /// <summary>
     /// Gets the connection type (e.g., "Wi-Fi", "Ethernet", "Cellular", "Unknown").
     /// </summary>
-    public string ConnectionType { get; private set; } = UnknownConnectionType;
+    public string ConnectionType { get; init; } = UnknownConnectionType;
 
     /// <summary>
     /// Gets the packet loss percentage if measurable.
     /// </summary>
-    public int? PacketLossPercent { get; private set; }
+    public int? PacketLossPercent { get; init; }
 }

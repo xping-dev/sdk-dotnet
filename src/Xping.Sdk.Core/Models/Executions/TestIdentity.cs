@@ -68,7 +68,7 @@ public sealed class TestIdentity
     /// Format: SHA256 hash as lowercase hex string (64 characters).
     /// Example: "a3f5e9c2d1b4a7f8e0c9d6b3a2f1e8d5c7b4a9f6e3d0c8b5a2f9e6d3c0b7a4f1"
     /// </remarks>
-    public string TestId { get; private set; }
+    public string TestId { get; init; }
 
     /// <summary>
     /// Gets the fully qualified name of the test.
@@ -78,7 +78,7 @@ public sealed class TestIdentity
     /// Example: "MyApp.Tests.CalculatorTests.Add_ReturnSum"
     /// This may change during refactoring, but TestId remains stable.
     /// </remarks>
-    public string FullyQualifiedName { get; private set; }
+    public string FullyQualifiedName { get; init; }
 
     /// <summary>
     /// Gets the assembly name where the test is defined.
@@ -86,7 +86,7 @@ public sealed class TestIdentity
     /// <remarks>
     /// Example: "MyApp.Tests"
     /// </remarks>
-    public string Assembly { get; private set; }
+    public string Assembly { get; init; }
 
     /// <summary>
     /// Gets the namespace where the test is defined.
@@ -94,7 +94,7 @@ public sealed class TestIdentity
     /// <remarks>
     /// Example: "MyApp.Tests"
     /// </remarks>
-    public string Namespace { get; private set; }
+    public string Namespace { get; init; }
 
     /// <summary>
     /// Gets the class name where the test method is defined.
@@ -102,7 +102,7 @@ public sealed class TestIdentity
     /// <remarks>
     /// Example: "CalculatorTests"
     /// </remarks>
-    public string ClassName { get; private set; }
+    public string ClassName { get; init; }
 
     /// <summary>
     /// Gets the test method name.
@@ -110,7 +110,7 @@ public sealed class TestIdentity
     /// <remarks>
     /// Example: "Add_ReturnSum"
     /// </remarks>
-    public string MethodName { get; private set; }
+    public string MethodName { get; init; }
 
     /// <summary>
     /// Gets the display name for human readability.
@@ -120,7 +120,7 @@ public sealed class TestIdentity
     /// Example: "Add_ReturnSum(a: 2, b: 3, expected: 5)"
     /// May include parameter names and values for better readability.
     /// </remarks>
-    public string DisplayName { get; private set; }
+    public string DisplayName { get; init; }
 
     /// <summary>
     /// Gets the parameter hash for parameterized tests.
@@ -133,17 +133,17 @@ public sealed class TestIdentity
     ///
     /// Format: Comma-separated string representation of parameters.
     /// </remarks>
-    public string? ParameterHash { get; private set; }
+    public string? ParameterHash { get; init; }
 
     /// <summary>
     /// Gets the source file path where the test is defined.
     /// Optional, useful for IDE navigation and debugging.
     /// </summary>
-    public string? SourceFile { get; private set; }
+    public string? SourceFile { get; init; }
 
     /// <summary>
     /// Gets the line number in the source file where the test begins.
     /// Optional, useful for IDE navigation and debugging.
     /// </summary>
-    public int? SourceLineNumber { get; private set; }
+    public int? SourceLineNumber { get; init; }
 }

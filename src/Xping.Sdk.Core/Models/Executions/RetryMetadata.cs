@@ -58,7 +58,7 @@ public sealed class RetryMetadata
     /// 1 = first run (no retry), 2 = first retry, 3 = second retry, etc.
     /// This enables analysis of "pass on Nth attempt" patterns.
     /// </remarks>
-    public int AttemptNumber { get; private set; }
+    public int AttemptNumber { get; init; }
 
     /// <summary>
     /// Gets the maximum number of retries configured for this test.
@@ -67,7 +67,7 @@ public sealed class RetryMetadata
     /// This is the total number of retry attempts allowed, not including the initial attempt.
     /// For example, MaxRetries = 3 means: 1 initial attempt + 3 retry attempts = 4 total attempts.
     /// </remarks>
-    public int MaxRetries { get; private set; }
+    public int MaxRetries { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether this test passed after a retry (not on the first attempt).
@@ -76,7 +76,7 @@ public sealed class RetryMetadata
     /// False = passed on the first attempt (no retry needed)
     /// True = passed after one or more retries (indicates flakiness)
     /// </remarks>
-    public bool PassedOnRetry { get; private set; }
+    public bool PassedOnRetry { get; init; }
 
     /// <summary>
     /// Gets the configured delay between retry attempts.
@@ -85,7 +85,7 @@ public sealed class RetryMetadata
     /// This is the delay configured in the retry attribute.
     /// Actual delay may vary based on framework implementation.
     /// </remarks>
-    public TimeSpan DelayBetweenRetries { get; private set; }
+    public TimeSpan DelayBetweenRetries { get; init; }
 
     /// <summary>
     /// Gets the reason for the retry configuration.
@@ -95,7 +95,7 @@ public sealed class RetryMetadata
     /// This is typically extracted from custom retry attributes or attribute properties.
     /// May be null if not specified by the test author.
     /// </remarks>
-    public string? RetryReason { get; private set; }
+    public string? RetryReason { get; init; }
 
     /// <summary>
     /// Gets the name of the retry attribute or strategy used.
@@ -104,7 +104,7 @@ public sealed class RetryMetadata
     /// Examples: "RetryFact", "Retry", "TestRetry", "CustomRetry"
     /// Helps identify which retry mechanism is being used.
     /// </remarks>
-    public string RetryAttributeName { get; private set; }
+    public string RetryAttributeName { get; init; }
 
     /// <summary>
     /// Gets the additional retry-related metadata.
@@ -113,5 +113,5 @@ public sealed class RetryMetadata
     /// Used for framework-specific or custom retry attribute properties.
     /// Examples: retry filter types, exception types to retry on, custom conditions.
     /// </remarks>
-    public IReadOnlyDictionary<string, string> AdditionalMetadata { get; private set; }
+    public IReadOnlyDictionary<string, string> AdditionalMetadata { get; init; }
 }

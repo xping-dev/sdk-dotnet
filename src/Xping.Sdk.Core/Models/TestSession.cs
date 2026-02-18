@@ -48,32 +48,32 @@ public sealed class TestSession
     /// <summary>
     /// Gets the unique identifier for this test session.
     /// </summary>
-    public string SessionId { get; private set; }
+    public string SessionId { get; init; }
 
     /// <summary>
     /// Gets when the test session started (UTC).
     /// </summary>
-    public DateTime StartedAt { get; private set; }
+    public DateTime StartedAt { get; init; }
 
     /// <summary>
     /// Gets when the test session ended (UTC). Null if still running.
     /// </summary>
-    public DateTime? EndedAt { get; private set; }
+    public DateTime? EndedAt { get; init; }
 
     /// <summary>
     /// Gets the environment information for this test session.
     /// This is shared across all test executions in the session.
     /// </summary>
-    public EnvironmentInfo EnvironmentInfo { get; private set; }
+    public EnvironmentInfo EnvironmentInfo { get; init; }
 
     /// <summary>
     /// Gets the test executions in this session.
     /// </summary>
-    public IReadOnlyCollection<TestExecution> Executions { get; private set; }
+    public IReadOnlyCollection<TestExecution> Executions { get; init; }
 
     /// <summary>
     /// Gets the total number of tests expected in this session.
     /// Useful for tracking session completion progress.
     /// </summary>
-    public int? TotalTestsExpected { get; private set; }
+    public int? TotalTestsExpected { get; init; }
 }
