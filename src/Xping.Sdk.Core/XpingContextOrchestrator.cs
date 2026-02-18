@@ -5,6 +5,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
@@ -33,6 +34,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly Timer? _flushTimer;
     private readonly TestSessionBuilder _builder = new();
     private readonly IHost _host;
+    private readonly ILogger<XpingContextOrchestrator> _logger;
 
     // _Host manages lifetime — disposing the host disposes all registered services.
 #pragma warning disable CA2213
@@ -70,12 +72,33 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         StartedAt = DateTime.UtcNow;
 
         var services = _host.Services;
+
+        // Resolve the logger first, so it is available for error reporting during the rest of initialization.
+        _logger = services.GetRequiredService<ILogger<XpingContextOrchestrator>>();
+
         _collector = services.GetRequiredService<ITestExecutionCollector>();
-        _uploader = services.GetRequiredService<IXpingUploader>();
-        _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
         _flushLock = new SemaphoreSlim(1, 1);
 
-        XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+        XpingConfiguration configuration;
+        try
+        {
+            // Resolving IXpingUploader triggers HttpClient creation, which in turn accesses
+            // IOptions<XpingConfiguration>.Value and runs the registered Validate delegate.
+            // An OptionsValidationException here means the caller supplied invalid configuration.
+            _uploader = services.GetRequiredService<IXpingUploader>();
+            _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
+            configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+        }
+        catch (OptionsValidationException ex)
+        {
+            _logger.LogError("Configuration validation failed: {Errors}", string.Join("; ", ex.Failures));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Failed to initialize Xping SDK: {Message}", ex.Message);
+            throw;
+        }
 
         // Set up the automatic flush timer if enabled
         if (configuration.Enabled && configuration.FlushInterval > TimeSpan.Zero)
@@ -100,6 +123,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 try { await FlushSessionAsync().ConfigureAwait(false); }
                 catch { /* BufferFull is an event; exceptions cannot propagate to callers */ }
             };
+
+        _logger.LogInformation("Initialized. Project: {ProjectId}, Environment: {Environment}, Enabled: {Enabled}",
+            configuration.ProjectId, configuration.Environment, configuration.Enabled);
     }
 
     /// <summary>
@@ -151,15 +177,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         // Loop until the buffer is fully drained. The sentinel for "nothing left to drain" is
-        // { Success = true, ExecutionCount = 0 }, which the uploader returns when Drain() gave
-        // it an empty session. A failed upload also returns ExecutionCount = 0, but Success =
+        // { Success = true, TotalRecordsCount = 0 }, which the uploader returns when Drain() gave
+        // it an empty session. A failed upload also returns TotalRecordsCount = 0, but Success =
         // false — items were already dequeued, so we keep looping to drain remaining batches
         // rather than silently abandoning them.
         UploadResult uploadResult;
         do
         {
             uploadResult = await FlushSessionAsync(cancellationToken).ConfigureAwait(false);
-        } while (uploadResult.ExecutionCount > 0 || !uploadResult.Success);
+        } while (uploadResult.TotalRecordsCount > 0 || !uploadResult.Success);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 

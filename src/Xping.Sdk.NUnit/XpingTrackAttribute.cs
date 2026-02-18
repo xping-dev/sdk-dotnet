@@ -56,7 +56,14 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         // Resolve and cache services once per attribute instance. GetAttributeServices()
         // materializes the Lazy<XpingContext> on the first call (building the DI host), so
         // later calls on the same instance are a no-op field read.
-        _services ??= XpingContext.GetAttributeServices();
+        try
+        {
+            _services ??= XpingContext.GetAttributeServices();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
+        }
 
         if (test == null)
         {
@@ -158,7 +165,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
 
-        // Detect retry metadata first so the attempt number is available when claiming a position.
+        // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
 
         // Create an execution context using ExecutionTracker.

@@ -108,7 +108,7 @@ internal static class ServiceHelper
             .ReturnsAsync((Models.TestSession s, CancellationToken _) => new UploadResult
             {
                 Success = true,
-                ExecutionCount = s.Executions.Count
+                TotalRecordsCount = s.Executions.Count
             });
     }
 }
