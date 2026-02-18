@@ -23,6 +23,7 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <EmbeddedResource Include="Serialization\TestData\afbba725-d460-4b9f-88c6-a39c040e85aa.json" />
   </ItemGroup>
 
   <ItemGroup>

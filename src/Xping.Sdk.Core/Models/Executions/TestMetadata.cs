@@ -40,20 +40,20 @@ public sealed class TestMetadata
     /// <summary>
     /// Gets the test categories (e.g., "Integration", "Unit", "E2E").
     /// </summary>
-    public IReadOnlyList<string> Categories { get; private set; }
+    public IReadOnlyList<string> Categories { get; init; }
 
     /// <summary>
     /// Gets the test tags for filtering and organization.
     /// </summary>
-    public IReadOnlyList<string> Tags { get; private set; }
+    public IReadOnlyList<string> Tags { get; init; }
 
     /// <summary>
     /// Gets the custom attributes for additional test metadata.
     /// </summary>
-    public IReadOnlyDictionary<string, string> CustomAttributes { get; private set; }
+    public IReadOnlyDictionary<string, string> CustomAttributes { get; init; }
 
     /// <summary>
     /// Gets the test description.
     /// </summary>
-    public string? Description { get; private set; }
+    public string? Description { get; init; }
 }

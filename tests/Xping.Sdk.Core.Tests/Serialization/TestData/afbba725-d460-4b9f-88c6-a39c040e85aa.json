@@ -1,0 +1,527 @@
+{
+  "sessionId": "dc6cdcdc-8567-439b-8a1d-d86fad27d05e",
+  "startedAt": "2026-02-18T09:23:51.513715Z",
+  "endedAt": "2026-02-18T09:23:51.991022Z",
+  "environmentInfo": {
+    "machineName": "MacBook-Pro",
+    "operatingSystem": "macOS (Darwin 25.2.0 Darwin Kernel Version 25.2.0: Tue Nov 18 21:08:48 PST 2025; root:xnu-12377.61.12~1/RELEASE_ARM64_T8132)",
+    "runtimeVersion": ".NET 9.0.4",
+    "framework": ".NET",
+    "environmentName": "Local",
+    "isCIEnvironment": false,
+    "networkMetrics": {
+      "latencyMs": 0,
+      "isOnline": true,
+      "connectionType": "WiFi",
+      "packetLossPercent": 0
+    },
+    "customProperties": {
+      "Platform": "macOS",
+      "ProcessorArchitecture": "Arm64",
+      "ProcessorCount": "10"
+    }
+  },
+  "executions": [
+    {
+      "executionId": "408c62a6-43df-4a1a-8164-158de695f660",
+      "identity": {
+        "testId": "d6638513377582655769dbfe8907ed8f4e3ee8aaea14b08e11c262d65f508717",
+        "fullyQualifiedName": "SampleApp.XUnit.CollectionTests.TestInCollection",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "CollectionTests",
+        "methodName": "TestInCollection",
+        "displayName": "SampleApp.XUnit.CollectionTests.TestInCollection"
+      },
+      "metadata": {
+        "categories": [
+          "Integration"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "SampleApp.XUnit.CollectionTests.TestInCollection"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 1,
+        "globalPosition": 1,
+        "wasParallelized": false,
+        "concurrentTestCount": 1,
+        "threadId": "16",
+        "workerId": "Sample Collection",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.CollectionTests.TestInCollection",
+      "outcome": "passed",
+      "duration": "00:00:00.0025819",
+      "startTimeUtc": "2026-02-18T09:23:51.585204Z",
+      "endTimeUtc": "2026-02-18T09:23:51.591113Z"
+    },
+    {
+      "executionId": "c70c9748-6907-408d-8026-5ef079b682ed",
+      "identity": {
+        "testId": "79ed386be79bb44fa687dd235182e4b2dbfdfffd555a8d2070370fc5c90aa70c",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "ParameterizedTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)",
+        "parameterHash": "5,5,10"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "5, 5, 10"
+        },
+        "description": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 1,
+        "globalPosition": 2,
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)",
+      "outcome": "passed",
+      "duration": "00:00:00.0034118",
+      "startTimeUtc": "2026-02-18T09:23:51.585242Z",
+      "endTimeUtc": "2026-02-18T09:23:51.641218Z"
+    },
+    {
+      "executionId": "8f7c9871-deea-49ad-af35-94990c7797e8",
+      "identity": {
+        "testId": "aee15aaa28e96a57ac2ff913f8486417f99bc1691e369dae840f5248c7dec358",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "ParameterizedTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)",
+        "parameterHash": "1,2,3"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "1, 2, 3"
+        },
+        "description": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 2,
+        "globalPosition": 3,
+        "previousTestId": "79ed386be79bb44fa687dd235182e4b2dbfdfffd555a8d2070370fc5c90aa70c",
+        "previousTestName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)",
+      "outcome": "passed",
+      "duration": "00:00:00.0003762",
+      "startTimeUtc": "2026-02-18T09:23:51.644507Z",
+      "endTimeUtc": "2026-02-18T09:23:51.644523Z"
+    },
+    {
+      "executionId": "696c8795-5d6e-4e67-a420-d1daf6019427",
+      "identity": {
+        "testId": "1ea5cd933741ce316e94671dbafe2fe74fbc2d6bab5617e039b6c2c21de695e6",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "ParameterizedTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)",
+        "parameterHash": "0,0,0"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "0, 0, 0"
+        },
+        "description": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 3,
+        "globalPosition": 4,
+        "previousTestId": "aee15aaa28e96a57ac2ff913f8486417f99bc1691e369dae840f5248c7dec358",
+        "previousTestName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)",
+      "outcome": "passed",
+      "duration": "00:00:00.0000094",
+      "startTimeUtc": "2026-02-18T09:23:51.645031Z",
+      "endTimeUtc": "2026-02-18T09:23:51.645035Z"
+    },
+    {
+      "executionId": "587f1821-a9e4-4ebd-8a05-5f872f30b314",
+      "identity": {
+        "testId": "0ece57fae7c2540d880ad28ed71a9daaf616e487950613fdef583f537ff9754b",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "MemberDataTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"hello\", expectedLength: 5)",
+        "parameterHash": "hello,5"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "hello, 5"
+        },
+        "description": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"hello\", expectedLength: 5)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 4,
+        "globalPosition": 5,
+        "previousTestId": "1ea5cd933741ce316e94671dbafe2fe74fbc2d6bab5617e039b6c2c21de695e6",
+        "previousTestName": "SampleApp.XUnit.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"hello\", expectedLength: 5)",
+      "outcome": "passed",
+      "duration": "00:00:00.0001219",
+      "startTimeUtc": "2026-02-18T09:23:51.645427Z",
+      "endTimeUtc": "2026-02-18T09:23:51.645436Z"
+    },
+    {
+      "executionId": "3f6562f3-a758-422a-bd4f-8af70684777a",
+      "identity": {
+        "testId": "41f1bc9bd9469185bfaba203fb0a64e70d692ceabe9261e20b3ff077ec8b5751",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "MemberDataTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"xunit\", expectedLength: 5)",
+        "parameterHash": "xunit,5"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "xunit, 5"
+        },
+        "description": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"xunit\", expectedLength: 5)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 5,
+        "globalPosition": 6,
+        "previousTestId": "0ece57fae7c2540d880ad28ed71a9daaf616e487950613fdef583f537ff9754b",
+        "previousTestName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"hello\", expectedLength: 5)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"xunit\", expectedLength: 5)",
+      "outcome": "passed",
+      "duration": "00:00:00.0001268",
+      "startTimeUtc": "2026-02-18T09:23:51.645845Z",
+      "endTimeUtc": "2026-02-18T09:23:51.64585Z"
+    },
+    {
+      "executionId": "4781b07c-b6f2-48d4-82d8-2edcbe27bbea",
+      "identity": {
+        "testId": "e7dd6fc42a0469932996e7174b1a216623b3aab128c33bc111fde282a2bddefb",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "MemberDataTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"world\", expectedLength: 5)",
+        "parameterHash": "world,5"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:theory"
+        ],
+        "customAttributes": {
+          "Arguments": "world, 5"
+        },
+        "description": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"world\", expectedLength: 5)"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 6,
+        "globalPosition": 7,
+        "previousTestId": "41f1bc9bd9469185bfaba203fb0a64e70d692ceabe9261e20b3ff077ec8b5751",
+        "previousTestName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"xunit\", expectedLength: 5)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"world\", expectedLength: 5)",
+      "outcome": "passed",
+      "duration": "00:00:00.0000041",
+      "startTimeUtc": "2026-02-18T09:23:51.646224Z",
+      "endTimeUtc": "2026-02-18T09:23:51.646229Z"
+    },
+    {
+      "executionId": "912df407-7692-4db1-93b8-f061361fab41",
+      "identity": {
+        "testId": "0c3a69872ca8dacd2ed19880f365e08fa9fa1b58b3d30c6a97febcbada726e11",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.AnotherPassingTest",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "AnotherPassingTest",
+        "displayName": "SampleApp.XUnit.SampleTests.AnotherPassingTest"
+      },
+      "metadata": {
+        "categories": [
+          "Unit",
+          "Fast"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "SampleApp.XUnit.SampleTests.AnotherPassingTest"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 7,
+        "globalPosition": 8,
+        "previousTestId": "e7dd6fc42a0469932996e7174b1a216623b3aab128c33bc111fde282a2bddefb",
+        "previousTestName": "SampleApp.XUnit.SampleTests.MemberDataTestIsTracked(input: \"world\", expectedLength: 5)",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.AnotherPassingTest",
+      "outcome": "passed",
+      "duration": "00:00:00.0000153",
+      "startTimeUtc": "2026-02-18T09:23:51.6466Z",
+      "endTimeUtc": "2026-02-18T09:23:51.646605Z"
+    },
+    {
+      "executionId": "3ae507ed-67fa-4f16-bab5-fa63a39d8ecf",
+      "identity": {
+        "testId": "d15b809bcb63e81076b075917b64faa6cbfcbd775731505f9c0d330c3c3648ba",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "FlakyTest_EnvironmentState_FailsBasedOnSystemState",
+        "displayName": "SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState"
+      },
+      "metadata": {
+        "categories": [
+          "Flaky",
+          "StateDependency"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 8,
+        "globalPosition": 9,
+        "previousTestId": "0c3a69872ca8dacd2ed19880f365e08fa9fa1b58b3d30c6a97febcbada726e11",
+        "previousTestName": "SampleApp.XUnit.SampleTests.AnotherPassingTest",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState",
+      "outcome": "passed",
+      "duration": "00:00:00.0069005",
+      "startTimeUtc": "2026-02-18T09:23:51.646976Z",
+      "endTimeUtc": "2026-02-18T09:23:51.646981Z"
+    },
+    {
+      "executionId": "11fa27ba-641b-4e37-8bbe-71dd3b0837ac",
+      "identity": {
+        "testId": "fd2bfa3ab433df727b2f3ebb906aaf8bb090cc355a2bd030bea33a064351d368",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.ThrowingTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "ThrowingTestIsTracked",
+        "displayName": "Verifies that a test which throws an exception is properly tracked"
+      },
+      "metadata": {
+        "categories": [
+          "Unit"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "Verifies that a test which throws an exception is properly tracked"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 9,
+        "globalPosition": 10,
+        "previousTestId": "d15b809bcb63e81076b075917b64faa6cbfcbd775731505f9c0d330c3c3648ba",
+        "previousTestName": "SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState",
+        "previousTestOutcome": "passed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "Verifies that a test which throws an exception is properly tracked",
+      "outcome": "failed",
+      "duration": "00:00:00.0002060",
+      "startTimeUtc": "2026-02-18T09:23:51.656887Z",
+      "endTimeUtc": "2026-02-18T09:23:51.656983Z",
+      "exceptionType": "System.InvalidOperationException",
+      "errorMessage": "This is a test exception for tracking purposes.",
+      "stackTrace": "   at SampleApp.XUnit.SampleTests.ThrowingTestIsTracked() in /Users/adrian/Dev/xping/sdk-dotnet/samples/SampleApp.XUnit/SampleTests.cs:line 36\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+      "errorMessageHash": "77a219d7d8d5578d9982bc1cc9e9df9be98c9dd1726686d92d3e8e9e12b66d10",
+      "stackTraceHash": "d6e1f793551f87cd65b5e218255a6e6dda69f57d2fd1d26fc0d2e986dae03005"
+    },
+    {
+      "executionId": "a1ffb5e2-7633-4f0c-bdaa-938f6ddddec6",
+      "identity": {
+        "testId": "86a729840a68c6751c4f92a723383d5610e8dfba35b271da26d87a416263d16c",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.SkippedTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "SkippedTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.SkippedTestIsTracked"
+      },
+      "metadata": {
+        "categories": [
+          "Integration"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "SampleApp.XUnit.SampleTests.SkippedTestIsTracked"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 10,
+        "globalPosition": 11,
+        "previousTestId": "fd2bfa3ab433df727b2f3ebb906aaf8bb090cc355a2bd030bea33a064351d368",
+        "previousTestName": "Verifies that a test which throws an exception is properly tracked",
+        "previousTestOutcome": "failed",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.SkippedTestIsTracked",
+      "outcome": "skipped",
+      "duration": "00:00:00.0000542",
+      "startTimeUtc": "2026-02-18T09:23:51.659341Z",
+      "endTimeUtc": "2026-02-18T09:23:51.659395Z",
+      "errorMessage": "Test skipped: Demonstrating skipped test tracking",
+      "errorMessageHash": "348e11642cd84c250d995bef0803bd1e52202d9d83e19a891d6cc19d452177ea"
+    },
+    {
+      "executionId": "20d9b3d7-3f4d-46bd-b96a-23eba0ec97f7",
+      "identity": {
+        "testId": "18825932f321357f3ad0c45869d0c52d5ae1c95051d8cc5aef331d1f8a66905f",
+        "fullyQualifiedName": "SampleApp.XUnit.SampleTests.PassingTestIsTracked",
+        "assembly": "SampleApp.XUnit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "namespace": "SampleApp.XUnit",
+        "className": "SampleTests",
+        "methodName": "PassingTestIsTracked",
+        "displayName": "SampleApp.XUnit.SampleTests.PassingTestIsTracked"
+      },
+      "metadata": {
+        "categories": [
+          "Integration"
+        ],
+        "tags": [
+          "framework:xunit",
+          "type:fact"
+        ],
+        "customAttributes": {},
+        "description": "SampleApp.XUnit.SampleTests.PassingTestIsTracked"
+      },
+      "testOrchestrationRecord": {
+        "positionInSuite": 11,
+        "globalPosition": 12,
+        "previousTestId": "86a729840a68c6751c4f92a723383d5610e8dfba35b271da26d87a416263d16c",
+        "previousTestName": "SampleApp.XUnit.SampleTests.SkippedTestIsTracked",
+        "previousTestOutcome": "skipped",
+        "wasParallelized": true,
+        "concurrentTestCount": 2,
+        "threadId": "16",
+        "workerId": "Test collection for SampleApp.XUnit.SampleTests",
+        "suiteElapsedTime": "00:00:00"
+      },
+      "testName": "SampleApp.XUnit.SampleTests.PassingTestIsTracked",
+      "outcome": "passed",
+      "duration": "00:00:00.0000253",
+      "startTimeUtc": "2026-02-18T09:23:51.660402Z",
+      "endTimeUtc": "2026-02-18T09:23:51.660407Z"
+    }
+  ]
+}
