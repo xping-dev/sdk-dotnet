@@ -29,7 +29,7 @@ public abstract class XpingTestBase
 
     // Resolved once on first XpingTestInitialize() call and reused for every cleanup on this instance.
     // The DI singletons are the same each time, so a single resolution per instance is enough.
-    private XpingBaseServices? _services;
+    private XpingBaseServices _services = null!;
 
     /// <summary>
     /// Gets or sets the test context which provides information about and functionality for the current test run.
@@ -82,7 +82,7 @@ public abstract class XpingTestBase
 
         try
         {
-            var execution = CreateTestExecution(_services!, TestContext, _startTime, endTime, duration, threadId, className);
+            var execution = CreateTestExecution(_services, TestContext, _startTime, endTime, duration, threadId, className);
             XpingContext.RecordTest(execution);
         }
         catch

@@ -15,7 +15,9 @@ namespace Xping.Sdk.XUnit;
 /// </summary>
 public sealed class XpingTestFramework : XunitTestFramework
 {
-    private readonly XpingExecutorServices _executorServices;
+    // Initialized in constructor after XpingContext.Initialize() is called, so we can
+    // be sure the context is ready and any configuration issues have been surfaced.
+    private readonly XpingExecutorServices _services = null!;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="XpingTestFramework"/> class.
@@ -25,18 +27,16 @@ public sealed class XpingTestFramework : XunitTestFramework
     {
         XpingContext.Initialize();
 
-        // Get Xping SDK executor services for xUnit test execution.
-        // Any exception here (e.g., OptionsValidationException from invalid config) is caught,
-        // written to stderr so CI always has a [Xping] line, and then re-thrown so xUnit
-        // surfaces the failure rather than silently skipping all tests.
+        // Resolve and cache services for xUnit test execution. GetExecutorServices()
+        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
+        // later calls on the same instance are a no-op field read.
         try
         {
-            _executorServices = XpingContext.GetExecutorServices();
+            _services = XpingContext.GetExecutorServices();
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
-            throw;
         }
     }
 
@@ -51,10 +51,10 @@ public sealed class XpingTestFramework : XunitTestFramework
             assemblyName,
             SourceInformationProvider,
             DiagnosticMessageSink,
-            _executorServices.ExecutionTracker,
-            _executorServices.RetryDetector,
-            _executorServices.IdentityGenerator,
-            _executorServices.Logger);
+            _services.ExecutionTracker,
+            _services.RetryDetector,
+            _services.IdentityGenerator,
+            _services.Logger);
     }
 
     /// <summary>

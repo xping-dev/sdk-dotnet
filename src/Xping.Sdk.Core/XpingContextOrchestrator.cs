@@ -14,8 +14,11 @@ using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.Upload;
+using Xping.Sdk.Core.Services.Upload.Internals;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core;
@@ -43,6 +46,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly IEnvironmentDetector _environmentDetector;
 #pragma warning restore CA2213
 
+    private readonly bool _isHealthy;
     private int _disposed;
     private int _finalized;
 
@@ -51,6 +55,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     /// <summary>Gets the UTC timestamp when the session was initialized.</summary>
     public DateTime StartedAt { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the SDK initialized successfully with valid configuration.
+    /// When false, all operations are no-ops and tests run without tracking.
+    /// </summary>
+    protected bool IsHealthy => _isHealthy;
 
     /// <summary>
     /// Gets the service provider from the underlying host.
@@ -75,57 +85,74 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         // Resolve the logger first, so it is available for error reporting during the rest of initialization.
         _logger = services.GetRequiredService<ILogger<XpingContextOrchestrator>>();
-
-        _collector = services.GetRequiredService<ITestExecutionCollector>();
         _flushLock = new SemaphoreSlim(1, 1);
 
-        XpingConfiguration configuration;
         try
         {
             // Resolving IXpingUploader triggers HttpClient creation, which in turn accesses
             // IOptions<XpingConfiguration>.Value and runs the registered Validate delegate.
             // An OptionsValidationException here means the caller supplied invalid configuration.
+            _collector = services.GetRequiredService<ITestExecutionCollector>();
             _uploader = services.GetRequiredService<IXpingUploader>();
             _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
-            configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+            XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+            _isHealthy = configuration.Enabled;
+
+            // Only set up timer and events if healthy and enabled
+            if (_isHealthy)
+            {
+                if (configuration.FlushInterval > TimeSpan.Zero)
+                {
+                    _flushTimer = new Timer(
+                        async void (_) =>
+                        {
+                            try { await FlushSessionAsync().ConfigureAwait(false); }
+                            catch { /* Timer callbacks cannot propagate exceptions to callers */ }
+                        },
+                        state: null,
+                        dueTime: configuration.FlushInterval,
+                        period: configuration.FlushInterval);
+                }
+
+                _collector.BufferFull += async (_, _) =>
+                {
+                    try { await FlushSessionAsync().ConfigureAwait(false); }
+                    catch { /* BufferFull is an event; exceptions cannot propagate to callers */ }
+                };
+
+                _logger.LogInformation(
+                    "Initialized. SessionId: {SessionId}, Project: {ProjectId}, Environment: {Environment}",
+                    SessionId, configuration.ProjectId, configuration.Environment);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.");
+            }
         }
         catch (OptionsValidationException ex)
         {
-            _logger.LogError("Configuration validation failed: {Errors}", string.Join("; ", ex.Failures));
-            throw;
+            _logger.LogError(
+                "Configuration validation failed: {Errors}. SDK disabled - tests will run without observability tracking. ",
+                string.Join("; ", ex.Failures));
+
+            _isHealthy = false;
+            _collector = new NoOpTestExecutionCollector();
+            _uploader = new NoOpXpingUploader();
+            _environmentDetector = new NoOpEnvironmentDetector();
         }
         catch (Exception ex)
         {
-            _logger.LogError("Failed to initialize Xping SDK: {Message}", ex.Message);
-            throw;
+            _logger.LogError(
+                "Failed to initialize Xping SDK: {Message}. SDK disabled - tests will run without observability tracking.",
+                ex.Message);
+
+            _isHealthy = false;
+            _collector = new NoOpTestExecutionCollector();
+            _uploader = new NoOpXpingUploader();
+            _environmentDetector = new NoOpEnvironmentDetector();
         }
-
-        // Set up the automatic flush timer if enabled
-        if (configuration.Enabled && configuration.FlushInterval > TimeSpan.Zero)
-        {
-            _flushTimer = new Timer(
-                async void (_) =>
-                {
-                    try { await FlushSessionAsync().ConfigureAwait(false); }
-                    catch { /* Timer callbacks cannot propagate exceptions to callers */ }
-                },
-                state: null,
-                dueTime: configuration.FlushInterval,
-                period: configuration.FlushInterval);
-        }
-
-        // Subscribe to the buffer full event to flush the collector if enabled.
-        // The handler must be async void (EventHandler delegate returns void); the inner
-        // try/catch prevents unhandled exceptions from reaching the thread pool and crashing the process.
-        if (configuration.Enabled)
-            _collector.BufferFull += async (_, _) =>
-            {
-                try { await FlushSessionAsync().ConfigureAwait(false); }
-                catch { /* BufferFull is an event; exceptions cannot propagate to callers */ }
-            };
-
-        _logger.LogInformation("Initialized. Project: {ProjectId}, Environment: {Environment}, Enabled: {Enabled}",
-            configuration.ProjectId, configuration.Environment, configuration.Enabled);
     }
 
     /// <summary>
@@ -136,6 +163,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <returns>The result of the upload operation.</returns>
     protected async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
     {
+        // Short-circuit when SDK is unhealthy
+        if (!_isHealthy)
+            return new UploadResult { Success = true, TotalRecordsCount = 0 };
+
         // Ensure only one flush happens at a time
         await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 

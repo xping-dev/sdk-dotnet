@@ -10,7 +10,6 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Tests.Helpers;
@@ -33,6 +32,7 @@ public sealed class XpingContextOrchestratorTests
         public int SessionFinalizedCount => _sessionFinalizedCount;
         public UploadResult? LastFinalizedResult => _lastFinalizedResult;
         public List<TestExecution> OnRecordedExecutions { get; } = [];
+        public bool HealthStatus => IsHealthy;
 
         public TestOrchestrator(IHost host) : base(host) { }
 
@@ -337,6 +337,94 @@ public sealed class XpingContextOrchestratorTests
         // Assert
         Assert.Equal(3, stats.TotalRecorded);
 
+        await orchestrator.DisposeAsync();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Silent failure (invalid configuration)
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Constructor_WithInvalidConfig_DoesNotThrow()
+    {
+        // Arrange
+        var host = ServiceHelper.BuildInvalidConfigHost();
+
+        // Act — if the constructor throws, the test fails; reaching the assertion means success
+        var orchestrator = new TestOrchestrator(host);
+        Assert.NotNull(orchestrator);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Constructor_WithInvalidConfig_SetsIsHealthyFalse()
+    {
+        // Arrange
+        var host = ServiceHelper.BuildInvalidConfigHost();
+        var orchestrator = new TestOrchestrator(host);
+
+        // Assert
+        Assert.False(orchestrator.HealthStatus);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FlushSessionAsync_WhenUnhealthy_ReturnsSuccessWithZeroRecords()
+    {
+        // Arrange
+        var host = ServiceHelper.BuildInvalidConfigHost();
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("SilentTest"));
+
+        // Act
+        var result = await orchestrator.FlushAsync();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(0, result.TotalRecordsCount);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task RecordTestExecution_WhenUnhealthy_DoesNotBufferExecution()
+    {
+        // Arrange
+        var host = ServiceHelper.BuildInvalidConfigHost();
+        var orchestrator = new TestOrchestrator(host);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecution("SilentTest"));
+
+        // Assert — collector is no-op; stats show nothing recorded
+        var stats = await orchestrator.GetCollectorStatsAsync();
+        Assert.Equal(0, stats.TotalRecorded);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Constructor_WithEnabledFalse_SetsIsHealthyFalse()
+    {
+        // Arrange
+        var (orchestrator, _) = CreateOrchestrator(o => o.Enabled = false);
+
+        // Assert
+        Assert.False(orchestrator.HealthStatus);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenUnhealthy_DoesNotThrow()
+    {
+        // Arrange
+        var host = ServiceHelper.BuildInvalidConfigHost();
+        var orchestrator = new TestOrchestrator(host);
+
+        // Act — if DisposeAsync throws, the test fails automatically
         await orchestrator.DisposeAsync();
     }
 }

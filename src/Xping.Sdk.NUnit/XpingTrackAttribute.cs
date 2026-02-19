@@ -35,7 +35,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     // Resolved once in BeforeTest() and reused for every AfterTest() on this attribute instance.
     // The attribute can be applied at assembly, class, or method scope; in all cases the same
     // DI singletons are returned each time, so a single resolution per instance is enough.
-    private XpingAttributeServices? _services;
+    private XpingAttributeServices _services = null!;
 
     /// <summary>
     /// Gets the action targets (Test level).
@@ -121,7 +121,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             var workerId = TestContext.CurrentContext.WorkerId;
             var fixtureName = test.TypeInfo?.FullName ?? test.ClassName;
 
-            var execution = CreateTestExecution(_services!, test, startTime, endTime, duration, workerId, fixtureName);
+            var execution = CreateTestExecution(_services, test, startTime, endTime, duration, workerId, fixtureName);
             XpingContext.RecordTest(execution);
         }
         catch

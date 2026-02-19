@@ -111,4 +111,39 @@ internal static class ServiceHelper
                 TotalRecordsCount = s.Executions.Count
             });
     }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> wired with mock uploader and environment detector,
+    /// but with deliberately invalid configuration (missing ApiKey and ProjectId) so that
+    /// <see cref="Microsoft.Extensions.Options.OptionsValidationException"/> is thrown when
+    /// <c>IOptions&lt;XpingConfiguration&gt;.Value</c> is accessed during orchestrator construction.
+    /// </summary>
+    public static IHost BuildInvalidConfigHost()
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                // Configure with empty/invalid values — ApiKey and ProjectId are left null.
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = null!;
+                    o.ProjectId = null!;
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                });
+
+                // Register validation so OptionsValidationException fires on .Value access.
+                services.AddOptions<XpingConfiguration>().ValidateDataAnnotations();
+
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
 }
