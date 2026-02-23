@@ -130,7 +130,7 @@ internal sealed class XpingUploader(
             throw new InvalidOperationException("Executions cannot be null or empty");
         }
 
-        string sessionId = testSession.SessionId;
+        string sessionId = testSession.SessionId.ToString();
 #pragma warning disable CA2000 // Caller owns and disposes the request via using (request)
         HttpRequestMessage request = new(
             HttpMethod.Post,

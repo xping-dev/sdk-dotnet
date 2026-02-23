@@ -206,7 +206,7 @@ public sealed class XpingContextOrchestratorTests
 
         // Assert
         Assert.NotNull(capturedSession);
-        Assert.Equal(orchestrator.SessionId.ToString(), capturedSession.SessionId);
+        Assert.Equal(orchestrator.SessionId, capturedSession.SessionId);
 
         await orchestrator.DisposeAsync();
     }
