@@ -277,7 +277,7 @@ public sealed class XpingMessageSink(
             .Build();
 
         // Record test completion for tracking as previous test
-        _executionTracker.RecordTestCompletion(workerId: collectionName, identity.TestId, test.DisplayName, outcome);
+        _executionTracker.RecordTestCompletion(workerId: collectionName, identity.TestFingerprint, test.DisplayName, outcome);
 
         return testExecution;
     }

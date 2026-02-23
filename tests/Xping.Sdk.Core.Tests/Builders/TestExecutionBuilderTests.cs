@@ -275,7 +275,7 @@ public sealed class TestExecutionBuilderTests
             .Build();
 
         // Assert
-        Assert.Equal("stable-id", execution.Identity.TestId);
+        Assert.Equal("stable-id", execution.Identity.TestFingerprint);
     }
 
     [Fact]

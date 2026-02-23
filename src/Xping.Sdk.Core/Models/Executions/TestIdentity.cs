@@ -13,7 +13,7 @@ namespace Xping.Sdk.Core.Models.Executions;
 /// - Parameterized test variations
 /// </summary>
 /// <remarks>
-/// The TestId is a SHA256 hash computed from the fully qualified name and parameters,
+/// The TestFingerprint is a SHA256 hash computed from the fully qualified name and parameters,
 /// ensuring the same test always generates the same ID regardless of execution context.
 /// This enables reliable test tracking and historical analysis across test runs.
 /// </remarks>
@@ -24,7 +24,7 @@ public sealed class TestIdentity
     /// </summary>
     public TestIdentity()
     {
-        TestId = string.Empty;
+        TestFingerprint = string.Empty;
         FullyQualifiedName = string.Empty;
         Assembly = string.Empty;
         Namespace = string.Empty;
@@ -37,7 +37,7 @@ public sealed class TestIdentity
     /// Internal constructor for manual construction.
     /// </summary>
     internal TestIdentity(
-        string testId,
+        string testFingerprint,
         string fullyQualifiedName,
         string assembly,
         string @namespace,
@@ -48,7 +48,7 @@ public sealed class TestIdentity
         string? sourceFile,
         int? sourceLineNumber)
     {
-        TestId = testId;
+        TestFingerprint = testFingerprint;
         FullyQualifiedName = fullyQualifiedName;
         Assembly = assembly;
         Namespace = @namespace;
@@ -68,7 +68,7 @@ public sealed class TestIdentity
     /// Format: SHA256 hash as lowercase hex string (64 characters).
     /// Example: "a3f5e9c2d1b4a7f8e0c9d6b3a2f1e8d5c7b4a9f6e3d0c8b5a2f9e6d3c0b7a4f1"
     /// </remarks>
-    public string TestId { get; init; }
+    public string TestFingerprint { get; init; }
 
     /// <summary>
     /// Gets the fully qualified name of the test.
@@ -76,7 +76,7 @@ public sealed class TestIdentity
     /// </summary>
     /// <remarks>
     /// Example: "MyApp.Tests.CalculatorTests.Add_ReturnSum"
-    /// This may change during refactoring, but TestId remains stable.
+    /// This may change during refactoring, but TestFingerprint remains stable.
     /// </remarks>
     public string FullyQualifiedName { get; init; }
 

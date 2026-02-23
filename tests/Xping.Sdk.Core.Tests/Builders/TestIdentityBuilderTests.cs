@@ -18,7 +18,7 @@ public sealed class TestIdentityBuilderTests
     {
         var identity = new TestIdentityBuilder().Build();
 
-        Assert.Equal(string.Empty, identity.TestId);
+        Assert.Equal(string.Empty, identity.TestFingerprint);
         Assert.Equal(string.Empty, identity.FullyQualifiedName);
         Assert.Equal(string.Empty, identity.Assembly);
         Assert.Equal(string.Empty, identity.Namespace);
@@ -38,7 +38,7 @@ public sealed class TestIdentityBuilderTests
     public void WithTestId_ShouldSetTestId()
     {
         var identity = new TestIdentityBuilder().WithTestId("stable-id-abc").Build();
-        Assert.Equal("stable-id-abc", identity.TestId);
+        Assert.Equal("stable-id-abc", identity.TestFingerprint);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class TestIdentityBuilderTests
         builder.Reset();
         var identity = builder.Build();
 
-        Assert.Equal(string.Empty, identity.TestId);
+        Assert.Equal(string.Empty, identity.TestFingerprint);
         Assert.Equal(string.Empty, identity.FullyQualifiedName);
         Assert.Equal(string.Empty, identity.Assembly);
         Assert.Null(identity.ParameterHash);
@@ -182,7 +182,7 @@ public sealed class TestIdentityBuilderTests
             .WithSourceLineNumber(15)
             .Build();
 
-        Assert.Equal("test-id", identity.TestId);
+        Assert.Equal("test-id", identity.TestFingerprint);
         Assert.Equal("Company.Tests.MyClass.ShouldPass", identity.FullyQualifiedName);
         Assert.Equal("Company.Tests", identity.Assembly);
         Assert.Equal("Company.Tests", identity.Namespace);
