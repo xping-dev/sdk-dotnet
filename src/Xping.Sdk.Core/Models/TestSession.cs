@@ -20,7 +20,7 @@ public sealed class TestSession
     /// </summary>
     public TestSession()
     {
-        SessionId = Guid.Empty.ToString();
+        SessionId = Guid.Empty;
         StartedAt = DateTime.UtcNow;
         EnvironmentInfo = new EnvironmentInfo();
         Executions = [];
@@ -30,14 +30,16 @@ public sealed class TestSession
     /// Internal constructor for builder.
     /// </summary>
     internal TestSession(
-        string sessionId,
+        Guid sessionId,
         DateTime startedAt,
         EnvironmentInfo environmentInfo,
         IReadOnlyCollection<TestExecution> executions,
         DateTime? endedAt,
         int? totalTestsExpected)
     {
-        SessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
+        if (sessionId == Guid.Empty)
+            throw new ArgumentException("Session ID cannot be empty.", nameof(sessionId));
+        SessionId = sessionId;
         StartedAt = startedAt;
         EnvironmentInfo = environmentInfo ?? throw new ArgumentNullException(nameof(environmentInfo));
         Executions = executions ?? throw new ArgumentNullException(nameof(executions));
@@ -48,7 +50,7 @@ public sealed class TestSession
     /// <summary>
     /// Gets the unique identifier for this test session.
     /// </summary>
-    public string SessionId { get; init; }
+    public Guid SessionId { get; init; }
 
     /// <summary>
     /// Gets when the test session started (UTC).

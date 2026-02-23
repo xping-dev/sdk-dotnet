@@ -13,7 +13,7 @@ namespace Xping.Sdk.Core.Models.Builders;
 /// </summary>
 public sealed class TestSessionBuilder
 {
-    private string _sessionId;
+    private Guid _sessionId;
     private DateTime _startedAt;
     private DateTime? _endedAt;
     private EnvironmentInfo _environmentInfo;
@@ -25,7 +25,7 @@ public sealed class TestSessionBuilder
     /// </summary>
     public TestSessionBuilder()
     {
-        _sessionId = Guid.NewGuid().ToString();
+        _sessionId = Guid.NewGuid();
         _startedAt = DateTime.UtcNow;
         _environmentInfo = new EnvironmentInfo();
         _executions = [];
@@ -41,7 +41,7 @@ public sealed class TestSessionBuilder
         if (sessionId == Guid.Empty)
             throw new ArgumentException("Session ID cannot be empty.", nameof(sessionId));
 
-        _sessionId = sessionId.ToString();
+        _sessionId = sessionId;
         return this;
     }
 
@@ -138,7 +138,7 @@ public sealed class TestSessionBuilder
     /// <returns>The builder instance for method chaining.</returns>
     public TestSessionBuilder Reset()
     {
-        _sessionId = Guid.NewGuid().ToString();
+        _sessionId = Guid.NewGuid();
         _startedAt = DateTime.UtcNow;
         _endedAt = null;
         _environmentInfo = new EnvironmentInfo();

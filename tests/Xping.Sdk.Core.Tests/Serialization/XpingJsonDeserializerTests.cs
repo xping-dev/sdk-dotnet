@@ -45,7 +45,7 @@ public sealed class XpingJsonDeserializerTests
         var session = await serializer.DeserializeAsync<TestSession>(stream);
 
         Assert.NotNull(session);
-        Assert.Equal("dc6cdcdc-8567-439b-8a1d-d86fad27d05e", session!.SessionId);
+        Assert.Equal(Guid.Parse("dc6cdcdc-8567-439b-8a1d-d86fad27d05e"), session!.SessionId);
     }
 
     [Fact]

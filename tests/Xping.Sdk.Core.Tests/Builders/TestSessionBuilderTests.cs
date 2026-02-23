@@ -22,7 +22,7 @@ public sealed class TestSessionBuilderTests
     public void Build_ShouldReturnSession_WithNonEmptySessionId()
     {
         var session = new TestSessionBuilder().Build();
-        Assert.NotEqual(Guid.Empty.ToString(), session.SessionId);
+        Assert.NotEqual(Guid.Empty, session.SessionId);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class TestSessionBuilderTests
     {
         var id = Guid.NewGuid();
         var session = new TestSessionBuilder().WithSessionId(id).Build();
-        Assert.Equal(id.ToString(), session.SessionId);
+        Assert.Equal(id, session.SessionId);
     }
 
     [Fact]
