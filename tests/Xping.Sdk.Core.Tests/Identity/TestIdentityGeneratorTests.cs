@@ -53,8 +53,8 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act
-        var id1 = generator.Generate(ValidFqn, ValidAssembly).TestId;
-        var id2 = generator.Generate(ValidFqn, ValidAssembly).TestId;
+        var id1 = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
+        var id2 = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
 
         // Assert
         Assert.Equal(id1, id2);
@@ -67,8 +67,8 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act
-        var id1 = generator.Generate("Namespace.ClassA.Test", ValidAssembly).TestId;
-        var id2 = generator.Generate("Namespace.ClassB.Test", ValidAssembly).TestId;
+        var id1 = generator.Generate("Namespace.ClassA.Test", ValidAssembly).TestFingerprint;
+        var id2 = generator.Generate("Namespace.ClassB.Test", ValidAssembly).TestFingerprint;
 
         // Assert
         Assert.NotEqual(id1, id2);
@@ -140,7 +140,7 @@ public sealed class TestIdentityGeneratorTests
         var withoutParams = generator.Generate(ValidFqn, ValidAssembly);
 
         // Assert
-        Assert.NotEqual(withParams.TestId, withoutParams.TestId);
+        Assert.NotEqual(withParams.TestFingerprint, withoutParams.TestFingerprint);
     }
 
     [Fact]

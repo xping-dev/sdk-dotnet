@@ -12,7 +12,7 @@ namespace Xping.Sdk.Core.Services.Identity;
 /// environments, and code changes.
 /// </summary>
 /// <remarks>
-/// This generator creates consistent TestId hashes that enable:
+/// This generator creates consistent TestFingerprint hashes that enable:
 /// - Tracking the same test across different environments (CI, local, Docker)
 /// - Monitoring test history across refactorings
 /// - Identifying parameterized test variations
@@ -35,7 +35,7 @@ public interface ITestIdentityGenerator
     /// <param name="displayName">Optional display name for human readability.</param>
     /// <param name="sourceFile">Optional source file path.</param>
     /// <param name="sourceLineNumber">Optional source line number.</param>
-    /// <returns>A complete TestIdentity with stable TestId hash.</returns>
+    /// <returns>A complete TestIdentity with stable TestFingerprint hash.</returns>
     /// <exception cref="ArgumentNullException">Thrown when fullyQualifiedName or assembly is null.</exception>
     /// <exception cref="ArgumentException">Thrown when fullyQualifiedName is an invalid format.</exception>
     TestIdentity Generate(

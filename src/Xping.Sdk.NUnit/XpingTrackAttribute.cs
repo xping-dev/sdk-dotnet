@@ -192,7 +192,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .Build();
 
         // Record test completion for tracking as previous test
-        services.ExecutionTracker.RecordTestCompletion(workerId, identity.TestId, test.Name, outcome);
+        services.ExecutionTracker.RecordTestCompletion(workerId, identity.TestFingerprint, test.Name, outcome);
 
         return execution;
     }

@@ -12,7 +12,7 @@ namespace Xping.Sdk.Core.Models.Builders;
 /// </summary>
 public sealed class TestIdentityBuilder
 {
-    private string _testId;
+    private string _testFingerprint;
     private string _fullyQualifiedName;
     private string _assembly;
     private string _namespace;
@@ -28,7 +28,7 @@ public sealed class TestIdentityBuilder
     /// </summary>
     public TestIdentityBuilder()
     {
-        _testId = string.Empty;
+        _testFingerprint = string.Empty;
         _fullyQualifiedName = string.Empty;
         _assembly = string.Empty;
         _namespace = string.Empty;
@@ -42,7 +42,7 @@ public sealed class TestIdentityBuilder
     /// </summary>
     public TestIdentityBuilder WithTestId(string testId)
     {
-        _testId = testId;
+        _testFingerprint = testId;
         return this;
     }
 
@@ -133,7 +133,7 @@ public sealed class TestIdentityBuilder
     public TestIdentity Build()
     {
         return new TestIdentity(
-            testId: _testId,
+            testFingerprint: _testFingerprint,
             fullyQualifiedName: _fullyQualifiedName,
             assembly: _assembly,
             @namespace: _namespace,
@@ -150,7 +150,7 @@ public sealed class TestIdentityBuilder
     /// </summary>
     public TestIdentityBuilder Reset()
     {
-        _testId = string.Empty;
+        _testFingerprint = string.Empty;
         _fullyQualifiedName = string.Empty;
         _assembly = string.Empty;
         _namespace = string.Empty;

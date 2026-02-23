@@ -149,7 +149,7 @@ public abstract class XpingTestBase
             .Build();
 
         // Record test completion for tracking as previous test
-        services.ExecutionTracker.RecordTestCompletion(threadId, identity.TestId, testName, outcome);
+        services.ExecutionTracker.RecordTestCompletion(threadId, identity.TestFingerprint, testName, outcome);
 
         return execution;
     }
