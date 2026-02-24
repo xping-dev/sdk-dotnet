@@ -89,7 +89,6 @@ internal sealed class ExecutionTracker : IExecutionTracker
             .WithWorkerId(workerKey)
             .WithCollectionName(collectionName)
             .WithParallelization(concurrentCount > 1, concurrentCount)
-            .WithConcurrentTestCount(concurrentCount)
             .WithPositionInSuite(workerPosition)
             .WithGlobalPosition(globalPosition)
             .WithPreviousTest(previousTest?.TestFingerprint, previousTest?.TestName, previousTest?.Outcome)
