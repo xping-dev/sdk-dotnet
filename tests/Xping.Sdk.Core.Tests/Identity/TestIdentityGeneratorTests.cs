@@ -186,7 +186,7 @@ public sealed class TestIdentityGeneratorTests
     }
 
     // ---------------------------------------------------------------------------
-    // GenerateTestId
+    // GenerateTestFingerprint
     // ---------------------------------------------------------------------------
 
     [Fact]
@@ -196,8 +196,8 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act
-        var id1 = generator.GenerateTestId(ValidFqn);
-        var id2 = generator.GenerateTestId(ValidFqn);
+        var id1 = generator.GenerateTestFingerprint(ValidFqn);
+        var id2 = generator.GenerateTestFingerprint(ValidFqn);
 
         // Assert
         Assert.Equal(id1, id2);
@@ -210,7 +210,7 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act
-        var id = generator.GenerateTestId(ValidFqn);
+        var id = generator.GenerateTestFingerprint(ValidFqn);
 
         // Assert
         Assert.Equal(64, id.Length);
@@ -224,8 +224,8 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act
-        var idNoParam = generator.GenerateTestId(ValidFqn, parameterHash: null);
-        var idWithParam = generator.GenerateTestId(ValidFqn, parameterHash: "abc");
+        var idNoParam = generator.GenerateTestFingerprint(ValidFqn, parameterHash: null);
+        var idWithParam = generator.GenerateTestFingerprint(ValidFqn, parameterHash: "abc");
 
         // Assert
         Assert.NotEqual(idNoParam, idWithParam);
@@ -238,7 +238,7 @@ public sealed class TestIdentityGeneratorTests
         var generator = BuildGenerator();
 
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => generator.GenerateTestId(null!));
+        Assert.Throws<ArgumentNullException>(() => generator.GenerateTestFingerprint(null!));
     }
 
     // ---------------------------------------------------------------------------

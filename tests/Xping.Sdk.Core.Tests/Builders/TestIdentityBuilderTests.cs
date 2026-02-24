@@ -37,7 +37,7 @@ public sealed class TestIdentityBuilderTests
     [Fact]
     public void WithTestId_ShouldSetTestId()
     {
-        var identity = new TestIdentityBuilder().WithTestId("stable-id-abc").Build();
+        var identity = new TestIdentityBuilder().WithTestFingerprint("stable-id-abc").Build();
         Assert.Equal("stable-id-abc", identity.TestFingerprint);
     }
 
@@ -133,7 +133,7 @@ public sealed class TestIdentityBuilderTests
     public void Reset_ShouldRestoreAllDefaults()
     {
         var builder = new TestIdentityBuilder()
-            .WithTestId("id")
+            .WithTestFingerprint("id")
             .WithFullyQualifiedName("Ns.C.M")
             .WithAssembly("Asm")
             .WithNamespace("Ns")
@@ -170,7 +170,7 @@ public sealed class TestIdentityBuilderTests
     public void Build_ShouldSupportFullFluentChain()
     {
         var identity = new TestIdentityBuilder()
-            .WithTestId("test-id")
+            .WithTestFingerprint("test-id")
             .WithFullyQualifiedName("Company.Tests.MyClass.ShouldPass")
             .WithAssembly("Company.Tests")
             .WithNamespace("Company.Tests")

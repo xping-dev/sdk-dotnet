@@ -40,9 +40,9 @@ public sealed class TestIdentityBuilder
     /// <summary>
     /// Sets the test ID.
     /// </summary>
-    public TestIdentityBuilder WithTestId(string testId)
+    public TestIdentityBuilder WithTestFingerprint(string testFingerprint)
     {
-        _testFingerprint = testId;
+        _testFingerprint = testFingerprint;
         return this;
     }
 

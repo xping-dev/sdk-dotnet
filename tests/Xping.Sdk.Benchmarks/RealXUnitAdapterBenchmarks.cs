@@ -131,7 +131,7 @@ public class RealXUnitAdapterBenchmarks
         foreach (var (a, b, expected) in testCases)
         {
             var identity = new TestIdentityBuilder()
-                .WithTestId($"xunit-theory-test-{a}-{b}-{expected}")
+                .WithTestFingerprint($"xunit-theory-test-{a}-{b}-{expected}")
                 .WithFullyQualifiedName("XUnit.Tests.TheoryTests.AdditionTheory")
                 .WithClassName("TheoryTests")
                 .WithMethodName("AdditionTheory")

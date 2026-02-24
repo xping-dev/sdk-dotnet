@@ -253,7 +253,7 @@ public sealed class XpingMessageSink(
 
         // Extract test metadata
         TestMetadata metadata = ExtractMetadata(test, output);
-        // Detect retry metadata first so the attempt number is available when claiming a position.
+        // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
         // Create execution context using collection name as worker ID.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
@@ -277,7 +277,11 @@ public sealed class XpingMessageSink(
             .Build();
 
         // Record test completion for tracking as previous test
-        _executionTracker.RecordTestCompletion(workerId: collectionName, identity.TestFingerprint, test.DisplayName, outcome);
+        _executionTracker.RecordTestCompletion(
+            workerId: collectionName,
+            identity.TestFingerprint,
+            test.DisplayName,
+            outcome);
 
         return testExecution;
     }

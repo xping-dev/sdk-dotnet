@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Collection;
@@ -206,7 +207,7 @@ public sealed class ExecutionTrackerTests
 
         // Assert
         Assert.NotNull(prev);
-        Assert.Equal("id-42", prev.TestId);
+        Assert.Equal("id-42", prev.TestFingerprint);
         Assert.Equal("My_Test", prev.TestName);
         Assert.Equal(TestOutcome.Failed, prev.Outcome);
     }
@@ -225,7 +226,7 @@ public sealed class ExecutionTrackerTests
         var prev = tracker.GetPreviousTest(workerId);
 
         // Assert
-        Assert.Equal("id-2", prev!.TestId);
+        Assert.Equal("id-2", prev!.TestFingerprint);
         Assert.Equal("Second", prev.TestName);
     }
 
@@ -317,5 +318,120 @@ public sealed class ExecutionTrackerTests
         // Assert
         Assert.Equal(1, record.PositionInSuite);
         Assert.Equal(1, tracker.GlobalPosition);
+    }
+
+    // ---------------------------------------------------------------------------
+    // SuiteElapsedTime
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void CreateExecutionContext_FirstCall_ShouldReturnNearZeroSuiteElapsedTime()
+    {
+        // Arrange — fake time: first GetTimestamp call captures suite start, second computes delta.
+        // Both calls happen at the same tick, so elapsed should be zero.
+        var fake = new FakeTimeProvider(frequency: 1_000_000_000L);
+        fake.CurrentTimestamp = 1_000_000_000L; // 1 second into process lifetime (avoids sentinel 0)
+        IExecutionTracker tracker = new ExecutionTracker(fake);
+
+        // Act
+        var record = tracker.CreateExecutionContext("w");
+
+        // Assert — start was captured at the same tick as the elapsed read, so delta is zero
+        Assert.Equal(TimeSpan.Zero, record.SuiteElapsedTime);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_SubsequentCall_ShouldReturnAccumulatedSuiteElapsedTime()
+    {
+        // Arrange
+        var fake = new FakeTimeProvider(frequency: 1_000_000_000L); // 1 GHz → 1 tick = 1 ns
+        fake.CurrentTimestamp = 1_000_000_000L;
+        IExecutionTracker tracker = new ExecutionTracker(fake);
+
+        // First call: captures suite start at tick 1_000_000_000
+        tracker.CreateExecutionContext("w");
+
+        // Advance time by exactly 5 seconds
+        fake.CurrentTimestamp = 6_000_000_000L;
+
+        // Act
+        var record = tracker.CreateExecutionContext("w");
+
+        // Assert
+        Assert.Equal(TimeSpan.FromSeconds(5), record.SuiteElapsedTime);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_RetryAttempt_ShouldReflectRealElapsedTime()
+    {
+        // Retried tests should still report when they actually ran (not when attempt 1 ran).
+        var fake = new FakeTimeProvider(frequency: 1_000_000_000L);
+        fake.CurrentTimestamp = 1_000_000_000L;
+        IExecutionTracker tracker = new ExecutionTracker(fake);
+
+        // First attempt at t=0 relative to suite start
+        tracker.CreateExecutionContext("w", attemptNumber: 1);
+
+        // Retry occurs 3 seconds later
+        fake.CurrentTimestamp = 4_000_000_000L;
+        var retryRecord = tracker.CreateExecutionContext("w", attemptNumber: 2);
+
+        Assert.Equal(TimeSpan.FromSeconds(3), retryRecord.SuiteElapsedTime);
+    }
+
+    [Fact]
+    public void Clear_ShouldResetSuiteClock_AllowingFreshTrackingFromZero()
+    {
+        // Arrange
+        var fake = new FakeTimeProvider(frequency: 1_000_000_000L);
+        fake.CurrentTimestamp = 1_000_000_000L;
+        IExecutionTracker tracker = new ExecutionTracker(fake);
+
+        // Establish a suite start, then advance time significantly
+        tracker.CreateExecutionContext("w");
+        fake.CurrentTimestamp = 100_000_000_000L; // 99 seconds later
+
+        tracker.Clear();
+
+        // After Clear(), the next call should establish a new suite start at t=100s
+        // so elapsed should be zero again (start captured and read at same tick)
+        var record = tracker.CreateExecutionContext("w");
+
+        Assert.Equal(TimeSpan.Zero, record.SuiteElapsedTime);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_MultipleWorkers_EachReflectsElapsedFromSameSuiteStart()
+    {
+        // Arrange — two workers starting at different times, but suite clock is shared
+        var fake = new FakeTimeProvider(frequency: 1_000_000_000L);
+        fake.CurrentTimestamp = 1_000_000_000L;
+        IExecutionTracker tracker = new ExecutionTracker(fake);
+
+        // Worker A starts first — establishes suite start at tick 1_000_000_000
+        tracker.CreateExecutionContext("worker-a");
+
+        // 2 seconds later, worker B starts
+        fake.CurrentTimestamp = 3_000_000_000L;
+        var recordB = tracker.CreateExecutionContext("worker-b");
+
+        // Assert — worker B's elapsed should be measured from the shared suite start, not its own start
+        Assert.Equal(TimeSpan.FromSeconds(2), recordB.SuiteElapsedTime);
+    }
+
+    /// <summary>
+    /// Test double for <see cref="ITimeProvider"/> that allows manual control of the current timestamp.
+    /// </summary>
+    private sealed class FakeTimeProvider : ITimeProvider
+    {
+        public long CurrentTimestamp { get; set; }
+        public long Frequency { get; }
+
+        public FakeTimeProvider(long frequency = 10_000_000L) // 10 MHz default
+        {
+            Frequency = frequency;
+        }
+
+        public long GetTimestamp() => CurrentTimestamp;
     }
 }

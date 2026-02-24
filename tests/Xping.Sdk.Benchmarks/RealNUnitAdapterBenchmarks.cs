@@ -132,7 +132,7 @@ public class RealNUnitAdapterBenchmarks
         foreach (var (a, b) in testCases)
         {
             var identity = new TestIdentityBuilder()
-                .WithTestId($"nunit-parameterized-test-{a}-{b}")
+                .WithTestFingerprint($"nunit-parameterized-test-{a}-{b}")
                 .WithFullyQualifiedName("NUnit.Tests.ParameterTests.ParameterizedTest")
                 .WithClassName("ParameterTests")
                 .WithMethodName("ParameterizedTest")

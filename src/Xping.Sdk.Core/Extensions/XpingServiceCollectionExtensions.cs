@@ -298,6 +298,8 @@ public static class XpingServiceCollectionExtensions
     {
         // Register a test execution collector for batching and sampling
         services.AddSingleton<ITestExecutionCollector, TestExecutionCollector>();
+        // Register a time provider for high-resolution elapsed time tracking
+        services.AddSingleton<ITimeProvider, StopwatchTimeProvider>();
         // Register an execution tracker for tracking test executions across threads
         services.AddSingleton<IExecutionTracker, ExecutionTracker>();
         // Register a test identity generator for producing stable, deterministic test IDs

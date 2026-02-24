@@ -171,7 +171,7 @@ public class StressTestBenchmarks
             var outcome = i % 15 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
 
             var identity = new TestIdentityBuilder()
-                .WithTestId($"mixed-{i}")
+                .WithTestFingerprint($"mixed-{i}")
                 .WithFullyQualifiedName($"Stress.Mixed.{(isComplexTest ? "Complex" : "Simple")}.Test{i}")
                 .WithClassName(isComplexTest ? "ComplexTestClass" : "SimpleTestClass")
                 .WithMethodName($"TestMethod{i}")

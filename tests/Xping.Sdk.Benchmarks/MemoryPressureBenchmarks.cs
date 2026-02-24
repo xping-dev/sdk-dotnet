@@ -140,7 +140,7 @@ public class MemoryPressureBenchmarks
             }
 
             var identity = new TestIdentityBuilder()
-                .WithTestId($"complex-{i}")
+                .WithTestFingerprint($"complex-{i}")
                 .WithFullyQualifiedName($"Memory.Complex.LongNamespace.SubNamespace.TestClass.Method{i}")
                 .WithClassName($"ComplexTestClass_{i}")
                 .WithMethodName($"ComplexTestMethod_{i}")
@@ -270,7 +270,7 @@ public class MemoryPressureBenchmarks
             var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
 
             var identity = new TestIdentityBuilder()
-                .WithTestId($"string-{i}")
+                .WithTestFingerprint($"string-{i}")
                 .WithFullyQualifiedName($"Memory.Strings.Test{i}.{longString.Substring(0, 50)}")
                 .Build();
 
