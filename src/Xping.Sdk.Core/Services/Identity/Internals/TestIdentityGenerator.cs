@@ -44,10 +44,10 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
             : null;
 
         // Generate stable test ID
-        string testId = GenerateTestId(fullyQualifiedName, parameterHash);
+        string testFingerprint = GenerateTestFingerprint(fullyQualifiedName, parameterHash);
 
         TestIdentity testIdentity = _builder.Reset()
-            .WithTestId(testId)
+            .WithTestFingerprint(testFingerprint)
             .WithFullyQualifiedName(fullyQualifiedName)
             .WithAssembly(assembly)
             .WithNamespace(@namespace)
@@ -72,7 +72,7 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
     /// The hash is computed from: "{fullyQualifiedName}|{parameterHash}"
     /// The pipe separator ensures distinct hashes for tests with/without parameters.
     /// </remarks>
-    public string GenerateTestId(string fullyQualifiedName, string? parameterHash = null)
+    public string GenerateTestFingerprint(string fullyQualifiedName, string? parameterHash = null)
     {
         if (string.IsNullOrWhiteSpace(fullyQualifiedName))
         {

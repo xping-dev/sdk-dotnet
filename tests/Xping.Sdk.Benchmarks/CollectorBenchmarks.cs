@@ -133,7 +133,7 @@ public class CollectorBenchmarks
     private static TestExecution CreateTestExecution(string testName)
     {
         var identity = new TestIdentityBuilder()
-            .WithTestId(Guid.NewGuid().ToString("N"))
+            .WithTestFingerprint(Guid.NewGuid().ToString("N"))
             .WithFullyQualifiedName($"Benchmark.Tests.{testName}")
             .WithAssembly("Benchmark.Tests")
             .WithNamespace("Benchmark.Tests")

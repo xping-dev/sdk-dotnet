@@ -73,7 +73,7 @@ public class AdapterIntegrationBenchmarks
                 .Build();
 
             var identity = new TestIdentityBuilder()
-                .WithTestId($"nunit-test-{i}")
+                .WithTestFingerprint($"nunit-test-{i}")
                 .WithFullyQualifiedName($"NUnit.Tests.TestClass.TestMethod{i}")
                 .WithClassName("TestClass")
                 .WithMethodName($"TestMethod{i}")
@@ -108,7 +108,7 @@ public class AdapterIntegrationBenchmarks
             for (int paramSet = 0; paramSet < 5; paramSet++)
             {
                 var identity = new TestIdentityBuilder()
-                    .WithTestId($"xunit-theory-{testIdx}-{paramSet}")
+                    .WithTestFingerprint($"xunit-theory-{testIdx}-{paramSet}")
                     .WithFullyQualifiedName($"XUnit.Tests.TheoryClass.TheoryMethod{testIdx}")
                     .WithClassName("TheoryClass")
                     .WithMethodName($"TheoryMethod{testIdx}")
@@ -147,7 +147,7 @@ public class AdapterIntegrationBenchmarks
                 .Build();
 
             var identity = new TestIdentityBuilder()
-                .WithTestId($"mstest-test-{i}")
+                .WithTestFingerprint($"mstest-test-{i}")
                 .WithFullyQualifiedName($"MSTest.Tests.UnitTestClass.TestMethod{i}")
                 .WithClassName("UnitTestClass")
                 .WithMethodName($"TestMethod{i}")

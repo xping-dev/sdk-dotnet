@@ -260,7 +260,7 @@ public sealed class TestExecutionBuilderTests
     {
         // Arrange
         var identity = new TestIdentityBuilder()
-            .WithTestId("stable-id")
+            .WithTestFingerprint("stable-id")
             .WithFullyQualifiedName("Ns.Class.Method")
             .WithAssembly("TestAssembly")
             .WithMethodName("Method")

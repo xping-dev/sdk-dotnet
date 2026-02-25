@@ -106,7 +106,7 @@ public class UploadBenchmarks
             var outcome = i % 10 == 0 ? TestOutcome.Failed : TestOutcome.Passed;
 
             var identity = new TestIdentityBuilder()
-                .WithTestId(Guid.NewGuid().ToString("N"))
+                .WithTestFingerprint(Guid.NewGuid().ToString("N"))
                 .WithFullyQualifiedName($"Benchmark.Tests.TestClass.TestMethod{i}")
                 .WithAssembly("Benchmark.Tests")
                 .WithNamespace("Benchmark.Tests")

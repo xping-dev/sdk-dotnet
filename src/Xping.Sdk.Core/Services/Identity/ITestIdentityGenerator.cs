@@ -57,7 +57,7 @@ public interface ITestIdentityGenerator
     /// </param>
     /// <returns>A stable SHA256-based identifier string for the test.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fullyQualifiedName"/> is null.</exception>
-    string GenerateTestId(string fullyQualifiedName, string? parameterHash = null);
+    string GenerateTestFingerprint(string fullyQualifiedName, string? parameterHash = null);
 
     /// <summary>
     /// Generates a deterministic hash representing a set of test parameters.

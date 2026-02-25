@@ -19,7 +19,14 @@ internal sealed class ExecutionTracker : IExecutionTracker
     private readonly ConcurrentDictionary<string, PrecedingTestRecord> _previousTests = new();
     private readonly ConcurrentDictionary<string, int> _workerPositions = new();
     private readonly TestOrchestrationBuilder _builder = new();
+    private readonly ITimeProvider _timeProvider;
     private int _globalPosition;
+    private long _suiteStartTimestamp; // 0 = not yet captured; Stopwatch timestamps are always positive
+
+    public ExecutionTracker(ITimeProvider timeProvider)
+    {
+        _timeProvider = timeProvider;
+    }
 
     /// <inheritdoc/>
     int IExecutionTracker.GlobalPosition => _globalPosition;
@@ -27,9 +34,25 @@ internal sealed class ExecutionTracker : IExecutionTracker
     /// <inheritdoc/>
     int IExecutionTracker.ActiveWorkerCount => _workerPositions.Count;
 
+    private TimeSpan ComputeSuiteElapsedTime()
+    {
+        long start = Volatile.Read(ref _suiteStartTimestamp);
+        long elapsed = _timeProvider.GetTimestamp() - start;
+        return TimeSpan.FromTicks(elapsed * TimeSpan.TicksPerSecond / _timeProvider.Frequency);
+    }
+
     /// <inheritdoc/>
     TestOrchestrationRecord IExecutionTracker.CreateExecutionContext(string? workerId, string? collectionName, int attemptNumber)
     {
+        // Lazy-capture suite start on the very first call. Stopwatch timestamps are always > 0,
+        // so 0 is a safe sentinel for "not yet started". CompareExchange ensures exactly-once
+        // initialization even under concurrent entry by multiple workers.
+        if (Volatile.Read(ref _suiteStartTimestamp) == 0)
+        {
+            long captured = _timeProvider.GetTimestamp();
+            Interlocked.CompareExchange(ref _suiteStartTimestamp, captured, 0);
+        }
+
         string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
         string workerKey = workerId ?? threadId;
 
@@ -68,21 +91,22 @@ internal sealed class ExecutionTracker : IExecutionTracker
             .WithParallelization(concurrentCount > 1, concurrentCount)
             .WithPositionInSuite(workerPosition)
             .WithGlobalPosition(globalPosition)
-            .WithPreviousTest(previousTest?.TestId, previousTest?.TestName, previousTest?.Outcome)
+            .WithPreviousTest(previousTest?.TestFingerprint, previousTest?.TestName, previousTest?.Outcome)
+            .WithSuiteElapsedTime(ComputeSuiteElapsedTime())
             .Build();
 
         return testOrchestrationRecord;
     }
 
     /// <inheritdoc/>
-    void IExecutionTracker.RecordTestCompletion(string? workerId, string testId, string testName, TestOutcome outcome)
+    void IExecutionTracker.RecordTestCompletion(string? workerId, string testFingerprint, string testName, TestOutcome outcome)
     {
         string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
         string workerKey = workerId ?? threadId;
 
         _previousTests[workerKey] = new PrecedingTestRecord
         {
-            TestId = testId,
+            TestFingerprint = testFingerprint,
             TestName = testName,
             Outcome = outcome
         };
@@ -112,5 +136,7 @@ internal sealed class ExecutionTracker : IExecutionTracker
         _previousTests.Clear();
         _workerPositions.Clear();
         _globalPosition = 0;
+        _suiteStartTimestamp = 0;
+        _builder.Reset();
     }
 }

@@ -49,10 +49,10 @@ public interface IExecutionTracker
     /// <param name="workerId">
     /// Optional worker identifier. Falls back to the current managed thread ID if <see langword="null"/>.
     /// </param>
-    /// <param name="testId">Stable test identifier from <c>TestIdentity</c>.</param>
+    /// <param name="testFingerprint">Stable test identifier from <c>TestIdentity</c>.</param>
     /// <param name="testName">Display the name of the completed test.</param>
     /// <param name="outcome">Outcome of the completed test.</param>
-    void RecordTestCompletion(string? workerId, string testId, string testName, TestOutcome outcome);
+    void RecordTestCompletion(string? workerId, string testFingerprint, string testName, TestOutcome outcome);
 
     /// <summary>
     /// Returns the current execution position for the specified worker.

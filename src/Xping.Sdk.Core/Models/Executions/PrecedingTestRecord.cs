@@ -14,15 +14,15 @@ public sealed class PrecedingTestRecord
     /// <summary>
     /// Gets or sets the stable test identifier.
     /// </summary>
-    public string TestId { get; set; } = string.Empty;
+    public string TestFingerprint { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the test display name.
     /// </summary>
-    public string TestName { get; set; } = string.Empty;
+    public string TestName { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the test outcome.
     /// </summary>
-    public TestOutcome Outcome { get; set; }
+    public TestOutcome Outcome { get; init; }
 }
