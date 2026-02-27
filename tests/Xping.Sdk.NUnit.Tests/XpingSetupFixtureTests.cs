@@ -154,4 +154,50 @@ public class XpingSetupFixtureTests
         // Assert
         Assert.NotNull(instance);
     }
+
+    [Fact]
+    public void BeforeAllTests_CanBeCalled()
+    {
+        // Arrange
+        var instance = new XpingSetupFixture();
+
+        // Act & Assert - should not throw
+        instance.BeforeAllTests();
+    }
+
+    [Fact]
+    public async Task AfterAllTests_CanBeCalled()
+    {
+        // Arrange
+        var instance = new XpingSetupFixture();
+        instance.BeforeAllTests(); // Initialize first
+
+        // Act & Assert - should not throw
+        await instance.AfterAllTests();
+    }
+
+    [Fact]
+    public async Task BeforeAllTests_ThenAfterAllTests_ExecutesSuccessfully()
+    {
+        // Arrange
+        var instance = new XpingSetupFixture();
+
+        // Act
+        instance.BeforeAllTests();
+        await instance.AfterAllTests();
+
+        // Assert - completed without exceptions
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void BeforeAllTests_CalledMultipleTimes_DoesNotThrow()
+    {
+        // Arrange
+        var instance = new XpingSetupFixture();
+
+        // Act & Assert - should handle multiple calls gracefully
+        instance.BeforeAllTests();
+        instance.BeforeAllTests();
+    }
 }
