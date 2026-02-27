@@ -254,6 +254,68 @@ public sealed class XpingJsonSerializerTests
         Assert.Equal(original, restored);
     }
 
+    [Fact]
+    public async Task SerializeAsync_WithCancellationToken_CompletesSuccessfully()
+    {
+        var serializer = BuildSerializer();
+        using var stream = new MemoryStream();
+        var obj = new SampleRecord("cancellable", 42);
+        using var cts = new CancellationTokenSource();
+
+        await serializer.SerializeAsync(stream, obj, cts.Token);
+
+        stream.Position = 0;
+        var json = Encoding.UTF8.GetString(stream.ToArray());
+        Assert.Contains("cancellable", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeserializeAsync_WithCancellationToken_CompletesSuccessfully()
+    {
+        var serializer = BuildSerializer();
+        var json = "{\"name\":\"cancellable\",\"value\":99}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        using var cts = new CancellationTokenSource();
+
+        var result = await serializer.DeserializeAsync<SampleRecord>(stream, cts.Token);
+
+        Assert.NotNull(result);
+        Assert.Equal("cancellable", result!.Name);
+    }
+
+    [Fact]
+    public void Deserialize_EmptyString_ReturnsNull()
+    {
+        var serializer = BuildSerializer();
+        var json = "null";
+
+        var result = serializer.Deserialize<SampleRecord>(json);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Deserialize_EmptyBytes_ReturnsNull()
+    {
+        var serializer = BuildSerializer();
+        var bytes = Encoding.UTF8.GetBytes("null");
+
+        var result = serializer.Deserialize<SampleRecord>(bytes.AsSpan());
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task DeserializeAsync_InvalidJson_ThrowsJsonException()
+    {
+        var serializer = BuildSerializer();
+        var invalidJson = "{ invalid json }";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
+
+        await Assert.ThrowsAsync<JsonException>(
+            () => serializer.DeserializeAsync<SampleRecord>(stream));
+    }
+
     // ---------------------------------------------------------------------------
     // WriteOnlyStream helper
     // ---------------------------------------------------------------------------
