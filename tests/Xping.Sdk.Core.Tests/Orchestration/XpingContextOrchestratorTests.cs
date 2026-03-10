@@ -62,6 +62,24 @@ public sealed class XpingContextOrchestratorTests
     }
 
     // ---------------------------------------------------------------------------
+    // Minimal subclass for statistics tests — does NOT override OnTestExecutionRecorded
+    // so the base implementation feeds _statisticsAccumulator.Record(execution).
+    // ---------------------------------------------------------------------------
+
+    private sealed class StatsOrchestrator : XpingContextOrchestrator
+    {
+        public StatsOrchestrator(IHost host) : base(host) { }
+
+        public Task<UploadResult> FlushAsync(CancellationToken ct = default)
+            => FlushSessionAsync(ct);
+
+        public Task<UploadResult> FinalizeAsync(CancellationToken ct = default)
+            => FinalizeSessionAsync(ct);
+
+        public void RecordExecution(TestExecution e) => RecordTestExecution(e);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
@@ -74,6 +92,17 @@ public sealed class XpingContextOrchestratorTests
 
         var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock, configure);
         return (new TestOrchestrator(host), uploaderMock);
+    }
+
+    private static (StatsOrchestrator orchestrator, Mock<IXpingUploader> uploaderMock)
+        CreateStatsOrchestrator(Action<XpingConfiguration>? configure = null)
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock, configure);
+        return (new StatsOrchestrator(host), uploaderMock);
     }
 
     private static TestExecution BuildExecution(string name = "Test")
@@ -425,6 +454,176 @@ public sealed class XpingContextOrchestratorTests
         var orchestrator = new TestOrchestrator(host);
 
         // Act — if DisposeAsync throws, the test fails automatically
+        await orchestrator.DisposeAsync();
+    }
+
+    // ---------------------------------------------------------------------------
+    // TestSessionState progression
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FlushSessionAsync_FirstFlush_ShouldHaveInitialState()
+    {
+        // Arrange
+        TestSession? capturedSession = null;
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) => capturedSession = s)
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("StateTest"));
+
+        // Act — first flush
+        await orchestrator.FlushAsync();
+
+        // Assert
+        Assert.NotNull(capturedSession);
+        Assert.Equal(TestSessionState.Initial, capturedSession.SessionState);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FlushSessionAsync_SecondFlush_ShouldHavePartialState()
+    {
+        // Arrange
+        var capturedStates = new List<TestSessionState>();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) => capturedStates.Add(s.SessionState))
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+
+        // Act — two flushes with at least one execution each
+        orchestrator.RecordExecution(BuildExecution("First"));
+        await orchestrator.FlushAsync();
+
+        orchestrator.RecordExecution(BuildExecution("Second"));
+        await orchestrator.FlushAsync();
+
+        // Assert — first flush is Initial, second flush is Partial
+        Assert.Equal(2, capturedStates.Count);
+        Assert.Equal(TestSessionState.Initial, capturedStates[0]);
+        Assert.Equal(TestSessionState.Partial, capturedStates[1]);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_ShouldSendFinalizedSession()
+    {
+        // Arrange
+        var capturedStates = new List<TestSessionState>();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) => capturedStates.Add(s.SessionState))
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("FinalTest"));
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert — at least one upload must have Finalized state
+        Assert.Contains(TestSessionState.Finalized, capturedStates);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_ShouldIncludeQuickStatistics_InFinalizedSession()
+    {
+        // Arrange
+        TestSession? finalizedSession = null;
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) =>
+            {
+                if (s.SessionState == TestSessionState.Finalized)
+                    finalizedSession = s;
+            })
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new StatsOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("StatTest"));
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        Assert.NotNull(finalizedSession);
+        Assert.NotNull(finalizedSession.QuickStatistics);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task RecordTestExecution_ShouldFeedStatisticsAccumulator()
+    {
+        // Arrange — use StatsOrchestrator so base OnTestExecutionRecorded runs
+        // and feeds _statisticsAccumulator.
+        TestSession? finalizedSession = null;
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) =>
+            {
+                if (s.SessionState == TestSessionState.Finalized)
+                    finalizedSession = s;
+            })
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new StatsOrchestrator(host);
+
+        const int executionCount = 3;
+        for (int i = 0; i < executionCount; i++)
+            orchestrator.RecordExecution(BuildExecution($"StatTest{i}"));
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert — QuickStatistics.Total must match the number of recorded executions
+        Assert.NotNull(finalizedSession);
+        Assert.NotNull(finalizedSession.QuickStatistics);
+        Assert.Equal(executionCount, finalizedSession.QuickStatistics.Total);
+
         await orchestrator.DisposeAsync();
     }
 }

@@ -39,7 +39,7 @@ internal sealed class XpingUploader(
             throw new ArgumentNullException(nameof(testSession));
         }
 
-        if (testSession.Executions.Count == 0)
+        if (testSession.Executions.Count == 0 && testSession.SessionState != TestSessionState.Finalized)
         {
             return new UploadResult
             {
@@ -125,9 +125,9 @@ internal sealed class XpingUploader(
 
     private (HttpRequestMessage Request, long PayloadSizeBytes) CreateUploadRequest(TestSession testSession)
     {
-        if (testSession == null || testSession.Executions.Count == 0)
+        if (testSession == null)
         {
-            throw new InvalidOperationException("Executions cannot be null or empty");
+            throw new InvalidOperationException("TestSession cannot be null");
         }
 
         string sessionId = testSession.SessionId.ToString();

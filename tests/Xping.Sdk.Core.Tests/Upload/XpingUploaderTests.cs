@@ -98,6 +98,13 @@ public sealed class XpingUploaderTests
         return builder.Build();
     }
 
+    private static TestSession BuildFinalizedEmptySession()
+    {
+        return new TestSessionBuilder()
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
+    }
+
     // ---------------------------------------------------------------------------
     // UploadAsync — guard clauses
     // ---------------------------------------------------------------------------
@@ -124,6 +131,49 @@ public sealed class XpingUploaderTests
 
         Assert.True(result.Success);
         Assert.Equal(0, result.TotalRecordsCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_FinalizedEmptySession_ShouldUploadNotShortCircuit()
+    {
+        // A Finalized session with 0 executions must still reach the HTTP layer —
+        // it carries QuickStatistics and triggers the PR comment on the cloud side.
+        int callCount = 0;
+        using var handler = new FakeHttpMessageHandler(() =>
+        {
+            callCount++;
+            return JsonResponse(HttpStatusCode.OK, new { totalRecords = 0, receiptId = "final" });
+        });
+        var uploader = BuildUploader(handler);
+        var finalizedEmptySession = BuildFinalizedEmptySession();
+
+        var result = await uploader.UploadAsync(finalizedEmptySession);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_EmptySession_NonFinalized_ShouldShortCircuit()
+    {
+        // A Partial session with 0 executions should return success immediately
+        // without making any HTTP call.
+        int callCount = 0;
+        using var handler = new FakeHttpMessageHandler(() =>
+        {
+            callCount++;
+            return JsonResponse(HttpStatusCode.OK);
+        });
+        var uploader = BuildUploader(handler);
+        var partialEmptySession = new TestSessionBuilder()
+            .WithSessionState(TestSessionState.Partial)
+            .Build();
+
+        var result = await uploader.UploadAsync(partialEmptySession);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.TotalRecordsCount);
+        Assert.Equal(0, callCount);
     }
 
     // ---------------------------------------------------------------------------
