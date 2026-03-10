@@ -15,6 +15,7 @@ using Polly.CircuitBreaker;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Services.Upload.Internals;
 
@@ -125,12 +126,11 @@ internal sealed class XpingUploader(
 
     private (HttpRequestMessage Request, long PayloadSizeBytes) CreateUploadRequest(TestSession testSession)
     {
-        if (testSession == null)
-        {
-            throw new InvalidOperationException("TestSession cannot be null");
-        }
+        string sessionId = testSession
+            .RequireNotNull()
+            .SessionId
+            .ToString();
 
-        string sessionId = testSession.SessionId.ToString();
 #pragma warning disable CA2000 // Caller owns and disposes the request via using (request)
         HttpRequestMessage request = new(
             HttpMethod.Post,

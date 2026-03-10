@@ -193,6 +193,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             TestSession session = await BuildSessionAsync(isFinalizing: false, cancellationToken).ConfigureAwait(false);
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
+            // Only mark the first flush as done once data actually reaches the cloud.
+            // Empty short-circuited flushes (e.g. timer firing before any tests run) must
+            // not consume the Initial state so the first real upload is always marked Initial.
+            if (result.TotalRecordsCount > 0)
+                Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
+
             return result;
         }
         finally { _flushLock.Release(); }
@@ -338,7 +344,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         TestSessionState sessionState = isFinalizing
             ? TestSessionState.Finalized
-            : (Interlocked.Exchange(ref _firstFlushDone, 1) == 0
+            : (_firstFlushDone == 0
                 ? TestSessionState.Initial
                 : TestSessionState.Partial);
 

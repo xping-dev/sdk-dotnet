@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core.Models.PullRequests;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
 
@@ -31,6 +32,18 @@ public sealed class CompositePullRequestContextDetectorTests
         }
     }
 
+    /// <summary>Fake that always throws the supplied exception.</summary>
+    private sealed class ThrowingDetector : IPlatformPullRequestDetector
+    {
+        private readonly Exception _exception;
+        public ThrowingDetector(Exception exception) => _exception = exception;
+        public PullRequestContext? Detect() => throw _exception;
+    }
+
+    private static CompositePullRequestContextDetector Build(
+        IEnumerable<IPlatformPullRequestDetector> detectors)
+        => new(detectors, NullLogger<CompositePullRequestContextDetector>.Instance);
+
     // ---------------------------------------------------------------------------
     // Detect — empty detector list
     // ---------------------------------------------------------------------------
@@ -39,7 +52,7 @@ public sealed class CompositePullRequestContextDetectorTests
     public void Detect_WithNoDetectors_ReturnsNull()
     {
         // Arrange
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             Enumerable.Empty<IPlatformPullRequestDetector>());
 
         // Act
@@ -59,7 +72,7 @@ public sealed class CompositePullRequestContextDetectorTests
         // Arrange
         var d1 = new StubDetector(null);
         var d2 = new StubDetector(null);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { d1, d2 });
 
         // Act
@@ -80,7 +93,7 @@ public sealed class CompositePullRequestContextDetectorTests
         var context = new PullRequestContext();
         var first = new StubDetector(context);
         var second = new StubDetector(null);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { first, second });
 
         // Act
@@ -104,7 +117,7 @@ public sealed class CompositePullRequestContextDetectorTests
         var context = new PullRequestContext();
         var first = new StubDetector(null);
         var second = new StubDetector(context);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { first, second });
 
         // Act
@@ -127,7 +140,7 @@ public sealed class CompositePullRequestContextDetectorTests
         var first = new StubDetector(null);
         var second = new StubDetector(null);
         var third = new StubDetector(context);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { first, second, third });
 
         // Act
@@ -150,7 +163,7 @@ public sealed class CompositePullRequestContextDetectorTests
         // Arrange
         var context = new PullRequestContext();
         var detector = new StubDetector(context);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { detector });
 
         // Act
@@ -173,7 +186,7 @@ public sealed class CompositePullRequestContextDetectorTests
         var first = new StubDetector(context);
         var second = new StubDetector(new PullRequestContext());
         var third = new StubDetector(new PullRequestContext());
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { first, second, third });
 
         // Act
@@ -196,7 +209,7 @@ public sealed class CompositePullRequestContextDetectorTests
         var d1 = new StubDetector(null);
         var d2 = new StubDetector(null);
         var d3 = new StubDetector(null);
-        var composite = new CompositePullRequestContextDetector(
+        var composite = Build(
             new IPlatformPullRequestDetector[] { d1, d2, d3 });
 
         // Act
@@ -206,5 +219,54 @@ public sealed class CompositePullRequestContextDetectorTests
         Assert.Equal(1, d1.CallCount);
         Assert.Equal(1, d2.CallCount);
         Assert.Equal(1, d3.CallCount);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Detect — null detectors enumerable is treated as empty
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Detect_NullDetectors_ReturnsNull()
+    {
+        // Arrange
+        var composite = Build(null!);
+
+        // Act & Assert — must not throw
+        var result = composite.Detect();
+        Assert.Null(result);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Detect — throwing detector is skipped; subsequent detectors still run
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Detect_ThrowingDetector_IsSkipped_DoesNotThrow()
+    {
+        // Arrange
+        var throwing = new ThrowingDetector(new InvalidOperationException("boom"));
+        var composite = Build(new IPlatformPullRequestDetector[] { throwing });
+
+        // Act & Assert — exception is absorbed
+        var ex = Record.Exception(() => composite.Detect());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Detect_ThrowingFirstDetector_FallsBackToSecond()
+    {
+        // Arrange
+        var context = new PullRequestContext();
+        var throwing = new ThrowingDetector(new InvalidOperationException("boom"));
+        var fallback = new StubDetector(context);
+        var composite = Build(new IPlatformPullRequestDetector[] { throwing, fallback });
+
+        // Act
+        var result = composite.Detect();
+
+        // Assert — fallback detector result is returned
+        Assert.NotNull(result);
+        Assert.Same(context, result);
+        Assert.Equal(1, fallback.CallCount);
     }
 }
