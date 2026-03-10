@@ -13,10 +13,15 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.PullRequests;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Sdk.Core.Services.PullRequest;
+using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.Statistics;
+using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Services.Upload.Internals;
 using Xping.Sdk.Shared;
@@ -44,11 +49,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly ITestExecutionCollector _collector;
     private readonly IXpingUploader _uploader;
     private readonly IEnvironmentDetector _environmentDetector;
+    private readonly IPullRequestContextDetector _prDetector;
+    private readonly IRunningStatisticsAccumulator _statisticsAccumulator;
 #pragma warning restore CA2213
 
     private readonly bool _isHealthy;
+    private PullRequestContext? _pullRequestContext;
     private int _disposed;
     private int _finalized;
+    private int _firstFlushDone;
 
     /// <summary>Gets the unique identifier for this test session.</summary>
     public Guid SessionId { get; }
@@ -95,6 +104,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _collector = services.GetRequiredService<ITestExecutionCollector>();
             _uploader = services.GetRequiredService<IXpingUploader>();
             _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
+            _prDetector = services.GetRequiredService<IPullRequestContextDetector>();
+            _statisticsAccumulator = services.GetRequiredService<IRunningStatisticsAccumulator>();
             XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
             _isHealthy = configuration.Enabled;
@@ -102,6 +113,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
             {
+                if (configuration.EnablePullRequestDetection)
+                    _pullRequestContext = _prDetector.Detect();
+
                 if (configuration.FlushInterval > TimeSpan.Zero)
                 {
                     _flushTimer = new Timer(
@@ -141,6 +155,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _collector = new NoOpTestExecutionCollector();
             _uploader = new NoOpXpingUploader();
             _environmentDetector = new NoOpEnvironmentDetector();
+            _prDetector = new NoOpPullRequestContextDetector();
+            _statisticsAccumulator = new NoOpRunningStatisticsAccumulator();
         }
         catch (Exception ex)
         {
@@ -152,6 +168,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _collector = new NoOpTestExecutionCollector();
             _uploader = new NoOpXpingUploader();
             _environmentDetector = new NoOpEnvironmentDetector();
+            _prDetector = new NoOpPullRequestContextDetector();
+            _statisticsAccumulator = new NoOpRunningStatisticsAccumulator();
         }
     }
 
@@ -172,8 +190,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         try
         {
-            TestSession session = await BuildSessionAsync(cancellationToken).ConfigureAwait(false);
+            TestSession session = await BuildSessionAsync(isFinalizing: false, cancellationToken).ConfigureAwait(false);
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
+
+            // Only mark the first flush as done once data actually reaches the cloud.
+            // Empty short-circuited flushes (e.g. timer firing before any tests run) must
+            // not consume the Initial state so the first real upload is always marked Initial.
+            if (result.TotalRecordsCount > 0)
+                Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
 
             return result;
         }
@@ -217,6 +241,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         {
             uploadResult = await FlushSessionAsync(cancellationToken).ConfigureAwait(false);
         } while (uploadResult.TotalRecordsCount > 0 || !uploadResult.Success);
+
+        // Send the finalized session with QuickStatistics so the cloud can post the PR comment.
+        uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
@@ -286,6 +313,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <param name="execution">The test execution that was just recorded.</param>
     protected virtual void OnTestExecutionRecorded(TestExecution execution)
     {
+        _statisticsAccumulator.Record(execution);
     }
 
     /// <summary>
@@ -310,22 +338,45 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             });
     }
 
-    private async Task<TestSession> BuildSessionAsync(CancellationToken cancellationToken)
+    private async Task<TestSession> BuildSessionAsync(bool isFinalizing, CancellationToken cancellationToken)
     {
         _builder.Reset();
+
+        TestSessionState sessionState = isFinalizing
+            ? TestSessionState.Finalized
+            : (_firstFlushDone == 0
+                ? TestSessionState.Initial
+                : TestSessionState.Partial);
 
         EnvironmentInfo? environmentInfo = await CreateEnvironmentInfoAsync(cancellationToken).ConfigureAwait(false);
         IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
-        return _builder
+        _builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
             .WithEndedAt(DateTime.UtcNow)
             .WithEnvironmentInfo(environmentInfo)
             .AddExecutions(executions)
             .WithTotalTestsExpected(totalTestsExpected)
-            .Build();
+            .WithSessionState(sessionState)
+            .WithPullRequestContext(_pullRequestContext);
+
+        if (isFinalizing)
+            _builder.WithQuickStatistics(_statisticsAccumulator.GetSnapshot());
+
+        return _builder.Build();
+    }
+
+    private async Task<UploadResult> FinalFlushAsync(CancellationToken cancellationToken)
+    {
+        await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            TestSession session = await BuildSessionAsync(isFinalizing: true, cancellationToken).ConfigureAwait(false);
+            return await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
+        }
+        finally { _flushLock.Release(); }
     }
 
     private Task<UploadResult> UploadSessionAsync(

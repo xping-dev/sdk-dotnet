@@ -103,6 +103,12 @@ public sealed class XpingConfiguration
     public bool CollectNetworkMetrics { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to detect pull request context from CI/CD environment variables
+    /// and include it in session uploads to enable PR comment posting.
+    /// </summary>
+    public bool EnablePullRequestDetection { get; set; } = true;
+
+    /// <summary>
     /// Validates the configuration and returns a list of validation errors.
     /// </summary>
     /// <returns>A list of validation error messages, or an empty list if valid.</returns>

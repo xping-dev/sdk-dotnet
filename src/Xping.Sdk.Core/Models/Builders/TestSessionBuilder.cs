@@ -5,6 +5,8 @@
 
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Sdk.Core.Models.Statistics;
 
 namespace Xping.Sdk.Core.Models.Builders;
 
@@ -19,6 +21,9 @@ public sealed class TestSessionBuilder
     private EnvironmentInfo _environmentInfo;
     private readonly List<TestExecution> _executions;
     private int? _totalTestsExpected;
+    private TestSessionState _sessionState;
+    private PullRequestContext? _pullRequestContext;
+    private QuickStatistics? _quickStatistics;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestSessionBuilder"/> class.
@@ -29,6 +34,9 @@ public sealed class TestSessionBuilder
         _startedAt = DateTime.UtcNow;
         _environmentInfo = new EnvironmentInfo();
         _executions = [];
+        _sessionState = TestSessionState.Initial;
+        _pullRequestContext = null;
+        _quickStatistics = null;
     }
 
     /// <summary>
@@ -118,6 +126,41 @@ public sealed class TestSessionBuilder
     }
 
     /// <summary>
+    /// Sets the upload state of the session batch.
+    /// </summary>
+    /// <param name="state">The session state to set.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestSessionBuilder WithSessionState(TestSessionState state)
+    {
+        _sessionState = state;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the pull request context detected from the CI/CD environment.
+    /// Pass <c>null</c> when not running in a PR context.
+    /// </summary>
+    /// <param name="context">The pull request context, or <c>null</c>.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestSessionBuilder WithPullRequestContext(PullRequestContext? context)
+    {
+        _pullRequestContext = context;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the pre-calculated quick statistics for the finalized session.
+    /// Should only be set on the <see cref="TestSessionState.Finalized"/> upload.
+    /// </summary>
+    /// <param name="statistics">The accumulated statistics, or <c>null</c> for partial uploads.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestSessionBuilder WithQuickStatistics(QuickStatistics? statistics)
+    {
+        _quickStatistics = statistics;
+        return this;
+    }
+
+    /// <summary>
     /// Builds an immutable <see cref="TestSession"/> instance.
     /// </summary>
     /// <returns>A new immutable test session.</returns>
@@ -129,7 +172,10 @@ public sealed class TestSessionBuilder
             environmentInfo: _environmentInfo,
             executions: _executions.AsReadOnly(),
             endedAt: _endedAt,
-            totalTestsExpected: _totalTestsExpected);
+            totalTestsExpected: _totalTestsExpected,
+            sessionState: _sessionState,
+            pullRequestContext: _pullRequestContext,
+            quickStatistics: _quickStatistics);
     }
 
     /// <summary>
@@ -144,6 +190,9 @@ public sealed class TestSessionBuilder
         _environmentInfo = new EnvironmentInfo();
         _executions.Clear();
         _totalTestsExpected = null;
+        _sessionState = TestSessionState.Initial;
+        _pullRequestContext = null;
+        _quickStatistics = null;
         return this;
     }
 }

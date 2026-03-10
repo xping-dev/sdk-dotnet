@@ -82,6 +82,8 @@ internal static class ServiceHelper
                 });
                 services.AddXpingCollectors();
                 services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
                 services.AddSingleton(uploaderMock.Object);
                 services.AddSingleton(envDetectorMock.Object);
             })
@@ -104,8 +106,8 @@ internal static class ServiceHelper
         // Return success with ExecutionCount == session.Executions.Count so the
         // finalization drain loop terminates correctly.
         uploaderMock
-            .Setup(u => u.UploadAsync(It.IsAny<Models.TestSession>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Models.TestSession s, CancellationToken _) => new UploadResult
+            .Setup(u => u.UploadAsync(It.IsAny<Xping.Sdk.Core.Models.TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Xping.Sdk.Core.Models.TestSession s, CancellationToken _) => new UploadResult
             {
                 Success = true,
                 TotalRecordsCount = s.Executions.Count
@@ -141,6 +143,8 @@ internal static class ServiceHelper
 
                 services.AddXpingCollectors();
                 services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
                 services.AddSingleton(uploaderMock.Object);
                 services.AddSingleton(envDetectorMock.Object);
             })

@@ -27,6 +27,10 @@ using Xping.Sdk.Core.Services.Network;
 using Xping.Sdk.Core.Services.Network.Internals;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Serialization.Internals;
+using Xping.Sdk.Core.Services.PullRequest;
+using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.Statistics;
+using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Services.Upload.Internals;
 using Xping.Sdk.Shared;
@@ -103,6 +107,8 @@ public static class XpingServiceCollectionExtensions
             .AddXpingConfigurationFromConfiguration(configuration)
             .AddXpingEnvironment()
             .AddXpingCollectors()
+            .AddXpingPullRequest()
+            .AddXpingStatistics()
             .AddXpingUploader();
     }
 
@@ -129,6 +135,8 @@ public static class XpingServiceCollectionExtensions
             .AddXpingConfigurationFromInstance(config)
             .AddXpingEnvironment()
             .AddXpingCollectors()
+            .AddXpingPullRequest()
+            .AddXpingStatistics()
             .AddXpingUploader();
     }
 
@@ -154,6 +162,8 @@ public static class XpingServiceCollectionExtensions
             .AddXpingConfigurationFromInstance(configuration)
             .AddXpingEnvironment()
             .AddXpingCollectors()
+            .AddXpingPullRequest()
+            .AddXpingStatistics()
             .AddXpingUploader();
     }
 
@@ -305,6 +315,41 @@ public static class XpingServiceCollectionExtensions
         // Register a test identity generator for producing stable, deterministic test IDs
         services.AddSingleton<ITestIdentityGenerator, TestIdentityGenerator>();
 
+        return services;
+    }
+
+    #endregion
+
+    #region Feature: Pull Request Detection
+
+    /// <summary>
+    /// Adds pull request context detection services.
+    /// Registers the environment variable provider abstraction and the GitHub Actions detector.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddXpingPullRequest(this IServiceCollection services)
+    {
+        services.AddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
+        services.AddSingleton<IPlatformPullRequestDetector, GitHubPullRequestDetector>();
+        services.AddSingleton<IPullRequestContextDetector, CompositePullRequestContextDetector>();
+        return services;
+    }
+
+    #endregion
+
+    #region Feature: Statistics Accumulation
+
+    /// <summary>
+    /// Adds running statistics accumulation services.
+    /// The accumulator tracks test outcomes incrementally across all batch uploads and
+    /// produces a <c>QuickStatistics</c> snapshot on the finalized session upload.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddXpingStatistics(this IServiceCollection services)
+    {
+        services.AddSingleton<IRunningStatisticsAccumulator, RunningStatisticsAccumulator>();
         return services;
     }
 
@@ -477,6 +522,11 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("COLLECTNETWORKMETRICS") is { } collectMetrics
             && bool.TryParse(collectMetrics, out var cm))
             config.CollectNetworkMetrics = cm;
+
+        // PR Detection Options
+        if (GetEnv("ENABLEPULLREQUESTDETECTION") is { } enablePr
+            && bool.TryParse(enablePr, out var pr))
+            config.EnablePullRequestDetection = pr;
         return;
 
         string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
@@ -499,6 +549,7 @@ public static class XpingServiceCollectionExtensions
         target.SamplingRate = source.SamplingRate;
         target.UploadTimeout = source.UploadTimeout;
         target.CollectNetworkMetrics = source.CollectNetworkMetrics;
+        target.EnablePullRequestDetection = source.EnablePullRequestDetection;
     }
 
     #endregion

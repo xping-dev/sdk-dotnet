@@ -5,6 +5,9 @@
 
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Sdk.Core.Models.Statistics;
+using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Models;
 
@@ -24,6 +27,9 @@ public sealed class TestSession
         StartedAt = DateTime.UtcNow;
         EnvironmentInfo = new EnvironmentInfo();
         Executions = [];
+        SessionState = TestSessionState.Initial;
+        PullRequestContext = null;
+        QuickStatistics = null;
     }
 
     /// <summary>
@@ -35,16 +41,20 @@ public sealed class TestSession
         EnvironmentInfo environmentInfo,
         IReadOnlyCollection<TestExecution> executions,
         DateTime? endedAt,
-        int? totalTestsExpected)
+        int? totalTestsExpected,
+        TestSessionState sessionState,
+        PullRequestContext? pullRequestContext,
+        QuickStatistics? quickStatistics)
     {
-        if (sessionId == Guid.Empty)
-            throw new ArgumentException("Session ID cannot be empty.", nameof(sessionId));
-        SessionId = sessionId;
+        SessionId = sessionId.RequireCondition(arg => arg != Guid.Empty, "Session ID cannot be empty.");
         StartedAt = startedAt;
-        EnvironmentInfo = environmentInfo ?? throw new ArgumentNullException(nameof(environmentInfo));
-        Executions = executions ?? throw new ArgumentNullException(nameof(executions));
+        EnvironmentInfo = environmentInfo.RequireNotNull();
+        Executions = executions.RequireNotNull();
         EndedAt = endedAt;
         TotalTestsExpected = totalTestsExpected;
+        SessionState = sessionState;
+        PullRequestContext = pullRequestContext;
+        QuickStatistics = quickStatistics;
     }
 
     /// <summary>
@@ -78,4 +88,23 @@ public sealed class TestSession
     /// Useful for tracking session completion progress.
     /// </summary>
     public int? TotalTestsExpected { get; init; }
+
+    /// <summary>
+    /// Gets the upload state of this session batch.
+    /// The cloud uses this to decide whether to post a PR comment:
+    /// only <see cref="TestSessionState.Finalized"/> triggers a comment.
+    /// </summary>
+    public TestSessionState SessionState { get; init; }
+
+    /// <summary>
+    /// Gets the pull request or merge request context detected from the CI/CD environment,
+    /// or <c>null</c> when not running inside a PR build or when detection is disabled.
+    /// </summary>
+    public PullRequestContext? PullRequestContext { get; init; }
+
+    /// <summary>
+    /// Gets the pre-calculated test statistics accumulated across all batch uploads.
+    /// Only populated on the <c>TestSessionState.Finalized</c> upload; <c>null</c> otherwise.
+    /// </summary>
+    public QuickStatistics? QuickStatistics { get; init; }
 }

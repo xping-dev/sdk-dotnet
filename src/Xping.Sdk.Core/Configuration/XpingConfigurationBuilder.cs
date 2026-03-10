@@ -178,6 +178,19 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets whether to detect pull request context from CI/CD environment variables.
+    /// When enabled, the SDK reads GitHub Actions (and future GitLab/Azure DevOps) variables
+    /// and includes the pull request context in every session upload.
+    /// </summary>
+    /// <param name="enable">Whether to enable pull request detection.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public XpingConfigurationBuilder WithPullRequestDetection(bool enable)
+    {
+        _configuration.EnablePullRequestDetection = enable;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the configuration instance.
     /// </summary>
     /// <returns>The configured <see cref="XpingConfiguration"/> instance.</returns>
