@@ -35,10 +35,7 @@ internal sealed class XpingUploader(
         TestSession testSession,
         CancellationToken cancellationToken)
     {
-        if (testSession == null)
-        {
-            throw new ArgumentNullException(nameof(testSession));
-        }
+        testSession.RequireNotNull();
 
         if (testSession.Executions.Count == 0 && testSession.SessionState != TestSessionState.Finalized)
         {
@@ -64,7 +61,7 @@ internal sealed class XpingUploader(
             int executionsCount = testSession.Executions.Count;
             string requestUrl = _configuration.ApiEndpoint;
 
-            var (request, payloadSizeBytes) = CreateUploadRequest(testSession);
+            (HttpRequestMessage request, long payloadSizeBytes) = CreateUploadRequest(testSession);
             using (request)
             {
                 var sw = Stopwatch.StartNew();
