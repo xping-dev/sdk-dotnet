@@ -555,6 +555,49 @@ public sealed class XpingContextOrchestratorTests
     }
 
     [Fact]
+    public async Task FinalizeSessionAsync_WhenUploadFails_ExitsDrainLoopImmediately()
+    {
+        // Arrange
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+
+        // Non-finalized uploads always fail
+        uploaderMock
+            .Setup(u => u.UploadAsync(
+                It.Is<TestSession>(s => s.SessionState != TestSessionState.Finalized),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated failure" });
+
+        // Finalized upload (FinalFlushAsync) succeeds
+        uploaderMock
+            .Setup(u => u.UploadAsync(
+                It.Is<TestSession>(s => s.SessionState == TestSessionState.Finalized),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 0 });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("FailTest"));
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert — the drain loop must have called UploadAsync exactly once for the
+        // non-finalized session. A second call would mean the loop did not exit on failure,
+        // which is the bug this test guards against.
+        uploaderMock.Verify(
+            u => u.UploadAsync(
+                It.Is<TestSession>(s => s.SessionState != TestSessionState.Finalized),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
     public async Task FinalizeSessionAsync_ShouldIncludeQuickStatistics_InFinalizedSession()
     {
         // Arrange

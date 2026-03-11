@@ -232,7 +232,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         // Loop until the buffer is fully drained or an upload fails.
-        // Retries are handled by the Polly resilience pipeline inside XpingUploader;
+        // Retries are handled by the Polly resilience pipeline on the HttpClient
+        // (configured via AddResilienceHandler in XpingServiceCollectionExtensions);
         // if Polly exhausts its budget, we stop immediately rather than re-draining.
         UploadResult uploadResult;
         do
