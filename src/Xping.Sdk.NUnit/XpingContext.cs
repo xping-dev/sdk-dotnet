@@ -178,9 +178,16 @@ public class XpingContext : XpingContextOrchestrator
         QuickStatistics? stats = result.RequireNotNull().QuickStatistics;
         if (stats != null)
         {
+            var parts = new System.Text.StringBuilder();
+            parts.Append($"{stats.Passed} passed");
+            if (stats.Failed > 0)        parts.Append($", {stats.Failed} failed");
+            if (stats.Skipped > 0)       parts.Append($", {stats.Skipped} skipped");
+            if (stats.Inconclusive > 0)  parts.Append($", {stats.Inconclusive} inconclusive");
+            if (stats.NotExecuted > 0)   parts.Append($", {stats.NotExecuted} not executed");
+
             _logger.LogInformation(
-                "Total tests recorded: {Total} · {Passed} passed, {Failed} failed · {TotalDurationMs}ms total",
-                stats.Total, stats.Passed, stats.Failed, stats.TotalDurationMs);
+                "Total tests recorded: {Total} · {Outcomes} · {TotalDurationMs}ms total",
+                stats.Total, parts.ToString(), stats.TotalDurationMs);
         }
         else
         {

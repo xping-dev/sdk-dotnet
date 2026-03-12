@@ -70,6 +70,8 @@ public sealed class XpingContextOrchestratorTests
     {
         public StatsOrchestrator(IHost host) : base(host) { }
 
+        public Action<UploadResult>? OnFinalizedResult { get; set; }
+
         public Task<UploadResult> FlushAsync(CancellationToken ct = default)
             => FlushSessionAsync(ct);
 
@@ -77,6 +79,12 @@ public sealed class XpingContextOrchestratorTests
             => FinalizeSessionAsync(ct);
 
         public void RecordExecution(TestExecution e) => RecordTestExecution(e);
+
+        protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
+        {
+            OnFinalizedResult?.Invoke(result);
+            return base.OnSessionFinalizedAsync(result, cancellationToken);
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -627,6 +635,39 @@ public sealed class XpingContextOrchestratorTests
         // Assert
         Assert.NotNull(finalizedSession);
         Assert.NotNull(finalizedSession.QuickStatistics);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_ShouldPopulateQuickStatistics_OnUploadResult()
+    {
+        // Arrange — verifies that the UploadResult returned by FinalizeSessionAsync
+        // carries QuickStatistics so framework adapters can log the summary.
+        UploadResult? capturedResult = null;
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TestSession s, CancellationToken _) =>
+                new UploadResult { Success = true, TotalRecordsCount = s.Executions.Count });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new StatsOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("StatTest"));
+
+        // Capture the result returned by FinalizeSessionAsync via the hook
+        orchestrator.OnFinalizedResult = r => capturedResult = r;
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert — the returned UploadResult must carry QuickStatistics
+        Assert.NotNull(capturedResult);
+        Assert.NotNull(capturedResult.QuickStatistics);
 
         await orchestrator.DisposeAsync();
     }

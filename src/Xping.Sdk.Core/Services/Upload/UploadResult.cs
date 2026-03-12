@@ -44,7 +44,7 @@ public sealed class UploadResult
 
     /// <summary>
     /// Gets or sets the aggregated test statistics from the finalized session.
-    /// Populated only on the <see cref="Models.TestSessionState.Finalized"/> upload;
+    /// Populated only on the <see cref="Xping.Sdk.Core.Models.TestSessionState.Finalized"/> upload;
     /// <c>null</c> for intermediate flushes.
     /// </summary>
     public QuickStatistics? QuickStatistics { get; set; }
