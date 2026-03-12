@@ -194,8 +194,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
             // Only mark the first flush as done once data actually reaches the cloud.
-            // Empty short-circuited flushes (e.g. timer firing before any tests run) must
-            // not consume the Initial state so the first real upload is always marked Initial.
+            // Empty short-circuited flushes (e.g., timer firing before any tests run) must
+            // not consume the Initial state, so the first real upload is always marked Initial.
             if (result.TotalRecordsCount > 0)
                 Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
 
@@ -231,16 +231,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
-        // Loop until the buffer is fully drained. The sentinel for "nothing left to drain" is
-        // { Success = true, TotalRecordsCount = 0 }, which the uploader returns when Drain() gave
-        // it an empty session. A failed upload also returns TotalRecordsCount = 0, but Success =
-        // false — items were already dequeued, so we keep looping to drain remaining batches
-        // rather than silently abandoning them.
+        // Loop until the buffer is fully drained or an upload fails.
+        // Retries are handled by the Polly resilience pipeline on the HttpClient
+        // (configured via AddResilienceHandler in XpingServiceCollectionExtensions);
+        // if Polly exhausts its budget, we stop immediately rather than re-draining.
         UploadResult uploadResult;
         do
         {
             uploadResult = await FlushSessionAsync(cancellationToken).ConfigureAwait(false);
-        } while (uploadResult.TotalRecordsCount > 0 || !uploadResult.Success);
+        } while (uploadResult.TotalRecordsCount > 0 && uploadResult.Success);
 
         // Send the finalized session with QuickStatistics so the cloud can post the PR comment.
         uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
