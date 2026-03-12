@@ -10,6 +10,7 @@ using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
@@ -167,17 +168,25 @@ public class XpingContext : XpingContextOrchestrator
     /// <inheritdoc/>
     protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Finalizing session");
+        _logger.LogDebug("Finalizing session");
         return base.OnSessionFinalizingAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
     protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
     {
-        if (result == null) throw new ArgumentNullException(nameof(result));
+        QuickStatistics? stats = result.RequireNotNull().QuickStatistics;
+        if (stats != null)
+        {
+            _logger.LogInformation(
+                "Total tests recorded: {Total} · {Passed} passed, {Failed} failed · {TotalDurationMs}ms total",
+                stats.Total, stats.Passed, stats.Failed, stats.TotalDurationMs);
+        }
+        else
+        {
+            _logger.LogInformation("Session finalized.");
+        }
 
-        _logger.LogInformation(
-            "Session finalized. Total tests recorded: {TotalRecordsCount}", result.TotalRecordsCount);
         return base.OnSessionFinalizedAsync(result, cancellationToken);
     }
 

@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Models.Statistics;
+
 namespace Xping.Sdk.Core.Services.Upload;
 
 /// <summary>
@@ -39,4 +41,11 @@ public sealed class UploadResult
     /// Gets or sets the uncompressed payload size in bytes.
     /// </summary>
     public long PayloadSizeBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the aggregated test statistics from the finalized session.
+    /// Populated only on the <see cref="Models.TestSessionState.Finalized"/> upload;
+    /// <c>null</c> for intermediate flushes.
+    /// </summary>
+    public QuickStatistics? QuickStatistics { get; set; }
 }
