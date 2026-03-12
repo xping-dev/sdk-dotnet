@@ -10,6 +10,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
@@ -164,17 +165,32 @@ public class XpingContext : XpingContextOrchestrator
     /// <inheritdoc/>
     protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Finalizing session");
+        _logger.LogDebug("Finalizing session");
         return base.OnSessionFinalizingAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
     protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
     {
-        if (result == null) throw new ArgumentNullException(nameof(result));
+        QuickStatistics? stats = result.RequireNotNull().QuickStatistics;
+        if (stats != null)
+        {
+            var parts = new System.Text.StringBuilder();
+            parts.Append($"{stats.Passed} passed");
+            if (stats.Failed > 0)        parts.Append($", {stats.Failed} failed");
+            if (stats.Skipped > 0)       parts.Append($", {stats.Skipped} skipped");
+            if (stats.Inconclusive > 0)  parts.Append($", {stats.Inconclusive} inconclusive");
+            if (stats.NotExecuted > 0)   parts.Append($", {stats.NotExecuted} not executed");
 
-        _logger.LogInformation(
-            "Session finalized. Total tests recorded: {TotalRecordsCount}", result.TotalRecordsCount);
+            _logger.LogInformation(
+                "Total tests recorded: {Total} · {Outcomes} · {TotalDurationMs}ms total",
+                stats.Total, parts.ToString(), stats.TotalDurationMs);
+        }
+        else
+        {
+            _logger.LogInformation("Session finalized.");
+        }
+
         return base.OnSessionFinalizedAsync(result, cancellationToken);
     }
 

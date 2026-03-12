@@ -59,6 +59,7 @@ internal sealed class XpingUploader(
         try
         {
             int executionsCount = testSession.Executions.Count;
+            TestSessionState sessionState = testSession.SessionState;
             string requestUrl = _configuration.ApiEndpoint;
 
             (HttpRequestMessage request, long payloadSizeBytes) = CreateUploadRequest(testSession);
@@ -72,7 +73,7 @@ internal sealed class XpingUploader(
                 sw.Stop();
 
                 return await ProcessResponseAsync(
-                    response, executionsCount, requestUrl,
+                    response, executionsCount, sessionState, requestUrl,
                     sw.ElapsedMilliseconds, payloadSizeBytes).ConfigureAwait(false);
             }
         }
@@ -162,6 +163,7 @@ internal sealed class XpingUploader(
     private async Task<UploadResult> ProcessResponseAsync(
         HttpResponseMessage response,
         int executionCount,
+        TestSessionState sessionState,
         string requestUrl,
         long durationMs,
         long payloadSizeBytes)
@@ -179,12 +181,23 @@ internal sealed class XpingUploader(
                 ? receiptId.Substring(0, 8)
                 : receiptId ?? "n/a";
 
-            logger.LogInformation(
-                "Published {TotalRecords} tests in {DurationMs}ms ({PayloadKB:F1} KB) · receipt {ReceiptId}",
-                confirmedCount,
-                durationMs,
-                payloadSizeBytes / 1024.0,
-                shortReceipt);
+            if (sessionState == TestSessionState.Finalized)
+            {
+                logger.LogInformation(
+                    "Finalization receipt {ReceiptId} ({DurationMs}ms, {PayloadKB:F1} KB)",
+                    shortReceipt,
+                    durationMs,
+                    payloadSizeBytes / 1024.0);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Published {TotalRecords} tests in {DurationMs}ms ({PayloadKB:F1} KB) · receipt {ReceiptId}",
+                    confirmedCount,
+                    durationMs,
+                    payloadSizeBytes / 1024.0,
+                    shortReceipt);
+            }
 
             return new UploadResult
             {

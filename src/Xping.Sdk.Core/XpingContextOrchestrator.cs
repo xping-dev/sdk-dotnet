@@ -373,7 +373,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         try
         {
             TestSession session = await BuildSessionAsync(isFinalizing: true, cancellationToken).ConfigureAwait(false);
-            return await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
+            UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
+            result.QuickStatistics = session.QuickStatistics;
+            return result;
         }
         finally { _flushLock.Release(); }
     }
