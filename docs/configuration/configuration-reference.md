@@ -34,6 +34,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `SamplingRate` | double | `1.0` | `XPING_SAMPLINGRATE` | Percentage of tests tracked |
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
+| `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `LogLevel` | enum | `Info` | N/A | SDK diagnostic log level |
 | `Logger` | IXpingLogger | `null` | N/A | Custom logger implementation |
 
@@ -602,6 +603,44 @@ export XPING_COLLECTNETWORKMETRICS="false"
 
 ---
 
+### EnablePullRequestDetection
+
+**Type:** `bool`
+**Default:** `true`
+**Environment Variable:** `XPING_ENABLEPULLREQUESTDETECTION`
+
+Detect pull request context from CI/CD environment variables and include it in session uploads. When enabled, Xping reads PR metadata (PR number, branch, platform) from the CI environment to enable automatic PR comment posting with test results.
+
+**Supported platforms:**
+- GitHub Actions (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.)
+
+**When to disable:**
+- You don't use PR comment posting and want to skip the detection overhead
+- You're running in a non-PR build and want to suppress any PR context association
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "EnablePullRequestDetection": false
+  }
+}
+```
+
+```bash
+export XPING_ENABLEPULLREQUESTDETECTION="false"
+```
+
+```csharp
+var config = new XpingConfigurationBuilder()
+    .WithPullRequestDetection(false)
+    .Build();
+XpingContext.Initialize(config);
+```
+
+---
+
 ## Advanced Settings
 
 ### SamplingRate
@@ -748,7 +787,8 @@ XpingContext.Initialize(config);
     "RetryDelay": "00:00:02",
     "SamplingRate": 1.0,
     "UploadTimeout": "00:00:30",
-    "CollectNetworkMetrics": true
+    "CollectNetworkMetrics": true,
+    "EnablePullRequestDetection": true
   }
 }
 ```
