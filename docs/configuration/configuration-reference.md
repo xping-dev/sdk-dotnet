@@ -35,8 +35,6 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
-| `LogLevel` | enum | `Info` | N/A | SDK diagnostic log level |
-| `Logger` | IXpingLogger | `null` | N/A | Custom logger implementation |
 
 ---
 
@@ -643,6 +641,8 @@ XpingContext.Initialize(config);
 
 ## Advanced Settings
 
+> **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
+
 ### SamplingRate
 
 **Type:** `double`  
@@ -686,83 +686,6 @@ export XPING_SAMPLINGRATE="0.1"
 - 10% sampling: ~1,000 samples needed for 95% confidence
 - 50% sampling: ~384 samples needed for 95% confidence
 - 100% sampling: Complete data, no statistical uncertainty
-
----
-
-### LogLevel
-
-**Type:** `XpingLogLevel` enum  
-**Default:** `Info`  
-**Values:** `None`, `Error`, `Warning`, `Info`, `Debug`  
-**Environment Variable:** Not supported (programmatic only)
-
-Minimum severity level for SDK diagnostic logging. Controls verbosity of internal SDK operations.
-
-**Log levels:**
-- `None` - No logging output
-- `Error` - Only errors (authentication failures, network errors)
-- `Warning` - Errors + warnings (configuration issues, retry attempts)
-- `Info` - Errors + warnings + info (initialization, batch uploads, shutdown)
-- `Debug` - All messages including detailed diagnostics
-
-**Example:**
-
-```csharp
-var config = new XpingConfiguration
-{
-    LogLevel = XpingLogLevel.Debug
-};
-XpingContext.Initialize(config);
-```
-
-**Output destination:** By default, logs are written to `Console.WriteLine`. Set a custom `Logger` for different output.
-
----
-
-### Logger
-
-**Type:** `IXpingLogger`  
-**Default:** `null` (uses built-in console logger)  
-**Environment Variable:** Not supported (programmatic only)
-
-Custom logger implementation for SDK diagnostics. Allows integration with your application's logging framework.
-
-**Example with custom logger:**
-
-```csharp
-public class MyCustomLogger : IXpingLogger
-{
-    private readonly ILogger _logger;
-    
-    public MyCustomLogger(ILogger logger)
-    {
-        _logger = logger;
-    }
-    
-    public void Log(XpingLogLevel level, string message, Exception? exception = null)
-    {
-        var logLevel = MapToLogLevel(level);
-        _logger.Log(logLevel, exception, message);
-    }
-}
-
-// Configuration
-var config = new XpingConfiguration
-{
-    Logger = new MyCustomLogger(myLoggerInstance)
-};
-XpingContext.Initialize(config);
-```
-
-**Disable all logging:**
-
-```csharp
-var config = new XpingConfiguration
-{
-    Logger = XpingNullLogger.Instance
-};
-XpingContext.Initialize(config);
-```
 
 ---
 
