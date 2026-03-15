@@ -23,10 +23,10 @@ jobs:
     if: github.event_name == 'release' || github.event.inputs.release_type == 'nuget' || github.event.inputs.release_type == 'both'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
+    - uses: actions/checkout@v5
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 8.x
     
@@ -48,7 +48,7 @@ jobs:
     - name: Pack all SDK packages
       run: dotnet pack -c Release --no-build -p:Version=${{ steps.get_version.outputs.VERSION }} -o _build/nuget
     
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: nuget
         path: _build/nuget
@@ -60,11 +60,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.x
-      
-      - uses: actions/download-artifact@v4
+
+      - uses: actions/download-artifact@v8
         with:
           name: nuget
           path: _build/nuget
@@ -110,15 +110,15 @@ jobs:
       cancel-in-progress: false
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Dotnet Setup
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 8.x
     - run: dotnet tool update -g docfx
     - run: docfx ./docs/docfx.json  
     - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v4
       with:
         path: './docs/_site'
     - name: Deploy to GitHub Pages
