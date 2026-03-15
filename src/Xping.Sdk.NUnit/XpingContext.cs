@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -175,10 +176,12 @@ public class XpingContext : XpingContextOrchestrator
     /// <inheritdoc/>
     protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
     {
-        QuickStatistics? stats = result.RequireNotNull().QuickStatistics;
+        result = result.RequireNotNull();
+        QuickStatistics? stats = result.Success ? result.QuickStatistics : null;
+
         if (stats != null)
         {
-            var parts = new System.Text.StringBuilder();
+            var parts = new StringBuilder();
             parts.Append($"{stats.Passed} passed");
             if (stats.Failed > 0)        parts.Append($", {stats.Failed} failed");
             if (stats.Skipped > 0)       parts.Append($", {stats.Skipped} skipped");
