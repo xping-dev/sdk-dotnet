@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
@@ -58,6 +59,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
+
+    // Fingerprint → first-seen display name. Used to detect duplicate [XpingFingerprint] values
+    // across test methods within a single session.
+    private readonly ConcurrentDictionary<string, string> _seenFingerprints = new();
 
     /// <summary>Gets the unique identifier for this test session.</summary>
     public Guid SessionId { get; }
@@ -213,6 +218,27 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     {
         if (execution == null)
             throw new ArgumentNullException(nameof(execution));
+
+        // Warn when two distinct test methods report the same fingerprint in a single session.
+        // Retry attempts of the same test share both fingerprint and display name, so the
+        // display-name equality check naturally excludes them from producing false warnings.
+        string fingerprint = execution.Identity.TestFingerprint;
+        string displayName = execution.Identity.DisplayName;
+
+        if (!_seenFingerprints.TryAdd(fingerprint, displayName))
+        {
+            string existingName = _seenFingerprints[fingerprint];
+
+            if (!string.Equals(existingName, displayName, StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "Duplicate test fingerprint detected: '{Fingerprint}'. " +
+                    "First seen on '{FirstTest}', now reported for '{CurrentTest}'. " +
+                    "On the Xping platform, results may overwrite each other. " +
+                    "Rename one [XpingFingerprint] attribute value to make them unique.",
+                    fingerprint, existingName, displayName);
+            }
+        }
 
         _collector.RecordTest(execution);
         OnTestExecutionRecorded(execution);

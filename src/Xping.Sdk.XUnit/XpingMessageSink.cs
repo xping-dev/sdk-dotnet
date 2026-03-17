@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
@@ -14,6 +15,7 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Shared;
+using Xping.Sdk.Core.Attributes;
 
 namespace Xping.Sdk.XUnit;
 
@@ -240,16 +242,16 @@ public sealed class XpingMessageSink(
         string? assemblyName = testClass.Class.Assembly.Name;
         object[]? parameters = testCase.TestMethodArguments;
         string? displayName = test.DisplayName;
-        string? sourceFile = testCase.SourceInformation?.FileName;
-        int? sourceLine = testCase.SourceInformation?.LineNumber;
+
+        // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
+        string? pinnedFingerprint = ReadPinnedFingerprint(testMethod.Method);
 
         TestIdentity identity = _identityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
             displayName,
-            sourceFile,
-            sourceLine);
+            testFingerprint: pinnedFingerprint);
 
         // Extract test metadata
         TestMetadata metadata = ExtractMetadata(test, output);
@@ -375,6 +377,50 @@ public sealed class XpingMessageSink(
     private static string GetTestKey(ITest test)
     {
         return test.TestCase.UniqueID ?? test.DisplayName;
+    }
+
+    /// <summary>
+    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
+    /// Returns null when the attribute is absent (SHA256 will be computed instead).
+    /// </summary>
+    private static string? ReadPinnedFingerprint(IMethodInfo method)
+    {
+        MethodInfo? methodInfo = ResolveMethodInfo(method);
+        if (methodInfo == null)
+        {
+            return null;
+        }
+
+        return methodInfo.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
+    }
+
+    /// <summary>
+    /// Resolves an xUnit <see cref="IMethodInfo"/> to a BCL <see cref="MethodInfo"/> by scanning
+    /// loaded assemblies. Mirrors the pattern used in XUnitRetryDetector.
+    /// </summary>
+    private static MethodInfo? ResolveMethodInfo(IMethodInfo method)
+    {
+        try
+        {
+            string? typeName = method.Type.Name;
+            Type? type = Type.GetType(typeName)
+                ?? AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a =>
+                    {
+                        try { return a.GetTypes(); }
+                        catch { return Array.Empty<Type>(); }
+                    })
+                    .FirstOrDefault(t => t.FullName == typeName);
+
+            return type?.GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.Static)
+                .FirstOrDefault(m => m.Name == method.Name);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private sealed class TestExecutionData

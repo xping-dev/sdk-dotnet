@@ -281,6 +281,33 @@ public class UserServiceTests
 }
 ```
 
+### Pinning a Stable Test Fingerprint
+
+By default, Xping identifies each test by a SHA256 hash of its fully qualified name. Renaming a method, class, or namespace causes the platform to treat it as a brand-new test, losing all historical trend data.
+
+`XpingFingerprintAttribute` lets you pin a stable identifier to a test method. When present, Xping uses that value instead of computing a hash. The fingerprint value must use only URL-safe characters (`[a-zA-Z0-9_-]`):
+
+```csharp
+using Xping.Sdk.Core.Attributes;
+
+[XpingFingerprint("checkout-happy-path-v1")]
+[TestMethod]
+public void PlaceOrder_WithValidCart_Succeeds() { ... }
+```
+
+For parameterized tests, the pinned value is automatically combined with a value of the row parameters, keeping each variant distinct on the platform:
+
+```csharp
+[XpingFingerprint("login-v1")]
+[DataTestMethod]
+[DataRow("admin", true)]
+[DataRow("user", false)]
+public void Login_ShouldSucceed(string role, bool expected) { ... }
+// Automatically produces: "login-v1:admin,true" and "login-v1:user,false"
+```
+
+> **Important:** Once you publish a run with a pinned fingerprint, treat that value as permanent. Renaming the method is safe—that is the whole point—but changing the attribute value itself severs the link to all historical data for that test.
+
 ---
 
 ## Step 5: Run Your Tests

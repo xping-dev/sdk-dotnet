@@ -5,7 +5,9 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -115,9 +117,16 @@ public abstract class XpingTestBase
         // Format test name with parameters to match NUnit and xUnit display format
         var testName = FormatTestNameWithParameters(context.TestName ?? "Unknown", parameters);
 
+        // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
+        string? pinnedFingerprint = ReadPinnedFingerprint(context);
+
         // Generate stable test identity
         TestIdentity identity = services.IdentityGenerator.Generate(
-            fullyQualifiedName, assemblyName, parameters, testName);
+            fullyQualifiedName,
+            assemblyName,
+            parameters,
+            testName,
+            testFingerprint: pinnedFingerprint);
 
         var errorMessage = GetErrorMessage(context) ?? string.Empty;
         var stackTrace = GetStackTrace(context) ?? string.Empty;
@@ -313,5 +322,69 @@ public abstract class XpingTestBase
             Guid g => g.ToString("D"),
             _ => parameter.ToString() ?? "null"
         };
+    }
+
+    /// <summary>
+    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
+    /// Returns null when the attribute is absent (SHA256 will be computed instead).
+    /// </summary>
+    private static string? ReadPinnedFingerprint(TestContext context)
+    {
+        MethodInfo? methodInfo = FindTestMethodForContext(context);
+        if (methodInfo == null)
+        {
+            return null;
+        }
+
+        return methodInfo.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
+    }
+
+    /// <summary>
+    /// Locates the BCL <see cref="MethodInfo"/> for the currently running MSTest method by
+    /// resolving the type via its fully qualified class name and stripping parameterized suffixes
+    /// from the test name. Mirrors the pattern used in MSTestRetryDetector.
+    /// </summary>
+    private static MethodInfo? FindTestMethodForContext(TestContext context)
+    {
+        try
+        {
+            var fullClassName = context.FullyQualifiedTestClassName;
+            if (string.IsNullOrEmpty(fullClassName))
+            {
+                return null;
+            }
+
+            Type? type = Type.GetType(fullClassName)
+                ?? AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a =>
+                    {
+                        try { return a.GetTypes(); }
+                        catch { return Array.Empty<Type>(); }
+                    })
+                    .FirstOrDefault(t => t.FullName == fullClassName);
+
+            if (type == null)
+            {
+                return null;
+            }
+
+            var methodName = context.TestName ?? string.Empty;
+
+            // Strip parameterized suffix: "MethodName (arg1, arg2)" → "MethodName"
+            var parenIdx = methodName.IndexOf('(');
+            if (parenIdx > 0)
+            {
+                methodName = methodName.Substring(0, parenIdx).Trim();
+            }
+
+            return type.GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.Static)
+                .FirstOrDefault(m => m.Name == methodName);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
