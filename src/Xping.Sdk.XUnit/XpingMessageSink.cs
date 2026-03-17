@@ -412,10 +412,10 @@ public sealed class XpingMessageSink(
                     })
                     .FirstOrDefault(t => t.FullName == typeName);
 
-            return type?.GetMethod(
-                method.Name,
-                BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.Instance | BindingFlags.Static);
+            return type?.GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.Static)
+                .FirstOrDefault(m => m.Name == method.Name);
         }
         catch
         {

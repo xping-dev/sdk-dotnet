@@ -37,11 +37,12 @@ public interface ITestIdentityGenerator
     /// <param name="sourceFile">Optional source file path.</param>
     /// <param name="sourceLineNumber">Optional source line number.</param>
     /// <param name="testFingerprint">
-    /// Optional pre-computed fingerprint string supplied by
-    /// <see cref="XpingFingerprintAttribute"/>.
-    /// When non-null and non-whitespace, this value is used directly as
-    /// <see cref="TestIdentity.TestFingerprint"/> and the SHA256
-    /// computation is skipped. When null or whitespace, the SHA256-based algorithm runs as normal.
+    /// Optional pinned fingerprint supplied by <see cref="XpingFingerprintAttribute"/>.
+    /// When non-null and non-whitespace this value takes priority over the SHA256 computation.
+    /// For non-parameterised tests the value is used as-is.
+    /// For parameterised tests the parameter value is appended with a colon separator:
+    /// <c>"{pin}:{parameterValue}"</c> (e.g. <c>"login-v1:admin,true"</c>).
+    /// When null or whitespace the SHA256-based algorithm runs as normal.
     /// </param>
     /// <returns>A complete TestIdentity with stable TestFingerprint hash.</returns>
     /// <exception cref="ArgumentNullException">Thrown when fullyQualifiedName or assembly is null.</exception>

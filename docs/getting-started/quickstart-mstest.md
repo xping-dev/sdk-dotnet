@@ -303,7 +303,7 @@ For parameterized tests, the pinned value is automatically combined with a value
 [DataRow("admin", true)]
 [DataRow("user", false)]
 public void Login_ShouldSucceed(string role, bool expected) { ... }
-// Automatically produces: "login-v1:admin,True" and "login-v1:user,False"
+// Automatically produces: "login-v1:admin,true" and "login-v1:user,false"
 ```
 
 > **Important:** Once you publish a run with a pinned fingerprint, treat that value as permanent. Renaming the method is safe—that is the whole point—but changing the attribute value itself severs the link to all historical data for that test.

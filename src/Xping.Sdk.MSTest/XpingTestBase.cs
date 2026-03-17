@@ -377,10 +377,10 @@ public abstract class XpingTestBase
                 methodName = methodName.Substring(0, parenIdx).Trim();
             }
 
-            return type.GetMethod(
-                methodName,
-                BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.Instance | BindingFlags.Static);
+            return type.GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.Static)
+                .FirstOrDefault(m => m.Name == methodName);
         }
         catch
         {
