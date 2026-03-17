@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Core.Services.Identity;
@@ -35,6 +36,13 @@ public interface ITestIdentityGenerator
     /// <param name="displayName">Optional display name for human readability.</param>
     /// <param name="sourceFile">Optional source file path.</param>
     /// <param name="sourceLineNumber">Optional source line number.</param>
+    /// <param name="testFingerprint">
+    /// Optional pre-computed fingerprint string supplied by
+    /// <see cref="XpingFingerprintAttribute"/>.
+    /// When non-null and non-whitespace, this value is used directly as
+    /// <see cref="TestIdentity.TestFingerprint"/> and the SHA256
+    /// computation is skipped. When null or whitespace, the SHA256-based algorithm runs as normal.
+    /// </param>
     /// <returns>A complete TestIdentity with stable TestFingerprint hash.</returns>
     /// <exception cref="ArgumentNullException">Thrown when fullyQualifiedName or assembly is null.</exception>
     /// <exception cref="ArgumentException">Thrown when fullyQualifiedName is an invalid format.</exception>
@@ -44,7 +52,8 @@ public interface ITestIdentityGenerator
         object[]? parameters = null,
         string? displayName = null,
         string? sourceFile = null,
-        int? sourceLineNumber = null);
+        int? sourceLineNumber = null,
+        string? testFingerprint = null);
 
     /// <summary>
     /// Generates a stable, deterministic test identifier from a fully qualified test name

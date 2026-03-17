@@ -4,6 +4,7 @@
  */
 
 using Microsoft.Extensions.DependencyInjection;
+using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Tests.Helpers;
@@ -183,6 +184,220 @@ public sealed class TestIdentityGeneratorTests
         Assert.Equal("Company.Product.Tests.Feature", identity.Namespace);
         Assert.Equal("MyTestClass", identity.ClassName);
         Assert.Equal("ShouldDoSomething", identity.MethodName);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Generate with pinned testFingerprint
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Generate_WhenTestFingerprintProvided_UsesPinnedValueDirectly()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "my-stable-id";
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: pinnedValue);
+
+        // Assert
+        Assert.Equal(pinnedValue, identity.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintProvided_DoesNotMatchSHA256OfFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var withPin = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: "custom-id").TestFingerprint;
+        var withoutPin = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
+
+        // Assert — the pinned value is not the same as the computed SHA256
+        Assert.NotEqual(withPin, withoutPin);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsNull_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: null).TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsEmpty_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: string.Empty).TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsWhitespace_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: "   ").TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithParameters_ProducesUniqueValuesPerVariant()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "fixed-v1";
+
+        // Act
+        var params1 = generator.Generate(ValidFqn, ValidAssembly, parameters: [1, 2], testFingerprint: pinnedValue).TestFingerprint;
+        var params2 = generator.Generate(ValidFqn, ValidAssembly, parameters: [3, 4], testFingerprint: pinnedValue).TestFingerprint;
+
+        // Assert — different parameter sets produce different fingerprints even with the same pin
+        Assert.NotEqual(params1, params2);
+        Assert.StartsWith(pinnedValue + ":", params1, StringComparison.Ordinal);
+        Assert.StartsWith(pinnedValue + ":", params2, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_IsImmutableAcrossNameChanges()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "fixed-v1";
+
+        // Act
+        var identity1 = generator.Generate("A.B.OldTest", ValidAssembly, testFingerprint: pinnedValue).TestFingerprint;
+        var identity2 = generator.Generate("X.Y.NewTest", ValidAssembly, testFingerprint: pinnedValue).TestFingerprint;
+
+        // Assert
+        Assert.Equal(pinnedValue, identity1);
+        Assert.Equal(pinnedValue, identity2);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_DoesNotAffectOtherIdentityFields()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        var parameters = new object[] { 42 };
+
+        // Act
+        var identity = generator.Generate(
+            ValidFqn, ValidAssembly,
+            parameters: parameters,
+            displayName: "Custom Name",
+            sourceFile: "file.cs",
+            sourceLineNumber: 10,
+            testFingerprint: "my-pin");
+
+        // Assert — TestFingerprint = pin + ":" + paramHash; everything else is normal
+        Assert.Equal("my-pin:42", identity.TestFingerprint);
+        Assert.Equal(ValidFqn, identity.FullyQualifiedName);
+        Assert.Equal(ValidAssembly, identity.Assembly);
+        Assert.Equal("MyNamespace", identity.Namespace);
+        Assert.Equal("MyClass", identity.ClassName);
+        Assert.Equal("MyTest", identity.MethodName);
+        Assert.Equal("Custom Name", identity.DisplayName);
+        Assert.NotNull(identity.ParameterHash);
+        Assert.Equal("file.cs", identity.SourceFile);
+        Assert.Equal(10, identity.SourceLineNumber);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprintAcceptsArbitraryFormat()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act + Assert — UUID, slug, and 64-char SHA256-like hex are all accepted as-is
+        var uuid = "c4e12f97-1a23-4b56-8c9d-0e1f23456789";
+        Assert.Equal(uuid,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: uuid).TestFingerprint);
+
+        var slug = "login-happy-path-v1";
+        Assert.Equal(slug,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: slug).TestFingerprint);
+
+        var hexLike = new string('a', 64);
+        Assert.Equal(hexLike,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: hexLike).TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithParameters_AppendsSeparatorAndParamHash()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pin = "login-v1";
+        var parameters = new object[] { "admin", true };
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, parameters: parameters, testFingerprint: pin);
+
+        // Assert — fingerprint is "{pin}:{paramHash}", colon separator is unambiguous
+        var expectedParamHash = generator.GenerateParameterHash(parameters);
+        Assert.Equal($"{pin}:{expectedParamHash}", identity.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithNoParameters_UsesLiteralValue()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pin = "login-v1";
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: pin);
+
+        // Assert — no parameters means the pinned value is used as-is, no suffix appended
+        Assert.Equal(pin, identity.TestFingerprint);
+    }
+
+    // ---------------------------------------------------------------------------
+    // XpingFingerprintAttribute slug validation
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("login-happy-path-v1")]
+    [InlineData("checkout_smoke_42")]
+    [InlineData("abc123")]
+    [InlineData("A-B_C")]
+    public void XpingFingerprintAttribute_WithValidSlug_DoesNotThrow(string fingerprint)
+    {
+        // Act & Assert — no exception
+        var attr = new XpingFingerprintAttribute(fingerprint);
+        Assert.Equal(fingerprint, attr.Fingerprint);
+    }
+
+    [Theory]
+    [InlineData("login:v1")]          // colon — the reserved separator
+    [InlineData("test.method")]       // period
+    [InlineData("has space")]         // space
+    [InlineData("uuid@host")]         // at-sign
+    [InlineData("path/segment")]      // slash
+    public void XpingFingerprintAttribute_WithInvalidSlugCharacters_ThrowsArgumentException(string fingerprint)
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => new XpingFingerprintAttribute(fingerprint));
     }
 
     // ---------------------------------------------------------------------------

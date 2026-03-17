@@ -4,8 +4,10 @@
  */
 
 using System.Diagnostics;
+using System.Reflection;
 using NUnit.Framework;
 using NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -159,8 +161,15 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         var displayName = test.Name;
 
+        // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
+        string? pinnedFingerprint = ReadPinnedFingerprint(test.Method?.MethodInfo);
+
         TestIdentity identity = services.IdentityGenerator.Generate(
-            fullyQualifiedName, assemblyName, parameters, displayName);
+            fullyQualifiedName,
+            assemblyName,
+            parameters,
+            displayName,
+            testFingerprint: pinnedFingerprint);
 
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
@@ -331,5 +340,19 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         TestMetadata metadata = builder.Build();
         return metadata;
+    }
+
+    /// <summary>
+    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
+    /// Returns null when the attribute is absent (SHA256 will be computed instead).
+    /// </summary>
+    private static string? ReadPinnedFingerprint(MethodInfo? methodInfo)
+    {
+        if (methodInfo == null)
+        {
+            return null;
+        }
+
+        return methodInfo.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
     }
 }

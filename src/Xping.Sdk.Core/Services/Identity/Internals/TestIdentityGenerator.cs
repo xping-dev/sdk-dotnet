@@ -23,7 +23,8 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
         object[]? parameters,
         string? displayName,
         string? sourceFile,
-        int? sourceLineNumber)
+        int? sourceLineNumber,
+        string? testFingerprint)
     {
         if (string.IsNullOrWhiteSpace(fullyQualifiedName))
         {
@@ -43,11 +44,18 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
             ? GenerateParameterHash(parameters)
             : null;
 
-        // Generate stable test ID
-        string testFingerprint = GenerateTestFingerprint(fullyQualifiedName, parameterHash);
+        // Use the pinned fingerprint if supplied via XpingFingerprintAttribute;
+        // otherwise compute the stable SHA256 from FQN + params.
+        // For parameterized tests with a pinned value, append the parameter hash with a ':'
+        // separator to guarantee each variant has a unique fingerprint. The ':' character is
+        // not permitted in user-provided fingerprints (validated by XpingFingerprintAttribute),
+        // so this separator is unambiguous and cannot collide with user values.
+        string effectiveFingerprint = !string.IsNullOrWhiteSpace(testFingerprint)
+            ? (parameterHash != null ? $"{testFingerprint}:{parameterHash}" : testFingerprint!)
+            : GenerateTestFingerprint(fullyQualifiedName, parameterHash);
 
         TestIdentity testIdentity = _builder.Reset()
-            .WithTestFingerprint(testFingerprint)
+            .WithTestFingerprint(effectiveFingerprint)
             .WithFullyQualifiedName(fullyQualifiedName)
             .WithAssembly(assembly)
             .WithNamespace(@namespace)
