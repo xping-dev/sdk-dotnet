@@ -29,7 +29,8 @@ namespace Xping.Sdk.Core.Attributes;
 /// </para>
 /// <para>
 /// <strong>Format constraint:</strong> the fingerprint must be a URL-safe slug containing
-/// only alphanumeric characters, hyphens (<c>-</c>), or underscores (<c>_</c>).
+/// only alphanumeric characters, hyphens (<c>-</c>), or underscores (<c>_</c>),
+/// and must not exceed 100 characters.
 /// For example: <c>"login-happy-path-v1"</c> or <c>"checkout_smoke_42"</c>.
 /// </para>
 /// <para>
@@ -65,6 +66,7 @@ namespace Xping.Sdk.Core.Attributes;
     Inherited = false)]
 public sealed class XpingFingerprintAttribute : Attribute
 {
+    private const int MaxLength = 100;
     private static readonly Regex _validPattern =
         new(@"^[a-zA-Z0-9_-]+$", RegexOptions.Compiled);
 
@@ -78,17 +80,26 @@ public sealed class XpingFingerprintAttribute : Attribute
     /// </summary>
     /// <param name="fingerprint">
     /// A URL-safe slug that uniquely and stably identifies this test. Must contain only
-    /// alphanumeric characters, hyphens (<c>-</c>), or underscores (<c>_</c>).
+    /// alphanumeric characters, hyphens (<c>-</c>), or underscores (<c>_</c>), and must
+    /// not exceed 100 characters.
     /// Choose a value that is meaningful to your team and that you will not change
     /// once tests have been run (e.g., <c>"login-happy-path-v1"</c>).
     /// </param>
     /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="fingerprint"/> is null, empty, whitespace, or contains
-    /// characters outside <c>[a-zA-Z0-9_-]</c>.
+    /// Thrown when <paramref name="fingerprint"/> is null, empty, whitespace, exceeds 100
+    /// characters, or contains characters outside <c>[a-zA-Z0-9_-]</c>.
     /// </exception>
     public XpingFingerprintAttribute(string fingerprint)
     {
         Fingerprint = fingerprint.RequireNotNullOrWhiteSpace();
+
+        if (Fingerprint.Length > MaxLength)
+        {
+            throw new ArgumentException(
+                $"Fingerprint must not exceed {MaxLength} characters. " +
+                $"Supplied value has {Fingerprint.Length} characters.",
+                nameof(fingerprint));
+        }
 
         if (!_validPattern.IsMatch(Fingerprint))
         {

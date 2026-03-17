@@ -400,6 +400,38 @@ public sealed class TestIdentityGeneratorTests
         Assert.Throws<ArgumentException>(() => new XpingFingerprintAttribute(fingerprint));
     }
 
+    [Fact]
+    public void XpingFingerprintAttribute_ExactlyAtLengthLimit_DoesNotThrow()
+    {
+        // Arrange — 100 'a' characters (exactly at the limit)
+        var fingerprint = new string('a', 100);
+
+        // Act & Assert — no exception
+        var attr = new XpingFingerprintAttribute(fingerprint);
+        Assert.Equal(fingerprint, attr.Fingerprint);
+    }
+
+    [Fact]
+    public void XpingFingerprintAttribute_OneCharacterOverLimit_ThrowsArgumentException()
+    {
+        // Arrange — 101 'a' characters (one over the limit)
+        var fingerprint = new string('a', 101);
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => new XpingFingerprintAttribute(fingerprint));
+    }
+
+    [Fact]
+    public void XpingFingerprintAttribute_ShortValue_DoesNotThrow()
+    {
+        // Arrange
+        const string fingerprint = "short";
+
+        // Act & Assert — no exception
+        var attr = new XpingFingerprintAttribute(fingerprint);
+        Assert.Equal(fingerprint, attr.Fingerprint);
+    }
+
     // ---------------------------------------------------------------------------
     // GenerateTestFingerprint
     // ---------------------------------------------------------------------------
