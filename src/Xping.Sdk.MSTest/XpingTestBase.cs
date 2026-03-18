@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core.Attributes;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -54,6 +55,10 @@ public abstract class XpingTestBase
         try
         {
             _services ??= XpingContext.GetBaseServices();
+        }
+        catch (XpingConfigurationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

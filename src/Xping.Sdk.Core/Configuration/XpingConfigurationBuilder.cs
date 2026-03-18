@@ -191,6 +191,20 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets whether strict mode is enabled.
+    /// When <see langword="true"/>, configuration errors throw a
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> and stop test execution.
+    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
+    /// </summary>
+    /// <param name="strictMode">Whether to enable strict mode.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public XpingConfigurationBuilder WithStrictMode(bool strictMode)
+    {
+        _configuration.StrictMode = strictMode;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the configuration instance.
     /// </summary>
     /// <returns>The configured <see cref="XpingConfiguration"/> instance.</returns>

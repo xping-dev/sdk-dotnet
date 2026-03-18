@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
@@ -152,6 +153,13 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (OptionsValidationException ex)
         {
+            string message = $"Xping configuration invalid: {string.Join(", ", ex.Failures)}";
+
+            if (IsStrictModeEnabled())
+            {
+                throw new XpingConfigurationException(message, ex);
+            }
+
             _logger.LogError(
                 "Configuration validation failed: {Errors}. SDK disabled - tests will run without observability tracking. ",
                 string.Join("; ", ex.Failures));
@@ -165,6 +173,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            if (IsStrictModeEnabled())
+            {
+                string message = $"Xping configuration invalid: {ex.Message}";
+                throw new XpingConfigurationException(message, ex);
+            }
+
             _logger.LogError(
                 "Failed to initialize Xping SDK: {Message}. SDK disabled - tests will run without observability tracking.",
                 ex.Message);
@@ -176,6 +190,17 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _prDetector = new NoOpPullRequestContextDetector();
             _statisticsAccumulator = new NoOpRunningStatisticsAccumulator();
         }
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when strict mode is enabled via the <c>XPING_STRICT_MODE</c>
+    /// environment variable. This is checked at initialization time when configuration validation
+    /// has already failed and the options cannot be read from the DI container.
+    /// </summary>
+    private static bool IsStrictModeEnabled()
+    {
+        string? value = System.Environment.GetEnvironmentVariable("XPING_STRICT_MODE");
+        return bool.TryParse(value, out bool result) && result;
     }
 
     /// <summary>

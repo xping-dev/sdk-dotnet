@@ -33,6 +33,7 @@ using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Services.Upload.Internals;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Extensions;
@@ -153,7 +154,12 @@ public static class XpingServiceCollectionExtensions
         var errors = configuration.Validate();
         if (errors.Count > 0)
         {
-            throw new InvalidOperationException($"Invalid configuration: {string.Join(", ", errors)}");
+            string message = $"Xping configuration invalid: {string.Join(", ", errors)}";
+
+            if (configuration.StrictMode)
+                throw new XpingConfigurationException(message);
+
+            throw new InvalidOperationException(message);
         }
 
         return services
@@ -527,6 +533,11 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("ENABLEPULLREQUESTDETECTION") is { } enablePr
             && bool.TryParse(enablePr, out var pr))
             config.EnablePullRequestDetection = pr;
+
+        // Strict Mode Options
+        if (GetEnv("STRICT_MODE") is { } strictMode
+            && bool.TryParse(strictMode, out var sm))
+            config.StrictMode = sm;
         return;
 
         string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
@@ -550,6 +561,7 @@ public static class XpingServiceCollectionExtensions
         target.UploadTimeout = source.UploadTimeout;
         target.CollectNetworkMetrics = source.CollectNetworkMetrics;
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
+        target.StrictMode = source.StrictMode;
     }
 
     #endregion
