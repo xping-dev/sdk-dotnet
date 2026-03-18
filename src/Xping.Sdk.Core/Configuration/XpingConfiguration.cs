@@ -109,6 +109,18 @@ public sealed class XpingConfiguration
     public bool EnablePullRequestDetection { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether strict mode is enabled.
+    /// When <see langword="true"/>, configuration errors throw a
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> and stop test execution.
+    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
+    /// </summary>
+    /// <remarks>
+    /// Strict mode can also be enabled via the <c>XPING_STRICT_MODE</c> environment variable.
+    /// This is recommended for production CI/CD pipelines where observability must be guaranteed.
+    /// </remarks>
+    public bool StrictMode { get; set; }
+
+    /// <summary>
     /// Validates the configuration and returns a list of validation errors.
     /// </summary>
     /// <returns>A list of validation error messages, or an empty list if valid.</returns>

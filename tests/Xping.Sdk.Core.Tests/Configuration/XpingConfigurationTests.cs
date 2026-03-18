@@ -342,4 +342,24 @@ public sealed class XpingConfigurationTests
         Assert.Equal(0.5, config.SamplingRate);
         Assert.Equal(TimeSpan.FromMinutes(2), config.UploadTimeout);
     }
+
+    [Fact]
+    public void StrictMode_DefaultValueShouldBeFalse()
+    {
+        // Act
+        var config = new XpingConfiguration();
+
+        // Assert
+        Assert.False(config.StrictMode);
+    }
+
+    [Fact]
+    public void StrictMode_ShouldBeSettable()
+    {
+        // Arrange
+        var config = new XpingConfiguration { StrictMode = true };
+
+        // Act & Assert
+        Assert.True(config.StrictMode);
+    }
 }

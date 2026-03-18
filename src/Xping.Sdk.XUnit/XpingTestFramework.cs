@@ -4,6 +4,7 @@
  */
 
 using System.Reflection;
+using Xping.Sdk.Core.Exceptions;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -33,6 +34,10 @@ public sealed class XpingTestFramework : XunitTestFramework
         try
         {
             _services = XpingContext.GetExecutorServices();
+        }
+        catch (XpingConfigurationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

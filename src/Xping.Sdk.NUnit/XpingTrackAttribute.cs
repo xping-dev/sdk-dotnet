@@ -8,6 +8,7 @@ using System.Reflection;
 using NUnit.Framework;
 using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Attributes;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -61,6 +62,10 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         try
         {
             _services ??= XpingContext.GetAttributeServices();
+        }
+        catch (XpingConfigurationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
