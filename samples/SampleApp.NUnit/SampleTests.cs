@@ -6,6 +6,7 @@
 namespace SampleApp.NUnit;
 
 using global::NUnit.Framework;
+using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.NUnit;
 
 #pragma warning disable CA1707 // Identifiers should not contain underscores
@@ -55,6 +56,7 @@ public class SampleTests
     [Category("Flaky")]
     [Category("Random")]
     [Description("Demonstrates a flaky test that fails randomly due to probabilistic behavior")]
+    [XpingFingerprint("flaky-random-failure-v1")] // Pin a constant fingerprint to maintain historical data across refactors
     public void FlakyTest_RandomFailure_FailsProbabilistically()
     {
         // Use a pseudo-random seed based on time to get different results per run
