@@ -181,12 +181,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                return $"Linux ({description})";
+                return $"Linux {os.Version.Major}.{os.Version.Minor}.{os.Version.Build}";
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                return $"macOS ({description})";
+                return $"macOS {os.Version.Major}.{os.Version.Minor}.{os.Version.Build}";
             }
 
             return description;
