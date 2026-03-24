@@ -35,6 +35,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
+| `StrictMode` | bool | `false` | `XPING_STRICT_MODE` | Throw on configuration errors instead of silently disabling |
 
 ---
 
@@ -642,6 +643,93 @@ XpingContext.Initialize(config);
 ## Advanced Settings
 
 > **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
+
+### StrictMode
+
+**Type:** `bool`  
+**Default:** `false`  
+**Environment Variable:** `XPING_STRICT_MODE`
+
+Controls how the SDK responds to configuration errors at initialization time.
+
+- **`false` (default — resilient mode):** Configuration errors are logged as errors and the SDK is silently disabled. Tests continue to run without observability tracking.
+- **`true` (strict mode):** Configuration errors throw a `XpingConfigurationException`, immediately stopping test execution with a clear message.
+
+Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
+
+> **Note on naming:** Unlike other boolean settings that drop the separator (e.g., `XPING_COLLECTNETWORKMETRICS`), this setting uses `XPING_STRICT_MODE` (with an underscore before `MODE`) to match the naming specified in the issue and for clarity at a glance in CI/CD pipeline logs.
+
+**When to use strict mode:**
+- Production CI/CD pipelines where missing Xping configuration should be a build failure
+- Teams that have fully adopted Xping and want to enforce observability mandatorily
+- Security-sensitive environments where untracked test runs are unacceptable
+
+**When to use resilient mode (default):**
+- Local development and developer onboarding
+- Environments where tests must always run regardless of observability status
+- Gradual SDK adoption across a codebase
+
+**Behavior comparison:**
+
+| Scenario | Resilient Mode (default) | Strict Mode |
+|----------|--------------------------|-------------|
+| Missing `ApiKey` | Warning logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Invalid `ApiEndpoint` | Warning logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Valid configuration | SDK active, tests tracked | SDK active, tests tracked |
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "StrictMode": true
+  }
+}
+```
+
+```bash
+# Enable via environment variable
+export XPING_STRICT_MODE="true"
+```
+
+```bash
+# Inline for a single test run
+XPING_STRICT_MODE=true dotnet test
+```
+
+```csharp
+var config = new XpingConfigurationBuilder()
+    .WithApiKey("your-api-key")
+    .WithProjectId("your-project")
+    .WithStrictMode(true)
+    .Build();
+XpingContext.Initialize(config);
+```
+
+**GitHub Actions example:**
+
+```yaml
+- name: Run Tests
+  env:
+    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+    XPING_PROJECTID: ${{ vars.XPING_PROJECTID }}
+    XPING_STRICT_MODE: "true"
+  run: dotnet test
+```
+
+**Expected output when strict mode triggers:**
+
+```
+# Resilient mode (default)
+[Error] Configuration validation failed: ApiKey is required.; ProjectId is required.
+        SDK disabled - tests will run without observability tracking.
+
+# Strict mode
+Xping.Sdk.Core.Exceptions.XpingConfigurationException:
+  Xping configuration invalid: ApiKey is required., ProjectId is required.
+```
+
+---
 
 ### SamplingRate
 
