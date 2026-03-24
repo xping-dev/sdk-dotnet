@@ -11,7 +11,7 @@ namespace Xping.Sdk.Core.Exceptions;
 /// <remarks>
 /// This exception is thrown instead of silently disabling the SDK when
 /// <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.StrictMode"/> is <see langword="true"/>
-/// or the <c>XPING_STRICT_MODE</c> environment variable is set to <c>true</c>.
+/// or the <c>XPING_STRICTMODE</c> environment variable is set to <c>true</c>.
 /// </remarks>
 public sealed class XpingConfigurationException : Exception
 {

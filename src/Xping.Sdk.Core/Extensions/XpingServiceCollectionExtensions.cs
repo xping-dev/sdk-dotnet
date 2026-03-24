@@ -535,7 +535,7 @@ public static class XpingServiceCollectionExtensions
             config.EnablePullRequestDetection = pr;
 
         // Strict Mode Options
-        if (GetEnv("STRICT_MODE") is { } strictMode
+        if (GetEnv("STRICTMODE") is { } strictMode
             && bool.TryParse(strictMode, out var sm))
             config.StrictMode = sm;
         return;

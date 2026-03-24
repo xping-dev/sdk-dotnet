@@ -115,7 +115,7 @@ public sealed class XpingConfiguration
     /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
     /// </summary>
     /// <remarks>
-    /// Strict mode can also be enabled via the <c>XPING_STRICT_MODE</c> environment variable.
+    /// Strict mode can also be enabled via the <c>XPING_STRICTMODE</c> environment variable.
     /// This is recommended for production CI/CD pipelines where observability must be guaranteed.
     /// </remarks>
     public bool StrictMode { get; set; }

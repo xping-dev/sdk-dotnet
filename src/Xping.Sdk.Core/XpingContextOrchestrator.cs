@@ -194,7 +194,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when strict mode is enabled via either the <c>XPING_STRICT_MODE</c>
+    /// Returns <see langword="true"/> when strict mode is enabled via either the <c>XPING_STRICTMODE</c>
     /// environment variable or the <c>Xping:StrictMode</c> configuration key
     /// (e.g. from appsettings.json or the <c>Xping__StrictMode</c> environment variable).
     /// This is checked at initialization time when configuration validation has already failed
@@ -202,8 +202,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     private static bool IsStrictModeEnabled(IServiceProvider services)
     {
-        // 1. Check XPING_STRICT_MODE env var (PostConfigure-applied legacy format).
-        string? envValue = System.Environment.GetEnvironmentVariable("XPING_STRICT_MODE");
+        // 1. Check XPING_STRICTMODE env var (PostConfigure-applied legacy format).
+        string? envValue = System.Environment.GetEnvironmentVariable("XPING_STRICTMODE");
         if (bool.TryParse(envValue, out bool strictFromEnv) && strictFromEnv)
             return true;
 

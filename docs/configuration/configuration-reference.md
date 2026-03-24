@@ -35,7 +35,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
-| `StrictMode` | bool | `false` | `XPING_STRICT_MODE` | Throw on configuration errors instead of silently disabling |
+| `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 
 ---
 
@@ -648,7 +648,7 @@ XpingContext.Initialize(config);
 
 **Type:** `bool`  
 **Default:** `false`  
-**Environment Variable:** `XPING_STRICT_MODE`
+**Environment Variable:** `XPING_STRICTMODE`
 
 Controls how the SDK responds to configuration errors at initialization time.
 
@@ -656,8 +656,6 @@ Controls how the SDK responds to configuration errors at initialization time.
 - **`true` (strict mode):** Configuration errors throw a `XpingConfigurationException`, immediately stopping test execution with a clear message.
 
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
-
-> **Note on naming:** Unlike other boolean settings that drop the separator (e.g., `XPING_COLLECTNETWORKMETRICS`), this setting uses `XPING_STRICT_MODE` (with an underscore before `MODE`) to match the naming specified in the issue and for clarity at a glance in CI/CD pipeline logs.
 
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration should be a build failure
@@ -689,12 +687,12 @@ Strict mode is recommended for production CI/CD pipelines where you want to guar
 
 ```bash
 # Enable via environment variable
-export XPING_STRICT_MODE="true"
+export XPING_STRICTMODE="true"
 ```
 
 ```bash
 # Inline for a single test run
-XPING_STRICT_MODE=true dotnet test
+XPING_STRICTMODE=true dotnet test
 ```
 
 ```csharp
@@ -713,7 +711,7 @@ XpingContext.Initialize(config);
   env:
     XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
     XPING_PROJECTID: ${{ vars.XPING_PROJECTID }}
-    XPING_STRICT_MODE: "true"
+    XPING_STRICTMODE: "true"
   run: dotnet test
 ```
 

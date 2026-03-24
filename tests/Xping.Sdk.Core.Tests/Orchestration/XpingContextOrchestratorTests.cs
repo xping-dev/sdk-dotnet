@@ -469,7 +469,7 @@ public sealed class XpingContextOrchestratorTests
     // ---------------------------------------------------------------------------
     // Strict mode (invalid configuration)
     // xUnit runs tests within the same class sequentially, so the env-var tests
-    // below are safe: each test sets/clears XPING_STRICT_MODE in a try/finally
+    // below are safe: each test sets/clears XPING_STRICTMODE in a try/finally
     // block that guarantees cleanup even on failure, and no two tests in this
     // class access the variable concurrently.
     // ---------------------------------------------------------------------------
@@ -477,8 +477,8 @@ public sealed class XpingContextOrchestratorTests
     [Fact]
     public void Constructor_WithInvalidConfig_AndStrictModeViaEnvVar_ThrowsXpingConfigurationException()
     {
-        // Arrange — set XPING_STRICT_MODE before creating the host
-        System.Environment.SetEnvironmentVariable("XPING_STRICT_MODE", "true");
+        // Arrange — set XPING_STRICTMODE before creating the host
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
         try
         {
             var host = ServiceHelper.BuildInvalidConfigHost();
@@ -489,7 +489,7 @@ public sealed class XpingContextOrchestratorTests
         finally
         {
             // Always clear so the variable doesn't bleed into subsequent tests.
-            System.Environment.SetEnvironmentVariable("XPING_STRICT_MODE", null);
+            System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
         }
     }
 
@@ -509,7 +509,7 @@ public sealed class XpingContextOrchestratorTests
     {
         // Arrange — explicitly clear the env var to guarantee resilient (default) behavior
         // in case a prior test set it and the cleanup did not run (e.g., process restart).
-        System.Environment.SetEnvironmentVariable("XPING_STRICT_MODE", null);
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
         var host = ServiceHelper.BuildInvalidConfigHost();
 
         // Act — no exception expected
@@ -523,7 +523,7 @@ public sealed class XpingContextOrchestratorTests
     public void Constructor_WithInvalidConfig_AndStrictModeViaEnvVar_ExceptionContainsValidationErrors()
     {
         // Arrange
-        System.Environment.SetEnvironmentVariable("XPING_STRICT_MODE", "true");
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
         try
         {
             var host = ServiceHelper.BuildInvalidConfigHost();
@@ -534,7 +534,7 @@ public sealed class XpingContextOrchestratorTests
         }
         finally
         {
-            System.Environment.SetEnvironmentVariable("XPING_STRICT_MODE", null);
+            System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
         }
     }
 
