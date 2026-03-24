@@ -110,17 +110,22 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
-    /// When <see langword="true"/>, configuration errors abort the process immediately via
-    /// <see cref="Environment.FailFast(string, Exception)"/>, stopping all test execution.
-    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
+    /// When <see langword="true"/>, configuration errors cause the SDK to throw a
+    /// <see cref="XpingConfigurationException"/> during initialization, allowing callers to
+    /// fail fast and surface configuration problems explicitly.
+    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is
+    /// silently disabled where supported.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Strict mode terminates the process rather than throwing an exception because test framework
-    /// runners (e.g. xunit.runner.visualstudio, NUnit, MSTest) may catch or isolate exceptions
-    /// raised inside framework hooks, allowing subsequent tests to continue running untracked.
-    /// <see cref="Environment.FailFast(string, Exception)"/> bypasses all such handling and returns
-    /// a non-zero exit code, which causes CI/CD jobs to fail immediately.
+    /// In the core SDK, strict mode surfaces configuration problems by throwing
+    /// <see cref="XpingConfigurationException"/> so that hosts and orchestrators can control
+    /// how failures are handled (for example, by aborting the run or marking it as failed).
+    /// Some test framework adapters (e.g. NUnit, xUnit, MSTest integrations) may choose to
+    /// translate these configuration failures into a call to
+    /// <see cref="Environment.FailFast(string, Exception)"/> to immediately terminate the
+    /// process and prevent subsequent tests from running untracked, especially in CI/CD
+    /// environments.
     /// </para>
     /// <para>
     /// Strict mode can also be enabled via the <c>XPING_STRICTMODE</c> environment variable.
