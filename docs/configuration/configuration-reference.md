@@ -671,8 +671,8 @@ Strict mode is recommended for production CI/CD pipelines where you want to guar
 
 | Scenario | Resilient Mode (default) | Strict Mode |
 |----------|--------------------------|-------------|
-| Missing `ApiKey` | Warning logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
-| Invalid `ApiEndpoint` | Warning logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Missing `ApiKey` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Invalid `ApiEndpoint` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
 | Valid configuration | SDK active, tests tracked | SDK active, tests tracked |
 
 **Example:**
