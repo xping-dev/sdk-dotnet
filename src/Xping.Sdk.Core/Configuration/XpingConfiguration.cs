@@ -110,13 +110,22 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
-    /// When <see langword="true"/>, configuration errors throw a
-    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> and stop test execution.
+    /// When <see langword="true"/>, configuration errors abort the process immediately via
+    /// <see cref="Environment.FailFast(string, Exception)"/>, stopping all test execution.
     /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Strict mode terminates the process rather than throwing an exception because test framework
+    /// runners (e.g. xunit.runner.visualstudio, NUnit, MSTest) may catch or isolate exceptions
+    /// raised inside framework hooks, allowing subsequent tests to continue running untracked.
+    /// <see cref="Environment.FailFast(string, Exception)"/> bypasses all such handling and returns
+    /// a non-zero exit code, which causes CI/CD jobs to fail immediately.
+    /// </para>
+    /// <para>
     /// Strict mode can also be enabled via the <c>XPING_STRICTMODE</c> environment variable.
     /// This is recommended for production CI/CD pipelines where observability must be guaranteed.
+    /// </para>
     /// </remarks>
     public bool StrictMode { get; set; }
 

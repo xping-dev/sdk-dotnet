@@ -63,9 +63,12 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         {
             _services ??= XpingContext.GetAttributeServices();
         }
-        catch (XpingConfigurationException)
+        catch (XpingConfigurationException ex)
         {
-            throw;
+            // Re-throwing from BeforeTest only fails the current test; NUnit still attempts
+            // every subsequent test. FailFast aborts the process immediately, which is the
+            // correct behavior for strict mode where observability must be guaranteed.
+            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
         }
         catch (Exception ex)
         {
