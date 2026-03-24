@@ -191,11 +191,24 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets whether strict mode is enabled.
-    /// When <see langword="true"/>, configuration errors throw a
-    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> and stop test execution.
-    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is silently disabled.
+    /// Gets a value indicating whether strict mode is currently enabled on this builder.
     /// </summary>
+    /// <value>
+    /// <see langword="true"/> if strict mode is enabled; otherwise, <see langword="false"/>.
+    /// </value>
+    public bool StrictMode => _configuration.StrictMode;
+
+    /// <summary>
+    /// Sets whether strict mode is enabled.
+    /// </summary>
+    /// <remarks>
+    /// This method only configures the <see cref="XpingConfiguration.StrictMode"/> flag and does not
+    /// change how <see cref="Build"/> reports validation errors; <see cref="Build"/> always throws an
+    /// <see cref="InvalidOperationException"/> when the configuration is invalid.
+    /// Downstream components that consume <see cref="XpingConfiguration"/> (such as
+    /// <c>AddXping(Action&lt;XpingConfigurationBuilder&gt;)</c>) use this flag to decide whether
+    /// configuration problems should be treated as fatal or only logged.
+    /// </remarks>
     /// <param name="strictMode">Whether to enable strict mode.</param>
     /// <returns>The builder instance for method chaining.</returns>
     public XpingConfigurationBuilder WithStrictMode(bool strictMode)

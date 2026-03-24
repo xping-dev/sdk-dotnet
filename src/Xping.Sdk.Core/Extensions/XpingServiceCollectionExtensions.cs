@@ -127,7 +127,12 @@ public static class XpingServiceCollectionExtensions
 
         if (!builder.TryBuild(out var config, out var errors) || config == null)
         {
-            throw new InvalidOperationException($"Invalid Xping configuration: {string.Join(", ", errors)}");
+            string message = $"Invalid Xping configuration: {string.Join(", ", errors)}";
+
+            if (builder.StrictMode)
+                throw new XpingConfigurationException(message);
+
+            throw new InvalidOperationException(message);
         }
 
         return services
