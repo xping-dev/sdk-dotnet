@@ -653,10 +653,11 @@ XpingContext.Initialize(config);
 Controls how the SDK responds to configuration errors at initialization time.
 
 - **`false` (default — resilient mode):** Configuration errors are logged as errors and the SDK is silently disabled. Tests continue to run without observability tracking.
-- **`true` (strict mode):** Configuration errors throw a `XpingConfigurationException`, immediately stopping test execution with a clear message.
+- **`true` (strict mode):** In the core SDK, configuration errors cause a `XpingConfigurationException` to be thrown. The provided test framework adapters (NUnit, xUnit, MSTest) treat this as a fatal initialization error and invoke `Environment.FailFast`, terminating the test process with a clear error message.
 
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
 
+> **Note:** The distinction between core behavior (throwing `XpingConfigurationException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure misconfigured observability fails fast and visibly in CI.
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration should be a build failure
 - Teams that have fully adopted Xping and want to enforce observability mandatorily
