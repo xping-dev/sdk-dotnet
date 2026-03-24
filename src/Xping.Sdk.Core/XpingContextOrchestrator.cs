@@ -175,7 +175,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         {
             if (IsStrictModeEnabled())
             {
-                string message = $"Xping configuration invalid: {ex.Message}";
+                string message = $"Failed to initialize Xping SDK: {ex.Message}";
                 throw new XpingConfigurationException(message, ex);
             }
 
