@@ -111,7 +111,7 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
     /// When <see langword="true"/>, configuration errors cause the SDK to throw a
-    /// <see cref="XpingConfigurationException"/> during initialization, allowing callers to
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> during initialization, allowing callers to
     /// fail fast and surface configuration problems explicitly.
     /// When <see langword="false"/> (default), configuration errors are logged and the SDK is
     /// silently disabled where supported.
@@ -119,7 +119,7 @@ public sealed class XpingConfiguration
     /// <remarks>
     /// <para>
     /// In the core SDK, strict mode surfaces configuration problems by throwing
-    /// <see cref="XpingConfigurationException"/> so that hosts and orchestrators can control
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> so that hosts and orchestrators can control
     /// how failures are handled (for example, by aborting the run or marking it as failed).
     /// Some test framework adapters (e.g. NUnit, xUnit, MSTest integrations) may choose to
     /// translate these configuration failures into a call to
