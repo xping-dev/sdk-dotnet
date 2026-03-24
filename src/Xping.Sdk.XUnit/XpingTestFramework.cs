@@ -4,6 +4,7 @@
  */
 
 using System.Reflection;
+using Xping.Sdk.Core.Exceptions;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -33,6 +34,15 @@ public sealed class XpingTestFramework : XunitTestFramework
         try
         {
             _services = XpingContext.GetExecutorServices();
+        }
+        catch (XpingConfigurationException ex)
+        {
+            // Re-throwing from a custom xUnit test framework constructor is insufficient —
+            // xUnit runners (e.g. xunit.runner.visualstudio used by `dotnet test`) catch
+            // framework constructor exceptions and fall back to default behavior, so tests
+            // continue to run untracked. FailFast aborts the process immediately and returns
+            // a non-zero exit code, which is the correct behavior for strict mode.
+            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
         }
         catch (Exception ex)
         {

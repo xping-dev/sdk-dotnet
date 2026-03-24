@@ -6,6 +6,7 @@
 using Microsoft.Extensions.Hosting;
 using Moq;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
@@ -463,6 +464,24 @@ public sealed class XpingContextOrchestratorTests
 
         // Act — if DisposeAsync throws, the test fails automatically
         await orchestrator.DisposeAsync();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Strict mode (invalid configuration) — IConfiguration path only.
+    // Tests that set/clear the XPING_STRICTMODE environment variable have been
+    // moved to XpingContextOrchestratorEnvVarTests which runs in the "Sequential"
+    // xUnit collection to avoid races with other test classes.
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Constructor_WithInvalidConfig_AndStrictModeViaIConfiguration_ThrowsXpingConfigurationException()
+    {
+        // Arrange — Xping:StrictMode is injected into IConfiguration via in-memory collection;
+        // no env var is used, verifying the IConfiguration code path independently.
+        var host = ServiceHelper.BuildInvalidConfigHostWithStrictMode();
+
+        // Act & Assert
+        Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
     }
 
     // ---------------------------------------------------------------------------

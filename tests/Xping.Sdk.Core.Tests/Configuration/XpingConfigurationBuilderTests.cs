@@ -226,4 +226,31 @@ public sealed class XpingConfigurationBuilderTests
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
         Assert.Contains("UploadTimeout must be greater than zero", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void WithStrictMode_ShouldSetStrictModeToTrue()
+    {
+        // Arrange & Act
+        var config = new XpingConfigurationBuilder()
+            .WithApiKey("test-key")
+            .WithProjectId("test-project")
+            .WithStrictMode(true)
+            .Build();
+
+        // Assert
+        Assert.True(config.StrictMode);
+    }
+
+    [Fact]
+    public void WithStrictMode_DefaultShouldBeFalse()
+    {
+        // Arrange & Act
+        var config = new XpingConfigurationBuilder()
+            .WithApiKey("test-key")
+            .WithProjectId("test-project")
+            .Build();
+
+        // Assert
+        Assert.False(config.StrictMode);
+    }
 }

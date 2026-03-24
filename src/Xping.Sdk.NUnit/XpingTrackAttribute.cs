@@ -8,6 +8,7 @@ using System.Reflection;
 using NUnit.Framework;
 using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Attributes;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -61,6 +62,13 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         try
         {
             _services ??= XpingContext.GetAttributeServices();
+        }
+        catch (XpingConfigurationException ex)
+        {
+            // Re-throwing from BeforeTest only fails the current test; NUnit still attempts
+            // every subsequent test. FailFast aborts the process immediately, which is the
+            // correct behavior for strict mode where observability must be guaranteed.
+            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
         }
         catch (Exception ex)
         {

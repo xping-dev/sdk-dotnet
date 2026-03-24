@@ -3,12 +3,14 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
@@ -152,6 +154,13 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (OptionsValidationException ex)
         {
+            string message = $"Xping configuration invalid: {string.Join(", ", ex.Failures)}";
+
+            if (IsStrictModeEnabled(services))
+            {
+                throw new XpingConfigurationException(message, ex);
+            }
+
             _logger.LogError(
                 "Configuration validation failed: {Errors}. SDK disabled - tests will run without observability tracking. ",
                 string.Join("; ", ex.Failures));
@@ -165,6 +174,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            if (IsStrictModeEnabled(services))
+            {
+                string message = $"Failed to initialize Xping SDK: {ex.Message}";
+                throw new XpingConfigurationException(message, ex);
+            }
+
             _logger.LogError(
                 "Failed to initialize Xping SDK: {Message}. SDK disabled - tests will run without observability tracking.",
                 ex.Message);
@@ -176,6 +191,28 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _prDetector = new NoOpPullRequestContextDetector();
             _statisticsAccumulator = new NoOpRunningStatisticsAccumulator();
         }
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when strict mode is enabled via either the <c>XPING_STRICTMODE</c>
+    /// environment variable or the <c>Xping:StrictMode</c> configuration key
+    /// (e.g. from appsettings.json or the <c>Xping__StrictMode</c> environment variable).
+    /// This is checked at initialization time when configuration validation has already failed
+    /// and <c>IOptions&lt;XpingConfiguration&gt;</c> cannot be used directly.
+    /// </summary>
+    private static bool IsStrictModeEnabled(IServiceProvider services)
+    {
+        // 1. Check XPING_STRICTMODE env var (PostConfigure-applied legacy format).
+        string? envValue = System.Environment.GetEnvironmentVariable("XPING_STRICTMODE");
+        if (bool.TryParse(envValue, out bool strictFromEnv) && strictFromEnv)
+            return true;
+
+        // 2. Check Xping:StrictMode in IConfiguration (appsettings.json, Xping__StrictMode env var, etc.).
+        //    Reading IConfiguration does not trigger options validation, so this is safe even after
+        //    an OptionsValidationException.
+        IConfiguration? configuration = services.GetService<IConfiguration>();
+        string? configValue = configuration?["Xping:StrictMode"];
+        return bool.TryParse(configValue, out bool strictFromConfig) && strictFromConfig;
     }
 
     /// <summary>

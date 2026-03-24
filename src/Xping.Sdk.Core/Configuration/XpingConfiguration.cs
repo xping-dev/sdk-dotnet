@@ -109,6 +109,32 @@ public sealed class XpingConfiguration
     public bool EnablePullRequestDetection { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether strict mode is enabled.
+    /// When <see langword="true"/>, configuration errors cause the SDK to throw a
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> during initialization, allowing callers to
+    /// fail fast and surface configuration problems explicitly.
+    /// When <see langword="false"/> (default), configuration errors are logged and the SDK is
+    /// silently disabled where supported.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// In the core SDK, strict mode surfaces configuration problems by throwing
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> so that hosts and orchestrators can control
+    /// how failures are handled (for example, by aborting the run or marking it as failed).
+    /// Some test framework adapters (e.g. NUnit, xUnit, MSTest integrations) may choose to
+    /// translate these configuration failures into a call to
+    /// <see cref="Environment.FailFast(string, Exception)"/> to immediately terminate the
+    /// process and prevent subsequent tests from running untracked, especially in CI/CD
+    /// environments.
+    /// </para>
+    /// <para>
+    /// Strict mode can also be enabled via the <c>XPING_STRICTMODE</c> environment variable.
+    /// This is recommended for production CI/CD pipelines where observability must be guaranteed.
+    /// </para>
+    /// </remarks>
+    public bool StrictMode { get; set; }
+
+    /// <summary>
     /// Validates the configuration and returns a list of validation errors.
     /// </summary>
     /// <returns>A list of validation error messages, or an empty list if valid.</returns>

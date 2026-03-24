@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
@@ -127,6 +128,49 @@ internal static class ServiceHelper
         SetupDefaultMocks(uploaderMock, envDetectorMock);
 
         return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                // Configure with empty/invalid values — ApiKey and ProjectId are left null.
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = null!;
+                    o.ProjectId = null!;
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                });
+
+                // Register validation so OptionsValidationException fires on .Value access.
+                services.AddOptions<XpingConfiguration>().ValidateDataAnnotations();
+
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> with deliberately invalid configuration and
+    /// <c>Xping:StrictMode</c> set to <c>true</c> in <see cref="IConfiguration"/> so that
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> is thrown during
+    /// orchestrator construction.
+    /// </summary>
+    public static IHost BuildInvalidConfigHostWithStrictMode()
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        return new HostBuilder()
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                // Inject Xping:StrictMode=true so IsStrictModeEnabled() picks it up via IConfiguration.
+                var inMemory = new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" };
+                configBuilder.AddInMemoryCollection(inMemory);
+            })
             .ConfigureServices(services =>
             {
                 // Configure with empty/invalid values — ApiKey and ProjectId are left null.

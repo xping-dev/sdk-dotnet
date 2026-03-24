@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core.Attributes;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -54,6 +55,13 @@ public abstract class XpingTestBase
         try
         {
             _services ??= XpingContext.GetBaseServices();
+        }
+        catch (XpingConfigurationException ex)
+        {
+            // Re-throwing from TestInitialize only fails the current test; MSTest still
+            // attempts every subsequent test. FailFast aborts the process immediately, which
+            // is the correct behavior for strict mode where observability must be guaranteed.
+            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
         }
         catch (Exception ex)
         {

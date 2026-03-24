@@ -35,6 +35,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
+| `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 
 ---
 
@@ -642,6 +643,92 @@ XpingContext.Initialize(config);
 ## Advanced Settings
 
 > **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
+
+### StrictMode
+
+**Type:** `bool`  
+**Default:** `false`  
+**Environment Variable:** `XPING_STRICTMODE`
+
+Controls how the SDK responds to configuration errors at initialization time.
+
+- **`false` (default — resilient mode):** Configuration errors are logged as errors and the SDK is silently disabled. Tests continue to run without observability tracking.
+- **`true` (strict mode):** In the core SDK, configuration errors cause a `XpingConfigurationException` to be thrown. The provided test framework adapters (NUnit, xUnit, MSTest) treat this as a fatal initialization error and invoke `Environment.FailFast`, terminating the test process with a clear error message.
+
+Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
+
+> **Note:** The distinction between core behavior (throwing `XpingConfigurationException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure misconfigured observability fails fast and visibly in CI.
+**When to use strict mode:**
+- Production CI/CD pipelines where missing Xping configuration should be a build failure
+- Teams that have fully adopted Xping and want to enforce observability mandatorily
+- Security-sensitive environments where untracked test runs are unacceptable
+
+**When to use resilient mode (default):**
+- Local development and developer onboarding
+- Environments where tests must always run regardless of observability status
+- Gradual SDK adoption across a codebase
+
+**Behavior comparison:**
+
+| Scenario | Resilient Mode (default) | Strict Mode |
+|----------|--------------------------|-------------|
+| Missing `ApiKey` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Invalid `ApiEndpoint` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| Valid configuration | SDK active, tests tracked | SDK active, tests tracked |
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "StrictMode": true
+  }
+}
+```
+
+```bash
+# Enable via environment variable
+export XPING_STRICTMODE="true"
+```
+
+```bash
+# Inline for a single test run
+XPING_STRICTMODE=true dotnet test
+```
+
+```csharp
+var config = new XpingConfigurationBuilder()
+    .WithApiKey("your-api-key")
+    .WithProjectId("your-project")
+    .WithStrictMode(true)
+    .Build();
+XpingContext.Initialize(config);
+```
+
+**GitHub Actions example:**
+
+```yaml
+- name: Run Tests
+  env:
+    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+    XPING_PROJECTID: ${{ vars.XPING_PROJECTID }}
+    XPING_STRICTMODE: "true"
+  run: dotnet test
+```
+
+**Expected output when strict mode triggers:**
+
+```
+# Resilient mode (default)
+[Error] Configuration validation failed: ApiKey is required.; ProjectId is required.
+        SDK disabled - tests will run without observability tracking.
+
+# Strict mode
+Xping.Sdk.Core.Exceptions.XpingConfigurationException:
+  Xping configuration invalid: ApiKey is required., ProjectId is required.
+```
+
+---
 
 ### SamplingRate
 
