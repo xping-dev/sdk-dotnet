@@ -390,7 +390,7 @@ public static class XpingServiceCollectionExtensions
                 new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.Add("X-API-Key", config.ApiKey);
             client.DefaultRequestHeaders.Add("X-Project-Id", config.ProjectId);
-            client.DefaultRequestHeaders.Add("User-Agent", "Xping-SDK-DotNet/1.0");
+            client.DefaultRequestHeaders.Add("User-Agent", $"Xping-SDK-DotNet/{XpingSdkVersion.Current}");
         })
         .AddResilienceHandler("xping-upload-resilience", (builder, context) =>
         {
