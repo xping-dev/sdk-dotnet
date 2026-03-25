@@ -11,11 +11,12 @@ namespace Xping.Sdk.Core;
 /// Provides the current version of the Xping SDK, read from assembly metadata at runtime.
 /// </summary>
 /// <remarks>
-/// The version is sourced from <see cref="AssemblyInformationalVersionAttribute"/>, which is stamped
-/// onto the assembly during build by MinVer (or the <c>-p:Version</c> MSBuild property).
+/// The version is sourced from <see cref="AssemblyInformationalVersionAttribute"/>, which is
+/// stamped onto the assembly during build via the MSBuild <c>Version</c> property
+/// (e.g. <c>-p:Version=1.2.3</c> passed by the release workflow).
 /// It follows Semantic Versioning 2.0 (e.g. <c>1.2.3</c> or <c>1.3.0-beta.1</c>).
-/// The build metadata suffix appended by MinVer (e.g. <c>+abc123</c>) is stripped so that
-/// the value is a clean SemVer string suitable for HTTP headers and payload fields.
+/// Any build metadata suffix (e.g. <c>+abc123</c>) is stripped so that the value is a
+/// clean SemVer string suitable for HTTP headers and payload fields.
 /// </remarks>
 /// <example>
 /// <code>
@@ -42,7 +43,7 @@ public static class XpingSdkVersion
         if (version.Length == 0)
             return "0.0.0";
 
-        // Strip the build metadata suffix that MinVer appends (e.g. "1.2.3+abc123def" → "1.2.3")
+        // Strip any build metadata suffix (e.g. "1.2.3+abc123def" → "1.2.3")
         int plusIndex = version.IndexOf('+');
         return plusIndex >= 0 ? version.Substring(0, plusIndex) : version;
     }
