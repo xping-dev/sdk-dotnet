@@ -9,6 +9,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using Polly.CircuitBreaker;
+using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
@@ -40,6 +41,9 @@ public sealed class XpingUploaderTests
 
         public FakeHttpMessageHandler(Exception exception)
             => _respond = _ => throw exception;
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
+            => _respond = respond;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -388,5 +392,30 @@ public sealed class XpingUploaderTests
         var result = await uploader.UploadAsync(BuildSession(1));
 
         Assert.True(result.Success);
+    }
+
+    // ---------------------------------------------------------------------------
+    // UploadAsync — HTTP headers
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UploadAsync_ShouldInclude_UserAgentHeader_WithSdkVersion()
+    {
+        // Arrange
+        HttpRequestMessage? captured = null;
+        using var handler = new FakeHttpMessageHandler(req =>
+        {
+            captured = req;
+            return JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "r001" });
+        });
+        var uploader = BuildUploader(handler);
+
+        // Act
+        await uploader.UploadAsync(BuildSession(1));
+
+        // Assert
+        Assert.NotNull(captured);
+        Assert.True(captured.Headers.TryGetValues("User-Agent", out var values));
+        Assert.Equal($"Xping-SDK-DotNet/{XpingSdkVersion.Current}", string.Join(" ", values));
     }
 }

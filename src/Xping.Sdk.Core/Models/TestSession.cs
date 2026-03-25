@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -30,6 +31,7 @@ public sealed class TestSession
         SessionState = TestSessionState.Initial;
         PullRequestContext = null;
         QuickStatistics = null;
+        SdkVersion = XpingSdkVersion.Current;
     }
 
     /// <summary>
@@ -55,6 +57,7 @@ public sealed class TestSession
         SessionState = sessionState;
         PullRequestContext = pullRequestContext;
         QuickStatistics = quickStatistics;
+        SdkVersion = XpingSdkVersion.Current;
     }
 
     /// <summary>
@@ -107,4 +110,10 @@ public sealed class TestSession
     /// Only populated on the <c>TestSessionState.Finalized</c> upload; <c>null</c> otherwise.
     /// </summary>
     public QuickStatistics? QuickStatistics { get; init; }
+
+    /// <summary>
+    /// Gets the version of the Xping SDK that produced this session (e.g. <c>"1.2.3"</c>).
+    /// Automatically stamped from assembly metadata — no manual input required.
+    /// </summary>
+    public string SdkVersion { get; init; }
 }
