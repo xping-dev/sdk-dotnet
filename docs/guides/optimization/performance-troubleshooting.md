@@ -154,15 +154,15 @@ dotnet-counters monitor --process-id <pid> --counters System.Runtime
 
 **Symptom:** Seeing Xping upload errors or warnings in logs
 
-**Important:** Network issues **never fail your tests** - they're logged and handled gracefully.
+**Important:** In the default resilient mode, network issues **never fail your tests** — they're logged and handled gracefully. However, if you have enabled strict mode (`StrictMode: true` or `XPING_STRICTMODE=true`), network errors **will fail your test run** to ensure CI pipelines fail fast when test observability data cannot be transmitted.
 
 ### Common Scenarios
 
 #### 1. API Temporarily Unavailable
 
 - SDK retries automatically with exponential backoff
-- Tests queue locally until API is reachable
-- **No action needed** - this is expected behavior
+- **Resilient mode:** Tests complete normally even if retries are exhausted
+- **Strict mode:** If all retries fail, the test run is terminated via `Environment.FailFast`
 
 #### 2. Firewall or Proxy Blocking Requests
 

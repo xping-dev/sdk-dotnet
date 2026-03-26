@@ -61,6 +61,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
+    private volatile string? _strictModeNetworkError;
 
     // Fingerprint → first-seen display name. Used to detect duplicate [XpingFingerprint] values
     // across test methods within a single session.
@@ -286,11 +287,22 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The result of the upload operation.</returns>
+    /// <exception cref="XpingNetworkException">
+    /// Thrown when the final upload fails and strict mode is enabled, to ensure CI pipelines fail fast
+    /// when test observability data cannot be transmitted.
+    /// </exception>
     protected async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
     {
         // Idempotent: lifecycle hooks and upload run exactly once even if called multiple times.
+        // If the previous attempt failed in strict mode, surface that failure to the caller
+        // rather than masking it with Success=true.
         if (Interlocked.Exchange(ref _finalized, 1) != 0)
+        {
+            string? previousError = _strictModeNetworkError;
+            if (previousError != null)
+                return new UploadResult { Success = false, ErrorMessage = previousError };
             return new UploadResult { Success = true };
+        }
 
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
@@ -308,6 +320,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
+
+        if (!uploadResult.Success && IsStrictModeEnabled(Services))
+        {
+            string errorDetail = string.IsNullOrEmpty(uploadResult.ErrorMessage)
+                ? "Upload failed with no additional details"
+                : uploadResult.ErrorMessage!;
+            string errorMessage = $"Xping network error in strict mode: {errorDetail}";
+            _strictModeNetworkError = errorMessage;
+            throw new XpingNetworkException(errorMessage);
+        }
 
         return uploadResult;
     }

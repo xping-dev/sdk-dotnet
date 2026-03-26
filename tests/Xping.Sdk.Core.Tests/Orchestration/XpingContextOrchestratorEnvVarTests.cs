@@ -4,7 +4,14 @@
  */
 
 using Microsoft.Extensions.Hosting;
+using Moq;
 using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Orchestration;
@@ -22,6 +29,11 @@ public sealed class XpingContextOrchestratorEnvVarTests
     private sealed class TestOrchestrator : XpingContextOrchestrator
     {
         public TestOrchestrator(IHost host) : base(host) { }
+
+        public Task<UploadResult> FinalizeAsync(CancellationToken ct = default)
+            => FinalizeSessionAsync(ct);
+
+        public void RecordExecution(TestExecution e) => RecordTestExecution(e);
     }
 
     [Fact]
@@ -69,6 +81,38 @@ public sealed class XpingContextOrchestratorEnvVarTests
             // Act & Assert
             var ex = Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
             Assert.Contains("Xping configuration invalid", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
+        }
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaEnvVar_AndUploadFailure_ThrowsXpingNetworkException()
+    {
+        // Arrange — set XPING_STRICTMODE env var; valid config but upload always fails
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
+        try
+        {
+            var uploaderMock = new Mock<IXpingUploader>();
+            var envDetectorMock = new Mock<IEnvironmentDetector>();
+            envDetectorMock
+                .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new EnvironmentInfo());
+            uploaderMock
+                .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Network timeout" });
+
+            var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+            var orchestrator = new TestOrchestrator(host);
+            orchestrator.RecordExecution(
+                new TestExecutionBuilder().WithTestName("EnvVarNetworkTest").WithOutcome(TestOutcome.Passed).Build());
+
+            // Act & Assert
+            await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+            await orchestrator.DisposeAsync();
         }
         finally
         {

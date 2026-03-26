@@ -194,4 +194,42 @@ internal static class ServiceHelper
             })
             .Build();
     }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> with valid configuration, strict mode enabled via
+    /// <c>Xping:StrictMode</c> in <see cref="IConfiguration"/>, and a pre-configured mock uploader.
+    /// Use this to test network-error behavior in strict mode.
+    /// </summary>
+    public static IHost BuildOrchestratorHostWithStrictMode(
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock,
+        Action<XpingConfiguration>? configure = null)
+    {
+        return new HostBuilder()
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                var inMemory = new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" };
+                configBuilder.AddInMemoryCollection(inMemory);
+            })
+            .ConfigureServices(services =>
+            {
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = "test-key";
+                    o.ProjectId = "test-project";
+                    o.BatchSize = 100;
+                    o.SamplingRate = 1.0;
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                    configure?.Invoke(o);
+                });
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
 }
