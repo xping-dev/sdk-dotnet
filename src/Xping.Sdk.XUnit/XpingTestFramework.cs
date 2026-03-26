@@ -95,7 +95,7 @@ public sealed class XpingTestFramework : XunitTestFramework
             // xUnit runners may catch exceptions thrown from Dispose and suppress them, so the
             // test run would succeed even when upload failed. FailFast aborts the process
             // immediately with a non-zero exit code, which is the correct behavior for strict mode.
-            Environment.FailFast($"[Xping] Strict mode network error: {ex.Message}", ex);
+            Environment.FailFast($"[Xping] {ex.Message}", ex);
         }
 
         base.Dispose();

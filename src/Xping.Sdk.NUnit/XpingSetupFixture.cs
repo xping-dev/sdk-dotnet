@@ -42,7 +42,7 @@ public class XpingSetupFixture
             // FailFast aborts the process immediately, which is the correct behavior for strict mode
             // where observability must be guaranteed. Re-throwing from OneTimeTearDown only fails the
             // teardown method and may not cause the CI pipeline to fail with a non-zero exit code.
-            Environment.FailFast($"[Xping] Strict mode network error: {ex.Message}", ex);
+            Environment.FailFast($"[Xping] {ex.Message}", ex);
         }
 
         await XpingContext.ShutdownAsync().ConfigureAwait(false);

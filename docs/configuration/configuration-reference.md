@@ -653,7 +653,7 @@ XpingContext.Initialize(config);
 Controls how the SDK responds to errors that prevent proper test observability.
 
 - **`false` (default — resilient mode):** Configuration and network errors are logged and the SDK silently continues or is disabled. Tests always run without interruption.
-- **`true` (strict mode):** Any error that prevents test data from being collected or uploaded causes the test process to terminate immediately via `Environment.FailFast`, ensuring CI pipelines fail fast when observability cannot be guaranteed.
+- **`true` (strict mode):** In the core SDK, any error that prevents test data from being collected or uploaded is surfaced by throwing `XpingConfigurationException` or `XpingNetworkException`. When you use the provided NUnit, xUnit, or MSTest adapters, these exceptions are treated as fatal and translated into `Environment.FailFast`, ensuring CI pipelines fail fast when observability cannot be guaranteed.
 
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
 

@@ -852,4 +852,62 @@ public sealed class XpingContextOrchestratorTests
 
         await orchestrator.DisposeAsync();
     }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndUploadFailure_SecondCallReturnsFailed()
+    {
+        // Arrange — after the first finalization throws XpingNetworkException, a subsequent call
+        // (e.g. from DisposeAsync during test teardown) should return the stored failure rather
+        // than masking it with Success=true.
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated failure" });
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("SecondCallTest"));
+
+        // First call throws
+        await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+        // Act — second call (simulates a redundant finalization attempt after the exception)
+        var secondResult = await orchestrator.FinalizeAsync();
+
+        // Assert — failure is surfaced, not masked with Success=true
+        Assert.False(secondResult.Success);
+        Assert.NotNull(secondResult.ErrorMessage);
+        Assert.Contains("Simulated failure", secondResult.ErrorMessage, StringComparison.Ordinal);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndNullErrorMessage_UsesDefaultFallback()
+    {
+        // Arrange — upload fails with null ErrorMessage; the exception should not end with ": "
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = null });
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("NullErrorMessageTest"));
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+        Assert.False(ex.Message.EndsWith(": ", StringComparison.Ordinal));
+        Assert.Contains("Upload failed with no additional details", ex.Message, StringComparison.Ordinal);
+
+        await orchestrator.DisposeAsync();
+    }
 }
