@@ -650,16 +650,17 @@ XpingContext.Initialize(config);
 **Default:** `false`  
 **Environment Variable:** `XPING_STRICTMODE`
 
-Controls how the SDK responds to configuration errors at initialization time.
+Controls how the SDK responds to errors that prevent proper test observability.
 
-- **`false` (default — resilient mode):** Configuration errors are logged as errors and the SDK is silently disabled. Tests continue to run without observability tracking.
-- **`true` (strict mode):** In the core SDK, configuration errors cause a `XpingConfigurationException` to be thrown. The provided test framework adapters (NUnit, xUnit, MSTest) treat this as a fatal initialization error and invoke `Environment.FailFast`, terminating the test process with a clear error message.
+- **`false` (default — resilient mode):** Configuration and network errors are logged and the SDK silently continues or is disabled. Tests always run without interruption.
+- **`true` (strict mode):** Any error that prevents test data from being collected or uploaded causes the test process to terminate immediately via `Environment.FailFast`, ensuring CI pipelines fail fast when observability cannot be guaranteed.
 
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
 
-> **Note:** The distinction between core behavior (throwing `XpingConfigurationException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure misconfigured observability fails fast and visibly in CI.
+> **Note:** The distinction between core behavior (throwing `XpingConfigurationException` or `XpingNetworkException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure failed observability causes a visible CI failure.
+
 **When to use strict mode:**
-- Production CI/CD pipelines where missing Xping configuration should be a build failure
+- Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure
 - Teams that have fully adopted Xping and want to enforce observability mandatorily
 - Security-sensitive environments where untracked test runs are unacceptable
 
@@ -674,7 +675,8 @@ Strict mode is recommended for production CI/CD pipelines where you want to guar
 |----------|--------------------------|-------------|
 | Missing `ApiKey` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
 | Invalid `ApiEndpoint` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
-| Valid configuration | SDK active, tests tracked | SDK active, tests tracked |
+| Network error during upload | Error logged, tests complete without observability data | `XpingNetworkException` thrown, test run fails |
+| Valid configuration + upload succeeds | SDK active, tests tracked | SDK active, tests tracked |
 
 **Example:**
 
@@ -719,13 +721,19 @@ XpingContext.Initialize(config);
 **Expected output when strict mode triggers:**
 
 ```
-# Resilient mode (default)
+# Resilient mode (default) — configuration error
 [Error] Configuration validation failed: ApiKey is required.; ProjectId is required.
         SDK disabled - tests will run without observability tracking.
 
-# Strict mode
-Xping.Sdk.Core.Exceptions.XpingConfigurationException:
-  Xping configuration invalid: ApiKey is required., ProjectId is required.
+# Strict mode — configuration error
+[Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required., ProjectId is required.
+
+# Resilient mode (default) — network error
+[Error] Network error occurred
+        HTTP request failed: ...
+
+# Strict mode — network error
+[Xping] Strict mode network error: Xping network error in strict mode: HTTP request failed: ...
 ```
 
 ---

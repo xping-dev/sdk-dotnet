@@ -7,6 +7,7 @@ namespace Xping.Sdk.MSTest;
 
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xping.Sdk.Core.Exceptions;
 
 /// <summary>
 /// Assembly-level initialization and cleanup for Xping SDK in MSTest projects.
@@ -35,7 +36,18 @@ public static class XpingAssemblyInitialize
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        try
+        {
+            await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        }
+        catch (XpingNetworkException ex)
+        {
+            // FailFast aborts the process immediately, which is the correct behavior for strict mode
+            // where observability must be guaranteed. Re-throwing from AssemblyCleanup may not cause
+            // the CI pipeline to fail with a non-zero exit code.
+            Environment.FailFast($"[Xping] Strict mode network error: {ex.Message}", ex);
+        }
+
         await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }

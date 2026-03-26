@@ -729,4 +729,127 @@ public sealed class XpingContextOrchestratorTests
 
         await orchestrator.DisposeAsync();
     }
+
+    // ---------------------------------------------------------------------------
+    // StrictMode: network error handling — IConfiguration path only.
+    // Tests that set/clear XPING_STRICTMODE have been moved to
+    // XpingContextOrchestratorEnvVarTests which runs in the "Sequential" collection.
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndUploadFailure_ThrowsXpingNetworkException()
+    {
+        // Arrange — valid config but all uploads fail, strict mode via IConfiguration
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated network failure" });
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("StrictModeNetworkTest"));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndUploadSuccess_DoesNotThrow()
+    {
+        // Arrange — valid config, uploads succeed, strict mode via IConfiguration
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("StrictModeSuccessTest"));
+
+        // Act & Assert — no exception expected
+        var result = await orchestrator.FinalizeAsync();
+        Assert.True(result.Success);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithoutStrictMode_AndUploadFailure_DoesNotThrow()
+    {
+        // Arrange — valid config, uploads fail, strict mode NOT enabled
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated network failure" });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("ResilientModeNetworkTest"));
+
+        // Act — no exception expected in resilient (non-strict) mode
+        var result = await orchestrator.FinalizeAsync();
+        Assert.False(result.Success);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndUploadFailure_CallsOnSessionFinalizedBeforeThrowing()
+    {
+        // Arrange — verify OnSessionFinalizedAsync is called even when strict mode will throw
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated network failure" });
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("HookOrderTest"));
+
+        // Act & Assert
+        await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+        // The hook must have been called before the throw
+        Assert.Equal(1, orchestrator.SessionFinalizedCount);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaIConfiguration_AndUploadFailure_ExceptionContainsErrorMessage()
+    {
+        // Arrange
+        const string simulatedError = "Connection refused by server";
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = simulatedError });
+
+        var host = ServiceHelper.BuildOrchestratorHostWithStrictMode(uploaderMock, envDetectorMock);
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("ErrorMessageTest"));
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+        Assert.Contains(simulatedError, ex.Message, StringComparison.Ordinal);
+
+        await orchestrator.DisposeAsync();
+    }
 }

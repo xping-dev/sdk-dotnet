@@ -286,6 +286,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The result of the upload operation.</returns>
+    /// <exception cref="XpingNetworkException">
+    /// Thrown when the final upload fails and strict mode is enabled, to ensure CI pipelines fail fast
+    /// when test observability data cannot be transmitted.
+    /// </exception>
     protected async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
     {
         // Idempotent: lifecycle hooks and upload run exactly once even if called multiple times.
@@ -308,6 +312,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
+
+        if (!uploadResult.Success && IsStrictModeEnabled(Services))
+        {
+            throw new XpingNetworkException(
+                $"Xping network error in strict mode: {uploadResult.ErrorMessage}");
+        }
 
         return uploadResult;
     }
