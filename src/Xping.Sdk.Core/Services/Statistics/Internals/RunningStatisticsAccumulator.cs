@@ -80,7 +80,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         long notExecuted = Interlocked.Read(ref _notExecuted);
         long durationTicks = Interlocked.Read(ref _totalDurationTicks);
 
-        double successRate = total == 0 ? 0.0 : (double)passed / total * 100.0;
+        double successRate = total == 0 ? 0.0 : (double)passed / total;
         long totalMs = durationTicks / TimeSpan.TicksPerMillisecond;
         long averageMs = total == 0 ? 0L : totalMs / total;
 

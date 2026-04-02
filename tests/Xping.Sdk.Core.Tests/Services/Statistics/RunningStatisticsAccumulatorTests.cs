@@ -176,7 +176,7 @@ public sealed class RunningStatisticsAccumulatorTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void GetSnapshot_AllTestsPassed_SuccessRateIs100()
+    public void GetSnapshot_AllTestsPassed_SuccessRateIs1()
     {
         // Arrange
         var accumulator = new RunningStatisticsAccumulator();
@@ -187,7 +187,7 @@ public sealed class RunningStatisticsAccumulatorTests
         var snapshot = accumulator.GetSnapshot();
 
         // Assert
-        Assert.Equal(100.0, snapshot.SuccessRate, precision: 5);
+        Assert.Equal(1.0, snapshot.SuccessRate, precision: 5);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class RunningStatisticsAccumulatorTests
     }
 
     [Fact]
-    public void GetSnapshot_HalfTestsPassed_SuccessRateIs50()
+    public void GetSnapshot_HalfTestsPassed_SuccessRateIsPoint5()
     {
         // Arrange
         var accumulator = new RunningStatisticsAccumulator();
@@ -217,7 +217,7 @@ public sealed class RunningStatisticsAccumulatorTests
         var snapshot = accumulator.GetSnapshot();
 
         // Assert
-        Assert.Equal(50.0, snapshot.SuccessRate, precision: 5);
+        Assert.Equal(0.5, snapshot.SuccessRate, precision: 5);
     }
 
     [Fact]
