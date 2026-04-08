@@ -291,7 +291,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         TestMetadataBuilder builder = new();
 
         // Add common tags
-        builder.AddTag("framework:nunit");
+        builder.AddTag("framework:NUnit");
         builder.AddTag(test.IsSuite ? "type:suite" : "type:test");
 
         // Add a fixture type name if available

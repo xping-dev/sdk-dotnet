@@ -294,7 +294,7 @@ public sealed class XpingMessageSink(
 
         ITestCase? testCase = test.TestCase;
         List<string> categories = [];
-        List<string> tags = ["framework:xunit"];
+        List<string> tags = ["framework:xUnit"];
         Dictionary<string, string> customAttributes = [];
 
         // Extract traits as categories

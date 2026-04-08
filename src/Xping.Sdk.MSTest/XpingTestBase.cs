@@ -188,7 +188,7 @@ public abstract class XpingTestBase
     {
         TestMetadataBuilder builder = new();
 
-        builder.AddTag("framework:mstest");
+        builder.AddTag("framework:MSTest");
 
         // Extract properties
         if (context.Properties.Keys is { Count: > 0})
