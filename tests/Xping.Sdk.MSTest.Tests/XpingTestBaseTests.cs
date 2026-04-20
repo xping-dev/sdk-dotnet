@@ -82,6 +82,33 @@ public class XpingTestBaseTests
         Assert.Equal(TestOutcome.NotExecuted, outcome);
     }
 
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesDisabled_FailedTestWithStackTrace_SetsOmittedTrue()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Failed, "  at Method()", false);
+
+        Assert.Null(result.stackTrace);
+        Assert.True(result.stackTraceOmitted);
+    }
+
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesEnabled_FailedTest_PreservesStackTrace()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Failed, "  at Method()", true);
+
+        Assert.Equal("  at Method()", result.stackTrace);
+        Assert.False(result.stackTraceOmitted);
+    }
+
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesDisabled_PassedTest_DoesNotMarkOmitted()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Passed, null, false);
+
+        Assert.Null(result.stackTrace);
+        Assert.False(result.stackTraceOmitted);
+    }
+
     // Helper method to invoke private MapOutcome using reflection
     private static TestOutcome InvokeMapOutcome(UnitTestOutcome outcome)
     {
@@ -96,5 +123,23 @@ public class XpingTestBaseTests
 
         var result = method.Invoke(null, new object[] { outcome });
         return (TestOutcome)result!;
+    }
+
+    private static (string? stackTrace, bool stackTraceOmitted) InvokeResolveStackTrace(
+        TestOutcome outcome,
+        string? stackTrace,
+        bool captureStackTraces)
+    {
+        var method = typeof(XpingTestBase).GetMethod(
+            "ResolveStackTrace",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        if (method == null)
+        {
+            throw new InvalidOperationException("ResolveStackTrace method not found");
+        }
+
+        var result = method.Invoke(null, new object?[] { outcome, stackTrace, captureStackTraces });
+        return Assert.IsType<(string?, bool)>(result);
     }
 }

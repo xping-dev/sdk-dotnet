@@ -25,13 +25,18 @@ public sealed class XpingBaseServices
     /// <summary>Gets the test identity generator.</summary>
     public ITestIdentityGenerator IdentityGenerator { get; }
 
+    /// <summary>Gets a value indicating whether stack traces should be captured.</summary>
+    public bool CaptureStackTraces { get; }
+
     internal XpingBaseServices(
         IExecutionTracker executionTracker,
         IRetryDetector<TestContext> retryDetector,
-        ITestIdentityGenerator identityGenerator)
+        ITestIdentityGenerator identityGenerator,
+        bool captureStackTraces)
     {
         ExecutionTracker  = executionTracker;
         RetryDetector     = retryDetector;
         IdentityGenerator = identityGenerator;
+        CaptureStackTraces = captureStackTraces;
     }
 }

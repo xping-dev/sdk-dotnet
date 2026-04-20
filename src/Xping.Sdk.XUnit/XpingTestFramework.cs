@@ -64,7 +64,8 @@ public sealed class XpingTestFramework : XunitTestFramework
             _services.ExecutionTracker,
             _services.RetryDetector,
             _services.IdentityGenerator,
-            _services.Logger);
+            _services.Logger,
+            _services.CaptureStackTraces);
     }
 
     /// <summary>

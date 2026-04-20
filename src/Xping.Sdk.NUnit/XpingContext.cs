@@ -4,9 +4,11 @@
  */
 
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
@@ -205,6 +207,32 @@ public class XpingContext : XpingContextOrchestrator
         return new XpingAttributeServices(
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
-            identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>());
+            identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
+            captureStackTraces: ResolveCaptureStackTraces(Services));
+    }
+
+    private static bool ResolveCaptureStackTraces(IServiceProvider services)
+    {
+        try
+        {
+            return services.GetRequiredService<IOptions<XpingConfiguration>>().Value.CaptureStackTraces;
+        }
+        catch (OptionsValidationException)
+        {
+            IConfiguration? configuration = services.GetService<IConfiguration>();
+            bool? configuredValue = configuration?.GetSection("Xping").GetValue<bool?>("CaptureStackTraces");
+            if (configuredValue.HasValue)
+            {
+                return configuredValue.Value;
+            }
+
+            string? legacyEnvValue = Environment.GetEnvironmentVariable("XPING_CAPTURESTACKTRACES");
+            if (bool.TryParse(legacyEnvValue, out bool parsedLegacyValue))
+            {
+                return parsedLegacyValue;
+            }
+
+            return true;
+        }
     }
 }

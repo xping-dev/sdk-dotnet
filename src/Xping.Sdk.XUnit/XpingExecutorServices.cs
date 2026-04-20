@@ -29,15 +29,20 @@ public sealed class XpingExecutorServices
     /// <summary>Gets the logger for <see cref="XpingMessageSink"/>.</summary>
     public ILogger<XpingMessageSink> Logger { get; }
 
+    /// <summary>Gets a value indicating whether stack traces should be captured.</summary>
+    public bool CaptureStackTraces { get; }
+
     internal XpingExecutorServices(
         IExecutionTracker executionTracker,
         IRetryDetector<ITest> retryDetector,
         ITestIdentityGenerator identityGenerator,
-        ILogger<XpingMessageSink> logger)
+        ILogger<XpingMessageSink> logger,
+        bool captureStackTraces)
     {
         ExecutionTracker  = executionTracker;
         RetryDetector     = retryDetector;
         IdentityGenerator = identityGenerator;
         Logger            = logger;
+        CaptureStackTraces = captureStackTraces;
     }
 }

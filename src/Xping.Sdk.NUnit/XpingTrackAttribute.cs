@@ -181,6 +181,8 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         var errorMessage = result.Message ?? string.Empty;
         var stackTrace = result.StackTrace ?? string.Empty;
+        (string? configuredStackTrace, bool stackTraceOmitted) =
+            ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
         // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
@@ -201,9 +203,10 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(ExtractExceptionType(result), errorMessage, stackTrace)
+            .WithException(ExtractExceptionType(result), errorMessage, configuredStackTrace)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(stackTrace))
+            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
+            .WithStackTraceOmitted(stackTraceOmitted)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -212,6 +215,22 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         services.ExecutionTracker.RecordTestCompletion(workerId, identity.TestFingerprint, test.Name, outcome);
 
         return execution;
+    }
+
+    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
+        TestOutcome outcome,
+        string? stackTrace,
+        bool captureStackTraces)
+    {
+        bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
+        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+
+        if (!captureStackTraces)
+        {
+            return (null, stackTraceOmitted);
+        }
+
+        return (stackTrace, false);
     }
 
     private static string? ExtractExceptionType(TestContext.ResultAdapter result)

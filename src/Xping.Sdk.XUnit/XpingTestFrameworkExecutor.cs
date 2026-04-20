@@ -24,7 +24,8 @@ public sealed class XpingTestFrameworkExecutor(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    ILogger<XpingMessageSink> logger) : XunitTestFrameworkExecutor(
+    ILogger<XpingMessageSink> logger,
+    bool captureStackTraces) : XunitTestFrameworkExecutor(
         assemblyName,
         sourceInformationProvider,
         diagnosticMessageSink)
@@ -46,7 +47,8 @@ public sealed class XpingTestFrameworkExecutor(
             executionTracker,
             retryDetector,
             identityGenerator,
-            logger);
+            logger,
+            captureStackTraces);
 
         // Run tests with tracking enabled
         base.RunTestCases(testCases, trackingSink, executionOptions);

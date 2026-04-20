@@ -207,6 +207,28 @@ public sealed class TestExecutionBuilderTests
     }
 
     [Fact]
+    public void WithStackTraceOmitted_WhenSetToTrue_SetsPropertyToTrue()
+    {
+        // Arrange & Act
+        var execution = new TestExecutionBuilder()
+            .WithStackTraceOmitted(true)
+            .Build();
+
+        // Assert
+        Assert.True(execution.StackTraceOmitted);
+    }
+
+    [Fact]
+    public void WithStackTraceOmitted_WhenNotCalled_DefaultsToFalse()
+    {
+        // Arrange & Act
+        var execution = new TestExecutionBuilder().Build();
+
+        // Assert
+        Assert.False(execution.StackTraceOmitted);
+    }
+
+    [Fact]
     public void WithMetadata_ShouldSetMetadata()
     {
         // Arrange
@@ -324,6 +346,20 @@ public sealed class TestExecutionBuilderTests
 
         // Assert
         Assert.Same(builder, returned);
+    }
+
+    [Fact]
+    public void Reset_AfterSettingStackTraceOmitted_ClearsToFalse()
+    {
+        // Arrange
+        var builder = new TestExecutionBuilder()
+            .WithStackTraceOmitted(true);
+
+        // Act
+        var execution = builder.Reset().Build();
+
+        // Assert
+        Assert.False(execution.StackTraceOmitted);
     }
 
     // ---------------------------------------------------------------------------

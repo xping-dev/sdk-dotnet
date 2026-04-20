@@ -521,6 +521,10 @@ Include full stack traces for failed tests in uploaded data. Stack traces help d
 - Network bandwidth concerns
 - Privacy/security requirements (stack traces may contain sensitive paths)
 
+> When `CaptureStackTraces` is set to `false`, the uploaded payload for failed tests will include
+> `stackTraceOmitted: true`. This allows the Xping cloud platform to distinguish between a test
+> that had no stack trace and one where the user explicitly disabled stack trace collection.
+
 **Example:**
 
 ```json

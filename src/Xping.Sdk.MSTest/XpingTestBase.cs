@@ -137,7 +137,9 @@ public abstract class XpingTestBase
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = GetErrorMessage(context) ?? string.Empty;
-        var stackTrace = GetStackTrace(context) ?? string.Empty;
+        string? stackTrace = GetStackTrace(context);
+        (string? configuredStackTrace, bool stackTraceOmitted) =
+            ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
         // Detect retry metadata first so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(context, outcome);
@@ -158,9 +160,10 @@ public abstract class XpingTestBase
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(GetExceptionType(context), errorMessage, stackTrace)
+            .WithException(GetExceptionType(context), errorMessage, configuredStackTrace)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(stackTrace))
+            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
+            .WithStackTraceOmitted(stackTraceOmitted)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -250,6 +253,22 @@ public abstract class XpingTestBase
             return context.Properties["ExceptionType"]?.ToString();
 
         return null;
+    }
+
+    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
+        TestOutcome outcome,
+        string? stackTrace,
+        bool captureStackTraces)
+    {
+        bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
+        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+
+        if (!captureStackTraces)
+        {
+            return (null, stackTraceOmitted);
+        }
+
+        return (stackTrace, false);
     }
 
     private static string? GetErrorMessage(TestContext context)
