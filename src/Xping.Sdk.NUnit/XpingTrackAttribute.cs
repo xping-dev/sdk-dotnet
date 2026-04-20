@@ -180,7 +180,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = result.Message ?? string.Empty;
-        var stackTrace = result.StackTrace ?? string.Empty;
+        string? stackTrace = string.IsNullOrWhiteSpace(result.StackTrace) ? null : result.StackTrace;
         (string? configuredStackTrace, bool stackTraceOmitted) =
             ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
