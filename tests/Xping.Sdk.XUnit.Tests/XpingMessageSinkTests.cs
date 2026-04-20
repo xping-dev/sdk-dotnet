@@ -37,6 +37,15 @@ public sealed class XpingMessageSinkTests
         Assert.False(stackTraceOmitted);
     }
 
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesEnabled_WhitespaceStackTrace_ReturnsNull()
+    {
+        (string? stackTrace, bool stackTraceOmitted) = InvokeResolveStackTrace(TestOutcome.Failed, "   ", true);
+
+        Assert.Null(stackTrace);
+        Assert.False(stackTraceOmitted);
+    }
+
     private static (string? stackTrace, bool stackTraceOmitted) InvokeResolveStackTrace(
         TestOutcome outcome,
         string? stackTrace,

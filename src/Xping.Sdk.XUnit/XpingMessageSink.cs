@@ -297,7 +297,8 @@ public sealed class XpingMessageSink(
         string? stackTrace,
         bool captureStackTraces)
     {
-        bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
+        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
+        bool stackTraceAvailable = normalizedStackTrace != null;
         bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
 
         if (!captureStackTraces)
@@ -305,7 +306,7 @@ public sealed class XpingMessageSink(
             return (null, stackTraceOmitted);
         }
 
-        return (stackTrace, false);
+        return (normalizedStackTrace, false);
     }
 
     private static TestMetadata ExtractMetadata(ITest test, string output)
