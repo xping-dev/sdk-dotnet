@@ -260,7 +260,8 @@ public abstract class XpingTestBase
         string? stackTrace,
         bool captureStackTraces)
     {
-        bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
+        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
+        bool stackTraceAvailable = normalizedStackTrace != null;
         bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
 
         if (!captureStackTraces)
@@ -268,7 +269,7 @@ public abstract class XpingTestBase
             return (null, stackTraceOmitted);
         }
 
-        return (stackTrace, false);
+        return (normalizedStackTrace, false);
     }
 
     private static string? GetErrorMessage(TestContext context)

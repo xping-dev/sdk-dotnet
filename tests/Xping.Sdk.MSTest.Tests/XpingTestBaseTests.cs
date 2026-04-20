@@ -109,6 +109,15 @@ public class XpingTestBaseTests
         Assert.False(result.stackTraceOmitted);
     }
 
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesEnabled_WhitespaceStackTrace_ReturnsNullAndStackTraceOmittedIsFalse()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Failed, "   ", true);
+
+        Assert.Null(result.stackTrace);
+        Assert.False(result.stackTraceOmitted);
+    }
+
     // Helper method to invoke private MapOutcome using reflection
     private static TestOutcome InvokeMapOutcome(UnitTestOutcome outcome)
     {
