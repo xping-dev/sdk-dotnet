@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Xping.Sdk.Core.Configuration;
 
 /// <summary>
-/// Resolves CaptureStackTraces from options or raw configuration in failure paths.
+/// Resolves the CaptureStackTraces setting from options or raw configuration in failure paths.
 /// </summary>
 public static class CaptureStackTraceConfigurationResolver
 {
