@@ -37,27 +37,44 @@ public class SampleTests
     }
 
     /// <summary>
-    /// FLAKY TEST TYPE 3: Environment/State-based failure.
-    /// This test fails intermittently based on system state (file system, process count, etc.).
-    /// Simulates tests that depend on machine state, available resources, or global state.
+    /// FLAKY TEST TYPE 3: Race-condition / async-dependency failure.
+    /// Simulates a service call that races against an internal watchdog timer.
+    /// Fails intermittently (~25–35 % of runs) to mimic real-world flakiness caused
+    /// by network jitter, momentarily-saturated endpoints, or CPU scheduling variance.
+    /// The nondeterminism is subtle: the test logic looks structurally sound at a glance,
+    /// reproducing the "heisenbug" pattern where failures resist consistent reproduction.
     /// </summary>
     [Fact]
     [Trait("Category", "Flaky")]
     [Trait("Category", "StateDependency")]
-    public void FlakyTest_EnvironmentState_FailsBasedOnSystemState()
+    public async Task FlakyTest_EnvironmentState_FailsBasedOnSystemState()
     {
-        // Simulate environment-dependent behavior using process count as proxy
-        // In real scenarios, this could be file locks, port availability, memory pressure, etc.
-        var processCount = System.Diagnostics.Process.GetProcesses().Length;
-        var isEvenSecond = DateTime.Now.Second % 2 == 0;
+        // Random.Shared is cryptographically seeded by the runtime — no TickCount bias.
+        var rng = Random.Shared;
+        const int nominalTimeoutMs = 120;
 
-        // Fails when both conditions are met (approximately 25% of the time)
-        // Simulates tests that depend on external system state
-        var shouldPass = processCount % 3 != 0 || !isEvenSecond;
+        // ~30 % of runs take the "slow path", simulating network jitter or a briefly
+        // saturated downstream service that overruns the caller's internal deadline.
+        var simulatedLatencyMs = rng.NextDouble() < 0.30
+            ? nominalTimeoutMs + rng.Next(30, 90)   // slow path: 150–210 ms  → fails
+            : rng.Next(10, nominalTimeoutMs - 20);  // fast path:  10–100 ms  → passes
 
-        Assert.True(shouldPass,
-            $"Environment state conflict detected (processes: {processCount}, second: {DateTime.Now.Second}). " +
-            "This simulates a test that fails due to system state like file locks, port conflicts, or resource contention.");
+        // The watchdog carries ±15 ms of jitter, so the race outcome is non-trivial
+        // near the boundary — reproducing genuine heisenbug behaviour under load or on
+        // slower CI runners where task-scheduling order is unpredictable.
+        var watchdogMs = nominalTimeoutMs + rng.Next(-15, 15);
+
+        var serviceCall = Task.Delay(simulatedLatencyMs);
+        var watchdog    = Task.Delay(watchdogMs);
+
+        var winner = await Task.WhenAny(serviceCall, watchdog);
+
+        Assert.True(
+            winner == serviceCall,
+            $"Watchdog ({watchdogMs} ms) fired before the simulated service responded " +
+            $"({simulatedLatencyMs} ms). " +
+            "This reproduces flakiness caused by network timeouts, service-side " +
+            "back-pressure, or CPU contention that shifts task-scheduling order.");
     }
 
     [Fact]
