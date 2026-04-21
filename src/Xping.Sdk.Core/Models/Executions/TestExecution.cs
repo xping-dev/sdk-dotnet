@@ -47,7 +47,8 @@ public sealed class TestExecution
         string? errorMessage,
         string? stackTrace,
         string? errorMessageHash,
-        string? stackTraceHash)
+        string? stackTraceHash,
+        bool stackTraceOmitted)
     {
         ExecutionId = executionId;
         Identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -62,6 +63,7 @@ public sealed class TestExecution
         StackTrace = stackTrace;
         ErrorMessageHash = errorMessageHash;
         StackTraceHash = stackTraceHash;
+        StackTraceOmitted = stackTraceOmitted;
         TestOrchestrationRecord = testOrchestrationRecord;
         Retry = retry;
     }
@@ -148,6 +150,10 @@ public sealed class TestExecution
     /// <summary>
     /// Gets the stack trace if the test failed.
     /// </summary>
+    /// <remarks>
+    /// Will be <see langword="null"/> when the test passed, when no stack trace was available,
+    /// or when collection was intentionally disabled (see <see cref="StackTraceOmitted"/>).
+    /// </remarks>
     public string? StackTrace { get; init; }
 
     /// <summary>
@@ -167,6 +173,16 @@ public sealed class TestExecution
     /// This hash enables grouping of test failures with identical or similar stack traces,
     /// helping identify common failure locations and patterns in the codebase.
     /// The hash is computed using SHA256 for stability and collision resistance.
+    /// Will be <see langword="null"/> when the test passed, when no stack trace was available,
+    /// or when collection was intentionally disabled (see <see cref="StackTraceOmitted"/>).
     /// </remarks>
     public string? StackTraceHash { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether stack trace capture was explicitly disabled
+    /// via <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.CaptureStackTraces"/>.
+    /// When <see langword="true"/>, <see cref="StackTrace"/> and <see cref="StackTraceHash"/> are
+    /// <see langword="null"/> because the user opted out — not because no stack trace existed.
+    /// </summary>
+    public bool StackTraceOmitted { get; init; }
 }

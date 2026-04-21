@@ -28,13 +28,15 @@ public sealed class XpingMessageSink(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    ILogger<XpingMessageSink> logger) : IMessageSink
+    ILogger<XpingMessageSink> logger,
+    bool captureStackTraces) : IMessageSink
 {
     private readonly IMessageSink _innerSink = innerSink.RequireNotNull();
     private readonly IExecutionTracker _executionTracker = executionTracker.RequireNotNull();
     private readonly IRetryDetector<ITest> _retryDetector = retryDetector.RequireNotNull();
     private readonly ITestIdentityGenerator _identityGenerator = identityGenerator.RequireNotNull();
     private readonly ILogger<XpingMessageSink> _logger = logger.RequireNotNull();
+    private readonly bool _captureStackTraces = captureStackTraces;
 
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
     private readonly ConcurrentDictionary<string, int> _activeCollections = new();
@@ -257,6 +259,7 @@ public sealed class XpingMessageSink(
         TestMetadata metadata = ExtractMetadata(test, output);
         // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
+        (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, _captureStackTraces);
         // Create execution context using collection name as worker ID.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
         TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
@@ -271,9 +274,10 @@ public sealed class XpingMessageSink(
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(exceptionType, errorMessage, stackTrace)
+            .WithException(exceptionType, errorMessage, configuredStackTrace)
             .WithErrorMessageHash(_identityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(stackTrace))
+            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(configuredStackTrace))
+            .WithStackTraceOmitted(stackTraceOmitted)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -286,6 +290,23 @@ public sealed class XpingMessageSink(
             outcome);
 
         return testExecution;
+    }
+
+    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
+        TestOutcome outcome,
+        string? stackTrace,
+        bool captureStackTraces)
+    {
+        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
+        bool stackTraceAvailable = normalizedStackTrace != null;
+        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+
+        if (!captureStackTraces)
+        {
+            return (null, stackTraceOmitted);
+        }
+
+        return (normalizedStackTrace, false);
     }
 
     private static TestMetadata ExtractMetadata(ITest test, string output)

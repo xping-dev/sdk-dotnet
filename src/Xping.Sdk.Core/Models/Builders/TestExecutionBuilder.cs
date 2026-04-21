@@ -27,6 +27,7 @@ public sealed class TestExecutionBuilder
     private string? _stackTrace;
     private string? _errorMessageHash;
     private string? _stackTraceHash;
+    private bool _stackTraceOmitted;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestExecutionBuilder"/> class.
@@ -185,6 +186,20 @@ public sealed class TestExecutionBuilder
     }
 
     /// <summary>
+    /// Marks that stack trace capture was intentionally disabled by configuration.
+    /// </summary>
+    /// <param name="omitted">
+    /// <see langword="true"/> when <c>CaptureStackTraces</c> is <see langword="false"/>
+    /// and the test failed; otherwise <see langword="false"/>.
+    /// </param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestExecutionBuilder WithStackTraceOmitted(bool omitted)
+    {
+        _stackTraceOmitted = omitted;
+        return this;
+    }
+
+    /// <summary>
     /// Sets the test orchestration.
     /// </summary>
     /// <param name="orchestrationRecord">The orchestration record.</param>
@@ -226,6 +241,7 @@ public sealed class TestExecutionBuilder
             stackTrace: _stackTrace,
             errorMessageHash: _errorMessageHash,
             stackTraceHash: _stackTraceHash,
+            stackTraceOmitted: _stackTraceOmitted,
             testOrchestrationRecord: _testOrchestrationRecord,
             retry: _retry);
     }
@@ -251,6 +267,7 @@ public sealed class TestExecutionBuilder
         _stackTrace = null;
         _errorMessageHash = null;
         _stackTraceHash = null;
+        _stackTraceOmitted = false;
         return this;
     }
 }

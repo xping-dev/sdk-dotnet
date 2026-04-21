@@ -7,7 +7,9 @@ namespace Xping.Sdk.NUnit.Tests;
 
 using global::NUnit.Framework;
 using System;
+using System.Reflection;
 using System.Threading.Tasks;
+using Xping.Sdk.Core.Models.Executions;
 using Xunit;
 using Assert = Xunit.Assert;
 
@@ -117,5 +119,45 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
         var usage = (AttributeUsageAttribute)attributes[0];
 
         Assert.False(usage.AllowMultiple);
+    }
+
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesDisabled_FailedTestWithStackTrace_SetsOmittedTrue()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Failed, "  at Method()", false);
+
+        Assert.Null(result.stackTrace);
+        Assert.True(result.stackTraceOmitted);
+    }
+
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesEnabled_FailedTest_PreservesStackTrace()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Failed, "  at Method()", true);
+
+        Assert.Equal("  at Method()", result.stackTrace);
+        Assert.False(result.stackTraceOmitted);
+    }
+
+    [Fact]
+    public void ResolveStackTrace_CaptureStackTracesDisabled_PassedTest_DoesNotMarkOmitted()
+    {
+        var result = InvokeResolveStackTrace(TestOutcome.Passed, null, false);
+
+        Assert.Null(result.stackTrace);
+        Assert.False(result.stackTraceOmitted);
+    }
+
+    private static (string? stackTrace, bool stackTraceOmitted) InvokeResolveStackTrace(
+        TestOutcome outcome,
+        string? stackTrace,
+        bool captureStackTraces)
+    {
+        MethodInfo method = typeof(XpingTrackAttribute).GetMethod(
+            "ResolveStackTrace",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        object? value = method.Invoke(null, [outcome, stackTrace, captureStackTraces]);
+        return Assert.IsType<(string?, bool)>(value);
     }
 }

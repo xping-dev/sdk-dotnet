@@ -203,6 +203,7 @@ public class XpingContext : XpingContextOrchestrator
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
             identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
-            logger: Services.GetRequiredService<ILogger<XpingMessageSink>>());
+            logger: Services.GetRequiredService<ILogger<XpingMessageSink>>(),
+            captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services));
     }
 }
