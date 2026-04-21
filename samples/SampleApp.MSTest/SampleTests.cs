@@ -50,24 +50,44 @@ public class CalculatorTests : XpingTestBase
     }
 
     /// <summary>
-    /// FLAKY TEST TYPE 1: Time-based race condition.
-    /// This test fails intermittently based on timing - simulates a race condition
-    /// or timeout issue that occurs unpredictably in real-world scenarios.
+    /// FLAKY TEST TYPE 1: Race-condition / async-dependency failure.
+    /// Simulates a service call that races against an internal watchdog timer.
+    /// Fails intermittently (~25–35 % of runs) to mimic real-world flakiness caused
+    /// by network jitter, momentarily-saturated endpoints, or CPU scheduling variance.
+    /// The nondeterminism is subtle: the test logic looks structurally sound at a glance,
+    /// reproducing the "heisenbug" pattern where failures resist consistent reproduction.
     /// </summary>
     [TestMethod]
     [TestCategory("Flaky")]
     [TestCategory("RaceCondition")]
     public async Task FlakyTest_RaceCondition_FailsIntermittently()
     {
-        // Simulate a race condition that fails ~40% of the time
-        var delayMs = DateTime.Now.Millisecond % 100;
-        await Task.Delay(delayMs);
+        // Random.Shared is cryptographically seeded by the runtime — no TickCount bias.
+        var rng = Random.Shared;
+        const int nominalTimeoutMs = 120;
 
-        // This assertion fails when the delay is less than 60ms
-        // Simulates a timing-dependent operation that doesn't always complete in time
-        Assert.IsTrue(delayMs >= 60,
-            $"Race condition detected: operation completed too quickly ({delayMs}ms). " +
-            "This simulates a test that depends on timing and fails intermittently.");
+        // ~30 % of runs take the "slow path", simulating network jitter or a briefly
+        // saturated downstream service that overruns the caller's internal deadline.
+        var simulatedLatencyMs = rng.NextDouble() < 0.30
+            ? nominalTimeoutMs + rng.Next(30, 90)   // slow path: 150–210 ms  → fails
+            : rng.Next(10, nominalTimeoutMs - 20);  // fast path:  10–100 ms  → passes
+
+        // The watchdog carries ±15 ms of jitter, so the race outcome is non-trivial
+        // near the boundary — reproducing genuine heisenbug behaviour under load or on
+        // slower CI runners where task-scheduling order is unpredictable.
+        var watchdogMs = nominalTimeoutMs + rng.Next(-15, 15);
+
+        var serviceCall = Task.Delay(simulatedLatencyMs);
+        var watchdog    = Task.Delay(watchdogMs);
+
+        var winner = await Task.WhenAny(serviceCall, watchdog);
+
+        Assert.IsTrue(
+            winner == serviceCall,
+            $"Watchdog ({watchdogMs} ms) fired before the simulated service responded " +
+            $"({simulatedLatencyMs} ms). " +
+            "This reproduces flakiness caused by network timeouts, service-side " +
+            "back-pressure, or CPU contention that shifts task-scheduling order.");
     }
 
     [DataTestMethod]

@@ -47,30 +47,45 @@ public class SampleTests
     }
 
     /// <summary>
-    /// FLAKY TEST TYPE 2: Random/Probabilistic failure.
-    /// This test fails randomly ~30% of the time, simulating tests that depend
-    /// on non-deterministic behavior like network calls, external APIs, or random data.
+    /// FLAKY TEST TYPE 2: Race-condition / async-dependency failure.
+    /// Simulates a service call that races against an internal watchdog timer.
+    /// Fails intermittently (~25–35 % of runs) to mimic real-world flakiness caused
+    /// by network jitter, momentarily-saturated endpoints, or CPU scheduling variance.
+    /// The nondeterminism is subtle: the test logic looks structurally sound at a glance,
+    /// reproducing the "heisenbug" pattern where failures resist consistent reproduction.
     /// </summary>
     [Test]
     [Category("Flaky")]
     [Category("Random")]
     [Description("Demonstrates a flaky test that fails randomly due to probabilistic behavior")]
-    public void FlakyTest_RandomFailure_FailsProbabilistically()
+    public async Task FlakyTest_RandomFailure_FailsProbabilistically()
     {
-        // Use a pseudo-random seed based on time to get different results per run
-        var seed = DateTime.Now.Millisecond + DateTime.Now.Second * 1000;
-        var random = new Random(seed);
-        // CA5394 suppressed: Random generator used intentionally to simulate non-deterministic test behavior
-        // for observability testing
-#pragma warning disable CA5394 // Do not use insecure randomness
-        var randomValue = random.Next(0, 100);
-#pragma warning restore CA5394 // Do not use insecure randomness
+        // Random.Shared is cryptographically seeded by the runtime — no TickCount bias.
+        var rng = Random.Shared;
+        const int nominalTimeoutMs = 120;
 
-        // Fails approximately 30% of the time
-        // Simulates unreliable external dependencies or non-deterministic operations
-        Assert.That(randomValue, Is.GreaterThan(30),
-            $"Random failure occurred (value: {randomValue}). " +
-            "This simulates a test with non-deterministic behavior like flaky network calls or database connections.");
+        // ~30 % of runs take the "slow path", simulating network jitter or a briefly
+        // saturated downstream service that overruns the caller's internal deadline.
+        var simulatedLatencyMs = rng.NextDouble() < 0.30
+            ? nominalTimeoutMs + rng.Next(30, 90)   // slow path: 150–210 ms  → fails
+            : rng.Next(10, nominalTimeoutMs - 20);  // fast path:  10–100 ms  → passes
+
+        // The watchdog carries ±15 ms of jitter, so the race outcome is non-trivial
+        // near the boundary — reproducing genuine heisenbug behaviour under load or on
+        // slower CI runners where task-scheduling order is unpredictable.
+        var watchdogMs = nominalTimeoutMs + rng.Next(-15, 15);
+
+        var serviceCall = Task.Delay(simulatedLatencyMs);
+        var watchdog    = Task.Delay(watchdogMs);
+
+        var winner = await Task.WhenAny(serviceCall, watchdog);
+
+        Assert.That(
+            winner == serviceCall,
+            $"Watchdog ({watchdogMs} ms) fired before the simulated service responded " +
+            $"({simulatedLatencyMs} ms). " +
+            "This reproduces flakiness caused by network timeouts, service-side " +
+            "back-pressure, or CPU contention that shifts task-scheduling order.");
     }
 
     [Test]
