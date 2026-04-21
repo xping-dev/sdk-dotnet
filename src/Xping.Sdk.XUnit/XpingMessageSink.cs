@@ -36,7 +36,6 @@ public sealed class XpingMessageSink(
     private readonly IRetryDetector<ITest> _retryDetector = retryDetector.RequireNotNull();
     private readonly ITestIdentityGenerator _identityGenerator = identityGenerator.RequireNotNull();
     private readonly ILogger<XpingMessageSink> _logger = logger.RequireNotNull();
-    private readonly bool _captureStackTraces = captureStackTraces;
 
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
     private readonly ConcurrentDictionary<string, int> _activeCollections = new();
@@ -259,7 +258,7 @@ public sealed class XpingMessageSink(
         TestMetadata metadata = ExtractMetadata(test, output);
         // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
-        (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, _captureStackTraces);
+        (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, captureStackTraces);
         // Create execution context using collection name as worker ID.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
         TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
