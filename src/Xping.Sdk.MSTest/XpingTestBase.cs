@@ -208,6 +208,8 @@ public abstract class XpingTestBase
 
                 if (keyStr == "TestCategory")
                     builder.AddCategory(value);
+                else if (keyStr == "Description")
+                    builder.WithDescription(value);
                 else
                     builder.AddCustomAttribute(keyStr!, value);
             }

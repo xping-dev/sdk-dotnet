@@ -317,8 +317,12 @@ public sealed class XpingMessageSink(
         List<string> categories = [];
         List<string> tags = ["framework:xUnit"];
         Dictionary<string, string> customAttributes = [];
+        string? description = null;
 
-        // Extract traits as categories
+        // Extract traits as categories, description, or generic tags.
+        // xUnit has no built-in [Description] attribute; the idiomatic equivalent is
+        // [Trait("Description", "...")], which is handled here by capturing the first value
+        // and excluding it from the tags collection.
         if (testCase.Traits != null)
         {
             foreach (KeyValuePair<string, List<string>> trait in testCase.Traits)
@@ -326,7 +330,12 @@ public sealed class XpingMessageSink(
                 string? key = trait.Key;
                 foreach (string? value in trait.Value)
                 {
-                    if (key.Equals("Category", StringComparison.OrdinalIgnoreCase))
+                    if (key.Equals("Description", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Capture only the first Description trait value
+                        description ??= value;
+                    }
+                    else if (key.Equals("Category", StringComparison.OrdinalIgnoreCase))
                     {
                         categories.Add(value);
                     }
@@ -375,7 +384,7 @@ public sealed class XpingMessageSink(
         TestMetadata metadata = builder
             .AddCategories(categories)
             .AddTags(tags)
-            .WithDescription(test.DisplayName)
+            .WithDescription(description)
             .AddCustomAttributes(customAttributes)
             .Build();
 
