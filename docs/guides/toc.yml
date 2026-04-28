@@ -2,6 +2,8 @@
   items:
   - name: Understanding Confidence Scores
     href: getting-started/understanding-confidence-scores.md
+  - name: Session Reliability Score
+    href: getting-started/session-reliability-score.md
   - name: Navigating the Dashboard
     href: getting-started/navigating-the-dashboard.md
   - name: Interpreting Test Results
