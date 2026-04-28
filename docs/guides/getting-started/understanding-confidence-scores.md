@@ -196,6 +196,7 @@ Confidence scores are calculated automatically after new test executions are upl
 
 ## See Also
 
+- [Session Reliability Score](./session-reliability-score.md) — How individual confidence scores are aggregated into a session-level score, and how to configure the Reliability Scoring preset
 - [Navigating the Dashboard](./navigating-the-dashboard.md) - Learn how to view confidence scores in the Xping dashboard
 - [Interpreting Test Results](./interpreting-test-results.md) - How to use confidence scores to make decisions about your tests
 - [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Use confidence scores to find unreliable tests
