@@ -558,7 +558,11 @@ public static class XpingServiceCollectionExtensions
         target.ProjectId = source.ProjectId;
         target.BatchSize = source.BatchSize;
         target.FlushInterval = source.FlushInterval;
-        target.Environment = source.Environment;
+        if (source.HasExplicitEnvironment)
+        {
+            target.Environment = source.Environment;
+        }
+
         target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
         target.CiEnvironmentName = source.CiEnvironmentName;
         target.Enabled = source.Enabled;

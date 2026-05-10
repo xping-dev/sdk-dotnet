@@ -16,7 +16,7 @@ namespace Xping.Sdk.Core.Tests.Services.Environment;
 [Collection("Sequential")]
 public sealed class EnvironmentDetectorTests
 {
-    private static readonly string[] _ciVariables =
+    private static readonly string[] _environmentVariables =
     [
         "CI",
         "GITHUB_ACTIONS",
@@ -28,12 +28,15 @@ public sealed class EnvironmentDetectorTests
         "TEAMCITY_VERSION",
         "BITBUCKET_PIPELINE_UUID",
         "APPVEYOR",
+        "XPING_ENVIRONMENT",
+        "ASPNETCORE_ENVIRONMENT",
+        "DOTNET_ENVIRONMENT",
     ];
 
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithDotnetEnvironmentAndDefaultConfiguration_UsesDotnetEnvironment()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_ciVariables);
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var dotnetEnvironment = new EnvRestorer("DOTNET_ENVIRONMENT", "Development");
 
         IEnvironmentDetector detector = CreateDetector();
@@ -47,7 +50,7 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithLocalExecution_MarksDeveloperMachine()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_ciVariables);
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
 
         IEnvironmentDetector detector = CreateDetector();
 

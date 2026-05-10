@@ -554,7 +554,7 @@ If you want auto-detected CI runs grouped under a label other than the default `
 
 ```yaml
 env:
-  XPING__CIENVIRONMENTNAME: "BuildPipeline"
+  XPING_CIENVIRONMENTNAME: "BuildPipeline"
 ```
 
 ---
