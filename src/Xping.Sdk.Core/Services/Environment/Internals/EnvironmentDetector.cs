@@ -602,7 +602,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
         const string headsPrefix = "refs/heads/";
         return gitRef!.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
-            ? gitRef.Substring(headsPrefix.Length)
+            ? gitRef.Substring(headsPrefix.Length, gitRef.Length - headsPrefix.Length)
             : gitRef;
     }
 
