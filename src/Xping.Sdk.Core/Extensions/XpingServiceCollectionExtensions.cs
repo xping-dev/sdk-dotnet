@@ -492,6 +492,9 @@ public static class XpingServiceCollectionExtensions
             && bool.TryParse(autoDetect, out var ad))
             config.AutoDetectCIEnvironment = ad;
 
+        if (GetEnv("CIENVIRONMENTNAME") is { } ciEnvironmentName)
+            config.CiEnvironmentName = ciEnvironmentName;
+
         // Feature Flags
         if (GetEnv("ENABLED") is { } enabled && bool.TryParse(enabled, out var e))
             config.Enabled = e;
@@ -557,6 +560,7 @@ public static class XpingServiceCollectionExtensions
         target.FlushInterval = source.FlushInterval;
         target.Environment = source.Environment;
         target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
+        target.CiEnvironmentName = source.CiEnvironmentName;
         target.Enabled = source.Enabled;
         target.CaptureStackTraces = source.CaptureStackTraces;
         target.EnableCompression = source.EnableCompression;

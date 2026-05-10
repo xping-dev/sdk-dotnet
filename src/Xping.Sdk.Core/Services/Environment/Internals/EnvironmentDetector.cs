@@ -347,11 +347,13 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         // Priority 2: Auto-detect CI if enabled
         if (configuration.AutoDetectCIEnvironment && _ciPlatform.Value.HasValue)
         {
-            return "CI";
+            return string.IsNullOrWhiteSpace(configuration.CiEnvironmentName)
+                ? XpingConfiguration.DefaultCiEnvironment
+                : configuration.CiEnvironmentName;
         }
 
-        // Priority 3: Use configuration property
-        if (!string.IsNullOrWhiteSpace(configuration.Environment))
+        // Priority 3: Use explicitly configured environment property
+        if (configuration.HasExplicitEnvironment)
         {
             return configuration.Environment;
         }
@@ -369,8 +371,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             return dotnetEnv!;
         }
 
-        // Priority 5: Default to "Local"
-        return XpingConfiguration.DefaultEnvironment;
+        // Priority 5: Default to configured/default local environment
+        return configuration.Environment;
     }
 
     private bool DetectIsContainer()
@@ -414,6 +416,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private Dictionary<string, string> CollectCustomProperties(string operatingSystem, CIPlatform? ciPlatform, bool isContainer)
     {
         Dictionary<string, string> properties = new Dictionary<string, string>();
+
+        properties["ExecutionContext"] = ciPlatform.HasValue ? "CI" : "Local";
+        if (!ciPlatform.HasValue && !isContainer)
+        {
+            properties["IsDeveloperMachine"] = "true";
+        }
 
         // Add container information
         if (isContainer)
@@ -468,6 +476,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.RunId", GetEnvironmentVariable("GITHUB_RUN_ID"));
                     AddIfNotNull(properties, "CI.RunNumber", GetEnvironmentVariable("GITHUB_RUN_NUMBER"));
                     AddIfNotNull(properties, "CI.Ref", GetEnvironmentVariable("GITHUB_REF"));
+                    AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
+                        GetEnvironmentVariable("GITHUB_HEAD_REF"),
+                        GetEnvironmentVariable("GITHUB_REF_NAME"),
+                        ExtractBranchName(GetEnvironmentVariable("GITHUB_REF"))));
+                    AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
+                    AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
                     AddIfNotNull(properties, "CI.SHA", GetEnvironmentVariable("GITHUB_SHA"));
                     AddIfNotNull(properties, "CI.Actor", GetEnvironmentVariable("GITHUB_ACTOR"));
                     AddIfNotNull(properties, "CI.Workflow", GetEnvironmentVariable("GITHUB_WORKFLOW"));
@@ -478,6 +492,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_BUILDNUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BUILD_REPOSITORY_NAME"));
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
+                    AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
+                        GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
+                        ExtractBranchName(GetEnvironmentVariable("BUILD_SOURCEBRANCH"))));
                     AddIfNotNull(properties, "CI.SourceVersion", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
                     AddIfNotNull(properties, "CI.RequestedFor", GetEnvironmentVariable("BUILD_REQUESTEDFOR"));
                     break;
@@ -488,6 +505,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildUrl", GetEnvironmentVariable("BUILD_URL"));
                     AddIfNotNull(properties, "CI.GitCommit", GetEnvironmentVariable("GIT_COMMIT"));
                     AddIfNotNull(properties, "CI.GitBranch", GetEnvironmentVariable("GIT_BRANCH"));
+                    AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("GIT_BRANCH"));
                     break;
 
                 case CIPlatform.GitLabCI:
@@ -496,7 +514,11 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.ProjectPath", GetEnvironmentVariable("CI_PROJECT_PATH"));
                     AddIfNotNull(properties, "CI.CommitSHA", GetEnvironmentVariable("CI_COMMIT_SHA"));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
+                    AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
+                        GetEnvironmentVariable("CI_COMMIT_BRANCH"),
+                        GetEnvironmentVariable("CI_COMMIT_REF_NAME")));
                     AddIfNotNull(properties, "CI.CommitAuthor", GetEnvironmentVariable("CI_COMMIT_AUTHOR"));
+                    AddIfNotNull(properties, "CI.Actor", GetEnvironmentVariable("GITLAB_USER_LOGIN"));
                     break;
 
                 case CIPlatform.CircleCI:
@@ -554,6 +576,32 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         {
             dictionary[key] = value!;
         }
+    }
+
+    private static string? GetFirstNonEmptyValue(params string?[] values)
+    {
+        foreach (string? value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractBranchName(string? gitRef)
+    {
+        if (string.IsNullOrWhiteSpace(gitRef))
+        {
+            return null;
+        }
+
+        const string headsPrefix = "refs/heads/";
+        return gitRef!.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
+            ? gitRef.Substring(headsPrefix.Length)
+            : gitRef;
     }
 
     private static string? GetEnvironmentVariable(string variable)
