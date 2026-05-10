@@ -6,7 +6,7 @@ Learn how to integrate Xping SDK into your CI/CD pipelines for continuous test r
 
 ## Overview
 
-Xping SDK automatically detects CI/CD environments and captures relevant metadata like build numbers, commit SHAs, and branch names. This enables you to:
+Xping SDK automatically detects CI/CD environments and captures relevant metadata like build numbers, commit SHAs, and branch names. It also marks non-CI executions as local developer-machine runs. This enables you to:
 
 - **Track test reliability across builds**
 - **Detect flaky tests in your pipeline**
@@ -87,6 +87,7 @@ Xping automatically captures:
 - `GITHUB_RUN_NUMBER` - Sequential run number
 - `GITHUB_SHA` - Commit SHA
 - `GITHUB_REF` - Branch or tag ref
+- `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
 - `GITHUB_ACTOR` - User who triggered the workflow
 
@@ -216,7 +217,7 @@ Xping automatically captures:
 - `CI_PIPELINE_ID` - Unique pipeline ID
 - `CI_JOB_ID` - Job ID
 - `CI_COMMIT_SHA` - Commit SHA
-- `CI_COMMIT_REF_NAME` - Branch or tag name
+- `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
 - `CI_PROJECT_PATH` - Repository path
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
 
@@ -545,6 +546,15 @@ Track different branches in different Xping projects:
   env:
     XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
   run: dotnet test
+```
+
+### Custom CI Environment Label
+
+If you want auto-detected CI runs grouped under a label other than the default `CI`, set `XPING_CIENVIRONMENTNAME`:
+
+```yaml
+env:
+  XPING_CIENVIRONMENTNAME: "BuildPipeline"
 ```
 
 ---

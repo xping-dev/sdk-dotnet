@@ -23,6 +23,7 @@ public sealed class XpingConfigurationTests
         Assert.Equal(TimeSpan.FromSeconds(30), config.FlushInterval);
         Assert.Equal("Local", config.Environment);
         Assert.True(config.AutoDetectCIEnvironment);
+        Assert.Equal("CI", config.CiEnvironmentName);
         Assert.True(config.Enabled);
         Assert.True(config.CaptureStackTraces);
         Assert.True(config.EnableCompression);

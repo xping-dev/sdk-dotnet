@@ -26,6 +26,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
 | `Environment` | string | `Local` | `XPING_ENVIRONMENT` | Environment name |
 | `AutoDetectCIEnvironment` | bool | `true` | `XPING_AUTODETECTCIENVIRONMENT` | Auto-detect CI/CD |
+| `CiEnvironmentName` | string | `CI` | `XPING_CIENVIRONMENTNAME` | Label used for auto-detected CI executions |
 | `Enabled` | bool | `true` | `XPING_ENABLED` | SDK enabled/disabled |
 | `CaptureStackTraces` | bool | `true` | `XPING_CAPTURESTACKTRACES` | Include stack traces |
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
@@ -414,11 +415,12 @@ export XPING_ENVIRONMENT="Staging"
 The SDK determines the environment name using the following priority (highest to lowest):
 
 1. **`XPING_ENVIRONMENT` environment variable** - Explicit Xping-specific setting (highest priority)
-2. **Auto-detected CI** - Returns `"CI"` when `AutoDetectCIEnvironment=true` and running in a detected CI/CD platform
+2. **Auto-detected CI** - Returns `CiEnvironmentName` (default `"CI"`) when `AutoDetectCIEnvironment=true` and running in a detected CI/CD platform
 3. **`Environment` configuration property** - Value set programmatically or in configuration files
-4. **Default** - Returns `"Local"` when none of the above are set
+4. **Framework environment variables** - `ASPNETCORE_ENVIRONMENT`, then `DOTNET_ENVIRONMENT`
+5. **Default** - Returns `"Local"` when none of the above are set
 
-**Example:** If you won't specify `Environment` and `AutoDetectCIEnvironment=false`, Xping will use `"Local"` as the environment name. However, setting `XPING_ENVIRONMENT=Staging` will override this and use `"Staging"` instead.
+**Example:** If you don't specify `Environment` and `AutoDetectCIEnvironment=false`, Xping will use `DOTNET_ENVIRONMENT`/`ASPNETCORE_ENVIRONMENT` when available, and otherwise fall back to `"Local"`. Setting `XPING_ENVIRONMENT=Staging` still overrides everything and uses `"Staging"` instead.
 
 ---
 
@@ -428,7 +430,7 @@ The SDK determines the environment name using the following priority (highest to
 **Default:** `true`  
 **Environment Variable:** `XPING_AUTODETECTCIENVIRONMENT`
 
-Automatically detect when running in CI/CD environments and set `Environment` to `"CI"`. Also captures CI-specific metadata (build numbers, commit SHAs, etc.).
+Automatically detect when running in CI/CD environments and set `Environment` to `CiEnvironmentName` (default `"CI"`). Also captures CI-specific metadata (build numbers, commit SHAs, branch names, etc.).
 
 **Supported CI/CD platforms:**
 - GitHub Actions
@@ -458,6 +460,31 @@ Automatically detect when running in CI/CD environments and set `Environment` to
 
 ```bash
 export XPING_AUTODETECTCIENVIRONMENT="false"
+```
+
+---
+
+### CiEnvironmentName
+
+**Type:** `string`  
+**Default:** `"CI"`  
+**Environment Variable:** `XPING_CIENVIRONMENTNAME`
+
+Overrides the label used when CI/CD is auto-detected. This is useful when you want CI executions grouped under a more specific environment name such as `"BuildPipeline"` or `"PullRequestValidation"` without disabling auto-detection.
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "AutoDetectCIEnvironment": true,
+    "CiEnvironmentName": "BuildPipeline"
+  }
+}
+```
+
+```bash
+export XPING_CIENVIRONMENTNAME="BuildPipeline"
 ```
 
 ---

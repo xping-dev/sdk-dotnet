@@ -90,6 +90,17 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets the environment name to use when CI/CD is auto-detected.
+    /// </summary>
+    /// <param name="ciEnvironmentName">The CI/CD environment name.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public XpingConfigurationBuilder WithCiEnvironmentName(string ciEnvironmentName)
+    {
+        _configuration.CiEnvironmentName = ciEnvironmentName;
+        return this;
+    }
+
+    /// <summary>
     /// Sets whether the SDK is enabled.
     /// </summary>
     /// <param name="enabled">Whether the SDK is enabled.</param>

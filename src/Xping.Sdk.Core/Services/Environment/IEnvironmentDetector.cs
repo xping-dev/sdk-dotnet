@@ -52,7 +52,8 @@ public interface IEnvironmentDetector
     /// <summary>
     /// Gets the environment name based on configuration and auto-detection rules.
     /// Priority:
-    ///   XPING_ENVIRONMENT > AutoDetectCI > Options.Environment > ASPNETCORE_ENVIRONMENT/DOTNET_ENVIRONMENT > "Local"
+    ///   XPING_ENVIRONMENT > AutoDetectCI > explicitly configured Options.Environment >
+    ///   ASPNETCORE_ENVIRONMENT/DOTNET_ENVIRONMENT > "Local"
     /// </summary>
     /// <remarks>
     /// The environment name is used in confidence calculations, which are performed both globally across all executions

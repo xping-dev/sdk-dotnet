@@ -18,6 +18,13 @@ public sealed class XpingConfiguration
     public const string DefaultEnvironment = "Local";
 
     /// <summary>
+    /// Represents the default value for <see cref="CiEnvironmentName"/> when CI/CD is auto-detected and no explicit override is configured.
+    /// </summary>
+    public const string DefaultCiEnvironment = "CI";
+
+    private string? _environment;
+
+    /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
     [Required(ErrorMessage = "ApiEndpoint is required")]
@@ -57,13 +64,24 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the environment name (e.g., "Local", "CI", "Staging", "Production").
+    /// When left unset, the SDK falls back to <see cref="DefaultEnvironment"/> unless a CI or framework-specific
+    /// environment variable takes precedence during environment detection.
     /// </summary>
-    public string Environment { get; set; } = DefaultEnvironment;
+    public string Environment
+    {
+        get => string.IsNullOrWhiteSpace(_environment) ? DefaultEnvironment : _environment!;
+        set => _environment = value;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether to automatically detect CI/CD environments.
     /// </summary>
     public bool AutoDetectCIEnvironment { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the environment name to use when CI/CD is auto-detected.
+    /// </summary>
+    public string CiEnvironmentName { get; set; } = DefaultCiEnvironment;
 
     /// <summary>
     /// Gets or sets a value indicating whether the SDK is enabled.
@@ -213,4 +231,6 @@ public sealed class XpingConfiguration
     {
         return Validate().Count == 0;
     }
+
+    internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
 }
