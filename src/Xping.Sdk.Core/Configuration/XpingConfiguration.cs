@@ -18,7 +18,8 @@ public sealed class XpingConfiguration
     public const string DefaultEnvironment = "Local";
 
     /// <summary>
-    /// Represents the default environment name used when CI/CD is auto-detected.
+    /// Represents the default value for <see cref="CiEnvironmentName"/> when CI/CD is auto-detected
+    /// and no explicit override is configured.
     /// </summary>
     public const string DefaultCiEnvironment = "CI";
 

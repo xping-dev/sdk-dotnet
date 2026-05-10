@@ -417,7 +417,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     {
         Dictionary<string, string> properties = new Dictionary<string, string>();
 
-        properties["ExecutionContext"] = ciPlatform.HasValue ? "CI" : "Local";
+        properties["ExecutionContext"] = ciPlatform.HasValue
+            ? XpingConfiguration.DefaultCiEnvironment
+            : XpingConfiguration.DefaultEnvironment;
         if (!ciPlatform.HasValue && !isContainer)
         {
             properties["IsDeveloperMachine"] = "true";
