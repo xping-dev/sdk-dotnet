@@ -661,4 +661,19 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         Assert.Equal("BuildPipeline", bound.CiEnvironmentName);
     }
+
+    [Fact]
+    public void BindEnvVars_COLLECTLOCALGITAUTHOR_ShouldParseBool()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "k");
+        using var _proj = WithEnv("XPING_PROJECTID", "p");
+        using var _ = WithEnv("XPING_COLLECTLOCALGITAUTHOR", "true");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.True(bound.CollectLocalGitAuthor);
+    }
 }

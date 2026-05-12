@@ -665,7 +665,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 return;
             }
 
-            properties["IsDetachedHead"] = isDetachedHead ? "true" : "false";
+            if (isDetachedHead)
+            {
+                properties["IsDetachedHead"] = "true";
+            }
 
             if (branch is not null)
             {

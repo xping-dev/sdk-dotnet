@@ -302,7 +302,7 @@ public sealed class EnvironmentDetectorTests
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
-        Assert.Equal("false", info.CustomProperties["IsDetachedHead"]);
+        Assert.DoesNotContain("IsDetachedHead", info.CustomProperties.Keys);
         Assert.DoesNotContain("Git.Branch", info.CustomProperties.Keys);
         Assert.DoesNotContain("Git.SHA", info.CustomProperties.Keys);
     }
