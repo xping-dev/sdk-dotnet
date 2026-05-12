@@ -36,6 +36,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
+| `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 
 ---
@@ -671,6 +672,47 @@ XpingContext.Initialize(config);
 
 ---
 
+### CollectLocalGitAuthor
+
+**Type:** `bool`  
+**Default:** `false`  
+**Environment Variable:** `XPING_COLLECTLOCALGITAUTHOR`
+
+When running on a developer machine (not a CI environment) inside a git repository, controls whether the SDK reads the author name from `.git/config [user] name` and includes it as the `Git.Actor` custom property in environment metadata.
+
+This setting is **disabled by default** because `user.name` in `.git/config` is typically a developer's real full name — collecting and uploading it without explicit consent is a PII concern. Enable it only when your team is aware and has agreed to share this information.
+
+**When enabled, the following custom property is populated:**
+- `Git.Actor` — value of `[user] name` from the local `.git/config`
+
+**This setting has no effect when:**
+- Running in a CI environment (`IsCIEnvironment = true`) — CI actor comes from the CI provider's environment variables instead
+- Running outside a git repository
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "CollectLocalGitAuthor": true
+  }
+}
+```
+
+```bash
+export XPING_COLLECTLOCALGITAUTHOR="true"
+```
+
+```csharp
+var config = new XpingConfiguration
+{
+    CollectLocalGitAuthor = true
+};
+XpingContext.Initialize(config);
+```
+
+---
+
 ## Advanced Settings
 
 > **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
@@ -837,7 +879,8 @@ export XPING_SAMPLINGRATE="0.1"
     "SamplingRate": 1.0,
     "UploadTimeout": "00:00:30",
     "CollectNetworkMetrics": true,
-    "EnablePullRequestDetection": true
+    "EnablePullRequestDetection": true,
+    "CollectLocalGitAuthor": false
   }
 }
 ```

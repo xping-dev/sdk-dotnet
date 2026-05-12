@@ -90,6 +90,223 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain("IsDeveloperMachine", info.CustomProperties.Keys);
     }
 
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_InsideGitRepository_SetsIsInsideGitRepositoryTrue()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
+        Assert.Equal("main", info.CustomProperties["Git.Branch"]);
+        Assert.Equal("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", info.CustomProperties["Git.SHA"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_OutsideGitRepository_SetsIsInsideGitRepositoryFalse()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempDir = new TempEmptyDirectory();
+        using var dirRestorer = new WorkingDirectoryRestorer(tempDir.Path);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("false", info.CustomProperties["IsInsideGitRepository"]);
+        Assert.DoesNotContain("Git.Branch", info.CustomProperties.Keys);
+        Assert.DoesNotContain("Git.SHA", info.CustomProperties.Keys);
+        Assert.DoesNotContain("Git.Actor", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithDetachedHead_SetsIsDetachedHeadTrueAndNoBranch()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        const string detachedSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        tempGit.WriteHead(detachedSha);
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
+        Assert.Equal("true", info.CustomProperties["IsDetachedHead"]);
+        Assert.Equal(detachedSha, info.CustomProperties["Git.SHA"]);
+        Assert.DoesNotContain("Git.Branch", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithCIEnvironment_CIBranchPopulatedFromEnvVarNotGit()
+    {
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/ci-branch");
+        using var githubSha = new EnvRestorer("GITHUB_SHA", "cafebabe");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.True(info.IsCIEnvironment);
+        Assert.Equal("feature/ci-branch", info.CustomProperties["CI.Branch"]);
+        Assert.Equal("cafebabe", info.CustomProperties["CI.SHA"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_InsideGitRepositoryWithUserConfig_SetsActorFromGitConfig()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
+        tempGit.WriteConfig("[user]\n\tname = Jane Doe\n\temail = jane@example.com\n");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("Jane Doe", info.CustomProperties["Git.Actor"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithUserConfigButAuthorCollectionDisabled_OmitsActor()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
+        tempGit.WriteConfig("[user]\n\tname = Jane Doe\n\temail = jane@example.com\n");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector(); // CollectLocalGitAuthor defaults to false
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("Git.Actor", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithPackedRefsOnly_ResolvesShaFromPackedRefs()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/release");
+        tempGit.WritePackedRefs("# pack-refs with: peeled fully-peeled sorted\naaaa1111bbbb2222cccc3333dddd4444eeee5555 refs/heads/release\n");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("release", info.CustomProperties["Git.Branch"]);
+        Assert.Equal("aaaa1111bbbb2222cccc3333dddd4444eeee5555", info.CustomProperties["Git.SHA"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithGitWorktree_DetectsRepositoryViaGitFile()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var mainGit = new TempGitDirectory();
+        mainGit.WriteHead("ref: refs/heads/main");
+        mainGit.WriteRef("main", "1234567890abcdef1234567890abcdef12345678");
+
+        // Simulate a worktree: create a separate directory with a .git FILE pointing to the main gitdir
+        string worktreeRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(worktreeRoot);
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(worktreeRoot, ".git"),
+                $"gitdir: {mainGit.GitDir}\n");
+
+            using var dirRestorer = new WorkingDirectoryRestorer(worktreeRoot);
+            IEnvironmentDetector detector = CreateDetector();
+            EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+            Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
+            Assert.Equal("main", info.CustomProperties["Git.Branch"]);
+        }
+        finally
+        {
+            try { Directory.Delete(worktreeRoot, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithIndexNewerThanRef_SetsStagedChangesTrue()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
+        tempGit.WriteIndex();
+        var past = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var recent = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        tempGit.SetFileTime(Path.Combine("refs", "heads", "main"), past);
+        tempGit.SetFileTime("index", recent); // index newer than ref
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["HasStagedChanges"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithIndexOlderThanRef_SetsStagedChangesFalse()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
+        tempGit.WriteIndex();
+        var past = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var recent = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        tempGit.SetFileTime("index", past); // index older than ref
+        tempGit.SetFileTime(Path.Combine("refs", "heads", "main"), recent);
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("false", info.CustomProperties["HasStagedChanges"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithNoIndexFile_OmitsStagedChanges()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
+        // no index file written
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("HasStagedChanges", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithNonBranchSymbolicRef_DoesNotSetDetachedHead()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/tags/v1.0");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
+        Assert.DoesNotContain("IsDetachedHead", info.CustomProperties.Keys);
+        Assert.DoesNotContain("Git.Branch", info.CustomProperties.Keys);
+        Assert.DoesNotContain("Git.SHA", info.CustomProperties.Keys);
+    }
+
     private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
     {
         XpingConfiguration resolvedConfiguration = configuration ?? new XpingConfiguration();
@@ -137,6 +354,67 @@ public sealed class EnvironmentDetectorTests
             {
                 disposable.Dispose();
             }
+        }
+    }
+
+    private sealed class WorkingDirectoryRestorer : IDisposable
+    {
+        private readonly string _original;
+
+        public WorkingDirectoryRestorer(string newDirectory)
+        {
+            _original = Directory.GetCurrentDirectory();
+            Directory.SetCurrentDirectory(newDirectory);
+        }
+
+        public void Dispose() => Directory.SetCurrentDirectory(_original);
+    }
+
+    private sealed class TempEmptyDirectory : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
+
+        public TempEmptyDirectory() => Directory.CreateDirectory(Path);
+
+        public void Dispose()
+        {
+            try { Directory.Delete(Path, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    private sealed class TempGitDirectory : IDisposable
+    {
+        private readonly string _root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
+
+        public string WorkingDirectory => _root;
+        public string GitDir => System.IO.Path.Combine(_root, ".git");
+
+        public TempGitDirectory()
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(GitDir, "refs", "heads"));
+        }
+
+        public void WriteHead(string content) =>
+            File.WriteAllText(System.IO.Path.Combine(GitDir, "HEAD"), content + "\n");
+
+        public void WriteRef(string branch, string sha) =>
+            File.WriteAllText(System.IO.Path.Combine(GitDir, "refs", "heads", branch), sha + "\n");
+
+        public void WritePackedRefs(string content) =>
+            File.WriteAllText(System.IO.Path.Combine(GitDir, "packed-refs"), content);
+
+        public void WriteConfig(string content) =>
+            File.WriteAllText(System.IO.Path.Combine(GitDir, "config"), content);
+
+        public void WriteIndex(string content = "") =>
+            File.WriteAllText(System.IO.Path.Combine(GitDir, "index"), content);
+
+        public void SetFileTime(string relativePathInsideGitDir, DateTime utc) =>
+            File.SetLastWriteTimeUtc(System.IO.Path.Combine(GitDir, relativePathInsideGitDir), utc);
+
+        public void Dispose()
+        {
+            try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
         }
     }
 }

@@ -127,6 +127,14 @@ public sealed class XpingConfiguration
     public bool EnablePullRequestDetection { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to include the local git author name
+    /// (read from <c>.git/config [user] name</c>) in environment metadata when running
+    /// outside a CI environment.
+    /// Disabled by default to prevent unintentional collection of developer PII.
+    /// </summary>
+    public bool CollectLocalGitAuthor { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
     /// When <see langword="true"/>, configuration errors cause the SDK to throw a
     /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> during initialization, allowing callers to

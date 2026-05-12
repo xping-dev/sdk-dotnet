@@ -415,14 +415,27 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
     private Dictionary<string, string> CollectCustomProperties(string operatingSystem, CIPlatform? ciPlatform, bool isContainer)
     {
-        Dictionary<string, string> properties = new Dictionary<string, string>();
+        Dictionary<string, string> properties = new()
+        {
+            ["ExecutionContext"] = ciPlatform.HasValue
+                ? XpingConfiguration.DefaultCiEnvironment
+                : XpingConfiguration.DefaultEnvironment
+        };
 
-        properties["ExecutionContext"] = ciPlatform.HasValue
-            ? XpingConfiguration.DefaultCiEnvironment
-            : XpingConfiguration.DefaultEnvironment;
         if (!ciPlatform.HasValue && !isContainer)
         {
             properties["IsDeveloperMachine"] = "true";
+        }
+
+        // Detect whether running inside a git repository
+        string? gitDir = FindGitDirectory();
+        bool isInsideGitRepository = gitDir is not null;
+        properties["IsInsideGitRepository"] = isInsideGitRepository ? "true" : "false";
+
+        // Collect local git metadata when not running in a CI environment
+        if (!ciPlatform.HasValue && gitDir is not null)
+        {
+            CollectLocalGitMetadata(properties, gitDir, _configuration.CollectLocalGitAuthor);
         }
 
         // Add container information
@@ -570,6 +583,247 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         properties["ProcessorCount"] = System.Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture);
 
         return properties;
+    }
+
+    private static string? FindGitDirectory()
+    {
+        try
+        {
+            var dir = new DirectoryInfo(System.Environment.CurrentDirectory);
+            while (dir is not null)
+            {
+                string candidate = Path.Combine(dir.FullName, ".git");
+
+                if (Directory.Exists(candidate))
+                    return candidate;
+
+                // Worktrees and submodules: .git is a file containing "gitdir: <path>"
+                if (File.Exists(candidate))
+                {
+                    string content = File.ReadAllText(candidate).Trim();
+                    const string gitdirPrefix = "gitdir: ";
+                    if (content.StartsWith(gitdirPrefix, StringComparison.Ordinal))
+                    {
+                        string gitdirPath = content.Substring(gitdirPrefix.Length).Trim();
+                        if (!Path.IsPathRooted(gitdirPath))
+                            gitdirPath = Path.GetFullPath(Path.Combine(dir.FullName, gitdirPath));
+                        if (Directory.Exists(gitdirPath))
+                            return gitdirPath;
+                    }
+                }
+
+                dir = dir.Parent;
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void CollectLocalGitMetadata(Dictionary<string, string> properties, string gitDir, bool includeAuthor)
+    {
+        try
+        {
+            string headPath = Path.Combine(gitDir, "HEAD");
+            if (!File.Exists(headPath))
+                return;
+
+            string headContent = File.ReadAllText(headPath).Trim();
+            const string headsRefPrefix = "ref: refs/heads/";
+            const string refAnnotation = "ref: ";
+            bool isDetachedHead;
+            string? branch;
+            string? sha;
+
+            if (headContent.StartsWith(headsRefPrefix, StringComparison.Ordinal))
+            {
+                // Normal branch checkout
+                isDetachedHead = false;
+                branch = headContent.Substring(headsRefPrefix.Length);
+                sha = ResolveCommitSha(gitDir, branch);
+            }
+            else if (headContent.StartsWith(refAnnotation, StringComparison.Ordinal))
+            {
+                // Symbolic ref to a non-branch (tag, remote, etc.) — not detached HEAD,
+                // but we cannot safely resolve a branch name or SHA without following the full ref chain.
+                isDetachedHead = false;
+                branch = null;
+                sha = null;
+            }
+            else if (IsValidSha(headContent))
+            {
+                // Raw SHA — truly detached HEAD
+                isDetachedHead = true;
+                branch = null;
+                sha = headContent;
+            }
+            else
+            {
+                // Unrecognized HEAD format — skip metadata collection
+                return;
+            }
+
+            if (isDetachedHead)
+            {
+                properties["IsDetachedHead"] = "true";
+            }
+
+            if (branch is not null)
+            {
+                AddIfNotNull(properties, "Git.Branch", branch);
+            }
+
+            AddIfNotNull(properties, "Git.SHA", sha);
+
+            if (includeAuthor)
+            {
+                string? authorName = ReadGitConfigUserName(gitDir);
+                AddIfNotNull(properties, "Git.Actor", authorName);
+            }
+
+            bool? hasStagedChanges = DetectStagedChanges(gitDir, branch);
+            if (hasStagedChanges.HasValue)
+            {
+                properties["HasStagedChanges"] = hasStagedChanges.Value ? "true" : "false";
+            }
+        }
+        catch
+        {
+            // Never throw from environment detection methods
+        }
+    }
+
+    private static string? ResolveCommitSha(string gitDir, string branch)
+    {
+        try
+        {
+            string refFilePath = Path.Combine(gitDir, "refs", "heads", branch);
+            if (File.Exists(refFilePath))
+            {
+                return File.ReadAllText(refFilePath).Trim();
+            }
+
+            // Fall back to packed-refs
+            string packedRefsPath = Path.Combine(gitDir, "packed-refs");
+            if (File.Exists(packedRefsPath))
+            {
+                string target = $"refs/heads/{branch}";
+                foreach (string line in File.ReadAllLines(packedRefsPath))
+                {
+                    if (line.EndsWith(target, StringComparison.Ordinal))
+                    {
+                        int spaceIndex = line.IndexOf(' ');
+                        if (spaceIndex > 0)
+                        {
+                            return line.Substring(0, spaceIndex);
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadGitConfigUserName(string gitDir)
+    {
+        try
+        {
+            string configPath = Path.Combine(gitDir, "config");
+            if (!File.Exists(configPath))
+                return null;
+
+            bool inUserSection = false;
+            foreach (string line in File.ReadAllLines(configPath))
+            {
+                string trimmed = line.Trim();
+
+                if (trimmed == "[user]")
+                {
+                    inUserSection = true;
+                    continue;
+                }
+
+                if (trimmed.StartsWith("[", StringComparison.Ordinal) && inUserSection)
+                {
+                    break;
+                }
+
+                if (inUserSection)
+                {
+                    int eqIndex = trimmed.IndexOf('=');
+                    if (eqIndex < 0)
+                    {
+                        continue;
+                    }
+
+                    string key = trimmed.Substring(0, eqIndex).Trim();
+                    if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return trimmed.Substring(eqIndex + 1).Trim();
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Heuristic: compares the mtime of .git/index (updated on git add) against the mtime of
+    // the last-commit ref file. Returns true if the index appears newer than the last commit,
+    // suggesting staged-but-not-yet-committed changes. Does NOT detect unstaged working-tree
+    // edits. Property key is "HasStagedChanges" to reflect this limitation accurately.
+    private static bool? DetectStagedChanges(string gitDir, string? branch)
+    {
+        try
+        {
+            string indexFile = Path.Combine(gitDir, "index");
+            if (!File.Exists(indexFile))
+                return null;
+
+            DateTime indexModified = File.GetLastWriteTimeUtc(indexFile);
+
+            // Try loose ref first
+            if (branch is not null)
+            {
+                string loosePath = Path.Combine(gitDir, "refs", "heads", branch);
+                if (File.Exists(loosePath))
+                    return indexModified > File.GetLastWriteTimeUtc(loosePath);
+            }
+
+            // Fall back to packed-refs mtime as a conservative proxy
+            string packedRefsPath = Path.Combine(gitDir, "packed-refs");
+            if (File.Exists(packedRefsPath))
+                return indexModified > File.GetLastWriteTimeUtc(packedRefsPath);
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsValidSha(string value)
+    {
+        if (value.Length is not 40 and not 64)
+            return false;
+        foreach (char c in value)
+        {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                return false;
+        }
+        return true;
     }
 
     private static void AddIfNotNull(Dictionary<string, string> dictionary, string key, string? value)

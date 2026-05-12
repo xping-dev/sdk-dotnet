@@ -542,6 +542,11 @@ public static class XpingServiceCollectionExtensions
             && bool.TryParse(enablePr, out var pr))
             config.EnablePullRequestDetection = pr;
 
+        // Local Git Options
+        if (GetEnv("COLLECTLOCALGITAUTHOR") is { } collectGitAuthor
+            && bool.TryParse(collectGitAuthor, out var cga))
+            config.CollectLocalGitAuthor = cga;
+
         // Strict Mode Options
         if (GetEnv("STRICTMODE") is { } strictMode
             && bool.TryParse(strictMode, out var sm))
@@ -574,6 +579,7 @@ public static class XpingServiceCollectionExtensions
         target.UploadTimeout = source.UploadTimeout;
         target.CollectNetworkMetrics = source.CollectNetworkMetrics;
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
+        target.CollectLocalGitAuthor = source.CollectLocalGitAuthor;
         target.StrictMode = source.StrictMode;
     }
 
