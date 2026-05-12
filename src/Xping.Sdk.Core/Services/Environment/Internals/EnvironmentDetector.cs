@@ -591,8 +591,25 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             while (dir is not null)
             {
                 string candidate = Path.Combine(dir.FullName, ".git");
+
                 if (Directory.Exists(candidate))
                     return candidate;
+
+                // Worktrees and submodules: .git is a file containing "gitdir: <path>"
+                if (File.Exists(candidate))
+                {
+                    string content = File.ReadAllText(candidate).Trim();
+                    const string gitdirPrefix = "gitdir: ";
+                    if (content.StartsWith(gitdirPrefix, StringComparison.Ordinal))
+                    {
+                        string gitdirPath = content.Substring(gitdirPrefix.Length).Trim();
+                        if (!Path.IsPathRooted(gitdirPath))
+                            gitdirPath = Path.GetFullPath(Path.Combine(dir.FullName, gitdirPath));
+                        if (Directory.Exists(gitdirPath))
+                            return gitdirPath;
+                    }
+                }
+
                 dir = dir.Parent;
             }
             return null;
@@ -642,10 +659,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             string? authorName = ReadGitConfigUserName(gitDir);
             AddIfNotNull(properties, "CI.Actor", authorName);
 
-            bool? hasUncommittedChanges = DetectUncommittedChanges(gitDir, branch);
-            if (hasUncommittedChanges.HasValue)
+            bool? hasStagedChanges = DetectStagedChanges(gitDir, branch);
+            if (hasStagedChanges.HasValue)
             {
-                properties["HasUncommittedChanges"] = hasUncommittedChanges.Value ? "true" : "false";
+                properties["HasStagedChanges"] = hasStagedChanges.Value ? "true" : "false";
             }
         }
         catch
@@ -732,7 +749,11 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
     }
 
-    private static bool? DetectUncommittedChanges(string gitDir, string? branch)
+    // Heuristic: compares the mtime of .git/index (updated on git add) against the mtime of
+    // the last-commit ref file. Returns true if the index appears newer than the last commit,
+    // suggesting staged-but-not-yet-committed changes. Does NOT detect unstaged working-tree
+    // edits. Property key is "HasStagedChanges" to reflect this limitation accurately.
+    private static bool? DetectStagedChanges(string gitDir, string? branch)
     {
         try
         {
@@ -742,15 +763,20 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
             DateTime indexModified = File.GetLastWriteTimeUtc(indexFile);
 
-            string? refPath = branch is not null
-                ? Path.Combine(gitDir, "refs", "heads", branch)
-                : null;
+            // Try loose ref first
+            if (branch is not null)
+            {
+                string loosePath = Path.Combine(gitDir, "refs", "heads", branch);
+                if (File.Exists(loosePath))
+                    return indexModified > File.GetLastWriteTimeUtc(loosePath);
+            }
 
-            if (refPath is null || !File.Exists(refPath))
-                return null;
+            // Fall back to packed-refs mtime as a conservative proxy
+            string packedRefsPath = Path.Combine(gitDir, "packed-refs");
+            if (File.Exists(packedRefsPath))
+                return indexModified > File.GetLastWriteTimeUtc(packedRefsPath);
 
-            DateTime refModified = File.GetLastWriteTimeUtc(refPath);
-            return indexModified > refModified;
+            return null;
         }
         catch
         {

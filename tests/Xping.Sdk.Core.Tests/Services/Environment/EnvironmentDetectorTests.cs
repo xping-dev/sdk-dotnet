@@ -188,6 +188,36 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal("aaaa1111bbbb2222cccc3333dddd4444eeee5555", info.CustomProperties["CI.SHA"]);
     }
 
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithGitWorktree_DetectsRepositoryViaGitFile()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var mainGit = new TempGitDirectory();
+        mainGit.WriteHead("ref: refs/heads/main");
+        mainGit.WriteRef("main", "1234567890abcdef1234567890abcdef12345678");
+
+        // Simulate a worktree: create a separate directory with a .git FILE pointing to the main gitdir
+        string worktreeRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(worktreeRoot);
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(worktreeRoot, ".git"),
+                $"gitdir: {mainGit.GitDir}\n");
+
+            using var dirRestorer = new WorkingDirectoryRestorer(worktreeRoot);
+            IEnvironmentDetector detector = CreateDetector();
+            EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+            Assert.Equal("true", info.CustomProperties["IsInsideGitRepository"]);
+            Assert.Equal("main", info.CustomProperties["CI.Branch"]);
+        }
+        finally
+        {
+            try { Directory.Delete(worktreeRoot, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
     private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
     {
         XpingConfiguration resolvedConfiguration = configuration ?? new XpingConfiguration();
@@ -268,7 +298,7 @@ public sealed class EnvironmentDetectorTests
         private readonly string _root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
 
         public string WorkingDirectory => _root;
-        private string GitDir => System.IO.Path.Combine(_root, ".git");
+        public string GitDir => System.IO.Path.Combine(_root, ".git");
 
         public TempGitDirectory()
         {
