@@ -425,6 +425,17 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             properties["IsDeveloperMachine"] = "true";
         }
 
+        // Detect whether running inside a git repository
+        string? gitDir = FindGitDirectory();
+        bool isInsideGitRepository = gitDir is not null;
+        properties["IsInsideGitRepository"] = isInsideGitRepository ? "true" : "false";
+
+        // Collect local git metadata when not running in a CI environment
+        if (!ciPlatform.HasValue && gitDir is not null)
+        {
+            CollectLocalGitMetadata(properties, gitDir);
+        }
+
         // Add container information
         if (isContainer)
         {
@@ -570,6 +581,181 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         properties["ProcessorCount"] = System.Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture);
 
         return properties;
+    }
+
+    private static string? FindGitDirectory()
+    {
+        try
+        {
+            var dir = new DirectoryInfo(System.Environment.CurrentDirectory);
+            while (dir is not null)
+            {
+                string candidate = Path.Combine(dir.FullName, ".git");
+                if (Directory.Exists(candidate))
+                    return candidate;
+                dir = dir.Parent;
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void CollectLocalGitMetadata(Dictionary<string, string> properties, string gitDir)
+    {
+        try
+        {
+            string headPath = Path.Combine(gitDir, "HEAD");
+            if (!File.Exists(headPath))
+                return;
+
+            string headContent = File.ReadAllText(headPath).Trim();
+            const string refPrefix = "ref: refs/heads/";
+            bool isDetachedHead;
+            string? branch;
+            string? sha;
+
+            if (headContent.StartsWith(refPrefix, StringComparison.Ordinal))
+            {
+                isDetachedHead = false;
+                branch = headContent.Substring(refPrefix.Length);
+                sha = ResolveCommitSha(gitDir, branch);
+            }
+            else
+            {
+                isDetachedHead = true;
+                branch = null;
+                sha = headContent; // detached HEAD: content is the commit SHA
+            }
+
+            properties["IsDetachedHead"] = isDetachedHead ? "true" : "false";
+
+            if (!isDetachedHead && branch is not null)
+            {
+                AddIfNotNull(properties, "CI.Branch", branch);
+            }
+
+            AddIfNotNull(properties, "CI.SHA", sha);
+
+            string? authorName = ReadGitConfigUserName(gitDir);
+            AddIfNotNull(properties, "CI.Actor", authorName);
+
+            bool? hasUncommittedChanges = DetectUncommittedChanges(gitDir, branch);
+            if (hasUncommittedChanges.HasValue)
+            {
+                properties["HasUncommittedChanges"] = hasUncommittedChanges.Value ? "true" : "false";
+            }
+        }
+        catch
+        {
+            // Never throw from environment detection methods
+        }
+    }
+
+    private static string? ResolveCommitSha(string gitDir, string branch)
+    {
+        try
+        {
+            string refFilePath = Path.Combine(gitDir, "refs", "heads", branch);
+            if (File.Exists(refFilePath))
+            {
+                return File.ReadAllText(refFilePath).Trim();
+            }
+
+            // Fall back to packed-refs
+            string packedRefsPath = Path.Combine(gitDir, "packed-refs");
+            if (File.Exists(packedRefsPath))
+            {
+                string target = $"refs/heads/{branch}";
+                foreach (string line in File.ReadAllLines(packedRefsPath))
+                {
+                    if (line.EndsWith(target, StringComparison.Ordinal))
+                    {
+                        int spaceIndex = line.IndexOf(' ');
+                        if (spaceIndex > 0)
+                        {
+                            return line.Substring(0, spaceIndex);
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadGitConfigUserName(string gitDir)
+    {
+        try
+        {
+            string configPath = Path.Combine(gitDir, "config");
+            if (!File.Exists(configPath))
+                return null;
+
+            bool inUserSection = false;
+            foreach (string line in File.ReadAllLines(configPath))
+            {
+                string trimmed = line.Trim();
+
+                if (trimmed == "[user]")
+                {
+                    inUserSection = true;
+                    continue;
+                }
+
+                if (trimmed.StartsWith("[", StringComparison.Ordinal) && inUserSection)
+                {
+                    break;
+                }
+
+                if (inUserSection && trimmed.StartsWith("name =", StringComparison.OrdinalIgnoreCase))
+                {
+                    int eqIndex = trimmed.IndexOf('=');
+                    if (eqIndex >= 0)
+                    {
+                        return trimmed.Substring(eqIndex + 1).Trim();
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool? DetectUncommittedChanges(string gitDir, string? branch)
+    {
+        try
+        {
+            string indexFile = Path.Combine(gitDir, "index");
+            if (!File.Exists(indexFile))
+                return null;
+
+            DateTime indexModified = File.GetLastWriteTimeUtc(indexFile);
+
+            string? refPath = branch is not null
+                ? Path.Combine(gitDir, "refs", "heads", branch)
+                : null;
+
+            if (refPath is null || !File.Exists(refPath))
+                return null;
+
+            DateTime refModified = File.GetLastWriteTimeUtc(refPath);
+            return indexModified > refModified;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void AddIfNotNull(Dictionary<string, string> dictionary, string key, string? value)
