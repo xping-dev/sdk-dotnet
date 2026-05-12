@@ -415,11 +415,13 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
     private Dictionary<string, string> CollectCustomProperties(string operatingSystem, CIPlatform? ciPlatform, bool isContainer)
     {
-        Dictionary<string, string> properties = new Dictionary<string, string>();
+        Dictionary<string, string> properties = new()
+        {
+            ["ExecutionContext"] = ciPlatform.HasValue
+                ? XpingConfiguration.DefaultCiEnvironment
+                : XpingConfiguration.DefaultEnvironment
+        };
 
-        properties["ExecutionContext"] = ciPlatform.HasValue
-            ? XpingConfiguration.DefaultCiEnvironment
-            : XpingConfiguration.DefaultEnvironment;
         if (!ciPlatform.HasValue && !isContainer)
         {
             properties["IsDeveloperMachine"] = "true";
@@ -433,7 +435,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         // Collect local git metadata when not running in a CI environment
         if (!ciPlatform.HasValue && gitDir is not null)
         {
-            CollectLocalGitMetadata(properties, gitDir);
+            CollectLocalGitMetadata(properties, gitDir, _configuration.CollectLocalGitAuthor);
         }
 
         // Add container information
@@ -620,7 +622,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
     }
 
-    private static void CollectLocalGitMetadata(Dictionary<string, string> properties, string gitDir)
+    private static void CollectLocalGitMetadata(Dictionary<string, string> properties, string gitDir, bool includeAuthor)
     {
         try
         {
@@ -629,35 +631,54 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 return;
 
             string headContent = File.ReadAllText(headPath).Trim();
-            const string refPrefix = "ref: refs/heads/";
+            const string headsRefPrefix = "ref: refs/heads/";
+            const string refAnnotation = "ref: ";
             bool isDetachedHead;
             string? branch;
             string? sha;
 
-            if (headContent.StartsWith(refPrefix, StringComparison.Ordinal))
+            if (headContent.StartsWith(headsRefPrefix, StringComparison.Ordinal))
             {
+                // Normal branch checkout
                 isDetachedHead = false;
-                branch = headContent.Substring(refPrefix.Length);
+                branch = headContent.Substring(headsRefPrefix.Length);
                 sha = ResolveCommitSha(gitDir, branch);
+            }
+            else if (headContent.StartsWith(refAnnotation, StringComparison.Ordinal))
+            {
+                // Symbolic ref to a non-branch (tag, remote, etc.) — not detached HEAD,
+                // but we cannot safely resolve a branch name or SHA without following the full ref chain.
+                isDetachedHead = false;
+                branch = null;
+                sha = null;
+            }
+            else if (IsValidSha(headContent))
+            {
+                // Raw SHA — truly detached HEAD
+                isDetachedHead = true;
+                branch = null;
+                sha = headContent;
             }
             else
             {
-                isDetachedHead = true;
-                branch = null;
-                sha = headContent; // detached HEAD: content is the commit SHA
+                // Unrecognized HEAD format — skip metadata collection
+                return;
             }
 
             properties["IsDetachedHead"] = isDetachedHead ? "true" : "false";
 
-            if (!isDetachedHead && branch is not null)
+            if (branch is not null)
             {
-                AddIfNotNull(properties, "CI.Branch", branch);
+                AddIfNotNull(properties, "Git.Branch", branch);
             }
 
-            AddIfNotNull(properties, "CI.SHA", sha);
+            AddIfNotNull(properties, "Git.SHA", sha);
 
-            string? authorName = ReadGitConfigUserName(gitDir);
-            AddIfNotNull(properties, "CI.Actor", authorName);
+            if (includeAuthor)
+            {
+                string? authorName = ReadGitConfigUserName(gitDir);
+                AddIfNotNull(properties, "Git.Actor", authorName);
+            }
 
             bool? hasStagedChanges = DetectStagedChanges(gitDir, branch);
             if (hasStagedChanges.HasValue)
@@ -782,6 +803,18 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         {
             return null;
         }
+    }
+
+    private static bool IsValidSha(string value)
+    {
+        if (value.Length is not 40 and not 64)
+            return false;
+        foreach (char c in value)
+        {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                return false;
+        }
+        return true;
     }
 
     private static void AddIfNotNull(Dictionary<string, string> dictionary, string key, string? value)
