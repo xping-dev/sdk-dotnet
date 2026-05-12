@@ -763,10 +763,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         continue;
                     }
 
-                    string key = trimmed[..eqIndex].Trim();
+                    string key = trimmed.Substring(0, eqIndex).Trim();
                     if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase))
                     {
-                        return trimmed[(eqIndex + 1)..].Trim();
+                        return trimmed.Substring(eqIndex + 1).Trim();
                     }
                 }
             }
