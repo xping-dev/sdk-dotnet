@@ -755,12 +755,18 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     break;
                 }
 
-                if (inUserSection && trimmed.StartsWith("name =", StringComparison.OrdinalIgnoreCase))
+                if (inUserSection)
                 {
                     int eqIndex = trimmed.IndexOf('=');
-                    if (eqIndex >= 0)
+                    if (eqIndex < 0)
                     {
-                        return trimmed.Substring(eqIndex + 1).Trim();
+                        continue;
+                    }
+
+                    string key = trimmed[..eqIndex].Trim();
+                    if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return trimmed[(eqIndex + 1)..].Trim();
                     }
                 }
             }
