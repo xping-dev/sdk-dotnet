@@ -173,6 +173,39 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task BuildEnvironmentInfoAsync_NoLocalUserConfig_FallsBackToGlobalGitConfig()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
+        // No local [user] in .git/config — only write an unrelated section
+        tempGit.WriteConfig("[core]\n\trepositoryformatversion = 0\n");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        // Create a temporary HOME directory that contains only a .gitconfig with the user name
+        string tempHome = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempHome);
+        string? originalHome = System.Environment.GetEnvironmentVariable("HOME");
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(tempHome, ".gitconfig"),
+                "[user]\n\tname = Global Author\n\temail = global@example.com\n");
+            System.Environment.SetEnvironmentVariable("HOME", tempHome);
+
+            IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+            EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+            Assert.Equal("Global Author", info.CustomProperties["Git.Actor"]);
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("HOME", originalHome);
+            try { Directory.Delete(tempHome, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public async Task BuildEnvironmentInfoAsync_WithUserConfigButAuthorCollectionDisabled_OmitsActor()
     {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);

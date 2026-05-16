@@ -733,9 +733,37 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
     private static string? ReadGitConfigUserName(string gitDir)
     {
+        // Check local repo config first, then fall back to global git config (~/.gitconfig or
+        // XDG_CONFIG_HOME/git/config), which is where most users set their name.
+        string localConfig = Path.Combine(gitDir, "config");
+        string? result = ReadUserNameFromFile(localConfig);
+        if (result is not null)
+            return result;
+
+        // Global config: $HOME/.gitconfig
+        string? home = System.Environment.GetEnvironmentVariable("HOME")
+                       ?? System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(home))
+        {
+            result = ReadUserNameFromFile(Path.Combine(home, ".gitconfig"));
+            if (result is not null)
+                return result;
+
+            // XDG-compliant location: $XDG_CONFIG_HOME/git/config (defaults to ~/.config/git/config)
+            string xdgConfigHome = System.Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")
+                                   ?? Path.Combine(home, ".config");
+            result = ReadUserNameFromFile(Path.Combine(xdgConfigHome, "git", "config"));
+            if (result is not null)
+                return result;
+        }
+
+        return null;
+    }
+
+    private static string? ReadUserNameFromFile(string configPath)
+    {
         try
         {
-            string configPath = Path.Combine(gitDir, "config");
             if (!File.Exists(configPath))
                 return null;
 
