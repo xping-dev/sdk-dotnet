@@ -550,6 +550,28 @@ Compression reduces payload size but adds CPU overhead.
 
 ---
 
+### Session Summary Duration Differs from Test Framework's Reported Duration
+
+**Symptoms:**
+- The SDK's session finalized log shows a much smaller duration than the test framework's own summary, e.g.:
+  ```
+  [Xping 00:26:55 INF] Total tests recorded: 12 · "9 passed, 2 failed, 1 skipped" · 118ms combined test execution time
+  Test summary: total: 12, failed: 2, succeeded: 9, skipped: 1, duration: 1.1s
+  ```
+
+**Why This Happens:**
+
+These two numbers measure different things and are both correct:
+
+- **Xping's `combined test execution time`** is the **sum of each individual test's own execution time** (each test's `Duration`), accumulated across every recorded test.
+- **The test framework's `duration`** is the **wall-clock time for the entire run**, which also includes assembly loading, test discovery, fixture setup/teardown, parallelization scheduling, and the runner's own reporting overhead—none of which is attributed to any single test.
+
+For small or fast test suites, framework/runtime overhead can easily dominate the wall-clock time, making the two numbers diverge significantly. This is expected behavior, not a bug.
+
+**Solution:** No action needed. If you want the wall-clock duration of the whole run, use your test framework's own summary output rather than the Xping session log.
+
+---
+
 ### High Memory Usage
 
 **Symptoms:**

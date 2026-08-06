@@ -188,8 +188,9 @@ public class XpingContext : XpingContextOrchestrator
             if (stats.Inconclusive > 0)  parts.Append($", {stats.Inconclusive} inconclusive");
             if (stats.NotExecuted > 0)   parts.Append($", {stats.NotExecuted} not executed");
 
+            // TotalDurationMs is the sum of each test's own execution time, not the wall-clock run duration.
             _logger.LogInformation(
-                "Total tests recorded: {Total} · {Outcomes} · {TotalDurationMs}ms total",
+                "Total tests recorded: {Total} · {Outcomes} · {TotalDurationMs}ms combined test execution time",
                 stats.Total, parts.ToString(), stats.TotalDurationMs);
         }
         else
