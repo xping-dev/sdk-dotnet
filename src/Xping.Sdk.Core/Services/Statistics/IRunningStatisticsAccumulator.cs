@@ -28,7 +28,11 @@ public interface IRunningStatisticsAccumulator
     /// Returns an immutable snapshot of the statistics accumulated so far.
     /// Safe to call at any time, including concurrently with <see cref="Record"/>.
     /// </summary>
-    QuickStatistics GetSnapshot();
+    /// <param name="wallClockElapsed">
+    /// The wall-clock time elapsed since the session started, used to populate
+    /// <see cref="QuickStatistics.WallClockDurationMs"/>. Defaults to zero when omitted.
+    /// </param>
+    QuickStatistics GetSnapshot(TimeSpan wallClockElapsed = default);
 
     /// <summary>
     /// Resets all counters and totals to zero.

@@ -22,7 +22,7 @@ internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccum
     }
 
     /// <inheritdoc/>
-    public QuickStatistics GetSnapshot() => new();
+    public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed = default) => new();
 
     /// <inheritdoc/>
     public void Reset()

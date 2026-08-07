@@ -447,7 +447,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             .WithPullRequestContext(_pullRequestContext);
 
         if (isFinalizing)
-            _builder.WithQuickStatistics(_statisticsAccumulator.GetSnapshot());
+            _builder.WithQuickStatistics(_statisticsAccumulator.GetSnapshot(DateTime.UtcNow - StartedAt));
 
         return _builder.Build();
     }

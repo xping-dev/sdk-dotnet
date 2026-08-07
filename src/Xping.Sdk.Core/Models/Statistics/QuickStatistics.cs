@@ -37,6 +37,7 @@ public sealed class QuickStatistics
         NotExecuted = 0;
         SuccessRate = 0.0;
         TotalDurationMs = 0L;
+        WallClockDurationMs = 0L;
         AverageDurationMs = 0L;
         SlowestTestName = null;
         SlowestTestDurationMs = 0L;
@@ -54,6 +55,7 @@ public sealed class QuickStatistics
         int notExecuted,
         double successRate,
         long totalDurationMs,
+        long wallClockDurationMs,
         long averageDurationMs,
         string? slowestTestName,
         long slowestTestDurationMs)
@@ -66,6 +68,7 @@ public sealed class QuickStatistics
         NotExecuted = notExecuted;
         SuccessRate = successRate;
         TotalDurationMs = totalDurationMs;
+        WallClockDurationMs = wallClockDurationMs;
         AverageDurationMs = averageDurationMs;
         SlowestTestName = slowestTestName;
         SlowestTestDurationMs = slowestTestDurationMs;
@@ -111,6 +114,13 @@ public sealed class QuickStatistics
     /// Gets the combined duration of all test executions in milliseconds.
     /// </summary>
     public long TotalDurationMs { get; init; }
+
+    /// <summary>
+    /// Gets the wall-clock duration of the entire session, from initialization to finalization,
+    /// in milliseconds. Unlike <see cref="TotalDurationMs"/>, this includes framework overhead
+    /// such as fixture setup/teardown and test discovery, not just time spent inside test bodies.
+    /// </summary>
+    public long WallClockDurationMs { get; init; }
 
     /// <summary>
     /// Gets the mean duration per test in milliseconds.

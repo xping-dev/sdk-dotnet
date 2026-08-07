@@ -70,7 +70,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     }
 
     /// <inheritdoc/>
-    public QuickStatistics GetSnapshot()
+    public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed = default)
     {
         long total = Interlocked.Read(ref _total);
         long passed = Interlocked.Read(ref _passed);
@@ -101,6 +101,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             notExecuted: (int)notExecuted,
             successRate: successRate,
             totalDurationMs: totalMs,
+            wallClockDurationMs: wallClockElapsed.Ticks / TimeSpan.TicksPerMillisecond,
             averageDurationMs: averageMs,
             slowestTestName: slowestName,
             slowestTestDurationMs: slowestTicks / TimeSpan.TicksPerMillisecond);
