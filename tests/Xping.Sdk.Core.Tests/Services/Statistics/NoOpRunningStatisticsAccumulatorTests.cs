@@ -82,9 +82,23 @@ public sealed class NoOpRunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.NotExecuted);
         Assert.Equal(0.0, snapshot.SuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);
         Assert.Equal(0L, snapshot.SlowestTestDurationMs);
         Assert.Null(snapshot.SlowestTestName);
+    }
+
+    [Fact]
+    public void GetSnapshot_WithWallClockElapsed_StillReturnsZeroedWallClockDuration()
+    {
+        // Arrange — no-op accumulator ignores the elapsed argument entirely
+        var accumulator = new NoOpRunningStatisticsAccumulator();
+
+        // Act
+        var snapshot = accumulator.GetSnapshot(TimeSpan.FromMilliseconds(1204));
+
+        // Assert
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
     }
 
     [Fact]

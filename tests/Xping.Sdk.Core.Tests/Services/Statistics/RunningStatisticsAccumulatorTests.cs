@@ -63,6 +63,7 @@ public sealed class RunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.NotExecuted);
         Assert.Equal(0.0, snapshot.SuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);
         Assert.Equal(0L, snapshot.SlowestTestDurationMs);
         Assert.Null(snapshot.SlowestTestName);
@@ -297,6 +298,63 @@ public sealed class RunningStatisticsAccumulatorTests
     }
 
     // ---------------------------------------------------------------------------
+    // GetSnapshot — wall-clock duration
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GetSnapshot_Parameterless_WallClockDurationMsIsZero()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildExecution("T1", TestOutcome.Passed, TimeSpan.FromMilliseconds(100)));
+
+        // Act
+        var snapshot = accumulator.GetSnapshot();
+
+        // Assert
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
+    }
+
+    [Fact]
+    public void GetSnapshot_WithPositiveElapsed_WallClockDurationMsMatchesElapsed()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        var snapshot = accumulator.GetSnapshot(TimeSpan.FromMilliseconds(1204));
+
+        // Assert
+        Assert.Equal(1204L, snapshot.WallClockDurationMs);
+    }
+
+    [Fact]
+    public void GetSnapshot_WithZeroElapsed_WallClockDurationMsIsZero()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        var snapshot = accumulator.GetSnapshot(TimeSpan.Zero);
+
+        // Assert
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
+    }
+
+    [Fact]
+    public void GetSnapshot_WithNegativeElapsed_WallClockDurationMsIsClampedToZero()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — simulates a backwards system clock jump
+        var snapshot = accumulator.GetSnapshot(TimeSpan.FromMilliseconds(-500));
+
+        // Assert
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
+    }
+
+    // ---------------------------------------------------------------------------
     // GetSnapshot — slowest test tracking
     // ---------------------------------------------------------------------------
 
@@ -383,6 +441,7 @@ public sealed class RunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.Failed);
         Assert.Equal(0.0, snapshot.SuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
+        Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);
         Assert.Null(snapshot.SlowestTestName);
         Assert.Equal(0L, snapshot.SlowestTestDurationMs);

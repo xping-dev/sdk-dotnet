@@ -11,9 +11,9 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// <summary>
 /// A no-op implementation of <see cref="IRunningStatisticsAccumulator"/> used when the SDK
 /// is disabled or configuration validation fails. All operations are no-ops and
-/// <see cref="GetSnapshot"/> returns zeroed statistics.
+/// <see cref="GetSnapshot()"/> returns zeroed statistics.
 /// </summary>
-internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccumulator
+internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
 {
     /// <inheritdoc/>
     public void Record(TestExecution execution)
@@ -23,6 +23,9 @@ internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccum
 
     /// <inheritdoc/>
     public QuickStatistics GetSnapshot() => new();
+
+    /// <inheritdoc/>
+    public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed) => new();
 
     /// <inheritdoc/>
     public void Reset()
