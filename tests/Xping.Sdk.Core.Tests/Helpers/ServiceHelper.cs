@@ -117,10 +117,16 @@ internal static class ServiceHelper
 
     /// <summary>
     /// Builds an <see cref="IHost"/> wired with mock uploader and environment detector,
-    /// but with deliberately invalid configuration (missing ApiKey and ProjectId) so that
+    /// but with deliberately invalid configuration so that
     /// <see cref="Microsoft.Extensions.Options.OptionsValidationException"/> is thrown when
     /// <c>IOptions&lt;XpingConfiguration&gt;.Value</c> is accessed during orchestrator construction.
     /// </summary>
+    /// <remarks>
+    /// Invalidity is expressed as a malformed <c>ApiEndpoint</c> rather than missing credentials.
+    /// Missing credentials are valid under the local-only contract — they select
+    /// <see cref="XpingMode.LocalOnly"/> instead of failing — so they can no longer stand in for
+    /// "broken configuration".
+    /// </remarks>
     public static IHost BuildInvalidConfigHost()
     {
         var uploaderMock = new Mock<IXpingUploader>();
@@ -130,17 +136,20 @@ internal static class ServiceHelper
         return new HostBuilder()
             .ConfigureServices(services =>
             {
-                // Configure with empty/invalid values — ApiKey and ProjectId are left null.
                 services.Configure<XpingConfiguration>(o =>
                 {
-                    o.ApiKey = null!;
-                    o.ProjectId = null!;
+                    o.ApiKey = "test-key";
+                    o.ProjectId = "test-project";
+                    o.ApiEndpoint = "not-a-valid-url";
                     o.Enabled = true;
                     o.FlushInterval = TimeSpan.Zero;
                 });
 
-                // Register validation so OptionsValidationException fires on .Value access.
-                services.AddOptions<XpingConfiguration>().ValidateDataAnnotations();
+                // Mirror the real pipeline: both data annotations and the mode-aware Validate()
+                // delegate, so OptionsValidationException fires on .Value access.
+                services.AddOptions<XpingConfiguration>()
+                    .ValidateDataAnnotations()
+                    .Validate(config => config.Validate().Count == 0);
 
                 services.AddXpingCollectors();
                 services.AddXpingInfrastructure();
@@ -173,17 +182,22 @@ internal static class ServiceHelper
             })
             .ConfigureServices(services =>
             {
-                // Configure with empty/invalid values — ApiKey and ProjectId are left null.
+                // Missing credentials, plus StrictMode on the options instance itself. The real
+                // pipeline binds the "Xping" section, so Xping:StrictMode=true would land on this
+                // property; setting it here keeps the helper faithful to that behavior. Strict mode
+                // forces Connected, which makes the absent credentials a hard error.
                 services.Configure<XpingConfiguration>(o =>
                 {
-                    o.ApiKey = null!;
-                    o.ProjectId = null!;
+                    o.ApiKey = null;
+                    o.ProjectId = null;
                     o.Enabled = true;
+                    o.StrictMode = true;
                     o.FlushInterval = TimeSpan.Zero;
                 });
 
-                // Register validation so OptionsValidationException fires on .Value access.
-                services.AddOptions<XpingConfiguration>().ValidateDataAnnotations();
+                services.AddOptions<XpingConfiguration>()
+                    .ValidateDataAnnotations()
+                    .Validate(config => config.Validate().Count == 0);
 
                 services.AddXpingCollectors();
                 services.AddXpingInfrastructure();

@@ -33,17 +33,24 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the API key for authentication.
+    /// Required in <see cref="XpingMode.Connected"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
-    [Required(ErrorMessage = "ApiKey is required")]
-    [MinLength(1, ErrorMessage = "ApiKey cannot be empty")]
-    public string ApiKey { get; set; } = null!;
+    /// <remarks>
+    /// This property intentionally carries no <c>[Required]</c> data annotation. Requiring it
+    /// unconditionally would make <c>ValidateDataAnnotations()</c> throw before
+    /// <see cref="ResolveMode"/> ever runs, making local-only operation impossible.
+    /// Presence is enforced by <see cref="Validate()"/> only when the resolved mode needs it.
+    /// </remarks>
+    public string? ApiKey { get; set; }
 
     /// <summary>
     /// Gets or sets the project ID.
+    /// Required in <see cref="XpingMode.Connected"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
-    [Required(ErrorMessage = "ProjectId is required")]
-    [MinLength(1, ErrorMessage = "ProjectId cannot be empty")]
-    public string ProjectId { get; set; } = null!;
+    /// <remarks>
+    /// See the remarks on <see cref="ApiKey"/> for why this carries no <c>[Required]</c> annotation.
+    /// </remarks>
+    public string? ProjectId { get; set; }
 
     /// <summary>
     /// Gets or sets the batch size for uploading test executions.
@@ -87,6 +94,14 @@ public sealed class XpingConfiguration
     /// Gets or sets a value indicating whether the SDK is enabled.
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the operating mode. Defaults to <see cref="XpingMode.Auto"/>, which resolves to
+    /// <see cref="XpingMode.Connected"/> when credentials are present and
+    /// <see cref="XpingMode.LocalOnly"/> otherwise. Use <see cref="ResolveMode"/> to obtain the
+    /// effective mode.
+    /// </summary>
+    public XpingMode Mode { get; set; } = XpingMode.Auto;
 
     /// <summary>
     /// Gets or sets a value indicating whether to capture stack traces for failed tests.
@@ -161,21 +176,66 @@ public sealed class XpingConfiguration
     public bool StrictMode { get; set; }
 
     /// <summary>
+    /// Resolves <see cref="Mode"/> to a concrete operating mode.
+    /// </summary>
+    /// <returns>
+    /// The effective <see cref="XpingMode"/>: never <see cref="XpingMode.Auto"/>.
+    /// </returns>
+    /// <remarks>
+    /// <para>Resolution order:</para>
+    /// <list type="number">
+    /// <item><description><see cref="Enabled"/> is <see langword="false"/> → <see cref="XpingMode.Disabled"/>.</description></item>
+    /// <item><description><see cref="Mode"/> was set explicitly → that mode.</description></item>
+    /// <item><description><see cref="StrictMode"/> is <see langword="true"/> → <see cref="XpingMode.Connected"/>.</description></item>
+    /// <item><description>Credentials present → <see cref="XpingMode.Connected"/>.</description></item>
+    /// <item><description>Otherwise → <see cref="XpingMode.LocalOnly"/>.</description></item>
+    /// </list>
+    /// <para>
+    /// Strict mode deliberately forces <see cref="XpingMode.Connected"/>. Its purpose is to guarantee
+    /// observability in CI, so a missing API key must remain a hard configuration error rather than
+    /// silently degrading a pipeline to local-only collection.
+    /// </para>
+    /// </remarks>
+    public XpingMode ResolveMode()
+    {
+        if (!Enabled)
+            return XpingMode.Disabled;
+
+        if (Mode != XpingMode.Auto)
+            return Mode;
+
+        if (StrictMode)
+            return XpingMode.Connected;
+
+        return HasCredentials ? XpingMode.Connected : XpingMode.LocalOnly;
+    }
+
+    /// <summary>
     /// Validates the configuration and returns a list of validation errors.
+    /// Credential requirements are evaluated against the resolved <see cref="XpingMode"/>.
     /// </summary>
     /// <returns>A list of validation error messages, or an empty list if valid.</returns>
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
+        XpingMode mode = ResolveMode();
 
-        if (string.IsNullOrWhiteSpace(ApiKey))
+        // Credentials are only meaningful when the SDK will actually talk to the platform.
+        if (mode == XpingMode.Connected)
         {
-            errors.Add("ApiKey is required.");
-        }
+            if (string.IsNullOrWhiteSpace(ApiKey))
+            {
+                errors.Add(StrictMode && Mode == XpingMode.Auto
+                    ? "ApiKey is required when StrictMode is enabled."
+                    : "ApiKey is required in Connected mode.");
+            }
 
-        if (string.IsNullOrWhiteSpace(ProjectId))
-        {
-            errors.Add("ProjectId is required.");
+            if (string.IsNullOrWhiteSpace(ProjectId))
+            {
+                errors.Add(StrictMode && Mode == XpingMode.Auto
+                    ? "ProjectId is required when StrictMode is enabled."
+                    : "ProjectId is required in Connected mode.");
+            }
         }
 
         if (string.IsNullOrWhiteSpace(ApiEndpoint))
@@ -241,4 +301,10 @@ public sealed class XpingConfiguration
     }
 
     internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
+
+    /// <summary>
+    /// Gets a value indicating whether both an API key and a project ID have been supplied.
+    /// </summary>
+    internal bool HasCredentials =>
+        !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(ProjectId);
 }

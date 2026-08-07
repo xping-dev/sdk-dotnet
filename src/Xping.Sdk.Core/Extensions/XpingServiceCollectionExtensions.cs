@@ -102,15 +102,20 @@ public static class XpingServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // The mode must be known at registration time so that LocalOnly can skip HttpClient
+        // registration entirely. IOptions<> is not yet resolvable here, so bind a throwaway
+        // instance through the same pipeline the options system will use.
+        XpingMode mode = ResolveConfiguredMode(configuration.RequireNotNull());
+
         return services
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromConfiguration(configuration)
-            .AddXpingEnvironment()
+            .AddXpingEnvironment(mode)
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
-            .AddXpingUploader();
+            .AddXpingUploader(mode);
     }
 
     /// <summary>
@@ -135,15 +140,17 @@ public static class XpingServiceCollectionExtensions
             throw new InvalidOperationException(message);
         }
 
+        XpingMode mode = config.ResolveMode();
+
         return services
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(config)
-            .AddXpingEnvironment()
+            .AddXpingEnvironment(mode)
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
-            .AddXpingUploader();
+            .AddXpingUploader(mode);
     }
 
     /// <summary>
@@ -167,15 +174,17 @@ public static class XpingServiceCollectionExtensions
             throw new InvalidOperationException(message);
         }
 
+        XpingMode mode = configuration.ResolveMode();
+
         return services
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(configuration)
-            .AddXpingEnvironment()
+            .AddXpingEnvironment(mode)
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
-            .AddXpingUploader();
+            .AddXpingUploader(mode);
     }
 
     #region Feature: Infrastructure (Logging, Serialization, HTTP)
@@ -297,10 +306,32 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
+        return services.AddXpingEnvironment(XpingMode.Connected);
+    }
+
+    /// <summary>
+    /// Adds environment detection services for the given operating mode.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="mode">The resolved operating mode.</param>
+    /// <returns>The service collection for chaining.</returns>
+    /// <remarks>
+    /// In <see cref="XpingMode.LocalOnly"/> mode, network metrics collection is suppressed.
+    /// <c>NetworkMetricsCollector</c> performs a DNS lookup and four sequential ICMP pings on every
+    /// session build; that is hundreds of milliseconds of latency and a surprising outbound call for
+    /// a mode whose entire contract is that it does not touch the network.
+    /// </remarks>
+    public static IServiceCollection AddXpingEnvironment(this IServiceCollection services, XpingMode mode)
+    {
         // Register a network metrics collector for diagnostics used in environment detection
         services.AddSingleton<INetworkMetricsCollector, NetworkMetricsCollector>();
         // Register an environment detector e.g for CI platform detection
         services.AddSingleton<IEnvironmentDetector, EnvironmentDetector>();
+
+        if (mode == XpingMode.LocalOnly)
+        {
+            services.PostConfigure<XpingConfiguration>(options => options.CollectNetworkMetrics = false);
+        }
 
         return services;
     }
@@ -376,6 +407,28 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingUploader(this IServiceCollection services)
     {
+        return services.AddXpingUploader(XpingMode.Connected);
+    }
+
+    /// <summary>
+    /// Adds test result upload services for the given operating mode.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="mode">The resolved operating mode.</param>
+    /// <returns>The service collection for chaining.</returns>
+    /// <remarks>
+    /// In <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Disabled"/> modes the HTTP client,
+    /// retry pipeline, and circuit breaker are never registered. Nothing is uploaded, so constructing
+    /// them would cost startup time and would dereference a null API key while setting request headers.
+    /// </remarks>
+    public static IServiceCollection AddXpingUploader(this IServiceCollection services, XpingMode mode)
+    {
+        if (mode != XpingMode.Connected)
+        {
+            services.AddSingleton<IXpingUploader, NoOpXpingUploader>();
+            return services;
+        }
+
         // Register HttpClient for XpingUploader with proper configuration and resilience policies
         services.AddHttpClient<IXpingUploader, XpingUploader>((serviceProvider, client) =>
         {
@@ -456,6 +509,33 @@ public static class XpingServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Resolves the effective <see cref="XpingMode"/> at service-registration time, before
+    /// <c>IOptions&lt;XpingConfiguration&gt;</c> is available.
+    /// </summary>
+    /// <remarks>
+    /// Binds a throwaway instance through the same two steps the options pipeline uses — section
+    /// binding followed by <c>XPING_*</c> environment overrides — so the mode resolved here matches
+    /// the one the SDK will observe at runtime. Binding failures fall back to
+    /// <see cref="XpingMode.LocalOnly"/>: an unreadable configuration must not prevent the SDK from
+    /// collecting locally.
+    /// </remarks>
+    private static XpingMode ResolveConfiguredMode(IConfiguration configuration)
+    {
+        try
+        {
+            var probe = new XpingConfiguration();
+            configuration.GetSection(ConfigurationSectionName).Bind(probe);
+            BindEnvironmentVariablesWithPrefix(probe, EnvironmentVariablePrefix);
+            return probe.ResolveMode();
+        }
+        catch (InvalidOperationException)
+        {
+            // Malformed section (e.g. a non-parsable enum or numeric value).
+            return XpingMode.LocalOnly;
+        }
+    }
+
+    /// <summary>
     /// Binds environment variables with the specified prefix to the configuration options.
     /// This ensures environment variables always have the highest priority.
     /// </summary>
@@ -498,6 +578,11 @@ public static class XpingServiceCollectionExtensions
         // Feature Flags
         if (GetEnv("ENABLED") is { } enabled && bool.TryParse(enabled, out var e))
             config.Enabled = e;
+
+        if (GetEnv("MODE") is { } modeValue
+            && Enum.TryParse(modeValue, ignoreCase: true, out XpingMode parsedMode)
+            && Enum.IsDefined(typeof(XpingMode), parsedMode))
+            config.Mode = parsedMode;
 
         if (GetEnv("CAPTURESTACKTRACES") is { } captureStackTraces
             && bool.TryParse(captureStackTraces, out var cst))
@@ -571,6 +656,7 @@ public static class XpingServiceCollectionExtensions
         target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
         target.CiEnvironmentName = source.CiEnvironmentName;
         target.Enabled = source.Enabled;
+        target.Mode = source.Mode;
         target.CaptureStackTraces = source.CaptureStackTraces;
         target.EnableCompression = source.EnableCompression;
         target.MaxRetries = source.MaxRetries;

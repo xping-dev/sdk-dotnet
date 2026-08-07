@@ -45,6 +45,10 @@ public sealed class XpingContextOrchestratorTests
 
         public void RecordExecution(TestExecution e) => RecordTestExecution(e);
 
+        public XpingMode ResolvedMode => Mode;
+        public bool CollectingStatus => IsCollecting;
+        public bool UploadingStatus => IsUploading;
+
         protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _sessionFinalizingCount);
@@ -116,6 +120,119 @@ public sealed class XpingContextOrchestratorTests
 
     private static TestExecution BuildExecution(string name = "Test")
         => new TestExecutionBuilder().WithTestName(name).WithOutcome(TestOutcome.Passed).Build();
+
+    // ---------------------------------------------------------------------------
+    // Local-only mode
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LocalOnlyMode_StillCollectsExecutions()
+    {
+        // Arrange — the central guarantee of local-only mode: no credentials must not mean no data.
+        var (orchestrator, _) = CreateOrchestrator(o =>
+        {
+            o.ApiKey = null;
+            o.ProjectId = null;
+        });
+
+        // Act
+        orchestrator.RecordExecution(BuildExecution("LocalTest"));
+
+        // Assert
+        Assert.Equal(XpingMode.LocalOnly, orchestrator.ResolvedMode);
+        Assert.True(orchestrator.CollectingStatus);
+        Assert.False(orchestrator.UploadingStatus);
+
+        var stats = await orchestrator.GetCollectorStatsAsync();
+        Assert.Equal(1, stats.TotalRecorded);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task LocalOnlyMode_FinalizeDrainsEntireBufferAcrossMultipleBatches()
+    {
+        // Arrange — a no-op uploader always reports zero accepted records. If the finalize loop
+        // terminated on that count it would drain exactly one batch and silently discard the rest,
+        // so this pins the loop to the drained count instead.
+        const int BatchSize = 10;
+        const int TotalTests = 35;
+
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        var drainedPerCall = new List<int>();
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((s, _) => drainedPerCall.Add(s.Executions.Count))
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 0 });
+
+        var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock, o =>
+        {
+            o.ApiKey = null;
+            o.ProjectId = null;
+            o.BatchSize = BatchSize;
+            o.FlushInterval = TimeSpan.Zero;
+        });
+        var orchestrator = new TestOrchestrator(host);
+
+        for (int i = 0; i < TotalTests; i++)
+            orchestrator.RecordExecution(BuildExecution($"Test{i}"));
+
+        // Act
+        await orchestrator.FinalizeAsync();
+
+        // Assert — every recorded execution reaches the uploader, not just the first batch.
+        Assert.Equal(TotalTests, drainedPerCall.Sum());
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task DisabledMode_DoesNotCollect()
+    {
+        // Arrange
+        var (orchestrator, _) = CreateOrchestrator(o => o.Enabled = false);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecution("SilentTest"));
+
+        // Assert
+        Assert.Equal(XpingMode.Disabled, orchestrator.ResolvedMode);
+        Assert.False(orchestrator.CollectingStatus);
+        Assert.False(orchestrator.UploadingStatus);
+
+        var stats = await orchestrator.GetCollectorStatsAsync();
+        Assert.Equal(0, stats.TotalRecorded);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ConnectedMode_CollectsAndUploads()
+    {
+        // Arrange
+        var (orchestrator, uploaderMock) = CreateOrchestrator(o =>
+        {
+            o.ApiKey = "test-key";
+            o.ProjectId = "test-project";
+        });
+
+        // Act
+        orchestrator.RecordExecution(BuildExecution("ConnectedTest"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        Assert.Equal(XpingMode.Connected, orchestrator.ResolvedMode);
+        Assert.True(orchestrator.CollectingStatus);
+        Assert.True(orchestrator.UploadingStatus);
+        uploaderMock.Verify(
+            u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce);
+
+        await orchestrator.DisposeAsync();
+    }
 
     // ---------------------------------------------------------------------------
     // SessionId / StartedAt

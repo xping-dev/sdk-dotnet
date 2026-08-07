@@ -13,6 +13,7 @@ using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Network;
 using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Core.Services.Upload;
 
 namespace Xping.Sdk.Core.Tests.Extensions;
 
@@ -241,12 +242,54 @@ public sealed class XpingServiceCollectionExtensionsTests
     [Fact]
     public void AddXping_WithInvalidConfigInstance_ShouldThrowInvalidOperationException()
     {
-        // Arrange
+        // Arrange — missing credentials is no longer invalid; a malformed endpoint still is.
         var services = new ServiceCollection();
-        var invalidConfig = new XpingConfiguration(); // missing ApiKey and ProjectId
+        var invalidConfig = new XpingConfiguration
+        {
+            ApiKey = "key",
+            ProjectId = "proj",
+            ApiEndpoint = "not-a-url"
+        };
 
         // Act & Assert
         Assert.Throws<InvalidOperationException>(() => services.AddXping(invalidConfig));
+    }
+
+    [Fact]
+    public void AddXping_WithNoCredentials_ShouldRegisterLocalOnlyAndSkipHttpClient()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddXping(new XpingConfiguration());
+        var provider = services.BuildServiceProvider();
+        var uploader = provider.GetRequiredService<IXpingUploader>();
+        var options = provider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        // Assert — the no-op uploader stands in for the HTTP pipeline, and network probing is off
+        // so that local-only mode makes no outbound calls at all.
+        Assert.Equal("NoOpXpingUploader", uploader.GetType().Name);
+        Assert.Equal(XpingMode.LocalOnly, options.ResolveMode());
+        Assert.False(options.CollectNetworkMetrics);
+    }
+
+    [Fact]
+    public void AddXping_WithCredentials_ShouldRegisterHttpUploaderAndKeepNetworkMetrics()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddXping(new XpingConfiguration { ApiKey = "key", ProjectId = "proj" });
+        var provider = services.BuildServiceProvider();
+        var uploader = provider.GetRequiredService<IXpingUploader>();
+        var options = provider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        // Assert
+        Assert.Equal("XpingUploader", uploader.GetType().Name);
+        Assert.Equal(XpingMode.Connected, options.ResolveMode());
+        Assert.True(options.CollectNetworkMetrics);
     }
 
     // ---------------------------------------------------------------------------
@@ -275,9 +318,9 @@ public sealed class XpingServiceCollectionExtensionsTests
         // Arrange
         var services = new ServiceCollection();
 
-        // Act & Assert — builder produces invalid config (missing ApiKey)
+        // Act & Assert — missing ApiKey is only invalid once Connected mode is requested
         Assert.Throws<InvalidOperationException>(() =>
-            services.AddXping(b => b.WithProjectId("proj")));
+            services.AddXping(b => b.WithProjectId("proj").WithMode(XpingMode.Connected)));
     }
 
     [Fact]
