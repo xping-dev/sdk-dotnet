@@ -22,9 +22,10 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
-using Xping.Sdk.Core.Services.Reporting.Internals;
+using Xping.Sdk.Core.Services.Reporting;
 using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
@@ -60,7 +61,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     private readonly bool _isHealthy;
     private readonly XpingMode _mode;
+    private readonly ILocalRunReporter? _localRunReporter;
+
+    // Slim projections of every execution drained during this session. Accumulated at drain time
+    // rather than in RecordTestExecution so the per-test hot path stays free of any local-store work.
+    private readonly List<LocalTestRecord> _localRecords = [];
+    private readonly object _localRecordsLock = new();
+
     private PullRequestContext? _pullRequestContext;
+    private EnvironmentInfo? _lastEnvironmentInfo;
+    private string? _localAssemblyName;
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
@@ -142,6 +152,11 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
             _mode = configuration.ResolveMode();
             _isHealthy = _mode != XpingMode.Disabled;
+
+            // Optional so that hosts composed without the local-store feature still work.
+            _localRunReporter = _mode == XpingMode.Disabled
+                ? null
+                : services.GetService<ILocalRunReporter>();
 
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
@@ -389,10 +404,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
-        // PHASE 0 SPIKE: prove the end-of-run report reaches the terminal in local-only mode.
-        // Phase 1 replaces this with a store-backed report and extends it to Connected mode.
-        if (_mode == XpingMode.LocalOnly)
-            LocalRunReportWriter.Write(uploadResult.QuickStatistics, storedRunCount: 0);
+        WriteLocalRunReport(uploadResult.QuickStatistics);
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -509,6 +521,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
+        _lastEnvironmentInfo = environmentInfo;
+        AccumulateLocalRecords(executions);
+
         _builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
@@ -552,6 +567,82 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         return _uploader.UploadAsync(session, cancellationToken);
+    }
+
+    /// <summary>
+    /// Projects drained executions onto slim local records.
+    /// </summary>
+    /// <remarks>
+    /// Called once per flush rather than once per test. Doing this in
+    /// <see cref="RecordTestExecution"/> would add allocation and mapping cost to the per-test hot
+    /// path, which is the one place the SDK cannot afford to grow.
+    /// </remarks>
+    private void AccumulateLocalRecords(IReadOnlyList<TestExecution> executions)
+    {
+        if (_localRunReporter == null || executions.Count == 0)
+            return;
+
+        lock (_localRecordsLock)
+        {
+            for (int i = 0; i < executions.Count; i++)
+                _localRecords.Add(LocalTestRecord.FromExecution(executions[i]));
+
+            // Taken from the executions themselves rather than Assembly.GetEntryAssembly(), which
+            // under vstest resolves to the test host rather than the test project. The assembly name
+            // scopes the analysis window, so getting it wrong pools unrelated suites together.
+            if (_localAssemblyName == null)
+            {
+                for (int i = 0; i < executions.Count; i++)
+                {
+                    string candidate = executions[i].Identity.Assembly;
+                    if (!string.IsNullOrEmpty(candidate))
+                    {
+                        _localAssemblyName = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private void WriteLocalRunReport(QuickStatistics? stats)
+    {
+        if (_localRunReporter == null)
+            return;
+
+        List<LocalTestRecord> records;
+        lock (_localRecordsLock)
+        {
+            records = [.. _localRecords];
+        }
+
+        if (records.Count == 0)
+            return;
+
+        EnvironmentInfo? environment = _lastEnvironmentInfo;
+        DateTime endedAt = DateTime.UtcNow;
+
+        var header = new LocalRunHeader
+        {
+            SessionId = SessionId.ToString("N"),
+            StartedAtUtc = StartedAt,
+            DurationMs = (long)(endedAt - StartedAt).TotalMilliseconds,
+            Environment = environment?.EnvironmentName,
+            Assembly = _localAssemblyName,
+            Branch = GetCustomProperty(environment, "Git.Branch"),
+            CommitSha = GetCustomProperty(environment, "Git.SHA"),
+            IsCi = environment?.IsCIEnvironment ?? false
+        };
+
+        _localRunReporter.Report(new LocalRun(header, records), stats);
+    }
+
+    private static string? GetCustomProperty(EnvironmentInfo? environment, string key)
+    {
+        if (environment?.CustomProperties == null)
+            return null;
+
+        return environment.CustomProperties.TryGetValue(key, out string? value) ? value : null;
     }
 
     /// <summary>

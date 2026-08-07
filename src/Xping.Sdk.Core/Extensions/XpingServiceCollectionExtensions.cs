@@ -8,6 +8,7 @@ using Xping.Sdk.Core.Extensions.Internals;
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
@@ -33,6 +34,10 @@ using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Services.Upload.Internals;
+using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Sdk.Core.Services.Reporting;
+using Xping.Sdk.Core.Services.Reporting.Internals;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Shared;
 
@@ -115,6 +120,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
+            .AddXpingLocalStore(mode)
             .AddXpingUploader(mode);
     }
 
@@ -150,6 +156,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
+            .AddXpingLocalStore(mode)
             .AddXpingUploader(mode);
     }
 
@@ -184,6 +191,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
+            .AddXpingLocalStore(mode)
             .AddXpingUploader(mode);
     }
 
@@ -392,6 +400,47 @@ public static class XpingServiceCollectionExtensions
     public static IServiceCollection AddXpingStatistics(this IServiceCollection services)
     {
         services.AddSingleton<IRunningStatisticsAccumulator, RunningStatisticsAccumulator>();
+        return services;
+    }
+
+    #endregion
+
+    #region Feature: Local Run Store
+
+    /// <summary>
+    /// Adds the local run store and the end-of-run terminal report.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="mode">The resolved operating mode.</param>
+    /// <returns>The service collection for chaining.</returns>
+    /// <remarks>
+    /// Registered in <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> alike.
+    /// Connected users get the same local history, which is what makes the run store useful beyond
+    /// the zero-config case.
+    /// </remarks>
+    public static IServiceCollection AddXpingLocalStore(this IServiceCollection services, XpingMode mode)
+    {
+        if (mode == XpingMode.Disabled)
+            return services;
+
+        services.TryAddSingleton(_ => new LocalStoreOptions());
+
+        services.TryAddSingleton<ILocalRunStore>(sp => new JsonLinesRunStore(
+            sp.GetRequiredService<LocalStoreOptions>(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonLinesRunStore>()));
+
+        services.TryAddSingleton<ILocalRunReporter>(sp =>
+        {
+            var detector = sp.GetService<IEnvironmentDetector>();
+
+            return new LocalRunReporter(
+                sp.GetRequiredService<ILocalRunStore>(),
+                sp.GetRequiredService<LocalStoreOptions>(),
+                mode,
+                isCiEnvironment: detector?.IsCiEnvironment ?? false,
+                sp.GetRequiredService<ILogger<LocalRunReporter>>());
+        });
+
         return services;
     }
 
