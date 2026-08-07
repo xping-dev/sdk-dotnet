@@ -17,6 +17,7 @@ using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
@@ -447,7 +448,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             .WithPullRequestContext(_pullRequestContext);
 
         if (isFinalizing)
-            _builder.WithQuickStatistics(_statisticsAccumulator.GetSnapshot(DateTime.UtcNow - StartedAt));
+        {
+            // Prefer the wall-clock-aware overload when the resolved accumulator supports it
+            // (both built-in implementations do); this keeps IRunningStatisticsAccumulator's
+            // public surface unchanged for any external implementers.
+            QuickStatistics stats = _statisticsAccumulator is IWallClockAwareStatisticsAccumulator wallClockAware
+                ? wallClockAware.GetSnapshot(DateTime.UtcNow - StartedAt)
+                : _statisticsAccumulator.GetSnapshot();
+
+            _builder.WithQuickStatistics(stats);
+        }
 
         return _builder.Build();
     }

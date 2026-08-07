@@ -13,7 +13,7 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// Uses <see cref="Interlocked"/> operations for all scalar counters and a dedicated lock
 /// for the compound slowest-test state.
 /// </summary>
-internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator
+internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
 {
     // Outcome counters — stored as long for Interlocked.Read/Add compatibility
     private long _total;
@@ -70,7 +70,10 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     }
 
     /// <inheritdoc/>
-    public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed = default)
+    public QuickStatistics GetSnapshot() => GetSnapshot(TimeSpan.Zero);
+
+    /// <inheritdoc/>
+    public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed)
     {
         long total = Interlocked.Read(ref _total);
         long passed = Interlocked.Read(ref _passed);
@@ -92,6 +95,12 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             slowestName = _slowestTestName;
         }
 
+        // Clamp to zero: a caller computing elapsed via DateTime.UtcNow - startedAt could pass a
+        // negative value if the system clock jumps backwards.
+        long wallClockMs = wallClockElapsed > TimeSpan.Zero
+            ? wallClockElapsed.Ticks / TimeSpan.TicksPerMillisecond
+            : 0L;
+
         return new QuickStatistics(
             total: (int)total,
             passed: (int)passed,
@@ -101,7 +110,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             notExecuted: (int)notExecuted,
             successRate: successRate,
             totalDurationMs: totalMs,
-            wallClockDurationMs: wallClockElapsed.Ticks / TimeSpan.TicksPerMillisecond,
+            wallClockDurationMs: wallClockMs,
             averageDurationMs: averageMs,
             slowestTestName: slowestName,
             slowestTestDurationMs: slowestTicks / TimeSpan.TicksPerMillisecond);
