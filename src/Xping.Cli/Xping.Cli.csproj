@@ -20,7 +20,9 @@
 
   <ItemGroup>
     <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
-    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+    <!-- The CLI has its own NuGet readme; the shared one describes installing SDK adapters,
+         which is not what someone landing on this package is looking for. -->
+    <None Include="..\..\nuspec\README.Cli.md" Pack="true" PackagePath="\README.md" />
     <None Remove="obj\**" />
   </ItemGroup>
 
