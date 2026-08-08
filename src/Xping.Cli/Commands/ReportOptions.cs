@@ -28,6 +28,15 @@ internal sealed class ReportOptions
     public bool Ascii { get; private set; }
 
     /// <summary>
+    /// Gets a value indicating whether to report across every assembly in the store rather than
+    /// scoping to one.
+    /// </summary>
+    public bool All { get; private set; }
+
+    /// <summary>Gets a value indicating whether to emit JSON instead of a rendered block.</summary>
+    public bool Json { get; private set; }
+
+    /// <summary>
     /// Parses command-line arguments.
     /// </summary>
     /// <param name="args">Arguments following the verb.</param>
@@ -51,6 +60,14 @@ internal sealed class ReportOptions
 
                 case "--ascii":
                     options.Ascii = true;
+                    break;
+
+                case "--all":
+                    options.All = true;
+                    break;
+
+                case "--json":
+                    options.Json = true;
                     break;
 
                 case "--last":
@@ -82,6 +99,12 @@ internal sealed class ReportOptions
                     error = $"Unknown option '{arg}'.";
                     return false;
             }
+        }
+
+        if (options.All && options.Assembly != null)
+        {
+            error = "--all and --assembly are mutually exclusive.";
+            return false;
         }
 
         return true;

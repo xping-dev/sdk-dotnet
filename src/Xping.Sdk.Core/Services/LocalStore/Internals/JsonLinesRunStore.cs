@@ -48,6 +48,59 @@ internal sealed class JsonLinesRunStore : ILocalRunStore
 
     public string? StorePath => _storePath.Value;
 
+    public string? RunsPath =>
+        _storePath.Value is { } root ? LocalStorePathResolver.GetRunsDirectory(root) : null;
+
+    public int Delete(string? assembly = null)
+    {
+        string? root = _storePath.Value;
+        if (root == null)
+            return 0;
+
+        try
+        {
+            string runsDirectory = LocalStorePathResolver.GetRunsDirectory(root);
+            if (!Directory.Exists(runsDirectory))
+                return 0;
+
+            var targets = new List<string>();
+
+            foreach (string file in Directory.GetFiles(runsDirectory, FilePrefix + "*" + FileSuffix))
+            {
+                if (assembly == null)
+                {
+                    targets.Add(file);
+                    continue;
+                }
+
+                // Scoping by assembly means reading each header; the alternative would be encoding
+                // the assembly into the filename, which would break older stores.
+                LocalRun? run = TryReadFile(file);
+
+                // An unreadable run has no assembly to match, so a scoped delete leaves it alone.
+                if (run != null &&
+                    string.Equals(run.Header.Assembly, assembly, StringComparison.Ordinal))
+                {
+                    targets.Add(file);
+                }
+            }
+
+            int deleted = 0;
+            foreach (string file in targets)
+            {
+                if (TryDelete(new FileInfo(file)))
+                    deleted++;
+            }
+
+            return deleted;
+        }
+        catch (Exception ex) when (IsStorageFailure(ex))
+        {
+            _logger.LogDebug("Local run store delete skipped: {Message}", ex.Message);
+            return 0;
+        }
+    }
+
     public bool Write(LocalRun run)
     {
         if (run == null)

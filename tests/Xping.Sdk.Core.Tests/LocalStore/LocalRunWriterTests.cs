@@ -98,6 +98,10 @@ public sealed class LocalRunWriterTests : IDisposable
 
         public string? StorePath => "/nonexistent";
 
+        public string? RunsPath => "/nonexistent/runs";
+
+        public int Delete(string? assembly = null) => 0;
+
         public bool Write(LocalRun run) => throw new IOException("disk on fire");
 
         public IReadOnlyList<LocalRun> ReadRecent(int maxRuns, string? assembly = null) => [];

@@ -28,6 +28,29 @@ public interface ILocalRunStore
     string? StorePath { get; }
 
     /// <summary>
+    /// Gets the directory holding run files, or <see langword="null"/> when unavailable.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so tooling can report on disk usage. The store owns its layout, so callers should not
+    /// assume this is any particular child of <see cref="StorePath"/>.
+    /// </remarks>
+    string? RunsPath { get; }
+
+    /// <summary>
+    /// Deletes stored runs.
+    /// </summary>
+    /// <param name="assembly">
+    /// When supplied, only runs recorded for this test assembly are deleted; otherwise all runs are.
+    /// </param>
+    /// <returns>The number of runs deleted.</returns>
+    /// <remarks>
+    /// Deletion lives on the store rather than in the caller so that the on-disk layout stays an
+    /// implementation detail. Local history is not recoverable, so callers are expected to confirm
+    /// with the user first.
+    /// </remarks>
+    int Delete(string? assembly = null);
+
+    /// <summary>
     /// Writes a run and applies the retention policy.
     /// </summary>
     /// <param name="run">The run to persist.</param>

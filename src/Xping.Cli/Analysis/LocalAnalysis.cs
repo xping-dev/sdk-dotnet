@@ -69,6 +69,26 @@ internal sealed class UnstableTest
 
     /// <summary>Gets the maximum retries configured, when known.</summary>
     public int? MaxAttempts { get; init; }
+
+    /// <summary>
+    /// Gets the test assembly this finding belongs to. Set when findings from several assemblies
+    /// are merged; <see langword="null"/> for a single-assembly report.
+    /// </summary>
+    public string? Assembly { get; init; }
+
+    /// <summary>Returns a copy of this finding tagged with its assembly.</summary>
+    public UnstableTest WithAssembly(string? assembly) => new()
+    {
+        Fingerprint = Fingerprint,
+        Name = Name,
+        Kind = Kind,
+        History = History,
+        PassCount = PassCount,
+        RunCount = RunCount,
+        PassedOnAttempt = PassedOnAttempt,
+        MaxAttempts = MaxAttempts,
+        Assembly = assembly
+    };
 }
 
 /// <summary>
@@ -87,6 +107,11 @@ internal sealed class LocalAnalysis
 
     /// <summary>Gets the number of runs the analysis covered.</summary>
     public int RunsAnalysed { get; init; }
+
+    /// <summary>
+    /// Gets the number of test assemblies covered. Greater than one only for an aggregate report.
+    /// </summary>
+    public int AssembliesAnalysed { get; init; } = 1;
 
     /// <summary>
     /// Gets the number of runs needed before cross-run analysis becomes meaningful.

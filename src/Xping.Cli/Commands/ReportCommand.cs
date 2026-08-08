@@ -38,12 +38,17 @@ internal static class ReportCommand
             return 1;
         }
 
-        // Every test project in a solution shares one store. Reporting across them would produce a
-        // block whose headline counts describe one run while its history spans several unrelated
-        // suites, so scope to a single assembly — the caller's choice, or the most recent one.
-        string? assembly = options.Assembly ?? NewestAssembly(store);
+        // Every test project in a solution shares one store. A scoped report describes one suite;
+        // --all describes the solution and uses a header that does not pretend otherwise.
+        string? assembly = options.All ? null : options.Assembly ?? NewestAssembly(store);
 
-        IReadOnlyList<LocalRun> runs = store.ReadRecent(options.Last, assembly);
+        // In aggregate mode --last bounds each assembly's window, not the total, so read enough
+        // runs to cover every suite.
+        int readCount = options.All
+            ? SaturatingMultiply(options.Last, Math.Max(1, CountAssemblies(store)))
+            : options.Last;
+
+        IReadOnlyList<LocalRun> runs = store.ReadRecent(readCount, assembly);
 
         if (runs.Count == 0)
         {
@@ -54,17 +59,29 @@ internal static class ReportCommand
             return 1;
         }
 
-        WriteScopeNotice(store, assembly, options.Assembly != null, output);
+        LocalAnalysis analysis = options.All
+            ? AggregateAnalyzer.Analyze(runs)
+            : LocalFlakinessAnalyzer.Analyze(runs);
 
-        LocalAnalysis analysis = LocalFlakinessAnalyzer.Analyze(runs);
-        LocalRun latest = runs[runs.Count - 1];
+        if (options.Json)
+        {
+            output.WriteLine(JsonReportWriter.Write(analysis, store.StorePath, assembly, runs));
+            return 0;
+        }
 
-        string? report = LocalRunReportWriter.Render(
-            BuildStatistics(latest),
-            analysis,
-            options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Unicode,
-            CtaThrottle.ShouldShow(store.StorePath, analysis.HasFindings, isConnected: false),
-            store.StorePath);
+        if (!options.All)
+            WriteScopeNotice(store, assembly, options.Assembly != null, output);
+
+        // The invitation belongs to a human-readable report; JSON consumers are scripts.
+        bool showCta = CtaThrottle.ShouldShow(
+            store.StorePath, analysis.HasFindings, isConnected: false);
+
+        ReportGlyphs glyphs = options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Unicode;
+
+        string? report = options.All
+            ? LocalRunReportWriter.RenderAggregate(analysis, glyphs, showCta, store.StorePath)
+            : LocalRunReportWriter.Render(
+                BuildStatistics(runs[runs.Count - 1]), analysis, glyphs, showCta, store.StorePath);
 
         if (report != null)
             output.Write(report);
@@ -73,6 +90,22 @@ internal static class ReportCommand
             WriteDetails(analysis, runs, output);
 
         return 0;
+    }
+
+    private static int CountAssemblies(ILocalRunStore store)
+    {
+        const int ProbeWindow = 200;
+
+        return store.ReadRecent(ProbeWindow)
+            .Select(r => r.Header.Assembly)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+    }
+
+    private static int SaturatingMultiply(int a, int b)
+    {
+        long product = (long)a * b;
+        return product > int.MaxValue ? int.MaxValue : (int)product;
     }
 
     /// <summary>

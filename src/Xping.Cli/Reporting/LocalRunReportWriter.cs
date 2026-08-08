@@ -70,6 +70,62 @@ internal static class LocalRunReportWriter
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Renders an aggregate report covering several assemblies.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately omits the pass/fail counts of the single-assembly block. Those describe one run,
+    /// and across assemblies there is no single "latest run" they could honestly describe — printing
+    /// them anyway is exactly the error this mode exists to avoid.
+    /// </remarks>
+    /// <param name="analysis">Merged cross-assembly analysis.</param>
+    /// <param name="glyphs">Glyph set matched to the terminal's capabilities.</param>
+    /// <param name="showCta">Whether to append the cloud invitation.</param>
+    /// <param name="storePath">Store location, shown with the invitation.</param>
+    /// <returns>The rendered block.</returns>
+    public static string RenderAggregate(
+        LocalAnalysis analysis,
+        ReportGlyphs glyphs,
+        bool showCta,
+        string? storePath)
+    {
+        analysis ??= LocalAnalysis.Empty;
+
+        var sb = new StringBuilder();
+        string rule = new(glyphs.HorizontalRule, Width);
+
+        sb.AppendLine();
+        sb.AppendLine(rule);
+        sb.AppendLine(Pad(
+            "  Xping " + glyphs.Separator + " local summary",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} {1} {2} {3} {4}  ",
+                analysis.AssembliesAnalysed,
+                analysis.AssembliesAnalysed == 1 ? "assembly" : "assemblies",
+                glyphs.Separator,
+                analysis.RunsAnalysed,
+                analysis.RunsAnalysed == 1 ? "run" : "runs")));
+        sb.AppendLine(rule);
+
+        if (!analysis.HasFindings)
+        {
+            sb.AppendLine(
+                "  " + glyphs.Pass + "  Nothing unstable across the analysed runs.");
+        }
+
+        AppendUnstableSection(sb, analysis, glyphs);
+        AppendConsistentFailureSection(sb, analysis, glyphs);
+        AppendHistoryProgress(sb, analysis, glyphs);
+
+        if (showCta)
+            AppendCta(sb, analysis, glyphs, storePath);
+
+        sb.AppendLine(rule);
+
+        return sb.ToString();
+    }
+
     private static string RenderOutcomes(QuickStatistics stats, ReportGlyphs glyphs)
     {
         var sb = new StringBuilder("  ");
@@ -98,15 +154,26 @@ internal static class LocalRunReportWriter
             return;
 
         sb.AppendLine();
-        sb.AppendLine(string.Format(
-            CultureInfo.InvariantCulture,
-            "  {0}  {1} unstable {2} {3} last {4} local {5}",
-            glyphs.Warning,
-            analysis.UnstableTests.Count,
-            analysis.UnstableTests.Count == 1 ? "test" : "tests",
-            glyphs.Separator,
-            analysis.RunsAnalysed,
-            analysis.RunsAnalysed == 1 ? "run" : "runs"));
+
+        // In aggregate mode each finding is measured against its own assembly's window, so naming a
+        // single run count here would contradict the per-finding ratios below it.
+        sb.AppendLine(analysis.AssembliesAnalysed > 1
+            ? string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0}  {1} unstable {2} across {3} assemblies",
+                glyphs.Warning,
+                analysis.UnstableTests.Count,
+                analysis.UnstableTests.Count == 1 ? "test" : "tests",
+                analysis.AssembliesAnalysed)
+            : string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0}  {1} unstable {2} {3} last {4} local {5}",
+                glyphs.Warning,
+                analysis.UnstableTests.Count,
+                analysis.UnstableTests.Count == 1 ? "test" : "tests",
+                glyphs.Separator,
+                analysis.RunsAnalysed,
+                analysis.RunsAnalysed == 1 ? "run" : "runs"));
         sb.AppendLine();
 
         const int SparklineIndent = 5;
@@ -132,6 +199,16 @@ internal static class LocalRunReportWriter
                 ratio + "  "));
 
             string description = DescribeKind(test, glyphs);
+
+            // In an aggregate report the name alone is ambiguous: two suites can hold tests with
+            // the same short name, and the reader needs to know which one to go and look at.
+            if (test.Assembly is { Length: > 0 })
+            {
+                description = description.Length > 0
+                    ? test.Assembly + " " + glyphs.Separator + " " + description
+                    : test.Assembly;
+            }
+
             if (description.Length > 0)
                 sb.AppendLine(new string(' ', nameColumn) + description);
 
@@ -145,28 +222,53 @@ internal static class LocalRunReportWriter
         if (analysis.ConsistentFailures.Count == 0)
             return;
 
-        sb.AppendLine(string.Format(
-            CultureInfo.InvariantCulture,
-            "  {0}  {1} {2} failed in all {3} runs - not flaky, likely real bugs",
-            glyphs.Fail,
-            analysis.ConsistentFailures.Count,
-            analysis.ConsistentFailures.Count == 1 ? "test" : "tests",
-            analysis.RunsAnalysed));
+        // In aggregate mode the run count differs per assembly, so naming a single number would be
+        // wrong for every finding but one.
+        sb.AppendLine(analysis.AssembliesAnalysed > 1
+            ? string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0}  {1} {2} failed in every analysed run - not flaky, likely real bugs",
+                glyphs.Fail,
+                analysis.ConsistentFailures.Count,
+                analysis.ConsistentFailures.Count == 1 ? "test" : "tests")
+            : string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0}  {1} {2} failed in all {3} runs - not flaky, likely real bugs",
+                glyphs.Fail,
+                analysis.ConsistentFailures.Count,
+                analysis.ConsistentFailures.Count == 1 ? "test" : "tests",
+                analysis.RunsAnalysed));
 
         // Naming them is the useful part; past a handful the list stops being scannable.
         const int MaxNamed = 3;
-        var names = analysis.ConsistentFailures.Take(MaxNamed).Select(t => t.Name).ToList();
-        string line = string.Join(" " + glyphs.Separator + " ", names);
-
-        if (analysis.ConsistentFailures.Count > MaxNamed)
-        {
-            line += string.Format(
+        var names = analysis.ConsistentFailures
+            .Take(MaxNamed)
+            .Select(t => t.Assembly is { Length: > 0 } ? $"{t.Name} ({t.Assembly})" : t.Name)
+            .ToList();
+        string extra = analysis.ConsistentFailures.Count > MaxNamed
+            ? string.Format(
                 CultureInfo.InvariantCulture,
                 " (+{0} more)",
-                analysis.ConsistentFailures.Count - MaxNamed);
+                analysis.ConsistentFailures.Count - MaxNamed)
+            : string.Empty;
+
+        string joined = string.Join(" " + glyphs.Separator + " ", names) + extra;
+
+        if (joined.Length <= Width - 8)
+        {
+            sb.AppendLine("     " + joined);
+        }
+        else
+        {
+            // Truncating the joined form would hide whole names behind a single '~'. One per line
+            // keeps every name the reader is told about actually visible.
+            foreach (string name in names)
+                sb.AppendLine("     " + Truncate(name, Width - 8));
+
+            if (extra.Length > 0)
+                sb.AppendLine("    " + extra);
         }
 
-        sb.AppendLine("     " + Truncate(line, Width - 8));
         sb.AppendLine();
     }
 
