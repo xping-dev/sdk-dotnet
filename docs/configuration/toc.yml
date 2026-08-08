@@ -1,2 +1,4 @@
 - name: Configuration Reference
   href: configuration-reference.md
+- name: Local Store
+  href: local-store.md

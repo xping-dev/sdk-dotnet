@@ -1,3 +1,5 @@
+- name: Running Without an Account
+  href: local-first.md
 - name: Quick Start - NUnit
   href: quickstart-nunit.md
 - name: Quick Start - xUnit

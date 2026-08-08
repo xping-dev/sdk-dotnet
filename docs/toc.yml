@@ -2,6 +2,8 @@
   href: getting-started/
 - name: Configuration
   href: configuration/
+- name: CLI
+  href: cli/
 - name: Guides
   href: guides/
 - name: Performance
