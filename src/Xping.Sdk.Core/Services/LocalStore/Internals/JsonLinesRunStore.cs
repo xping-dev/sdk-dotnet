@@ -300,7 +300,11 @@ internal sealed class JsonLinesRunStore : ILocalRunStore
         long remainingBytes = files.Sum(SafeLength);
         int remainingCount = files.Count;
 
-        foreach (FileInfo file in files)
+        // The newest run is never a deletion candidate. Every limit is evaluated after the run has
+        // been written, so a short MaxAge, or a single run larger than MaxBytes, would otherwise
+        // delete the run that was just recorded and leave the store empty. Retention exists to bound
+        // history, not to discard the thing it was called to keep.
+        foreach (FileInfo file in files.Take(files.Count - 1))
         {
             bool overCount = remainingCount > _options.MaxRuns;
             bool overBytes = remainingBytes > _options.MaxBytes;

@@ -165,20 +165,63 @@ public sealed class JsonLinesRunStoreTests : IDisposable
     [Fact]
     public void EnforcesMaxAgeRetention()
     {
-        // Arrange
-        var store = CreateStore(new LocalStoreOptions { MaxAge = TimeSpan.FromMilliseconds(1) });
-        store.Write(BuildRun(DateTime.UtcNow.AddDays(-1), prefix: "old"));
+        // Arrange — age is judged by file write time, so backdate the first file explicitly rather
+        // than sleeping. Sleeping made the outcome depend on how long a write takes, which is not
+        // something this test is trying to measure.
+        var store = CreateStore(new LocalStoreOptions { MaxAge = TimeSpan.FromHours(1) });
+        store.Write(BuildRun(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), prefix: "old"));
 
-        // Age is judged by file write time, so let the first file fall outside the window.
-        Thread.Sleep(30);
+        foreach (string file in Directory.GetFiles(
+            LocalStorePathResolver.GetRunsDirectory(_root), "run-*.jsonl.gz"))
+        {
+            File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddDays(-2));
+        }
 
         // Act
-        store.Write(BuildRun(DateTime.UtcNow, prefix: "new"));
+        store.Write(BuildRun(new DateTime(2026, 1, 1, 0, 1, 0, DateTimeKind.Utc), prefix: "new"));
 
         // Assert
         var runs = store.ReadRecent(100);
         Assert.Single(runs);
         Assert.StartsWith("new", runs[0].Records[0].Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RetentionNeverDeletesTheRunItJustWrote()
+    {
+        // Arrange — limits so aggressive that every rule would delete the incoming run. Retention
+        // bounds history; it must not discard the thing it was called to keep, or an unlucky
+        // MaxAge would leave a developer with a permanently empty store.
+        var store = CreateStore(new LocalStoreOptions
+        {
+            MaxRuns = 0,
+            MaxBytes = 0,
+            MaxAge = TimeSpan.Zero
+        });
+
+        // Act
+        store.Write(BuildRun(DateTime.UtcNow, prefix: "survivor"));
+
+        // Assert
+        var run = Assert.Single(store.ReadRecent(100));
+        Assert.StartsWith("survivor", run.Records[0].Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RetentionKeepsTheNewestRunWhenEveryRunIsOverAge()
+    {
+        // Arrange
+        var store = CreateStore(new LocalStoreOptions { MaxAge = TimeSpan.Zero });
+        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // Act
+        store.Write(BuildRun(baseTime, prefix: "first"));
+        store.Write(BuildRun(baseTime.AddMinutes(1), prefix: "second"));
+        store.Write(BuildRun(baseTime.AddMinutes(2), prefix: "third"));
+
+        // Assert — older runs are pruned, the newest always survives.
+        var run = Assert.Single(store.ReadRecent(100));
+        Assert.StartsWith("third", run.Records[0].Name, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -192,9 +235,10 @@ public sealed class JsonLinesRunStoreTests : IDisposable
         store.Write(BuildRun(baseTime, prefix: "first"));
         store.Write(BuildRun(baseTime.AddMinutes(1), prefix: "second"));
 
-        // Assert — at least the newest run always survives.
-        var runs = store.ReadRecent(100);
-        Assert.True(runs.Count <= 1);
+        // Assert — the older run is pruned and the newest survives. This previously asserted
+        // `Count <= 1`, which quietly tolerated an empty store.
+        var run = Assert.Single(store.ReadRecent(100));
+        Assert.StartsWith("second", run.Records[0].Name, StringComparison.Ordinal);
     }
 
     [Fact]
