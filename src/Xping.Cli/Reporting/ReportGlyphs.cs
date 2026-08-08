@@ -5,15 +5,15 @@
 
 using System.Text;
 
-namespace Xping.Sdk.Core.Services.Reporting.Internals;
+namespace Xping.Cli.Reporting;
 
 /// <summary>
 /// The character set used to draw the report, matched to what the terminal can actually render.
 /// </summary>
 /// <remarks>
 /// Windows conhost still defaults to code page 437 in some configurations, and a box-drawing
-/// character there renders as mojibake. Detecting the output encoding and degrading to ASCII keeps
-/// the report legible instead of turning it into visual noise.
+/// character there renders as mojibake. Degrading to ASCII keeps the report legible instead of
+/// turning it into visual noise.
 /// </remarks>
 internal sealed class ReportGlyphs
 {

@@ -4,10 +4,10 @@
  */
 
 using Xping.Sdk.Core.Models.Statistics;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.Reporting.Internals;
+using Xping.Cli.Analysis;
+using Xping.Cli.Reporting;
 
-namespace Xping.Sdk.Core.Tests.Reporting;
+namespace Xping.Cli.Tests.Reporting;
 
 public sealed class LocalRunReportWriterTests
 {
@@ -65,6 +65,22 @@ public sealed class LocalRunReportWriterTests
         Assert.Contains("9 passed", report, StringComparison.Ordinal);
         Assert.Contains("2 failed", report, StringComparison.Ordinal);
         Assert.Contains("1 skipped", report, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1, "1 test ")]
+    [InlineData(2, "2 tests ")]
+    public void UsesTheCorrectPluralForTheTestCount(int total, string expected)
+    {
+        string? report = LocalRunReportWriter.Render(
+            new QuickStatistics { Total = total, Passed = total },
+            LocalAnalysis.Empty,
+            ReportGlyphs.Ascii,
+            showCta: false,
+            storePath: null);
+
+        Assert.NotNull(report);
+        Assert.Contains(expected, report, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -408,15 +408,22 @@ public static class XpingServiceCollectionExtensions
     #region Feature: Local Run Store
 
     /// <summary>
-    /// Adds the local run store and the end-of-run terminal report.
+    /// Adds the local run store.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="mode">The resolved operating mode.</param>
     /// <returns>The service collection for chaining.</returns>
     /// <remarks>
+    /// <para>
     /// Registered in <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> alike.
     /// Connected users get the same local history, which is what makes the run store useful beyond
     /// the zero-config case.
+    /// </para>
+    /// <para>
+    /// Writing only. Flakiness analysis and report rendering belong to the Xping CLI, which reads
+    /// the same store: keeping them out of the test host means no analysis cost during a test run,
+    /// and no need to wrestle the test runner for the terminal.
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddXpingLocalStore(this IServiceCollection services, XpingMode mode)
     {
@@ -429,17 +436,9 @@ public static class XpingServiceCollectionExtensions
             sp.GetRequiredService<LocalStoreOptions>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonLinesRunStore>()));
 
-        services.TryAddSingleton<ILocalRunReporter>(sp =>
-        {
-            var detector = sp.GetService<IEnvironmentDetector>();
-
-            return new LocalRunReporter(
-                sp.GetRequiredService<ILocalRunStore>(),
-                sp.GetRequiredService<LocalStoreOptions>(),
-                mode,
-                isCiEnvironment: detector?.IsCiEnvironment ?? false,
-                sp.GetRequiredService<ILogger<LocalRunReporter>>());
-        });
+        services.TryAddSingleton<ILocalRunWriter>(sp => new LocalRunWriter(
+            sp.GetRequiredService<ILocalRunStore>(),
+            sp.GetRequiredService<ILogger<LocalRunWriter>>()));
 
         return services;
     }

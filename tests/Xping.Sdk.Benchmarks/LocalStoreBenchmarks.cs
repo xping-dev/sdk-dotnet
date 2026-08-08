@@ -127,12 +127,4 @@ public class LocalStoreBenchmarks
     /// <summary>Reading a full 12-run analysis window of 2,000-test runs.</summary>
     [Benchmark]
     public int ReadRecent_12Runs() => _store.ReadRecent(12).Count;
-
-    /// <summary>Analysis over a full window, which is what the report renders.</summary>
-    [Benchmark]
-    public int Analyze_12Runs()
-    {
-        var runs = _store.ReadRecent(12);
-        return LocalFlakinessAnalyzer.Analyze(runs).UnstableTests.Count;
-    }
 }

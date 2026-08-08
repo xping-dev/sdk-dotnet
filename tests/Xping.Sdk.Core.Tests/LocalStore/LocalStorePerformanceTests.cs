@@ -134,9 +134,10 @@ public sealed class LocalStorePerformanceTests : IDisposable
     }
 
     [Fact]
-    public void ReadingAndAnalysingAFullWindowIsFastEnoughForTheReport()
+    public void ReadingAFullWindowIsFastEnoughForTheCli()
     {
         // Arrange — a full analysis window of large runs, the worst realistic read.
+        // This cost is paid by `xping report`, not by a test run: the SDK only writes.
         var store = new JsonLinesRunStore(new LocalStoreOptions(), NullLogger.Instance);
         for (int i = 0; i < 12; i++)
             store.Write(BuildRun(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
@@ -144,16 +145,12 @@ public sealed class LocalStorePerformanceTests : IDisposable
         // Act
         var sw = Stopwatch.StartNew();
         var runs = store.ReadRecent(12);
-        var analysis = LocalFlakinessAnalyzer.Analyze(runs);
         sw.Stop();
 
         // Assert
-        _output.WriteLine(FormatMs("Read + analyse 12 x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
+        _output.WriteLine(FormatMs("Read 12 x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
         Assert.Equal(12, runs.Count);
-        Assert.NotNull(analysis);
-        Assert.True(
-            sw.ElapsedMilliseconds < 2000,
-            $"Read and analysis took {sw.ElapsedMilliseconds}ms.");
+        Assert.True(sw.ElapsedMilliseconds < 2000, $"Read took {sw.ElapsedMilliseconds}ms.");
     }
 
     [Fact]

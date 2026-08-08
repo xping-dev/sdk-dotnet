@@ -5,7 +5,7 @@
 
 using Xping.Sdk.Core.Models.Local;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Cli.Analysis;
 
 /// <summary>
 /// Derives local instability signals from recent runs.

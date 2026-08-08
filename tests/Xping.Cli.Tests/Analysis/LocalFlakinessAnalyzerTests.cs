@@ -4,10 +4,9 @@
  */
 
 using Xping.Sdk.Core.Models.Local;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Cli.Analysis;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Cli.Tests.Analysis;
 
 public sealed class LocalFlakinessAnalyzerTests
 {

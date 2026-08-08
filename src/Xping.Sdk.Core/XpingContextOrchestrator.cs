@@ -25,7 +25,8 @@ using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
-using Xping.Sdk.Core.Services.Reporting;
+using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Sdk.Core.Services.Reporting.Internals;
 using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
@@ -61,7 +62,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     private readonly bool _isHealthy;
     private readonly XpingMode _mode;
-    private readonly ILocalRunReporter? _localRunReporter;
+    private readonly ILocalRunWriter? _localRunWriter;
 
     // Slim projections of every execution drained during this session. Accumulated at drain time
     // rather than in RecordTestExecution so the per-test hot path stays free of any local-store work.
@@ -154,9 +155,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _isHealthy = _mode != XpingMode.Disabled;
 
             // Optional so that hosts composed without the local-store feature still work.
-            _localRunReporter = _mode == XpingMode.Disabled
+            _localRunWriter = _mode == XpingMode.Disabled
                 ? null
-                : services.GetService<ILocalRunReporter>();
+                : services.GetService<ILocalRunWriter>();
 
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
@@ -404,7 +405,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
-        WriteLocalRunReport(uploadResult.QuickStatistics);
+        WriteLocalRun();
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -579,7 +580,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </remarks>
     private void AccumulateLocalRecords(IReadOnlyList<TestExecution> executions)
     {
-        if (_localRunReporter == null || executions.Count == 0)
+        if (_localRunWriter == null || executions.Count == 0)
             return;
 
         lock (_localRecordsLock)
@@ -605,9 +606,18 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
     }
 
-    private void WriteLocalRunReport(QuickStatistics? stats)
+    /// <summary>
+    /// Persists the finished run to the local store and, when this run produced a retry flake,
+    /// prints a single line pointing at the CLI.
+    /// </summary>
+    /// <remarks>
+    /// The SDK does not analyse history or render reports. It states one fact about the run it just
+    /// observed — how many tests failed and then passed on a retry — which is available from records
+    /// already in memory and needs no store read. Everything historical is the CLI's job.
+    /// </remarks>
+    private void WriteLocalRun()
     {
-        if (_localRunReporter == null)
+        if (_localRunWriter == null)
             return;
 
         List<LocalTestRecord> records;
@@ -634,7 +644,18 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             IsCi = environment?.IsCIEnvironment ?? false
         };
 
-        _localRunReporter.Report(new LocalRun(header, records), stats);
+        bool stored = _localRunWriter.Write(new LocalRun(header, records));
+
+        if (stored)
+            WriteRetryFlakeHint(records, header.IsCi);
+    }
+
+    private static void WriteRetryFlakeHint(List<LocalTestRecord> records, bool isCi)
+    {
+        string? hint = RetryFlakeHint.Build(records, isCi, RetryFlakeHint.IsSuppressed());
+
+        if (hint != null)
+            TerminalWriter.Write(hint + System.Environment.NewLine);
     }
 
     private static string? GetCustomProperty(EnvironmentInfo? environment, string key)

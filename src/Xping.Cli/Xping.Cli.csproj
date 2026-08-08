@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RollForward>Major</RollForward>
+
+    <!-- Packaged as a .NET tool. Installed into a tool manifest it is invoked as
+         `dotnet xping`; installed globally it is invoked as `xping`. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>xping</ToolCommandName>
+
+    <PackageId>Xping.Cli</PackageId>
+    <Description>Command-line companion for the Xping SDK. Reads the local run store written by Xping.Sdk.Core and reports test flakiness from recent local runs. No account required.</Description>
+    <PackageTags>testing;observability;flaky-tests;reliability;cli;dotnet-tool</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+    <None Remove="obj\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Xping.Cli.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

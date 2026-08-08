@@ -6,9 +6,9 @@
 using System.Globalization;
 using System.Text;
 using Xping.Sdk.Core.Models.Statistics;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Cli.Analysis;
 
-namespace Xping.Sdk.Core.Services.Reporting.Internals;
+namespace Xping.Cli.Reporting;
 
 /// <summary>
 /// Renders the end-of-run local summary block.
@@ -50,8 +50,9 @@ internal static class LocalRunReportWriter
             "  Xping " + glyphs.Separator + " local run summary",
             string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} tests {1} {2:0.0}s  ",
+                "{0} {1} {2} {3:0.0}s  ",
                 stats.Total,
+                stats.Total == 1 ? "test" : "tests",
                 glyphs.Separator,
                 stats.WallClockDurationMs / 1000.0)));
         sb.AppendLine(rule);
@@ -257,7 +258,9 @@ internal static class LocalRunReportWriter
         if (string.IsNullOrEmpty(value) || value.Length <= max)
             return value;
 
-        return max <= 1 ? value.Substring(0, max) : value.Substring(0, max - 1) + "~";
+        return max <= 1
+            ? value.Substring(0, max)
+            : string.Concat(value.AsSpan(0, max - 1), "~");
     }
 
     private static string Shorten(string path)

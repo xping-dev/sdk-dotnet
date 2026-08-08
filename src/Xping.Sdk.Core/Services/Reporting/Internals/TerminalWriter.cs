@@ -49,7 +49,36 @@ internal static class TerminalWriter
         if (_terminalPath.Value is { } path && TryWriteToTerminal(path, text))
             return;
 
-        RawConsoleReportSink.Write(text);
+        WriteToStandardOutput(text);
+    }
+
+    /// <summary>
+    /// Fallback for when no controlling terminal exists (CI, IDE test runners, redirected output).
+    /// </summary>
+    /// <remarks>
+    /// Writes to the raw stdout handle rather than <see cref="Console.Out"/>, which test framework
+    /// adapters redirect to capture per-test output. This still reaches only the test host's pipe, so
+    /// the vstest runner may drop it at low console verbosity — but it puts the text where captured
+    /// logs can find it, which is the best available outcome without a terminal.
+    /// </remarks>
+    private static void WriteToStandardOutput(string text)
+    {
+        try
+        {
+            using Stream stream = Console.OpenStandardOutput();
+            using var writer = new StreamWriter(
+                stream,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+            {
+                AutoFlush = true
+            };
+
+            writer.Write(text);
+        }
+        catch (Exception ex) when (IsTerminalUnavailable(ex) || ex is ObjectDisposedException)
+        {
+            // A closed or redirected handle must never disturb the test run.
+        }
     }
 
     private static string? ResolveTerminalPath()

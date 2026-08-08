@@ -3,12 +3,12 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Cli.Analysis;
 
 /// <summary>
 /// Why a test was flagged as unstable. Ordered by how strongly it implies flakiness.
 /// </summary>
-public enum InstabilityKind
+internal enum InstabilityKind
 {
     /// <summary>
     /// The test failed and then passed on a later attempt within a single run.
@@ -38,7 +38,7 @@ public enum InstabilityKind
 /// <summary>
 /// A test flagged by local analysis, with the history behind the flag.
 /// </summary>
-public sealed class UnstableTest
+internal sealed class UnstableTest
 {
     /// <summary>Gets the stable test fingerprint.</summary>
     public string Fingerprint { get; init; } = string.Empty;
@@ -74,7 +74,7 @@ public sealed class UnstableTest
 /// <summary>
 /// The result of analysing recent local runs.
 /// </summary>
-public sealed class LocalAnalysis
+internal sealed class LocalAnalysis
 {
     /// <summary>Gets an empty analysis.</summary>
     public static LocalAnalysis Empty { get; } = new();
