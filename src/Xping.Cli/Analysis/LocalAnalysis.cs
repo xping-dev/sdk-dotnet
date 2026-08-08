@@ -119,9 +119,21 @@ internal sealed class LocalAnalysis
     public int MinimumRunsForHistory { get; init; }
 
     /// <summary>
+    /// Gets the largest number of runs any single assembly contributed.
+    /// </summary>
+    /// <remarks>
+    /// For a scoped report this equals <see cref="RunsAnalysed"/>. For an aggregate report the two
+    /// differ, and only this one can answer whether cross-run analysis is meaningful: three
+    /// assemblies with one run each total three runs but have no history to compare.
+    /// </remarks>
+    public int LargestAssemblyWindow { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether there is enough history for cross-run analysis.
     /// </summary>
-    public bool HasSufficientHistory => RunsAnalysed >= MinimumRunsForHistory;
+    public bool HasSufficientHistory =>
+        Math.Max(LargestAssemblyWindow, AssembliesAnalysed > 1 ? 0 : RunsAnalysed)
+            >= MinimumRunsForHistory;
 
     /// <summary>
     /// Gets a value indicating whether the analysis found anything worth showing.

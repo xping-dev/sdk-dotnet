@@ -641,7 +641,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             Assembly = _localAssemblyName,
             Branch = GetCustomProperty(environment, "Git.Branch"),
             CommitSha = GetCustomProperty(environment, "Git.SHA"),
-            IsCi = environment?.IsCIEnvironment ?? false
+            IsCi = environment?.IsCIEnvironment ?? false,
+            IsConnected = _mode == XpingMode.Connected
         };
 
         bool stored = _localRunWriter.Write(new LocalRun(header, records));

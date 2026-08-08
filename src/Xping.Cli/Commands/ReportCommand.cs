@@ -42,13 +42,13 @@ internal static class ReportCommand
         // --all describes the solution and uses a header that does not pretend otherwise.
         string? assembly = options.All ? null : options.Assembly ?? NewestAssembly(store);
 
-        // In aggregate mode --last bounds each assembly's window, not the total, so read enough
-        // runs to cover every suite.
-        int readCount = options.All
-            ? SaturatingMultiply(options.Last, Math.Max(1, CountAssemblies(store)))
-            : options.Last;
-
-        IReadOnlyList<LocalRun> runs = store.ReadRecent(readCount, assembly);
+        // In aggregate mode --last bounds each assembly's window, not the total. Reading N x
+        // assemblies globally does not achieve that: ReadRecent returns the newest runs overall, so
+        // one busy suite owning the newest runs would push another suite out of the window
+        // entirely. Read each assembly's window separately instead.
+        IReadOnlyList<LocalRun> runs = options.All
+            ? ReadPerAssembly(store, options.Last)
+            : store.ReadRecent(options.Last, assembly);
 
         if (runs.Count == 0)
         {
@@ -73,10 +73,14 @@ internal static class ReportCommand
             WriteScopeNotice(store, assembly, options.Assembly != null, output);
 
         // The invitation belongs to a human-readable report; JSON consumers are scripts.
-        bool showCta = CtaThrottle.ShouldShow(
-            store.StorePath, analysis.HasFindings, isConnected: false);
+        // A project that has uploaded at any point in the window is already a customer.
+        bool isConnected = runs.Any(r => r.Header.IsConnected);
 
-        ReportGlyphs glyphs = options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Unicode;
+        bool showCta = CtaThrottle.ShouldShow(store.StorePath, analysis.HasFindings, isConnected);
+
+        // --ascii forces ASCII; otherwise ask the terminal. Assuming Unicode would render as
+        // mojibake on a console still using a legacy code page.
+        ReportGlyphs glyphs = options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Detect();
 
         string? report = options.All
             ? LocalRunReportWriter.RenderAggregate(analysis, glyphs, showCta, store.StorePath)
@@ -92,20 +96,33 @@ internal static class ReportCommand
         return 0;
     }
 
-    private static int CountAssemblies(ILocalRunStore store)
+    /// <summary>
+    /// Reads the newest <paramref name="last"/> runs for every assembly in the store.
+    /// </summary>
+    /// <remarks>
+    /// Each assembly gets its own window, so a suite that runs rarely is still represented even when
+    /// another suite owns every one of the newest runs.
+    /// </remarks>
+    private static List<LocalRun> ReadPerAssembly(ILocalRunStore store, int last)
     {
-        const int ProbeWindow = 200;
+        // A generous probe purely to discover which assemblies exist; the per-assembly reads below
+        // are what actually bound the analysis window.
+        const int DiscoveryWindow = 500;
 
-        return store.ReadRecent(ProbeWindow)
+        var assemblies = store.ReadRecent(DiscoveryWindow)
             .Select(r => r.Header.Assembly)
             .Distinct(StringComparer.Ordinal)
-            .Count();
-    }
+            .ToList();
 
-    private static int SaturatingMultiply(int a, int b)
-    {
-        long product = (long)a * b;
-        return product > int.MaxValue ? int.MaxValue : (int)product;
+        if (assemblies.Count == 0)
+            return [];
+
+        var runs = new List<LocalRun>();
+        foreach (string? assembly in assemblies)
+            runs.AddRange(store.ReadRecent(last, assembly));
+
+        // Merge back into one chronological sequence so downstream ordering assumptions hold.
+        return runs.OrderBy(r => r.Header.StartedAtUtc).ToList();
     }
 
     /// <summary>

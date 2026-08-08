@@ -36,6 +36,12 @@ internal static class Program
         switch (verb)
         {
             case "report":
+                if (rest.Any(IsHelp))
+                {
+                    WriteUsage(output);
+                    return 0;
+                }
+
                 if (!ReportOptions.TryParse(rest, out ReportOptions options, out string? parseError))
                 {
                     error.WriteLine(parseError);
@@ -46,13 +52,41 @@ internal static class Program
                 return ReportCommand.Run(options, output);
 
             case "where":
-                return WhereCommand.Run(ValueOf(rest, "--directory"), output);
+                if (rest.Any(IsHelp))
+                {
+                    WriteUsage(output);
+                    return 0;
+                }
+
+                if (!WhereOptions.TryParse(rest, out WhereOptions whereOptions, out string? whereError))
+                {
+                    error.WriteLine(whereError);
+                    error.WriteLine("Run `xping where --help` for usage.");
+                    return 2;
+                }
+
+                return WhereCommand.Run(whereOptions.Directory, output);
 
             case "clear":
+                if (rest.Any(IsHelp))
+                {
+                    WriteUsage(output);
+                    return 0;
+                }
+
+                // Parsed strictly before anything is deleted: a lenient flag scan treats a trailing
+                // `--assembly` with no value as "no scope", turning a scoped delete into a full one.
+                if (!ClearOptions.TryParse(rest, out ClearOptions clearOptions, out string? clearError))
+                {
+                    error.WriteLine(clearError);
+                    error.WriteLine("Run `xping clear --help` for usage.");
+                    return 2;
+                }
+
                 return ClearCommand.Run(
-                    ValueOf(rest, "--directory"),
-                    ValueOf(rest, "--assembly"),
-                    force: rest.Contains("--force"),
+                    clearOptions.Directory,
+                    clearOptions.Assembly,
+                    clearOptions.Force,
                     input ?? TextReader.Null,
                     output,
                     error);
@@ -71,13 +105,6 @@ internal static class Program
 
     private static bool IsHelp(string arg) =>
         arg is "--help" or "-h" or "help";
-
-    /// <summary>Returns the value following a flag, or <see langword="null"/> when absent.</summary>
-    private static string? ValueOf(string[] args, string name)
-    {
-        int index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-    }
 
     private static void WriteUsage(TextWriter writer)
     {

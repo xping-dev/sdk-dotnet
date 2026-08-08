@@ -57,6 +57,17 @@ public sealed class LocalRunHeader
     /// <summary>Gets a value indicating whether the run executed in a CI environment.</summary>
     [JsonPropertyName("ci")]
     public bool IsCi { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the run was recorded by a cloud-connected project.
+    /// </summary>
+    /// <remarks>
+    /// Recorded so tooling reading the store can tell an existing customer from a local-only user
+    /// without any credentials of its own. Absent in files written before this field existed, which
+    /// read back as <see langword="false"/>.
+    /// </remarks>
+    [JsonPropertyName("conn")]
+    public bool IsConnected { get; set; }
 }
 
 /// <summary>

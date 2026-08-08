@@ -201,7 +201,11 @@ public sealed class XpingConfiguration
         if (!Enabled)
             return XpingMode.Disabled;
 
-        if (Mode != XpingMode.Auto)
+        // Mode is externally bindable, so an out-of-range numeric value can reach this property
+        // (Xping:Mode=99, or a cast in code). Treating it as an implicit mode would select a no-op
+        // uploader while leaving local-only network suppression off - a state no configuration is
+        // supposed to produce. Fall back to Auto resolution; Validate() reports it separately.
+        if (Mode != XpingMode.Auto && IsDefinedMode(Mode))
             return Mode;
 
         if (StrictMode)
@@ -218,6 +222,14 @@ public sealed class XpingConfiguration
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
+
+        if (!IsDefinedMode(Mode))
+        {
+            errors.Add(
+                $"Mode has an undefined value ({(int)Mode}). " +
+                "Valid values are Auto, LocalOnly, Connected, and Disabled.");
+        }
+
         XpingMode mode = ResolveMode();
 
         // Credentials are only meaningful when the SDK will actually talk to the platform.
@@ -299,6 +311,9 @@ public sealed class XpingConfiguration
     {
         return Validate().Count == 0;
     }
+
+    private static bool IsDefinedMode(XpingMode mode) =>
+        mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Connected or XpingMode.Disabled;
 
     internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
 

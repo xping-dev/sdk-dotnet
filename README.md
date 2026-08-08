@@ -141,7 +141,7 @@ dotnet xping report
      ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
                     passed 9 of 12 runs · inconsistent
 
-     ○○●●●●●●●●●●   Db.MigratesSchema_OnStartup                     10/12
+     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
                     newly failing · first failure in this window
 
   ✗  1 test failed in all 12 runs - not flaky, likely real bugs

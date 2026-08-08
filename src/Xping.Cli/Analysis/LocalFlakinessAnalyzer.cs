@@ -71,6 +71,7 @@ internal static class LocalFlakinessAnalyzer
                 .OrderBy(t => t.Name, StringComparer.Ordinal)
                 .ToList(),
             RunsAnalysed = runs.Count,
+            LargestAssemblyWindow = runs.Count,
             MinimumRunsForHistory = MinimumRunsForHistory
         };
     }
@@ -79,8 +80,10 @@ internal static class LocalFlakinessAnalyzer
     {
         var histories = new Dictionary<string, TestHistory>(StringComparer.Ordinal);
 
-        foreach (LocalRun run in runs)
+        for (int runIndex = 0; runIndex < runs.Count; runIndex++)
         {
+            LocalRun run = runs[runIndex];
+
             // Within one run a fingerprint can appear several times (retry attempts). Collapse them
             // to a single per-run outcome so the history has exactly one entry per run.
             var perRun = new Dictionary<string, LocalTestRecord>(StringComparer.Ordinal);
@@ -114,14 +117,17 @@ internal static class LocalFlakinessAnalyzer
                 history.Fingerprint = entry.Key;
                 history.Outcomes.Add(entry.Value.Outcome == OutcomeCodes.Passed);
 
+                // Record which run the retry flake happened in. A boolean would go stale: a test
+                // that flaked once and was then absent or skipped from every later run would keep
+                // reporting "flaked inside this run" forever.
                 if (entry.Value.PassedOnRetry)
                 {
-                    history.FlakedInLatestRun = true;
+                    history.RetryFlakeRunIndex = runIndex;
                     history.PassedOnAttempt = entry.Value.Attempt;
                 }
                 else
                 {
-                    history.FlakedInLatestRun = false;
+                    history.RetryFlakeRunIndex = null;
                     history.PassedOnAttempt = null;
                 }
             }
@@ -147,13 +153,16 @@ internal static class LocalFlakinessAnalyzer
             PassedOnAttempt = kind == InstabilityKind.FlakedInRun ? history.PassedOnAttempt : null
         };
 
-        // Retry flakiness in the current run outranks everything: it is direct evidence of
-        // non-determinism, not an inference from a pattern.
-        if (history.FlakedInLatestRun)
+        // Retry flakiness outranks everything: it is direct evidence of non-determinism rather than
+        // an inference from a pattern. It only counts as "this run" when it happened in the most
+        // recent run analysed.
+        if (history.RetryFlakeRunIndex == totalRuns - 1)
             return Build(InstabilityKind.FlakedInRun);
 
-        // Everything below compares runs against each other and needs a minimum of history.
-        if (totalRuns < MinimumRunsForHistory || runCount < 2)
+        // Everything below compares runs against each other. The minimum applies to how many times
+        // this test was actually observed, not just how many runs exist - a test seen twice in a
+        // twelve-run window has too little history to call flaky.
+        if (totalRuns < MinimumRunsForHistory || runCount < MinimumRunsForHistory)
             return null;
 
         if (passes == 0)
@@ -177,7 +186,8 @@ internal static class LocalFlakinessAnalyzer
 
         public List<bool> Outcomes { get; } = [];
 
-        public bool FlakedInLatestRun { get; set; }
+        /// <summary>Index of the run in which the test failed and then passed on a retry.</summary>
+        public int? RetryFlakeRunIndex { get; set; }
 
         public int? PassedOnAttempt { get; set; }
     }

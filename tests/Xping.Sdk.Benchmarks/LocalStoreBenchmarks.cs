@@ -83,7 +83,9 @@ public class LocalStoreBenchmarks
     {
         var records = Enumerable.Range(0, count).Select(i => new LocalTestRecord
         {
-            Fingerprint = new string((char)('a' + (i % 16)), 64),
+            // A repeated character compresses to almost nothing, which would make the write
+            // benchmark measure an unrealistically small payload. Real fingerprints are SHA256.
+            Fingerprint = PseudoRandomHex(i),
             Name = $"Namespace.Class.Test_{i}",
             Outcome = i % 20 == 0 ? OutcomeCodes.Failed : OutcomeCodes.Passed,
             DurationMs = 10 + (i % 500),
@@ -99,6 +101,21 @@ public class LocalStoreBenchmarks
         };
 
         return new LocalRun(header, records);
+    }
+
+    /// <summary>
+    /// Produces a deterministic 64-character hex string with hash-like entropy, so compression
+    /// behaves as it does for real fingerprints.
+    /// </summary>
+    private static string PseudoRandomHex(int seed)
+    {
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(BitConverter.GetBytes(seed));
+
+        var sb = new System.Text.StringBuilder(64);
+        foreach (byte b in hash)
+            sb.Append(b.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+
+        return sb.ToString();
     }
 
     /// <summary>

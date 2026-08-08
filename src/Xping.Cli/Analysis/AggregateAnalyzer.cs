@@ -55,8 +55,9 @@ internal static class AggregateAnalyzer
             unstable.AddRange(analysis.UnstableTests.Select(t => t.WithAssembly(assembly)));
             consistent.AddRange(analysis.ConsistentFailures.Select(t => t.WithAssembly(assembly)));
 
-            // The window differs per assembly; report the largest so the header is not misleading
-            // about how much history any single finding is based on.
+            // The window differs per assembly. Keeping the largest is what lets
+            // HasSufficientHistory mean "some assembly has enough history" rather than "the run
+            // totals happen to add up", which three assemblies with one run each would satisfy.
             maxWindow = Math.Max(maxWindow, analysis.RunsAnalysed);
         }
 
@@ -74,6 +75,7 @@ internal static class AggregateAnalyzer
                 .ToList(),
             RunsAnalysed = runs.Count,
             AssembliesAnalysed = byAssembly.Count,
+            LargestAssemblyWindow = maxWindow,
             MinimumRunsForHistory = LocalFlakinessAnalyzer.MinimumRunsForHistory
         };
     }

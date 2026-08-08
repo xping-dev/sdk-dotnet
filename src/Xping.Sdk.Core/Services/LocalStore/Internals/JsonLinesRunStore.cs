@@ -265,7 +265,11 @@ internal sealed class JsonLinesRunStore : ILocalRunStore
 
             return new LocalRun(header, records);
         }
-        catch (Exception ex) when (IsStorageFailure(ex) || ex is InvalidDataException)
+        // JsonException covers a malformed header. Record deserialization is guarded separately,
+        // but without this a single corrupt header would abort the whole read instead of costing
+        // one run, which is the opposite of what the store contract promises.
+        catch (Exception ex) when (
+            IsStorageFailure(ex) || ex is InvalidDataException or System.Text.Json.JsonException)
         {
             _logger.LogDebug("Skipping unreadable run file '{Path}': {Message}", path, ex.Message);
             return null;

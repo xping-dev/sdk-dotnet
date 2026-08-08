@@ -12,6 +12,10 @@
 
 ## Install
 
+> **Requires the .NET 10 SDK or runtime.** The tool targets `net10.0` and will not launch on
+> older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
+> your test projects can stay on any supported .NET version.
+
 ```bash
 dotnet new tool-manifest        # if your repo has no manifest yet
 dotnet tool install Xping.Cli
@@ -38,7 +42,7 @@ dotnet xping report
      ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
                     passed 9 of 12 runs · inconsistent
 
-     ○○●●●●●●●●●●   Db.MigratesSchema_OnStartup                     10/12
+     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
                     newly failing · first failure in this window
 
   ✗  1 test failed in all 12 runs - not flaky, likely real bugs

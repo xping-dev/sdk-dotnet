@@ -58,9 +58,48 @@ internal static class LocalStorePathResolver
 
         string? repoRoot = FindRepositoryRoot(origin);
         if (repoRoot != null)
-            return Path.Combine(repoRoot, StoreDirectoryName);
+        {
+            string candidate = Path.Combine(repoRoot, StoreDirectoryName);
+
+            // A repository root is not automatically writable: read-only checkouts and containers
+            // that mount the source tree read-only are common. Without this check the store would
+            // silently fail on every write instead of reaching the documented profile fallback.
+            if (IsWritable(candidate))
+                return candidate;
+        }
 
         return GetProfileFallback(origin);
+    }
+
+    /// <summary>
+    /// Returns whether a store can actually be created and written at the given path.
+    /// </summary>
+    private static bool IsWritable(string storeRoot)
+    {
+        try
+        {
+            Directory.CreateDirectory(storeRoot);
+
+            // Creating the directory can succeed on a path that still rejects file writes, so probe
+            // with a real file rather than trusting the directory alone.
+            string probe = Path.Combine(storeRoot, ".write-probe");
+            using (var stream = new FileStream(probe, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                stream.WriteByte(0);
+            }
+
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (
+            ex is IOException
+                or UnauthorizedAccessException
+                or System.Security.SecurityException
+                or NotSupportedException
+                or ArgumentException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

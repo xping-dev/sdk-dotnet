@@ -13,6 +13,10 @@ The SDK records runs; the CLI interprets them. Keeping analysis out of the test 
 
 ## Installation
 
+> **Requires the .NET 10 SDK or runtime.** The tool targets `net10.0` and will not launch on
+> older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
+> your test projects can stay on any supported .NET version.
+
 ### As a local tool (recommended)
 
 ```bash

@@ -59,6 +59,10 @@ Each run is recorded to a local store. Cross-run flakiness detection needs at le
 
 ## Step 3: Install the CLI
 
+> **Requires the .NET 10 SDK or runtime.** The tool targets `net10.0` and will not launch on
+> older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
+> your test projects can stay on any supported .NET version.
+
 ```bash
 dotnet new tool-manifest        # if your repo has no manifest yet
 dotnet tool install Xping.Cli
@@ -85,7 +89,7 @@ dotnet xping report
      ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
                     passed 9 of 12 runs · inconsistent
 
-     ○○●●●●●●●●●●   Db.MigratesSchema_OnStartup                     10/12
+     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
                     newly failing · first failure in this window
 
   ✗  1 test failed in all 12 runs - not flaky, likely real bugs
@@ -97,12 +101,12 @@ dotnet xping report
 
 The sparkline runs **left to right, oldest to newest**. `●` is a pass, `○` a failure. The pattern is the point:
 
-| Pattern | Meaning |
+| Pattern | What Xping calls it |
 |---|---|
-| `●●○●●●○●●●●○` | Flaky — passes and fails without a clear cause |
-| `○○●●●●●●●●●●` | Recently broken — was fine, now consistently failing |
-| `●●●●●●●●●●○○` | Newly failing — a regression, not flakiness |
-| `○○○○○○○○○○○○` | Failed every run — a real bug, listed separately |
+| `●●○●●●○●●●●○` | **Flaky across runs** — passes and fails without a clear cause |
+| `●●●●●●●●●●●○` | **Newly failing** — passed every earlier run, failed the most recent |
+| `●●●●●●●●○○○○` | **Flaky across runs** — broke recently and stayed broken, but it has both passed and failed in the window |
+| `○○○○○○○○○○○○` | **Consistently failing** — never passed; listed separately as a likely real bug |
 
 Separating "flaky" from "consistently failing" is deliberate. A test that never passes is not unreliable, it is broken, and the fix is completely different.
 
