@@ -112,9 +112,16 @@ public abstract class XpingTestBase
     {
         var outcome = MapOutcome(context.CurrentTestOutcome);
 
-        // Extract assembly from a fully qualified class name
+        // Resolve the real test method once, so both the assembly name and the pinned fingerprint
+        // come from actual reflection data instead of parsing the fully qualified class name.
+        MethodInfo? testMethod = FindTestMethodForContext(context);
+
+        // The assembly's simple name (e.g. "MyApp.Tests") — TestContext exposes no assembly
+        // member directly, so resolve it from the test method's declaring type. Falls back to the
+        // namespace-root heuristic only when the type can't be resolved.
         var fullClassName = context.FullyQualifiedTestClassName ?? string.Empty;
-        var assemblyName = ExtractAssemblyName(fullClassName);
+        var assemblyName = testMethod?.DeclaringType?.Assembly.GetName().Name
+            ?? ExtractAssemblyName(fullClassName);
 
         // Build the fully qualified test name
         var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
@@ -126,7 +133,7 @@ public abstract class XpingTestBase
         var testName = FormatTestNameWithParameters(context.TestName ?? "Unknown", parameters);
 
         // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
-        string? pinnedFingerprint = ReadPinnedFingerprint(context);
+        string? pinnedFingerprint = testMethod?.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
 
         // Generate stable test identity
         TestIdentity identity = services.IdentityGenerator.Generate(
@@ -352,21 +359,6 @@ public abstract class XpingTestBase
             Guid g => g.ToString("D"),
             _ => parameter.ToString() ?? "null"
         };
-    }
-
-    /// <summary>
-    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
-    /// Returns null when the attribute is absent (SHA256 will be computed instead).
-    /// </summary>
-    private static string? ReadPinnedFingerprint(TestContext context)
-    {
-        MethodInfo? methodInfo = FindTestMethodForContext(context);
-        if (methodInfo == null)
-        {
-            return null;
-        }
-
-        return methodInfo.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
     }
 
     /// <summary>

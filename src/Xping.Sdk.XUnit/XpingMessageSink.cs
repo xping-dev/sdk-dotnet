@@ -29,13 +29,15 @@ public sealed class XpingMessageSink(
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
     ILogger<XpingMessageSink> logger,
-    bool captureStackTraces) : IMessageSink
+    bool captureStackTraces,
+    string assemblyName) : IMessageSink
 {
     private readonly IMessageSink _innerSink = innerSink.RequireNotNull();
     private readonly IExecutionTracker _executionTracker = executionTracker.RequireNotNull();
     private readonly IRetryDetector<ITest> _retryDetector = retryDetector.RequireNotNull();
     private readonly ITestIdentityGenerator _identityGenerator = identityGenerator.RequireNotNull();
     private readonly ILogger<XpingMessageSink> _logger = logger.RequireNotNull();
+    private readonly string _assemblyName = assemblyName.RequireNotNull();
 
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
     private readonly ConcurrentDictionary<string, int> _activeCollections = new();
@@ -238,9 +240,12 @@ public sealed class XpingMessageSink(
         ITestMethod? testMethod = testCase.TestMethod;
         ITestClass? testClass = testMethod.TestClass;
 
-        // Generate stable test identity
+        // Generate stable test identity. The assembly name comes from the AssemblyName the xUnit
+        // runner handed to XpingTestFramework.CreateExecutor, not testClass.Class.Assembly.Name —
+        // xUnit v2's IAssemblyInfo.Name is the full assembly display name (with Version/Culture/
+        // PublicKeyToken), not the simple name.
         string fullyQualifiedName = $"{testClass.Class.Name}.{testMethod.Method.Name}";
-        string? assemblyName = testClass.Class.Assembly.Name;
+        string assemblyName = _assemblyName;
         object[]? parameters = testCase.TestMethodArguments;
         string? displayName = test.DisplayName;
 
