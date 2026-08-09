@@ -215,7 +215,7 @@ public sealed class ReportCommandTests : IDisposable
         var (code, output) = RunReport("--nonsense");
 
         Assert.Equal(2, code);
-        Assert.Contains("Unknown option", output, StringComparison.Ordinal);
+        Assert.Contains("Unrecognized command or argument", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -233,6 +233,6 @@ public sealed class ReportCommandTests : IDisposable
         var (code, output) = RunReport("--assembly");
 
         Assert.Equal(2, code);
-        Assert.Contains("expects a value", output, StringComparison.Ordinal);
+        Assert.Contains("Required argument missing", output, StringComparison.Ordinal);
     }
 }

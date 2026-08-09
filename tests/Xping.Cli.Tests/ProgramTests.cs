@@ -22,7 +22,7 @@ public sealed class ProgramTests
         var (code, output, _) = Run();
 
         Assert.Equal(1, code);
-        Assert.Contains("xping report", output, StringComparison.Ordinal);
+        Assert.Contains("Report flakiness from recent local runs", output, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -34,7 +34,7 @@ public sealed class ProgramTests
         var (code, output, _) = Run(arg);
 
         Assert.Equal(0, code);
-        Assert.Contains("xping report", output, StringComparison.Ordinal);
+        Assert.Contains("Report flakiness from recent local runs", output, StringComparison.Ordinal);
         Assert.Contains("No account is required", output, StringComparison.Ordinal);
     }
 
@@ -44,7 +44,7 @@ public sealed class ProgramTests
         var (code, _, error) = Run("frobnicate");
 
         Assert.Equal(2, code);
-        Assert.Contains("Unknown command", error, StringComparison.Ordinal);
+        Assert.Contains("Unrecognized command or argument", error, StringComparison.Ordinal);
     }
 
     [Fact]

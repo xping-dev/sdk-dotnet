@@ -91,7 +91,7 @@ public sealed class ReviewFixesTests : IDisposable
 
         // Assert
         Assert.Equal(2, code);
-        Assert.Contains("expects a value", output, StringComparison.Ordinal);
+        Assert.Contains("Required argument missing", output, StringComparison.Ordinal);
         Assert.Equal(3, LocalRunStore.Create().ReadRecent(100).Count);
     }
 
@@ -103,7 +103,7 @@ public sealed class ReviewFixesTests : IDisposable
         var (code, output) = Run("clear", "--force", "--dry-run");
 
         Assert.Equal(2, code);
-        Assert.Contains("Unknown option", output, StringComparison.Ordinal);
+        Assert.Contains("Unrecognized command or argument", output, StringComparison.Ordinal);
         Assert.Equal(2, LocalRunStore.Create().ReadRecent(100).Count);
     }
 
@@ -113,7 +113,7 @@ public sealed class ReviewFixesTests : IDisposable
         var (code, output) = Run("where", "--nonsense");
 
         Assert.Equal(2, code);
-        Assert.Contains("Unknown option", output, StringComparison.Ordinal);
+        Assert.Contains("Unrecognized command or argument", output, StringComparison.Ordinal);
     }
 
     // -----------------------------------------------------------------------
