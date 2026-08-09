@@ -285,3 +285,6 @@ _build
 # Stray macOS "Library" path accidentally created at repo root by sandboxed tool
 # runs when $HOME could not be resolved (contains machine-specific DeveloperTools state)
 /Library/
+
+# macOS
+.DS_Store

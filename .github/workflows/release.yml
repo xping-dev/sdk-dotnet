@@ -28,7 +28,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 8.x
+        dotnet-version: 10.0.x
     
     - name: Extract version from tag
       id: get_version
@@ -48,6 +48,17 @@ jobs:
     - name: Pack all SDK packages
       run: dotnet pack -c Release --no-build -p:Version=${{ steps.get_version.outputs.VERSION }} -o _build/nuget
     
+    - name: Verify the CLI tool installs and runs
+      run: |
+        set -euo pipefail
+        mkdir -p _build/toolcheck && cd _build/toolcheck
+        dotnet new tool-manifest
+        dotnet tool install Xping.Cli \
+          --add-source ../../_build/nuget \
+          --version ${{ steps.get_version.outputs.VERSION }}
+        dotnet xping version
+        dotnet xping --help
+
     - uses: actions/upload-artifact@v7
       with:
         name: nuget
@@ -62,7 +73,7 @@ jobs:
     steps:
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.x
+          dotnet-version: 10.0.x
 
       - uses: actions/download-artifact@v8
         with:
@@ -89,6 +100,7 @@ jobs:
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.NUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.XUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.MSTest.${{ steps.get_version.outputs.VERSION }}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Cli.${{ steps.get_version.outputs.VERSION }}.nupkg
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -114,7 +126,7 @@ jobs:
     - name: Dotnet Setup
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 8.x
+        dotnet-version: 10.0.x
     - run: dotnet tool update -g docfx
     - run: docfx ./docs/docfx.json  
     - name: Upload artifact

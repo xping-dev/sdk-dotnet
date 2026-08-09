@@ -34,35 +34,119 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenApiKeyIsMissing()
+    public void ValidateShouldReturnErrorsWhenApiKeyIsMissingInConnectedMode()
     {
         // Arrange
         var config = new XpingConfiguration
         {
-            ProjectId = "test-project"
+            ProjectId = "test-project",
+            Mode = XpingMode.Connected
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("ApiKey is required.", errors);
+        Assert.Contains("ApiKey is required in Connected mode.", errors);
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenProjectIdIsMissing()
+    public void ValidateShouldReturnErrorsWhenProjectIdIsMissingInConnectedMode()
     {
         // Arrange
         var config = new XpingConfiguration
         {
-            ApiKey = "test-key"
+            ApiKey = "test-key",
+            Mode = XpingMode.Connected
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("ProjectId is required.", errors);
+        Assert.Contains("ProjectId is required in Connected mode.", errors);
+    }
+
+    [Fact]
+    public void ValidateShouldSucceedWhenCredentialsAreMissingInLocalOnlyMode()
+    {
+        // Arrange — the local-only contract: no credentials required.
+        var config = new XpingConfiguration();
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Empty(errors);
+        Assert.Equal(XpingMode.LocalOnly, config.ResolveMode());
+    }
+
+    [Fact]
+    public void ValidateShouldReturnErrorsWhenCredentialsAreMissingAndStrictModeIsEnabled()
+    {
+        // Arrange — strict mode must keep its teeth: it exists to guarantee observability in CI,
+        // so a missing key stays a hard error rather than degrading to local-only collection.
+        var config = new XpingConfiguration { StrictMode = true };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Equal(XpingMode.Connected, config.ResolveMode());
+        Assert.Contains("ApiKey is required when StrictMode is enabled.", errors);
+        Assert.Contains("ProjectId is required when StrictMode is enabled.", errors);
+    }
+
+    [Theory]
+    [InlineData(true, null, null, XpingMode.LocalOnly)]
+    [InlineData(true, "key", null, XpingMode.LocalOnly)]
+    [InlineData(true, null, "proj", XpingMode.LocalOnly)]
+    [InlineData(true, "key", "proj", XpingMode.Connected)]
+    [InlineData(false, "key", "proj", XpingMode.Disabled)]
+    [InlineData(false, null, null, XpingMode.Disabled)]
+    public void ResolveModeShouldFollowCredentialsAndEnabledFlag(
+        bool enabled, string? apiKey, string? projectId, XpingMode expected)
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            Enabled = enabled,
+            ApiKey = apiKey,
+            ProjectId = projectId
+        };
+
+        // Act & Assert
+        Assert.Equal(expected, config.ResolveMode());
+    }
+
+    [Fact]
+    public void ResolveModeShouldHonorExplicitModeOverCredentials()
+    {
+        // Arrange — an explicit mode wins even when credentials would imply Connected.
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            Mode = XpingMode.LocalOnly
+        };
+
+        // Act & Assert
+        Assert.Equal(XpingMode.LocalOnly, config.ResolveMode());
+        Assert.Empty(config.Validate());
+    }
+
+    [Fact]
+    public void ResolveModeShouldReturnDisabledWhenNotEnabledEvenIfModeIsExplicit()
+    {
+        // Arrange — Enabled=false is the master switch and outranks an explicit mode.
+        var config = new XpingConfiguration
+        {
+            Enabled = false,
+            Mode = XpingMode.Connected
+        };
+
+        // Act & Assert
+        Assert.Equal(XpingMode.Disabled, config.ResolveMode());
     }
 
     [Fact]
@@ -234,11 +318,22 @@ public sealed class XpingConfigurationTests
     [Fact]
     public void IsValidShouldReturnFalseForInvalidConfiguration()
     {
-        // Arrange
-        var config = new XpingConfiguration();
+        // Arrange — a default instance is now valid (it resolves to local-only), so invalidity has
+        // to come from something that is wrong in every mode.
+        var config = new XpingConfiguration { ApiEndpoint = "not-a-url" };
 
         // Act & Assert
         Assert.False(config.IsValid());
+    }
+
+    [Fact]
+    public void IsValidShouldReturnTrueForDefaultConfiguration()
+    {
+        // Arrange — zero-config is the local-only entry point and must validate cleanly.
+        var config = new XpingConfiguration();
+
+        // Act & Assert
+        Assert.True(config.IsValid());
     }
 
     [Fact]

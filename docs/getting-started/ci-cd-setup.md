@@ -62,7 +62,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       
       - name: Restore dependencies
         run: dotnet restore
@@ -124,7 +124,7 @@ steps:
 - task: UseDotNet@2
   displayName: 'Setup .NET'
   inputs:
-    version: '8.0.x'
+    version: '10.0.x'
 
 - task: DotNetCoreCLI@2
   displayName: 'Restore dependencies'

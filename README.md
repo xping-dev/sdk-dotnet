@@ -92,6 +92,10 @@ export XPING_APIKEY="your-api-key"
 export XPING_PROJECTID="your-project-id"
 ```
 
+> **No account?** Skip this step. Without an API key the SDK runs in local-only
+> mode and records test history to a `.xping` folder in your repository — no
+> signup, no network calls. See [Try it without an account](#try-it-without-an-account).
+
 ### 3. Add tracking to your tests
 
 **NUnit** - Add one attribute to track all tests:
@@ -113,6 +117,43 @@ public class MyTests : XpingTestBase { }
 ### 4. Run your tests
 
 That's it! Run your tests normally and view insights at [app.xping.io](https://app.xping.io)
+
+---
+
+## Try It Without an Account
+
+Xping works with no API key, no signup, and no network access. Add the SDK, run
+your tests a few times, then ask which of them you can trust:
+
+```bash
+dotnet tool install Xping.Cli     # into a tool manifest
+dotnet xping report
+```
+
+```
+──────────────────────────────────────────────────────────────────────────
+  Xping · local run summary                             412 tests · 38.2s
+──────────────────────────────────────────────────────────────────────────
+  ✓ 405 passed     ✗ 4 failed     ○ 3 skipped
+
+  ⚠  2 unstable tests · last 12 local runs
+
+     ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
+                    passed 9 of 12 runs · inconsistent
+
+     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
+                    newly failing · first failure in this window
+
+  ✗  1 test failed in all 12 runs - not flaky, likely real bugs
+     Auth.RejectsExpiredToken
+──────────────────────────────────────────────────────────────────────────
+```
+
+The sparkline reads left to right, oldest run to newest — `●` passed, `○` failed.
+Everything stays on your machine. Add an API key whenever you want team-wide
+history across CI and every branch.
+
+[Running Without an Account →](https://docs.xping.io/getting-started/local-first.html)
 
 ### Framework-Specific Guides
 

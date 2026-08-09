@@ -112,6 +112,21 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets the operating mode.
+    /// </summary>
+    /// <param name="mode">
+    /// The mode to use. <see cref="XpingMode.Auto"/> (the default) resolves to
+    /// <see cref="XpingMode.Connected"/> when credentials are present and
+    /// <see cref="XpingMode.LocalOnly"/> otherwise.
+    /// </param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public XpingConfigurationBuilder WithMode(XpingMode mode)
+    {
+        _configuration.Mode = mode;
+        return this;
+    }
+
+    /// <summary>
     /// Sets whether to capture stack traces for failed tests.
     /// </summary>
     /// <param name="captureStackTraces">Whether to capture stack traces.</param>

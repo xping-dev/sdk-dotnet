@@ -19,7 +19,7 @@ Before you begin, make sure you have:
 
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
-- An **Xping account** with API credentials ([Sign up](https://app.xping.io))
+- Optionally, an **Xping account** with API credentials ([Sign up](https://app.xping.io)) — without one the SDK runs [local-only](local-first.md) and records history to disk
 - An existing **NUnit test project** or create a new one
 
 > **New to NUnit?** Create a test project with: `dotnet new nunit -n MyTestProject`

@@ -20,8 +20,9 @@ Xping SDK supports multiple configuration methods with the following priority or
 | Setting | Type | Default | Environment Variable | Description |
 |---------|------|---------|---------------------|-------------|
 | `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
-| `ApiKey` | string | **(required)** | `XPING_APIKEY` | Authentication API key |
-| `ProjectId` | string | **(required)** | `XPING_PROJECTID` | User-defined project identifier |
+| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in connected mode; omit it to run [local-only](local-store.md). |
+| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | User-defined project identifier. Required in connected mode. |
+| `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Connected`, or `Disabled` |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
 | `Environment` | string | `Local` | `XPING_ENVIRONMENT` | Environment name |
@@ -38,6 +39,63 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
+| *(store path)* | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
+| *(banner)* | string | *(unset)* | `XPING_NO_BANNER` | Suppresses the SDK's retry hint and the CLI's invitation |
+
+---
+
+## Operating Mode
+
+Xping runs in one of three modes. The mode is resolved once at startup and determines whether the SDK uploads, stores locally, or does nothing.
+
+### Mode
+
+**Type:** `XpingMode`
+**Default:** `Auto`
+**Environment Variable:** `XPING_MODE`
+
+| Value | Behaviour |
+|---|---|
+| `Auto` | Resolves to `Connected` when credentials are present, otherwise `LocalOnly`. |
+| `LocalOnly` | Collects and writes the [local store](local-store.md). No network calls at all. |
+| `Connected` | Collects, uploads, **and** writes the local store. |
+| `Disabled` | Collects nothing. Equivalent to `Enabled = false`. |
+
+### How `Auto` resolves
+
+| Condition | Resolved mode |
+|---|---|
+| `Enabled = false` | `Disabled` |
+| `StrictMode = true` | `Connected` |
+| `ApiKey` **and** `ProjectId` present | `Connected` |
+| Otherwise | `LocalOnly` |
+
+### Strict mode still requires credentials
+
+`StrictMode` exists to guarantee observability in CI, so it forces `Connected`. A missing API key under strict mode remains a hard configuration error and will **not** silently degrade to local-only collection.
+
+This is the intended split: local-only is the default for an unconfigured developer, never a silent downgrade for a configured pipeline.
+
+```bash
+# CI: fail the build if observability is misconfigured
+export XPING_STRICTMODE=true
+export XPING_APIKEY="..."
+export XPING_PROJECTID="..."
+```
+
+### Local-only makes no network calls
+
+In `LocalOnly` mode the SDK does not create an HTTP client, retry pipeline, or circuit breaker, and network metrics collection is disabled. `CollectNetworkMetrics` performs a DNS lookup and several pings, which would be several hundred milliseconds of pure waste when nothing will be uploaded.
+
+### Staying local with credentials present
+
+Setting `Mode` explicitly overrides credential detection:
+
+```bash
+export XPING_MODE=LocalOnly
+```
+
+Useful when a key is present in your environment for other reasons but you want a particular run kept off the platform.
 
 ---
 
@@ -84,10 +142,12 @@ XpingContext.Initialize(config);
 
 **Type:** `string`  
 **Default:** *None*  
-**Required:** Yes  
+**Required:** In connected mode only  
 **Environment Variable:** `XPING_APIKEY`
 
 Your Xping authentication API key. This credential identifies your account and authorizes SDK operations.
+
+Omitting it is a supported configuration: the SDK resolves to [`LocalOnly`](#operating-mode) and records test history to disk instead of uploading. See [Running Without an Account](../getting-started/local-first.md).
 
 **Getting your API key:**
 1. Log in to [Xping Dashboard](https://app.xping.io)
@@ -130,7 +190,7 @@ XpingContext.Initialize(config);
 
 **Type:** `string`
 **Default:** *None*
-**Required:** Yes
+**Required:** In connected mode only
 **Environment Variable:** `XPING_PROJECTID`
 
 A user-defined identifier for your project. Choose any meaningful name — Xping automatically creates the project when your tests first run.

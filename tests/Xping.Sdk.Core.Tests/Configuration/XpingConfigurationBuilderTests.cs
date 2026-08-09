@@ -72,8 +72,10 @@ public sealed class XpingConfigurationBuilderTests
     [Fact]
     public void BuildShouldThrowWhenConfigurationIsInvalid()
     {
-        // Arrange
-        var builder = new XpingConfigurationBuilder();
+        // Arrange — an empty builder now yields a valid local-only configuration, so invalidity
+        // must come from a value that is wrong in every mode.
+        var builder = new XpingConfigurationBuilder()
+            .WithApiEndpoint("not-a-url");
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -81,11 +83,25 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void BuildShouldThrowWhenApiKeyIsMissing()
+    public void BuildShouldSucceedWithNoCredentials()
+    {
+        // Arrange — zero-config must produce a usable local-only configuration.
+        var builder = new XpingConfigurationBuilder();
+
+        // Act
+        var config = builder.Build();
+
+        // Assert
+        Assert.Equal(XpingMode.LocalOnly, config.ResolveMode());
+    }
+
+    [Fact]
+    public void BuildShouldThrowWhenApiKeyIsMissingInConnectedMode()
     {
         // Arrange
         var builder = new XpingConfigurationBuilder()
-            .WithProjectId("test-project");
+            .WithProjectId("test-project")
+            .WithMode(XpingMode.Connected);
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -93,15 +109,28 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void BuildShouldThrowWhenProjectIdIsMissing()
+    public void BuildShouldThrowWhenProjectIdIsMissingInConnectedMode()
     {
         // Arrange
         var builder = new XpingConfigurationBuilder()
-            .WithApiKey("test-key");
+            .WithApiKey("test-key")
+            .WithMode(XpingMode.Connected);
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
         Assert.Contains("ProjectId is required", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildShouldThrowWhenCredentialsAreMissingAndStrictModeIsEnabled()
+    {
+        // Arrange — strict mode must not silently degrade to local-only.
+        var builder = new XpingConfigurationBuilder()
+            .WithStrictMode(true);
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Contains("ApiKey is required", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,8 +155,9 @@ public sealed class XpingConfigurationBuilderTests
     [Fact]
     public void TryBuildShouldReturnFalseForInvalidConfiguration()
     {
-        // Arrange
-        var builder = new XpingConfigurationBuilder();
+        // Arrange — credentials are optional now, so use a mode that actually requires them.
+        var builder = new XpingConfigurationBuilder()
+            .WithMode(XpingMode.Connected);
 
         // Act
         var result = builder.TryBuild(out var config, out var errors);
@@ -136,8 +166,24 @@ public sealed class XpingConfigurationBuilderTests
         Assert.False(result);
         Assert.Null(config);
         Assert.NotEmpty(errors);
-        Assert.Contains("ApiKey is required.", errors);
-        Assert.Contains("ProjectId is required.", errors);
+        Assert.Contains("ApiKey is required in Connected mode.", errors);
+        Assert.Contains("ProjectId is required in Connected mode.", errors);
+    }
+
+    [Fact]
+    public void TryBuildShouldReturnTrueForZeroConfiguration()
+    {
+        // Arrange
+        var builder = new XpingConfigurationBuilder();
+
+        // Act
+        var result = builder.TryBuild(out var config, out var errors);
+
+        // Assert
+        Assert.True(result);
+        Assert.NotNull(config);
+        Assert.Empty(errors);
+        Assert.Equal(XpingMode.LocalOnly, config!.ResolveMode());
     }
 
     [Fact]

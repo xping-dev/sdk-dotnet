@@ -22,8 +22,11 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Sdk.Core.Services.Reporting.Internals;
 using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
@@ -58,7 +61,17 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 #pragma warning restore CA2213
 
     private readonly bool _isHealthy;
+    private readonly XpingMode _mode;
+    private readonly ILocalRunWriter? _localRunWriter;
+
+    // Slim projections of every execution drained during this session. Accumulated at drain time
+    // rather than in RecordTestExecution so the per-test hot path stays free of any local-store work.
+    private readonly List<LocalTestRecord> _localRecords = [];
+    private readonly object _localRecordsLock = new();
+
     private PullRequestContext? _pullRequestContext;
+    private EnvironmentInfo? _lastEnvironmentInfo;
+    private string? _localAssemblyName;
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
@@ -79,6 +92,27 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// When false, all operations are no-ops and tests run without tracking.
     /// </summary>
     protected bool IsHealthy => _isHealthy;
+
+    /// <summary>
+    /// Gets the resolved operating mode for this session.
+    /// </summary>
+    protected XpingMode Mode => _mode;
+
+    /// <summary>
+    /// Gets a value indicating whether test executions are being collected.
+    /// True in both <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> modes.
+    /// </summary>
+    /// <remarks>
+    /// Collection is deliberately decoupled from upload. A missing API key must not stop the SDK from
+    /// gathering data — that is precisely the case local-only mode exists to serve.
+    /// </remarks>
+    protected bool IsCollecting => _isHealthy && _mode != XpingMode.Disabled;
+
+    /// <summary>
+    /// Gets a value indicating whether the session will be uploaded to the Xping platform.
+    /// True only in <see cref="XpingMode.Connected"/> mode.
+    /// </summary>
+    protected bool IsUploading => _isHealthy && _mode == XpingMode.Connected;
 
     /// <summary>
     /// Gets the service provider from the underlying host.
@@ -117,7 +151,13 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _statisticsAccumulator = services.GetRequiredService<IRunningStatisticsAccumulator>();
             XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-            _isHealthy = configuration.Enabled;
+            _mode = configuration.ResolveMode();
+            _isHealthy = _mode != XpingMode.Disabled;
+
+            // Optional so that hosts composed without the local-store feature still work.
+            _localRunWriter = _mode == XpingMode.Disabled
+                ? null
+                : services.GetService<ILocalRunWriter>();
 
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
@@ -125,7 +165,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 if (configuration.EnablePullRequestDetection)
                     _pullRequestContext = _prDetector.Detect();
 
-                if (configuration.FlushInterval > TimeSpan.Zero)
+                // The periodic flush exists to stream batches to the cloud during long runs.
+                // In local-only mode there is nothing to stream: the session is written once at
+                // finalization, so the timer would only wake up to drain into a no-op uploader.
+                if (_mode == XpingMode.Connected && configuration.FlushInterval > TimeSpan.Zero)
                 {
                     _flushTimer = new Timer(
                         async void (_) =>
@@ -136,17 +179,33 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                         state: null,
                         dueTime: configuration.FlushInterval,
                         period: configuration.FlushInterval);
+
+                    _collector.BufferFull += async (_, _) =>
+                    {
+                        try { await FlushSessionAsync().ConfigureAwait(false); }
+                        catch { /* BufferFull is an event; exceptions cannot propagate to callers */ }
+                    };
                 }
 
-                _collector.BufferFull += async (_, _) =>
+                if (_mode == XpingMode.LocalOnly)
                 {
-                    try { await FlushSessionAsync().ConfigureAwait(false); }
-                    catch { /* BufferFull is an event; exceptions cannot propagate to callers */ }
-                };
+                    // Distinguish "fell back because nothing was configured" from "was told to stay
+                    // local". Reporting a missing API key when one was supplied is actively confusing.
+                    string reason = configuration.Mode == XpingMode.LocalOnly
+                        ? "Mode is set to LocalOnly"
+                        : "No API key configured";
 
-                _logger.LogInformation(
-                    "Initialized. SessionId: {SessionId}, Project: {ProjectId}, Environment: {Environment}",
-                    SessionId, configuration.ProjectId, configuration.Environment);
+                    _logger.LogInformation(
+                        "Initialized in local-only mode. SessionId: {SessionId}, Environment: {Environment}. " +
+                        "{Reason} - results stay on this machine.",
+                        SessionId, configuration.Environment, reason);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Initialized. SessionId: {SessionId}, Project: {ProjectId}, Environment: {Environment}",
+                        SessionId, configuration.ProjectId, configuration.Environment);
+                }
             }
             else
             {
@@ -225,16 +284,33 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <returns>The result of the upload operation.</returns>
     protected async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
     {
-        // Short-circuit when SDK is unhealthy
-        if (!_isHealthy)
+        // Short-circuit when SDK is unhealthy or disabled
+        if (!IsCollecting)
             return new UploadResult { Success = true, TotalRecordsCount = 0 };
 
+        (UploadResult result, _) = await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
+    /// Performs a single drain-and-upload cycle, reporting both the upload result and the number of
+    /// executions actually drained from the collector.
+    /// </summary>
+    /// <remarks>
+    /// The drained count is reported separately because it is the only reliable measure of remaining
+    /// work. <see cref="UploadResult.TotalRecordsCount"/> reflects what the *server* acknowledged, and
+    /// is always zero for <c>NoOpXpingUploader</c> — so a caller that loops on it would drain a single
+    /// batch and silently discard the rest of the buffer in any non-uploading mode.
+    /// </remarks>
+    private async Task<(UploadResult Result, int DrainedCount)> FlushOnceAsync(CancellationToken cancellationToken)
+    {
         // Ensure only one flush happens at a time
         await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
             TestSession session = await BuildSessionAsync(isFinalizing: false, cancellationToken).ConfigureAwait(false);
+            int drainedCount = session.Executions.Count;
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
             // Only mark the first flush as done once data actually reaches the cloud.
@@ -243,7 +319,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             if (result.TotalRecordsCount > 0)
                 Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
 
-            return result;
+            return (result, drainedCount);
         }
         finally { _flushLock.Release(); }
     }
@@ -305,22 +381,31 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             return new UploadResult { Success = true };
         }
 
+        if (!IsCollecting)
+            return new UploadResult { Success = true, TotalRecordsCount = 0 };
+
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         // Loop until the buffer is fully drained or an upload fails.
         // Retries are handled by the Polly resilience pipeline on the HttpClient
         // (configured via AddResilienceHandler in XpingServiceCollectionExtensions);
         // if Polly exhausts its budget, we stop immediately rather than re-draining.
+        //
+        // The loop tracks the *drained* count rather than the uploaded count: the two diverge in
+        // local-only mode, where the no-op uploader always acknowledges zero records.
         UploadResult uploadResult;
+        int drainedCount;
         do
         {
-            uploadResult = await FlushSessionAsync(cancellationToken).ConfigureAwait(false);
-        } while (uploadResult.TotalRecordsCount > 0 && uploadResult.Success);
+            (uploadResult, drainedCount) = await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
+        } while (drainedCount > 0 && uploadResult.Success);
 
         // Send the finalized session with QuickStatistics so the cloud can post the PR comment.
         uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
+
+        WriteLocalRun();
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -437,6 +522,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
+        _lastEnvironmentInfo = environmentInfo;
+        AccumulateLocalRecords(executions);
+
         _builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
@@ -480,6 +568,103 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         return _uploader.UploadAsync(session, cancellationToken);
+    }
+
+    /// <summary>
+    /// Projects drained executions onto slim local records.
+    /// </summary>
+    /// <remarks>
+    /// Called once per flush rather than once per test. Doing this in
+    /// <see cref="RecordTestExecution"/> would add allocation and mapping cost to the per-test hot
+    /// path, which is the one place the SDK cannot afford to grow.
+    /// </remarks>
+    private void AccumulateLocalRecords(IReadOnlyList<TestExecution> executions)
+    {
+        if (_localRunWriter == null || executions.Count == 0)
+            return;
+
+        lock (_localRecordsLock)
+        {
+            for (int i = 0; i < executions.Count; i++)
+                _localRecords.Add(LocalTestRecord.FromExecution(executions[i]));
+
+            // Taken from the executions themselves rather than Assembly.GetEntryAssembly(), which
+            // under vstest resolves to the test host rather than the test project. The assembly name
+            // scopes the analysis window, so getting it wrong pools unrelated suites together.
+            if (_localAssemblyName == null)
+            {
+                for (int i = 0; i < executions.Count; i++)
+                {
+                    string candidate = executions[i].Identity.Assembly;
+                    if (!string.IsNullOrEmpty(candidate))
+                    {
+                        _localAssemblyName = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Persists the finished run to the local store and, when this run produced a retry flake,
+    /// prints a single line pointing at the CLI.
+    /// </summary>
+    /// <remarks>
+    /// The SDK does not analyse history or render reports. It states one fact about the run it just
+    /// observed — how many tests failed and then passed on a retry — which is available from records
+    /// already in memory and needs no store read. Everything historical is the CLI's job.
+    /// </remarks>
+    private void WriteLocalRun()
+    {
+        if (_localRunWriter == null)
+            return;
+
+        List<LocalTestRecord> records;
+        lock (_localRecordsLock)
+        {
+            records = [.. _localRecords];
+        }
+
+        if (records.Count == 0)
+            return;
+
+        EnvironmentInfo? environment = _lastEnvironmentInfo;
+        DateTime endedAt = DateTime.UtcNow;
+
+        var header = new LocalRunHeader
+        {
+            SessionId = SessionId.ToString("N"),
+            StartedAtUtc = StartedAt,
+            DurationMs = (long)(endedAt - StartedAt).TotalMilliseconds,
+            Environment = environment?.EnvironmentName,
+            Assembly = _localAssemblyName,
+            Branch = GetCustomProperty(environment, "Git.Branch"),
+            CommitSha = GetCustomProperty(environment, "Git.SHA"),
+            IsCi = environment?.IsCIEnvironment ?? false,
+            IsConnected = _mode == XpingMode.Connected
+        };
+
+        bool stored = _localRunWriter.Write(new LocalRun(header, records));
+
+        if (stored)
+            WriteRetryFlakeHint(records, header.IsCi);
+    }
+
+    private static void WriteRetryFlakeHint(List<LocalTestRecord> records, bool isCi)
+    {
+        string? hint = RetryFlakeHint.Build(records, isCi, RetryFlakeHint.IsSuppressed());
+
+        if (hint != null)
+            TerminalWriter.Write(hint + System.Environment.NewLine);
+    }
+
+    private static string? GetCustomProperty(EnvironmentInfo? environment, string key)
+    {
+        if (environment?.CustomProperties == null)
+            return null;
+
+        return environment.CustomProperties.TryGetValue(key, out string? value) ? value : null;
     }
 
     /// <summary>
