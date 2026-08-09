@@ -41,6 +41,33 @@ public sealed class XpingTestBaseAssemblyNameTests
     }
 
     [Fact]
+    public void CreateTestExecution_InheritedTestMethod_ResolvesReflectedTypeNotDeclaringType()
+    {
+        // FindTestMethodForContext searches inherited methods too (GetMethods without
+        // DeclaredOnly), so for a method inherited from a base fixture, MethodInfo.DeclaringType
+        // is the base class while ReflectedType is the concrete, resolved test class. Assembly
+        // resolution must use ReflectedType so a shared base class living in a different assembly
+        // can't leak into TestIdentity.Assembly.
+        string fullClassName = typeof(DerivedTestClass).FullName!;
+        string expectedAssembly = typeof(DerivedTestClass).Assembly.GetName().Name!;
+
+        var context = new MockTestContext(nameof(BaseTestClass.InheritedTestMethod), fullClassName);
+
+        MethodInfo findMethod = typeof(XpingTestBase).GetMethod(
+            "FindTestMethodForContext", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var resolved = (MethodInfo)findMethod.Invoke(null, [context])!;
+
+        // Confirm DeclaringType and ReflectedType really do diverge for this scenario —
+        // otherwise this test would not exercise the distinction at all.
+        Assert.Equal(typeof(BaseTestClass), resolved.DeclaringType);
+        Assert.Equal(typeof(DerivedTestClass), resolved.ReflectedType);
+
+        InvokeCreateTestExecution(context, out string? capturedAssembly);
+
+        Assert.Equal(expectedAssembly, capturedAssembly);
+    }
+
+    [Fact]
     public void CreateTestExecution_UnresolvableTestClass_FallsBackToNamespaceHeuristic()
     {
         var context = new MockTestContext("SomeMethod", "NonExistent.Namespace.Class");
@@ -128,6 +155,30 @@ public sealed class XpingTestBaseAssemblyNameTests
         public void SampleTestMethod()
         {
         }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1812:Avoid uninstantiated internal classes",
+        Justification = "Class is resolved and inspected via reflection, not instantiated directly")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "MicrosoftCodeAnalysisCorrectness",
+        "MSTEST0003:Test method signature is invalid",
+        Justification = "Test helper class used via reflection, not run by the MSTest runner")]
+    private class BaseTestClass
+    {
+        [TestMethod]
+        public void InheritedTestMethod()
+        {
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1812:Avoid uninstantiated internal classes",
+        Justification = "Class is resolved and inspected via reflection, not instantiated directly")]
+    private sealed class DerivedTestClass : BaseTestClass
+    {
     }
 
     private sealed class MockTestContext(string testName, string? fullClassName) : TestContext

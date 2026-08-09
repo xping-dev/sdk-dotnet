@@ -117,10 +117,13 @@ public abstract class XpingTestBase
         MethodInfo? testMethod = FindTestMethodForContext(context);
 
         // The assembly's simple name (e.g. "MyApp.Tests") — TestContext exposes no assembly
-        // member directly, so resolve it from the test method's declaring type. Falls back to the
-        // namespace-root heuristic only when the type can't be resolved.
+        // member directly, so resolve it from the resolved test class type. Uses ReflectedType,
+        // not DeclaringType: FindTestMethodForContext searches inherited methods too, so for a
+        // test method inherited from a base fixture in another assembly, DeclaringType would be
+        // that base class rather than the actual test project. Falls back to the namespace-root
+        // heuristic only when the type can't be resolved.
         var fullClassName = context.FullyQualifiedTestClassName ?? string.Empty;
-        var assemblyName = testMethod?.DeclaringType?.Assembly.GetName().Name
+        var assemblyName = testMethod?.ReflectedType?.Assembly.GetName().Name
             ?? ExtractAssemblyName(fullClassName);
 
         // Build the fully qualified test name
