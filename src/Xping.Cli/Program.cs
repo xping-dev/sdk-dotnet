@@ -43,7 +43,11 @@ internal static class Program
         {
             foreach (ParseError parseError in parseResult.Errors)
                 error.WriteLine(parseError.Message);
-            error.WriteLine("Run `xping --help` for usage.");
+
+            string verb = effectiveArgs.Length > 0 ? effectiveArgs[0] : string.Empty;
+            error.WriteLine(verb is "report" or "where" or "clear" or "version"
+                ? $"Run `xping {verb} --help` for usage."
+                : "Run `xping --help` for usage.");
             return 2;
         }
 
@@ -76,7 +80,10 @@ internal static class Program
             DefaultValueFactory = _ => 12,
             CustomParser = result =>
             {
-                string raw = result.Tokens.Single().Value;
+                // Defensive: normal arity validation rejects a missing value before this runs, but
+                // never assume that holds across parser versions — indexing beats `.Single()` here
+                // because it can't throw if a future arity mismatch calls this with 0 or 2+ tokens.
+                string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
                 if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ||
                     parsed <= 0)
                 {
