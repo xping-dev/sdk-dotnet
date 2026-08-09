@@ -30,6 +30,11 @@ public sealed class XpingTestFrameworkExecutor(
         sourceInformationProvider,
         diagnosticMessageSink)
 {
+    // Captured separately (rather than referencing the primary constructor parameter directly in
+    // RunTestCases) to avoid CS9107: the parameter is also passed to the base constructor, and the
+    // compiler forbids capturing it into the instance as well.
+    private readonly string _assemblyName = assemblyName.Name ?? string.Empty;
+
     /// <summary>
     /// Runs test cases with Xping tracking enabled.
     /// </summary>
@@ -48,7 +53,8 @@ public sealed class XpingTestFrameworkExecutor(
             retryDetector,
             identityGenerator,
             logger,
-            captureStackTraces);
+            captureStackTraces,
+            _assemblyName);
 
         // Run tests with tracking enabled
         base.RunTestCases(testCases, trackingSink, executionOptions);
