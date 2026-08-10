@@ -21,7 +21,7 @@ namespace Xping.Sdk.Shared;
 /// <example>
 /// <code>
 /// // Include in HTTP payloads or headers:
-/// string version = XpingSdkVersion.Current; // e.g. "1.2.3" or "1.3.0-beta.1"
+/// string version = XpingVersion.Current; // e.g. "1.2.3" or "1.3.0-beta.1"
 /// </code>
 /// </example>
 public static class XpingVersion

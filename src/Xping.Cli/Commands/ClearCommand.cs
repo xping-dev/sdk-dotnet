@@ -4,6 +4,8 @@
  */
 
 using System.Globalization;
+using Xping.Cli.Hosting;
+using Xping.Cli.Services;
 using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.LocalStore;
 
@@ -18,17 +20,15 @@ namespace Xping.Cli.Commands;
 /// than assuming consent, which keeps a stray `xping clear` in a script from silently discarding
 /// weeks of history.
 /// </remarks>
-internal static class ClearCommand
+internal sealed class ClearCommand(ILocalRunStoreFactory storeFactory, ConsoleIO io)
 {
-    public static int Run(
-        string? directory,
-        string? assembly,
-        bool force,
-        TextReader input,
-        TextWriter output,
-        TextWriter error)
+    public int Run(string? directory, string? assembly, bool force)
     {
-        ILocalRunStore store = LocalRunStore.Create(
+        TextReader input = io.Input;
+        TextWriter output = io.Output;
+        TextWriter error = io.Error;
+
+        ILocalRunStore store = storeFactory.Create(
             startDirectory: directory ?? Directory.GetCurrentDirectory());
 
         if (!store.IsAvailable || store.StorePath == null)

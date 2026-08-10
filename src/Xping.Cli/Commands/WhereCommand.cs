@@ -4,6 +4,8 @@
  */
 
 using System.Globalization;
+using Xping.Cli.Hosting;
+using Xping.Cli.Services;
 using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.LocalStore;
 
@@ -17,11 +19,13 @@ namespace Xping.Cli.Commands;
 /// is not answerable by inspection. This makes it answerable, and doubles as the first thing to run
 /// when a report is unexpectedly empty.
 /// </remarks>
-internal static class WhereCommand
+internal sealed class WhereCommand(ILocalRunStoreFactory storeFactory, ConsoleIO io)
 {
-    public static int Run(string? directory, TextWriter output)
+    public int Run(string? directory)
     {
-        ILocalRunStore store = LocalRunStore.Create(
+        TextWriter output = io.Output;
+
+        ILocalRunStore store = storeFactory.Create(
             startDirectory: directory ?? Directory.GetCurrentDirectory());
 
         if (!store.IsAvailable || store.StorePath == null)
