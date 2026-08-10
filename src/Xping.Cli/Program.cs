@@ -6,6 +6,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
+using System.Reflection;
 using Xping.Cli.Commands;
 
 namespace Xping.Cli;
@@ -210,12 +211,24 @@ internal static class Program
     {
         Command command = new("version", "Print the tool version");
 
+        // Reads the same AssemblyInformationalVersionAttribute that System.CommandLine's built-in
+        // `--version` root option uses, so `xping version` and `xping --version` always agree.
         command.SetAction(_ =>
         {
-            output.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown");
+            output.WriteLine(GetInformationalVersion());
             return 0;
         });
 
         return command;
+    }
+
+    private static string GetInformationalVersion()
+    {
+        AssemblyInformationalVersionAttribute? attribute = typeof(Program).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+
+        return attribute?.InformationalVersion is { Length: > 0 } version
+            ? version
+            : typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
     }
 }
