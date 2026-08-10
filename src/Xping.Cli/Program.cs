@@ -3,6 +3,10 @@
  * License: [MIT]
  */
 
+using System.CommandLine;
+using System.CommandLine.Parsing;
+using System.Globalization;
+using System.Reflection;
 using Xping.Cli.Commands;
 
 namespace Xping.Cli;
@@ -24,111 +28,207 @@ internal static class Program
     internal static int Run(
         string[] args, TextWriter output, TextWriter error, TextReader? input = null)
     {
-        if (args.Length == 0 || IsHelp(args[0]))
+        RootCommand root = BuildRootCommand(output, error, input ?? TextReader.Null);
+
+        bool noArgs = args.Length == 0;
+
+        // Matches the historical bare-word `help` verb; `--help`/`-h` are already recognised by
+        // the root command itself.
+        string[] effectiveArgs = noArgs
+            ? ["--help"]
+            : args[0] == "help" ? ["--help"] : args;
+
+        ParseResult parseResult = root.Parse(effectiveArgs);
+
+        if (parseResult.Errors.Count > 0)
         {
-            WriteUsage(output);
-            return args.Length == 0 ? 1 : 0;
+            foreach (ParseError parseError in parseResult.Errors)
+                error.WriteLine(parseError.Message);
+
+            string verb = effectiveArgs.Length > 0 ? effectiveArgs[0] : string.Empty;
+            error.WriteLine(verb is "report" or "where" or "clear" or "version"
+                ? $"Run `xping {verb} --help` for usage."
+                : "Run `xping --help` for usage.");
+            return 2;
         }
 
-        string verb = args[0];
-        string[] rest = args.Skip(1).ToArray();
-
-        switch (verb)
-        {
-            case "report":
-                if (rest.Any(IsHelp))
-                {
-                    WriteUsage(output);
-                    return 0;
-                }
-
-                if (!ReportOptions.TryParse(rest, out ReportOptions options, out string? parseError))
-                {
-                    error.WriteLine(parseError);
-                    error.WriteLine("Run `xping report --help` for usage.");
-                    return 2;
-                }
-
-                return ReportCommand.Run(options, output);
-
-            case "where":
-                if (rest.Any(IsHelp))
-                {
-                    WriteUsage(output);
-                    return 0;
-                }
-
-                if (!WhereOptions.TryParse(rest, out WhereOptions whereOptions, out string? whereError))
-                {
-                    error.WriteLine(whereError);
-                    error.WriteLine("Run `xping where --help` for usage.");
-                    return 2;
-                }
-
-                return WhereCommand.Run(whereOptions.Directory, output);
-
-            case "clear":
-                if (rest.Any(IsHelp))
-                {
-                    WriteUsage(output);
-                    return 0;
-                }
-
-                // Parsed strictly before anything is deleted: a lenient flag scan treats a trailing
-                // `--assembly` with no value as "no scope", turning a scoped delete into a full one.
-                if (!ClearOptions.TryParse(rest, out ClearOptions clearOptions, out string? clearError))
-                {
-                    error.WriteLine(clearError);
-                    error.WriteLine("Run `xping clear --help` for usage.");
-                    return 2;
-                }
-
-                return ClearCommand.Run(
-                    clearOptions.Directory,
-                    clearOptions.Assembly,
-                    clearOptions.Force,
-                    input ?? TextReader.Null,
-                    output,
-                    error);
-
-            case "--version":
-            case "version":
-                output.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown");
-                return 0;
-
-            default:
-                error.WriteLine($"Unknown command '{verb}'.");
-                WriteUsage(error);
-                return 2;
-        }
+        int exitCode = parseResult.Invoke(new InvocationConfiguration { Output = output, Error = error });
+        return noArgs ? 1 : exitCode;
     }
 
-    private static bool IsHelp(string arg) =>
-        arg is "--help" or "-h" or "help";
-
-    private static void WriteUsage(TextWriter writer)
+    private static RootCommand BuildRootCommand(TextWriter output, TextWriter error, TextReader input)
     {
-        writer.WriteLine("xping - local test reliability reports");
-        writer.WriteLine();
-        writer.WriteLine("Usage:");
-        writer.WriteLine("  xping report [options]     Report flakiness from recent local runs");
-        writer.WriteLine("  xping where [options]      Show where local runs are stored");
-        writer.WriteLine("  xping clear [options]      Delete recorded runs");
-        writer.WriteLine("  xping version              Print the tool version");
-        writer.WriteLine();
-        writer.WriteLine("Report options:");
-        writer.WriteLine("  --last <n>          Recent runs to analyse per assembly (default 12)");
-        writer.WriteLine("  --assembly <name>   Restrict to one test assembly");
-        writer.WriteLine("  --all               Report across every assembly in the store");
-        writer.WriteLine("  --directory <path>  Resolve the store from this directory");
-        writer.WriteLine("  --details           Print per-test run history");
-        writer.WriteLine("  --json              Emit JSON instead of a rendered report");
-        writer.WriteLine("  --ascii             Force ASCII output");
-        writer.WriteLine();
-        writer.WriteLine("Clear options:");
-        writer.WriteLine("  --assembly <name>   Only delete runs for one test assembly");
-        writer.WriteLine("  --force             Skip the confirmation prompt");
-        writer.WriteLine();
-        writer.WriteLine("Runs are recorded by the Xping SDK. No account is required.");
+        // RootCommand's displayed name comes from the running executable (ExecutableName), which
+        // is "xping" once packed as a tool (ToolCommandName in the csproj); under `dotnet run` in
+        // this repo it shows the assembly name instead, which is expected and harmless.
+        RootCommand root = new(
+            "xping - local test reliability reports\n\n" +
+            "Runs are recorded by the Xping SDK. No account is required.");
+
+        root.Subcommands.Add(BuildReportCommand(output));
+        root.Subcommands.Add(BuildWhereCommand(output));
+        root.Subcommands.Add(BuildClearCommand(output, error, input));
+        root.Subcommands.Add(BuildVersionCommand(output));
+
+        return root;
+    }
+
+    private static Command BuildReportCommand(TextWriter output)
+    {
+        Option<int> lastOption = new("--last")
+        {
+            Description = "Recent runs to analyse per assembly (default 12)",
+            DefaultValueFactory = _ => 12,
+            CustomParser = result =>
+            {
+                // Defensive: normal arity validation rejects a missing value before this runs, but
+                // never assume that holds across parser versions — indexing beats `.Single()` here
+                // because it can't throw if a future arity mismatch calls this with 0 or 2+ tokens.
+                string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+                if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ||
+                    parsed <= 0)
+                {
+                    result.AddError($"--last expects a positive number, got '{raw}'.");
+                    return 0;
+                }
+
+                return parsed;
+            }
+        };
+
+        Option<string?> assemblyOption = new("--assembly")
+        {
+            Description = "Restrict to one test assembly"
+        };
+
+        Option<bool> allOption = new("--all")
+        {
+            Description = "Report across every assembly in the store"
+        };
+
+        Option<string?> directoryOption = new("--directory")
+        {
+            Description = "Resolve the store from this directory"
+        };
+
+        Option<bool> detailsOption = new("--details")
+        {
+            Description = "Print per-test run history"
+        };
+
+        Option<bool> jsonOption = new("--json")
+        {
+            Description = "Emit JSON instead of a rendered report"
+        };
+
+        Option<bool> asciiOption = new("--ascii")
+        {
+            Description = "Force ASCII output"
+        };
+
+        Command command = new("report", "Report flakiness from recent local runs")
+        {
+            lastOption, assemblyOption, allOption, directoryOption, detailsOption, jsonOption, asciiOption
+        };
+
+        command.Validators.Add(result =>
+        {
+            if (result.GetValue(allOption) && result.GetValue(assemblyOption) != null)
+                result.AddError("--all and --assembly are mutually exclusive.");
+        });
+
+        command.SetAction(parseResult =>
+        {
+            var options = new ReportOptions
+            {
+                Last = parseResult.GetValue(lastOption),
+                Assembly = parseResult.GetValue(assemblyOption),
+                Directory = parseResult.GetValue(directoryOption),
+                Details = parseResult.GetValue(detailsOption),
+                Json = parseResult.GetValue(jsonOption),
+                Ascii = parseResult.GetValue(asciiOption),
+                All = parseResult.GetValue(allOption)
+            };
+
+            return ReportCommand.Run(options, output);
+        });
+
+        return command;
+    }
+
+    private static Command BuildWhereCommand(TextWriter output)
+    {
+        Option<string?> directoryOption = new("--directory")
+        {
+            Description = "Resolve the store from this directory"
+        };
+
+        Command command = new("where", "Show where local runs are stored") { directoryOption };
+
+        command.SetAction(parseResult => WhereCommand.Run(parseResult.GetValue(directoryOption), output));
+
+        return command;
+    }
+
+    private static Command BuildClearCommand(TextWriter output, TextWriter error, TextReader input)
+    {
+        // A trailing `--assembly` with no value must fail parsing rather than silently reading as
+        // "no scope" — the latter would widen a scoped delete into deleting everything, the worst
+        // possible failure for a destructive command. The option's default arity (exactly one
+        // value) already enforces this.
+        Option<string?> assemblyOption = new("--assembly")
+        {
+            Description = "Only delete runs for one test assembly"
+        };
+
+        Option<string?> directoryOption = new("--directory")
+        {
+            Description = "Resolve the store from this directory"
+        };
+
+        Option<bool> forceOption = new("--force")
+        {
+            Description = "Skip the confirmation prompt"
+        };
+
+        Command command = new("clear", "Delete recorded runs")
+        {
+            assemblyOption, directoryOption, forceOption
+        };
+
+        command.SetAction(parseResult => ClearCommand.Run(
+            parseResult.GetValue(directoryOption),
+            parseResult.GetValue(assemblyOption),
+            parseResult.GetValue(forceOption),
+            input,
+            output,
+            error));
+
+        return command;
+    }
+
+    private static Command BuildVersionCommand(TextWriter output)
+    {
+        Command command = new("version", "Print the tool version");
+
+        // Reads the same AssemblyInformationalVersionAttribute that System.CommandLine's built-in
+        // `--version` root option uses, so `xping version` and `xping --version` always agree.
+        command.SetAction(_ =>
+        {
+            output.WriteLine(GetInformationalVersion());
+            return 0;
+        });
+
+        return command;
+    }
+
+    private static string GetInformationalVersion()
+    {
+        AssemblyInformationalVersionAttribute? attribute = typeof(Program).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+
+        return attribute?.InformationalVersion is { Length: > 0 } version
+            ? version
+            : typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
     }
 }
