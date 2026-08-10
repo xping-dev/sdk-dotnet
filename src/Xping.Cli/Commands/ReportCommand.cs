@@ -6,7 +6,9 @@
 using System.Globalization;
 using System.Text;
 using Xping.Cli.Analysis;
+using Xping.Cli.Hosting;
 using Xping.Cli.Reporting;
+using Xping.Cli.Services;
 using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -16,19 +18,19 @@ namespace Xping.Cli.Commands;
 /// <summary>
 /// Renders the local flakiness report from the run store.
 /// </summary>
-internal static class ReportCommand
+internal sealed class ReportCommand(ILocalRunStoreFactory storeFactory, ConsoleIO io)
 {
     /// <summary>
     /// Runs the report.
     /// </summary>
     /// <param name="options">Parsed command-line options.</param>
-    /// <param name="output">Where to write the report.</param>
     /// <returns>Process exit code.</returns>
-    public static int Run(ReportOptions options, TextWriter output)
+    public int Run(ReportOptions options)
     {
-        ILocalRunStore store = LocalRunStore.Create(
+        TextWriter output = io.Output;
+
+        ILocalRunStore store = storeFactory.Create(
             new LocalStoreOptions { AnalysisWindow = options.Last },
-            logger: null,
             startDirectory: options.Directory ?? Directory.GetCurrentDirectory());
 
         if (!store.IsAvailable)

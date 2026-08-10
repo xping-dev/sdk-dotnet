@@ -6,7 +6,11 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Xping.Cli.Commands;
+using Xping.Cli.Hosting;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli;
@@ -28,7 +32,9 @@ internal static class Program
     internal static int Run(
         string[] args, TextWriter output, TextWriter error, TextReader? input = null)
     {
-        RootCommand root = BuildRootCommand(output, error, input ?? TextReader.Null);
+        using IHost host = BuildHost(output, error, input ?? TextReader.Null);
+
+        RootCommand root = BuildRootCommand(host.Services, output);
 
         bool noArgs = args.Length == 0;
 
@@ -56,7 +62,38 @@ internal static class Program
         return noArgs ? 1 : exitCode;
     }
 
-    private static RootCommand BuildRootCommand(TextWriter output, TextWriter error, TextReader input)
+    /// <summary>
+    /// Builds the composition root for one CLI invocation.
+    /// </summary>
+    /// <remarks>
+    /// Built fresh per <see cref="Run"/> call rather than once per process: <paramref name="output"/>
+    /// and <paramref name="error"/> are per-invocation state (tests pass a new pair on every call),
+    /// and there are no <see cref="IHostedService"/>s registered, so this is purely a composition
+    /// root — built, resolved from, and disposed, never started/run.
+    /// </remarks>
+    private static IHost BuildHost(TextWriter output, TextWriter error, TextReader input)
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+
+        // `xping` is a globally-installed tool invoked from arbitrary directories. The default
+        // pipeline would load appsettings.json relative to the current directory (ContentRootPath) -
+        // silently picking up a stray file from whatever repo the user happens to be in is exactly
+        // the kind of surprise a CLI must not have. Nothing today needs IConfiguration; clear it so
+        // any future use is deliberate.
+        builder.Configuration.Sources.Clear();
+
+        // The default pipeline adds a Console logging provider that writes straight to
+        // System.Console, bypassing the output/error test seam and risking interleaving with
+        // --json output on real stdout. Start silent; a future --verbose flag is the place to opt a
+        // provider back in.
+        builder.Logging.ClearProviders();
+
+        builder.Services.AddXpingCliServices(output, error, input);
+
+        return builder.Build();
+    }
+
+    private static RootCommand BuildRootCommand(IServiceProvider services, TextWriter output)
     {
         // RootCommand's displayed name comes from the running executable (ExecutableName), which
         // is "xping" once packed as a tool (ToolCommandName in the csproj); under `dotnet run` in
@@ -65,15 +102,15 @@ internal static class Program
             "xping - local test reliability reports\n\n" +
             "Runs are recorded by the Xping SDK. No account is required.");
 
-        root.Subcommands.Add(BuildReportCommand(output));
-        root.Subcommands.Add(BuildWhereCommand(output));
-        root.Subcommands.Add(BuildClearCommand(output, error, input));
+        root.Subcommands.Add(BuildReportCommand(services));
+        root.Subcommands.Add(BuildWhereCommand(services));
+        root.Subcommands.Add(BuildClearCommand(services));
         root.Subcommands.Add(BuildVersionCommand(output));
 
         return root;
     }
 
-    private static Command BuildReportCommand(TextWriter output)
+    private static Command BuildReportCommand(IServiceProvider services)
     {
         Option<int> lastOption = new("--last")
         {
@@ -150,13 +187,13 @@ internal static class Program
                 All = parseResult.GetValue(allOption)
             };
 
-            return ReportCommand.Run(options, output);
+            return services.GetRequiredService<ReportCommand>().Run(options);
         });
 
         return command;
     }
 
-    private static Command BuildWhereCommand(TextWriter output)
+    private static Command BuildWhereCommand(IServiceProvider services)
     {
         Option<string?> directoryOption = new("--directory")
         {
@@ -165,12 +202,13 @@ internal static class Program
 
         Command command = new("where", "Show where local runs are stored") { directoryOption };
 
-        command.SetAction(parseResult => WhereCommand.Run(parseResult.GetValue(directoryOption), output));
+        command.SetAction(parseResult =>
+            services.GetRequiredService<WhereCommand>().Run(parseResult.GetValue(directoryOption)));
 
         return command;
     }
 
-    private static Command BuildClearCommand(TextWriter output, TextWriter error, TextReader input)
+    private static Command BuildClearCommand(IServiceProvider services)
     {
         // A trailing `--assembly` with no value must fail parsing rather than silently reading as
         // "no scope" — the latter would widen a scoped delete into deleting everything, the worst
@@ -196,13 +234,10 @@ internal static class Program
             assemblyOption, directoryOption, forceOption
         };
 
-        command.SetAction(parseResult => ClearCommand.Run(
+        command.SetAction(parseResult => services.GetRequiredService<ClearCommand>().Run(
             parseResult.GetValue(directoryOption),
             parseResult.GetValue(assemblyOption),
-            parseResult.GetValue(forceOption),
-            input,
-            output,
-            error));
+            parseResult.GetValue(forceOption)));
 
         return command;
     }
@@ -211,7 +246,7 @@ internal static class Program
     {
         Command command = new("version", "Print the tool version");
 
-        // Uses the shared XpingSdkVersion (the same clean SemVer reported in the SDK's User-Agent
+        // Uses the shared XpingVersion (the same clean SemVer reported in the SDK's User-Agent
         // header and TestSession.SdkVersion), so it may omit the local source-revision suffix
         // (e.g. "+abc123") that System.CommandLine's built-in `--version` option can include.
         command.SetAction(_ =>
