@@ -9,13 +9,13 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using Polly.CircuitBreaker;
-using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Upload;
+using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Tests.Upload;
 
@@ -416,6 +416,6 @@ public sealed class XpingUploaderTests
         // Assert
         Assert.NotNull(captured);
         Assert.True(captured.Headers.TryGetValues("User-Agent", out var values));
-        Assert.Equal($"Xping-SDK-DotNet/{XpingSdkVersion.Current}", string.Join(" ", values));
+        Assert.Equal($"Xping-SDK-DotNet/{XpingVersion.Current}", string.Join(" ", values));
     }
 }
