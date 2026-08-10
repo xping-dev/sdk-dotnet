@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -31,7 +30,7 @@ public sealed class TestSession
         SessionState = TestSessionState.Initial;
         PullRequestContext = null;
         QuickStatistics = null;
-        SdkVersion = XpingSdkVersion.Current;
+        SdkVersion = XpingVersion.Current;
     }
 
     /// <summary>
@@ -57,7 +56,7 @@ public sealed class TestSession
         SessionState = sessionState;
         PullRequestContext = pullRequestContext;
         QuickStatistics = quickStatistics;
-        SdkVersion = XpingSdkVersion.Current;
+        SdkVersion = XpingVersion.Current;
     }
 
     /// <summary>

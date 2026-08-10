@@ -3,10 +3,10 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Tests.Models;
 
@@ -21,7 +21,7 @@ public sealed class TestSessionTests
     {
         var session = new TestSession();
 
-        Assert.Equal(XpingSdkVersion.Current, session.SdkVersion);
+        Assert.Equal(XpingVersion.Current, session.SdkVersion);
     }
 
     // ---------------------------------------------------------------------------
@@ -39,6 +39,6 @@ public sealed class TestSessionTests
                     .Build())
             .Build();
 
-        Assert.Equal(XpingSdkVersion.Current, session.SdkVersion);
+        Assert.Equal(XpingVersion.Current, session.SdkVersion);
     }
 }

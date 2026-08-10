@@ -6,8 +6,8 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
-using System.Reflection;
 using Xping.Cli.Commands;
+using Xping.Sdk.Shared;
 
 namespace Xping.Cli;
 
@@ -32,7 +32,7 @@ internal static class Program
 
         bool noArgs = args.Length == 0;
 
-        // Matches the historical bare-word `help` verb; `--help`/`-h` are already recognised by
+        // Matches the historical bare-word `help` verb; `--help`/`-h` are already recognized by
         // the root command itself.
         string[] effectiveArgs = noArgs
             ? ["--help"]
@@ -211,24 +211,15 @@ internal static class Program
     {
         Command command = new("version", "Print the tool version");
 
-        // Reads the same AssemblyInformationalVersionAttribute that System.CommandLine's built-in
-        // `--version` root option uses, so `xping version` and `xping --version` always agree.
+        // Uses the shared XpingSdkVersion (the same clean SemVer reported in the SDK's User-Agent
+        // header and TestSession.SdkVersion), so it may omit the local source-revision suffix
+        // (e.g. "+abc123") that System.CommandLine's built-in `--version` option can include.
         command.SetAction(_ =>
         {
-            output.WriteLine(GetInformationalVersion());
+            output.WriteLine(XpingVersion.Current);
             return 0;
         });
 
         return command;
-    }
-
-    private static string GetInformationalVersion()
-    {
-        AssemblyInformationalVersionAttribute? attribute = typeof(Program).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-
-        return attribute?.InformationalVersion is { Length: > 0 } version
-            ? version
-            : typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
     }
 }

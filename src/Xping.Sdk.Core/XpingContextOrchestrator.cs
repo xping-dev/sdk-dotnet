@@ -65,7 +65,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly ILocalRunWriter? _localRunWriter;
 
     // Slim projections of every execution drained during this session. Accumulated at drain time
-    // rather than in RecordTestExecution so the per-test hot path stays free of any local-store work.
+    // rather than in RecordTestExecution, so the per-test hot path stays free of any local-store work.
     private readonly List<LocalTestRecord> _localRecords = [];
     private readonly object _localRecordsLock = new();
 

@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+    <ProjectReference Include="..\Xping.Sdk.Shared\Xping.Sdk.Shared.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
