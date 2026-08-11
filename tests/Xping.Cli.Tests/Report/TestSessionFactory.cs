@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Security.Cryptography;
+using System.Text;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
@@ -41,6 +43,19 @@ internal static class TestSessionFactory
         new($"00000000-0000-0000-0000-{ordinal + 1:D12}");
 
     /// <summary>
+    /// Builds an execution id that is stable for a given execution's inputs.
+    /// </summary>
+    /// <param name="name">Method name.</param>
+    /// <param name="attempt">Retry attempt number.</param>
+    /// <param name="outcome">How it ended.</param>
+    /// <returns>The id.</returns>
+    public static Guid ExecutionIdFor(string name, int attempt, TestOutcome outcome)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{name}|{attempt}|{outcome}"));
+        return new Guid(hash.AsSpan(0, 16));
+    }
+
+    /// <summary>
     /// Builds one execution.
     /// </summary>
     /// <param name="name">Method name; also seeds the fingerprint.</param>
@@ -48,13 +63,28 @@ internal static class TestSessionFactory
     /// <param name="assembly">Owning assembly.</param>
     /// <param name="durationMs">How long it took.</param>
     /// <param name="attempt">Retry attempt number.</param>
+    /// <param name="passedOnRetry">Whether this attempt is a pass that followed a failure.</param>
+    /// <param name="maxRetries">Retries the attribute allows.</param>
+    /// <param name="retryAttributeName">The retry mechanism the SDK identified.</param>
+    /// <param name="errorMessage">Failure text, when the execution failed.</param>
+    /// <param name="executionId">Explicit execution id; defaults to one derived from the inputs.</param>
+    /// <param name="retry">
+    /// Whether to attach retry metadata at all. Passing <see langword="false"/> reproduces an
+    /// adapter that never detected a retry attribute, which is the common case in a real store.
+    /// </param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
         TestOutcome outcome = TestOutcome.Passed,
         string assembly = DefaultAssembly,
         int durationMs = 100,
-        int attempt = 1)
+        int attempt = 1,
+        bool passedOnRetry = false,
+        int maxRetries = 0,
+        string retryAttributeName = "",
+        string? errorMessage = null,
+        Guid? executionId = null,
+        bool retry = true)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint($"fp-{name}")
@@ -68,22 +98,33 @@ internal static class TestSessionFactory
             .WithSourceLineNumber(10)
             .Build();
 
-        RetryMetadata retry = new RetryMetadataBuilder()
-            .WithAttemptNumber(attempt)
-            .WithMaxRetries(0)
-            .WithPassedOnRetry(false)
-            .Build();
+        RetryMetadata? retryMetadata = retry
+            ? new RetryMetadataBuilder()
+                .WithAttemptNumber(attempt)
+                .WithMaxRetries(maxRetries)
+                .WithPassedOnRetry(passedOnRetry)
+                .WithRetryAttributeName(retryAttributeName)
+                .Build()
+            : null;
 
-        return new TestExecutionBuilder()
-            .WithExecutionId(Guid.NewGuid())
+        TestExecutionBuilder builder = new TestExecutionBuilder()
+
+            // Derived rather than random: the exemplar order in a finding falls back to the
+            // execution id, and a fixture that produced a new one per call would make the
+            // byte-identical-output requirement untestable.
+            .WithExecutionId(executionId ?? ExecutionIdFor(name, attempt, outcome))
             .WithIdentity(identity)
             .WithTestName(name)
             .WithOutcome(outcome)
             .WithDuration(TimeSpan.FromMilliseconds(durationMs))
             .WithStartTime(Epoch)
             .WithEndTime(Epoch.AddMilliseconds(durationMs))
-            .WithRetry(retry)
-            .Build();
+            .WithRetry(retryMetadata);
+
+        if (errorMessage != null)
+            builder = builder.WithException("System.Exception", errorMessage);
+
+        return builder.Build();
     }
 
     /// <summary>

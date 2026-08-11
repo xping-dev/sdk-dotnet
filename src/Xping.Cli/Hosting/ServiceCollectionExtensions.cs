@@ -62,6 +62,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IWindowResolver, WindowResolver>();
         services.AddSingleton<FindingCoordinator>();
 
+        services.AddSingleton<IFindingProvider, RetryMaskedProvider>();
         services.AddSingleton<IFindingProvider, VanishedProvider>();
 
         return services;
