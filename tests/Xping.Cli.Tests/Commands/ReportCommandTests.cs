@@ -3,8 +3,10 @@
  * License: [MIT]
  */
 
+using System.Text.Json;
 using Xping.Cli.Commands;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Cli.Tests.Report;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
@@ -38,36 +40,28 @@ public sealed class ReportCommandTests : IDisposable
         }
     }
 
-    private static void Seed(string assembly, params bool[] outcomesPerRun)
+    /// <summary>
+    /// Writes one session per entry, containing the named tests.
+    /// </summary>
+    private static void Seed(
+        string assembly, int startOrdinal, params string[][] testsPerSession)
     {
-        ILocalRunStore store = LocalRunStore.Create();
-        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        ILocalSessionStore store = LocalSessionStore.Create();
 
-        for (int i = 0; i < outcomesPerRun.Length; i++)
+        for (int i = 0; i < testsPerSession.Length; i++)
         {
-            var records = new List<LocalTestRecord>
-            {
-                new()
-                {
-                    Fingerprint = "fingerprint-target",
-                    Name = "MyTests.TargetTest",
-                    Outcome = outcomesPerRun[i] ? OutcomeCodes.Passed : OutcomeCodes.Failed,
-                    DurationMs = 120,
-                    Attempt = 1
-                }
-            };
+            List<TestExecution> executions =
+                [.. testsPerSession[i].Select(n => TestSessionFactory.Execution(n, assembly: assembly))];
 
-            store.Write(new LocalRun(
-                new LocalRunHeader
-                {
-                    SessionId = Guid.NewGuid().ToString("N"),
-                    StartedAtUtc = baseTime.AddMinutes(i),
-                    DurationMs = 4000,
-                    Assembly = assembly
-                },
-                records));
+            store.Write(TestSessionFactory.Session(startOrdinal + i, executions));
         }
     }
+
+    /// <summary>
+    /// Writes <paramref name="count"/> sessions running the same tests every time.
+    /// </summary>
+    private static void SeedStable(string assembly, int count, int startOrdinal = 0) =>
+        Seed(assembly, startOrdinal, [.. Enumerable.Repeat<string[]>(["Alpha", "Beta"], count)]);
 
     private static (int Code, string Output) RunReport(params string[] args)
     {
@@ -78,135 +72,99 @@ public sealed class ReportCommandTests : IDisposable
         return (code, output.ToString() + error.ToString());
     }
 
-    [Fact]
-    public void ReportsFlakinessFromStoredRuns()
+    private static JsonElement RunJson(params string[] args)
     {
-        // Arrange
-        Seed("MyTests", true, false, true, false);
+        var (_, output) = RunReport([.. args, "--format", "json"]);
 
-        // Act
-        var (code, output) = RunReport("--ascii");
-
-        // Assert
-        Assert.Equal(0, code);
-        Assert.Contains("local run summary", output, StringComparison.Ordinal);
-        Assert.Contains("MyTests.TargetTest", output, StringComparison.Ordinal);
-        Assert.Contains("unstable", output, StringComparison.Ordinal);
+        // Cloned so the document can be disposed while the element stays usable.
+        using JsonDocument document = JsonDocument.Parse(output);
+        return document.RootElement.Clone();
     }
 
     [Fact]
-    public void ExitsNonZeroWhenNoRunsAreStored()
+    public void ExitsWithInsufficientDataWhenNoRunsAreStored()
     {
         var (code, output) = RunReport();
 
-        Assert.NotEqual(0, code);
+        Assert.Equal(2, code);
         Assert.Contains("No runs recorded yet", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportsTheWindowItAnalysed()
+    {
+        SeedStable("MyTests", 6);
+
+        JsonElement root = RunJson();
+        JsonElement window = root.GetProperty("window");
+
+        Assert.Equal(6, window.GetProperty("sessionCount").GetInt32());
+        Assert.Equal(6, window.GetProperty("sessionIds").GetArrayLength());
+        Assert.Equal(1, window.GetProperty("currentSliceSize").GetInt32());
+    }
+
+    [Fact]
+    public void ASmallWindowStillProducesAReport()
+    {
+        // Below the reporting floor there are no findings, but the counts, the window and the
+        // context are all still true and useful. Refusing to report would be discouraging and wrong.
+        SeedStable("MyTests", 2);
+
+        var (code, output) = RunReport("--format", "json");
+
+        Assert.Equal(0, code);
+        using JsonDocument doc = JsonDocument.Parse(output);
+        Assert.Equal(2, doc.RootElement.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Empty(doc.RootElement.GetProperty("findings").EnumerateArray());
     }
 
     [Fact]
     public void ScopesTheReportToTheRequestedAssembly()
     {
-        // Arrange — two suites sharing one store.
-        Seed("Alpha.Tests", true, false, true);
-        Seed("Beta.Tests", true, true, true);
+        SeedStable("Alpha.Tests", 5);
+        SeedStable("Beta.Tests", 5, startOrdinal: 10);
 
-        // Act
-        var (code, output) = RunReport("--assembly", "Beta.Tests", "--ascii");
+        JsonElement root = RunJson("--assembly", "Alpha.Tests");
 
-        // Assert — Beta is stable, so nothing should be flagged.
-        Assert.Equal(0, code);
-        Assert.DoesNotContain("unstable", output, StringComparison.Ordinal);
+        Assert.Equal(5, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal("Alpha.Tests", root.GetProperty("context").GetProperty("assembly").GetString());
     }
 
     [Fact]
-    public void LimitsTheWindowWithLast()
+    public void LimitsTheWindowWithRuns()
     {
-        // Arrange — the oldest runs fail, the newest three pass.
-        Seed("MyTests", false, false, true, true, true);
+        SeedStable("MyTests", 8);
 
-        // Act
-        var (code, output) = RunReport("--last", "3", "--ascii");
+        JsonElement root = RunJson("--runs", "3");
 
-        // Assert — restricted to the passing tail, nothing is unstable.
-        Assert.Equal(0, code);
-        Assert.DoesNotContain("unstable", output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void PrintsPerTestHistoryWithDetails()
-    {
-        // Arrange
-        Seed("MyTests", true, false, true, false);
-
-        // Act
-        var (code, output) = RunReport("--details", "--ascii");
-
-        // Assert
-        Assert.Equal(0, code);
-        Assert.Contains("Details", output, StringComparison.Ordinal);
-        Assert.Contains("fingerprint-target", output, StringComparison.Ordinal);
-        Assert.Contains("FAIL", output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ScopesToTheNewestAssemblyWhenNoneIsRequested()
-    {
-        // Arrange — Alpha is stable and older; Beta is flaky and newest. Reporting across both would
-        // give headline counts from one run and history from several unrelated suites.
-        Seed("Alpha.Tests", true, true, true);
-        Seed("Beta.Tests", true, false, true, false);
-
-        // Act
-        var (code, output) = RunReport("--ascii");
-
-        // Assert
-        Assert.Equal(0, code);
-        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
-        Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
-        Assert.Contains("unstable", output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void DoesNotAnnounceScopeWhenTheStoreHoldsOneAssembly()
-    {
-        // Arrange
-        Seed("Only.Tests", true, false, true);
-
-        // Act
-        var (code, output) = RunReport("--ascii");
-
-        // Assert — the notice is there to make an omission visible; with nothing omitted it is noise.
-        Assert.Equal(0, code);
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void DoesNotAnnounceScopeWhenTheAssemblyWasRequested()
-    {
-        // Arrange
-        Seed("Alpha.Tests", true, true, true);
-        Seed("Beta.Tests", true, false, true);
-
-        // Act
-        var (code, output) = RunReport("--assembly", "Alpha.Tests", "--ascii");
-
-        // Assert
-        Assert.Equal(0, code);
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
+        Assert.Equal(3, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal("runs", root.GetProperty("window").GetProperty("resolution").GetString());
     }
 
     [Fact]
     public void ReportsAClearMessageForAnUnknownAssembly()
     {
-        // Arrange
-        Seed("Alpha.Tests", true, true, true);
+        SeedStable("Alpha.Tests", 5);
 
-        // Act
         var (code, output) = RunReport("--assembly", "Nonexistent.Tests");
 
-        // Assert
-        Assert.NotEqual(0, code);
+        Assert.Equal(2, code);
         Assert.Contains("Nonexistent.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContextIsOmittedRatherThanInventedWhenNothingIsKnown()
+    {
+        // Sessions recorded outside a git checkout, or in CI, carry no commit. A fabricated context
+        // would be quietly wrong; a null one is honest.
+        SeedStable("MyTests", 5);
+
+        JsonElement root = RunJson();
+        JsonElement context = root.GetProperty("context");
+
+        Assert.Equal(JsonValueKind.Null, context.GetProperty("sha").ValueKind);
+        Assert.Equal(JsonValueKind.Null, context.GetProperty("branch").ValueKind);
+        Assert.Equal("MyTests", context.GetProperty("assembly").GetString());
     }
 
     [Fact]
@@ -219,9 +177,9 @@ public sealed class ReportCommandTests : IDisposable
     }
 
     [Fact]
-    public void RejectsNonNumericLast()
+    public void RejectsNonNumericRuns()
     {
-        var (code, output) = RunReport("--last", "banana");
+        var (code, output) = RunReport("--runs", "banana");
 
         Assert.Equal(2, code);
         Assert.Contains("positive number", output, StringComparison.Ordinal);

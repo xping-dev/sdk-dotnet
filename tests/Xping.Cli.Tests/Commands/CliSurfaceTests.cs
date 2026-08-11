@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using Xping.Cli.Commands;
+using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.LocalStore;
 
@@ -66,6 +67,21 @@ public sealed class CliSurfaceTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes sessions to the tier <c>xping report</c> actually reads.
+    /// </summary>
+    private static void SeedSessions(string assembly, int count, int startOrdinal = 0)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < count; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                startOrdinal + i,
+                [TestSessionFactory.Execution("Sample", assembly: assembly)]));
+        }
+    }
+
     private static (int Code, string Output) Run(params string[] args)
     {
         using var output = new StringWriter();
@@ -76,141 +92,139 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // --all
+    // report
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void AllReportsAcrossEveryAssembly()
+    public void ReportOnAnEmptyStoreExitsWithInsufficientDataNotFailure()
     {
-        // Arrange
-        Seed("Alpha.Tests", true, false, true);
-        Seed("Beta.Tests", false, true, false);
+        // A build step has to tell "I looked and found problems" apart from "I could not look".
+        var (code, output) = Run("report");
 
-        // Act
-        var (code, output) = Run("report", "--all", "--ascii");
-
-        // Assert
-        Assert.Equal(0, code);
-        Assert.Contains("2 assemblies", output, StringComparison.Ordinal);
-        Assert.Contains("Alpha.Tests", output, StringComparison.Ordinal);
-        Assert.Contains("Beta.Tests", output, StringComparison.Ordinal);
+        Assert.Equal(2, code);
+        Assert.Contains("No runs recorded yet", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AllOmitsSingleRunOutcomeCounts()
+    public void ReportScopesToTheNewestAssemblyAndSaysSo()
     {
-        // Arrange
-        Seed("Alpha.Tests", true, false, true);
-        Seed("Beta.Tests", true, true, true);
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
 
-        // Act
-        var (code, output) = Run("report", "--all", "--ascii");
+        var (code, output) = Run("report", "--ascii");
 
-        // Assert — across assemblies there is no single latest run those counts could describe.
         Assert.Equal(0, code);
-        Assert.DoesNotContain("passed     ", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("local run summary", output, StringComparison.Ordinal);
-        Assert.Contains("local summary", output, StringComparison.Ordinal);
+        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
+        Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AllSaysSoWhenNothingIsUnstable()
+    public void ReportScopedExplicitlyDoesNotPrintTheNotice()
     {
-        Seed("Alpha.Tests", true, true, true);
-        Seed("Beta.Tests", true, true, true);
+        // The notice exists to flag an omission the user did not ask for.
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
 
-        var (code, output) = Run("report", "--all", "--ascii");
+        var (_, output) = Run("report", "--assembly", "Alpha.Tests", "--ascii");
 
-        Assert.Equal(0, code);
-        Assert.Contains("Nothing unstable", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AllAndAssemblyAreMutuallyExclusive()
+    public void RunsAndSinceAreMutuallyExclusive()
     {
-        var (code, output) = Run("report", "--all", "--assembly", "Alpha.Tests");
+        var (code, output) = Run("report", "--runs", "3", "--since", "abc123");
 
         Assert.Equal(2, code);
         Assert.Contains("mutually exclusive", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AllDoesNotPrintTheScopeNotice()
+    public void AllAndTopAreMutuallyExclusive()
     {
-        // The notice exists to flag an omission; --all omits nothing.
-        Seed("Alpha.Tests", true, false, true);
-        Seed("Beta.Tests", true, false, true);
+        var (code, output) = Run("report", "--all", "--top", "2");
 
-        var (_, output) = Run("report", "--all", "--ascii");
+        Assert.Equal(2, code);
+        Assert.Contains("mutually exclusive", output, StringComparison.Ordinal);
+    }
 
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
+    [Fact]
+    public void RunsRejectsANonPositiveValueWithAnActionableMessage()
+    {
+        var (code, output) = Run("report", "--runs", "0");
+
+        Assert.Equal(2, code);
+        Assert.Contains("--runs expects a positive number", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnknownKindNamesTheKindsThatExist()
+    {
+        // The built-in enum converter reports the CLR type name, which tells a user nothing.
+        var (code, output) = Run("report", "--kind", "Nonsense");
+
+        Assert.Equal(2, code);
+        Assert.Contains("Unknown finding kind 'Nonsense'", output, StringComparison.Ordinal);
+        Assert.Contains("Vanished", output, StringComparison.Ordinal);
     }
 
     // -----------------------------------------------------------------------
-    // --json
+    // --format json
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void JsonEmitsParsableOutputWithAStableSchemaVersion()
+    public void JsonEmitsTheVersionedEnvelope()
     {
-        // Arrange
-        Seed("Alpha.Tests", true, false, true);
+        SeedSessions("Alpha.Tests", 6);
 
-        // Act
-        var (code, output) = Run("report", "--json");
+        var (code, output) = Run("report", "--format", "json");
 
-        // Assert
         Assert.Equal(0, code);
 
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal(3, root.GetProperty("runsAnalysed").GetInt32());
-        Assert.NotEqual(0, root.GetProperty("unstableTests").GetArrayLength());
+        Assert.Equal("1.0", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
+        Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
     }
 
     [Fact]
-    public void JsonIncludesFindingDetail()
+    public void JsonIsStillTheEnvelopeWhenSelectedByTheLegacyFlag()
     {
-        Seed("Alpha.Tests", true, false, true);
+        // `--json` shipped before `--format`; scripts using it must keep working.
+        SeedSessions("Alpha.Tests", 6);
 
-        var (_, output) = Run("report", "--json");
+        var (code, output) = Run("report", "--json");
 
+        Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        JsonElement finding = doc.RootElement.GetProperty("unstableTests")[0];
-
-        Assert.Equal("fp-Alpha.Tests", finding.GetProperty("fingerprint").GetString());
-        Assert.Equal("FlakyAcrossRuns", finding.GetProperty("kind").GetString());
-        Assert.Equal(2, finding.GetProperty("passCount").GetInt32());
-        Assert.Equal(3, finding.GetProperty("history").GetArrayLength());
+        Assert.Equal("1.0", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]
-    public void JsonCarriesAssemblyLabelsInAggregateMode()
+    public void RunsIsStillAcceptedUnderItsLegacyName()
     {
-        Seed("Alpha.Tests", true, false, true);
-        Seed("Beta.Tests", false, true, false);
+        SeedSessions("Alpha.Tests", 8);
 
-        var (_, output) = Run("report", "--all", "--json");
+        var (code, output) = Run("report", "--last", "3", "--format", "json");
 
+        Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-
-        Assert.Equal(2, doc.RootElement.GetProperty("assembliesAnalysed").GetInt32());
-        Assert.All(
-            doc.RootElement.GetProperty("unstableTests").EnumerateArray(),
-            f => Assert.False(string.IsNullOrEmpty(f.GetProperty("assembly").GetString())));
+        Assert.Equal(3, doc.RootElement.GetProperty("window").GetProperty("sessionCount").GetInt32());
     }
 
     [Fact]
     public void JsonEmitsNoRenderedReport()
     {
         // A script consuming stdout must not have to strip a box-drawn block first.
-        Seed("Alpha.Tests", true, false, true);
+        SeedSessions("Alpha.Tests", 6);
 
-        var (_, output) = Run("report", "--json");
+        var (_, output) = Run("report", "--format", "json");
 
-        Assert.DoesNotContain("local run summary", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Xping report", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
     }
 
     // -----------------------------------------------------------------------

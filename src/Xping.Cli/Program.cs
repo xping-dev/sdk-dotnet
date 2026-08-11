@@ -11,6 +11,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xping.Cli.Commands;
 using Xping.Cli.Hosting;
+using Xping.Cli.Report;
+using Xping.Cli.Report.Model;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli;
@@ -33,7 +35,6 @@ internal static class Program
         string[] args, TextWriter output, TextWriter error, TextReader? input = null)
     {
         using IHost host = BuildHost(output, error, input ?? TextReader.Null);
-
         RootCommand root = BuildRootCommand(host.Services, output);
 
         bool noArgs = args.Length == 0;
@@ -112,25 +113,71 @@ internal static class Program
 
     private static Command BuildReportCommand(IServiceProvider services)
     {
-        Option<int> lastOption = new("--last")
+        // `--last` is the name this option shipped under. Kept as an alias so existing scripts and
+        // muscle memory keep working; `--runs` is what the report itself calls the window.
+        Option<int?> runsOption = new("--runs", "--last")
         {
-            Description = "Recent runs to analyse per assembly (default 12)",
-            DefaultValueFactory = _ => 12,
+            Description = "Recent runs to analyse (default: 20, or 14 days, whichever is fewer)",
+            CustomParser = result => ParsePositive(result, "--runs")
+        };
+
+        Option<string?> sinceOption = new("--since")
+        {
+            Description = "Analyse from a commit SHA or a date (yyyy-MM-dd)"
+        };
+
+        Option<int?> topOption = new("--top")
+        {
+            Description = $"Findings to show (default {LocalAnalysisConstants.DefaultTopFindings})",
+            CustomParser = result => ParsePositive(result, "--top")
+        };
+
+        Option<bool> allOption = new("--all")
+        {
+            Description = "Show every finding rather than the top ones"
+        };
+
+        Option<FindingKind[]> kindOption = new("--kind")
+        {
+            Description = "Restrict to one or more finding kinds",
+            AllowMultipleArgumentsPerToken = true,
+
+            // Parsed by hand so a typo names the kinds that exist. The built-in enum converter
+            // reports the CLR type name instead, which tells a user nothing they can act on.
             CustomParser = result =>
             {
-                // Defensive: normal arity validation rejects a missing value before this runs, but
-                // never assume that holds across parser versions — indexing beats `.Single()` here
-                // because it can't throw if a future arity mismatch calls this with 0 or 2+ tokens.
-                string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
-                if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ||
-                    parsed <= 0)
+                var kinds = new List<FindingKind>();
+
+                foreach (Token token in result.Tokens)
                 {
-                    result.AddError($"--last expects a positive number, got '{raw}'.");
-                    return 0;
+                    if (Enum.TryParse(token.Value, ignoreCase: true, out FindingKind kind))
+                        kinds.Add(kind);
+                    else
+                        result.AddError(
+                            $"Unknown finding kind '{token.Value}'. " +
+                            $"Expected one of: {string.Join(", ", Enum.GetNames<FindingKind>())}.");
                 }
 
-                return parsed;
+                return [.. kinds];
             }
+        };
+
+        Option<ReportFormat> formatOption = new("--format")
+        {
+            Description = "Output format: text or json",
+            DefaultValueFactory = _ => ReportFormat.Text
+        };
+
+        // Superseded by `--format json`, kept so existing scripts keep working.
+        Option<bool> jsonOption = new("--json")
+        {
+            Description = "Alias for --format json"
+        };
+
+        Option<FailOn> failOnOption = new("--fail-on")
+        {
+            Description = "Exit non-zero when a finding reaches this severity",
+            DefaultValueFactory = _ => FailOn.None
         };
 
         Option<string?> assemblyOption = new("--assembly")
@@ -138,24 +185,9 @@ internal static class Program
             Description = "Restrict to one test assembly"
         };
 
-        Option<bool> allOption = new("--all")
-        {
-            Description = "Report across every assembly in the store"
-        };
-
         Option<string?> directoryOption = new("--directory")
         {
             Description = "Resolve the store from this directory"
-        };
-
-        Option<bool> detailsOption = new("--details")
-        {
-            Description = "Print per-test run history"
-        };
-
-        Option<bool> jsonOption = new("--json")
-        {
-            Description = "Emit JSON instead of a rendered report"
         };
 
         Option<bool> asciiOption = new("--ascii")
@@ -163,34 +195,100 @@ internal static class Program
             Description = "Force ASCII output"
         };
 
-        Command command = new("report", "Report flakiness from recent local runs")
+        Command command = new("report", "Report test reliability findings from recent local runs")
         {
-            lastOption, assemblyOption, allOption, directoryOption, detailsOption, jsonOption, asciiOption
+            runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
+            failOnOption, assemblyOption, directoryOption, asciiOption
         };
 
+        // Presence is tested with GetResult rather than GetValue: an option whose own parser already
+        // rejected its value has no value to read, and asking for one throws before the parse errors
+        // are ever reported to the user.
         command.Validators.Add(result =>
         {
-            if (result.GetValue(allOption) && result.GetValue(assemblyOption) != null)
-                result.AddError("--all and --assembly are mutually exclusive.");
+            if (result.GetResult(runsOption) != null && result.GetResult(sinceOption) != null)
+                result.AddError("--runs and --since are mutually exclusive.");
+
+            if (result.GetResult(allOption) != null && result.GetResult(topOption) != null)
+                result.AddError("--all and --top are mutually exclusive.");
         });
 
         command.SetAction(parseResult =>
         {
+            bool showAll = parseResult.GetValue(allOption);
+
             var options = new ReportOptions
             {
-                Last = parseResult.GetValue(lastOption),
+                Runs = parseResult.GetValue(runsOption),
+                Since = parseResult.GetValue(sinceOption),
+                Top = showAll
+                    ? null
+                    : parseResult.GetValue(topOption) ?? LocalAnalysisConstants.DefaultTopFindings,
+                Kinds = parseResult.GetValue(kindOption) ?? [],
                 Assembly = parseResult.GetValue(assemblyOption),
                 Directory = parseResult.GetValue(directoryOption),
-                Details = parseResult.GetValue(detailsOption),
-                Json = parseResult.GetValue(jsonOption),
-                Ascii = parseResult.GetValue(asciiOption),
-                All = parseResult.GetValue(allOption)
+                Format = parseResult.GetValue(jsonOption)
+                    ? ReportFormat.Json
+                    : parseResult.GetValue(formatOption),
+                FailOn = ToSeverity(parseResult.GetValue(failOnOption)),
+                Ascii = parseResult.GetValue(asciiOption)
             };
 
             return services.GetRequiredService<ReportCommand>().Run(options);
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// The severities <c>--fail-on</c> accepts, including the opt-out.
+    /// </summary>
+    /// <remarks>
+    /// A separate enum rather than a nullable <c>Severity</c> because the option needs a name for
+    /// "never fail" that a user can type, and because it keeps the parser's error message listing
+    /// exactly the words that work.
+    /// </remarks>
+    private enum FailOn
+    {
+        /// <summary>Never fail on findings.</summary>
+        None,
+
+        /// <summary>Fail on any finding.</summary>
+        Low,
+
+        /// <summary>Fail on medium and high findings.</summary>
+        Medium,
+
+        /// <summary>Fail on high findings only.</summary>
+        High
+    }
+
+    private static Severity? ToSeverity(FailOn failOn) => failOn switch
+    {
+        FailOn.High => Severity.High,
+        FailOn.Medium => Severity.Medium,
+        FailOn.Low => Severity.Low,
+        _ => null
+    };
+
+    /// <summary>
+    /// Parses an option that must be a positive count.
+    /// </summary>
+    private static int? ParsePositive(ArgumentResult result, string optionName)
+    {
+        // Defensive: normal arity validation rejects a missing value before this runs, but never
+        // assume that holds across parser versions — indexing beats `.Single()` here because it
+        // can't throw if a future arity mismatch calls this with 0 or 2+ tokens.
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+        if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ||
+            parsed <= 0)
+        {
+            result.AddError($"{optionName} expects a positive number, got '{raw}'.");
+            return null;
+        }
+
+        return parsed;
     }
 
     private static Command BuildWhereCommand(IServiceProvider services)

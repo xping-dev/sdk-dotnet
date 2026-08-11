@@ -36,6 +36,7 @@ internal static class LocalStorePathResolver
     internal const string EnvironmentVariableName = "XPING_LOCAL_STORE";
     internal const string StoreDirectoryName = ".xping";
     internal const string RunsDirectoryName = "runs";
+    internal const string SessionsDirectoryName = "sessions";
 
     // Bounds the upward walk. A repository nested deeper than this is pathological, and an unbounded
     // walk on a detached or virtualised path would climb to the filesystem root.
@@ -111,6 +112,19 @@ internal static class LocalStorePathResolver
         Path.Combine(storeRoot, RunsDirectoryName);
 
     /// <summary>
+    /// Gets the directory holding full-session files for the given store root.
+    /// </summary>
+    /// <param name="storeRoot">The store root directory.</param>
+    /// <returns>The sessions directory path.</returns>
+    /// <remarks>
+    /// Sessions live beside <see cref="GetRunsDirectory"/> rather than inside it so the two tiers
+    /// prune independently. They hold the same runs at very different fidelities, and a shared
+    /// directory would let one tier's retention delete the other's history.
+    /// </remarks>
+    public static string GetSessionsDirectory(string storeRoot) =>
+        Path.Combine(storeRoot, SessionsDirectoryName);
+
+    /// <summary>
     /// Creates the store directory structure and ensures it is invisible to git.
     /// </summary>
     /// <param name="storeRoot">The store root directory.</param>
@@ -123,6 +137,7 @@ internal static class LocalStorePathResolver
     public static void EnsureCreated(string storeRoot)
     {
         Directory.CreateDirectory(GetRunsDirectory(storeRoot));
+        Directory.CreateDirectory(GetSessionsDirectory(storeRoot));
 
         string gitIgnorePath = Path.Combine(storeRoot, ".gitignore");
         if (!File.Exists(gitIgnorePath))
