@@ -72,6 +72,12 @@ internal static class TestSessionFactory
     /// Whether to attach retry metadata at all. Passing <see langword="false"/> reproduces an
     /// adapter that never detected a retry attribute, which is the common case in a real store.
     /// </param>
+    /// <param name="exceptionType">The type the adapter recorded, when it recorded one.</param>
+    /// <param name="stackTrace">The stack trace the adapter recorded, when it recorded one.</param>
+    /// <param name="stackTraceOmitted">
+    /// Whether stack trace capture was switched off. Distinct from having no trace: it means the
+    /// developer opted out, not that none existed.
+    /// </param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -84,7 +90,10 @@ internal static class TestSessionFactory
         string retryAttributeName = "",
         string? errorMessage = null,
         Guid? executionId = null,
-        bool retry = true)
+        bool retry = true,
+        string? exceptionType = null,
+        string? stackTrace = null,
+        bool stackTraceOmitted = false)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint($"fp-{name}")
@@ -119,9 +128,16 @@ internal static class TestSessionFactory
             .WithDuration(TimeSpan.FromMilliseconds(durationMs))
             .WithStartTime(Epoch)
             .WithEndTime(Epoch.AddMilliseconds(durationMs))
-            .WithRetry(retryMetadata);
+            .WithRetry(retryMetadata)
+            .WithStackTraceOmitted(stackTraceOmitted);
 
-        if (errorMessage != null)
+        // A caller that named a type or supplied a trace is exercising signature composition and
+        // gets exactly what it passed — including a null type, which is what NUnit records for an
+        // assertion failure. A caller that passed a message alone gets a plausible type with it,
+        // which is what the retry fixtures have always assumed.
+        if (exceptionType != null || stackTrace != null)
+            builder = builder.WithException(exceptionType, errorMessage, stackTrace);
+        else if (errorMessage != null)
             builder = builder.WithException("System.Exception", errorMessage);
 
         return builder.Build();

@@ -93,10 +93,6 @@ internal sealed class RetryMaskedProvider : IFindingProvider
     // would be a threshold this session invented.
     private const int MaxExemplars = 3;
 
-    // Appended when an error message is cut, so a reader can tell a truncated message from a test
-    // that genuinely failed with one line.
-    private const string ElisionMarker = "… (truncated)";
-
     /// <inheritdoc/>
     public string Name => "retry-masked";
 
@@ -252,24 +248,9 @@ internal sealed class RetryMaskedProvider : IFindingProvider
                 attempt,
                 preceding.Count,
                 (long)reference.Execution.Duration.TotalMilliseconds,
-                Elide(errorMessage)));
+                EvidenceText.Elide(errorMessage)));
         }
 
         return exemplars;
-    }
-
-    /// <summary>
-    /// Cuts an error message to the published budget, marking it when anything was removed.
-    /// </summary>
-    /// <param name="message">The raw message, which may be absent.</param>
-    /// <returns>The message to publish, or <see langword="null"/> when there was none.</returns>
-    private static string? Elide(string? message)
-    {
-        if (string.IsNullOrEmpty(message))
-            return null;
-
-        return message.Length <= LocalAnalysisConstants.ExemplarCharBudget
-            ? message
-            : string.Concat(message.AsSpan(0, LocalAnalysisConstants.ExemplarCharBudget), ElisionMarker);
     }
 }

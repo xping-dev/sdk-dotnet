@@ -203,7 +203,7 @@ internal sealed class TestIndex
                     references[fingerprint] = ToReference(execution);
             }
 
-            if (HasFinalFailure(session))
+            if (SessionOutcomes.HasFinalFailure(session))
                 sessionsWithFinalFailures.Add(session.SessionId);
         }
 
@@ -211,40 +211,6 @@ internal sealed class TestIndex
 
         return new TestIndex(
             window, byFingerprint, references, sessionPositions, sessionsWithFinalFailures, fingerprints);
-    }
-
-    /// <summary>
-    /// Returns whether a session ended with at least one test failing on its final attempt.
-    /// </summary>
-    /// <remarks>
-    /// Grouped by fingerprint and judged on the highest attempt number, so a test that failed once
-    /// and passed on retry does not make the session look failed. That distinction is the whole
-    /// basis of the retry-masked signal.
-    /// </remarks>
-    private static bool HasFinalFailure(TestSession session)
-    {
-        var finalOutcomes = new Dictionary<string, (int Attempt, TestOutcome Outcome)>(
-            StringComparer.Ordinal);
-
-        foreach (TestExecution execution in session.Executions)
-        {
-            string fingerprint = execution.Identity.TestFingerprint;
-            if (string.IsNullOrEmpty(fingerprint))
-                continue;
-
-            int attempt = execution.Retry?.AttemptNumber ?? 1;
-
-            if (!finalOutcomes.TryGetValue(fingerprint, out var existing) || attempt >= existing.Attempt)
-                finalOutcomes[fingerprint] = (attempt, execution.Outcome);
-        }
-
-        foreach (var outcome in finalOutcomes.Values)
-        {
-            if (outcome.Outcome == TestOutcome.Failed)
-                return true;
-        }
-
-        return false;
     }
 
     private static TestReference ToReference(TestExecution execution)

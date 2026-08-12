@@ -26,6 +26,8 @@ namespace Xping.Cli.Report;
 /// </remarks>
 internal sealed class AnalysisContext
 {
+    private readonly Dictionary<Guid, SessionView> _viewsBySession;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AnalysisContext"/> class.
     /// </summary>
@@ -36,6 +38,15 @@ internal sealed class AnalysisContext
         Window = window ?? throw new ArgumentNullException(nameof(window));
         Revision = revision;
         Tests = TestIndex.Build(window);
+        Signatures = SignatureIndex.Build(window);
+
+        var views = new List<SessionView>(window.Sessions.Count);
+        for (int position = 0; position < window.Sessions.Count; position++)
+            views.Add(SessionView.For(window.Sessions[position], position));
+
+        SessionViews = views;
+        _viewsBySession = views.ToDictionary(v => v.Session.SessionId);
+        EnvironmentalSessionCount = views.Count(v => v.IsLikelyEnvironmental);
     }
 
     /// <summary>Gets the sessions under analysis and the boundaries that produced them.</summary>
@@ -43,6 +54,30 @@ internal sealed class AnalysisContext
 
     /// <summary>Gets the shared derived index over those sessions.</summary>
     public TestIndex Tests { get; }
+
+    /// <summary>Gets the failure signatures of every failure in the window.</summary>
+    public SignatureIndex Signatures { get; }
+
+    /// <summary>Gets the analysed sessions with their health, newest first.</summary>
+    public IReadOnlyList<SessionView> SessionViews { get; }
+
+    /// <summary>
+    /// Gets how many analysed sessions look like the environment failed rather than the tests.
+    /// </summary>
+    /// <remarks>
+    /// Reported in the summary so a reader can tell a quiet window from one whose numbers were
+    /// deliberately discounted. Without that line the discounting would silently change every rate
+    /// in the report with nothing on screen to explain it.
+    /// </remarks>
+    public int EnvironmentalSessionCount { get; }
+
+    /// <summary>
+    /// Gets the health of one analysed session.
+    /// </summary>
+    /// <param name="sessionId">The session to look up.</param>
+    /// <returns>Its view, or <see langword="null"/> when it is not in the window.</returns>
+    public SessionView? SessionViewFor(Guid sessionId) =>
+        _viewsBySession.TryGetValue(sessionId, out SessionView? view) ? view : null;
 
     /// <summary>
     /// Gets where the analysed sessions came from, or <see langword="null"/> when unknown.

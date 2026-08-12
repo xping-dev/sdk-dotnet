@@ -62,9 +62,7 @@ internal static class EnvelopeBuilder
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
 
-                // Session 2 computes environmental discounting. Reported as zero rather than omitted
-                // so the envelope's shape does not change when that lands.
-                EnvironmentalSessions: 0,
+                context.EnvironmentalSessionCount,
                 incompleteSessions,
                 unreadableSessions,
                 result.FailedProviders),

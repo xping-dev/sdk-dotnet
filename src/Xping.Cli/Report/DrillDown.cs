@@ -40,6 +40,26 @@ internal static class DrillDown
     }
 
     /// <summary>
+    /// Builds the invocation that expands a finding about a cluster of tests.
+    /// </summary>
+    /// <param name="kind">The kind of finding being expanded.</param>
+    /// <param name="assembly">The assembly the cluster's members belong to.</param>
+    /// <returns>The command.</returns>
+    /// <remarks>
+    /// Scoped to the kind rather than to the cluster: there is no verb that takes a signature today,
+    /// and a drill-down that fails is worse than a coarse one, because it is the field a reader is
+    /// most likely to run.
+    /// </remarks>
+    public static string ForGroup(FindingKind kind, string? assembly)
+    {
+        string command = $"xping report --kind {kind} --format json";
+
+        return string.IsNullOrEmpty(assembly)
+            ? command
+            : $"{command} --assembly {Quote(assembly)}";
+    }
+
+    /// <summary>
     /// Builds the invocation that shows the untruncated report.
     /// </summary>
     /// <returns>The command.</returns>
