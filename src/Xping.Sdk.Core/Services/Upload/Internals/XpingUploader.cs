@@ -9,6 +9,7 @@ using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly.CircuitBreaker;
@@ -26,6 +27,9 @@ internal sealed class XpingUploader(
     IXpingSerializer serializer) : IXpingUploader
 {
     private const int CompressionThresholdBytes = 1024; // 1KB
+
+    private static readonly JsonSerializerOptions ProblemDetailsSerializerOptions =
+        new() { PropertyNameCaseInsensitive = true };
 
     private readonly XpingConfiguration _configuration = options.Value;
     private readonly ConcurrentDictionary<string, int> _errorOccurrences = new();
@@ -223,21 +227,7 @@ internal sealed class XpingUploader(
         string baseUrl = GetBaseUrl(requestUrl);
 
         // Enhanced error messages with actionable guidance
-        string detailedErrorMsg = statusCode switch
-        {
-            401 => $"Authentication failed (401) for {baseUrl}: Invalid API Key. " +
-                   "Action: Verify credentials at https://app.xping.io",
-            403 => $"Authorization failed (403) for {baseUrl}: Insufficient permissions. " +
-                   "Action: Check project access at https://app.xping.io",
-            404 => $"API endpoint not found (404): {baseUrl}. " +
-                   "Action: Verify the ApiEndpoint configuration matches your deployment",
-            429 => "Rate limit exceeded (429): Too many requests. " +
-                   "Action: Reduce test execution frequency or contact support",
-            >= 500 => $"Server error ({statusCode}): API temporarily unavailable.",
-            _ => string.IsNullOrWhiteSpace(errorContent)
-                ? $"API returned {statusCode}: No additional error details provided"
-                : $"API returned {statusCode}: {errorContent}"
-        };
+        string detailedErrorMsg = BuildErrorMessage(statusCode, errorContent, baseUrl);
 
         // Log detailed message on the first occurrence, abbreviated on later
         if (occurrenceCount == 1)
@@ -246,7 +236,7 @@ internal sealed class XpingUploader(
         }
         else
         {
-            logger.LogError("Same {StatusCode} error ({Ordinal} occurrence, batch size: {TotalRecords})",
+            logger.LogError("Same HTTP {StatusCode} error ({Ordinal} occurrence, batch size: {TotalRecords})",
                 statusCode, GetOrdinal(occurrenceCount), executionCount);
         }
 
@@ -270,6 +260,147 @@ internal sealed class XpingUploader(
         }
 
         return url;
+    }
+
+    /// <summary>
+    /// Builds an actionable error message from a failed upload response.
+    /// </summary>
+    /// <remarks>
+    /// The API reports failures as RFC 7807 ProblemDetails, where <c>title</c> carries the server
+    /// error code (for example <c>Error.Subscription.ProjectLimitReached</c>) and <c>detail</c> a
+    /// human-readable explanation. The error code is the authoritative signal: a single status code
+    /// covers unrelated causes, so 403 is not necessarily a missing scope and 402 is not necessarily
+    /// a failed payment. The status code is only used when no recognizable code is present.
+    /// </remarks>
+    private static string BuildErrorMessage(int statusCode, string? errorContent, string baseUrl)
+    {
+        ProblemDetails? problem = TryParseProblemDetails(errorContent);
+        string? errorCode = problem?.Title;
+
+        string action = GetActionForErrorCode(errorCode, baseUrl)
+            ?? GetActionForStatusCode(statusCode, baseUrl);
+
+        // Prefer the server's explanation - it carries the specifics the SDK cannot know,
+        // such as which plan limit was hit and what the limit is.
+        string reason = problem?.Detail
+            ?? (string.IsNullOrWhiteSpace(errorContent) ? "No additional error details provided" : errorContent!);
+
+        string category = GetCategoryForStatusCode(statusCode);
+        string code = string.IsNullOrWhiteSpace(errorCode) ? string.Empty : $" [{errorCode}]";
+
+        return $"{category} (HTTP {statusCode}) for {baseUrl}{code}: {reason} Action: {action}";
+    }
+
+    /// <summary>
+    /// Maps a server error code to the action that resolves it. Returns <c>null</c> for codes the
+    /// SDK does not recognize, so the caller can fall back to status-code guidance.
+    /// </summary>
+    private static string? GetActionForErrorCode(string? errorCode, string baseUrl) => errorCode switch
+    {
+        null or "" => null,
+
+        // Credentials - the key itself is the problem
+        "Error.ApiKey.MissingApiKey" =>
+            "Set the ApiKey in your Xping configuration; it is sent as the X-API-Key header",
+        "Error.ApiKey.InvalidApiKey" =>
+            $"Verify the ApiKey value matches a key issued for this workspace at {baseUrl}",
+        "Error.ApiKey.ExpiredApiKey" =>
+            "The key has passed its expiry date - issue a new API key and update your configuration",
+        "Error.ApiKey.RevokedApiKey" =>
+            "This key was revoked - issue a new API key and update your configuration",
+
+        // Scope and access - the key is valid but not permitted for uploads
+        "Error.ApiKey.InsufficientScope" or "Authorization.InsufficientScope" =>
+            "Grant the API key the UPLOAD scope, or use a key that already has it",
+        "Authorization.InsufficientAccess" or "Error.Security.OperationRequiresApiKeyContext" =>
+            "This endpoint requires an API key principal with upload access",
+        "Error.ApiKey.IpNotAllowed" =>
+            "The key restricts client IP addresses - add this runner's public IP to the key's allow list",
+
+        // Quotas - the caller is authorized, the plan or the key cap is the limit
+        "Error.ApiKey.UsageLimitReached" =>
+            "This key reached its configured usage cap - raise the cap or use a different key",
+        "Error.ApiKey.RateLimitExceeded" =>
+            "Back off and retry later, or reduce upload frequency by batching more executions per upload",
+        "Error.Subscription.ProjectLimitReached" =>
+            "Upgrade the plan, or upload to an existing project - the X-Project-Id header names a new " +
+            "project and the workspace is already at its project limit",
+        "Error.Subscription.TestRunLimitReached" or "Error.Subscription.UsageLimitExceeded" =>
+            "Upgrade the plan to continue ingesting test results this billing period",
+        "Error.Billing.PaymentFailed" or "Error.Billing.CardDeclined" or "Error.Billing.InsufficientFunds" =>
+            "Update the workspace payment method to restore uploads",
+
+        // Project state
+        "Error.Project.ProjectDisabled" =>
+            "The target project is disabled and rejects uploads - re-enable it in the dashboard",
+
+        // Request content - a configuration or SDK-version problem
+        "Error.Uploads.MissingProjectKey" =>
+            "Set ProjectId in your Xping configuration; it is sent as the X-Project-Id header",
+        "Error.Uploads.MissingSessionId" =>
+            "The upload was sent without a session id - this indicates an SDK defect, please report it",
+        "Error.Uploads.UnrecognizedPayload" or "Error.Uploads.UnrecognizedState" =>
+            "The server could not read this payload - update Xping.Sdk to a version compatible with the API",
+        "Error.Uploads.BatchSizeExceeded" =>
+            "Reduce the number of executions per upload - the server accepts at most 1000 per batch",
+
+        _ => null
+    };
+
+    /// <summary>
+    /// Fallback guidance when the response carries no recognizable error code - for example when a
+    /// proxy or load balancer, rather than the API, produced the response.
+    /// </summary>
+    private static string GetActionForStatusCode(int statusCode, string baseUrl) => statusCode switch
+    {
+        400 or 422 => "Check the upload configuration (ApiEndpoint, ProjectId) and the SDK version",
+        401 => $"Verify the ApiKey is set and valid for {baseUrl}",
+        402 => "Review the workspace subscription - a plan limit or billing issue is blocking uploads",
+        403 => "Verify the API key has the UPLOAD scope and that this client's IP is permitted",
+        404 => "Verify the ApiEndpoint configuration matches your deployment",
+        409 => "The target project rejected the upload in its current state - check it in the dashboard",
+        413 => "Reduce the number of executions per upload",
+        429 => "Reduce test execution frequency, or retry after the interval the server indicates",
+        >= 500 => "Retry later; if this persists, contact support with the receipt of a failing run",
+        _ => "Inspect the response body for details"
+    };
+
+    private static string GetCategoryForStatusCode(int statusCode) => statusCode switch
+    {
+        400 or 422 => "Upload rejected",
+        401 => "Authentication failed",
+        402 => "Subscription limit reached",
+        403 => "Authorization failed",
+        404 => "API endpoint not found",
+        409 => "Upload conflicts with the current project state",
+        413 => "Payload too large",
+        429 => "Rate limit exceeded",
+        >= 500 => "Server error",
+        _ => "Upload failed"
+    };
+
+    private static ProblemDetails? TryParseProblemDetails(string? errorContent)
+    {
+        if (string.IsNullOrWhiteSpace(errorContent))
+        {
+            return null;
+        }
+
+        try
+        {
+            ProblemDetails? problem = JsonSerializer.Deserialize<ProblemDetails>(
+                errorContent!,
+                ProblemDetailsSerializerOptions);
+
+            // A non-ProblemDetails JSON body (or a bare literal) deserializes without throwing,
+            // so treat a payload that carries neither field as unparsed.
+            return problem is null || (problem.Title is null && problem.Detail is null) ? null : problem;
+        }
+        catch (JsonException)
+        {
+            // Not JSON at all - a proxy error page, for example. The raw body is still logged.
+            return null;
+        }
     }
 
     private static string GetErrorContentKey(string? errorContent)
@@ -314,6 +445,17 @@ internal sealed class XpingUploader(
         public int TotalRecords { get; set; }
 
         public string? ReceiptId { get; set; }
+    }
+
+    /// <summary>
+    /// RFC 7807 problem response returned by the API on failure. <see cref="Title"/> carries the
+    /// server error code and <see cref="Detail"/> the human-readable explanation.
+    /// </summary>
+    private sealed class ProblemDetails
+    {
+        public string? Title { get; set; }
+
+        public string? Detail { get; set; }
     }
 #pragma warning restore CA1812
 }
