@@ -76,6 +76,27 @@ public sealed class XpingMessageSinkConcurrencyTests : IAsyncLifetime
         });
     }
 
+    [Fact]
+    public void RecordExecution_ShouldPopulateCollectionName()
+    {
+        // Regression test for issue #121: the xUnit adapter passed the collection name as the
+        // execution context's worker ID but never as its collection name, leaving
+        // TestOrchestrationRecord.CollectionName null.
+
+        // Arrange
+        (XpingMessageSink sink, RecordingExecutionTracker tracker) = CreateSink();
+        ITest testA = BuildFakeTest("test-a", "CalculatorTests.Add", "SampleApp.XUnit.CalculatorTests");
+
+        // Act
+        Send(sink, Starting(testA));
+        Send(sink, Passed(testA));
+
+        // Assert
+        TestOrchestrationRecord record = Assert.Single(tracker.Records);
+        Assert.Equal("SampleApp.XUnit.CalculatorTests", record.CollectionName);
+        Assert.Equal("SampleApp.XUnit.CalculatorTests", record.WorkerId);
+    }
+
     private static void Send(XpingMessageSink sink, IMessageSinkMessage message) =>
         ((IMessageSink)sink).OnMessage(message);
 
