@@ -163,17 +163,24 @@ public class XpingContext : XpingContextOrchestrator
     {
         try
         {
-            await FinalizeAsync().ConfigureAwait(false);
+            try
+            {
+                await FinalizeAsync().ConfigureAwait(false);
+            }
+            catch (XpingNetworkException ex)
+            {
+                // FailFast aborts the process immediately, which is the correct behavior for strict mode
+                // where observability must be guaranteed. Re-throwing here may not cause the CI pipeline
+                // to fail with a non-zero exit code.
+                Environment.FailFast($"[Xping] {ex.Message}", ex);
+            }
         }
-        catch (XpingNetworkException ex)
+        finally
         {
-            // FailFast aborts the process immediately, which is the correct behavior for strict mode
-            // where observability must be guaranteed. Re-throwing here may not cause the CI pipeline
-            // to fail with a non-zero exit code.
-            Environment.FailFast($"[Xping] {ex.Message}", ex);
+            // Runs even if FinalizeAsync throws something other than XpingNetworkException, so the
+            // "always releases the underlying host" guarantee above actually holds.
+            await ShutdownAsync().ConfigureAwait(false);
         }
-
-        await ShutdownAsync().ConfigureAwait(false);
     }
 
     /// <summary>
