@@ -85,14 +85,20 @@ public sealed class TestOrchestrationRecord
     // Parallelization
 
     /// <summary>
-    /// Gets a value indicating whether this test was executed in parallel with other tests.
+    /// Gets a value indicating whether at least one other test was observed running concurrently with
+    /// this test at any point during its execution. Equivalent to <see cref="ConcurrentTestCount"/>
+    /// being greater than <c>1</c>.
     /// </summary>
     public bool WasParallelized { get; init; }
 
     /// <summary>
-    /// Gets the number of tests executing concurrently at the time this test started.
-    /// 1 for sequential execution.
+    /// Gets the peak number of tests observed running concurrently at any point while this test was
+    /// executing, including this test itself. <c>1</c> when this test ran on its own.
     /// </summary>
+    /// <remarks>
+    /// Measured from the test start and end notifications reported by the test framework adapter.
+    /// Integrations that do not report test starts always yield <c>1</c>.
+    /// </remarks>
     public int ConcurrentTestCount { get; init; }
 
     /// <summary>

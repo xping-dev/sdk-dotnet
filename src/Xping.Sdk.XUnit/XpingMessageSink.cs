@@ -40,7 +40,6 @@ public sealed class XpingMessageSink(
     private readonly string _assemblyName = assemblyName.RequireNotNull();
 
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
-    private readonly ConcurrentDictionary<string, int> _activeCollections = new();
 
     /// <summary>
     /// Handles incoming messages from xUnit test execution.
@@ -83,9 +82,6 @@ public sealed class XpingMessageSink(
         string testKey = GetTestKey(testStarting.Test);
         string? collectionName = testStarting.Test.TestCase.TestMethod.TestClass.TestCollection.DisplayName;
 
-        // Track active collections for parallelization detection
-        _activeCollections.AddOrUpdate(collectionName, 1, (_, count) => count + 1);
-
         TestExecutionData data = new()
         {
             Test = testStarting.Test,
@@ -94,7 +90,13 @@ public sealed class XpingMessageSink(
             CollectionName = collectionName,
         };
 
-        _testData.TryAdd(testKey, data);
+        if (_testData.TryAdd(testKey, data))
+        {
+            // Mark the test in flight so overlapping tests can be measured. Reported only when the
+            // entry was added, so it pairs with the TryRemove in the result handlers; the matching
+            // end runs in RecordTestExecution's finally block.
+            _executionTracker.RecordTestStart(collectionName);
+        }
     }
 
     private void HandleTestPassed(ITestPassed testPassed)
@@ -221,6 +223,12 @@ public sealed class XpingMessageSink(
         catch
         {
             // Swallow exceptions to avoid interfering with test execution
+        }
+        finally
+        {
+            // Release the in-flight slot even when record creation failed, so later tests are not
+            // reported as having run concurrently with this one.
+            _executionTracker.RecordTestEnd(collectionName);
         }
     }
 
