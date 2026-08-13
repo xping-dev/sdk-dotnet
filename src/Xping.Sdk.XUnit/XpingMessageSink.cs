@@ -16,6 +16,7 @@ using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Shared;
 using Xping.Sdk.Core.Attributes;
+using Xping.Sdk.XUnit.Retry;
 
 namespace Xping.Sdk.XUnit;
 
@@ -48,6 +49,15 @@ public sealed class XpingMessageSink(
     /// <returns>True if the message was processed successfully.</returns>
     bool IMessageSink.OnMessage(IMessageSinkMessage message)
     {
+        // Attempts of a test case Xping drives itself are recorded from inside the retry loop, where
+        // every attempt is still visible. What reaches this sink is only what the retry library chose
+        // to report — one attempt, carrying the cumulative duration of all of them — so it is forwarded
+        // to the runner without being recorded a second time.
+        if (message is ITestMessage testMessage && testMessage.Test.TestCase is IXpingManagedTestCase)
+        {
+            return _innerSink.OnMessage(message);
+        }
+
         // Handle test lifecycle messages
         switch (message)
         {
@@ -192,6 +202,45 @@ public sealed class XpingMessageSink(
         }
     }
 
+    /// <summary>
+    /// Records a single attempt of a test case whose retry loop Xping observes from the inside.
+    /// </summary>
+    /// <remarks>
+    /// Called by <see cref="XpingAttemptMessageBus"/> once per attempt, including the attempts the retry
+    /// library discards. The attempt number is supplied by the caller rather than inferred, and the
+    /// in-flight slot is opened here because the corresponding <see cref="ITestStarting"/> message is
+    /// not routed through this sink's own handlers for a managed test case.
+    /// </remarks>
+    internal void RecordAttempt(
+        ITest test,
+        TestOutcome outcome,
+        DateTime startTime,
+        TimeSpan duration,
+        string output,
+        string? exceptionType,
+        string? errorMessage,
+        string? stackTrace,
+        int attemptNumber)
+    {
+        string collectionName =
+            test.TestCase?.TestMethod?.TestClass?.TestCollection?.DisplayName ?? string.Empty;
+
+        _executionTracker.RecordTestStart(collectionName);
+
+        RecordTestExecution(
+            test: test,
+            outcome: outcome,
+            startTime: startTime,
+            endTime: startTime + duration,
+            duration: duration,
+            output: output,
+            exceptionType: exceptionType,
+            errorMessage: errorMessage,
+            stackTrace: stackTrace,
+            collectionName: collectionName,
+            attemptNumber: attemptNumber);
+    }
+
     private void RecordTestExecution(
         ITest test,
         TestOutcome outcome,
@@ -202,7 +251,8 @@ public sealed class XpingMessageSink(
         string? exceptionType,
         string? errorMessage,
         string? stackTrace,
-        string collectionName)
+        string collectionName,
+        int? attemptNumber = null)
     {
         try
         {
@@ -216,7 +266,8 @@ public sealed class XpingMessageSink(
                 exceptionType,
                 errorMessage,
                 stackTrace,
-                collectionName);
+                collectionName,
+                attemptNumber);
 
             XpingContext.RecordTest(execution);
         }
@@ -242,7 +293,8 @@ public sealed class XpingMessageSink(
         string? exceptionType,
         string? errorMessage,
         string? stackTrace,
-        string collectionName)
+        string collectionName,
+        int? attemptNumber)
     {
         ITestCase? testCase = test.TestCase;
         ITestMethod? testMethod = testCase.TestMethod;
@@ -270,7 +322,11 @@ public sealed class XpingMessageSink(
         // Extract test metadata
         TestMetadata metadata = ExtractMetadata(test, output);
         // Detect retry metadata first, so the attempt number is available when claiming a position.
-        RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
+        // A caller that drove the retry loop knows which attempt this is; without one, the detector
+        // falls back to whatever the retry library left behind on the test case.
+        RetryMetadata? retryMetadata = attemptNumber is int attempt && _retryDetector is IXUnitRetryDetector detector
+            ? detector.DetectRetryMetadata(test, outcome, attempt)
+            : _retryDetector.DetectRetryMetadata(test, outcome);
         (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, captureStackTraces);
         // xUnit has no separate worker concept, so the collection name doubles as both
         // the concurrency worker key and the record's collection metadata.
@@ -278,7 +334,7 @@ public sealed class XpingMessageSink(
         TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
             workerId: collectionName,
             collectionName: collectionName,
-            attemptNumber: retryMetadata?.AttemptNumber ?? 1);
+            attemptNumber: retryMetadata?.AttemptNumber ?? attemptNumber ?? 1);
 
         TestExecution testExecution = new TestExecutionBuilder()
             .WithExecutionId(Guid.NewGuid())
@@ -406,13 +462,13 @@ public sealed class XpingMessageSink(
         return metadata;
     }
 
-    private static TimeSpan CalculateDuration(long startTimestamp, long endTimestamp)
+    internal static TimeSpan CalculateDuration(long startTimestamp, long endTimestamp)
     {
         long elapsedTicks = endTimestamp - startTimestamp;
         return TimeSpan.FromTicks(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
     }
 
-    private static TimeSpan CalculateDuration(decimal executionTime)
+    internal static TimeSpan CalculateDuration(decimal executionTime)
     {
         // xUnit ExecutionTime is in seconds (decimal); convert to TimeSpan via ticks for precision
         long ticks = (long)(executionTime * TimeSpan.TicksPerSecond);

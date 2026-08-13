@@ -74,7 +74,8 @@ public static class RetryAttributeRegistry
     /// <returns>True if the attribute is recognized as a retry attribute; otherwise, false.</returns>
     /// <remarks>
     /// This method checks all framework registries to determine if the attribute name
-    /// matches any known retry attribute pattern. Case-insensitive comparison is used.
+    /// matches any known retry attribute pattern. Case-insensitive comparison is used,
+    /// and the <c>Attribute</c> suffix is optional on either side of the comparison.
     /// </remarks>
     public static bool IsKnownRetryAttribute(string attributeName)
     {
@@ -83,9 +84,9 @@ public static class RetryAttributeRegistry
             return false;
         }
 
-        return XUnitRetryAttributes.Contains(attributeName) ||
-               NUnitRetryAttributes.Contains(attributeName) ||
-               MSTestRetryAttributes.Contains(attributeName);
+        return Matches(XUnitRetryAttributes, attributeName) ||
+               Matches(NUnitRetryAttributes, attributeName) ||
+               Matches(MSTestRetryAttributes, attributeName);
     }
 
     /// <summary>
@@ -150,6 +151,10 @@ public static class RetryAttributeRegistry
     /// <param name="framework">The target framework: "xunit", "nunit", or "mstest" (case-insensitive).</param>
     /// <param name="attributeName">The attribute name to check.</param>
     /// <returns>True if the attribute is registered for the specified framework; otherwise, false.</returns>
+    /// <remarks>
+    /// The <c>Attribute</c> suffix is optional on either side of the comparison: an attribute used as
+    /// <c>[Retry]</c> matches a registered <c>"RetryAttribute"</c> and vice versa.
+    /// </remarks>
     public static bool IsRegisteredForFramework(string framework, string attributeName)
     {
         if (string.IsNullOrWhiteSpace(attributeName))
@@ -158,6 +163,32 @@ public static class RetryAttributeRegistry
         }
 
         var registry = GetAttributesForFramework(framework);
-        return registry.Contains(attributeName);
+        return Matches(registry, attributeName);
+    }
+
+    /// <summary>
+    /// Checks a registry for the given attribute name, treating the <c>Attribute</c> suffix as optional.
+    /// </summary>
+    /// <remarks>
+    /// Callers reach this method with either spelling: detectors historically strip the suffix from the
+    /// runtime type name before the lookup, while the registries are seeded with the CLR type names that
+    /// carry it. Comparing both forms keeps entries such as <c>"RetryAttribute"</c> reachable regardless
+    /// of which spelling the caller and the registry happen to use.
+    /// </remarks>
+    private static bool Matches(HashSet<string> registry, string attributeName)
+    {
+        if (registry.Contains(attributeName))
+        {
+            return true;
+        }
+
+        const string suffix = "Attribute";
+
+        if (attributeName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return registry.Contains(attributeName.Substring(0, attributeName.Length - suffix.Length));
+        }
+
+        return registry.Contains(attributeName + suffix);
     }
 }

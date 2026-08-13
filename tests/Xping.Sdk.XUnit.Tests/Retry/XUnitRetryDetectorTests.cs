@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using Moq;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.XUnit.Retry;
 using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit.Tests.Retry;
@@ -241,6 +242,83 @@ public sealed class XUnitRetryDetectorTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------
+    // Attempt number — supplied by the caller
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_WithExplicitAttempt_UsesSuppliedAttemptNumber()
+    {
+        // Regression test for issue #115: xRetry sets neither a trait nor a decorated display name, so
+        // an attempt number is only ever known to the caller that drove the retry loop.
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry));
+
+        var result = ((IXUnitRetryDetector)_detector).DetectRetryMetadata(mockTest, TestOutcome.Passed, 2);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.AttemptNumber);
+        Assert.True(result.PassedOnRetry);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_WithExplicitAttempt_OverridesInferredAttemptNumber()
+    {
+        var traits = new Dictionary<string, List<string>>
+        {
+            ["RetryAttempt"] = ["7"]
+        };
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry),
+            traits: traits);
+
+        var result = ((IXUnitRetryDetector)_detector).DetectRetryMetadata(mockTest, TestOutcome.Failed, 3);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.AttemptNumber);
+        Assert.False(result.PassedOnRetry);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Attribute member extraction
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DetectRetryMetadata_AttributeWithoutSuffixInRegistry_IsStillDetected()
+    {
+        // Regression test for issue #115: the detector stripped the "Attribute" suffix before the
+        // registry lookup, which made suffixed entries such as "RetryAttribute" unreachable.
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "RetryAttribute"));
+
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithRetry));
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void DetectRetryMetadata_ConfigurationDeclaredAsFields_IsExtracted()
+    {
+        // Regression test for issue #115: retry attributes commonly declare their configuration as
+        // public readonly fields (xRetry does), which a property-only lookup silently missed.
+        RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", "FieldRetry");
+
+        var mockTest = CreateMockTest(
+            typeof(TestClass).FullName!,
+            nameof(TestClass.TestMethodWithFieldRetry));
+
+        var result = _detector.DetectRetryMetadata(mockTest, TestOutcome.Passed);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.MaxRetries);
+        Assert.Equal(TimeSpan.FromMilliseconds(250), result.DelayBetweenRetries);
+    }
+
+    // ---------------------------------------------------------------------------
     // PassedOnRetry
     // ---------------------------------------------------------------------------
 
@@ -322,6 +400,9 @@ public sealed class XUnitRetryDetectorTests : IAsyncLifetime
 
         [Retry(3, DelayMilliseconds = 200)]
         public static void TestMethodWithDelay() { }
+
+        [FieldRetry]
+        public static void TestMethodWithFieldRetry() { }
     }
 
     /// <summary>Mock retry attribute applied in <see cref="TestClass"/>.</summary>
@@ -330,5 +411,16 @@ public sealed class XUnitRetryDetectorTests : IAsyncLifetime
     {
         public int MaxRetries { get; } = maxRetries;
         public int DelayMilliseconds { get; set; }
+    }
+
+    /// <summary>
+    /// Mock retry attribute declaring its configuration as public fields, the way xRetry's
+    /// <c>RetryFactAttribute</c> does.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method)]
+    private sealed class FieldRetryAttribute : Attribute
+    {
+        public readonly int MaxRetries = 4;
+        public readonly int DelayBetweenRetriesMs = 250;
     }
 }

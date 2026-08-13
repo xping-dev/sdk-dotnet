@@ -46,6 +46,28 @@ public void MyTest()
 
 The xUnit adapter uses a message sink pattern that intercepts all test lifecycle events, including skipped tests.
 
+#### Retry Attempts Are Only Tracked For Retry Libraries That Expose A Single-Attempt Hook
+
+**Affected Versions**: All versions
+**Impact**: With some retry libraries, a test that fails and then passes on retry is recorded as a single passing execution — `AttemptNumber` stays `1`, `PassedOnRetry` stays `false`, the hidden failure is not persisted, and the recorded duration is the library's cumulative time across all attempts
+
+**Reason**: xUnit has no native retry support. Retry libraries implement it by running each attempt against a message bus of their own that *discards* the messages of any attempt they intend to retry, then flushing a single synthesised result. A message sink — which is where Xping observes test execution — sits outside that bus, so the discarded attempts never reach it.
+
+**Where retries are fully tracked**: [xRetry](https://github.com/JoshKeegan/xRetry) exposes `RetryTestCaseRunner.RunAsync` publicly so other xUnit extensions can supply the delegate that runs one attempt. Xping uses it, which places it *inside* the retry loop: every attempt is recorded as its own `TestExecution` with the correct `AttemptNumber`, its own duration, and — for the attempts the retry hid — the failure message, stack trace and exception type. The retry library keeps full control of the retry count, delays, skip-on-exception handling and what the runner is told, so test behavior is unchanged.
+
+**Where they are not**: libraries that inline the retry loop inside their test case's `RunAsync` behind a private delayed or blocking bus — including the retry sample in xUnit's own documentation — expose no such hook. Xping leaves those test cases untouched and records only the attempt the library reports.
+
+```csharp
+// Fully tracked: two executions recorded — attempt 1 Failed, attempt 2 Passed
+[RetryFact(3)]
+public void FlakyTest()
+{
+    // ...
+}
+```
+
+**Note**: `AttemptNumber` is also read from a `RetryAttempt` trait or an attempt number in the display name (`(attempt 2)`, `[Retry 2]`) when a library publishes one of those.
+
 ---
 
 ## General Limitations
@@ -107,3 +129,4 @@ When reporting, please include:
 |---------|---------|
 | 1.0.0   | Initial documentation - NUnit and MSTest `[Ignore]` limitation |
 | 1.1.0   | Added known CI flaky test `RecordTest_AfterInitialize_DoesNotThrow` as intentional flakiness example |
+| 1.2.0   | Documented xUnit retry attempt tracking and the retry libraries it covers |

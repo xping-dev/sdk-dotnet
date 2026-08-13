@@ -47,7 +47,8 @@ public class XpingContext : XpingContextOrchestrator
         IHost host = CreateHostBuilder(configuration)
             .ConfigureServices(services =>
             {
-                // Register the xUnit-specific retry detector
+                // Register the xUnit-specific retry detector. The registered instance also implements
+                // IXUnitRetryDetector, which callers that know the attempt number reach by casting.
                 services.AddSingleton<IRetryDetector<ITest>, XUnitRetryDetector>();
             })
             .Build();

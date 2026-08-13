@@ -22,12 +22,19 @@ namespace Xping.Sdk.XUnit.Retry;
 /// This detector uses reflection to identify and extract metadata from these retry attributes.
 /// </remarks>
 [SuppressMessage("Performance", "CA1812", Justification = "Instantiated by the DI container.")]
-internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
+internal sealed class XUnitRetryDetector : IXUnitRetryDetector
 {
     private static readonly string[] _attemptSeparators = ["(attempt", ")"];
 
     /// <inheritdoc/>
-    RetryMetadata? IRetryDetector<ITest>.DetectRetryMetadata(ITest test, TestOutcome testOutcome)
+    RetryMetadata? IRetryDetector<ITest>.DetectRetryMetadata(ITest test, TestOutcome testOutcome) =>
+        Detect(test, testOutcome, attemptNumber: null);
+
+    /// <inheritdoc/>
+    RetryMetadata? IXUnitRetryDetector.DetectRetryMetadata(ITest test, TestOutcome testOutcome, int attemptNumber) =>
+        Detect(test, testOutcome, attemptNumber);
+
+    private static RetryMetadata? Detect(ITest test, TestOutcome testOutcome, int? attemptNumber)
     {
         if (test.TestCase?.TestMethod?.Method == null)
         {
@@ -50,7 +57,7 @@ internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
             return null;
         }
 
-        return ExtractRetryMetadata(retryAttribute, test, testOutcome);
+        return ExtractRetryMetadata(retryAttribute, test, testOutcome, attemptNumber);
     }
 
     private static MethodInfo? GetMethodInfo(IMethodInfo method)
@@ -89,10 +96,9 @@ internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
         // Look for known retry attributes
         foreach (object attr in attributes)
         {
-            Type attrType = attr.GetType();
-            string attrName = attrType.Name.Replace("Attribute", "");
-
-            if (RetryAttributeRegistry.IsRegisteredForFramework("xunit", attrName))
+            // The raw type name is passed through: the registry treats the "Attribute" suffix as
+            // optional, so stripping it here would make suffixed entries unreachable.
+            if (RetryAttributeRegistry.IsRegisteredForFramework("xunit", attr.GetType().Name))
             {
                 return attr as Attribute;
             }
@@ -101,55 +107,40 @@ internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
         return null;
     }
 
-    private static RetryMetadata ExtractRetryMetadata(Attribute retryAttribute, ITest test, TestOutcome testOutcome)
+    private static RetryMetadata ExtractRetryMetadata(
+        Attribute retryAttribute,
+        ITest test,
+        TestOutcome testOutcome,
+        int? knownAttemptNumber)
     {
         RetryMetadataBuilder builder = new();
         Type attrType = retryAttribute.GetType();
 
-        // Extract MaxRetries property (common in retry attributes)
-        PropertyInfo? maxRetriesProperty =
-            attrType.GetProperty("MaxRetries") ??
-            attrType.GetProperty("Count");
-
-        if (maxRetriesProperty != null)
+        // Extract the configured retry count. The value is recorded exactly as the attribute declares
+        // it: libraries disagree on whether it counts total attempts (xRetry's MaxRetries) or retries
+        // excluding the first, and guessing which one applies would corrupt the record either way.
+        if (TryReadInt(retryAttribute, out int maxRetries, "MaxRetries", "Count"))
         {
-            object? value = maxRetriesProperty.GetValue(retryAttribute);
-            if (value is int maxRetries)
-            {
-                builder.WithMaxRetries(maxRetries);
-            }
+            builder.WithMaxRetries(maxRetries);
         }
 
-        // Extract Delay property if available
-        PropertyInfo? delayProperty =
-            attrType.GetProperty("DelayMilliseconds") ??
-            attrType.GetProperty("Delay");
-
-        if (delayProperty != null)
+        // Extract the configured delay between attempts if available
+        if (TryReadInt(retryAttribute, out int delayMs, "DelayMilliseconds", "DelayBetweenRetriesMs", "Delay"))
         {
-            object? value = delayProperty.GetValue(retryAttribute);
-            if (value is int delayMs)
-            {
-                builder.WithDelayBetweenRetries(TimeSpan.FromMilliseconds(delayMs));
-            }
+            builder.WithDelayBetweenRetries(TimeSpan.FromMilliseconds(delayMs));
         }
 
-        // Extract Reason property if available
-        PropertyInfo? reasonProperty =
-            attrType.GetProperty("Reason") ??
-            attrType.GetProperty("RetryReason");
-
-        if (reasonProperty != null)
+        // Extract Reason if available
+        if (TryReadMember(retryAttribute, out object? reasonValue, "Reason", "RetryReason") &&
+            reasonValue is string reason &&
+            !string.IsNullOrWhiteSpace(reason))
         {
-            object? value = reasonProperty.GetValue(retryAttribute);
-            if (value is string reason && !string.IsNullOrWhiteSpace(reason))
-            {
-                builder.WithRetryReason(reason);
-            }
+            builder.WithRetryReason(reason);
         }
 
-        // Get the current attempt number
-        int attemptNumber = GetCurrentAttemptNumber(test);
+        // Use the attempt number the caller established when it drove the retry loop itself,
+        // and fall back to inference only when nothing observed the attempts.
+        int attemptNumber = knownAttemptNumber ?? GetCurrentAttemptNumber(test);
 
         RetryMetadata metadata = builder
             .WithRetryAttributeName(attrType.Name.Replace("Attribute", ""))
@@ -239,38 +230,81 @@ internal sealed class XUnitRetryDetector : IRetryDetector<ITest>
     private static Dictionary<string, string> ExtractAdditionalMetadata(Attribute retryAttribute)
     {
         Dictionary<string, string> additionalMetadata = [];
-        Type attrType = retryAttribute.GetType();
 
-        // Look for common retry-related properties
-        string[] propertiesToCheck =
+        // Look for common retry-related members
+        string[] membersToCheck =
         [
             "ExceptionTypes",
             "Filter",
             "OnlyRetryOn",
             "Skip",
+            "SkipOnExceptions",
             "Timeout"
         ];
 
-        foreach (string propertyName in propertiesToCheck)
+        foreach (string memberName in membersToCheck)
         {
-            PropertyInfo? property = attrType.GetProperty(propertyName);
-            if (property != null)
+            if (TryReadMember(retryAttribute, out object? value, memberName) && value != null)
             {
-                try
-                {
-                    object? value = property.GetValue(retryAttribute);
-                    if (value != null)
-                    {
-                        additionalMetadata[propertyName] = value.ToString() ?? string.Empty;
-                    }
-                }
-                catch
-                {
-                    // Ignore property access errors
-                }
+                additionalMetadata[memberName] = value.ToString() ?? string.Empty;
             }
         }
 
         return additionalMetadata;
+    }
+
+    /// <summary>
+    /// Reads the first of the named members that exists on the attribute and holds an <see cref="int"/>.
+    /// </summary>
+    private static bool TryReadInt(Attribute retryAttribute, out int value, params string[] memberNames)
+    {
+        if (TryReadMember(retryAttribute, out object? raw, memberNames) && raw is int intValue)
+        {
+            value = intValue;
+            return true;
+        }
+
+        value = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// Reads the first of the named members that exists on the attribute, checking properties and fields.
+    /// </summary>
+    /// <remarks>
+    /// Fields are checked as well as properties because retry attributes commonly declare their
+    /// configuration as public readonly fields — xRetry's <c>RetryFactAttribute.MaxRetries</c> and
+    /// <c>DelayBetweenRetriesMs</c> among them — which a property-only lookup silently misses.
+    /// </remarks>
+    private static bool TryReadMember(Attribute retryAttribute, out object? value, params string[] memberNames)
+    {
+        Type attrType = retryAttribute.GetType();
+
+        foreach (string memberName in memberNames)
+        {
+            try
+            {
+                PropertyInfo? property = attrType.GetProperty(memberName);
+                if (property != null && property.CanRead)
+                {
+                    value = property.GetValue(retryAttribute);
+                    return true;
+                }
+
+                FieldInfo? field = attrType.GetField(memberName);
+                if (field != null)
+                {
+                    value = field.GetValue(retryAttribute);
+                    return true;
+                }
+            }
+            catch
+            {
+                // Ignore member access errors and continue with the next candidate name
+            }
+        }
+
+        value = null;
+        return false;
     }
 }
