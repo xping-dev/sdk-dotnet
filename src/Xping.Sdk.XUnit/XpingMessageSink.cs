@@ -231,7 +231,7 @@ public sealed class XpingMessageSink(
             test: test,
             outcome: outcome,
             startTime: startTime,
-            endTime: DateTime.UtcNow,
+            endTime: startTime + duration,
             duration: duration,
             output: output,
             exceptionType: exceptionType,
