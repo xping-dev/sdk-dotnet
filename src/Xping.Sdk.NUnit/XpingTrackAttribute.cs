@@ -87,6 +87,21 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         test.Properties.Set(StartTimeKey, startTime);
         test.Properties.Set(StartTimestampKey, startTimestamp);
+
+        try
+        {
+            // Mark the test in flight so the tests it overlaps with can be measured. Reported under
+            // the same worker key AfterTest uses, so the start and end pair up. No per-test state is
+            // needed here: the tracker keys in-flight tests by worker, so applying [XpingTrack] at
+            // several scopes at once (which invokes BeforeTest once per attribute instance) cannot
+            // inflate the count.
+            _services.ExecutionTracker.RecordTestStart(TestContext.CurrentContext.WorkerId);
+        }
+        catch
+        {
+            // Swallow exceptions to avoid interfering with test execution: _services is unset when
+            // the SDK failed to initialize above.
+        }
     }
 
     /// <summary>
@@ -137,6 +152,20 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         catch
         {
             // Swallow exceptions to avoid interfering with test execution
+        }
+        finally
+        {
+            try
+            {
+                // Release the in-flight slot even when recording failed, so later tests are not
+                // reported as having run concurrently with this one. Runs after the record above was
+                // built, so this test still counts itself.
+                _services.ExecutionTracker.RecordTestEnd(TestContext.CurrentContext.WorkerId);
+            }
+            catch
+            {
+                // Swallow exceptions to avoid interfering with test execution
+            }
         }
     }
 

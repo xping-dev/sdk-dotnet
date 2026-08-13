@@ -18,7 +18,12 @@ internal sealed class ExecutionTracker : IExecutionTracker
 {
     private readonly ConcurrentDictionary<string, PrecedingTestRecord> _previousTests = new();
     private readonly ConcurrentDictionary<string, int> _workerPositions = new();
-    private readonly TestOrchestrationBuilder _builder = new();
+
+    // In-flight tests, keyed by worker. Every supported framework runs at most one test per worker
+    // at a time, so the worker key doubles as the in-flight slot: a repeated start replaces the
+    // slot instead of double counting, and a missing end self-heals on the worker's next test.
+    private readonly ConcurrentDictionary<string, InFlightTest> _inFlightTests = new();
+
     private readonly ITimeProvider _timeProvider;
     private int _globalPosition;
     private long _suiteStartTimestamp; // 0 = not yet captured; Stopwatch timestamps are always positive
@@ -33,6 +38,9 @@ internal sealed class ExecutionTracker : IExecutionTracker
 
     /// <inheritdoc/>
     int IExecutionTracker.ActiveWorkerCount => _workerPositions.Count;
+
+    private static string ResolveWorkerKey(string? workerId) =>
+        workerId ?? System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
 
     private TimeSpan ComputeSuiteElapsedTime()
     {
@@ -54,7 +62,7 @@ internal sealed class ExecutionTracker : IExecutionTracker
         }
 
         string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
-        string workerKey = workerId ?? threadId;
+        string workerKey = ResolveWorkerKey(workerId);
 
         int workerPosition;
         int globalPosition;
@@ -80,11 +88,18 @@ internal sealed class ExecutionTracker : IExecutionTracker
         // Get a previous test for this worker
         _previousTests.TryGetValue(workerKey, out PrecedingTestRecord? previousTest);
 
-        // Count active workers (approximation of concurrency)
-        int concurrentCount = _workerPositions.Count;
+        // Measure actual concurrency. The adapter reports the test end only after this record has
+        // been built, so this test is still in flight and counts itself. The slot carries the peak
+        // overlap observed during the test, which covers tests that overlapped and already finished;
+        // the live count is a lower bound for callers that never reported a start.
+        int observedConcurrency = _inFlightTests.TryGetValue(workerKey, out InFlightTest? inFlightTest)
+            ? Volatile.Read(ref inFlightTest.ObservedConcurrency)
+            : 0;
+        int concurrentCount = Math.Max(1, Math.Max(observedConcurrency, _inFlightTests.Count));
 
-        TestOrchestrationRecord testOrchestrationRecord = _builder
-            .Reset()
+        // A local builder: a shared instance would let concurrent workers interleave their
+        // Reset()/With...() calls and emit records mixing fields from two different tests.
+        TestOrchestrationRecord testOrchestrationRecord = new TestOrchestrationBuilder()
             .WithThreadId(threadId)
             .WithWorkerId(workerKey)
             .WithCollectionName(collectionName)
@@ -99,10 +114,52 @@ internal sealed class ExecutionTracker : IExecutionTracker
     }
 
     /// <inheritdoc/>
+    int IExecutionTracker.RecordTestStart(string? workerId)
+    {
+        string workerKey = ResolveWorkerKey(workerId);
+
+        InFlightTest inFlightTest = new();
+        _inFlightTests[workerKey] = inFlightTest;
+
+        int inFlightCount = _inFlightTests.Count;
+
+        // Publish the new concurrency level to every test currently in flight, including this one,
+        // so each test reports the peak overlap it actually experienced rather than the overlap that
+        // happened to exist at the moment its record was built.
+        foreach (KeyValuePair<string, InFlightTest> entry in _inFlightTests)
+        {
+            ObserveConcurrency(entry.Value, inFlightCount);
+        }
+
+        return inFlightCount;
+    }
+
+    /// <inheritdoc/>
+    void IExecutionTracker.RecordTestEnd(string? workerId)
+    {
+        _inFlightTests.TryRemove(ResolveWorkerKey(workerId), out _);
+    }
+
+    private static void ObserveConcurrency(InFlightTest inFlightTest, int concurrency)
+    {
+        int current = Volatile.Read(ref inFlightTest.ObservedConcurrency);
+
+        while (current < concurrency)
+        {
+            int previous = Interlocked.CompareExchange(ref inFlightTest.ObservedConcurrency, concurrency, current);
+            if (previous == current)
+            {
+                return;
+            }
+
+            current = previous;
+        }
+    }
+
+    /// <inheritdoc/>
     void IExecutionTracker.RecordTestCompletion(string? workerId, string testFingerprint, string testName, TestOutcome outcome)
     {
-        string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
-        string workerKey = workerId ?? threadId;
+        string workerKey = ResolveWorkerKey(workerId);
 
         _previousTests[workerKey] = new PrecedingTestRecord
         {
@@ -115,8 +172,7 @@ internal sealed class ExecutionTracker : IExecutionTracker
     /// <inheritdoc/>
     int IExecutionTracker.GetWorkerPosition(string? workerId)
     {
-        string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
-        string workerKey = workerId ?? threadId;
+        string workerKey = ResolveWorkerKey(workerId);
 
         return _workerPositions.TryGetValue(workerKey, out int position) ? position : 0;
     }
@@ -124,8 +180,7 @@ internal sealed class ExecutionTracker : IExecutionTracker
     /// <inheritdoc/>
     PrecedingTestRecord? IExecutionTracker.GetPreviousTest(string? workerId)
     {
-        string threadId = System.Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
-        string workerKey = workerId ?? threadId;
+        string workerKey = ResolveWorkerKey(workerId);
 
         return _previousTests.TryGetValue(workerKey, out PrecedingTestRecord? previousTest) ? previousTest : null;
     }
@@ -135,8 +190,20 @@ internal sealed class ExecutionTracker : IExecutionTracker
     {
         _previousTests.Clear();
         _workerPositions.Clear();
+        _inFlightTests.Clear();
         _globalPosition = 0;
         _suiteStartTimestamp = 0;
-        _builder.Reset();
+    }
+
+    /// <summary>
+    /// A test occupying a worker's in-flight slot, carrying the peak concurrency observed while it ran.
+    /// </summary>
+    private sealed class InFlightTest
+    {
+        /// <summary>
+        /// The highest number of tests seen in flight at any point while this test was running.
+        /// Mutated through <see cref="Interlocked"/>, so it cannot be a property.
+        /// </summary>
+        public int ObservedConcurrency;
     }
 }

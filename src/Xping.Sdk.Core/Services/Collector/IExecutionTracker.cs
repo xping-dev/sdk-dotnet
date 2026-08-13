@@ -40,7 +40,46 @@ public interface IExecutionTracker
     /// <returns>
     /// An <see cref="TestOrchestrationRecord"/> containing order, parallelization, and suite state information.
     /// </returns>
+    /// <remarks>
+    /// Parallelization is measured from the test start and end notifications reported through
+    /// <see cref="RecordTestStart"/> and <see cref="RecordTestEnd"/>. Callers that never report a
+    /// test start always get <see cref="TestOrchestrationRecord.ConcurrentTestCount"/> of <c>1</c>.
+    /// </remarks>
     TestOrchestrationRecord CreateExecutionContext(string? workerId = null, string? collectionName = null, int attemptNumber = 1);
+
+    /// <summary>
+    /// Signals that a test has started executing on the specified worker, so that the tests it
+    /// overlaps with can be measured.
+    /// </summary>
+    /// <param name="workerId">
+    /// Optional worker identifier (e.g., NUnit WorkerId, xUnit collection name, MSTest thread ID).
+    /// Falls back to the current managed thread ID if <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// The number of tests in flight after this test was registered, including this test.
+    /// Always at least <c>1</c>.
+    /// </returns>
+    /// <remarks>
+    /// Each worker acts as a single in-flight slot, because every supported test framework runs at
+    /// most one test per worker at a time. Calling this method twice for the same worker without an
+    /// intervening <see cref="RecordTestEnd"/> therefore replaces the previous slot instead of
+    /// counting the test twice, which also self-heals a missing end notification.
+    /// </remarks>
+    int RecordTestStart(string? workerId = null);
+
+    /// <summary>
+    /// Signals that the test running on the specified worker has finished, releasing its in-flight slot.
+    /// </summary>
+    /// <param name="workerId">
+    /// Optional worker identifier. Falls back to the current managed thread ID if <see langword="null"/>.
+    /// </param>
+    /// <remarks>
+    /// Call this only after the test's <see cref="CreateExecutionContext"/> record has been built, so
+    /// that the test is counted in its own <see cref="TestOrchestrationRecord.ConcurrentTestCount"/>.
+    /// Calling it for a worker with no test in flight is a no-op, so it is safe to invoke from a
+    /// <c>finally</c> block.
+    /// </remarks>
+    void RecordTestEnd(string? workerId = null);
 
     /// <summary>
     /// Records a completed test so it can be referenced as the previous test in subsequent executions

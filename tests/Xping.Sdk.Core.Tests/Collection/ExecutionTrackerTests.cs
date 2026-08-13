@@ -136,21 +136,6 @@ public sealed class ExecutionTrackerTests
     }
 
     [Fact]
-    public void CreateExecutionContext_ShouldDetectParallelism_WhenMultipleWorkers()
-    {
-        // Arrange
-        var tracker = BuildTracker();
-
-        // Act — register two workers at the same time
-        tracker.CreateExecutionContext("worker-a");
-        var record = tracker.CreateExecutionContext("worker-b");
-
-        // Assert — ConcurrentTestCount should be 2 (two workers active)
-        Assert.Equal(2, record.ConcurrentTestCount);
-        Assert.True(record.WasParallelized);
-    }
-
-    [Fact]
     public void CreateExecutionContext_ShouldUseCollectionName_WhenProvided()
     {
         // Arrange
@@ -262,6 +247,259 @@ public sealed class ExecutionTrackerTests
     }
 
     // ---------------------------------------------------------------------------
+    // Parallelization (issue #120)
+    //
+    // WasParallelized/ConcurrentTestCount used to be derived from the number of distinct
+    // worker keys ever seen, which is monotonically non-decreasing and says nothing about
+    // concurrency. They are now measured from RecordTestStart/RecordTestEnd notifications.
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void CreateExecutionContext_SerialExecutionAcrossWorkers_ShouldNotReportParallelization()
+    {
+        // Regression for #120: a serial run that visits several workers (xUnit reports one
+        // collection per test class) must not be reported as parallel.
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act — one test at a time, each fully finished before the next starts
+        tracker.RecordTestStart("worker-a");
+        var first = tracker.CreateExecutionContext("worker-a");
+        tracker.RecordTestEnd("worker-a");
+
+        tracker.RecordTestStart("worker-b");
+        var second = tracker.CreateExecutionContext("worker-b");
+        tracker.RecordTestEnd("worker-b");
+
+        // Assert
+        Assert.Equal(1, first.ConcurrentTestCount);
+        Assert.False(first.WasParallelized);
+        Assert.Equal(1, second.ConcurrentTestCount);
+        Assert.False(second.WasParallelized);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_OverlappingTests_ShouldReportBothAsParallel()
+    {
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act — both tests are in flight at the same time
+        tracker.RecordTestStart("worker-a");
+        tracker.RecordTestStart("worker-b");
+
+        var recordA = tracker.CreateExecutionContext("worker-a");
+        var recordB = tracker.CreateExecutionContext("worker-b");
+
+        // Assert — overlapping tests agree on the count, so a session's records stay consistent
+        Assert.Equal(2, recordA.ConcurrentTestCount);
+        Assert.True(recordA.WasParallelized);
+        Assert.Equal(2, recordB.ConcurrentTestCount);
+        Assert.True(recordB.WasParallelized);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_OverlapEndedBeforeRecordCreated_ShouldReportPeak()
+    {
+        // ConcurrentTestCount is the peak overlap during the test, not a snapshot taken when
+        // the record is built — worker-b has already finished by the time worker-a reports.
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act
+        tracker.RecordTestStart("worker-a");
+        tracker.RecordTestStart("worker-b");
+        tracker.RecordTestEnd("worker-b");
+
+        var record = tracker.CreateExecutionContext("worker-a");
+
+        // Assert
+        Assert.Equal(2, record.ConcurrentTestCount);
+        Assert.True(record.WasParallelized);
+    }
+
+    [Fact]
+    public void CreateExecutionContext_WithoutRecordedStart_ShouldReportSingleTest()
+    {
+        // Callers that never report test starts (third-party integrations) get the honest
+        // default rather than a fabricated concurrency value.
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act
+        var record = tracker.CreateExecutionContext("worker-a");
+
+        // Assert
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestStart_CalledTwiceForSameWorker_ShouldNotDoubleCount()
+    {
+        // [XpingTrack] can be applied at assembly, class and method scope at once, in which case
+        // NUnit invokes BeforeTest once per attribute instance for the same test.
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act
+        tracker.RecordTestStart("worker-a");
+        tracker.RecordTestStart("worker-a");
+        var record = tracker.CreateExecutionContext("worker-a");
+
+        // Assert
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestEnd_WithoutMatchingStart_ShouldBeNoOp()
+    {
+        // Adapters call RecordTestEnd from a finally block, which can run without a matching start
+        // (e.g. when initialization failed before the test was registered).
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act
+        tracker.RecordTestEnd("worker-a");
+        tracker.RecordTestEnd("worker-a");
+        tracker.RecordTestEnd("worker-b");
+
+        tracker.RecordTestStart("worker-a");
+        var record = tracker.CreateExecutionContext("worker-a");
+
+        // Assert — no underflow leaked into the next test
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestStart_AfterAbandonedTest_ShouldSelfHealOnSameWorker()
+    {
+        // A test whose end is never reported (framework abort) must not leave the worker
+        // permanently occupied — otherwise every later test looks parallel, which is #120 again.
+        // Arrange
+        var tracker = BuildTracker();
+        tracker.RecordTestStart("worker-a"); // abandoned: no RecordTestEnd
+
+        // Act
+        tracker.RecordTestStart("worker-a");
+        var record = tracker.CreateExecutionContext("worker-a");
+
+        // Assert
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestStart_AbandonedOtherWorker_ShouldStillCount()
+    {
+        // Accepted residual behavior: a lost end on a worker that never runs another test keeps
+        // its slot for the rest of the run, so tests on other workers see it as an overlap.
+        // Encoded here so the trade-off cannot drift silently.
+        // Arrange
+        var tracker = BuildTracker();
+        tracker.RecordTestStart("worker-a"); // abandoned: no RecordTestEnd
+
+        // Act
+        tracker.RecordTestStart("worker-b");
+        var record = tracker.CreateExecutionContext("worker-b");
+
+        // Assert
+        Assert.Equal(2, record.ConcurrentTestCount);
+        Assert.True(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestStart_NullWorkerId_ShouldPairWithThreadIdFallback()
+    {
+        // Arrange — serial NUnit runs report a null WorkerId, so both sides fall back to the thread id
+        var tracker = BuildTracker();
+
+        // Act
+        tracker.RecordTestStart();
+        var record = tracker.CreateExecutionContext();
+        tracker.RecordTestEnd();
+
+        // Assert
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
+    public void RecordTestStart_ShouldReturnNumberOfTestsInFlight()
+    {
+        // Arrange
+        var tracker = BuildTracker();
+
+        // Act & Assert
+        Assert.Equal(1, tracker.RecordTestStart("worker-a"));
+        Assert.Equal(2, tracker.RecordTestStart("worker-b"));
+
+        tracker.RecordTestEnd("worker-a");
+
+        Assert.Equal(2, tracker.RecordTestStart("worker-c"));
+    }
+
+    [Fact]
+    public void CreateExecutionContext_ConcurrentCalls_ShouldReportEveryTestAsParallel()
+    {
+        // Arrange
+        const int workerCount = 8;
+        var tracker = BuildTracker();
+        var records = new ConcurrentBag<TestOrchestrationRecord>();
+        using var allStarted = new Barrier(workerCount);
+
+        // Act — every worker registers its start, then all of them build their records
+        Parallel.For(0, workerCount, index =>
+        {
+            string workerId = $"worker-{index}";
+
+            tracker.RecordTestStart(workerId);
+            allStarted.SignalAndWait();
+
+            records.Add(tracker.CreateExecutionContext(workerId));
+            tracker.RecordTestEnd(workerId);
+        });
+
+        // Assert — all eight overlapped, so all eight report the full peak
+        Assert.Equal(workerCount, records.Count);
+        Assert.All(records, record =>
+        {
+            Assert.Equal(workerCount, record.ConcurrentTestCount);
+            Assert.True(record.WasParallelized);
+        });
+    }
+
+    [Fact]
+    public void CreateExecutionContext_ConcurrentCalls_ShouldNotProduceMixedRecords()
+    {
+        // Regression for the shared TestOrchestrationBuilder: concurrent callers used to interleave
+        // their Reset()/With...() calls on one instance and emit records mixing two tests' fields.
+        // This is a probabilistic detector — intermittent against the old code, always green now.
+        // Arrange
+        const int workerCount = 16;
+        var tracker = BuildTracker();
+        var records = new ConcurrentBag<TestOrchestrationRecord>();
+
+        // Act — worker and collection names are paired, so a mixed record shows up as a mismatch
+        Parallel.For(0, workerCount, index =>
+        {
+            var record = tracker.CreateExecutionContext($"worker-{index}", $"collection-{index}");
+            records.Add(record);
+        });
+
+        // Assert
+        Assert.Equal(workerCount, records.Count);
+        Assert.All(records, record =>
+        {
+            string index = record.WorkerId.Substring("worker-".Length);
+            Assert.Equal($"collection-{index}", record.CollectionName);
+            Assert.Equal(1, record.PositionInSuite); // each worker ran exactly one test
+        });
+    }
+
+    // ---------------------------------------------------------------------------
     // ActiveWorkerCount
     // ---------------------------------------------------------------------------
 
@@ -318,6 +556,25 @@ public sealed class ExecutionTrackerTests
         // Assert
         Assert.Equal(1, record.PositionInSuite);
         Assert.Equal(1, tracker.GlobalPosition);
+    }
+
+    [Fact]
+    public void Clear_ShouldResetInFlightState()
+    {
+        // Arrange — two tests left in flight when the suite state is released
+        var tracker = BuildTracker();
+        tracker.RecordTestStart("w1");
+        tracker.RecordTestStart("w2");
+
+        // Act
+        tracker.Clear();
+
+        tracker.RecordTestStart("w3");
+        var record = tracker.CreateExecutionContext("w3");
+
+        // Assert — the abandoned slots do not survive the reset
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
     }
 
     // ---------------------------------------------------------------------------

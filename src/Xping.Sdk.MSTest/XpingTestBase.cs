@@ -30,6 +30,11 @@ public abstract class XpingTestBase
     private DateTime _startTime;
     private long _startTimestamp;
 
+    // Captured in TestInitialize rather than read again in TestCleanup: for an async test method the
+    // cleanup continuation can resume on a different pool thread, which would split the test's start
+    // and end — and its ordering chain — across two worker keys.
+    private string? _workerKey;
+
     // Resolved once on first XpingTestInitialize() call and reused for every cleanup on this instance.
     // The DI singletons are the same each time, so a single resolution per instance is enough.
     private XpingBaseServices _services = null!;
@@ -70,6 +75,19 @@ public abstract class XpingTestBase
 
         _startTime = DateTime.UtcNow;
         _startTimestamp = Stopwatch.GetTimestamp();
+        _workerKey = Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
+
+        try
+        {
+            // Mark the test in flight so the tests it overlaps with can be measured. The matching end
+            // runs in XpingTestCleanup's finally block.
+            _services.ExecutionTracker.RecordTestStart(_workerKey);
+        }
+        catch
+        {
+            // Swallow exceptions to avoid interfering with test execution: _services is unset when
+            // the SDK failed to initialize above.
+        }
     }
 
     /// <summary>
@@ -78,26 +96,46 @@ public abstract class XpingTestBase
     [TestCleanup]
     public void XpingTestCleanup()
     {
-        if (TestContext == null)
-            return;
-
-        var endTimestamp = Stopwatch.GetTimestamp();
-        var endTime = DateTime.UtcNow;
-
-        var elapsedTicks = endTimestamp - _startTimestamp;
-        var duration = TimeSpan.FromTicks(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
-
-        var threadId = Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
-        var className = TestContext.FullyQualifiedTestClassName ?? "Unknown";
-
         try
         {
-            var execution = CreateTestExecution(_services, TestContext, _startTime, endTime, duration, threadId, className);
-            XpingContext.RecordTest(execution);
+            if (TestContext == null)
+                return;
+
+            var endTimestamp = Stopwatch.GetTimestamp();
+            var endTime = DateTime.UtcNow;
+
+            var elapsedTicks = endTimestamp - _startTimestamp;
+            var duration = TimeSpan.FromTicks(elapsedTicks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
+
+            var workerKey = _workerKey ?? Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
+            var className = TestContext.FullyQualifiedTestClassName ?? "Unknown";
+
+            try
+            {
+                var execution = CreateTestExecution(_services, TestContext, _startTime, endTime, duration, workerKey, className);
+                XpingContext.RecordTest(execution);
+            }
+            catch
+            {
+                // Swallow exceptions to avoid interfering with test execution
+            }
         }
-        catch
+        finally
         {
-            // Swallow exceptions to avoid interfering with test execution
+            if (_workerKey != null)
+            {
+                try
+                {
+                    // Release the in-flight slot even when recording failed, so later tests are not
+                    // reported as having run concurrently with this one. Runs after the record above
+                    // was built, so this test still counts itself.
+                    _services.ExecutionTracker.RecordTestEnd(_workerKey);
+                }
+                catch
+                {
+                    // Swallow exceptions to avoid interfering with test execution
+                }
+            }
         }
     }
 
@@ -107,7 +145,7 @@ public abstract class XpingTestBase
         DateTime startTime,
         DateTime endTime,
         TimeSpan duration,
-        string threadId,
+        string workerKey,
         string className)
     {
         var outcome = MapOutcome(context.CurrentTestOutcome);
@@ -157,7 +195,7 @@ public abstract class XpingTestBase
         // Create an execution context using ExecutionTracker.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
         var orchestrationRecord = services.ExecutionTracker.CreateExecutionContext(
-            threadId, className, retryMetadata?.AttemptNumber ?? 1);
+            workerKey, className, retryMetadata?.AttemptNumber ?? 1);
 
         TestMetadata metadata = ExtractMetadata(context);
 
@@ -179,7 +217,7 @@ public abstract class XpingTestBase
             .Build();
 
         // Record test completion for tracking as previous test
-        services.ExecutionTracker.RecordTestCompletion(threadId, identity.TestFingerprint, testName, outcome);
+        services.ExecutionTracker.RecordTestCompletion(workerKey, identity.TestFingerprint, testName, outcome);
 
         return execution;
     }
