@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -28,6 +29,7 @@ namespace Xping.Sdk.MSTest;
 public class XpingContext : XpingContextOrchestrator
 {
     private static Lazy<XpingContext>? _instance;
+    private static int _processExitHandlerRegistered;
     private readonly ILogger<XpingContext> _logger;
 
     /// <summary>
@@ -61,6 +63,8 @@ public class XpingContext : XpingContextOrchestrator
     /// </summary>
     public static void Initialize()
     {
+        EnsureProcessExitSafetyNetRegistered();
+
         if (IsInitialized)
             return;
 
@@ -77,6 +81,8 @@ public class XpingContext : XpingContextOrchestrator
     /// <param name="configuration">The configuration to use.</param>
     public static void Initialize(XpingConfiguration configuration)
     {
+        EnsureProcessExitSafetyNetRegistered();
+
         if (IsInitialized)
             return;
 
@@ -145,6 +151,74 @@ public class XpingContext : XpingContextOrchestrator
             return Task.CompletedTask;
 
         return _instance.Value.FinalizeSessionAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Finalizes the Xping session and shuts down the context, matching the behavior MSTest's
+    /// <c>[AssemblyCleanup]</c> hook needs: uploads buffered executions, fails the process fast on a
+    /// strict-mode network error, and always releases the underlying host afterward.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public static async Task FinalizeAndShutdownAsync()
+    {
+        try
+        {
+            try
+            {
+                await FinalizeAsync().ConfigureAwait(false);
+            }
+            catch (XpingNetworkException ex)
+            {
+                // FailFast aborts the process immediately, which is the correct behavior for strict mode
+                // where observability must be guaranteed. Re-throwing here may not cause the CI pipeline
+                // to fail with a non-zero exit code.
+                Environment.FailFast($"[Xping] {ex.Message}", ex);
+            }
+        }
+        finally
+        {
+            // Runs even if FinalizeAsync throws something other than XpingNetworkException, so the
+            // "always releases the underlying host" guarantee above actually holds.
+            await ShutdownAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Registers a process-exit safety net, once per process, that finalizes an initialized-but-not-yet-
+    /// finalized session. MSTest skips <c>[AssemblyCleanup]</c> under some configurations (e.g. method-
+    /// level parallelization — see issue #124), which otherwise silently discards every buffered
+    /// execution. No-op when a session already finalized normally, since <see cref="ShutdownAsync"/>
+    /// nulls out <see cref="_instance"/> before the process exits.
+    /// </summary>
+    private static void EnsureProcessExitSafetyNetRegistered()
+    {
+        if (Interlocked.CompareExchange(ref _processExitHandlerRegistered, 1, 0) != 0)
+            return;
+
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => FinalizeOnProcessExit();
+    }
+
+    private static void FinalizeOnProcessExit()
+    {
+        Lazy<XpingContext>? instance = _instance;
+        if (instance is not { IsValueCreated: true })
+            return;
+
+        XpingContext context = instance.Value;
+        context._logger.LogWarning(
+            "[Xping] Process exiting with session {SessionId} still active. The test framework's " +
+            "assembly cleanup hook did not run (e.g. MSTest with method-level parallelization). " +
+            "Finalizing now as a safety net.",
+            context.SessionId);
+
+        try
+        {
+            FinalizeAndShutdownAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            context._logger.LogError(ex, "[Xping] Error finalizing Xping session during process-exit safety net");
+        }
     }
 
     /// <summary>
