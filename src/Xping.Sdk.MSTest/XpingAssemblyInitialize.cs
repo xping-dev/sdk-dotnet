@@ -7,7 +7,6 @@ namespace Xping.Sdk.MSTest;
 
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core.Exceptions;
 
 /// <summary>
 /// Assembly-level initialization and cleanup for Xping SDK in MSTest projects.
@@ -33,21 +32,15 @@ public static class XpingAssemblyInitialize
     /// Called once after all tests in the assembly complete.
     /// Finalizes the session by uploading all buffered executions, then disposes SDK resources.
     /// </summary>
+    /// <remarks>
+    /// MSTest does not reliably invoke this hook under some configurations (e.g. method-level
+    /// parallelization — see issue #124). <see cref="XpingContext"/> registers a process-exit safety
+    /// net on <see cref="XpingContext.Initialize()"/> that finalizes the session in that case, so this
+    /// hook is the primary path, not the only one.
+    /// </remarks>
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        try
-        {
-            await XpingContext.FinalizeAsync().ConfigureAwait(false);
-        }
-        catch (XpingNetworkException ex)
-        {
-            // FailFast aborts the process immediately, which is the correct behavior for strict mode
-            // where observability must be guaranteed. Re-throwing from AssemblyCleanup may not cause
-            // the CI pipeline to fail with a non-zero exit code.
-            Environment.FailFast($"[Xping] {ex.Message}", ex);
-        }
-
-        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(false);
     }
 }

@@ -129,6 +129,25 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.Null(exception);
     }
 
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_AfterInitialize_ResetsContext()
+    {
+        XpingContext.Initialize();
+        Assert.True(XpingContext.IsInitialized);
+
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = await Record.ExceptionAsync(async () => await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true)).ConfigureAwait(true);
+
+        Assert.Null(exception);
+    }
+
 
     private static TestExecution CreateTestExecution()
     {
