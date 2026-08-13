@@ -122,7 +122,8 @@ public sealed class XpingMessageSinkAssemblyNameTests
                 null,
                 null,
                 null,
-                "worker-1"
+                "worker-1",
+                null // attemptNumber: inferred by the retry detector
             ]);
     }
 }

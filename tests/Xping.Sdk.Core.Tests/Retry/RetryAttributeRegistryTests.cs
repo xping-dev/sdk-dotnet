@@ -371,4 +371,52 @@ public sealed class RetryAttributeRegistryTests
         Assert.DoesNotContain(nunitOnly, RetryAttributeRegistry.XUnitRetryAttributes);
         Assert.DoesNotContain(nunitOnly, RetryAttributeRegistry.MSTestRetryAttributes);
     }
+
+    // ---------------------------------------------------------------------------
+    // Attribute suffix — issues #115 and #116
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("xunit")]
+    [InlineData("nunit")]
+    [InlineData("mstest")]
+    public void IsRegisteredForFramework_SuffixStrippedName_MatchesSuffixedRegistryEntry(string framework)
+    {
+        // Regression test: every detector strips the "Attribute" suffix from the runtime type name
+        // before the lookup, which made registry entries such as "RetryAttribute" unreachable and left
+        // any attribute used as [Retry] undetected.
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework(framework, "Retry"));
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework(framework, "RetryAttribute"));
+    }
+
+    [Fact]
+    public void IsRegisteredForFramework_SuffixedName_MatchesBareRegistryEntry()
+    {
+        // The bare "Retry" entry in the NUnit registry must also be reachable by the CLR type name.
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework("nunit", "RetryAttribute"));
+
+        // And a custom attribute registered without the suffix is matched by its type name.
+        var customName = "SuffixProbeRetry_" + Guid.NewGuid().ToString("N");
+        RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", customName);
+
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework("xunit", customName + "Attribute"));
+        Assert.True(RetryAttributeRegistry.IsKnownRetryAttribute(customName + "Attribute"));
+    }
+
+    [Fact]
+    public void IsRegisteredForFramework_XRetryAttributeNames_AreRecognized()
+    {
+        // The attribute names xRetry actually declares, as the detector sees them.
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "RetryFactAttribute"));
+        Assert.True(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "RetryTheoryAttribute"));
+    }
+
+    [Fact]
+    public void IsRegisteredForFramework_UnrelatedName_IsNotMatched()
+    {
+        // Suffix tolerance must not turn unrelated attributes into retry attributes.
+        Assert.False(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "Fact"));
+        Assert.False(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "FactAttribute"));
+        Assert.False(RetryAttributeRegistry.IsRegisteredForFramework("xunit", "Attribute"));
+    }
 }

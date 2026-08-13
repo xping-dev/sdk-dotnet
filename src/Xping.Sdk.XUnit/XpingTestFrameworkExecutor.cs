@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.XUnit.Retry;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -56,7 +57,15 @@ public sealed class XpingTestFrameworkExecutor(
             captureStackTraces,
             _assemblyName);
 
+        // Retry libraries discard the messages of the attempts they retry, so those attempts are
+        // invisible to any message sink. Wrapping such a test case lets Xping observe its retry loop
+        // from the inside; every other test case is passed through untouched.
+        // Materialized so that a re-enumeration downstream cannot hand out a second set of wrappers,
+        // each with its own attempt counter, for the same test cases.
+        List<IXunitTestCase> trackedTestCases = [.. testCases
+            .Select(testCase => (IXunitTestCase?)XpingRetryTestCase.TryWrap(testCase, trackingSink) ?? testCase)];
+
         // Run tests with tracking enabled
-        base.RunTestCases(testCases, trackingSink, executionOptions);
+        base.RunTestCases(trackedTestCases, trackingSink, executionOptions);
     }
 }
