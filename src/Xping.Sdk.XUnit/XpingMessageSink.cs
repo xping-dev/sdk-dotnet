@@ -272,10 +272,13 @@ public sealed class XpingMessageSink(
         // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = _retryDetector.DetectRetryMetadata(test, outcome);
         (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, captureStackTraces);
-        // Create execution context using collection name as worker ID.
+        // xUnit has no separate worker concept, so the collection name doubles as both
+        // the concurrency worker key and the record's collection metadata.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
         TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
-            workerId: collectionName, attemptNumber: retryMetadata?.AttemptNumber ?? 1);
+            workerId: collectionName,
+            collectionName: collectionName,
+            attemptNumber: retryMetadata?.AttemptNumber ?? 1);
 
         TestExecution testExecution = new TestExecutionBuilder()
             .WithExecutionId(Guid.NewGuid())
