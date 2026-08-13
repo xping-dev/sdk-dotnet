@@ -90,12 +90,12 @@ internal sealed class ExecutionTracker : IExecutionTracker
 
         // Measure actual concurrency. The adapter reports the test end only after this record has
         // been built, so this test is still in flight and counts itself. The slot carries the peak
-        // overlap observed during the test, which covers tests that overlapped and already finished;
-        // the live count is a lower bound for callers that never reported a start.
-        int observedConcurrency = _inFlightTests.TryGetValue(workerKey, out InFlightTest? inFlightTest)
-            ? Volatile.Read(ref inFlightTest.ObservedConcurrency)
-            : 0;
-        int concurrentCount = Math.Max(1, Math.Max(observedConcurrency, _inFlightTests.Count));
+        // overlap observed during the test, which covers tests that overlapped and already finished.
+        // Without a slot for this worker the test's own overlap window is unknown, so report that it
+        // ran alone rather than attributing unrelated in-flight tests to it.
+        int concurrentCount = _inFlightTests.TryGetValue(workerKey, out InFlightTest? inFlightTest)
+            ? Math.Max(1, Volatile.Read(ref inFlightTest.ObservedConcurrency))
+            : 1;
 
         // A local builder: a shared instance would let concurrent workers interleave their
         // Reset()/With...() calls and emit records mixing fields from two different tests.

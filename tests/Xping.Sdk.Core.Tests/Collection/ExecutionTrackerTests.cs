@@ -335,6 +335,24 @@ public sealed class ExecutionTrackerTests
     }
 
     [Fact]
+    public void CreateExecutionContext_WithoutRecordedStart_ShouldReportSingleTestWhileOthersAreInFlight()
+    {
+        // A caller that does not report starts has no measurable overlap window of its own, so
+        // tests in flight on other workers must not be attributed to it.
+        // Arrange
+        var tracker = BuildTracker();
+        tracker.RecordTestStart("worker-a");
+        tracker.RecordTestStart("worker-b");
+
+        // Act
+        var record = tracker.CreateExecutionContext("worker-untracked");
+
+        // Assert
+        Assert.Equal(1, record.ConcurrentTestCount);
+        Assert.False(record.WasParallelized);
+    }
+
+    [Fact]
     public void RecordTestStart_CalledTwiceForSameWorker_ShouldNotDoubleCount()
     {
         // [XpingTrack] can be applied at assembly, class and method scope at once, in which case
