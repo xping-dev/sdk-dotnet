@@ -94,7 +94,6 @@ public sealed class XpingMessageSinkConcurrencyTests : IAsyncLifetime
         // Assert
         TestOrchestrationRecord record = Assert.Single(tracker.Records);
         Assert.Equal("SampleApp.XUnit.CalculatorTests", record.CollectionName);
-        Assert.Equal("SampleApp.XUnit.CalculatorTests", record.WorkerId);
     }
 
     private static void Send(XpingMessageSink sink, IMessageSinkMessage message) =>

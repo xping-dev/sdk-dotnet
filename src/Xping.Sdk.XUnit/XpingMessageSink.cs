@@ -276,7 +276,9 @@ public sealed class XpingMessageSink(
         // the concurrency worker key and the record's collection metadata.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
         TestOrchestrationRecord orchestrationRecord = _executionTracker.CreateExecutionContext(
-            workerId: collectionName, collectionName: collectionName, attemptNumber: retryMetadata?.AttemptNumber ?? 1);
+            workerId: collectionName,
+            collectionName: collectionName,
+            attemptNumber: retryMetadata?.AttemptNumber ?? 1);
 
         TestExecution testExecution = new TestExecutionBuilder()
             .WithExecutionId(Guid.NewGuid())
