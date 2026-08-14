@@ -11,6 +11,7 @@ using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.MSTest.Retry;
 
 namespace Xping.Sdk.MSTest;
 
@@ -190,7 +191,11 @@ public abstract class XpingTestBase
             ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
         // Detect retry metadata first so the attempt number is available when claiming a position.
-        RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(context, outcome);
+        // The MSTest detector numbers attempts by counting the executions already recorded for this
+        // test identity, which is why it needs the fingerprint resolved above.
+        RetryMetadata? retryMetadata = services.RetryDetector is IMSTestRetryDetector retryDetector
+            ? retryDetector.DetectRetryMetadata(context, outcome, identity.TestFingerprint)
+            : services.RetryDetector.DetectRetryMetadata(context, outcome);
 
         // Create an execution context using ExecutionTracker.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
@@ -294,16 +299,8 @@ public abstract class XpingTestBase
         return firstDotIndex >= 0 ? fullyQualifiedClassName.Substring(0, firstDotIndex) : fullyQualifiedClassName;
     }
 
-    private static string? GetExceptionType(TestContext context)
-    {
-        if (context.CurrentTestOutcome == UnitTestOutcome.Passed)
-            return null;
-
-        if (context.Properties.Keys is { Count: >0 } && context.Properties.Contains("ExceptionType"))
-            return context.Properties["ExceptionType"]?.ToString();
-
-        return null;
-    }
+    private static string? GetExceptionType(TestContext context) =>
+        GetTestException(context)?.GetType().FullName;
 
     private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
         TestOutcome outcome,
@@ -322,26 +319,34 @@ public abstract class XpingTestBase
         return (normalizedStackTrace, false);
     }
 
-    private static string? GetErrorMessage(TestContext context)
+    private static string? GetErrorMessage(TestContext context) =>
+        GetTestException(context)?.Message;
+
+    private static string? GetStackTrace(TestContext context) =>
+        GetTestException(context)?.StackTrace;
+
+    /// <summary>
+    /// Returns the exception that failed the current test, or <see langword="null"/> when the test did
+    /// not fail with one.
+    /// </summary>
+    /// <remarks>
+    /// MSTest exposes the failure through <see cref="TestContext.TestException"/>, which it sets before
+    /// <c>[TestCleanup]</c> runs. It is never populated from <c>TestContext.Properties</c>, which holds
+    /// only the test name, the run directories, and any <c>[TestProperty]</c> or <c>DataRow</c> values.
+    /// Outcomes with no exception behind them — a timeout, an aborted run — leave it null.
+    /// </remarks>
+    private static Exception? GetTestException(TestContext context)
     {
         if (context.CurrentTestOutcome == UnitTestOutcome.Passed)
             return null;
 
-        if (context.Properties.Keys is { Count: >0 } && context.Properties.Contains("ExceptionMessage"))
-            return context.Properties["ExceptionMessage"]?.ToString();
+        Exception? exception = context.TestException;
 
-        return null;
-    }
-
-    private static string? GetStackTrace(TestContext context)
-    {
-        if (context.CurrentTestOutcome == UnitTestOutcome.Passed)
-            return null;
-
-        if (context.Properties.Keys is { Count: >0 } && context.Properties.Contains("StackTrace"))
-            return context.Properties["StackTrace"]?.ToString();
-
-        return null;
+        // Reflection-invoked test methods surface their failure wrapped; the wrapper's own message and
+        // stack trace describe the invocation, not the test, so report what the test actually threw.
+        return exception is TargetInvocationException { InnerException: not null } wrapper
+            ? wrapper.InnerException
+            : exception;
     }
 
     /// <summary>

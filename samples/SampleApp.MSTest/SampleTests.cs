@@ -16,6 +16,8 @@ namespace SampleApp.MSTest;
 [TestClass]
 public class CalculatorTests : XpingTestBase
 {
+    private static int _passesOnRetryAttempts;
+
     [TestMethod]
     [TestCategory("Unit")]
     public void Add_TwoNumbers_ReturnsSum()
@@ -88,6 +90,27 @@ public class CalculatorTests : XpingTestBase
             $"({simulatedLatencyMs} ms). " +
             "This reproduces flakiness caused by network timeouts, service-side " +
             "back-pressure, or CPU contention that shifts task-scheduling order.");
+    }
+
+    /// <summary>
+    /// FLAKY TEST TYPE 2: A failure masked by a retry.
+    /// Fails on the first attempt and passes on the second, so MSTest reports the test as passed
+    /// and the build stays green. Xping records both attempts — attempt 1 Failed with its error
+    /// intact, attempt 2 Passed with PassedOnRetry — which is what makes the masked failure
+    /// visible in reporting.
+    /// </summary>
+    [Retry(3)]
+    [TestCategory("Flaky")]
+    [TestCategory("Retry")]
+    public void FlakyTest_PassesOnRetry()
+    {
+        // Static, so it survives the fresh test class instance MSTest builds for each attempt.
+        var attempt = Interlocked.Increment(ref _passesOnRetryAttempts);
+
+        Assert.IsTrue(
+            attempt > 1,
+            $"Simulated transient failure on attempt {attempt}. " +
+            "The retry attribute re-runs the test, so the suite still reports green.");
     }
 
     [DataTestMethod]

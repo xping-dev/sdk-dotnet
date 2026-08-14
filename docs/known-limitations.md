@@ -28,6 +28,28 @@ This document outlines known limitations and edge cases in the Xping SDK. Unders
 
 **Note**: Currently, there is no workaround for tracking ignored tests in MSTest. Only tests that actually execute will be tracked by Xping.
 
+#### Retry Attempts Are Numbered By Counting, Not Reported By The Framework
+
+**Affected Versions**: All versions
+**Impact**: Two runs of the same test identity within one session are recorded as attempt 1 and attempt 2 of a retry, whether or not a retry is what produced them
+
+**What works**: MSTest re-runs the whole per-test lifecycle for every retried attempt — a retry attribute derived from `TestMethodAttribute` invokes the test method again, which builds a fresh test class instance and runs `[TestInitialize]`, the method, and `[TestCleanup]` once more. Xping therefore records **every attempt** as its own `TestExecution`, each with its own outcome, duration and failure text, all sharing one position in the suite. A test that fails and then passes carries `AttemptNumber = 2` and `PassedOnRetry = true` on its final execution, so the masked failure is visible even though the build is green.
+
+```csharp
+// Both attempts recorded: attempt 1 Failed with its error intact, attempt 2 Passed
+[Retry(3)]
+public void FlakyTest()
+{
+    // ...
+}
+```
+
+**Reason for the limitation**: nothing in `TestContext` says which attempt is running, so the adapter derives the number by counting the executions already recorded for the same test fingerprint. A test identity that passed starts a fresh chain, since a retry only ever follows an attempt that did not pass — but two `[DataRow]` rows carrying *identical* values share a fingerprint, and a failing one followed by a repeat of itself is indistinguishable from a retry.
+
+**Where attempts are not tracked**: a retry helper that re-runs only the test method body without going through `ITestMethod.Invoke` bypasses `[TestInitialize]` / `[TestCleanup]` entirely, and Xping sees a single execution for the whole retry loop.
+
+**Note**: `AttemptNumber` is taken from a `RetryAttempt` or `RetryCount` test property, or an attempt marker in the test name (`(Retry 2)`, `[Attempt 2]`), when a retry helper publishes one of those; the counted value is used only as the floor.
+
 ---
 
 ### xUnit
@@ -130,3 +152,4 @@ When reporting, please include:
 | 1.0.0   | Initial documentation - NUnit and MSTest `[Ignore]` limitation |
 | 1.1.0   | Added known CI flaky test `RecordTest_AfterInitialize_DoesNotThrow` as intentional flakiness example |
 | 1.2.0   | Documented xUnit retry attempt tracking and the retry libraries it covers |
+| 1.3.0   | Documented MSTest retry attempt tracking and how attempt numbers are derived |
