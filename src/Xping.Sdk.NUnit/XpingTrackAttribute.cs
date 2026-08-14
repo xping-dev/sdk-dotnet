@@ -33,7 +33,23 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 {
     private const string StartTimeKey = "Xping.StartTime";
     private const string StartTimestampKey = "Xping.StartTimestamp";
+
+    // Header NUnit writes for an Assert.Multiple failure. Identical in NUnit 3.14 and 4.x.
+    private const string MultipleFailureHeader = "Multiple failures or warnings in test:";
+
+    // NUnit prefixes a setup or teardown failure with "SetUp : " / "TearDown : ", so at most the
+    // first two segments of the line can hold the type name.
+    private const int MaxTypeSegmentsScanned = 2;
+
     private static readonly string[] _lineSeparators = ["\r\n", "\r", "\n"];
+
+    // Separator ExceptionHelper.BuildMessage places between the type name and the message.
+    private static readonly string[] _typeMessageSeparators = [" : "];
+
+    private static readonly string _assertionExceptionTypeName = typeof(AssertionException).FullName!;
+
+    private static readonly string _multipleAssertExceptionTypeName =
+        typeof(MultipleAssertException).FullName!;
 
     // Resolved once in BeforeTest() and reused for every AfterTest() on this attribute instance.
     // The attribute can be applied at assembly, class, or method scope; in all cases the same
@@ -232,7 +248,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(ExtractExceptionType(result), errorMessage, configuredStackTrace)
+            .WithException(ExtractExceptionType(result.Outcome, result.Message), errorMessage, configuredStackTrace)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
             .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
@@ -262,44 +278,99 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         return (stackTrace, false);
     }
 
-    private static string? ExtractExceptionType(TestContext.ResultAdapter result)
+    /// <summary>
+    /// Determines the exception type for a completed test from its <see cref="ResultState"/>.
+    /// </summary>
+    /// <param name="outcome">The NUnit result state of the test, if one was recorded.</param>
+    /// <param name="message">The NUnit failure message, if any.</param>
+    /// <returns>The full exception type name, or <c>null</c> when NUnit records no type.</returns>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ITestAction.AfterTest(ITest)"/> only receives <see cref="TestContext.ResultAdapter"/>,
+    /// which exposes no exception object, so the type is derived from the outcome rather than guessed
+    /// from the message. Only the error arm carries a type name in its text.
+    /// </para>
+    /// </remarks>
+    internal static string? ExtractExceptionType(ResultState? outcome, string? message)
     {
-        // NUnit 3 doesn't expose the exception type directly through the public API.
-        // We need to parse it from the message or stack trace
-        if (result.Outcome.Status == TestStatus.Passed)
+        if (outcome is null || outcome.Status != TestStatus.Failed)
+        {
+            // Passed, Skipped, Inconclusive and Warning results carry no exception type.
+            return null;
+        }
+
+        // Assertion failures: NUnit throws AssertionException and writes only the assertion text
+        // into the message, so there is nothing to parse and nothing worth guessing.
+        // Matches() compares Status and Label while ignoring Site, so SetUpFailure lands here too.
+        if (outcome.Matches(ResultState.Failure))
+        {
+            if (outcome.Site == FailureSite.Child)
+            {
+                // A suite rollup: the failing type belongs to a child test, not to this one.
+                return null;
+            }
+
+            // Assert.Multiple throws MultipleAssertException, which is a sibling of
+            // AssertionException rather than a subclass. The header is the only way to tell them apart.
+            return StartsWithMultipleFailureHeader(message)
+                ? _multipleAssertExceptionTypeName
+                : _assertionExceptionTypeName;
+        }
+
+        // Unhandled exceptions: NUnit builds these messages with ExceptionHelper.BuildMessage,
+        // which writes "{FullTypeName} : {message}". This is the only arm that encodes a real type.
+        if (outcome.Matches(ResultState.Error))
+        {
+            return ParseExceptionTypeFromErrorMessage(message);
+        }
+
+        // Cancelled, NotRunnable and any future label: no type is known.
+        return null;
+    }
+
+    private static bool StartsWithMultipleFailureHeader(string? message) =>
+        message != null &&
+        message.TrimStart().StartsWith(MultipleFailureHeader, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Reads the exception type out of a message NUnit formatted as "{FullTypeName} : {message}".
+    /// </summary>
+    private static string? ParseExceptionTypeFromErrorMessage(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
         {
             return null;
         }
 
-        // Try to extract from the message - often contains an exception type
-        var message = result.Message;
-        if (!string.IsNullOrEmpty(message))
+        // Non-null after the check above.
+        var lines = message!.Split(_lineSeparators, StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length == 0)
         {
-            // Non-null after the check above
-            var lines = message!.Split(_lineSeparators, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length > 0)
+            return null;
+        }
+
+        var segments = lines[0].Trim().Split(_typeMessageSeparators, StringSplitOptions.None);
+
+        // The last segment is the message body: a type token has to be followed by " : ".
+        // Scanning the leading segments only lets a "SetUp : {type} : {message}" prefix through
+        // without hunting for type-shaped words deep inside the prose.
+        var limit = Math.Min(segments.Length - 1, MaxTypeSegmentsScanned);
+        for (var i = 0; i < limit; i++)
+        {
+            var candidate = segments[i].Trim();
+            if (IsExceptionTypeName(candidate))
             {
-                var firstLine = lines[0].Trim();
-                // Check if it looks like an exception type (contains namespace and ends with Exception)
-                if (firstLine.Contains('.') && firstLine.Contains("Exception"))
-                {
-                    // Extract just the exception type, not the full message
-                    var colonIndex = firstLine.IndexOf(':');
-                    if (colonIndex > 0)
-                    {
-                        return firstLine.Substring(0, colonIndex).Trim();
-                    }
-                    // If no colon, the whole line might be the exception type
-                    if (!firstLine.Contains(' '))
-                    {
-                        return firstLine;
-                    }
-                }
+                return candidate;
             }
         }
 
         return null;
     }
+
+    private static bool IsExceptionTypeName(string candidate) =>
+        candidate.Length > 0 &&
+        candidate.IndexOf('.') > 0 &&
+        candidate.IndexOf(' ') < 0;
 
     private static TestOutcome MapOutcome(ResultState resultState)
     {
