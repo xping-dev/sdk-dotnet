@@ -5,11 +5,8 @@
 
 namespace Xping.Sdk.NUnit.Tests;
 
-using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
 using Xunit;
-using Assert = Xunit.Assert;
-using Theory = Xunit.TheoryAttribute;
 
 /// <summary>
 /// Tests for <see cref="XpingTrackAttribute.ExtractExceptionType"/>.
@@ -220,6 +217,6 @@ public sealed class XpingTrackAttributeExceptionTypeTests
     [Fact]
     public void ExtractExceptionType_NullOutcome_ReturnsNull()
     {
-        Assert.Null(XpingTrackAttribute.ExtractExceptionType(null!, "System.InvalidOperationException : boom"));
+        Assert.Null(XpingTrackAttribute.ExtractExceptionType(null, "System.InvalidOperationException : boom"));
     }
 }

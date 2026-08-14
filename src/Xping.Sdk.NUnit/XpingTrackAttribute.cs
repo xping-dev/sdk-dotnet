@@ -281,7 +281,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     /// <summary>
     /// Determines the exception type for a completed test from its <see cref="ResultState"/>.
     /// </summary>
-    /// <param name="outcome">The NUnit result state of the test.</param>
+    /// <param name="outcome">The NUnit result state of the test, if one was recorded.</param>
     /// <param name="message">The NUnit failure message, if any.</param>
     /// <returns>The full exception type name, or <c>null</c> when NUnit records no type.</returns>
     /// <remarks>
@@ -291,7 +291,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     /// from the message. Only the error arm carries a type name in its text.
     /// </para>
     /// </remarks>
-    internal static string? ExtractExceptionType(ResultState outcome, string? message)
+    internal static string? ExtractExceptionType(ResultState? outcome, string? message)
     {
         if (outcome is null || outcome.Status != TestStatus.Failed)
         {
