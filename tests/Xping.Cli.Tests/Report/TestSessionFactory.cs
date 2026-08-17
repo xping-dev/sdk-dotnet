@@ -78,6 +78,12 @@ internal static class TestSessionFactory
     /// Whether stack trace capture was switched off. Distinct from having no trace: it means the
     /// developer opted out, not that none existed.
     /// </param>
+    /// <param name="concurrency">
+    /// Tests in flight alongside this one, itself included, or <see langword="null"/> to record no
+    /// orchestration data at all. Null is the default because it is what an execution written before
+    /// the field existed looks like, and because every fixture that predates concurrency analysis
+    /// must keep meaning exactly what it did.
+    /// </param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -93,7 +99,8 @@ internal static class TestSessionFactory
         bool retry = true,
         string? exceptionType = null,
         string? stackTrace = null,
-        bool stackTraceOmitted = false)
+        bool stackTraceOmitted = false,
+        int? concurrency = null)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint($"fp-{name}")
@@ -130,6 +137,17 @@ internal static class TestSessionFactory
             .WithEndTime(Epoch.AddMilliseconds(durationMs))
             .WithRetry(retryMetadata)
             .WithStackTraceOmitted(stackTraceOmitted);
+
+        // Attached only when asked for. The execution builder already defaults the record, and that
+        // default reports a concurrency of zero — which is precisely how concurrency analysis
+        // recognises an execution it cannot place in an arm.
+        if (concurrency is { } concurrent)
+        {
+            builder = builder.WithTestOrchestrationRecord(
+                new TestOrchestrationBuilder()
+                    .WithParallelization(concurrent > 1, concurrent)
+                    .Build());
+        }
 
         // A caller that named a type or supplied a trace is exercising signature composition and
         // gets exactly what it passed — including a null type, which is what NUnit records for an

@@ -1,6 +1,6 @@
 # Local Analysis Specification
 
-**Status:** authoritative · **Version:** 1.2 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
+**Status:** authoritative · **Version:** 1.3 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
 
 This document is the single source of truth for local analysis. Every implementation session reads it and treats it as immutable. Sessions cite sections by number (`§5.3`). If an implementer believes a section is wrong, incomplete, or unimplementable, they **stop and report** — they do not adapt around it. Amendments follow §12.
 
@@ -202,7 +202,7 @@ All kinds are declared in the enum from session 0 onward, including unimplemente
 | `DurationRegression` | 3 | test |
 | `DurationUnstable` | 3 | test |
 | `OrderDependent` | 4 (declared) | test |
-| `ParallelSensitive` | 4 (declared) | test |
+| `ParallelSensitive` | 4 | test |
 | `NetworkDependent` | 5 | test |
 | `Vanished` | 6 | test |
 | `NeverRun` | 6 | test |
@@ -274,19 +274,36 @@ The floor excludes trivially fast tests, where CV is dominated by scheduler nois
 
 That makes the condition unsatisfiable rather than merely unmet. When T has a single predecessor P, every execution of T is a pairing with P, so `failureRate given P ≡ unconditional failureRate` and the two rate gates reduce to `x >= 0.70 && x < 0.30`. Ten `(test, predecessor)` pairs cleared `OrderDependentMinPairings`; none can ever clear the rates.
 
-The only mechanism that varies a predecessor is parallel interleaving, which the restriction above excludes — the restriction removes exactly the case the finding needs. Scoping to a subset of adapters does not help, because deterministic ordering holds on all three. This is not a defect to fix: implementing the kind requires an opt-in randomised execution order in the SDK, at which point the condition becomes meaningful and the `unreliability` formula (below) can be settled. Until then the kind stays in the enum, unimplemented.
+The only mechanism that varies a predecessor is parallel interleaving, which the restriction above excludes — the restriction removes exactly the case the finding needs. Scoping to a subset of adapters does not help, because deterministic ordering holds on all three. This is not a defect to fix: implementing the kind requires an opt-in randomised execution order in the SDK, at which point the condition becomes meaningful.
+
+**Re-verified at v1.3 and unchanged.** The three SDK defects that blocked §5.8 ([#120](https://github.com/xping-dev/sdk-dotnet/issues/120)–[#122](https://github.com/xping-dev/sdk-dotnet/issues/122)) are fixed, but none of them bore on this section: `PreviousTestId` was never the broken part. Re-measured against a fresh store, every test still had exactly one predecessor.
+
+**§5.7 does not define an `unreliability` formula**, alone among the implementable kinds in §5. The gap is left open deliberately — it is settled by whichever amendment makes the kind implementable, on the data that amendment makes available, rather than chosen now against a measurement nothing produces. Until then the kind stays in the enum, unimplemented.
 
 ### 5.8 `ParallelSensitive`
 
-**Condition:** `|failureRate(parallel) - failureRate(serial)| >= ParallelSensitivityDelta (0.30)`, with ≥ 5 executions in each arm.
+**Condition**, over the test's executions that carry a `TestOrchestrationRecord`, after environmental discounting (§6):
 
-**`ParallelSensitive` is not implementable and is declared only.** Session 4's verification found that `TestOrchestrationRecord.WasParallelized` does not report whether a test ran concurrently with another. It is derived from the count of distinct worker keys seen so far in the run, and that collection is never removed from, so the flag means "a second worker has appeared at some point" and never returns to false. Because the xUnit adapter keys workers by test collection, and xUnit gives each test class its own collection, the flag turns true at the second test class **even when parallelisation is disabled**; because the NUnit and MSTest adapters key on a value that is constant in a serial run, it stays false there for the wrong reason. Recorded as [#120](https://github.com/xping-dev/sdk-dotnet/issues/120).
+```
+m        = median ConcurrentTestCount across those executions   (nearest rank)
+low arm  = executions where ConcurrentTestCount <= m
+high arm = executions where ConcurrentTestCount >  m
+```
 
-The consequence for this kind is that arm membership is an artefact of report order rather than a property of the execution. Every parallel-marked run in the verification store contained exactly one serial execution — whichever test was reported first — and **no test in the store had ≥ 5 executions in both arms**. Splitting on this field would produce two arms that do not mean what their names say.
+- ≥ `ParallelSensitiveMinArmExecutions (5)` executions in **each** arm
+- `|failureRate(high) - failureRate(low)| >= ParallelSensitivityDelta (0.30)`
 
-Blocked on [#120](https://github.com/xping-dev/sdk-dotnet/issues/120). Note for whoever picks it up afterwards: measuring concurrency correctly is necessary but may not be sufficient, since both arms only fill for a suite whose parallelisation setting changed inside the window. Until then the kind stays in the enum, unimplemented.
+**`unreliability` = `|failureRate(high) - failureRate(low)|`.** In [0,1] by construction, and the same quantity the condition thresholds.
 
-**Neither §5.7 nor §5.8 defines an `unreliability` formula**, alone among the kinds in §5. That gap is left open deliberately. It is settled by whichever amendment makes either kind implementable, on the data that amendment makes available, rather than chosen now against a measurement nothing produces.
+**Split on the level, never on `WasParallelized`.** The boolean is correct since [#120](https://github.com/xping-dev/sdk-dotnet/issues/120), but it is the wrong measurement for this kind and must not be used to form the arms. Concurrency *level* varies freely between runs; the flag derived from it does not, because the variation happens among values that are all `> 1`. Measured at v1.3 over 770 tests × 3 runs of a genuinely parallel assembly: **360 tests ran at more than one concurrency level** (spreads as wide as 8→14), while **not one test was ever in both boolean arms** — 646 were parallel in every run and 123 serial in every run. Binarising throws the signal away.
+
+Splitting at the test's *own* median rather than a fixed boundary is what makes the comparison a property of the test instead of a property of the suite it lives in, and it subsumes the parallel-versus-serial comparison this section originally described: a suite whose parallelisation setting changed inside the window puts its concurrency-1 executions and its concurrency-*n* executions either side of that median automatically, with no special case.
+
+**Either direction qualifies.** The condition is an absolute value, so a test that fails more when it runs nearly alone is reported alongside one that fails more when the suite is crowded — isolation sensitivity is as real a defect as contention, and gating on sign would leave it reported by nothing. The evidence carries the **signed** delta so a reader never has to derive the direction (§8.3).
+
+**Overlaps `Flaky` by design.** A concurrency-sensitive test both passes and fails, so §5.2 will usually claim it too. That is additive, not duplicative: `Flaky` says the test is unreliable, this says under what conditions the unreliability concentrates. No cross-provider suppression is implied.
+
+A test whose concurrency never varied leaves the high arm empty and yields no finding. That is the common case and it is correct — the question was asked and the data answered it.
 
 ### 5.9 `NetworkDependent`
 
@@ -313,7 +330,9 @@ A session is marked `IsLikelyEnvironmental` when its failure rate ≥ `Environme
 
 Session 2 computes and exposes this flag on the analysis context. Later sessions consume it. Without it, one broken Docker daemon poisons every test's history and the whole report becomes noise.
 
-Discounting rule: executions from environmental sessions are excluded from `failureRate` denominators **and** numerators for `Flaky` / `AlwaysFailing`, but retained for `SharedFailure` (where they are precisely the signal). The count of discounted sessions appears in `summary.environmentalSessions`.
+Discounting rule: executions from environmental sessions are excluded from `failureRate` denominators **and** numerators for `Flaky` / `AlwaysFailing` / `ParallelSensitive`, but retained for `SharedFailure` (where they are precisely the signal). The count of discounted sessions appears in `summary.environmentalSessions`.
+
+`ParallelSensitive` (§5.8) is included because an outage lands in whichever concurrency arm its sessions happen to occupy and manufactures a delta out of a bad afternoon — the arms are formed from a per-test median, so nothing about the split protects against it.
 
 ---
 
@@ -492,6 +511,7 @@ Values are **provisional but binding**: an implementer who thinks a value is wro
 | `OrderDependentUnconditionalMax` | 0.30 | 5.7 |
 | `OrderDependentMinPairings` | 5 | 5.7 |
 | `ParallelSensitivityDelta` | 0.30 | 5.8 |
+| `ParallelSensitiveMinArmExecutions` | 5 | 5.8 |
 | `EnvironmentalSessionFailureRate` | 0.30 | 6 |
 | `EnvironmentalSessionMinFailures` | 10 | 6 |
 | `SignatureFrameCount` | 5 | 7.3 |
@@ -545,9 +565,9 @@ Each is verified in its owning session before any analysis is written on top of 
 | Field | Suspicion |
 |---|---|
 | `Retry.PassedOnRetry`, `Retry.AttemptNumber` | Requires each of NUnit/xUnit/MSTest adapters to hook retry attributes. At least one likely does not. |
-| `TestOrchestrationRecord.PreviousTestId` | **Verified v1.2: populated and resolvable, but constant per test.** It is the predecessor's `TestFingerprint`, written by all three adapters, and all 3,112 values in the verification store resolved to a test in the same session. The recorded suspicion was not the problem: all three frameworks order an assembly deterministically, so each test has exactly one predecessor and the chain repeats run for run. Blocks `OrderDependent` (§5.7), which needs the predecessor to vary. |
-| `TestOrchestrationRecord.WasParallelized` / `ConcurrentTestCount` | **Verified v1.2: does not measure concurrency.** Derived from the number of distinct worker keys seen so far in the run, which is never decremented — so the flag latches true once a second worker appears. xUnit keys workers by test collection and so latches at the second test class even with parallelisation disabled; NUnit and MSTest key on a value constant in a serial run and so stay false for the wrong reason. Blocks `ParallelSensitive` (§5.8). [#120](https://github.com/xping-dev/sdk-dotnet/issues/120) |
-| `TestOrchestrationRecord.CollectionName` | **Verified v1.2: null on xUnit.** The sink passes the collection as `workerId` and omits the `collectionName` argument; NUnit and MSTest populate it. [#121](https://github.com/xping-dev/sdk-dotnet/issues/121) |
+| `TestOrchestrationRecord.PreviousTestId` | **Verified v1.2, re-confirmed v1.3: populated and resolvable, but constant per test.** It is the predecessor's `TestFingerprint`, written by all three adapters, and all 3,112 values in the verification store resolved to a test in the same session. The recorded suspicion was not the problem: all three frameworks order an assembly deterministically, so each test has exactly one predecessor and the chain repeats run for run. Blocks `OrderDependent` (§5.7), which needs the predecessor to vary. |
+| `TestOrchestrationRecord.WasParallelized` / `ConcurrentTestCount` | **Verified v1.3: fixed and usable.** v1.2 found the count was of distinct worker keys ever seen, never decremented, so the flag latched true at the second test class even with parallelisation disabled. [#120](https://github.com/xping-dev/sdk-dotnet/issues/120) tracks in-flight tests instead and is merged. Re-measured: `ConcurrentTestCount` spans 1…14 over 2,313 executions and varies run to run for 360 of 770 tests. `WasParallelized` is now correct but remains the wrong measurement for §5.8 — see that section. |
+| `TestOrchestrationRecord.CollectionName` | **Verified v1.3: fixed.** v1.2 found it null on every xUnit execution, the sink having passed the collection as `workerId` and omitted the `collectionName` argument. [#121](https://github.com/xping-dev/sdk-dotnet/issues/121) is merged; re-measured, all three adapters populate it. |
 | `ErrorMessage`, `StackTrace` | Confirm populated for failures in all three adapters; confirm `ExceptionType` is the real cause and not a wrapper such as `TargetInvocationException`. |
 | `TestIdentity.SourceFile` / `SourceLineNumber` | **Verified v1.1: never populated.** No adapter passes them to `ITestIdentityGenerator.Generate`; the xUnit sink puts a `SourceFile` entry into `TestMetadata.CustomAttributes` instead. §4.2's requirement is satisfied vacuously — they are emitted whenever present, and they are never present. Making a report navigable needs an adapter change. |
 | `QuickStatistics` | **Verified v1.1: populated for local runs.** `BuildSessionAsync(isFinalizing: true)` sets it regardless of mode; it is not gated on `Connected`. |
@@ -578,3 +598,4 @@ Sessions never resolve a spec conflict locally. A silently adapted spec is how s
 | 1.0 | Initial specification. |
 | 1.1 | Session 0 verification and the amendments it forced. **§2.1/§2.2** — the store has two tiers; §2.2's "one `TestSession` per file" now describes the new `sessions/` tier and no longer contradicts §2.1's `runs/` layout. Analysis reads whole sessions, because the slim projection cannot carry §4.2, §5 or §7. **§2.2** — partial sessions are not persisted at all, so `incompleteSessions` reads 0; empty sessions are skipped without being called unreadable. **§3.2** — `--since` disambiguation, oldest-match anchoring, `--runs`/`--since` exclusivity, and the age-bound fallback. **§4.3** — severity ceiling. **§4.4** — the reporting floor governs findings, not the command. **§5.10** — `NeverRun` is declared but unimplementable (`TotalTestsExpected` is always null); `Vanished` is session 0's reference provider. **§8.1** — `context.dirty` removed; `window.resolutionArgument` added. **§8.4** — command surface and exit codes, replacing the earlier `report` flags; `--all` now means "do not truncate". **§9** — constants that were used but unlisted. **§11.1** — corrected: a local commit anchor already exists in `EnvironmentInfo.CustomProperties`, so `--since <sha>` and `context` are supported; CI runs carry no commit and `dirty` is not collected. **§11.2** — verification results recorded for source locations (never populated), `QuickStatistics` (populated), `TotalTestsExpected` (always null) and fingerprint stability. |
 | 1.2 | Session 4 verification and the amendments it forced. **§5.7** — `OrderDependent` is declared but unimplementable: `PreviousTestId` is well populated and resolvable, but all three frameworks order an assembly deterministically, so each test has exactly one predecessor and the conditional and unconditional failure rates are the same number — the two rate gates cannot both be satisfied. Needs an opt-in randomised execution order in the SDK, not a bug fix. **§5.8** — `ParallelSensitive` is declared but unimplementable: `WasParallelized` counts worker keys ever seen rather than tests in flight, so arm membership is an artefact of report order and no test in the verification store had five executions in both arms. Blocked on [#120](https://github.com/xping-dev/sdk-dotnet/issues/120). **§5** — the kinds table marks both as declared. **§5.7/§5.8** — the missing `unreliability` formulae are left open deliberately, to be settled by whichever amendment makes either kind implementable. **§11.2** — verification results recorded for `PreviousTestId` (populated but constant per test), `WasParallelized`/`ConcurrentTestCount` (does not measure concurrency) and `CollectionName` (null on xUnit, [#121](https://github.com/xping-dev/sdk-dotnet/issues/121)). Also filed, outside this document's scope: [#122](https://github.com/xping-dev/sdk-dotnet/issues/122), an unsynchronised shared builder in `ExecutionTracker`. |
+| 1.3 | Session 4 resumed after [#120](https://github.com/xping-dev/sdk-dotnet/issues/120)–[#122](https://github.com/xping-dev/sdk-dotnet/issues/122) were fixed. **§5.8** — `ParallelSensitive` is implementable again and is redesigned: the arms are now formed by splitting a test's executions at its own median `ConcurrentTestCount`, never on `WasParallelized`, because concurrency level varies between runs while the boolean derived from it does not (360 of 770 tests varied by level; none was ever in both boolean arms). Its `unreliability` formula is defined, and either direction of the delta qualifies. **§5.7** — `OrderDependent` re-verified and unchanged; still declared only, and its `unreliability` gap stays open. **§6** — discounting extended to `ParallelSensitive`. **§9** — `ParallelSensitiveMinArmExecutions` added. **§11.2** — `WasParallelized`/`ConcurrentTestCount` and `CollectionName` re-verified as fixed. |

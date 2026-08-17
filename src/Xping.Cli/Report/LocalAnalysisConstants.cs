@@ -145,9 +145,25 @@ internal static class LocalAnalysisConstants
     public const int OrderDependentMinPairings = 5;
 
     /// <summary>
-    /// Difference between parallel and serial failure rates that indicates sensitivity (0.30).
+    /// Difference in failure rate across a test's concurrency split that indicates sensitivity (0.30).
     /// </summary>
+    /// <remarks>
+    /// Applied across the median split described in §5.8, not to a parallel-versus-serial boolean.
+    /// The comparison is absolute, so it catches a test that fails more when it runs nearly alone as
+    /// well as one that fails more when the suite is crowded.
+    /// </remarks>
     public const double ParallelSensitivityDelta = 0.30;
+
+    /// <summary>
+    /// Executions each concurrency arm needs before the two are compared (5).
+    /// </summary>
+    /// <remarks>
+    /// The test therefore needs ten executions in the window, twice the general reporting floor.
+    /// At five a side the weakest qualifying signal is around zero-of-five against two-of-five, which
+    /// is already thin; below it a single unlucky execution clears
+    /// <see cref="ParallelSensitivityDelta"/> on its own and the report starts ranking noise.
+    /// </remarks>
+    public const int ParallelSensitiveMinArmExecutions = 5;
 
     /// <summary>
     /// Session failure rate at which the session itself is suspected, not the tests (0.30).

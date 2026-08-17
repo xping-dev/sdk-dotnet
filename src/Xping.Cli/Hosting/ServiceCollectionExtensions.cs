@@ -66,6 +66,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IFindingProvider, RetryMaskedProvider>();
         services.AddSingleton<IFindingProvider, DurationProvider>();
         services.AddSingleton<IFindingProvider, VanishedProvider>();
+        services.AddSingleton<IFindingProvider, ParallelSensitiveProvider>();
 
         return services;
     }
