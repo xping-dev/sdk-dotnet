@@ -1,6 +1,6 @@
 # Local Analysis Specification
 
-**Status:** authoritative · **Version:** 1.3 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
+**Status:** authoritative · **Version:** 1.6 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
 
 This document is the single source of truth for local analysis. Every implementation session reads it and treats it as immutable. Sessions cite sections by number (`§5.3`). If an implementer believes a section is wrong, incomplete, or unimplementable, they **stop and report** — they do not adapt around it. Amendments follow §12.
 
@@ -203,7 +203,7 @@ All kinds are declared in the enum from session 0 onward, including unimplemente
 | `DurationUnstable` | 3 | test |
 | `OrderDependent` | 4 (declared) | test |
 | `ParallelSensitive` | 4 | test |
-| `NetworkDependent` | 5 | test |
+| `NetworkDependent` | 5 (declared) | test |
 | `Vanished` | 6 | test |
 | `NeverRun` | 6 | test |
 
@@ -307,9 +307,45 @@ A test whose concurrency never varied leaves the high arm empty and yields no fi
 
 ### 5.9 `NetworkDependent`
 
-**Condition:** failures concentrated in sessions where `EnvironmentInfo.NetworkMetrics.IsOnline == false` or `LatencyMs` exceeds the window's p90, across ≥ 3 such sessions.
+**Condition**, over the sessions containing an execution of the test:
 
-**Granularity limit:** `NetworkMetrics` lives on `EnvironmentInfo`, which is session-scoped. Correlation is therefore session-level only. Do not construct per-execution network attribution — the data does not support it.
+```
+impaired session = EnvironmentInfo.NetworkMetrics.IsOnline == false
+                    || LatencyMs is high against the window's own latency
+healthy session   = every other session containing an execution of this test
+```
+
+- ≥ `NetworkDependentMinAffectedSessions (3)` impaired sessions containing an execution of this test
+- ≥ `NetworkDependentMinAffectedSessions (3)` healthy sessions containing an execution of this test
+- `|failureRate(impaired) - failureRate(healthy)| >= NetworkSensitivityDelta (0.30)`
+
+**Granularity limit:** `NetworkMetrics` lives on `EnvironmentInfo`, which is session-scoped. Correlation is therefore session-level only: the arms are formed from sessions, not executions, and every execution within an impaired session falls in the impaired arm regardless of when in the session it ran. Do not construct per-execution network attribution — the data does not support it.
+
+**`NetworkDependent` is not implementable and is declared only.** Session 5's verification found three defects. The first two are fixable and the third is not.
+
+**Coverage.** `EnvironmentInfo.NetworkMetrics` is null on every session a zero-config user records, and not because a probe failed. `ResolveMode()` returns `LocalOnly` whenever no credentials are configured, and `AddXpingEnvironment` then force-sets `CollectNetworkMetrics = false` — deliberately, because the collector performs a DNS lookup and four sequential ICMP pings per session build and local-only mode must not touch the network. All 19 sessions of the verification store carried no network state at all (§11.2). The kind could therefore only ever exist for users who configured credentials.
+
+**The percentile was unsatisfiable.** Nearest rank takes index `ceil(0.9n) - 1`, so with a strictly-greater boundary at most `n - ceil(0.9n)` sessions can be impaired by latency: 0 for `n ≤ 9`, 1 for `n ∈ [10, 19]`, 2 for `n ∈ [20, 29]`, and 3 only at `n ≥ 30`. `NetworkDependentMinAffectedSessions` is 3 and `DefaultWindowSessions` is 20, so on the default window the latency limb could never fill the impaired arm however bad the network was. Measured against the real probe target, it was worse still: the collector truncates its four-ping average to an `int`, and twenty samples spanning 25.0–30.4 ms produced a p90 of 30 with three values tied at 30, leaving nothing strictly above it. A relative threshold (a multiple of the window's median, with an absolute floor) repairs this, and was drafted at v1.5 before the third defect withdrew the section.
+
+**The comparison measures nothing, and that is the one that cannot be repaired.** Two independent problems compound.
+
+*The arms cannot isolate the network.* An impaired arm is a set of whole sessions, so it does not select for network conditions — it selects for **those particular runs**. Every other property of them is perfectly correlated with the split: a laptop on battery, a build running alongside the suite, thermal throttling, an upstream dependency having a bad hour. A test that never opens a socket is fully eligible for the finding, and nothing in the data distinguishes it from one that does. This is the opposite of §5.8's situation, where concurrency varies *within* a run and the arms are therefore not confounded with when the run happened.
+
+*The gate has no statistical power at the sizes it operates on.* Because the minimum arm is three **sessions**, `|delta| >= 0.30` reduces to "a one-failure difference". At the realistic operating point — impairment is rare, so the impaired arm sits at the minimum while the healthy arm holds the rest of a 20-run window — a **single failure in the entire window fires the finding** if it happens to land in an impaired session. For a test with no network dependence whatsoever, failing independently at rate `p`:
+
+| test fails | fires anyway (3 impaired, 17 healthy) |
+|---|---|
+| 10% of runs | 7.2% |
+| 20% of runs | 16.3% |
+| 30% of runs | 31.4% |
+
+In a 400-test suite with twenty mildly flaky tests, that is roughly 1.4 fabricated findings per report — and they land on precisely the tests a reader is most likely to be looking at. Raising the arm minimum to where the delta carries information needs about fifteen sessions a side, which a window capped at `DefaultWindowSessions (20)` cannot supply.
+
+A tightened rule — failed in *every* impaired session and in *no* healthy one — does have power, at under 0.02% false positives across the same range. It was rejected because it does not touch the first problem: it reports a striking coincidence over three sessions and labels it with a cause, which is what §1.2 and §8.3 exist to prevent.
+
+Implementing the kind requires a signal the store does not carry: whether the test under analysis uses the network at all. That is an SDK change, not an analysis one. Until then the kind stays in the enum, unimplemented.
+
+**§5.9 does not define an `unreliability` formula.** The absolute failure-rate delta drafted at v1.4 is withdrawn with the condition it thresholded. The gap is left open on the same terms as §5.7's: it is settled by whichever amendment makes the kind implementable, on the data that amendment makes available.
 
 ### 5.10 `Vanished` / `NeverRun`
 
@@ -333,6 +369,8 @@ Session 2 computes and exposes this flag on the analysis context. Later sessions
 Discounting rule: executions from environmental sessions are excluded from `failureRate` denominators **and** numerators for `Flaky` / `AlwaysFailing` / `ParallelSensitive`, but retained for `SharedFailure` (where they are precisely the signal). The count of discounted sessions appears in `summary.environmentalSessions`.
 
 `ParallelSensitive` (§5.8) is included because an outage lands in whichever concurrency arm its sessions happen to occupy and manufactures a delta out of a bad afternoon — the arms are formed from a per-test median, so nothing about the split protects against it.
+
+The rule governs failure-rate numerators and denominators. It does not govern **baselines**: §5.5's per-session duration median is computed over every session, because it describes the machine the suite ran on and remains a true measurement whether or not the suite fell over.
 
 ---
 
@@ -512,6 +550,8 @@ Values are **provisional but binding**: an implementer who thinks a value is wro
 | `OrderDependentMinPairings` | 5 | 5.7 |
 | `ParallelSensitivityDelta` | 0.30 | 5.8 |
 | `ParallelSensitiveMinArmExecutions` | 5 | 5.8 |
+| `NetworkDependentMinAffectedSessions` | 3 | 5.9 |
+| `NetworkSensitivityDelta` | 0.30 | 5.9 |
 | `EnvironmentalSessionFailureRate` | 0.30 | 6 |
 | `EnvironmentalSessionMinFailures` | 10 | 6 |
 | `SignatureFrameCount` | 5 | 7.3 |
@@ -571,7 +611,7 @@ Each is verified in its owning session before any analysis is written on top of 
 | `ErrorMessage`, `StackTrace` | Confirm populated for failures in all three adapters; confirm `ExceptionType` is the real cause and not a wrapper such as `TargetInvocationException`. |
 | `TestIdentity.SourceFile` / `SourceLineNumber` | **Verified v1.1: never populated.** No adapter passes them to `ITestIdentityGenerator.Generate`; the xUnit sink puts a `SourceFile` entry into `TestMetadata.CustomAttributes` instead. §4.2's requirement is satisfied vacuously — they are emitted whenever present, and they are never present. Making a report navigable needs an adapter change. |
 | `QuickStatistics` | **Verified v1.1: populated for local runs.** `BuildSessionAsync(isFinalizing: true)` sets it regardless of mode; it is not gated on `Connected`. |
-| `EnvironmentInfo.NetworkMetrics` | May be null when collection is disabled or the probe fails. |
+| `EnvironmentInfo.NetworkMetrics` | **Verified v1.5: null on every session of a zero-config store, by design rather than by failure.** All 19 sessions of the verification store carried no `networkMetrics` at all. `ResolveMode()` returns `LocalOnly` whenever no credentials are configured, and `AddXpingEnvironment` then force-sets `CollectNetworkMetrics = false` — the collector performs a DNS lookup and four sequential ICMP pings per session build, which a mode whose contract is that it does not touch the network must not do. `EnvironmentDetector` returns null before the collector is reached. The property's own default is `true`, so the suppression is invisible from the model. Populated in `Connected` mode only, which scopes §5.9 to users who configured credentials. Independently, `LatencyMs` can be null while `IsOnline == true`: it is measured only when online, nulled on any throw, and nulled when all four probes fail — reachable on a host that blocks ICMP *and* filters TCP 443, which the fallback path uses. `EnvironmentDetector` is a singleton caching by endpoint, so the probe runs once per process and the value is genuinely one per session. |
 | `TestSession.TotalTestsExpected` | **Verified v1.1: always null.** `GetTotalTestsExpected()` returns null and no adapter overrides it. Blocks `NeverRun` (§5.10). |
 | `TestIdentity.TestFingerprint` | **Verified v1.1: stable for plain and parameterized tests, not across renames.** It is SHA-256 of `"{FQN}\|{paramHash}"`, so renaming or moving a test breaks its history; `[XpingFingerprint]` is the escape hatch. It does **not** include the assembly, so identical FQNs in two assemblies collide — any cross-assembly grouping must key on `(assembly, fingerprint)`. A parameter whose `ToString()` is identity-based or time-derived produces a new fingerprint every run, which surfaces as a `Vanished` finding. |
 
@@ -599,3 +639,6 @@ Sessions never resolve a spec conflict locally. A silently adapted spec is how s
 | 1.1 | Session 0 verification and the amendments it forced. **§2.1/§2.2** — the store has two tiers; §2.2's "one `TestSession` per file" now describes the new `sessions/` tier and no longer contradicts §2.1's `runs/` layout. Analysis reads whole sessions, because the slim projection cannot carry §4.2, §5 or §7. **§2.2** — partial sessions are not persisted at all, so `incompleteSessions` reads 0; empty sessions are skipped without being called unreadable. **§3.2** — `--since` disambiguation, oldest-match anchoring, `--runs`/`--since` exclusivity, and the age-bound fallback. **§4.3** — severity ceiling. **§4.4** — the reporting floor governs findings, not the command. **§5.10** — `NeverRun` is declared but unimplementable (`TotalTestsExpected` is always null); `Vanished` is session 0's reference provider. **§8.1** — `context.dirty` removed; `window.resolutionArgument` added. **§8.4** — command surface and exit codes, replacing the earlier `report` flags; `--all` now means "do not truncate". **§9** — constants that were used but unlisted. **§11.1** — corrected: a local commit anchor already exists in `EnvironmentInfo.CustomProperties`, so `--since <sha>` and `context` are supported; CI runs carry no commit and `dirty` is not collected. **§11.2** — verification results recorded for source locations (never populated), `QuickStatistics` (populated), `TotalTestsExpected` (always null) and fingerprint stability. |
 | 1.2 | Session 4 verification and the amendments it forced. **§5.7** — `OrderDependent` is declared but unimplementable: `PreviousTestId` is well populated and resolvable, but all three frameworks order an assembly deterministically, so each test has exactly one predecessor and the conditional and unconditional failure rates are the same number — the two rate gates cannot both be satisfied. Needs an opt-in randomised execution order in the SDK, not a bug fix. **§5.8** — `ParallelSensitive` is declared but unimplementable: `WasParallelized` counts worker keys ever seen rather than tests in flight, so arm membership is an artefact of report order and no test in the verification store had five executions in both arms. Blocked on [#120](https://github.com/xping-dev/sdk-dotnet/issues/120). **§5** — the kinds table marks both as declared. **§5.7/§5.8** — the missing `unreliability` formulae are left open deliberately, to be settled by whichever amendment makes either kind implementable. **§11.2** — verification results recorded for `PreviousTestId` (populated but constant per test), `WasParallelized`/`ConcurrentTestCount` (does not measure concurrency) and `CollectionName` (null on xUnit, [#121](https://github.com/xping-dev/sdk-dotnet/issues/121)). Also filed, outside this document's scope: [#122](https://github.com/xping-dev/sdk-dotnet/issues/122), an unsynchronised shared builder in `ExecutionTracker`. |
 | 1.3 | Session 4 resumed after [#120](https://github.com/xping-dev/sdk-dotnet/issues/120)–[#122](https://github.com/xping-dev/sdk-dotnet/issues/122) were fixed. **§5.8** — `ParallelSensitive` is implementable again and is redesigned: the arms are now formed by splitting a test's executions at its own median `ConcurrentTestCount`, never on `WasParallelized`, because concurrency level varies between runs while the boolean derived from it does not (360 of 770 tests varied by level; none was ever in both boolean arms). Its `unreliability` formula is defined, and either direction of the delta qualifies. **§5.7** — `OrderDependent` re-verified and unchanged; still declared only, and its `unreliability` gap stays open. **§6** — discounting extended to `ParallelSensitive`. **§9** — `ParallelSensitiveMinArmExecutions` added. **§11.2** — `WasParallelized`/`ConcurrentTestCount` and `CollectionName` re-verified as fixed. |
+| 1.6 | Session 5 concluded. **§5.9** — `NetworkDependent` is declared but unimplementable, and v1.5's repair is withdrawn along with the condition it repaired. Fixing the latency threshold fixed a symptom: the comparison itself measures nothing. The arms are whole sessions, so an impaired arm does not select for network conditions but for *those particular runs*, and every other property of them — a laptop on battery, a build running alongside the suite, an upstream dependency having a bad hour — is perfectly correlated with the split; a test that never opens a socket is fully eligible. Compounding it, a three-**session** arm makes `NetworkSensitivityDelta` reduce to "a one-failure difference", so at the realistic operating point a single failure in the whole window fires the finding, and a test with no network dependence at all fires 7.2%/16.3%/31.4% of the time when it fails 10%/20%/30% of runs — roughly 1.4 fabricated findings per report in a 400-test suite. Restoring power needs about fifteen sessions a side, which `DefaultWindowSessions (20)` cannot supply. Implementing the kind requires the store to carry whether a test uses the network at all, which is an SDK change. Its `unreliability` formula is withdrawn and left open on §5.7's terms. **§5** — the kinds table marks it declared. **§6** — `NetworkDependent` removed from discounting, which only applied to it as an implemented kind; the clarification that the rule does not govern baselines is kept for §5.5. **§9** — `NetworkImpairedLatencyMultiple` and `NetworkImpairedMinLatencyMs` removed with the design that introduced them. **§11.2** — the `NetworkMetrics` verification result is retained; it is what scoped the kind down. |
+| 1.5 | Session 5 verification and the amendments it forced. **§5.9** — the p90 latency threshold is replaced by a relative-plus-absolute one (`NetworkImpairedLatencyMultiple` × the window's median `LatencyMs`, floored at `NetworkImpairedMinLatencyMs`). The percentile was unsatisfiable: nearest rank with a strictly-greater boundary admits at most `n - ceil(0.9n)` sessions, which is 2 at the default window of 20 against a gate of 3, so the latency limb could never fill the impaired arm. A rank is the wrong instrument for an absolute physical condition. Also settled in the same section: exemplars come from the arm with the higher failure rate rather than from the impaired arm by name, since the condition's absolute value admits either direction and the impaired arm may hold no failures; a `NetworkMetrics` record with `IsOnline == null` and `LatencyMs == null` is excluded from both arms rather than treated as healthy; and the kind is recorded as reachable in `Connected` mode only. **§6** — discounting extended to `NetworkDependent`, whose impaired arm collects an outage's collateral failures by construction; the rule is also stated not to govern baselines. **§9** — `NetworkImpairedLatencyMultiple` and `NetworkImpairedMinLatencyMs` added. **§11.2** — `EnvironmentInfo.NetworkMetrics` verified null on every session of a zero-config store, because `LocalOnly` mode suppresses collection; `LatencyMs` independently nullable while online. |
+| 1.4 | Pre-session-5 amendment. **§5.9** — `NetworkDependent` was missing an `unreliability` formula and a named threshold constant, alone among the implementable kinds; both gaps are closed before implementation rather than left for the session to invent. The condition is redesigned as a two-arm comparison in the shape of §5.8: sessions split into impaired (`IsOnline == false` or `LatencyMs` above the window's p90) versus healthy, each arm requiring a minimum size, `unreliability` = the absolute failure-rate delta between them. **§9** — `NetworkDependentMinAffectedSessions` and `NetworkSensitivityDelta` added. |
