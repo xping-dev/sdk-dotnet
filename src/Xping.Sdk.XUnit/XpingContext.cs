@@ -204,8 +204,9 @@ public class XpingContext : XpingContextOrchestrator
                 int retries = stats.Total - stats.DistinctTests;
 
                 _logger.LogInformation(
-                    "Total tests recorded: {Total} ({DistinctTests} tests, {Retries} {RetryLabel}) · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
-                    stats.Total, stats.DistinctTests, retries, retries == 1 ? "retry" : "retries",
+                    "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
+                    stats.Total, stats.DistinctTests, stats.DistinctTests == 1 ? "test" : "tests",
+                    retries, retries == 1 ? "retry" : "retries",
                     parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
             }
             else

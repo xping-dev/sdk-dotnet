@@ -141,8 +141,11 @@ public sealed class QuickStatistics
     /// retried test as one test.
     /// </summary>
     /// <remarks>
-    /// Tests are identified by <c>TestIdentity.TestFingerprint</c> within an assembly.
-    /// <see cref="Total"/> minus this value is the number of retry attempts performed.
+    /// Tests are identified by <c>TestIdentity.TestFingerprint</c> within an assembly. When an
+    /// execution carries no fingerprint, the fully qualified name identifies it instead, then the
+    /// test name; an execution carrying none of those counts as its own distinct test rather than
+    /// merging with every other unidentified one. <see cref="Total"/> minus this value is the number
+    /// of retry attempts performed.
     /// </remarks>
     public int DistinctTests { get; init; }
 
