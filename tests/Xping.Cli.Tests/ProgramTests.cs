@@ -22,7 +22,7 @@ public sealed class ProgramTests
         var (code, output, _) = Run();
 
         Assert.Equal(1, code);
-        Assert.Contains("Report flakiness from recent local runs", output, StringComparison.Ordinal);
+        Assert.Contains("Report test reliability findings from recent local runs", output, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -34,7 +34,7 @@ public sealed class ProgramTests
         var (code, output, _) = Run(arg);
 
         Assert.Equal(0, code);
-        Assert.Contains("Report flakiness from recent local runs", output, StringComparison.Ordinal);
+        Assert.Contains("Report test reliability findings from recent local runs", output, StringComparison.Ordinal);
         Assert.Contains("No account is required", output, StringComparison.Ordinal);
     }
 

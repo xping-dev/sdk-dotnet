@@ -1,0 +1,207 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using Xping.Cli.Report;
+using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
+using Xping.Sdk.Core.Models;
+
+namespace Xping.Cli.Tests.Report;
+
+public sealed class FindingCoordinatorTests
+{
+    private static AnalysisContext Context(int sessionCount = 6, int testsPerSession = 1)
+    {
+        string[] names = [.. Enumerable.Range(0, testsPerSession).Select(i => $"Test{i}")];
+
+        return TestSessionFactory.Context(
+            [.. Enumerable.Range(0, sessionCount).Select(i => TestSessionFactory.Session(i, names))]);
+    }
+
+    [Fact]
+    public void AProviderThatThrowsIsRecordedAndTheReportStillRenders()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new ThrowingProvider(),
+            new StubProvider("healthy", FindingKind.Flaky, "Test0")
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        // The working provider's finding survives; only the broken metric is lost.
+        Assert.Single(result.Findings);
+        Assert.Equal("broken", Assert.Single(result.FailedProviders));
+        Assert.Contains("broken", warnings.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AProviderThatThrowsMidEnumerationIsStillContained()
+    {
+        // Providers are iterators, so the throw happens while their results are being drained rather
+        // than when Analyze is called. Catching only the call would miss this entirely.
+        var coordinator = new FindingCoordinator([new ThrowingLazyProvider()]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Empty(result.Findings);
+        Assert.Equal("lazy-broken", Assert.Single(result.FailedProviders));
+    }
+
+    [Fact]
+    public void FindingsBelowTheEvidenceFloorAreExcludedAndCounted()
+    {
+        // Four sessions is below the session floor, so nothing may be reported however confident the
+        // provider is.
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(sessionCount: 4), null, warnings);
+
+        Assert.Empty(result.Findings);
+        Assert.Equal(1, result.ExcludedLowEvidence);
+    }
+
+    [Fact]
+    public void FindingsAtTheEvidenceFloorAreReported()
+    {
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(sessionCount: 5), null, warnings);
+
+        Assert.Single(result.Findings);
+        Assert.Equal(0, result.ExcludedLowEvidence);
+    }
+
+    [Fact]
+    public void TheKindFilterSkipsProvidersThatCannotContribute()
+    {
+        var flaky = new StubProvider("flaky", FindingKind.Flaky, "Test0");
+        var vanished = new StubProvider("vanished", FindingKind.Vanished, "Test0");
+
+        var coordinator = new FindingCoordinator([flaky, vanished]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(
+            Context(), new HashSet<FindingKind> { FindingKind.Vanished }, warnings);
+
+        Assert.Equal(FindingKind.Vanished, Assert.Single(result.Findings).Kind);
+        Assert.False(flaky.WasRun);
+    }
+
+    [Fact]
+    public void EvidenceLevelFollowsTheExecutionCount()
+    {
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
+
+        using var warnings = new StringWriter();
+
+        // One execution per session, so the session count is the execution count.
+        Assert.Equal(
+            EvidenceLevel.Low,
+            coordinator.Run(Context(sessionCount: 10), null, warnings).Findings[0].EvidenceLevel);
+
+        Assert.Equal(
+            EvidenceLevel.Moderate,
+            coordinator.Run(Context(sessionCount: 20), null, warnings).Findings[0].EvidenceLevel);
+
+        Assert.Equal(
+            EvidenceLevel.High,
+            coordinator.Run(Context(sessionCount: 41), null, warnings).Findings[0].EvidenceLevel);
+    }
+
+    [Fact]
+    public void FindingIdsAreStableAcrossRunsOverTheSameWindow()
+    {
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
+
+        using var warnings = new StringWriter();
+
+        string first = coordinator.Run(Context(), null, warnings).Findings[0].Id;
+        string second = coordinator.Run(Context(), null, warnings).Findings[0].Id;
+
+        Assert.Equal(first, second);
+        Assert.StartsWith("f_", first, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FindingIdsDifferBetweenSubjects()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new StubProvider("a", FindingKind.Flaky, "Test0"),
+            new StubProvider("b", FindingKind.Flaky, "Test1")
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(testsPerSession: 2), null, warnings);
+
+        Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// Emits one finding about a named test, with a fixed unreliability.
+    /// </summary>
+    private sealed class StubProvider(string name, FindingKind kind, string test, double unreliability = 0.5)
+        : IFindingProvider
+    {
+        public string Name { get; } = name;
+
+        public IReadOnlyList<FindingKind> Kinds { get; } = [kind];
+
+        public bool WasRun { get; private set; }
+
+        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+        {
+            WasRun = true;
+
+            TestReference? reference = context.Tests.ReferenceFor($"fp-{test}");
+            if (reference == null)
+                yield break;
+
+            yield return new FindingCandidate(
+                kind,
+                new FindingSubject.SingleTest(reference),
+                new StubEvidence(1),
+                unreliability,
+                SessionsSinceLastOccurrence: 0,
+                DrillDownCommand: "xping report");
+        }
+    }
+
+    private sealed class ThrowingProvider : IFindingProvider
+    {
+        public string Name => "broken";
+
+        public IReadOnlyList<FindingKind> Kinds => [FindingKind.DurationRegression];
+
+        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context) =>
+            throw new InvalidOperationException("metric exploded");
+    }
+
+    private sealed class ThrowingLazyProvider : IFindingProvider
+    {
+        public string Name => "lazy-broken";
+
+        public IReadOnlyList<FindingKind> Kinds => [FindingKind.OrderDependent];
+
+        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+        {
+            yield return Explode();
+        }
+
+        private static FindingCandidate Explode() =>
+            throw new InvalidOperationException("metric exploded while enumerating");
+    }
+
+    private sealed record StubEvidence(int Occurrences) : FindingEvidence;
+}

@@ -1,0 +1,614 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using System.Text.Json;
+using Xping.Cli.Report;
+using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Windowing;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Executions;
+
+namespace Xping.Cli.Tests.Report;
+
+public sealed class DurationProviderTests
+{
+    private const string Subject = "Subject";
+
+    // Three companions per session at a fixed duration. With three identical companions and at most
+    // one subject execution, the session's median is always the companion duration whichever side
+    // of it the subject falls — which is what lets a test state the normalisation divisor outright
+    // instead of inferring it.
+    private const int Companions = 3;
+    private const int CompanionMs = 100;
+
+    // ---------------------------------------------------------------------------------------
+    // The condition
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void ATestThatSlowedAgainstASteadyBaselineHasRegressed()
+    {
+        FindingCandidate candidate = Single(Regressing());
+
+        Assert.Equal(FindingKind.DurationRegression, candidate.Kind);
+        Assert.Equal(Subject, Named(candidate));
+    }
+
+    [Fact]
+    public void TheEvidenceCarriesBothSidesOfTheComparisonWithTheirDenominators()
+    {
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing(sha: o => $"sha{o}"));
+
+        Assert.Equal(800, evidence.Current.P50Ms);
+        Assert.Equal(800, evidence.Current.P95Ms);
+        Assert.Equal(3, evidence.Current.Executions);
+        Assert.Equal(3, evidence.Current.Sessions);
+
+        Assert.Equal(200, evidence.Baseline.P50Ms);
+        Assert.Equal(200, evidence.Baseline.P95Ms);
+        Assert.Equal(7, evidence.Baseline.Executions);
+        Assert.Equal(7, evidence.Baseline.Sessions);
+    }
+
+    [Fact]
+    public void TheDeltaIsPublishedInBothRawAndNormalisedTerms()
+    {
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing());
+
+        // 200ms to 800ms against an unchanged suite: the same change either way of measuring it.
+        Assert.Equal(300.0, evidence.Delta.P50Pct);
+        Assert.Equal(600, evidence.Delta.P50Ms);
+        Assert.Equal(300.0, evidence.NormalisedDelta.P50Pct);
+        Assert.Equal(0.0, evidence.BaselineCv);
+    }
+
+    [Fact]
+    public void ARegressionCarriesRecentExemplarsAndOneContrastFromBefore()
+    {
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing(sha: o => $"sha{o}"));
+
+        Assert.Equal(3, evidence.Exemplars.Count);
+        Assert.All(evidence.Exemplars, e => Assert.Equal(800, e.DurationMs));
+        Assert.All(evidence.Exemplars, e => Assert.Equal("Passed", e.Outcome));
+
+        // Required of any finding about a change: without the prior behaviour beside it, the delta
+        // is a number the reader has to take on trust.
+        Assert.NotNull(evidence.Contrast);
+        Assert.Equal(200, evidence.Contrast.DurationMs);
+    }
+
+    [Fact]
+    public void ExemplarsAreOrderedNewestFirst()
+    {
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing(sha: o => $"sha{o}"));
+
+        Assert.Equal(["sha9", "sha8", "sha7"], evidence.Exemplars.Select(e => e.Sha));
+    }
+
+    [Fact]
+    public void UnreliabilityIsHalfTheNormalisedIncreaseCappedAtOne()
+    {
+        // Baseline 400, current 600: a normalised increase of 0.5, so half of it is 0.25.
+        FindingCandidate candidate = Single(Regressing(baselineMs: 400, currentMs: 600));
+
+        Assert.Equal(0.25, candidate.Unreliability);
+
+        // Beyond a doubling the measure saturates rather than letting one arithmetic accident
+        // crowd out every other kind in the ranking.
+        Assert.Equal(1.0, Single(Regressing()).Unreliability);
+    }
+
+    [Fact]
+    public void ATestThatVariesWildlyIsUnstable()
+    {
+        FindingCandidate candidate = Single(Analyze(Varying(high: 300, low: 100)));
+
+        Assert.Equal(FindingKind.DurationUnstable, candidate.Kind);
+
+        var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
+
+        Assert.Equal(10, evidence.Executions);
+        Assert.Equal(10, evidence.Sessions);
+        Assert.Equal(100, evidence.MinMs);
+        Assert.Equal(300, evidence.MaxMs);
+        Assert.Equal(0.5, evidence.Cv);
+        Assert.Equal(0.5, candidate.Unreliability);
+    }
+
+    [Fact]
+    public void UnstableExemplarsSpanTheSpreadRatherThanRepeatingIt()
+    {
+        var evidence = Assert.IsType<DurationUnstableEvidence>(Single(Analyze(Stepped())).Evidence);
+
+        // The slowest, the most typical and the fastest — newest first, as every kind's exemplars
+        // are. Three clustered at the median would describe a steady test, which is the opposite of
+        // what this finding claims.
+        Assert.Equal(100, evidence.MinMs);
+        Assert.Equal(200, evidence.P50Ms);
+        Assert.Equal(400, evidence.MaxMs);
+        Assert.Equal([100, 200, 400], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void ExemplarsCollapseRatherThanRepeatOneExecutionToFillTheBudget()
+    {
+        // With only two duration levels the median coincides with the faster of them, so the
+        // typical and the fastest are the same run. Publishing it twice would pad the budget with
+        // a second copy of a point the reader has already seen.
+        var evidence = Assert.IsType<DurationUnstableEvidence>(
+            Single(Analyze(Varying(high: 300, low: 100))).Evidence);
+
+        Assert.Equal([100, 300], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Normalisation
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AWholeSuiteRunningSlowerIsNotARegressionInAnyTest()
+    {
+        // Every test in the recent runs took five times as long — a busy machine, not a code
+        // change. In raw milliseconds the subject went from 200ms to 1000ms, which clears both
+        // regression gates comfortably; normalised against its own run it did not move at all.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 1000,
+            companionMs: o => o < 7 ? CompanionMs : CompanionMs * 5);
+
+        Assert.Empty(Analyze(context));
+    }
+
+    [Fact]
+    public void TheSameShapeWithOnlyTheSubjectSlowingIsStillReported()
+    {
+        // The companion to the test above: identical subject durations, but the suite around it
+        // held steady. Without this pair, a fixture that reported nothing would prove nothing.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 1000);
+
+        Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Thresholds, at and either side of the boundary
+    // ---------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(599, false)]    // a 49.75% increase
+    [InlineData(600, true)]     // exactly 50%
+    [InlineData(601, true)]     // 50.25%
+    public void TheNormalisedIncreaseDecidesWhetherASlowdownIsARegression(int currentMs, bool reported)
+    {
+        // A 400ms baseline keeps the absolute increase well clear of its own gate in all three
+        // cases, so only the relative one is under test.
+        IReadOnlyList<FindingCandidate> candidates =
+            Regressions(Regressing(baselineMs: 400, currentMs: currentMs));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(159, false)]    // 99ms slower
+    [InlineData(160, true)]     // exactly 100ms
+    [InlineData(161, true)]     // 101ms
+    public void TheAbsoluteIncreaseDecidesWhetherASmallSlowdownIsWorthReporting(
+        int currentMs, bool reported)
+    {
+        // From a 60ms baseline every case here is a large relative increase, so the relative gate
+        // is satisfied throughout and the millisecond floor is what decides.
+        IReadOnlyList<FindingCandidate> candidates =
+            Regressions(Regressing(baselineMs: 60, currentMs: currentMs));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(102, false)]    // a baseline coefficient of variation of 0.51
+    [InlineData(100, true)]     // exactly 0.50
+    [InlineData(98, true)]      // 0.49
+    public void AnUnsteadyBaselineIsNotSomethingARegressionCanBeClaimedAgainst(
+        int spread, bool reported)
+    {
+        // A test that has always swung between fast and slow has not "regressed" when it happens
+        // to run slow; it has done what it always does.
+        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+            sessions: 11,
+            subjectMs: o => o >= 8 ? 900 : o % 2 == 0 ? 200 - spread : 200 + spread));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(4, false)]
+    [InlineData(5, true)]
+    public void ABaselineTooThinToHaveAMedianProducesNoRegression(int baselineRuns, bool reported)
+    {
+        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+
+            // Runs in the three recent sessions, and in only the newest few baseline ones.
+            subjectRuns: o => o >= 7 || o >= 7 - baselineRuns));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    public void TooFewRecentRunsProduceNoRegression(int currentRuns, bool reported)
+    {
+        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            subjectRuns: o => o < 7 || o >= 10 - currentRuns));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(298, 102, false)]   // a coefficient of variation of 0.49
+    [InlineData(300, 100, true)]    // exactly 0.50
+    [InlineData(302, 98, true)]     // 0.51
+    public void TheCoefficientOfVariationDecidesWhetherATestIsUnstable(
+        int high, int low, bool reported)
+    {
+        IReadOnlyList<FindingCandidate> candidates = Unstables(Varying(high, low));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(49, 16, false)]
+    [InlineData(50, 16, true)]
+    [InlineData(52, 17, true)]
+    public void ATrivallyFastTestIsNotReportedAsUnstable(int high, int low, bool reported)
+    {
+        // Below a few tens of milliseconds the coefficient of variation measures the scheduler
+        // rather than the test, so it is not evidence of anything. Every case here is above the
+        // instability threshold; only the duration floor changes the answer.
+        IReadOnlyList<FindingCandidate> candidates = Unstables(Varying(high, low));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // One judgement, one finding
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void ARegressingTestIsNotAlsoReportedAsUnstable()
+    {
+        // The step from 200ms to 800ms lifts the whole window's dispersion above the instability
+        // threshold on its own. Reporting both would state one observation twice under two names.
+        AnalysisContext context = Regressing();
+
+        Assert.True(WholeWindowCoefficientOfVariation(context) >= 0.5);
+        Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The commit the change arrived at
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void TheChangeIsDatedFromTheOldestRecentRunTheTestAppearedIn()
+    {
+        // Sessions 7, 8 and 9 are the recent slice; 7 is where the regression crosses into "now".
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing(sha: o => $"sha{o}"));
+
+        Assert.Equal("sha7", evidence.FirstSeenAt);
+    }
+
+    [Fact]
+    public void AMissingCommitIsNullRatherThanFabricated()
+    {
+        // Sessions recorded on a CI agent carry no commit, and inventing one would be worse than
+        // admitting the report cannot say.
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing());
+
+        Assert.Null(evidence.FirstSeenAt);
+        Assert.All(evidence.Exemplars, e => Assert.Null(e.Sha));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Edge cases
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AnEmptyWindowProducesNothing()
+    {
+        var window = AnalysisWindow.Create(
+            [], DateTime.UnixEpoch, DateTime.UnixEpoch, WindowResolution.Default, null);
+
+        Assert.Empty(Analyze(new AnalysisContext(window, null)));
+    }
+
+    [Fact]
+    public void ASingleSessionHasNoBeforeToCompareAgainst()
+    {
+        // The one session becomes the recent slice and leaves the baseline empty, so there is
+        // nothing a delta could be computed against.
+        Assert.Empty(Analyze(Build(sessions: 1, subjectMs: _ => 800)));
+    }
+
+    [Fact]
+    public void ANewTestIsNotReportedAsHavingRegressed()
+    {
+        // Absent from the baseline entirely. A test added this week has history in the window but
+        // no history of its own, and calling that a regression would flag every new test.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o == 8 ? 500 : 100,
+            subjectRuns: o => o >= 7);
+
+        Assert.Empty(Regressions(context));
+    }
+
+    [Fact]
+    public void ANewTestMayStillBeReportedAsUnstable()
+    {
+        // The same window as above. Instability needs no baseline — it is a standing property of
+        // the executions there are, not a change between two halves of them.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o == 8 ? 500 : 100,
+            subjectRuns: o => o >= 7);
+
+        Assert.Equal(FindingKind.DurationUnstable, Single(Analyze(context)).Kind);
+    }
+
+    [Fact]
+    public void ATestThatStoppedRunningIsLeftToVanished()
+    {
+        // Present throughout the baseline and absent from every recent run. Its disappearance is
+        // what is interesting about it, and claiming it here as well would report one event twice.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o % 2 == 0 ? 300 : 100,
+            subjectRuns: o => o < 7);
+
+        Assert.Empty(Analyze(context));
+    }
+
+    [Fact]
+    public void ASessionRunningOnlyOneTestNormalisesItToItself()
+    {
+        // Its own duration is its session's median, so its normalised value is exactly one. The
+        // interesting part is that nothing divides by zero on the way there.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            companions: o => o == 9 ? 0 : Companions);
+
+        Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
+    }
+
+    [Fact]
+    public void ASessionWhoseMedianIsZeroIsLeftOutOfTheNormalisationRatherThanDividedBy()
+    {
+        // The xUnit adapter reports a zero duration for failures raised outside the timed
+        // invocation. A run made mostly of those has a zero median, which cannot be a divisor.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            companionMs: o => o == 3 ? 0 : CompanionMs);
+
+        FindingCandidate candidate = Single(Analyze(context));
+        var evidence = Assert.IsType<DurationRegressionEvidence>(candidate.Evidence);
+
+        // The unusable run still contributes its raw milliseconds — seven baseline executions, all
+        // of them counted — while contributing nothing to the normalised comparison.
+        Assert.Equal(7, evidence.Baseline.Executions);
+        Assert.False(double.IsNaN(evidence.NormalisedDelta.P50Pct));
+        Assert.False(double.IsInfinity(evidence.NormalisedDelta.P50Pct));
+    }
+
+    [Fact]
+    public void AnInstantBaselineProducesNoRegressionRatherThanAnInfinity()
+    {
+        // A mocked test that took no measurable time has no meaningful relative increase; the
+        // division would produce an infinity that then compares greater than every threshold.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 0 : 800);
+
+        Assert.Empty(Regressions(context));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Determinism
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void TwoRunsOverTheSameWindowProduceByteIdenticalJson()
+    {
+        AnalysisContext context = Regressing(sha: o => $"sha{o}");
+
+        Assert.Equal(Serialize(context), Serialize(context));
+    }
+
+    [Fact]
+    public void TwoIdenticallyBuiltWindowsProduceByteIdenticalJson()
+    {
+        // Rebuilt from scratch rather than reused, so anything leaking in from allocation order or
+        // dictionary enumeration would show up here and not in the run-twice case.
+        string first = Serialize(Regressing(sha: o => $"sha{o}"));
+        string second = Serialize(Regressing(sha: o => $"sha{o}"));
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void TheSameWindowProducesTheSameCandidatesInTheSameOrder()
+    {
+        AnalysisContext context = Varying(high: 300, low: 100);
+
+        Assert.Equal(
+            Analyze(context).Select(c => c.Kind),
+            Analyze(context).Select(c => c.Kind));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Fixtures
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a window whose subject steps from one duration to another at the slice boundary.
+    /// </summary>
+    /// <param name="baselineMs">What the subject took before.</param>
+    /// <param name="currentMs">What it takes now.</param>
+    /// <param name="sha">The commit each session ran at, given its ordinal.</param>
+    private static AnalysisContext Regressing(
+        int baselineMs = 200, int currentMs = 800, Func<int, string?>? sha = null) =>
+        Build(sessions: 10, subjectMs: o => o < 7 ? baselineMs : currentMs, sha: sha);
+
+    /// <summary>
+    /// Builds a window whose subject alternates between two durations.
+    /// </summary>
+    /// <remarks>
+    /// The slower half is the older half, so the recent runs are never the slow ones — otherwise
+    /// the window would read as a regression and the instability finding would be suppressed
+    /// before the threshold under test was reached.
+    /// </remarks>
+    /// <param name="high">The slower duration.</param>
+    /// <param name="low">The faster duration.</param>
+    private static AnalysisContext Varying(int high, int low) =>
+        Build(sessions: 10, subjectMs: o => o < 5 ? high : low);
+
+    /// <summary>
+    /// Builds a window whose subject settles at three distinct durations, slowest first.
+    /// </summary>
+    /// <remarks>
+    /// Three levels rather than two so that the fastest, the median and the slowest are three
+    /// different runs — which is the only arrangement in which spanning exemplars have anything to
+    /// span. Ordered slowest-to-fastest so the window cannot read as a regression.
+    /// </remarks>
+    private static AnalysisContext Stepped() =>
+        Build(sessions: 10, subjectMs: o => o < 4 ? 400 : o < 7 ? 200 : 100);
+
+    /// <summary>
+    /// Builds a window of sessions, each running the subject alongside fixed-duration companions.
+    /// </summary>
+    /// <param name="sessions">Sessions to build; ordinal 0 is the oldest.</param>
+    /// <param name="subjectMs">What the subject took, given the session ordinal.</param>
+    /// <param name="companionMs">What each companion took, given the session ordinal.</param>
+    /// <param name="companions">How many companions ran, given the session ordinal.</param>
+    /// <param name="subjectRuns">Whether the subject ran at all, given the session ordinal.</param>
+    /// <param name="sha">The commit the session ran at, given its ordinal.</param>
+    private static AnalysisContext Build(
+        int sessions,
+        Func<int, int> subjectMs,
+        Func<int, int>? companionMs = null,
+        Func<int, int>? companions = null,
+        Func<int, bool>? subjectRuns = null,
+        Func<int, string?>? sha = null)
+    {
+        var built = new List<TestSession>(sessions);
+
+        for (int ordinal = 0; ordinal < sessions; ordinal++)
+        {
+            var executions = new List<TestExecution>();
+
+            if (subjectRuns?.Invoke(ordinal) ?? true)
+                executions.Add(Execution(Subject, ordinal, subjectMs(ordinal)));
+
+            for (int companion = 0; companion < (companions?.Invoke(ordinal) ?? Companions); companion++)
+            {
+                executions.Add(Execution(
+                    $"Companion{companion}", ordinal, companionMs?.Invoke(ordinal) ?? CompanionMs));
+            }
+
+            built.Add(TestSessionFactory.Session(ordinal, executions, sha: sha?.Invoke(ordinal)));
+        }
+
+        return TestSessionFactory.Context([.. built]);
+    }
+
+    /// <summary>
+    /// Builds one execution with an id unique to its test and session.
+    /// </summary>
+    /// <remarks>
+    /// The factory's default id is derived from the name, attempt and outcome alone, so the same
+    /// test passing in ten sessions would carry one id ten times — and exemplar selection, which
+    /// deduplicates and breaks ties on that id, would be testing a fiction.
+    /// </remarks>
+    private static TestExecution Execution(string name, int ordinal, int durationMs) =>
+        TestSessionFactory.Execution(
+            name,
+            durationMs: durationMs,
+            executionId: TestSessionFactory.ExecutionIdFor(name, ordinal, TestOutcome.Passed),
+            retry: false);
+
+    private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
+        [.. new DurationProvider().Analyze(context)];
+
+    private static IReadOnlyList<FindingCandidate> Regressions(AnalysisContext context) =>
+        [.. Analyze(context).Where(c => c.Kind == FindingKind.DurationRegression)];
+
+    private static IReadOnlyList<FindingCandidate> Unstables(AnalysisContext context) =>
+        [.. Analyze(context).Where(c => c.Kind == FindingKind.DurationUnstable)];
+
+    /// <summary>
+    /// Asserts that exactly one candidate was produced, and returns it.
+    /// </summary>
+    /// <remarks>
+    /// The companions are deliberately identical in every session, so any candidate beyond the
+    /// subject's is the fixture leaking rather than the provider working.
+    /// </remarks>
+    private static FindingCandidate Single(IReadOnlyList<FindingCandidate> candidates) =>
+        Assert.Single(candidates);
+
+    private static FindingCandidate Single(AnalysisContext context) => Single(Analyze(context));
+
+    private static DurationRegressionEvidence RegressionFrom(AnalysisContext context) =>
+        Assert.IsType<DurationRegressionEvidence>(Single(Analyze(context)).Evidence);
+
+    private static string Named(FindingCandidate candidate) =>
+        Assert.IsType<FindingSubject.SingleTest>(candidate.Subject).Test.DisplayName;
+
+    /// <summary>
+    /// Recomputes the window's dispersion for the subject, to show a suppression really suppressed
+    /// something rather than the threshold never having been met.
+    /// </summary>
+    private static double WholeWindowCoefficientOfVariation(AnalysisContext context)
+    {
+        List<double> normalised = [];
+
+        foreach (TestSession session in context.Window.Sessions)
+        {
+            List<double> durations = [.. session.Executions.Select(e => e.Duration.TotalMilliseconds)];
+            durations.Sort();
+
+            double median = durations[(int)Math.Ceiling(0.5 * durations.Count) - 1];
+
+            normalised.AddRange(session.Executions
+                .Where(e => e.TestName == Subject)
+                .Select(e => e.Duration.TotalMilliseconds / median));
+        }
+
+        double mean = normalised.Average();
+        double variance = normalised.Sum(v => (v - mean) * (v - mean)) / normalised.Count;
+
+        return Math.Sqrt(variance) / mean;
+    }
+
+    private static string Serialize(AnalysisContext context)
+    {
+        using var warnings = new StringWriter();
+
+        AnalysisResult result =
+            new FindingCoordinator([new DurationProvider()]).Run(context, null, warnings);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, top: null);
+
+        return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
+    }
+}

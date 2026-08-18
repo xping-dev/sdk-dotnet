@@ -288,90 +288,10 @@ internal sealed class JsonLinesRunStore : ILocalRunStore
         }
     }
 
-    /// <summary>
-    /// Deletes runs, oldest first, until the count, size and age limits all hold.
-    /// </summary>
-    private void ApplyRetention(string runsDirectory)
-    {
-        // Oldest first: filenames are timestamp-prefixed, so ordinal order is chronological.
-        var files = Directory
-            .GetFiles(runsDirectory, FilePrefix + "*" + FileSuffix)
-            .Select(f => new FileInfo(f))
-            .OrderBy(f => f.Name, StringComparer.Ordinal)
-            .ToList();
+    private void ApplyRetention(string runsDirectory) =>
+        StoreRetention.Apply(runsDirectory, FilePrefix + "*" + FileSuffix, _options, _logger);
 
-        DateTime cutoff = DateTime.UtcNow - _options.MaxAge;
-        long remainingBytes = files.Sum(SafeLength);
-        int remainingCount = files.Count;
+    private bool TryDelete(FileInfo file) => StoreRetention.TryDelete(file, _logger);
 
-        // The newest run is never a deletion candidate. Every limit is evaluated after the run has
-        // been written, so a short MaxAge, or a single run larger than MaxBytes, would otherwise
-        // delete the run that was just recorded and leave the store empty. Retention exists to bound
-        // history, not to discard the thing it was called to keep.
-        foreach (FileInfo file in files.Take(files.Count - 1))
-        {
-            bool overCount = remainingCount > _options.MaxRuns;
-            bool overBytes = remainingBytes > _options.MaxBytes;
-            bool tooOld = SafeLastWriteUtc(file) < cutoff;
-
-            // Files are ordered oldest first, so once the oldest survivor is within every limit,
-            // everything newer is too.
-            if (!overCount && !overBytes && !tooOld)
-                break;
-
-            long length = SafeLength(file);
-            if (TryDelete(file))
-            {
-                remainingCount--;
-                remainingBytes -= length;
-            }
-        }
-    }
-
-    private static long SafeLength(FileInfo file)
-    {
-        try
-        {
-            return file.Exists ? file.Length : 0;
-        }
-        catch (IOException)
-        {
-            return 0;
-        }
-    }
-
-    private static DateTime SafeLastWriteUtc(FileInfo file)
-    {
-        try
-        {
-            return file.LastWriteTimeUtc;
-        }
-        catch (IOException)
-        {
-            // Unreadable timestamp must not make the file look infinitely old and get deleted.
-            return DateTime.UtcNow;
-        }
-    }
-
-    private bool TryDelete(FileInfo file)
-    {
-        try
-        {
-            file.Delete();
-            return true;
-        }
-        catch (Exception ex) when (IsStorageFailure(ex))
-        {
-            // Another test host may be pruning the same file concurrently, which is expected.
-            _logger.LogDebug("Retention could not delete '{Path}': {Message}", file.FullName, ex.Message);
-            return false;
-        }
-    }
-
-    private static bool IsStorageFailure(Exception ex) =>
-        ex is IOException
-            or UnauthorizedAccessException
-            or System.Security.SecurityException
-            or NotSupportedException
-            or ArgumentException;
+    private static bool IsStorageFailure(Exception ex) => StoreRetention.IsStorageFailure(ex);
 }

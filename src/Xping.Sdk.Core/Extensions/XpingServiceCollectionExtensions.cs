@@ -440,6 +440,13 @@ public static class XpingServiceCollectionExtensions
             sp.GetRequiredService<ILocalRunStore>(),
             sp.GetRequiredService<ILogger<LocalRunWriter>>()));
 
+        // The full-session tier. It shares the resolved store root and the retention limits with the
+        // run tier but prunes independently, because the two hold the same runs at very different
+        // sizes and one tier's limits must not evict the other's history.
+        services.TryAddSingleton<ILocalSessionStore>(sp => new JsonSessionStore(
+            sp.GetRequiredService<LocalStoreOptions>(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonSessionStore>()));
+
         return services;
     }
 
