@@ -252,18 +252,41 @@ public class XpingContext : XpingContextOrchestrator
 
         if (stats != null)
         {
+            // A retried test is recorded once per attempt, so the outcome counters count attempts.
+            // When any retry happened, report the test-level outcomes instead — a suite that recovered
+            // on retry is green — and keep the attempt count visible beside them.
+            bool retried = stats.DistinctTests > 0 && stats.DistinctTests != stats.Total;
+
+            int passed = retried ? stats.FinalPassed : stats.Passed;
+            int failed = retried ? stats.FinalFailed : stats.Failed;
+            int skipped = retried ? stats.FinalSkipped : stats.Skipped;
+            int inconclusive = retried ? stats.FinalInconclusive : stats.Inconclusive;
+            int notExecuted = retried ? stats.FinalNotExecuted : stats.NotExecuted;
+
             var parts = new StringBuilder();
-            parts.Append($"{stats.Passed} passed");
-            if (stats.Failed > 0)        parts.Append($", {stats.Failed} failed");
-            if (stats.Skipped > 0)       parts.Append($", {stats.Skipped} skipped");
-            if (stats.Inconclusive > 0)  parts.Append($", {stats.Inconclusive} inconclusive");
-            if (stats.NotExecuted > 0)   parts.Append($", {stats.NotExecuted} not executed");
+            parts.Append($"{passed} passed");
+            if (failed > 0)        parts.Append($", {failed} failed");
+            if (skipped > 0)       parts.Append($", {skipped} skipped");
+            if (inconclusive > 0)  parts.Append($", {inconclusive} inconclusive");
+            if (notExecuted > 0)   parts.Append($", {notExecuted} not executed");
 
             // TotalDurationMs sums each test's own execution time; WallClockDurationMs is the
             // elapsed time for the whole session (includes fixture setup/teardown, discovery, etc.).
-            _logger.LogInformation(
-                "Total tests recorded: {Total} · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
-                stats.Total, parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
+            if (retried)
+            {
+                int retries = stats.Total - stats.DistinctTests;
+
+                _logger.LogInformation(
+                    "Total tests recorded: {Total} ({DistinctTests} tests, {Retries} {RetryLabel}) · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
+                    stats.Total, stats.DistinctTests, retries, retries == 1 ? "retry" : "retries",
+                    parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Total tests recorded: {Total} · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
+                    stats.Total, parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
+            }
         }
         else
         {

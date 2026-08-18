@@ -27,6 +27,38 @@ public sealed class RunningStatisticsAccumulatorTests
             .Build();
     }
 
+    /// <summary>
+    /// Builds an execution carrying a real identity and attempt number, which is what the
+    /// distinct-test counters key on. <paramref name="fingerprint"/> stands in for
+    /// <c>TestIdentity.TestFingerprint</c>; two executions sharing one are two attempts of one test.
+    /// </summary>
+    private static TestExecution BuildAttempt(
+        string fingerprint,
+        TestOutcome outcome,
+        int attemptNumber = 1,
+        string assembly = "SampleApp.Tests",
+        TimeSpan duration = default)
+    {
+        TestIdentity identity = new TestIdentityBuilder()
+            .WithTestFingerprint(fingerprint)
+            .WithFullyQualifiedName($"SampleApp.Tests.{fingerprint}")
+            .WithAssembly(assembly)
+            .Build();
+
+        RetryMetadata retry = new RetryMetadataBuilder()
+            .WithAttemptNumber(attemptNumber)
+            .WithPassedOnRetry(attemptNumber > 1 && outcome == TestOutcome.Passed)
+            .Build();
+
+        return new TestExecutionBuilder()
+            .WithIdentity(identity)
+            .WithTestName(fingerprint)
+            .WithOutcome(outcome)
+            .WithDuration(duration)
+            .WithRetry(retry)
+            .Build();
+    }
+
     // ---------------------------------------------------------------------------
     // Record — guard clauses
     // ---------------------------------------------------------------------------
@@ -62,6 +94,13 @@ public sealed class RunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.Inconclusive);
         Assert.Equal(0, snapshot.NotExecuted);
         Assert.Equal(0.0, snapshot.SuccessRate);
+        Assert.Equal(0, snapshot.DistinctTests);
+        Assert.Equal(0, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+        Assert.Equal(0, snapshot.FinalSkipped);
+        Assert.Equal(0, snapshot.FinalInconclusive);
+        Assert.Equal(0, snapshot.FinalNotExecuted);
+        Assert.Equal(0.0, snapshot.FinalSuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
         Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);
@@ -440,6 +479,10 @@ public sealed class RunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.Passed);
         Assert.Equal(0, snapshot.Failed);
         Assert.Equal(0.0, snapshot.SuccessRate);
+        Assert.Equal(0, snapshot.DistinctTests);
+        Assert.Equal(0, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+        Assert.Equal(0.0, snapshot.FinalSuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
         Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);
@@ -505,5 +548,243 @@ public sealed class RunningStatisticsAccumulatorTests
         var snapshot = accumulator.GetSnapshot();
         Assert.Equal(parallelism * recordsPerTask, snapshot.Total);
         Assert.Equal(parallelism * recordsPerTask, snapshot.Passed);
+
+        // Every execution named the same test, so they collapse to a single distinct test
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+    }
+
+    [Fact]
+    public async Task Record_ConcurrentAttemptsOfManyTests_DistinctTestCountIsConsistent()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        const int testCount = 50;
+        const int attemptsPerTest = 4;
+
+        // Act — every test records all of its attempts from its own task, concurrently
+        var tasks = Enumerable.Range(0, testCount)
+            .Select(testIndex => Task.Run(() =>
+            {
+                for (int attempt = 1; attempt <= attemptsPerTest; attempt++)
+                {
+                    accumulator.Record(BuildAttempt(
+                        $"fingerprint-{testIndex}",
+                        attempt == attemptsPerTest ? TestOutcome.Passed : TestOutcome.Failed,
+                        attemptNumber: attempt));
+                }
+            }));
+
+        await Task.WhenAll(tasks);
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(testCount * attemptsPerTest, snapshot.Total);
+        Assert.Equal(testCount, snapshot.DistinctTests);
+        Assert.Equal(testCount, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+        Assert.Equal(1.0, snapshot.FinalSuccessRate);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Distinct tests — final-attempt-per-test tallies
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Record_RetryThatPassesOnSecondAttempt_CountsOneDistinctTestAsFinalPassed()
+    {
+        // Arrange — the issue #132 reproduction, reduced to the one flaky test
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Failed, attemptNumber: 1));
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Passed, attemptNumber: 2));
+
+        // Assert — the attempt-level view still reports both attempts
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(2, snapshot.Total);
+        Assert.Equal(1, snapshot.Passed);
+        Assert.Equal(1, snapshot.Failed);
+        Assert.Equal(0.5, snapshot.SuccessRate);
+
+        // Assert — the test-level view reports the green suite it actually was
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+        Assert.Equal(1.0, snapshot.FinalSuccessRate);
+    }
+
+    [Fact]
+    public void Record_TestFailingOnEveryAttempt_CountsOneDistinctTestAsFinalFailed()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("broken", TestOutcome.Failed, attemptNumber: 1));
+        accumulator.Record(BuildAttempt("broken", TestOutcome.Failed, attemptNumber: 2));
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(0, snapshot.FinalPassed);
+        Assert.Equal(1, snapshot.FinalFailed);
+        Assert.Equal(0.0, snapshot.FinalSuccessRate);
+    }
+
+    [Fact]
+    public void Record_ExecutionsWithoutRetryMetadata_CountEachFingerprintOnce()
+    {
+        // Arrange — Retry is nullable on builder-produced executions; the attempt number defaults to 1
+        var accumulator = new RunningStatisticsAccumulator();
+
+        TestExecution execution = new TestExecutionBuilder()
+            .WithIdentity(new TestIdentityBuilder().WithTestFingerprint("no-retry-metadata").Build())
+            .WithTestName("NoRetryMetadata")
+            .WithOutcome(TestOutcome.Passed)
+            .WithRetry(null)
+            .Build();
+
+        // Act
+        accumulator.Record(execution);
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+    }
+
+    [Fact]
+    public void Record_EqualAttemptNumbers_LastRecordedOutcomeWins()
+    {
+        // Arrange — a detector that cannot infer the attempt number reports 1 for every attempt
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("undetected-retry", TestOutcome.Failed, attemptNumber: 1));
+        accumulator.Record(BuildAttempt("undetected-retry", TestOutcome.Passed, attemptNumber: 1));
+
+        // Assert — the later execution decides, so the recovered test still reads as passed
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+    }
+
+    [Fact]
+    public void Record_LowerAttemptRecordedAfterHigher_KeepsHighestAttemptOutcome()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — attempt 2 arrives before attempt 1
+        accumulator.Record(BuildAttempt("out-of-order", TestOutcome.Passed, attemptNumber: 2));
+        accumulator.Record(BuildAttempt("out-of-order", TestOutcome.Failed, attemptNumber: 1));
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+    }
+
+    [Fact]
+    public void Record_SameFingerprintInDifferentAssemblies_CountsTwoDistinctTests()
+    {
+        // Arrange — TestFingerprint hashes the name and parameters only, so it does not separate assemblies
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("shared", TestOutcome.Passed, assembly: "First.Tests"));
+        accumulator.Record(BuildAttempt("shared", TestOutcome.Failed, assembly: "Second.Tests"));
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(2, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(1, snapshot.FinalFailed);
+    }
+
+    [Fact]
+    public void Record_ExecutionsWithoutIdentity_FallBackToTestNameForDistinctness()
+    {
+        // Arrange — the default TestIdentity carries an empty fingerprint and fully qualified name
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildExecution("T1", TestOutcome.Passed));
+        accumulator.Record(BuildExecution("T2", TestOutcome.Failed));
+        accumulator.Record(BuildExecution("T2", TestOutcome.Passed));
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(3, snapshot.Total);
+        Assert.Equal(2, snapshot.DistinctTests);
+        Assert.Equal(2, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+    }
+
+    [Fact]
+    public void Record_ExecutionsWithNoIdentifierAtAll_CountEachAsItsOwnDistinctTest()
+    {
+        // Arrange — nothing to group on, so merging would be a worse answer than not grouping
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(new TestExecutionBuilder().WithOutcome(TestOutcome.Passed).Build());
+        accumulator.Record(new TestExecutionBuilder().WithOutcome(TestOutcome.Failed).Build());
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(2, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(1, snapshot.FinalFailed);
+    }
+
+    [Fact]
+    public void GetSnapshot_WithEveryOutcome_FinalBucketsSumToDistinctTests()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("passed", TestOutcome.Passed));
+        accumulator.Record(BuildAttempt("failed", TestOutcome.Failed));
+        accumulator.Record(BuildAttempt("skipped", TestOutcome.Skipped));
+        accumulator.Record(BuildAttempt("inconclusive", TestOutcome.Inconclusive));
+        accumulator.Record(BuildAttempt("notExecuted", TestOutcome.NotExecuted));
+
+        // Act
+        var snapshot = accumulator.GetSnapshot();
+
+        // Assert
+        Assert.Equal(5, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(1, snapshot.FinalFailed);
+        Assert.Equal(1, snapshot.FinalSkipped);
+        Assert.Equal(1, snapshot.FinalInconclusive);
+        Assert.Equal(1, snapshot.FinalNotExecuted);
+        Assert.Equal(
+            snapshot.DistinctTests,
+            snapshot.FinalPassed + snapshot.FinalFailed + snapshot.FinalSkipped +
+            snapshot.FinalInconclusive + snapshot.FinalNotExecuted);
+        Assert.Equal(0.2, snapshot.FinalSuccessRate, precision: 5);
+    }
+
+    [Fact]
+    public void Reset_AfterRecordingRetries_ClearsDistinctTestState()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Failed, attemptNumber: 1));
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Passed, attemptNumber: 2));
+        accumulator.Reset();
+
+        // Act — a test that failed before the reset must not resurface as a distinct test
+        accumulator.Record(BuildAttempt("other", TestOutcome.Passed));
+        var snapshot = accumulator.GetSnapshot();
+
+        // Assert
+        Assert.Equal(1, snapshot.DistinctTests);
+        Assert.Equal(1, snapshot.FinalPassed);
+        Assert.Equal(1.0, snapshot.FinalSuccessRate);
     }
 }
