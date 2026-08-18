@@ -81,6 +81,13 @@ public sealed class NoOpRunningStatisticsAccumulatorTests
         Assert.Equal(0, snapshot.Inconclusive);
         Assert.Equal(0, snapshot.NotExecuted);
         Assert.Equal(0.0, snapshot.SuccessRate);
+        Assert.Equal(0, snapshot.DistinctTests);
+        Assert.Equal(0, snapshot.FinalPassed);
+        Assert.Equal(0, snapshot.FinalFailed);
+        Assert.Equal(0, snapshot.FinalSkipped);
+        Assert.Equal(0, snapshot.FinalInconclusive);
+        Assert.Equal(0, snapshot.FinalNotExecuted);
+        Assert.Equal(0.0, snapshot.FinalSuccessRate);
         Assert.Equal(0L, snapshot.TotalDurationMs);
         Assert.Equal(0L, snapshot.WallClockDurationMs);
         Assert.Equal(0L, snapshot.AverageDurationMs);

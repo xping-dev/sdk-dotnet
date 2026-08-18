@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Collections.Concurrent;
+
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 
@@ -10,8 +12,9 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 
 /// <summary>
 /// Thread-safe, incrementally updated implementation of <see cref="IRunningStatisticsAccumulator"/>.
-/// Uses <see cref="Interlocked"/> operations for all scalar counters and a dedicated lock
-/// for the compound slowest-test state.
+/// Uses <see cref="Interlocked"/> operations for all scalar counters, a dedicated lock for the
+/// compound slowest-test state, and a <see cref="ConcurrentDictionary{TKey,TValue}"/> holding the
+/// final attempt of each distinct test.
 /// </summary>
 internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
 {
@@ -23,6 +26,13 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     private long _inconclusive;
     private long _notExecuted;
     private long _totalDurationTicks;
+
+    // Final attempt per distinct test — the scalar counters above cannot express this, because a
+    // retried test arrives as several executions and only its last attempt decides whether it passed.
+    // The key carries the assembly because TestFingerprint hashes the fully qualified name and the
+    // parameters only, so identical names in two assemblies would otherwise collide. A ValueTuple key
+    // keeps the per-execution path free of the string concatenation a composite key would need.
+    private readonly ConcurrentDictionary<(string Assembly, string Test), FinalAttempt> _finalByTest = new();
 
     // Slowest test — requires a lock because name + duration must update atomically
     private readonly object _slowestLock = new();
@@ -56,6 +66,8 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
                 break;
         }
 
+        RecordFinalAttempt(execution);
+
         long ticks = execution.Duration.Ticks;
         Interlocked.Add(ref _totalDurationTicks, ticks);
 
@@ -82,6 +94,8 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         long inconclusive = Interlocked.Read(ref _inconclusive);
         long notExecuted = Interlocked.Read(ref _notExecuted);
         long durationTicks = Interlocked.Read(ref _totalDurationTicks);
+
+        FinalTally finalTally = TallyFinalAttempts();
 
         double successRate = total == 0 ? 0.0 : (double)passed / total;
         long totalMs = durationTicks / TimeSpan.TicksPerMillisecond;
@@ -113,7 +127,18 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             wallClockDurationMs: wallClockMs,
             averageDurationMs: averageMs,
             slowestTestName: slowestName,
-            slowestTestDurationMs: slowestTicks / TimeSpan.TicksPerMillisecond);
+            slowestTestDurationMs: slowestTicks / TimeSpan.TicksPerMillisecond)
+        {
+            DistinctTests = finalTally.DistinctTests,
+            FinalPassed = finalTally.Passed,
+            FinalFailed = finalTally.Failed,
+            FinalSkipped = finalTally.Skipped,
+            FinalInconclusive = finalTally.Inconclusive,
+            FinalNotExecuted = finalTally.NotExecuted,
+            FinalSuccessRate = finalTally.DistinctTests == 0
+                ? 0.0
+                : (double)finalTally.Passed / finalTally.DistinctTests
+        };
     }
 
     /// <inheritdoc/>
@@ -127,10 +152,125 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         Interlocked.Exchange(ref _notExecuted, 0L);
         Interlocked.Exchange(ref _totalDurationTicks, 0L);
 
+        _finalByTest.Clear();
+
         lock (_slowestLock)
         {
             _slowestDurationTicks = 0L;
             _slowestTestName = null;
         }
+    }
+
+    /// <summary>
+    /// Keeps the highest-numbered attempt of the test this execution belongs to. On an equal attempt
+    /// number the later-recorded execution wins: the per-framework detectors infer attempt numbers
+    /// heuristically, and when that inference degrades to 1 for every attempt, taking the last one
+    /// still reports a suite that recovered on retry as recovered.
+    /// </summary>
+    private void RecordFinalAttempt(TestExecution execution)
+    {
+        (string Assembly, string Test) key = (execution.Identity.Assembly, ResolveTestKey(execution));
+        var attempt = new FinalAttempt(execution.Retry?.AttemptNumber ?? 1, execution.Outcome);
+
+        _finalByTest.AddOrUpdate(
+            key,
+            attempt,
+            (_, existing) => attempt.AttemptNumber >= existing.AttemptNumber ? attempt : existing);
+    }
+
+    /// <summary>
+    /// Resolves the value identifying the test an execution belongs to, falling back through the
+    /// weaker identifiers when the fingerprint is absent. The final fallback is the execution's own
+    /// id, which makes an execution carrying no identity at all count as its own distinct test rather
+    /// than merging with every other such execution.
+    /// </summary>
+    private static string ResolveTestKey(TestExecution execution)
+    {
+        TestIdentity identity = execution.Identity;
+
+        if (!string.IsNullOrEmpty(identity.TestFingerprint))
+            return identity.TestFingerprint;
+
+        if (!string.IsNullOrEmpty(identity.FullyQualifiedName))
+            return identity.FullyQualifiedName;
+
+        return !string.IsNullOrEmpty(execution.TestName)
+            ? execution.TestName
+            : execution.ExecutionId.ToString();
+    }
+
+    /// <summary>
+    /// Tallies the recorded final attempts into per-outcome counts. The distinct-test count comes from
+    /// the same enumeration as the buckets, so the two always agree even if a concurrent
+    /// <see cref="Record"/> adds an entry midway.
+    /// </summary>
+    private FinalTally TallyFinalAttempts()
+    {
+        int distinct = 0;
+        int passed = 0;
+        int failed = 0;
+        int skipped = 0;
+        int inconclusive = 0;
+        int notExecuted = 0;
+
+        foreach (KeyValuePair<(string Assembly, string Test), FinalAttempt> entry in _finalByTest)
+        {
+            distinct++;
+
+            switch (entry.Value.Outcome)
+            {
+                case TestOutcome.Passed:
+                    passed++;
+                    break;
+                case TestOutcome.Failed:
+                    failed++;
+                    break;
+                case TestOutcome.Skipped:
+                    skipped++;
+                    break;
+                case TestOutcome.Inconclusive:
+                    inconclusive++;
+                    break;
+                case TestOutcome.NotExecuted:
+                    notExecuted++;
+                    break;
+            }
+        }
+
+        return new FinalTally(distinct, passed, failed, skipped, inconclusive, notExecuted);
+    }
+
+    /// <summary>
+    /// The outcome of the highest-numbered attempt seen for one test.
+    /// </summary>
+    private readonly struct FinalAttempt(int attemptNumber, TestOutcome outcome)
+    {
+        public int AttemptNumber { get; } = attemptNumber;
+
+        public TestOutcome Outcome { get; } = outcome;
+    }
+
+    /// <summary>
+    /// The distinct-test counts derived from <see cref="_finalByTest"/> in a single pass.
+    /// </summary>
+    private readonly struct FinalTally(
+        int distinctTests,
+        int passed,
+        int failed,
+        int skipped,
+        int inconclusive,
+        int notExecuted)
+    {
+        public int DistinctTests { get; } = distinctTests;
+
+        public int Passed { get; } = passed;
+
+        public int Failed { get; } = failed;
+
+        public int Skipped { get; } = skipped;
+
+        public int Inconclusive { get; } = inconclusive;
+
+        public int NotExecuted { get; } = notExecuted;
     }
 }

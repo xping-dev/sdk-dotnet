@@ -18,6 +18,16 @@ namespace Xping.Sdk.Core.Models.Statistics;
 /// (i.e. <see cref="Total"/> may be greater than the sum of all uploaded execution counts).
 /// </para>
 /// <para>
+/// Two readings of the same session coexist here. The unprefixed counters
+/// (<see cref="Total"/>, <see cref="Passed"/>, <see cref="Failed"/>, …) count <b>executions</b>,
+/// so every retry attempt is counted separately. The <c>Final*</c> counters
+/// (<see cref="DistinctTests"/>, <see cref="FinalPassed"/>, <see cref="FinalFailed"/>, …) count
+/// <b>distinct tests</b>, each one contributing only the outcome of its highest-numbered attempt.
+/// A suite that went green on retry therefore reports <see cref="FinalSuccessRate"/> of 1.0 while
+/// <see cref="SuccessRate"/> stays below it, and <see cref="Total"/> minus
+/// <see cref="DistinctTests"/> is the number of retry attempts the runner performed.
+/// </para>
+/// <para>
 /// Duration values are expressed in whole milliseconds for cross-platform serialization
 /// compatibility.
 /// </para>
@@ -36,6 +46,13 @@ public sealed class QuickStatistics
         Inconclusive = 0;
         NotExecuted = 0;
         SuccessRate = 0.0;
+        DistinctTests = 0;
+        FinalPassed = 0;
+        FinalFailed = 0;
+        FinalSkipped = 0;
+        FinalInconclusive = 0;
+        FinalNotExecuted = 0;
+        FinalSuccessRate = 0.0;
         TotalDurationMs = 0L;
         WallClockDurationMs = 0L;
         AverageDurationMs = 0L;
@@ -46,6 +63,10 @@ public sealed class QuickStatistics
     /// <summary>
     /// Internal constructor for creation by <c>IRunningStatisticsAccumulator</c>.
     /// </summary>
+    /// <remarks>
+    /// The distinct-test counters are not parameters; the accumulator sets them through an object
+    /// initializer on top of this constructor, keeping the parameter list readable.
+    /// </remarks>
     internal QuickStatistics(
         int total,
         int passed,
@@ -105,10 +126,63 @@ public sealed class QuickStatistics
     public int NotExecuted { get; init; }
 
     /// <summary>
-    /// Gets the percentage of tests that passed, from 0.0 to 100.0.
+    /// Gets the proportion of executions that passed, as a ratio from 0.0 to 1.0.
     /// Returns 0.0 when <see cref="Total"/> is zero.
     /// </summary>
+    /// <remarks>
+    /// This is <see cref="Passed"/> divided by <see cref="Total"/>, so a test that failed once and
+    /// passed on retry lowers the ratio even though the suite ended green. See
+    /// <see cref="FinalSuccessRate"/> for the test-level reading.
+    /// </remarks>
     public double SuccessRate { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests recorded in this session, counting all attempts of a
+    /// retried test as one test.
+    /// </summary>
+    /// <remarks>
+    /// Tests are identified by <c>TestIdentity.TestFingerprint</c> within an assembly. When an
+    /// execution carries no fingerprint, the fully qualified name identifies it instead, then the
+    /// test name; an execution carrying none of those counts as its own distinct test rather than
+    /// merging with every other unidentified one. <see cref="Total"/> minus this value is the number
+    /// of retry attempts performed.
+    /// </remarks>
+    public int DistinctTests { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt passed.
+    /// </summary>
+    public int FinalPassed { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt failed.
+    /// </summary>
+    public int FinalFailed { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt was skipped.
+    /// </summary>
+    public int FinalSkipped { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt was inconclusive.
+    /// </summary>
+    public int FinalInconclusive { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt was not executed.
+    /// </summary>
+    public int FinalNotExecuted { get; init; }
+
+    /// <summary>
+    /// Gets the proportion of distinct tests that ended passed, as a ratio from 0.0 to 1.0.
+    /// Returns 0.0 when <see cref="DistinctTests"/> is zero.
+    /// </summary>
+    /// <remarks>
+    /// This is <see cref="FinalPassed"/> divided by <see cref="DistinctTests"/>: the answer to
+    /// "did the suite pass", unaffected by attempts a retry later recovered from.
+    /// </remarks>
+    public double FinalSuccessRate { get; init; }
 
     /// <summary>
     /// Gets the combined duration of all test executions in milliseconds.
