@@ -231,8 +231,14 @@ public sealed class MSTestRetryAttemptTests
     [AttributeUsage(AttributeTargets.Method)]
     private sealed class FieldConfiguredRetryAttribute : Attribute
     {
-        public readonly int MaxRetries = 7;
+        // The MaxRetries/DelayBetweenRetriesMs fields on the test-local
+        // FieldConfiguredRetryAttribute and FieldRetryAttribute are read via
+        // reflection by the retry detectors, so the compiler's "assigned but
+        // never used" warning is a false positive.
 
+#pragma warning disable CS0414 // Field is assigned but its value is never used
+        public readonly int MaxRetries = 7;
         public readonly int DelayBetweenRetriesMs = 250;
+#pragma warning restore CS0414 // Field is assigned but its value is never used
     }
 }
