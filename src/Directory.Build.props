@@ -10,4 +10,36 @@
         <!-- Source projects should be packable -->
         <IsPackable>true</IsPackable>
     </PropertyGroup>
+
+    <!--
+      Xping.Sdk.Shared is deliberately not published as its own package (IsPackable=false), and every
+      library that uses it references it with PrivateAssets="all" so it never surfaces as a NuGet
+      dependency. That left its assembly with nowhere to travel: the compiled libraries carry a hard
+      reference to Xping.Sdk.Shared, but nothing put the file in the package, so a consumer restoring
+      from a feed hits FileNotFoundException the moment a Shared type is touched at runtime.
+
+      The reference has been unresolvable since the first published build. It only became fatal once
+      TestSession's constructor started reading XpingVersion.Current, which put a Shared type on the
+      deserialization path that every upload goes through.
+
+      So the assembly now ships inside each package's lib/ folder. It stays an implementation detail —
+      no package id, no version to maintain, nothing added to the public surface — at the cost of the
+      same file appearing in several packages, which is only safe while they are versioned and
+      released together. If they ever diverge, publish Xping.Sdk.Shared properly and let NuGet resolve
+      a single copy.
+
+      Tools are excluded: PackAsTool bundles the whole output directory, so they already carry it.
+    -->
+    <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Xping.Sdk.Shared' AND '$(PackAsTool)' != 'true'">
+        <TargetsForTfmSpecificBuildOutput>
+            $(TargetsForTfmSpecificBuildOutput);IncludeSharedAssemblyInPackage
+        </TargetsForTfmSpecificBuildOutput>
+    </PropertyGroup>
+
+    <Target Name="IncludeSharedAssemblyInPackage">
+        <ItemGroup>
+            <BuildOutputInPackage Include="$(OutputPath)Xping.Sdk.Shared.dll"
+                                  Condition="Exists('$(OutputPath)Xping.Sdk.Shared.dll')" />
+        </ItemGroup>
+    </Target>
 </Project>
