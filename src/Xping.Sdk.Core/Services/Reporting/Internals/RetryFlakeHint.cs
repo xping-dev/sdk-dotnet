@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Core.Services.Reporting.Internals;
 
@@ -14,8 +14,8 @@ namespace Xping.Sdk.Core.Services.Reporting.Internals;
 /// <para>
 /// The SDK does not analyse history — that is the CLI's job. It reports exactly one fact about the
 /// run it just observed: how many tests failed and then passed on a retry. That needs no store read
-/// and no cross-run comparison, because <see cref="LocalTestRecord.PassedOnRetry"/> is already on
-/// records held in memory at finalization.
+/// and no cross-run comparison, because <see cref="RetryMetadata.PassedOnRetry"/> is already on the
+/// executions held in memory at finalization.
 /// </para>
 /// <para>
 /// The line exists so the CLI is discoverable. Without it a developer with no API key sees nothing
@@ -30,19 +30,19 @@ internal static class RetryFlakeHint
     /// <summary>
     /// Builds the hint, or returns <see langword="null"/> when nothing should be printed.
     /// </summary>
-    /// <param name="records">Records for the run that just finished.</param>
+    /// <param name="executions">Executions for the run that just finished.</param>
     /// <param name="isCi">Whether the run executed in a CI environment.</param>
     /// <param name="suppressed">Whether output has been suppressed by the user.</param>
-    public static string? Build(IReadOnlyList<LocalTestRecord> records, bool isCi, bool suppressed)
+    public static string? Build(IReadOnlyList<TestExecution> executions, bool isCi, bool suppressed)
     {
         // CI logs are read when something breaks; a pointer to a local tool is noise there.
-        if (isCi || suppressed || records == null)
+        if (isCi || suppressed || executions == null)
             return null;
 
         int flaked = 0;
-        for (int i = 0; i < records.Count; i++)
+        for (int i = 0; i < executions.Count; i++)
         {
-            if (records[i].PassedOnRetry)
+            if (executions[i].Retry?.PassedOnRetry == true)
                 flaked++;
         }
 

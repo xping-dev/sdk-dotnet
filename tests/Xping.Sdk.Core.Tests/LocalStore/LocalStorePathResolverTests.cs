@@ -152,7 +152,7 @@ public sealed class LocalStorePathResolverTests : IDisposable
     }
 
     [Fact]
-    public void EnsureCreatedMakesRunsDirectoryAndGitIgnore()
+    public void EnsureCreatedMakesSessionsDirectoryAndGitIgnore()
     {
         // Arrange
         string root = Path.Combine(_temp, "store");
@@ -161,7 +161,10 @@ public sealed class LocalStorePathResolverTests : IDisposable
         LocalStorePathResolver.EnsureCreated(root);
 
         // Assert
-        Assert.True(Directory.Exists(LocalStorePathResolver.GetRunsDirectory(root)));
+        Assert.True(Directory.Exists(LocalStorePathResolver.GetSessionsDirectory(root)));
+
+        // The store is one tier now; nothing should re-create the retired runs directory.
+        Assert.False(Directory.Exists(Path.Combine(root, "runs")));
         Assert.Equal("*", File.ReadAllLines(Path.Combine(root, ".gitignore"))[1]);
     }
 

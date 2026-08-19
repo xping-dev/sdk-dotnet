@@ -19,15 +19,15 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One file per session, for the same reasons as <see cref="JsonLinesRunStore"/>: concurrent test
-/// assemblies write disjoint files so there is no locking anywhere, retention is file deletion, and
-/// the filename carries the sort key so no shared index is needed.
+/// One file per session is what makes the design cheap: concurrent test assemblies write disjoint
+/// files so there is no locking anywhere, retention is file deletion, and the filename carries the
+/// sort key so no shared index is needed.
 /// </para>
 /// <para>
-/// Unlike the run tier this is a single JSON document rather than JSON Lines, which is what makes a
-/// truncated file <i>detectable</i>: a partial document fails to parse and is reported as unreadable,
-/// where a partial JSON Lines file parses cleanly and silently under-reports its executions. Analysis
-/// that counts executions cannot tolerate the second failure mode.
+/// A session is a single JSON document rather than JSON Lines, which is what makes a truncated file
+/// <i>detectable</i>: a partial document fails to parse and is reported as unreadable, where a
+/// partial JSON Lines file parses cleanly and silently under-reports its executions. Analysis that
+/// counts executions cannot tolerate the second failure mode.
 /// </para>
 /// </remarks>
 internal sealed class JsonSessionStore : ILocalSessionStore

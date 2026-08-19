@@ -179,7 +179,7 @@ dotnet xping where [--directory <path>]
 
 ```
 /Users/you/src/my-repo/.xping
-  36 runs · 1.2 MB on disk
+  36 runs · 6.1 MB on disk
   Checkout.Tests                              12 runs  last 2026-08-08 09:14 UTC
   Billing.Tests                               12 runs  last 2026-08-08 09:13 UTC
   Api.Tests                                   12 runs  last 2026-08-08 09:11 UTC

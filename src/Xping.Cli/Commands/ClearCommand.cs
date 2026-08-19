@@ -6,7 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Hosting;
 using Xping.Cli.Services;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Commands;
@@ -21,8 +21,7 @@ namespace Xping.Cli.Commands;
 /// weeks of history.
 /// </remarks>
 internal sealed class ClearCommand(
-    ILocalRunStoreFactory storeFactory,
-    ILocalSessionStoreFactory sessionStoreFactory,
+    ILocalSessionStoreFactory storeFactory,
     ConsoleIO io)
 {
     public int Run(string? directory, string? assembly, bool force)
@@ -33,7 +32,7 @@ internal sealed class ClearCommand(
 
         string startDirectory = directory ?? Directory.GetCurrentDirectory();
 
-        ILocalRunStore store = storeFactory.Create(startDirectory: startDirectory);
+        ILocalSessionStore store = storeFactory.Create(startDirectory: startDirectory);
 
         if (!store.IsAvailable || store.StorePath == null)
         {
@@ -41,14 +40,9 @@ internal sealed class ClearCommand(
             return 1;
         }
 
-        ILocalSessionStore sessionStore = sessionStoreFactory.Create(startDirectory: startDirectory);
+        IReadOnlyList<TestSession> matching = store.ReadRecent(int.MaxValue, assembly).Sessions;
 
-        IReadOnlyList<LocalRun> matching = store.ReadRecent(int.MaxValue, assembly);
-
-        // Emptiness is judged across both tiers. A store holding sessions but no runs is unusual —
-        // they are written together — but reporting "nothing to clear" while `xping report` still
-        // has history to show would be a straightforward lie.
-        if (matching.Count == 0 && sessionStore.ReadRecent(1, assembly).Sessions.Count == 0)
+        if (matching.Count == 0)
         {
             output.WriteLine(assembly == null
                 ? "Nothing to clear."
@@ -64,11 +58,6 @@ internal sealed class ClearCommand(
             return 1;
 
         int deleted = store.Delete(assembly);
-
-        // Both tiers, always. The run tier is what the count above describes, but the session tier is
-        // what `xping report` reads — clearing one and leaving the other would show the user history
-        // they were just told had been deleted.
-        sessionStore.Delete(assembly);
 
         output.WriteLine(string.Format(
             CultureInfo.InvariantCulture,

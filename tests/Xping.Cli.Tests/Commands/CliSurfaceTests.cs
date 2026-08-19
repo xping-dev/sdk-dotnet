@@ -6,7 +6,8 @@
 using System.Text.Json;
 using Xping.Cli.Commands;
 using Xping.Cli.Tests.Report;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
@@ -40,35 +41,32 @@ public sealed class CliSurfaceTests : IDisposable
         }
     }
 
-    private static void Seed(string assembly, params bool[] outcomes)
+    // Sessions are addressed by ordinal, so seeding two assemblies in one test has to keep handing
+    // out fresh ones or the second suite overwrites the first.
+    private int _nextOrdinal = 1000;
+
+    /// <summary>
+    /// Writes one session per outcome for the given assembly.
+    /// </summary>
+    private void Seed(string assembly, params bool[] outcomes)
     {
-        ILocalRunStore store = LocalRunStore.Create();
-        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        ILocalSessionStore store = LocalSessionStore.Create();
 
         for (int i = 0; i < outcomes.Length; i++)
         {
-            store.Write(new LocalRun(
-                new LocalRunHeader
-                {
-                    SessionId = Guid.NewGuid().ToString("N"),
-                    StartedAtUtc = baseTime.AddMinutes(i).AddSeconds(assembly.Length),
-                    DurationMs = 3000,
-                    Assembly = assembly
-                },
+            store.Write(TestSessionFactory.Session(
+                _nextOrdinal++,
                 [
-                    new LocalTestRecord
-                    {
-                        Fingerprint = $"fp-{assembly}",
-                        Name = $"{assembly}.Test",
-                        Outcome = outcomes[i] ? OutcomeCodes.Passed : OutcomeCodes.Failed,
-                        DurationMs = 50
-                    }
+                    TestSessionFactory.Execution(
+                        "Sample",
+                        outcome: outcomes[i] ? TestOutcome.Passed : TestOutcome.Failed,
+                        assembly: assembly)
                 ]));
         }
     }
 
     /// <summary>
-    /// Writes sessions to the tier <c>xping report</c> actually reads.
+    /// Writes <paramref name="count"/> passing sessions for the given assembly.
     /// </summary>
     private static void SeedSessions(string assembly, int count, int startOrdinal = 0)
     {
@@ -319,7 +317,7 @@ public sealed class CliSurfaceTests : IDisposable
         // Assert
         Assert.Equal(1, code);
         Assert.Contains("Refusing to delete", output, StringComparison.Ordinal);
-        Assert.Equal(3, LocalRunStore.Create().ReadRecent(100).Count);
+        Assert.Equal(3, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
     }
 
     [Fact]
@@ -334,7 +332,7 @@ public sealed class CliSurfaceTests : IDisposable
         // Assert
         Assert.Equal(0, code);
         Assert.Contains("Deleted 3 runs", output, StringComparison.Ordinal);
-        Assert.Empty(LocalRunStore.Create().ReadRecent(100));
+        Assert.Empty(LocalSessionStore.Create().ReadRecent(100).Sessions);
     }
 
     [Fact]
@@ -351,9 +349,11 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.Equal(0, code);
         Assert.Contains("Deleted 2 runs", output, StringComparison.Ordinal);
 
-        var remaining = LocalRunStore.Create().ReadRecent(100);
+        var remaining = LocalSessionStore.Create().ReadRecent(100).Sessions;
         Assert.Equal(3, remaining.Count);
-        Assert.All(remaining, r => Assert.Equal("Beta.Tests", r.Header.Assembly));
+        Assert.All(
+            remaining,
+            session => Assert.Equal("Beta.Tests", session.Executions.First().Identity.Assembly));
     }
 
     [Fact]
@@ -374,6 +374,6 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         Assert.Contains("No runs recorded for assembly", output, StringComparison.Ordinal);
-        Assert.Single(LocalRunStore.Create().ReadRecent(100));
+        Assert.Single(LocalSessionStore.Create().ReadRecent(100).Sessions);
     }
 }

@@ -12,6 +12,7 @@ using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Reporting;
 using Xping.Cli.Services;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Commands;
@@ -26,7 +27,6 @@ namespace Xping.Cli.Commands;
 /// </remarks>
 internal sealed class ReportCommand(
     ILocalSessionStoreFactory sessionStoreFactory,
-    ILocalRunStoreFactory runStoreFactory,
     IWindowResolver windowResolver,
     FindingCoordinator coordinator,
     ConsoleIO io)
@@ -94,7 +94,7 @@ internal sealed class ReportCommand(
         if (pad)
         {
             WriteScopeNotice(source, assembly, options.Assembly != null);
-            WriteCloudInvitation(store, analysis, startDirectory, capabilities);
+            WriteCloudInvitation(store, analysis, resolved.Window.Sessions, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
             // block, and one wedged in the middle of it would separate nothing.
@@ -181,20 +181,17 @@ internal sealed class ReportCommand(
     /// Prints the cloud invitation, at most once a day and only when it is relevant.
     /// </summary>
     /// <remarks>
-    /// Whether a project is already cloud-connected is recorded on the run tier rather than on the
-    /// session itself, so this reads one run header. Skipping that read would mean pitching the
+    /// Whether the project is already cloud-connected travels on the newest session's environment
+    /// (<see cref="LocalSessionProperties.Mode"/>). Skipping that check would mean pitching the
     /// cloud to people who already pay for it.
     /// </remarks>
     private void WriteCloudInvitation(
         ILocalSessionStore store,
         AnalysisResult analysis,
-        string startDirectory,
+        IReadOnlyList<TestSession> sessions,
         OutputCapabilities capabilities)
     {
-        bool isConnected = runStoreFactory
-            .Create(startDirectory: startDirectory)
-            .ReadRecent(1)
-            .Any(run => run.Header.IsConnected);
+        bool isConnected = sessions.Count > 0 && LocalSessionProperties.IsConnected(sessions[0]);
 
         if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;

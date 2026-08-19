@@ -1,6 +1,6 @@
 # Local Analysis Specification
 
-**Status:** authoritative · **Version:** 1.8 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
+**Status:** authoritative · **Version:** 1.9 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
 
 This document is the single source of truth for local analysis. Every implementation session reads it and treats it as immutable. Sessions cite sections by number (`§5.3`). If an implementer believes a section is wrong, incomplete, or unimplementable, they **stop and report** — they do not adapt around it. Amendments follow §12.
 
@@ -35,18 +35,15 @@ Where a concept exists in both places, local analysis uses the **same name and t
 ```
 <store-root>/.xping/
   .gitignore
-  runs/
-    run-{StartedAtUtc.Ticks:D19}-{sessionId[0..8]}.jsonl.gz
   sessions/
     session-{StartedAt.Ticks:D19}-{sessionId[0..8]}.json.gz
 ```
 
-The store has **two tiers**, written together at the end of every run and pruned independently.
+The store has **one tier**, written at the end of every run.
 
-**`runs/` — the summary tier.** A gzip-compressed JSON Lines file: the first line is a
-`LocalRunHeader` (session id, start timestamp, duration, environment, assembly, branch, commit SHA, CI flag, connected flag, schema version), followed by one `LocalTestRecord` per line. `LocalTestRecord` is a deliberately lossy projection — fingerprint, display name, outcome, duration, attempt, passed-on-retry, error hash — sized for a fast summary. The schema version travels with each run's header (`LocalRunHeader.Version`, currently `1`) so a reader can skip a file written by a newer schema without failing the whole store. This tier is **not** the analysis substrate; it exists for the SDK's own end-of-run retry hint and for cloud import.
+**`sessions/`.** One gzip-compressed JSON document holding one whole `TestSession`, serialised through the SDK's existing `XpingSerializerOptions`. Nothing is dropped: raw error text, stack traces, exception types, source locations, orchestration data and network metrics all survive, because §4.2, §5 and §7 all depend on fields a summary projection would discard. **This is what `xping report` reads.**
 
-**`sessions/` — the analysis tier.** One gzip-compressed JSON document holding one whole `TestSession`, serialised through the SDK's existing `XpingSerializerOptions`. Nothing is dropped: raw error text, stack traces, exception types, source locations, orchestration data and network metrics all survive, because §4.2, §5 and §7 all depend on fields the summary projection discards. **This is what `xping report` reads.**
+The mode the run was recorded under travels on `EnvironmentInfo.CustomProperties["Xping.Mode"]`, alongside the Git metadata. It is what lets the CLI withhold the cloud invitation from projects that are already connected. Sessions written before the key existed read as local-only.
 
 A single JSON document rather than JSON Lines is what makes truncation *detectable*: a partial document fails to parse and is counted in `summary.unreadableSessions`, where a partial JSON Lines file parses cleanly and silently under-reports its executions. Analysis that counts executions cannot tolerate the second failure mode.
 
@@ -65,8 +62,8 @@ The SDK writes `.xping/.gitignore` (containing `*`) inside the store directory i
 | Property | Rule |
 |---|---|
 | Append-only | Analysis never writes, moves, or deletes. Pruning is a separate explicit operation. |
-| Format | Per §2.1: a slim JSON Lines projection in `runs/`, one whole `TestSession` per gzipped JSON document in `sessions/`. Analysis reads the latter. |
-| Retention | 50 runs, 50 MB total store size, or 30 days, whichever is reached first (`LocalStoreOptions` defaults). All three limits are enforced together after each write, **per tier**; the newest file in a tier is never pruned. Oldest pruned on write, not on read. |
+| Format | Per §2.1: one whole `TestSession` per gzipped JSON document in `sessions/`. |
+| Retention | 50 runs, 50 MB total store size, or 30 days, whichever is reached first (`LocalStoreOptions` defaults). All three limits are enforced together after each write; the newest file is never pruned. Oldest pruned on write, not on read. |
 | Corruption | An unreadable or unparseable file is **skipped with a warning on stderr**. It never fails the command. The count of skipped files appears in `summary.unreadableSessions`. |
 | Empty sessions | A session with no executions is skipped and is **not** counted as unreadable — it is not damage, but letting it occupy a window slot would dilute every rate computed against the session count. |
 | Partial sessions | A session is written only after it finalises, so a test host killed mid-run leaves **no file** rather than a partial one. `summary.incompleteSessions` therefore reads 0 until the store gains a way to persist a run that did not finish; a truncated file is reported as unreadable instead. |
@@ -712,3 +709,4 @@ Sessions never resolve a spec conflict locally. A silently adapted spec is how s
 | 1.5 | Session 5 verification and the amendments it forced. **§5.9** — the p90 latency threshold is replaced by a relative-plus-absolute one (`NetworkImpairedLatencyMultiple` × the window's median `LatencyMs`, floored at `NetworkImpairedMinLatencyMs`). The percentile was unsatisfiable: nearest rank with a strictly-greater boundary admits at most `n - ceil(0.9n)` sessions, which is 2 at the default window of 20 against a gate of 3, so the latency limb could never fill the impaired arm. A rank is the wrong instrument for an absolute physical condition. Also settled in the same section: exemplars come from the arm with the higher failure rate rather than from the impaired arm by name, since the condition's absolute value admits either direction and the impaired arm may hold no failures; a `NetworkMetrics` record with `IsOnline == null` and `LatencyMs == null` is excluded from both arms rather than treated as healthy; and the kind is recorded as reachable in `Connected` mode only. **§6** — discounting extended to `NetworkDependent`, whose impaired arm collects an outage's collateral failures by construction; the rule is also stated not to govern baselines. **§9** — `NetworkImpairedLatencyMultiple` and `NetworkImpairedMinLatencyMs` added. **§11.2** — `EnvironmentInfo.NetworkMetrics` verified null on every session of a zero-config store, because `LocalOnly` mode suppresses collection; `LatencyMs` independently nullable while online. |
 | 1.4 | Pre-session-5 amendment. **§5.9** — `NetworkDependent` was missing an `unreliability` formula and a named threshold constant, alone among the implementable kinds; both gaps are closed before implementation rather than left for the session to invent. The condition is redesigned as a two-arm comparison in the shape of §5.8: sessions split into impaired (`IsOnline == false` or `LatencyMs` above the window's p90) versus healthy, each arm requiring a minimum size, `unreliability` = the absolute failure-rate delta between them. **§9** — `NetworkDependentMinAffectedSessions` and `NetworkSensitivityDelta` added. |
 | 1.8 | The rendered report is rebuilt around being shared. **§8.5** — new: the `text` format always fences its findings, holds every fenced line to 72 columns, states the drill-down once, and decides colour, glyphs and decoration from whether stdout is a terminal. **§8.2** — findings carry `headline` and `metrics`, resolved once in the envelope so no renderer phrases a measurement itself; ASCII-only, no arithmetic, §8.3 unchanged. **§8.1** — `summary.counts` breaks findings down by severity over every finding produced. **§8.1** — `truncated.command` drops `--format json`: it is the "show me the rest" affordance, and a reader looking at ten of twenty-one findings wants the other eleven in the format they are already reading. Per-finding `drillDown` keeps its `--format json`, being aimed at an agent. Schema **1.0 → 1.1**. **§8.4** — `--format summary` with a `--summary` alias, and `--no-color`. |
+| 1.9 | The store drops to one tier. **§2.1/§2.2** — `runs/` and its `LocalRunHeader`/`LocalTestRecord` projection are removed; every consumer already read whole sessions, so the tier was duplicated storage and duplicated retention. The connected-project flag the summary header carried moves to `EnvironmentInfo.CustomProperties["Xping.Mode"]`, which is the only thing the CLI read it for. The SDK's end-of-run retry hint reads `TestExecution.Retry.PassedOnRetry` off the executions it already holds. Existing `runs/` directories are left on disk, unread. |
