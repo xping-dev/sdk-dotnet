@@ -63,7 +63,13 @@ internal static class DrillDown
     /// Builds the invocation that shows the untruncated report.
     /// </summary>
     /// <returns>The command.</returns>
-    public static string ForFullReport() => "xping report --all --format json";
+    /// <remarks>
+    /// Deliberately carries no <c>--format</c>. This is the "show me the other eleven" affordance,
+    /// and a reader who wants eleven more of what they are already looking at should get exactly
+    /// that; sending them to JSON would answer a question they did not ask. A caller that wants the
+    /// envelope adds the flag, having just used it.
+    /// </remarks>
+    public static string ForFullReport() => "xping report --all";
 
     private static string Quote(string value) =>
         value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;

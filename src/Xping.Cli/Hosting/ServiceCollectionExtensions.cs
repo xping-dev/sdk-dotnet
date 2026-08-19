@@ -18,9 +18,13 @@ namespace Xping.Cli.Hosting;
 internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddXpingCliServices(
-        this IServiceCollection services, TextWriter output, TextWriter error, TextReader input)
+        this IServiceCollection services,
+        TextWriter output,
+        TextWriter error,
+        TextReader input,
+        bool isTerminal)
     {
-        services.AddSingleton(new ConsoleIO(output, error, input));
+        services.AddSingleton(new ConsoleIO(output, error, input, isTerminal));
         services.AddSingleton<ILocalRunStoreFactory, LocalRunStoreFactory>();
         services.AddSingleton<ILocalSessionStoreFactory, LocalSessionStoreFactory>();
 

@@ -38,7 +38,7 @@ Invoke it as `xping`. Note that `dotnet xping` only works for tools installed in
 
 ## `xping report`
 
-Reports flakiness from recent local runs.
+Reports test reliability findings from recent local runs.
 
 ```bash
 dotnet xping report [options]
@@ -46,112 +46,126 @@ dotnet xping report [options]
 
 | Option | Default | Description |
 |---|---|---|
-| `--last <n>` | `12` | Recent runs to analyse **per assembly** |
+| `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last` |
+| `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
+| `--top <n>` | `10` | Findings to show. Excludes `--all` |
+| `--all` | off | Show **every finding** rather than the top ones |
+| `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Restrict the report to one test assembly |
-| `--all` | off | Report across every assembly in the store |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
-| `--details` | off | Print per-test run history |
-| `--json` | off | Emit JSON instead of a rendered report |
+| `--format <f>` | `text` | `text`, `json` or `summary` |
+| `--json` | off | Alias for `--format json` |
+| `--summary` | off | Alias for `--format summary` |
+| `--fail-on <s>` | `none` | Exit non-zero when a finding reaches `high`, `medium` or `low` |
 | `--ascii` | auto | Force ASCII output |
+| `--no-color` | auto | Never emit ANSI colour. `NO_COLOR` is honoured too |
 
-`--all` and `--assembly` are mutually exclusive.
+> `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
 
-**Exit codes:** `0` success · `1` no store or no runs · `2` invalid arguments.
+**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error).
 
-Note that the exit code reports whether the **command** succeeded, not whether tests are flaky. A clean report and a report full of findings both exit `0`.
+The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
+
+### The report
+
+The default output is built to be shared. The findings sit inside a fenced code block, so selecting the report and pasting it into Slack, a pull request or a ticket renders it in monospace with its columns intact:
+
+````
+Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+3 findings (1 high, 2 medium) · 412 tests · 409 healthy
+
+```
+HIGH  flaky            GenerateMonthlySummary
+      failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+      evidence moderate | f_2a91
+
+MED   slower           CheckoutFlow_Completes
+      p50 340ms -> 1.2s (+264.7%), normalised +251.2%
+      evidence high | f_8c04
+
+LOW   stopped running  LegacyImport.Roundtrip
+      ran in 12 of 17 earlier runs, absent from the last 3
+      evidence moderate | f_1d77
+```
+````
+
+Only the top ten findings are shown by default. When some are withheld, one line follows the fence — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the fence.
+
+Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
+
+Copy the block, or pipe it:
+
+```bash
+dotnet xping report | pbcopy          # macOS
+dotnet xping report | clip            # Windows
+dotnet xping report | wl-copy         # Linux (Wayland)
+```
+
+When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
+
+### `--summary`
+
+One line, for a chat message, a commit trailer or a CI step title:
+
+```bash
+$ dotnet xping report --summary
+Xping: 3 findings (1 high, 2 medium) in 20 runs of Checkout.Tests
+```
 
 ### Scoping
 
-Every test project in a solution shares one store. Without `--all` or `--assembly`, the report covers the assembly that ran most recently and says so when others exist:
+Every test project in a solution shares one store. Without `--assembly`, the report covers the assembly that ran most recently and says so when others exist:
 
 ```
 Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly to switch).
 ```
 
-### `--all`
+Analysing them together would pool unrelated suites: one assembly's history would contain another's tests, and its run count would be the solution-wide total.
 
-Each assembly is analysed against **its own** runs, and the findings are merged. A suite with 3 runs is never described against another suite's 12-run window.
+### `--format json`
 
-Because there is no single "latest run" across assemblies, the aggregate report omits the pass/fail counts of the scoped report and labels each finding with its assembly:
-
-```
-──────────────────────────────────────────────────────────────────────────
-  Xping · local summary                            3 assemblies · 36 runs
-──────────────────────────────────────────────────────────────────────────
-
-  ⚠  2 unstable tests across 3 assemblies
-
-     ●●○●●●○●●●●○   Checkout.AppliesDiscount                        9/12
-                    Checkout.Tests · passed 9 of 12 runs · inconsistent
-──────────────────────────────────────────────────────────────────────────
-```
-
-### `--details`
-
-Per-test history, including the full fingerprint you can use to correlate with the dashboard:
-
-```
-Details
-
-  Checkout.AppliesDiscount_WhenCouponValid
-    fingerprint  90a41028c37a83516e2f22f6de78ae42225cc7cde60353b747902bdd645460e4
-    passed       9 of 12 runs
-      2026-08-08 09:02  pass  120ms  main
-      2026-08-08 09:07  FAIL  2400ms  main
-      2026-08-08 09:14  pass  118ms  feat/coupons
-```
-
-### `--json`
-
-For scripts and CI. Emits a versioned document and nothing else — no rendered block to strip.
+For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
 
 ```bash
-dotnet xping report --all --json > flakiness.json
+dotnet xping report --all --format json > findings.json
 ```
+
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from:
 
 ```json
 {
-  "schemaVersion": 1,
-  "storePath": "/Users/you/src/my-repo/.xping",
-  "runsAnalysed": 36,
-  "assembliesAnalysed": 3,
-  "hasSufficientHistory": true,
-  "minimumRunsForHistory": 3,
-  "generatedAtUtc": "2026-08-08T12:35:40.6663810Z",
-  "runs": [
+  "schemaVersion": "1.1",
+  "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
+  "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
+  "summary": {
+    "tests": 412,
+    "findings": 3,
+    "counts": { "high": 1, "medium": 2, "low": 0 },
+    "healthy": 409,
+    "excludedLowEvidence": 41
+  },
+  "findings": [
     {
-      "sessionId": "08ffa28a39a34abfa91b781e4a44d788",
-      "startedAtUtc": "2026-08-08T12:34:22.2985860Z",
-      "durationMs": 38214,
-      "assembly": "Checkout.Tests",
-      "environment": "Local",
-      "branch": "feat/coupons",
-      "commitSha": "9d3f1a2...",
-      "isCi": false,
-      "testCount": 412
+      "id": "f_2a91",
+      "kind": "Flaky",
+      "severity": "high",
+      "evidenceLevel": "moderate",
+      "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests" },
+      "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",
+      "metrics": [
+        { "label": "failed", "value": "7 of 20 executions (35%)" },
+        { "label": "runs affected", "value": "5 of 20" },
+        { "label": "failure modes", "value": "3" }
+      ],
+      "evidence": { "…": "…" },
+      "drillDown": "xping report --kind Flaky --format json"
     }
   ],
-  "unstableTests": [
-    {
-      "fingerprint": "90a41028c37a8351...",
-      "name": "Checkout.AppliesDiscount_WhenCouponValid",
-      "assembly": "Checkout.Tests",
-      "kind": "FlakyAcrossRuns",
-      "passCount": 9,
-      "runCount": 12,
-      "history": [true, true, false, true, true, true],
-      "passedOnAttempt": null
-    }
-  ],
-  "consistentFailures": []
+  "truncated": { "shown": 3, "total": 3, "command": "xping report --all" }
 }
 ```
 
-`kind` is one of `FlakedInRun`, `FlakyAcrossRuns`, `NewlyFailing`, `ConsistentlyFailing`.
-
-`history` is ordered oldest first; `true` is a pass. Per-run detail is included deliberately so a consumer can compute its own view without re-reading the store.
-
-**Check `schemaVersion` before parsing.** Fields will be added over time; existing fields will not be renamed or repurposed.
+The full contract, including every finding kind and the thresholds behind it, is in the [local analysis specification](../local-analysis-spec.md).
 
 ---
 

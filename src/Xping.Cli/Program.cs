@@ -31,10 +31,23 @@ internal static class Program
     /// Runs the tool against the supplied writers.
     /// </summary>
     /// <remarks>Separated from <see cref="Main"/> so the command surface is testable.</remarks>
+    /// <param name="args">The command line.</param>
+    /// <param name="output">Where the report is written.</param>
+    /// <param name="error">Where warnings and failures are written.</param>
+    /// <param name="input">Where prompts are read from.</param>
+    /// <param name="isTerminal">
+    /// Whether <paramref name="output"/> is a terminal. Defaults to what the process can see, and is
+    /// passed explicitly by tests that exercise the parts of the output only a terminal gets.
+    /// </param>
     internal static int Run(
-        string[] args, TextWriter output, TextWriter error, TextReader? input = null)
+        string[] args,
+        TextWriter output,
+        TextWriter error,
+        TextReader? input = null,
+        bool? isTerminal = null)
     {
-        using IHost host = BuildHost(output, error, input ?? TextReader.Null);
+        using IHost host = BuildHost(
+            output, error, input ?? TextReader.Null, isTerminal ?? !Console.IsOutputRedirected);
         RootCommand root = BuildRootCommand(host.Services, output);
 
         bool noArgs = args.Length == 0;
@@ -72,7 +85,8 @@ internal static class Program
     /// and there are no <see cref="IHostedService"/>s registered, so this is purely a composition
     /// root — built, resolved from, and disposed, never started/run.
     /// </remarks>
-    private static IHost BuildHost(TextWriter output, TextWriter error, TextReader input)
+    private static IHost BuildHost(
+        TextWriter output, TextWriter error, TextReader input, bool isTerminal)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
@@ -89,7 +103,7 @@ internal static class Program
         // provider back in.
         builder.Logging.ClearProviders();
 
-        builder.Services.AddXpingCliServices(output, error, input);
+        builder.Services.AddXpingCliServices(output, error, input, isTerminal);
 
         return builder.Build();
     }
@@ -164,7 +178,7 @@ internal static class Program
 
         Option<ReportFormat> formatOption = new("--format")
         {
-            Description = "Output format: text or json",
+            Description = "Output format: text, json or summary",
             DefaultValueFactory = _ => ReportFormat.Text
         };
 
@@ -172,6 +186,13 @@ internal static class Program
         Option<bool> jsonOption = new("--json")
         {
             Description = "Alias for --format json"
+        };
+
+        // The one-line form is asked for by name far more often than by format, so it gets a flag of
+        // its own for the same reason `--json` kept one.
+        Option<bool> summaryOption = new("--summary")
+        {
+            Description = "Alias for --format summary"
         };
 
         Option<FailOn> failOnOption = new("--fail-on")
@@ -195,10 +216,17 @@ internal static class Program
             Description = "Force ASCII output"
         };
 
+        // NO_COLOR is honoured too; the flag exists for the caller who cannot set an environment
+        // variable, such as a build step that only takes an argument list.
+        Option<bool> noColorOption = new("--no-color")
+        {
+            Description = "Never emit ANSI colour"
+        };
+
         Command command = new("report", "Report test reliability findings from recent local runs")
         {
             runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
-            failOnOption, assemblyOption, directoryOption, asciiOption
+            summaryOption, failOnOption, assemblyOption, directoryOption, asciiOption, noColorOption
         };
 
         // Presence is tested with GetResult rather than GetValue: an option whose own parser already
@@ -211,6 +239,22 @@ internal static class Program
 
             if (result.GetResult(allOption) != null && result.GetResult(topOption) != null)
                 result.AddError("--all and --top are mutually exclusive.");
+
+            // The aliases are conveniences, not overrides. Silently winning over an explicit
+            // `--format` would make one of the two flags a lie.
+            if (result.GetResult(jsonOption) != null && result.GetResult(summaryOption) != null)
+                result.AddError("--json and --summary are mutually exclusive.");
+
+            if (result.GetResult(formatOption) is { Implicit: false } format)
+            {
+                ReportFormat chosen = format.GetValueOrDefault<ReportFormat>();
+
+                if (result.GetResult(jsonOption) != null && chosen != ReportFormat.Json)
+                    result.AddError("--json conflicts with --format.");
+
+                if (result.GetResult(summaryOption) != null && chosen != ReportFormat.Summary)
+                    result.AddError("--summary conflicts with --format.");
+            }
         });
 
         command.SetAction(parseResult =>
@@ -227,11 +271,12 @@ internal static class Program
                 Kinds = parseResult.GetValue(kindOption) ?? [],
                 Assembly = parseResult.GetValue(assemblyOption),
                 Directory = parseResult.GetValue(directoryOption),
-                Format = parseResult.GetValue(jsonOption)
-                    ? ReportFormat.Json
+                Format = parseResult.GetValue(jsonOption) ? ReportFormat.Json
+                    : parseResult.GetValue(summaryOption) ? ReportFormat.Summary
                     : parseResult.GetValue(formatOption),
                 FailOn = ToSeverity(parseResult.GetValue(failOnOption)),
-                Ascii = parseResult.GetValue(asciiOption)
+                Ascii = parseResult.GetValue(asciiOption),
+                NoColor = parseResult.GetValue(noColorOption)
             };
 
             return services.GetRequiredService<ReportCommand>().Run(options);

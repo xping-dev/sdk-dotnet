@@ -74,25 +74,43 @@ internal sealed class ReportCommand(
             resolved.UnreadableSessions,
             options.Top);
 
-        Renderer(options).Render(envelope, io.Output);
+        // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
+        // terminal and decorated for a pipe, or the reverse.
+        OutputCapabilities capabilities = OutputCapabilities.Resolve(
+            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
 
-        if (options.Format == ReportFormat.Text)
+        // A blank line either side, for a person only. It separates the report from the command that
+        // produced it and from whatever comes next, which a terminal gives no other help with — and
+        // it is decoration, so a redirected stream carries the report and nothing around it.
+        bool pad = options.Format == ReportFormat.Text && capabilities.Decorate;
+
+        if (pad)
+            io.Output.WriteLine();
+
+        Renderer(options, capabilities).Render(envelope, io.Output);
+
+        // Anything beyond the report itself is for a person at a terminal. A redirected stream is on
+        // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
+        if (pad)
+        {
             WriteScopeNotice(source, assembly, options.Assembly != null);
+            WriteCloudInvitation(store, analysis, startDirectory, capabilities);
 
-        if (options.Format == ReportFormat.Text)
-            WriteCloudInvitation(store, analysis, startDirectory, options);
+            // After the notices rather than after the report: the trailing blank closes the whole
+            // block, and one wedged in the middle of it would separate nothing.
+            io.Output.WriteLine();
+        }
 
         return ExitCodes.ForReport(analysis.Findings, options.FailOn);
     }
 
-    private static IReportRenderer Renderer(ReportOptions options) => options.Format switch
-    {
-        ReportFormat.Json => new JsonReportRenderer(),
-
-        // --ascii forces the fallback; otherwise ask the terminal. Assuming Unicode would render as
-        // mojibake on a console still using a legacy code page.
-        _ => new TextReportRenderer(options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Detect())
-    };
+    private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>
+        options.Format switch
+        {
+            ReportFormat.Json => new JsonReportRenderer(),
+            ReportFormat.Summary => new SummaryReportRenderer(),
+            _ => new TextReportRenderer(capabilities)
+        };
 
     /// <summary>
     /// Explains why no report could be produced.
@@ -168,7 +186,10 @@ internal sealed class ReportCommand(
     /// cloud to people who already pay for it.
     /// </remarks>
     private void WriteCloudInvitation(
-        ILocalSessionStore store, AnalysisResult analysis, string startDirectory, ReportOptions options)
+        ILocalSessionStore store,
+        AnalysisResult analysis,
+        string startDirectory,
+        OutputCapabilities capabilities)
     {
         bool isConnected = runStoreFactory
             .Create(startDirectory: startDirectory)
@@ -178,10 +199,9 @@ internal sealed class ReportCommand(
         if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;
 
-        ReportGlyphs glyphs = options.Ascii ? ReportGlyphs.Ascii : ReportGlyphs.Detect();
-
         io.Output.WriteLine();
         io.Output.WriteLine(
-            $"See flakiness across CI and your whole team {glyphs.Arrow} https://xping.io/start");
+            "See flakiness across CI and your whole team " +
+            $"{capabilities.Glyphs.Arrow} https://xping.io/start");
     }
 }

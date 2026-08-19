@@ -87,7 +87,9 @@ public sealed class CliSurfaceTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(args, output, error);
+        // Rendered as if a person were watching, so the parts of the output only a terminal gets —
+        // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
+        int code = Program.Run(args, output, error, input: null, isTerminal: true);
         return (code, output.ToString() + error.ToString());
     }
 
@@ -103,6 +105,48 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(2, code);
         Assert.Contains("No runs recorded yet", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APipedReportCarriesNothingButTheReport()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int code = Program.Run(
+            ["report"], output, error, input: null, isTerminal: false);
+
+        string report = output.ToString();
+
+        Assert.Equal(0, code);
+
+        // `xping report | pbcopy` has to copy a report and nothing else.
+        Assert.DoesNotContain("Reporting on", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("xping.io/start", report, StringComparison.Ordinal);
+
+        // And it has to arrive drawable: no escape codes, no glyphs a legacy code page cannot show.
+        Assert.DoesNotContain("\u001b", report, StringComparison.Ordinal);
+        Assert.All(report, c => Assert.True(c < 0x80, $"non-ASCII '{c}' in a piped report"));
+
+        // Not even blank lines around it. Breathing room is for a person looking at a terminal; a
+        // clipboard and a script both do better without it.
+        Assert.StartsWith("Xping", report, StringComparison.Ordinal);
+        Assert.False(report.EndsWith("\n\n", StringComparison.Ordinal), "a piped report is padded");
+    }
+
+    [Fact]
+    public void ATerminalReportIsGivenBreathingRoomOnEitherSide()
+    {
+        SeedSessions("Alpha.Tests", 6);
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(0, code);
+        Assert.StartsWith(Environment.NewLine, output, StringComparison.Ordinal);
+        Assert.EndsWith(Environment.NewLine + Environment.NewLine, output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -184,7 +228,7 @@ public sealed class CliSurfaceTests : IDisposable
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal("1.0", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.1", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
         Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
@@ -200,7 +244,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        Assert.Equal("1.0", doc.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.1", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

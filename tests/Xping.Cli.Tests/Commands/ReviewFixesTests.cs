@@ -95,7 +95,9 @@ public sealed class ReviewFixesTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(args, output, error);
+        // Rendered as if a person were watching, so the parts of the output only a terminal gets —
+        // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
+        int code = Program.Run(args, output, error, input: null, isTerminal: true);
         return (code, output.ToString() + error.ToString());
     }
 

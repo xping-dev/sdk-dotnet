@@ -1,6 +1,6 @@
 # Local Analysis Specification
 
-**Status:** authoritative · **Version:** 1.7 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
+**Status:** authoritative · **Version:** 1.8 · **Applies to:** `Xping.Cli` local analysis (`xping report` and subcommands)
 
 This document is the single source of truth for local analysis. Every implementation session reads it and treats it as immutable. Sessions cite sections by number (`§5.3`). If an implementer believes a section is wrong, incomplete, or unimplementable, they **stop and report** — they do not adapt around it. Amendments follow §12.
 
@@ -433,6 +433,7 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
   "summary": {
     "tests": 1284,
     "findings": 5,
+    "counts": { "high": 1, "medium": 3, "low": 1 },
     "healthy": 1279,
     "excludedLowEvidence": 41,
     "environmentalSessions": 1,
@@ -444,7 +445,7 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
   "truncated": {
     "shown": 5,
     "total": 5,
-    "command": "xping report --all --format json"
+    "command": "xping report --all"
   }
 }
 ```
@@ -452,6 +453,8 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
 `context` is null when nothing is known about the revision (§11.1). It is never fabricated. There is deliberately no `dirty` field — see §11.1.
 
 `window` additionally carries `resolutionArgument`: the flag value that produced the window, or null for the default. Without it a reader can see that `--runs` was used but not what was asked for.
+
+`summary.counts` breaks `findings` down by severity, counted over **every** finding produced rather than over the truncated list — `--top` decides how much is shown and must never decide what the report says it found. It is resolved here rather than tallied by each renderer, because two renderers counting one list are two places the count can be wrong.
 
 ### 8.2 Finding
 
@@ -470,6 +473,12 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
     "sourceLineNumber": 41,
     "assembly": "MyApp.Tests"
   },
+  "headline": "p50 340ms -> 1.2s (+264.7%), normalised +251.2%",
+  "metrics": [
+    { "label": "baseline p50", "value": "340ms over 10 executions" },
+    { "label": "current p50", "value": "1.2s over 4 executions" },
+    { "label": "change", "value": "+264.7% (+900ms)" }
+  ],
   "evidence": {
     "current":  { "p50Ms": 1240, "p95Ms": 1890, "executions": 4 },
     "baseline": { "p50Ms": 340,  "p95Ms": 410,  "executions": 10 },
@@ -485,6 +494,18 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
   "drillDown": "xping test GenerateMonthlySummary --format json"
 }
 ```
+
+`headline` and `metrics` are the evidence stated for a person, resolved **once** here rather than in each renderer. A renderer that reached into `evidence` to phrase its own summary would be a second place a measurement is described, and the two would eventually disagree about the same run.
+
+Three rules govern them:
+
+| Rule | Detail |
+|---|---|
+| ASCII only | `->`, never an arrow glyph. A headline is read by a JSON consumer, by a terminal on a legacy code page, and out of a chat client whose font is not ours to choose. It is resolved before any glyph set is selected and is never subject to one. |
+| No arithmetic | Every figure was already rounded by its provider to the precision §10 publishes. Resolution formats; it does not compute. |
+| §8.3 applies unchanged | Denominators always, observations never causes. `"failed 7 of 20 executions (35%)"` is a headline; `"unreliable because of shared state"` is a verdict. |
+
+`metrics` values are strings because they are presentation. Anyone doing arithmetic reads `evidence`.
 
 ### 8.3 Universal evidence rules
 
@@ -507,11 +528,12 @@ If zero user frames remain, fall back to the top 5 frames of any origin and set 
 | `--top N` | Findings to show; default `DefaultTopFindings (10)`. Mutually exclusive with `--all`. |
 | `--all` | Show every finding. This is the meaning `truncated.command` refers to — **not** "every assembly". |
 | `--kind <Kind>...` | Restrict to one or more `FindingKind` values. An unknown value is rejected naming the kinds that exist. |
-| `--format text\|json` | Output format; default `text`. Alias: `--json`. |
+| `--format text\|json\|summary` | Output format; default `text`. Aliases: `--json`, `--summary`. An alias that contradicts an explicit `--format` is a parse error rather than a silent override. |
 | `--fail-on high\|medium\|low\|none` | Least severity that fails the command; default `none`. |
 | `--assembly <name>` | Scope to one test assembly. Defaults to the newest assembly in the store, announced in the text report. |
 | `--directory <path>` | Resolve the store from here. |
 | `--ascii` | Force the ASCII glyph set. |
+| `--no-color` | Never emit ANSI colour. `NO_COLOR` and `FORCE_COLOR` are honoured as the informal standards define them, and `NO_COLOR` wins over both. |
 
 Exit codes:
 
@@ -524,6 +546,50 @@ Exit codes:
 The 1/2 distinction is load-bearing: a build step has to tell "I looked and found problems" apart from "I could not look".
 
 Warnings — unreadable files, failed providers — go to **stderr**, so `--format json` on stdout stays parsable.
+
+### 8.5 The rendered report
+
+The `text` format is the one nearly every user sees, and a report is shared more often than it is merely read. It is therefore built to survive a paste rather than to look its best in a terminal:
+
+````
+Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+3 findings (1 high, 2 medium) · 412 tests · 409 healthy
+
+```
+HIGH  flaky            GenerateMonthlySummary
+      failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+      evidence moderate | f_2a91
+```
+````
+
+A truncated report adds one line after the fence — `Showing 10 of 21 · all: xping report --all` — and a complete one ends at the fence.
+
+| Rule | Why |
+|---|---|
+| The findings are always fenced | Slack, a PR comment and a ticket all render pasted text in a proportional font, which destroys column alignment, and all three render a fenced block verbatim in monospace. Emitting the fence unconditionally means a mouse selection and a pipe both paste correctly; two lines of backticks in a terminal is the cheaper half of the trade. |
+| Nothing inside the fence exceeds 72 columns | A chat client wraps a code block rather than scrolling it on a phone, and a wrapped line loses the alignment the fence existed to preserve. Long subjects truncate from the **left**: a test's identity is its method name. |
+| An empty finding list is still fenced | A clean report and a full one must paste as the same shape, or a reader learns to read the presence of a block as bad news. |
+| Provenance sits outside the fence | So a reader who copies only the block still gets the findings. |
+| The rest of the findings are offered once, and only when some were withheld | Stated once for the report rather than once per finding — ten near-identical command lines are ten lines of noise in anything the report is pasted into — and omitted entirely when nothing was truncated, since the command would then be the one the reader just ran. |
+| Caveats sit above the fence | Unreadable runs, discounted runs, failed providers, truncation. A partial report that looks complete is worse than no report, and the reader of a pasted block reads the top of it. |
+| Ordering is by impact, not grouped by kind | Findings arrive ranked (§4.3); the severity column carries what a kind heading carried, and the ranking is worth more. |
+
+Decoration is decided by the stream, as every mainstream CLI decides it:
+
+| | Terminal | Redirected |
+|---|---|---|
+| Glyphs | Detected from the console encoding | ASCII |
+| ANSI colour | Yes, unless `NO_COLOR` / `--no-color` | Never, unless `FORCE_COLOR` |
+| Scope notice, cloud invitation | Yes | Never |
+| A blank line either side of the whole block | Yes | Never |
+
+Padding is decoration, and belongs on the same side of that line as colour. A terminal offers no other separation between a report and the command that produced it; a clipboard and a `$(…)` are both better off without it.
+
+Reference data inside the block — the evidence band, the finding id, the truncation line — is **dimmed** rather than spaced out or moved. Dimming costs no lines and no columns, and a terminal copies plain text, so the pasted block is byte-identical whether it was coloured or not. Widening the block or indenting it would trade paste fidelity for room, which is the wrong way round.
+
+`FORCE_COLOR` deliberately does not lift the last row. It says what a stream can render, not that a caller piping the report into a file wants a call to action in it.
+
+The `summary` format is one line — `Xping: 3 findings (1 high, 2 medium) in 20 runs of Checkout.Tests` — for a chat message, a commit trailer or a CI step title. It names no test: a line that did would be the one place the report's phrasing is not the fenced block's phrasing.
 
 ---
 
@@ -645,3 +711,4 @@ Sessions never resolve a spec conflict locally. A silently adapted spec is how s
 | 1.6 | Session 5 concluded. **§5.9** — `NetworkDependent` is declared but unimplementable, and v1.5's repair is withdrawn along with the condition it repaired. Fixing the latency threshold fixed a symptom: the comparison itself measures nothing. The arms are whole sessions, so an impaired arm does not select for network conditions but for *those particular runs*, and every other property of them — a laptop on battery, a build running alongside the suite, an upstream dependency having a bad hour — is perfectly correlated with the split; a test that never opens a socket is fully eligible. Compounding it, a three-**session** arm makes `NetworkSensitivityDelta` reduce to "a one-failure difference", so at the realistic operating point a single failure in the whole window fires the finding, and a test with no network dependence at all fires 7.2%/16.3%/31.4% of the time when it fails 10%/20%/30% of runs — roughly 1.4 fabricated findings per report in a 400-test suite. Restoring power needs about fifteen sessions a side, which `DefaultWindowSessions (20)` cannot supply. Implementing the kind requires the store to carry whether a test uses the network at all, which is an SDK change. Its `unreliability` formula is withdrawn and left open on §5.7's terms. **§5** — the kinds table marks it declared. **§6** — `NetworkDependent` removed from discounting, which only applied to it as an implemented kind; the clarification that the rule does not govern baselines is kept for §5.5. **§9** — `NetworkImpairedLatencyMultiple` and `NetworkImpairedMinLatencyMs` removed with the design that introduced them. **§11.2** — the `NetworkMetrics` verification result is retained; it is what scoped the kind down. |
 | 1.5 | Session 5 verification and the amendments it forced. **§5.9** — the p90 latency threshold is replaced by a relative-plus-absolute one (`NetworkImpairedLatencyMultiple` × the window's median `LatencyMs`, floored at `NetworkImpairedMinLatencyMs`). The percentile was unsatisfiable: nearest rank with a strictly-greater boundary admits at most `n - ceil(0.9n)` sessions, which is 2 at the default window of 20 against a gate of 3, so the latency limb could never fill the impaired arm. A rank is the wrong instrument for an absolute physical condition. Also settled in the same section: exemplars come from the arm with the higher failure rate rather than from the impaired arm by name, since the condition's absolute value admits either direction and the impaired arm may hold no failures; a `NetworkMetrics` record with `IsOnline == null` and `LatencyMs == null` is excluded from both arms rather than treated as healthy; and the kind is recorded as reachable in `Connected` mode only. **§6** — discounting extended to `NetworkDependent`, whose impaired arm collects an outage's collateral failures by construction; the rule is also stated not to govern baselines. **§9** — `NetworkImpairedLatencyMultiple` and `NetworkImpairedMinLatencyMs` added. **§11.2** — `EnvironmentInfo.NetworkMetrics` verified null on every session of a zero-config store, because `LocalOnly` mode suppresses collection; `LatencyMs` independently nullable while online. |
 | 1.4 | Pre-session-5 amendment. **§5.9** — `NetworkDependent` was missing an `unreliability` formula and a named threshold constant, alone among the implementable kinds; both gaps are closed before implementation rather than left for the session to invent. The condition is redesigned as a two-arm comparison in the shape of §5.8: sessions split into impaired (`IsOnline == false` or `LatencyMs` above the window's p90) versus healthy, each arm requiring a minimum size, `unreliability` = the absolute failure-rate delta between them. **§9** — `NetworkDependentMinAffectedSessions` and `NetworkSensitivityDelta` added. |
+| 1.8 | The rendered report is rebuilt around being shared. **§8.5** — new: the `text` format always fences its findings, holds every fenced line to 72 columns, states the drill-down once, and decides colour, glyphs and decoration from whether stdout is a terminal. **§8.2** — findings carry `headline` and `metrics`, resolved once in the envelope so no renderer phrases a measurement itself; ASCII-only, no arithmetic, §8.3 unchanged. **§8.1** — `summary.counts` breaks findings down by severity over every finding produced. **§8.1** — `truncated.command` drops `--format json`: it is the "show me the rest" affordance, and a reader looking at ten of twenty-one findings wants the other eleven in the format they are already reading. Per-finding `drillDown` keeps its `--format json`, being aimed at an agent. Schema **1.0 → 1.1**. **§8.4** — `--format summary` with a `--summary` alias, and `--no-color`. |

@@ -16,7 +16,10 @@ internal enum ReportFormat
     Text,
 
     /// <summary>The versioned envelope for a script or an agent.</summary>
-    Json
+    Json,
+
+    /// <summary>One line, for a chat message, a commit trailer or a CI step title.</summary>
+    Summary
 }
 
 /// <summary>
@@ -61,4 +64,9 @@ internal sealed class ReportOptions
 
     /// <summary>Gets or sets a value indicating whether to force the ASCII glyph set.</summary>
     public bool Ascii { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to suppress ANSI colour regardless of the terminal.
+    /// </summary>
+    public bool NoColor { get; set; }
 }

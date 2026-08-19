@@ -35,7 +35,7 @@ internal sealed record ReportEnvelope(
     TruncationDto Truncated)
 {
     /// <summary>The shape this build emits.</summary>
-    public const string CurrentSchemaVersion = "1.0";
+    public const string CurrentSchemaVersion = "1.1";
 }
 
 /// <summary>
@@ -75,6 +75,7 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// </summary>
 /// <param name="Tests">Distinct tests seen in the window.</param>
 /// <param name="Findings">Findings produced, before truncation.</param>
+/// <param name="Counts">Those findings broken down by severity.</param>
 /// <param name="Healthy">Tests no finding was raised about.</param>
 /// <param name="ExcludedLowEvidence">Candidates dropped for resting on too little data.</param>
 /// <param name="EnvironmentalSessions">Sessions discounted as environment failures.</param>
@@ -84,6 +85,7 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 internal sealed record SummaryDto(
     int Tests,
     int Findings,
+    SeverityCountsDto Counts,
     int Healthy,
     int ExcludedLowEvidence,
     int EnvironmentalSessions,
@@ -99,6 +101,8 @@ internal sealed record SummaryDto(
 /// <param name="Severity">How much attention it deserves.</param>
 /// <param name="EvidenceLevel">How much data it rests on.</param>
 /// <param name="Subject">The test or group it is about.</param>
+/// <param name="Headline">The observations in one already-resolved sentence.</param>
+/// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
 /// <param name="Evidence">The kind-specific observations.</param>
 /// <param name="DrillDown">The command that expands it.</param>
 internal sealed record FindingDto(
@@ -107,8 +111,35 @@ internal sealed record FindingDto(
     string Severity,
     string EvidenceLevel,
     SubjectDto Subject,
+    string Headline,
+    IReadOnlyList<MetricDto> Metrics,
     JsonNode? Evidence,
     string DrillDown);
+
+/// <summary>
+/// One labelled observation from a finding's evidence, already formatted.
+/// </summary>
+/// <remarks>
+/// The pair exists so a caller can lay the numbers out itself — a table, a chat card — without
+/// re-deriving them from <see cref="FindingDto.Evidence"/> and inventing a second phrasing for the
+/// same measurement. <see cref="Value"/> is a string, not a number: it is presentation, and the
+/// figure it was rounded from is in the evidence payload for anyone doing arithmetic.
+/// </remarks>
+/// <param name="Label">What was measured, in lower case.</param>
+/// <param name="Value">The measurement, at published precision.</param>
+internal sealed record MetricDto(string Label, string Value);
+
+/// <summary>
+/// Findings broken down by severity.
+/// </summary>
+/// <remarks>
+/// Resolved here rather than tallied by each renderer, for the same reason every other value is:
+/// two renderers counting the same list are two places the count can be wrong.
+/// </remarks>
+/// <param name="High">Findings at high severity.</param>
+/// <param name="Medium">Findings at medium severity.</param>
+/// <param name="Low">Findings at low severity.</param>
+internal sealed record SeverityCountsDto(int High, int Medium, int Low);
 
 /// <summary>
 /// The test or group a finding is about.

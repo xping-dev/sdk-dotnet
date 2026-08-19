@@ -1,0 +1,225 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using System.Globalization;
+using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
+
+namespace Xping.Cli.Report.Contract;
+
+/// <summary>
+/// Turns a finding's evidence into the one sentence a reader is shown, and the labelled pairs
+/// behind it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Resolved here, once, rather than in each renderer. A renderer that reached into the evidence
+/// payload to phrase its own summary would be the second place a measurement is described, and the
+/// two would eventually disagree about the same run — which is precisely what the renderer contract
+/// in <c>IReportRenderer</c> forbids.
+/// </para>
+/// <para>
+/// <b>Every headline is ASCII.</b> It is read by a JSON consumer, by a terminal on a legacy code
+/// page, and out of a chat client that may or may not have the font — so <c>-&gt;</c>, never an
+/// arrow glyph. The glyph set is chosen after this runs and never applies to it.
+/// </para>
+/// <para>
+/// Observations only, per the output contract's evidence rules: a headline states what was counted
+/// and never why it happened. No arithmetic happens here either — every figure was rounded by its
+/// provider to the precision the report publishes, and this only formats it.
+/// </para>
+/// </remarks>
+internal static class EvidenceHeadline
+{
+    /// <summary>
+    /// Resolves the headline and metrics for one finding.
+    /// </summary>
+    /// <param name="kind">What the finding claims.</param>
+    /// <param name="evidence">The kind-specific payload.</param>
+    /// <returns>The sentence and the pairs behind it.</returns>
+    public static (string Headline, IReadOnlyList<MetricDto> Metrics) For(
+        FindingKind kind, FindingEvidence evidence) => evidence switch
+    {
+        RetryMaskedEvidence retry => RetryMasked(retry),
+        FlakyEvidence flaky => Flaky(flaky),
+        AlwaysFailingEvidence always => AlwaysFailing(always),
+        SharedFailureEvidence shared => SharedFailure(shared),
+        DurationRegressionEvidence regression => DurationRegression(regression),
+        DurationUnstableEvidence unstable => DurationUnstable(unstable),
+        ParallelSensitiveEvidence parallel => ParallelSensitive(parallel),
+        VanishedEvidence vanished => Vanished(vanished),
+
+        // A kind whose provider ships later. Naming the kind is honest and useless in equal measure,
+        // which is better than a renderer printing an empty line where a number belongs.
+        _ => ($"see evidence for details ({kind})", [])
+    };
+
+    private static (string, IReadOnlyList<MetricDto>) RetryMasked(RetryMaskedEvidence e)
+    {
+        string headline =
+            $"passed on retry {Times(e.MaskedOccurrences)} in " +
+            $"{e.SessionsWithMasking} of {Runs(e.Sessions)}, up to attempt {e.MaxAttemptObserved}";
+
+        if (e.RetryWallClockMs > 0)
+            headline += $", {Duration(e.RetryWallClockMs)} spent retrying";
+
+        List<MetricDto> metrics =
+        [
+            new("masked", $"{e.MaskedOccurrences} of {e.Executions} executions ({Percent(e.MaskedRate)})"),
+            new("runs affected", $"{e.SessionsWithMasking} of {e.Sessions}"),
+            new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture))
+        ];
+
+        if (e.RetryAttributeName is { Length: > 0 } attribute)
+            metrics.Add(new MetricDto("mechanism", attribute));
+
+        return (headline, metrics);
+    }
+
+    private static (string, IReadOnlyList<MetricDto>) Flaky(FlakyEvidence e)
+    {
+        string modes = e.DistinctSignatureCount == 1
+            ? "1 failure mode"
+            : $"{e.DistinctSignatureCount} failure modes";
+
+        return (
+            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}) " +
+            $"in {e.SessionsWithFailures} of {Runs(e.Sessions)}, {modes}",
+            [
+                new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
+                new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+                new("failure modes", e.DistinctSignatureCount.ToString(CultureInfo.InvariantCulture))
+            ]);
+    }
+
+    private static (string, IReadOnlyList<MetricDto>) AlwaysFailing(AlwaysFailingEvidence e)
+    {
+        string headline =
+            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}), " +
+            "one failure mode";
+
+        // Named only when the adapter recorded a type. An adapter that captures no failure detail is
+        // not the same as a failure that had none, and inventing a name here would hide the gap.
+        if (e.Signature.ExceptionType is { Length: > 0 } type)
+            headline += $": {type}";
+
+        return (
+            headline,
+            [
+                new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
+                new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+                new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
+            ]);
+    }
+
+    private static (string, IReadOnlyList<MetricDto>) SharedFailure(SharedFailureEvidence e) =>
+    (
+        $"{e.MemberCount} tests failed alike in {e.SessionsAffected} of {Runs(e.Sessions)}, " +
+        $"worst run hit {e.MaxTestsInOneSession}",
+        [
+            new("tests affected", e.MemberCount.ToString(CultureInfo.InvariantCulture)),
+            new("failures", e.Failures.ToString(CultureInfo.InvariantCulture)),
+            new("runs affected", $"{e.SessionsAffected} of {e.Sessions}"),
+            new("worst run", $"{e.MaxTestsInOneSession} tests")
+        ]);
+
+    private static (string, IReadOnlyList<MetricDto>) DurationRegression(
+        DurationRegressionEvidence e) =>
+    (
+        $"p50 {Duration(e.Baseline.P50Ms)} -> {Duration(e.Current.P50Ms)} " +
+        $"({Signed(e.Delta.P50Pct)}), normalised {Signed(e.NormalisedDelta.P50Pct)}",
+        [
+            new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.Executions} executions"),
+            new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.Executions} executions"),
+            new("change", $"{Signed(e.Delta.P50Pct)} ({Signed(e.Delta.P50Ms)}ms)"),
+            new("normalised change", Signed(e.NormalisedDelta.P50Pct))
+        ]);
+
+    private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>
+    (
+        $"p50 {Duration(e.P50Ms)}, ranging {Duration(e.MinMs)} to {Duration(e.MaxMs)} " +
+        $"over {e.Executions} executions, cv {Rate(e.Cv)}",
+        [
+            new("p50", Duration(e.P50Ms)),
+            new("p95", Duration(e.P95Ms)),
+            new("range", $"{Duration(e.MinMs)} to {Duration(e.MaxMs)}"),
+            new("cv", $"{Rate(e.Cv)} over {e.Executions} executions")
+        ]);
+
+    private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(
+        ParallelSensitiveEvidence e) =>
+    (
+        $"failed {Percent(e.High.FailureRate)} above concurrency {e.SplitAtConcurrency} " +
+        $"and {Percent(e.Low.FailureRate)} at or below, gap {Points(e.Delta.FailureRatePct)}",
+        [
+            new(
+                $"above {e.SplitAtConcurrency}",
+                $"{e.High.Failures} of {e.High.Executions} executions ({Percent(e.High.FailureRate)})"),
+            new(
+                $"at or below {e.SplitAtConcurrency}",
+                $"{e.Low.Failures} of {e.Low.Executions} executions ({Percent(e.Low.FailureRate)})"),
+            new("gap", Points(e.Delta.FailureRatePct)),
+            new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}")
+        ]);
+
+    private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e) =>
+    (
+        $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier runs, " +
+        $"absent from the last {e.CurrentSessionCount}",
+        [
+            new("ran in", $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier runs"),
+            new("absent from", $"the last {e.CurrentSessionCount} runs"),
+            new("executions", e.Executions.ToString(CultureInfo.InvariantCulture))
+        ]);
+
+    private static string Times(int count) =>
+        count == 1 ? "once" : $"{count.ToString(CultureInfo.InvariantCulture)} times";
+
+    private static string Runs(int count) =>
+        count == 1 ? "1 run" : $"{count.ToString(CultureInfo.InvariantCulture)} runs";
+
+    /// <summary>
+    /// Formats a rate in [0,1] as a whole percentage.
+    /// </summary>
+    /// <remarks>
+    /// The scaling is presentation, not analysis: the rate was already rounded to the precision the
+    /// report publishes, and the unrounded figure it came from is not reachable from here. Reading
+    /// "35%" is what makes the sentence quotable in a chat message; reading "0.35" is not.
+    /// </remarks>
+    private static string Percent(double rate) =>
+        (rate * 100).ToString("0.#", CultureInfo.InvariantCulture) + "%";
+
+    private static string Rate(double value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats an already-signed change, keeping the plus that a bare number would drop.
+    /// </summary>
+    private static string Signed(double percent) =>
+        (percent >= 0 ? "+" : string.Empty) +
+        percent.ToString("0.#", CultureInfo.InvariantCulture) + "%";
+
+    private static string Signed(long milliseconds) =>
+        (milliseconds >= 0 ? "+" : string.Empty) +
+        milliseconds.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats a difference between two rates, in percentage points rather than percent.
+    /// </summary>
+    /// <remarks>
+    /// The unit matters: 60% against 10% is a gap of 50 points, not of 500%, and the two readings
+    /// differ by an order of magnitude.
+    /// </remarks>
+    private static string Points(double percentagePoints) =>
+        Math.Abs(percentagePoints).ToString("0.#", CultureInfo.InvariantCulture) + " pts";
+
+    /// <summary>
+    /// Formats a duration at the scale a reader thinks in.
+    /// </summary>
+    private static string Duration(long milliseconds) =>
+        milliseconds < 1000
+            ? milliseconds.ToString(CultureInfo.InvariantCulture) + "ms"
+            : (milliseconds / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + "s";
+}

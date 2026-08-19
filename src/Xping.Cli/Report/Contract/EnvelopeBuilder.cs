@@ -43,6 +43,10 @@ internal static class EnvelopeBuilder
 
         int tests = context.Tests.Fingerprints.Count;
 
+        int high = 0;
+        int medium = 0;
+        int low = 0;
+
         // Tests named by any finding, deduplicated: one test can attract findings of several kinds,
         // and counting it as unhealthy more than once would make "healthy" go negative on a bad day.
         var flagged = new HashSet<string>(StringComparer.Ordinal);
@@ -50,6 +54,21 @@ internal static class EnvelopeBuilder
         {
             foreach (TestReference test in finding.Subject.Tests)
                 flagged.Add(test.TestFingerprint);
+
+            // Counted over every finding produced, not over the truncated list: `--top` decides how
+            // much is shown and must never decide what the report says it found.
+            switch (finding.Severity)
+            {
+                case Severity.High:
+                    high++;
+                    break;
+                case Severity.Medium:
+                    medium++;
+                    break;
+                default:
+                    low++;
+                    break;
+            }
         }
 
         return new ReportEnvelope(
@@ -59,6 +78,7 @@ internal static class EnvelopeBuilder
             new SummaryDto(
                 tests,
                 result.Findings.Count,
+                new SeverityCountsDto(high, medium, low),
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
 
@@ -83,15 +103,22 @@ internal static class EnvelopeBuilder
     private static ContextDto? BuildContext(RevisionContext? revision) =>
         revision == null ? null : new ContextDto(revision.Sha, revision.Branch, revision.Assembly);
 
-    private static FindingDto BuildFinding(Finding finding) =>
-        new(
+    private static FindingDto BuildFinding(Finding finding)
+    {
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(finding.Kind, finding.Evidence);
+
+        return new FindingDto(
             finding.Id,
             finding.Kind.ToString(),
             ToCamelCase(finding.Severity.ToString()),
             ToCamelCase(finding.EvidenceLevel.ToString()),
             BuildSubject(finding.Subject),
+            headline,
+            metrics,
             BuildEvidence(finding.Evidence),
             finding.DrillDownCommand);
+    }
 
     private static SubjectDto BuildSubject(FindingSubject subject) => subject switch
     {

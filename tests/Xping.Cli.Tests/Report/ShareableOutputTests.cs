@@ -1,0 +1,416 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
+
+namespace Xping.Cli.Tests.Report;
+
+/// <summary>
+/// The properties that make a report survive being pasted somewhere else.
+/// </summary>
+/// <remarks>
+/// The report is shared more often than it is merely read, so the fence, the width and the ASCII
+/// headline are load-bearing rather than cosmetic: a line over the width wraps in a chat client and
+/// loses the alignment the fence exists to preserve, and a non-ASCII character can arrive as a
+/// replacement glyph in whatever the reader is using.
+/// </remarks>
+public sealed class ShareableOutputTests
+{
+    private const int FenceWidth = 72;
+    private const string Fence = "```";
+
+    // ---------------------------------------------------------------------
+    // Headlines
+    // ---------------------------------------------------------------------
+
+    /// <summary>Every kind a provider can emit today.</summary>
+    /// <remarks>
+    /// Named rather than passed as evidence: the evidence records are internal, and a public theory
+    /// member cannot expose them. The lookup below is the price of keeping the model internal, which
+    /// is worth more than the indirection costs.
+    /// </remarks>
+    public static TheoryData<string> EveryEvidenceShape() =>
+    [
+        nameof(FindingKind.RetryMasked),
+        nameof(FindingKind.Flaky),
+        nameof(FindingKind.AlwaysFailing),
+        nameof(FindingKind.SharedFailure),
+        nameof(FindingKind.DurationRegression),
+        nameof(FindingKind.DurationUnstable),
+        nameof(FindingKind.ParallelSensitive),
+        nameof(FindingKind.Vanished)
+    ];
+
+    private static FindingEvidence EvidenceFor(FindingKind kind)
+    {
+        SignatureView signature = new(
+            "abc123",
+            "System.InvalidOperationException",
+            "Expected <n> but was <n>",
+            ["MyApp.Tests.CheckoutTests.Completes()"],
+            Degraded: false,
+            Unavailable: false,
+            Occurrences: 12,
+            FirstSeenAt: new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
+            FirstSeenSha: "a3f9c2e",
+            FirstSeenSessionsAgo: 4,
+            FirstSeenInLatestSession: false,
+            FirstSeenAfterWindowStart: true);
+
+        FailureExemplar exemplar = new(
+            "11111111-1111-1111-1111-111111111111",
+            new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
+            "a3f9c2e",
+            AttemptNumber: 1,
+            DurationMs: 120,
+            "System.InvalidOperationException",
+            "boom",
+            ["MyApp.Tests.CheckoutTests.Completes()"],
+            "abc123");
+
+        return kind switch
+        {
+            FindingKind.RetryMasked =>
+                new RetryMaskedEvidence(
+                    4, 20, 20, 3, 0.2, 3, "RetryAttribute", 2, 12_400,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", []),
+
+            FindingKind.Flaky =>
+                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),
+
+            FindingKind.AlwaysFailing =>
+                new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, signature, [exemplar], null),
+
+            FindingKind.SharedFailure =>
+                new SharedFailureEvidence(
+                    signature, 12, [new ClusterMember("fp", "MyApp.Tests.A", 4)], 47, 3, 20, 12,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
+
+            FindingKind.DurationRegression =>
+                new DurationRegressionEvidence(
+                    new DurationProfile(1240, 1890, 4, 3),
+                    new DurationProfile(340, 410, 10, 10),
+                    new DurationDelta(264.7, 900),
+                    new NormalisedDurationDelta(251.2),
+                    0.11,
+                    "a3f9c2e",
+                    [],
+                    null),
+
+            FindingKind.DurationUnstable =>
+                new DurationUnstableEvidence(18, 20, 820, 3100, 210, 4100, 0.71, []),
+
+            FindingKind.ParallelSensitive =>
+                new ParallelSensitiveEvidence(
+                    new ConcurrencyArm(6, 10, 8, 0.6, 9, 14),
+                    new ConcurrencyArm(1, 10, 9, 0.1, 1, 8),
+                    new ConcurrencyDelta(0.5, 50),
+                    8,
+                    new ConcurrencyRange(1, 14, 9),
+                    [],
+                    null),
+
+            FindingKind.Vanished =>
+                new VanishedEvidence(
+                    12, 17, 3, 40, new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e"),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryEvidenceShape))]
+    public void EveryHeadlineIsAsciiAndCarriesItsDenominators(string kind)
+    {
+        FindingKind parsed = Enum.Parse<FindingKind>(kind);
+
+        var (headline, metrics) = EvidenceHeadline.For(parsed, EvidenceFor(parsed));
+
+        Assert.NotEmpty(headline);
+
+        // The one property that keeps a pasted fence intact in a client whose font, encoding or
+        // markdown dialect is not ours to choose.
+        Assert.All(headline, c => Assert.InRange(c, (char)0x20, (char)0x7E));
+
+        Assert.NotEmpty(metrics);
+        Assert.All(metrics, m =>
+        {
+            Assert.NotEmpty(m.Label);
+            Assert.NotEmpty(m.Value);
+        });
+    }
+
+    [Fact]
+    public void AHeadlineNamesTheFailureTypeOnlyWhenTheAdapterRecordedOne()
+    {
+        SignatureView unnamed = new(
+            "abc123", null, "no detail", [], false, true, 3,
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), null, 0, true, false);
+
+        var (headline, _) = EvidenceHeadline.For(
+            FindingKind.AlwaysFailing,
+            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, unnamed, [], null));
+
+        // An adapter that captures no failure detail is not the same as a failure that had none.
+        Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------
+    // The fenced report
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void NothingInsideTheFenceExceedsTheWidth()
+    {
+        string report = Render(Envelope(
+            Finding(
+                "Flaky",
+                "high",
+                "MyApp.Tests.Checkout.Integration.VeryLongNamespace.PlacesAnOrderAndSettlesIt",
+                "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes, " +
+                "and a great deal more text besides so that wrapping has to happen"),
+            Finding("DurationUnstable", "low", "Short", "p50 820ms, cv 0.71")));
+
+        foreach (string line in Fenced(report))
+            Assert.True(line.Length <= FenceWidth, $"'{line}' is {line.Length} columns");
+    }
+
+    [Fact]
+    public void TheFenceOpensAndClosesOnceEvenWithNothingToReport()
+    {
+        string clean = Render(Envelope());
+        string dirty = Render(Envelope(Finding("Flaky", "high", "Alpha", "failed twice")));
+
+        // A clean report and a full one paste as the same shape, or a reader learns to read the
+        // presence of a block as bad news.
+        Assert.Equal(2, Lines(clean).Count(l => l.Trim() == Fence));
+        Assert.Equal(2, Lines(dirty).Count(l => l.Trim() == Fence));
+        Assert.Single(Fenced(clean));
+    }
+
+    [Fact]
+    public void EveryHeadlineIsInsideTheFence()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"),
+            Finding("Vanished", "low", "Beta", "ran in 12 of 17 earlier runs")));
+
+        Assert.Contains(
+            Fenced(report), l => l.Contains("failed 7 of 20 executions", StringComparison.Ordinal));
+        Assert.Contains(
+            Fenced(report), l => l.Contains("ran in 12 of 17 earlier", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheRestOfTheFindingsAreOfferedOnlyWhenSomeWereWithheld()
+    {
+        FindingDto[] findings =
+        [
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"),
+            Finding("Vanished", "low", "Beta", "ran in 12 of 17 earlier runs")
+        ];
+
+        string truncated = Render(Envelope(findings, shown: 1, total: 21));
+        string complete = Render(Envelope(findings));
+
+        // One offer for the whole report. Ten near-identical command lines are ten lines of noise in
+        // anything the report is pasted into.
+        Assert.Equal(
+            1, Lines(truncated).Count(l => l.Contains("xping report --all", StringComparison.Ordinal)));
+        Assert.Contains("Showing 1 of 21", truncated, StringComparison.Ordinal);
+
+        // And no offer at all when there is nothing more to show: the command would be the one the
+        // reader just ran, and it names no format, so it cannot be offering a different view either.
+        Assert.DoesNotContain("xping report --all", complete, StringComparison.Ordinal);
+        Assert.EndsWith(Fence + Environment.NewLine, complete, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoRendersOfOneEnvelopeAreByteIdentical()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"));
+
+        Assert.Equal(Render(envelope), Render(envelope));
+    }
+
+    [Fact]
+    public void ColourIsEmittedForATerminalAndNeverForAPipe()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"));
+
+        string piped = Render(envelope, Capabilities(redirected: true));
+        string terminal = Render(envelope, Capabilities(redirected: false));
+
+        Assert.DoesNotContain("\u001b", piped, StringComparison.Ordinal);
+        Assert.Contains("\u001b", terminal, StringComparison.Ordinal);
+
+        // The escape codes are the only difference: colour must not move a column.
+        Assert.Equal(piped, Strip(terminal));
+    }
+
+    [Fact]
+    public void TheOneLineSummaryStatesTheSameCountsAsTheReport()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"));
+
+        using var writer = new StringWriter();
+        new SummaryReportRenderer().Render(envelope, writer);
+
+        Assert.Equal(
+            "Xping: 1 finding (1 high) in 20 runs of MyApp.Tests",
+            writer.ToString().TrimEnd());
+    }
+
+    // ---------------------------------------------------------------------
+    // Capabilities
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void APipeGetsAsciiWithoutColourOrDecoration()
+    {
+        OutputCapabilities capabilities = OutputCapabilities.Resolve(
+            forceAscii: false, noColor: false, redirected: true, _ => null);
+
+        Assert.Same(ReportGlyphs.Ascii, capabilities.Glyphs);
+        Assert.False(capabilities.Color);
+        Assert.False(capabilities.Decorate);
+    }
+
+    [Fact]
+    public void NoColorWinsOverEverything()
+    {
+        OutputCapabilities byFlag = OutputCapabilities.Resolve(false, noColor: true, false, _ => null);
+        OutputCapabilities byVariable = OutputCapabilities.Resolve(
+            false, false, false, name => name == "NO_COLOR" ? "1" : null);
+
+        Assert.False(byFlag.Color);
+        Assert.False(byVariable.Color);
+
+        // Both together: the informal standard says NO_COLOR wins, and a caller who set both is more
+        // likely to have inherited FORCE_COLOR from a tool than to have meant it here.
+        OutputCapabilities both = OutputCapabilities.Resolve(
+            false, false, true, name => "1");
+
+        Assert.False(both.Color);
+    }
+
+    [Fact]
+    public void ForceColorLiftsColourButNeverDecoration()
+    {
+        OutputCapabilities capabilities = OutputCapabilities.Resolve(
+            false, false, redirected: true, name => name == "FORCE_COLOR" ? "1" : null);
+
+        Assert.True(capabilities.Color);
+
+        // FORCE_COLOR says what the stream can render, not that a caller piping the report into a
+        // file wants a call to action in it.
+        Assert.False(capabilities.Decorate);
+    }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    private static OutputCapabilities Capabilities(bool redirected) =>
+        OutputCapabilities.Resolve(forceAscii: true, noColor: false, redirected, _ => null);
+
+    private static string Render(ReportEnvelope envelope, OutputCapabilities? capabilities = null)
+    {
+        using var writer = new StringWriter();
+        new TextReportRenderer(capabilities ?? Capabilities(redirected: true)).Render(envelope, writer);
+
+        return writer.ToString();
+    }
+
+    private static string[] Lines(string report) =>
+        report.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    /// <summary>
+    /// Returns the lines between the fences — the part that has to survive a paste.
+    /// </summary>
+    private static string[] Fenced(string report)
+    {
+        string[] lines = Lines(report);
+        int open = Array.FindIndex(lines, l => l.Trim() == Fence);
+        int close = Array.FindLastIndex(lines, l => l.Trim() == Fence);
+
+        Assert.True(open >= 0 && close > open, "the report is not fenced");
+
+        return lines[(open + 1)..close];
+    }
+
+    private static string Strip(string value)
+    {
+        var builder = new System.Text.StringBuilder(value.Length);
+
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (value[i] != '\u001b')
+            {
+                builder.Append(value[i]);
+                continue;
+            }
+
+            while (i < value.Length && value[i] != 'm')
+                i++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static FindingDto Finding(string kind, string severity, string name, string headline) =>
+        new(
+            "f_2a91",
+            kind,
+            severity,
+            "moderate",
+            new SubjectDto("test", "fp", name, name, null, null, "MyApp.Tests", null, null, null),
+            headline,
+            [new MetricDto("failed", "7 of 20 executions (35%)")],
+            null,
+            "xping report --kind Flaky --format json");
+
+    private static ReportEnvelope Envelope(params FindingDto[] findings) =>
+        Envelope(findings, findings.Length, findings.Length);
+
+    private static ReportEnvelope Envelope(FindingDto[] findings, int shown, int total)
+    {
+        int high = findings.Count(f => f.Severity == "high");
+        int medium = findings.Count(f => f.Severity == "medium");
+        int low = findings.Count(f => f.Severity == "low");
+        int produced = Math.Max(total, findings.Length);
+
+        return new ReportEnvelope(
+            ReportEnvelope.CurrentSchemaVersion,
+            new WindowDto(
+                new DateTime(2026, 8, 5, 9, 12, 0, DateTimeKind.Utc),
+                new DateTime(2026, 8, 19, 16, 40, 0, DateTimeKind.Utc),
+                20,
+                "default",
+                null,
+                3,
+                []),
+            new ContextDto("a3f9c2ed0011", "main", "MyApp.Tests"),
+            new SummaryDto(
+                412,
+                produced,
+                new SeverityCountsDto(high, medium, low),
+                412 - findings.Length,
+                0,
+                0,
+                0,
+                0,
+                []),
+            findings,
+            new TruncationDto(shown, total, "xping report --all"));
+    }
+}
