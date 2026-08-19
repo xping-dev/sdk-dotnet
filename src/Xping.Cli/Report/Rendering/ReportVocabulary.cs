@@ -35,8 +35,8 @@ internal static class ReportVocabulary
     /// <param name="kind">The kind, as the envelope spells it.</param>
     /// <returns>The label.</returns>
     /// <remarks>
-    /// Takes the serialised string rather than the enum: renderers read an envelope, which is text
-    /// by then, and re-parsing it back into an enum only to look up a word would be a second place
+    /// Takes the serialized string rather than the enum: renderers read an envelope, which is text
+    /// by then, and reparsing it back into an enum only to look up a word would be a second place
     /// an unknown kind could throw.
     /// </remarks>
     public static string LabelFor(string kind) => kind switch
@@ -59,7 +59,7 @@ internal static class ReportVocabulary
     };
 
     /// <summary>
-    /// Gets the fixed-width marker for a severity.
+    /// Gets the fixed-width marker for severity.
     /// </summary>
     /// <param name="severity">The severity, as the envelope spells it.</param>
     /// <returns>The marker, padded to a common width.</returns>
@@ -79,7 +79,7 @@ internal static class ReportVocabulary
     /// <remarks>
     /// Shared by the fenced report and the one-line summary, so the two cannot describe the same run
     /// with two different sentences. Bands that are empty are omitted rather than printed as zero:
-    /// "3 findings (1 high, 2 medium)" is read at a glance and "3 findings (1 high, 2 medium, 0 low)"
+    /// "3 findings (1 high, 2 medium)" is read at a glance, and "3 findings (1 high, 2 medium, 0 low)"
     /// is not.
     /// </remarks>
     public static string FindingsPhrase(SummaryDto summary)
