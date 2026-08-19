@@ -165,8 +165,6 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 }
 ```
 
-The full contract, including every finding kind and the thresholds behind it, is in the [local analysis specification](../local-analysis-spec.md).
-
 ---
 
 ## `xping where`
