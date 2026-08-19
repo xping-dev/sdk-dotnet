@@ -25,7 +25,6 @@ internal static class ServiceCollectionExtensions
         bool isTerminal)
     {
         services.AddSingleton(new ConsoleIO(output, error, input, isTerminal));
-        services.AddSingleton<ILocalRunStoreFactory, LocalRunStoreFactory>();
         services.AddSingleton<ILocalSessionStoreFactory, LocalSessionStoreFactory>();
 
         services.AddXpingLocalAnalysis();

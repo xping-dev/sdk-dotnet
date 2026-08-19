@@ -10,7 +10,7 @@ using System.Text;
 namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 
 /// <summary>
-/// Resolves the on-disk location of the local run store.
+/// Resolves the on-disk location of the local session store.
 /// </summary>
 /// <remarks>
 /// Resolution order:
@@ -35,7 +35,6 @@ internal static class LocalStorePathResolver
 {
     internal const string EnvironmentVariableName = "XPING_LOCAL_STORE";
     internal const string StoreDirectoryName = ".xping";
-    internal const string RunsDirectoryName = "runs";
     internal const string SessionsDirectoryName = "sessions";
 
     // Bounds the upward walk. A repository nested deeper than this is pathological, and an unbounded
@@ -104,22 +103,14 @@ internal static class LocalStorePathResolver
     }
 
     /// <summary>
-    /// Gets the directory holding run files for the given store root.
-    /// </summary>
-    /// <param name="storeRoot">The store root directory.</param>
-    /// <returns>The runs directory path.</returns>
-    public static string GetRunsDirectory(string storeRoot) =>
-        Path.Combine(storeRoot, RunsDirectoryName);
-
-    /// <summary>
-    /// Gets the directory holding full-session files for the given store root.
+    /// Gets the directory holding session files for the given store root.
     /// </summary>
     /// <param name="storeRoot">The store root directory.</param>
     /// <returns>The sessions directory path.</returns>
     /// <remarks>
-    /// Sessions live beside <see cref="GetRunsDirectory"/> rather than inside it so the two tiers
-    /// prune independently. They hold the same runs at very different fidelities, and a shared
-    /// directory would let one tier's retention delete the other's history.
+    /// Sessions sit in their own directory rather than at the store root so the store can grow
+    /// sibling state — the CLI's <c>state.json</c> already lives there — without retention having to
+    /// tell its own files apart from everything else in the folder.
     /// </remarks>
     public static string GetSessionsDirectory(string storeRoot) =>
         Path.Combine(storeRoot, SessionsDirectoryName);
@@ -136,7 +127,6 @@ internal static class LocalStorePathResolver
     /// </remarks>
     public static void EnsureCreated(string storeRoot)
     {
-        Directory.CreateDirectory(GetRunsDirectory(storeRoot));
         Directory.CreateDirectory(GetSessionsDirectory(storeRoot));
 
         string gitIgnorePath = Path.Combine(storeRoot, ".gitignore");

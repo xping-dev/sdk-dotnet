@@ -178,19 +178,27 @@ internal static class TestSessionFactory
     /// <param name="sha">Commit it ran at, or <see langword="null"/> for none.</param>
     /// <param name="branch">Branch it ran on, or <see langword="null"/> for none.</param>
     /// <param name="startedAt">Explicit start time; defaults to one minute per ordinal.</param>
+    /// <param name="customProperties">Extra environment properties, such as the recording mode.</param>
     /// <returns>The session.</returns>
     public static TestSession Session(
         int ordinal,
         IReadOnlyList<TestExecution> executions,
         string? sha = null,
         string? branch = null,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        IReadOnlyDictionary<string, string>? customProperties = null)
     {
         var properties = new Dictionary<string, string>();
         if (sha != null)
             properties["Git.SHA"] = sha;
         if (branch != null)
             properties["Git.Branch"] = branch;
+
+        if (customProperties != null)
+        {
+            foreach (KeyValuePair<string, string> property in customProperties)
+                properties[property.Key] = property.Value;
+        }
 
         EnvironmentInfo environment = new EnvironmentInfoBuilder()
             .WithMachineName("dev-box")

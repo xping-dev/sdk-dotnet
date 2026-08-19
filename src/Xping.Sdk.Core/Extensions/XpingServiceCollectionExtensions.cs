@@ -405,10 +405,10 @@ public static class XpingServiceCollectionExtensions
 
     #endregion
 
-    #region Feature: Local Run Store
+    #region Feature: Local Session Store
 
     /// <summary>
-    /// Adds the local run store.
+    /// Adds the local session store.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="mode">The resolved operating mode.</param>
@@ -416,8 +416,8 @@ public static class XpingServiceCollectionExtensions
     /// <remarks>
     /// <para>
     /// Registered in <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> alike.
-    /// Connected users get the same local history, which is what makes the run store useful beyond
-    /// the zero-config case.
+    /// Connected users get the same local history, which is what makes the store useful beyond the
+    /// zero-config case.
     /// </para>
     /// <para>
     /// Writing only. Flakiness analysis and report rendering belong to the Xping CLI, which reads
@@ -432,17 +432,6 @@ public static class XpingServiceCollectionExtensions
 
         services.TryAddSingleton(_ => new LocalStoreOptions());
 
-        services.TryAddSingleton<ILocalRunStore>(sp => new JsonLinesRunStore(
-            sp.GetRequiredService<LocalStoreOptions>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonLinesRunStore>()));
-
-        services.TryAddSingleton<ILocalRunWriter>(sp => new LocalRunWriter(
-            sp.GetRequiredService<ILocalRunStore>(),
-            sp.GetRequiredService<ILogger<LocalRunWriter>>()));
-
-        // The full-session tier. It shares the resolved store root and the retention limits with the
-        // run tier but prunes independently, because the two hold the same runs at very different
-        // sizes and one tier's limits must not evict the other's history.
         services.TryAddSingleton<ILocalSessionStore>(sp => new JsonSessionStore(
             sp.GetRequiredService<LocalStoreOptions>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonSessionStore>()));

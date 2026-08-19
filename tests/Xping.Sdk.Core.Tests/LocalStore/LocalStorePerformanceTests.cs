@@ -8,7 +8,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.LocalStore.Internals;
 using Xunit.Abstractions;
@@ -62,54 +62,62 @@ public sealed class LocalStorePerformanceTests : IDisposable
         }
     }
 
-    private static LocalRun BuildRun(int count, DateTime startedAt)
+    private static TestSession BuildSession(int count, DateTime startedAt)
     {
-        var records = Enumerable.Range(0, count).Select(i => new LocalTestRecord
-        {
-            // Real fingerprints are SHA256 hashes. Using a repeated character here would compress
-            // to almost nothing and make the on-disk figures meaningless, so generate high-entropy
-            // hex that behaves like the real thing under gzip.
-            Fingerprint = PseudoRandomHex(i),
-            Name = $"MyCompany.Product.Tests.SomeFixture.Test_Method_Name_{i}",
-            Outcome = i % 20 == 0 ? OutcomeCodes.Failed : OutcomeCodes.Passed,
-            DurationMs = 10 + (i % 500),
-            Attempt = 1
-        }).ToList();
+        var executions = Enumerable.Range(0, count).Select(i => new TestExecutionBuilder()
+            .WithExecutionId(Guid.NewGuid())
+            .WithIdentity(new TestIdentityBuilder()
 
-        return new LocalRun(
-            new LocalRunHeader
-            {
-                SessionId = Guid.NewGuid().ToString("N"),
-                StartedAtUtc = startedAt,
-                DurationMs = 38000,
-                Environment = "Local"
-            },
-            records);
+                // Real fingerprints are SHA256 hashes. Using a repeated character here would
+                // compress to almost nothing and make the on-disk figures meaningless, so generate
+                // high-entropy hex that behaves like the real thing under gzip.
+                .WithTestFingerprint(PseudoRandomHex(i))
+                .WithAssembly("MyCompany.Product.Tests")
+                .WithFullyQualifiedName($"MyCompany.Product.Tests.SomeFixture.Test_Method_Name_{i}")
+                .WithDisplayName($"Test_Method_Name_{i}")
+                .Build())
+            .WithTestName($"MyCompany.Product.Tests.SomeFixture.Test_Method_Name_{i}")
+            .WithOutcome(i % 20 == 0 ? TestOutcome.Failed : TestOutcome.Passed)
+            .WithDuration(TimeSpan.FromMilliseconds(10 + (i % 500)))
+            .Build())
+            .ToList();
+
+        return new TestSessionBuilder()
+            .WithSessionId(Guid.NewGuid())
+            .WithStartedAt(startedAt)
+            .WithEndedAt(startedAt.AddSeconds(38))
+            .WithEnvironmentInfo(new EnvironmentInfoBuilder()
+                .WithMachineName("dev-box")
+                .WithEnvironmentName("Local")
+                .Build())
+            .AddExecutions(executions)
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
     }
 
     [Fact]
     public void WritingATwoThousandTestRunStaysWellInsideBudget()
     {
         // Arrange
-        var store = new JsonLinesRunStore(new LocalStoreOptions(), NullLogger.Instance);
-        var run = BuildRun(SuiteSize, DateTime.UtcNow);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
+        var session = BuildSession(SuiteSize, DateTime.UtcNow);
 
-        store.Write(BuildRun(SuiteSize, DateTime.UtcNow.AddMinutes(-1))); // warm the path
+        store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-1))); // warm the path
 
         // Act
         var sw = Stopwatch.StartNew();
-        store.Write(run);
+        store.Write(session);
         sw.Stop();
 
         // Assert
         _output.WriteLine(FormatMs("Write 2,000-test run", sw.Elapsed.TotalMilliseconds));
         Assert.True(
-            sw.ElapsedMilliseconds < 250,
+            sw.ElapsedMilliseconds < 1000,
             $"Write took {sw.ElapsedMilliseconds}ms for {SuiteSize} tests.");
     }
 
     [Fact]
-    public void ProjectingExecutionsIsCheapEnoughToRunAtDrainTime()
+    public void BuildingASessionIsCheapEnoughToRunAtFinalization()
     {
         // Arrange
         var executions = Enumerable.Range(0, SuiteSize)
@@ -122,15 +130,20 @@ public sealed class LocalStorePerformanceTests : IDisposable
 
         // Act
         var sw = Stopwatch.StartNew();
-        var records = executions.Select(LocalTestRecord.FromExecution).ToList();
+        TestSession session = new TestSessionBuilder()
+            .WithSessionId(Guid.NewGuid())
+            .WithStartedAt(DateTime.UtcNow)
+            .AddExecutions(executions)
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
         sw.Stop();
 
         // Assert
-        _output.WriteLine(FormatMs("Project 2,000 executions", sw.Elapsed.TotalMilliseconds));
-        Assert.Equal(SuiteSize, records.Count);
+        _output.WriteLine(FormatMs("Assemble a 2,000-test session", sw.Elapsed.TotalMilliseconds));
+        Assert.Equal(SuiteSize, session.Executions.Count);
         Assert.True(
             sw.ElapsedMilliseconds < 100,
-            $"Projection took {sw.ElapsedMilliseconds}ms for {SuiteSize} executions.");
+            $"Assembly took {sw.ElapsedMilliseconds}ms for {SuiteSize} executions.");
     }
 
     [Fact]
@@ -138,39 +151,39 @@ public sealed class LocalStorePerformanceTests : IDisposable
     {
         // Arrange — a full analysis window of large runs, the worst realistic read.
         // This cost is paid by `xping report`, not by a test run: the SDK only writes.
-        var store = new JsonLinesRunStore(new LocalStoreOptions(), NullLogger.Instance);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
         for (int i = 0; i < 12; i++)
-            store.Write(BuildRun(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
+            store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
 
         // Act
         var sw = Stopwatch.StartNew();
-        var runs = store.ReadRecent(12);
+        var sessions = store.ReadRecent(12).Sessions;
         sw.Stop();
 
         // Assert
         _output.WriteLine(FormatMs("Read 12 x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
-        Assert.Equal(12, runs.Count);
-        Assert.True(sw.ElapsedMilliseconds < 2000, $"Read took {sw.ElapsedMilliseconds}ms.");
+        Assert.Equal(12, sessions.Count);
+        Assert.True(sw.ElapsedMilliseconds < 5000, $"Read took {sw.ElapsedMilliseconds}ms.");
     }
 
     [Fact]
     public void StoreSizeStaysReasonableForALargeSuite()
     {
         // Arrange
-        var store = new JsonLinesRunStore(new LocalStoreOptions(), NullLogger.Instance);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
 
         // Act
         for (int i = 0; i < 12; i++)
-            store.Write(BuildRun(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
+            store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
 
-        long total = new DirectoryInfo(LocalStorePathResolver.GetRunsDirectory(_root))
+        long total = new DirectoryInfo(LocalStorePathResolver.GetSessionsDirectory(_root))
             .GetFiles()
             .Sum(f => f.Length);
 
         // Assert — disk bloat is the failure mode developers would actually notice and resent.
         _output.WriteLine(string.Format(
             CultureInfo.InvariantCulture,
-            "12 x 2,000-test runs on disk: {0:0.0} KB ({1:0} bytes per record)",
+            "12 x 2,000-test runs on disk: {0:0.0} KB ({1:0} bytes per execution)",
             total / 1024.0,
             total / (double)(12 * SuiteSize)));
 

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Extensions;
@@ -22,7 +23,6 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
-using Xping.Sdk.Core.Models.Local;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -62,23 +62,20 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     private readonly bool _isHealthy;
     private readonly XpingMode _mode;
-    private readonly ILocalRunWriter? _localRunWriter;
     private readonly ILocalSessionStore? _localSessionStore;
 
     // Every execution drained during this session. Accumulated at drain time rather than in
     // RecordTestExecution, so the per-test hot path stays free of any local-store work.
     //
-    // The executions are held whole rather than projected on arrival because the two local tiers
-    // need different fidelities: the run tier wants the slim LocalTestRecord, the session tier wants
-    // the untouched TestExecution. Projecting here would make the lossier of the two the only thing
-    // available to the other.
+    // The executions are held whole rather than projected on arrival because the local store keeps
+    // the untouched TestExecution: analysis that has to explain why a test is unreliable needs the
+    // error text, stack traces and orchestration data a projection would drop.
     private readonly List<TestExecution> _localExecutions = [];
-    private readonly object _localRecordsLock = new();
+    private readonly object _localExecutionsLock = new();
 
     private PullRequestContext? _pullRequestContext;
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
-    private string? _localAssemblyName;
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
@@ -162,10 +159,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _isHealthy = _mode != XpingMode.Disabled;
 
             // Optional so that hosts composed without the local-store feature still work.
-            _localRunWriter = _mode == XpingMode.Disabled
-                ? null
-                : services.GetService<ILocalRunWriter>();
-
             _localSessionStore = _mode == XpingMode.Disabled
                 ? null
                 : services.GetService<ILocalSessionStore>();
@@ -416,7 +409,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
-        WriteLocalRun();
+        WriteLocalHistory();
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -534,7 +527,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         int? totalTestsExpected = GetTotalTestsExpected();
 
         _lastEnvironmentInfo = environmentInfo;
-        AccumulateLocalRecords(executions);
+        AccumulateLocalExecutions(executions);
 
         _builder
             .WithSessionId(SessionId)
@@ -568,7 +561,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         {
             TestSession session = await BuildSessionAsync(isFinalizing: true, cancellationToken).ConfigureAwait(false);
 
-            // Kept for the local session tier, which rebuilds its own session from the accumulated
+            // Kept for the local store, which rebuilds its own session from the accumulated
             // executions and has no other source for the accumulated statistics.
             _finalizedStatistics = session.QuickStatistics;
 
@@ -596,35 +589,19 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <para>
     /// This buffer is why the local store sees a complete run at all. The session built by
     /// <c>FinalFlushAsync</c> is assembled <i>after</i> the drain loop has emptied the collector, so
-    /// its own <c>Executions</c> collection is empty; everything the local tiers write comes from
+    /// its own <c>Executions</c> collection is empty; everything the local store writes comes from
     /// here.
     /// </para>
     /// </remarks>
-    private void AccumulateLocalRecords(IReadOnlyList<TestExecution> executions)
+    private void AccumulateLocalExecutions(IReadOnlyList<TestExecution> executions)
     {
         if (!IsLocalStoreEnabled || executions.Count == 0)
             return;
 
-        lock (_localRecordsLock)
+        lock (_localExecutionsLock)
         {
             for (int i = 0; i < executions.Count; i++)
                 _localExecutions.Add(executions[i]);
-
-            // Taken from the executions themselves rather than Assembly.GetEntryAssembly(), which
-            // under vstest resolves to the test host rather than the test project. The assembly name
-            // scopes the analysis window, so getting it wrong pools unrelated suites together.
-            if (_localAssemblyName == null)
-            {
-                for (int i = 0; i < executions.Count; i++)
-                {
-                    string candidate = executions[i].Identity.Assembly;
-                    if (!string.IsNullOrEmpty(candidate))
-                    {
-                        _localAssemblyName = candidate;
-                        break;
-                    }
-                }
-            }
         }
     }
 
@@ -634,16 +611,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// The SDK does not analyse history or render reports. It states one fact about the run it just
-    /// observed — how many tests failed and then passed on a retry — which is available from records
-    /// already in memory and needs no store read. Everything historical is the CLI's job.
+    /// observed — how many tests failed and then passed on a retry — which is available from the
+    /// executions already in memory and needs no store read. Everything historical is the CLI's job.
     /// </remarks>
-    private void WriteLocalRun()
+    private void WriteLocalHistory()
     {
         if (!IsLocalStoreEnabled)
             return;
 
         List<TestExecution> executions;
-        lock (_localRecordsLock)
+        lock (_localExecutionsLock)
         {
             executions = [.. _localExecutions];
         }
@@ -652,34 +629,13 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             return;
 
         EnvironmentInfo? environment = _lastEnvironmentInfo;
-        DateTime endedAt = DateTime.UtcNow;
 
-        WriteLocalSession(executions, environment, endedAt);
+        bool stored = WriteLocalSession(executions, environment, DateTime.UtcNow);
 
-        if (_localRunWriter == null)
-            return;
-
-        var records = new List<LocalTestRecord>(executions.Count);
-        for (int i = 0; i < executions.Count; i++)
-            records.Add(LocalTestRecord.FromExecution(executions[i]));
-
-        var header = new LocalRunHeader
-        {
-            SessionId = SessionId.ToString("N"),
-            StartedAtUtc = StartedAt,
-            DurationMs = (long)(endedAt - StartedAt).TotalMilliseconds,
-            Environment = environment?.EnvironmentName,
-            Assembly = _localAssemblyName,
-            Branch = GetCustomProperty(environment, "Git.Branch"),
-            CommitSha = GetCustomProperty(environment, "Git.SHA"),
-            IsCi = environment?.IsCIEnvironment ?? false,
-            IsConnected = _mode == XpingMode.Connected
-        };
-
-        bool stored = _localRunWriter.Write(new LocalRun(header, records));
-
+        // Gated on the write because the hint points at `dotnet xping report`, and a run that was
+        // never stored is a run that report cannot show.
         if (stored)
-            WriteRetryFlakeHint(records, header.IsCi);
+            WriteRetryFlakeHint(executions, environment?.IsCIEnvironment ?? false);
     }
 
     /// <summary>
@@ -691,11 +647,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// executions at all. Only <see cref="QuickStatistics"/> and the environment survive from it,
     /// and both are captured at finalization for exactly this purpose.
     /// </remarks>
-    private void WriteLocalSession(
+    /// <returns><see langword="true"/> when the session was written.</returns>
+    private bool WriteLocalSession(
         List<TestExecution> executions, EnvironmentInfo? environment, DateTime endedAt)
     {
         if (_localSessionStore == null)
-            return;
+            return false;
 
         try
         {
@@ -703,7 +660,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 .WithSessionId(SessionId)
                 .WithStartedAt(StartedAt)
                 .WithEndedAt(endedAt)
-                .WithEnvironmentInfo(environment ?? new EnvironmentInfo())
+                .WithEnvironmentInfo(WithRecordingMode(environment ?? new EnvironmentInfo()))
                 .AddExecutions(executions)
                 .WithTotalTestsExpected(GetTotalTestsExpected())
                 .WithSessionState(TestSessionState.Finalized)
@@ -711,35 +668,62 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 .WithQuickStatistics(_finalizedStatistics)
                 .Build();
 
-            _localSessionStore.Write(session);
+            return _localSessionStore.Write(session);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Local history is a side channel. It must never be the reason a test run fails, and a
-            // failure here must not stop the run tier below from being written.
+            // Local history is a side channel. It must never be the reason a test run fails.
             _logger.LogDebug("Local session not stored: {Message}", ex.Message);
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="environment"/> carrying the mode this session was recorded
+    /// under.
+    /// </summary>
+    /// <remarks>
+    /// The CLI needs to know whether a project is already cloud-connected so it does not pitch the
+    /// cloud to people who pay for it, and the stored session is the only record of it. Applied here
+    /// rather than in the environment detector so it lands on the local copy alone — the uploaded
+    /// session keeps the environment exactly as detected.
+    /// </remarks>
+    private EnvironmentInfo WithRecordingMode(EnvironmentInfo environment)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (environment.CustomProperties != null)
+        {
+            foreach (KeyValuePair<string, string> property in environment.CustomProperties)
+                properties[property.Key] = property.Value;
+        }
+
+        properties[LocalSessionProperties.Mode] = _mode.ToString();
+
+        return new EnvironmentInfo
+        {
+            MachineName = environment.MachineName,
+            OperatingSystem = environment.OperatingSystem,
+            RuntimeVersion = environment.RuntimeVersion,
+            Framework = environment.Framework,
+            EnvironmentName = environment.EnvironmentName,
+            IsCIEnvironment = environment.IsCIEnvironment,
+            NetworkMetrics = environment.NetworkMetrics,
+            CustomProperties = new ReadOnlyDictionary<string, string>(properties)
+        };
     }
 
     /// <summary>
     /// Gets a value indicating whether anything is listening for local history this session.
     /// </summary>
-    private bool IsLocalStoreEnabled => _localRunWriter != null || _localSessionStore != null;
+    private bool IsLocalStoreEnabled => _localSessionStore != null;
 
-    private static void WriteRetryFlakeHint(List<LocalTestRecord> records, bool isCi)
+    private static void WriteRetryFlakeHint(IReadOnlyList<TestExecution> executions, bool isCi)
     {
-        string? hint = RetryFlakeHint.Build(records, isCi, RetryFlakeHint.IsSuppressed());
+        string? hint = RetryFlakeHint.Build(executions, isCi, RetryFlakeHint.IsSuppressed());
 
         if (hint != null)
             TerminalWriter.Write(hint + System.Environment.NewLine);
-    }
-
-    private static string? GetCustomProperty(EnvironmentInfo? environment, string key)
-    {
-        if (environment?.CustomProperties == null)
-            return null;
-
-        return environment.CustomProperties.TryGetValue(key, out string? value) ? value : null;
     }
 
     /// <summary>

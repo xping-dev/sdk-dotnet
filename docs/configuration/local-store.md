@@ -34,13 +34,13 @@ The repository root is preferred because flakiness history is only meaningful pe
 ```
 <repo-root>/.xping/
 ├── .gitignore          # contains `*`
-├── runs/
-│   ├── run-638912345678901234-a3f5e9c2.jsonl.gz
+├── sessions/
+│   ├── session-638912345678901234-a3f5e9c2.json.gz
 │   └── …
 └── state.json
 ```
 
-Each run is one gzipped [JSON Lines](https://jsonlines.org/) file. One file per run means concurrent test projects never contend for a lock, and a run interrupted by a killed test host costs only that run.
+Each run is one gzipped JSON document holding the whole session. One file per run means concurrent test projects never contend for a lock, and a run interrupted by a killed test host leaves no file at all rather than a partial one.
 
 ---
 
@@ -62,7 +62,7 @@ Applied after every write, oldest run first, until all three limits hold:
 | Maximum total size | 50 MB |
 | Maximum age | 30 days |
 
-A 2,000-test suite stores roughly 136 KB per run, so 50 runs is about 7 MB. A 200-test suite is well under 1 MB.
+A 2,000-test suite stores roughly 170 KB per run, so 50 runs is about 8.5 MB. A 200-test suite is well under 1 MB.
 
 To delete history manually, use [`xping clear`](../cli/command-reference.md#xping-clear).
 
@@ -76,8 +76,8 @@ Measured on a 2,000-test suite:
 
 | Operation | Cost | When |
 |---|---|---|
-| Projecting executions to records | 0.30 ms | Once per flush |
-| Writing the run | 1.75 ms | Once per run |
+| Assembling the session | 1.4 ms | Once per run |
+| Writing the run | 9.4 ms | Once per run |
 | Per-test overhead | **none** | — |
 
 Reading and analysing history is paid by the CLI, not by your test run.

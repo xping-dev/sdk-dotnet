@@ -47,11 +47,9 @@ public sealed class LocalSessionReadResult
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is the substrate for local analysis. Unlike <see cref="ILocalRunStore"/>, which stores a
-/// deliberately lossy projection sized for a fast flakiness summary, this tier stores the whole
-/// <see cref="TestSession"/>: error text, stack traces, source locations, orchestration and network
-/// data. Analysis that has to explain <i>why</i> a test is unreliable cannot work from the
-/// projection.
+/// This is the substrate for local analysis. It stores the whole <see cref="TestSession"/>: error
+/// text, stack traces, source locations, orchestration and network data. Analysis that has to
+/// explain <i>why</i> a test is unreliable cannot work from a summary projection.
 /// </para>
 /// <para>
 /// Implementations must never throw as a result of storage problems. A read-only checkout, a full

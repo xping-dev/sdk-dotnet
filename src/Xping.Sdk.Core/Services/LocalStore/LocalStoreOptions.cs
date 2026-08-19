@@ -6,7 +6,7 @@
 namespace Xping.Sdk.Core.Services.LocalStore;
 
 /// <summary>
-/// Retention settings for the local run store.
+/// Retention settings for the local session store.
 /// </summary>
 /// <remarks>
 /// All three limits are applied together after each write, oldest run first, until every limit holds.

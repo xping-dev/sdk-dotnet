@@ -7,7 +7,7 @@ using Xping.Cli.Commands;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
@@ -42,30 +42,16 @@ public sealed class ReviewFixesTests : IDisposable
     }
 
     /// <summary>
-    /// Writes runs to the slim run tier, which is what the cloud invitation reads.
+    /// Writes passing sessions for the given assembly.
     /// </summary>
-    private static void SeedRuns(string assembly, DateTime start, int count, bool connected)
+    private static void SeedSessions(string assembly, int count)
     {
-        ILocalRunStore store = LocalRunStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create();
 
         for (int i = 0; i < count; i++)
         {
-            store.Write(new LocalRun(
-                new LocalRunHeader
-                {
-                    SessionId = Guid.NewGuid().ToString("N"),
-                    StartedAtUtc = start.AddMinutes(i),
-                    Assembly = assembly,
-                    IsConnected = connected
-                },
-                [
-                    new LocalTestRecord
-                    {
-                        Fingerprint = $"fp-{assembly}",
-                        Name = $"{assembly}.Test",
-                        Outcome = OutcomeCodes.Passed
-                    }
-                ]));
+            store.Write(TestSessionFactory.Session(
+                i, [TestSessionFactory.Execution("Sample", assembly: assembly)]));
         }
     }
 
@@ -76,9 +62,15 @@ public sealed class ReviewFixesTests : IDisposable
     /// The cloud invitation is only offered once the developer has been shown a problem worth
     /// solving, so a store with no findings cannot exercise it.
     /// </remarks>
-    private static void SeedVanishingSessions()
+    private static void SeedVanishingSessions(bool connected = false)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
+
+        var properties = new Dictionary<string, string>
+        {
+            [LocalSessionProperties.Mode] =
+                connected ? nameof(XpingMode.Connected) : nameof(XpingMode.LocalOnly)
+        };
 
         for (int i = 0; i < 8; i++)
         {
@@ -86,7 +78,7 @@ public sealed class ReviewFixesTests : IDisposable
                 ? [TestSessionFactory.Execution("Stable"), TestSessionFactory.Execution("Removed")]
                 : [TestSessionFactory.Execution("Stable")];
 
-            store.Write(TestSessionFactory.Session(i, executions));
+            store.Write(TestSessionFactory.Session(i, executions, customProperties: properties));
         }
     }
 
@@ -110,7 +102,7 @@ public sealed class ReviewFixesTests : IDisposable
     {
         // Arrange — `--assembly` with no value used to read as "no scope", turning a scoped delete
         // into a full one. For a destructive command that is the worst possible misparse.
-        SeedRuns("Alpha.Tests", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), 3, connected: false);
+        SeedSessions("Alpha.Tests", 3);
 
         // Act
         var (code, output) = Run("clear", "--force", "--assembly");
@@ -118,19 +110,19 @@ public sealed class ReviewFixesTests : IDisposable
         // Assert
         Assert.Equal(2, code);
         Assert.Contains("Required argument missing", output, StringComparison.Ordinal);
-        Assert.Equal(3, LocalRunStore.Create().ReadRecent(100).Count);
+        Assert.Equal(3, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
     }
 
     [Fact]
     public void ClearRejectsUnknownOptionsInsteadOfIgnoringThem()
     {
-        SeedRuns("Alpha.Tests", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), 2, connected: false);
+        SeedSessions("Alpha.Tests", 2);
 
         var (code, output) = Run("clear", "--force", "--dry-run");
 
         Assert.Equal(2, code);
         Assert.Contains("Unrecognized command or argument", output, StringComparison.Ordinal);
-        Assert.Equal(2, LocalRunStore.Create().ReadRecent(100).Count);
+        Assert.Equal(2, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
     }
 
     [Fact]
@@ -169,12 +161,7 @@ public sealed class ReviewFixesTests : IDisposable
     {
         // Arrange — isConnected was once hard-coded to false, so existing customers were pitched to
         // despite CtaThrottle explicitly excluding them.
-        SeedVanishingSessions();
-        SeedRuns(
-            TestSessionFactory.DefaultAssembly,
-            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            4,
-            connected: true);
+        SeedVanishingSessions(connected: true);
 
         // Act
         var (code, output) = Run("report", "--ascii");
@@ -187,12 +174,7 @@ public sealed class ReviewFixesTests : IDisposable
     [Fact]
     public void CtaIsOfferedForLocalOnlyRuns()
     {
-        SeedVanishingSessions();
-        SeedRuns(
-            TestSessionFactory.DefaultAssembly,
-            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            4,
-            connected: false);
+        SeedVanishingSessions(connected: false);
 
         var (code, output) = Run("report", "--ascii");
 

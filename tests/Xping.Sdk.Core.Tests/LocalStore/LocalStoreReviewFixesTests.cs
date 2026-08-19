@@ -8,7 +8,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models.Local;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.LocalStore.Internals;
 
@@ -46,49 +48,43 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
         }
     }
 
-    private static LocalRun BuildRun(string name = "T") =>
-        new(
-            new LocalRunHeader { SessionId = Guid.NewGuid().ToString("N"), StartedAtUtc = DateTime.UtcNow },
-            [new LocalTestRecord { Fingerprint = "fp", Name = name, Outcome = OutcomeCodes.Passed }]);
+    private static TestSession BuildSession(
+        string name = "T", IDictionary<string, string>? customProperties = null) =>
+        new TestSessionBuilder()
+            .WithSessionId(Guid.NewGuid())
+            .WithStartedAt(DateTime.UtcNow)
+            .WithEnvironmentInfo(new EnvironmentInfoBuilder()
+                .AddCustomProperties(customProperties ?? new Dictionary<string, string>())
+                .Build())
+            .AddExecutions(
+            [
+                new TestExecutionBuilder()
+                    .WithIdentity(new TestIdentityBuilder()
+                        .WithTestFingerprint("fp")
+                        .WithAssembly("MyApp.Tests")
+                        .WithDisplayName(name)
+                        .Build())
+                    .WithTestName(name)
+                    .WithOutcome(TestOutcome.Passed)
+                    .Build()
+            ])
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
+
+    private static JsonSessionStore CreateStore() =>
+        new(new LocalStoreOptions(), NullLogger.Instance);
 
     [Fact]
-    public void AMalformedHeaderSkipsOnlyThatRun()
+    public void AMalformedSessionDoesNotBreakDelete()
     {
-        // Arrange — a corrupt header threw JsonException past the catch, aborting the entire read.
-        // One bad file must cost one run, which is what the store contract promises.
-        var store = LocalRunStore.Create();
-        store.Write(BuildRun("good"));
+        // Arrange — a scoped delete has to read each file to learn its assembly, so a corrupt file
+        // must cost that file alone rather than the whole operation.
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession("good"));
 
         string path = Path.Combine(
-            LocalStorePathResolver.GetRunsDirectory(_root),
-            "run-0638999999999999999-deadbeef.jsonl.gz");
-
-        using (var file = new FileStream(path, FileMode.Create))
-        using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
-        using (var writer = new StreamWriter(gzip, new UTF8Encoding(false)))
-        {
-            writer.WriteLine("{ this is not valid json");
-            writer.WriteLine("{\"f\":\"fp\",\"n\":\"A\",\"o\":\"P\"}");
-        }
-
-        // Act
-        var runs = store.ReadRecent(10);
-
-        // Assert
-        var run = Assert.Single(runs);
-        Assert.Equal("good", run.Records[0].Name);
-    }
-
-    [Fact]
-    public void AMalformedHeaderDoesNotBreakDelete()
-    {
-        // Arrange
-        var store = LocalRunStore.Create();
-        store.Write(BuildRun("good"));
-
-        string path = Path.Combine(
-            LocalStorePathResolver.GetRunsDirectory(_root),
-            "run-0638999999999999998-deadbee0.jsonl.gz");
+            LocalStorePathResolver.GetSessionsDirectory(_root),
+            "session-0638999999999999998-deadbee0.json.gz");
 
         using (var file = new FileStream(path, FileMode.Create))
         using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
@@ -97,8 +93,11 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
             writer.WriteLine("{ not json either");
         }
 
-        // Act & Assert — a scoped delete reads headers, so it must survive a corrupt one.
+        // Act
         store.Delete("Nonexistent.Tests");
+
+        // Assert — the readable session was out of scope, so it survives.
+        Assert.Single(store.ReadRecent(10).Sessions);
     }
 
     [Fact]
@@ -159,44 +158,28 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
     }
 
     [Fact]
-    public void RunHeaderRecordsConnectedStatus()
+    public void ASessionRecordsTheModeItWasWrittenUnder()
     {
         // The CLI suppresses the signup invitation for existing customers, which it can only do if
-        // the store says whether the run was connected.
-        var store = LocalRunStore.Create();
-        var run = new LocalRun(
-            new LocalRunHeader
-            {
-                SessionId = "s",
-                StartedAtUtc = DateTime.UtcNow,
-                IsConnected = true
-            },
-            [new LocalTestRecord { Fingerprint = "fp", Name = "T", Outcome = OutcomeCodes.Passed }]);
+        // the stored session says which mode recorded it.
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(customProperties: new Dictionary<string, string>
+        {
+            [LocalSessionProperties.Mode] = nameof(XpingMode.Connected)
+        }));
 
-        store.Write(run);
-
-        Assert.True(store.ReadRecent(1)[0].Header.IsConnected);
+        Assert.True(LocalSessionProperties.IsConnected(store.ReadRecent(1).Sessions[0]));
     }
 
     [Fact]
-    public void RunsWrittenBeforeConnectedStatusExistedReadAsLocal()
+    public void SessionsWrittenBeforeTheModePropertyExistedReadAsLocal()
     {
-        // Forward compatibility in reverse: a file without the field must not fail to parse.
-        var store = LocalRunStore.Create();
-        string path = Path.Combine(
-            LocalStorePathResolver.GetRunsDirectory(_root),
-            "run-0638000000000000000-abcdef01.jsonl.gz");
-        Directory.CreateDirectory(LocalStorePathResolver.GetRunsDirectory(_root));
+        // Forward compatibility in reverse: a session with no mode property must still read, and
+        // must read as not connected — the flag only ever suppresses output.
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession());
 
-        using (var file = new FileStream(path, FileMode.Create))
-        using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
-        using (var writer = new StreamWriter(gzip, new UTF8Encoding(false)))
-        {
-            writer.WriteLine("{\"v\":1,\"sid\":\"old\",\"ts\":\"2026-01-01T00:00:00Z\"}");
-            writer.WriteLine("{\"f\":\"fp\",\"n\":\"A\",\"o\":\"P\"}");
-        }
-
-        Assert.False(store.ReadRecent(1)[0].Header.IsConnected);
+        Assert.False(LocalSessionProperties.IsConnected(store.ReadRecent(1).Sessions[0]));
     }
 }
 
