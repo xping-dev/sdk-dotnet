@@ -165,7 +165,7 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
         JsonSessionStore store = CreateStore();
         store.Write(BuildSession(customProperties: new Dictionary<string, string>
         {
-            [LocalSessionProperties.Mode] = nameof(XpingMode.Connected)
+            [LocalSessionProperties.Mode] = nameof(XpingMode.Cloud)
         }));
 
         Assert.True(LocalSessionProperties.IsConnected(store.ReadRecent(1).Sessions[0]));
@@ -210,9 +210,9 @@ public sealed class XpingModeValidationTests
             Mode = (XpingMode)99
         };
 
-        // Credentials are present, so Auto resolution lands on Connected — a real mode, not the
+        // Credentials are present, so Auto resolution lands on Cloud — a real mode, not the
         // undefined value.
-        Assert.Equal(XpingMode.Connected, config.ResolveMode());
+        Assert.Equal(XpingMode.Cloud, config.ResolveMode());
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed class XpingModeValidationTests
     [Theory]
     [InlineData(XpingMode.Auto)]
     [InlineData(XpingMode.LocalOnly)]
-    [InlineData(XpingMode.Connected)]
+    [InlineData(XpingMode.Cloud)]
     [InlineData(XpingMode.Disabled)]
     public void DefinedModesPassValidation(XpingMode mode)
     {

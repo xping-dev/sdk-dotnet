@@ -69,7 +69,7 @@ public sealed class ReviewFixesTests : IDisposable
         var properties = new Dictionary<string, string>
         {
             [LocalSessionProperties.Mode] =
-                connected ? nameof(XpingMode.Connected) : nameof(XpingMode.LocalOnly)
+                connected ? nameof(XpingMode.Cloud) : nameof(XpingMode.LocalOnly)
         };
 
         for (int i = 0; i < 8; i++)

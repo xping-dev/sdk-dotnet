@@ -96,12 +96,12 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void BuildShouldThrowWhenApiKeyIsMissingInConnectedMode()
+    public void BuildShouldThrowWhenApiKeyIsMissingInCloudMode()
     {
         // Arrange
         var builder = new XpingConfigurationBuilder()
             .WithProjectId("test-project")
-            .WithMode(XpingMode.Connected);
+            .WithMode(XpingMode.Cloud);
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -109,12 +109,12 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void BuildShouldThrowWhenProjectIdIsMissingInConnectedMode()
+    public void BuildShouldThrowWhenProjectIdIsMissingInCloudMode()
     {
         // Arrange
         var builder = new XpingConfigurationBuilder()
             .WithApiKey("test-key")
-            .WithMode(XpingMode.Connected);
+            .WithMode(XpingMode.Cloud);
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
@@ -157,7 +157,7 @@ public sealed class XpingConfigurationBuilderTests
     {
         // Arrange — credentials are optional now, so use a mode that actually requires them.
         var builder = new XpingConfigurationBuilder()
-            .WithMode(XpingMode.Connected);
+            .WithMode(XpingMode.Cloud);
 
         // Act
         var result = builder.TryBuild(out var config, out var errors);
@@ -166,8 +166,8 @@ public sealed class XpingConfigurationBuilderTests
         Assert.False(result);
         Assert.Null(config);
         Assert.NotEmpty(errors);
-        Assert.Contains("ApiKey is required in Connected mode.", errors);
-        Assert.Contains("ProjectId is required in Connected mode.", errors);
+        Assert.Contains("ApiKey is required in Cloud mode.", errors);
+        Assert.Contains("ProjectId is required in Cloud mode.", errors);
     }
 
     [Fact]

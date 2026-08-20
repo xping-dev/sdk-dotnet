@@ -457,7 +457,7 @@ This logs all HTTP requests and responses, including Xping SDK uploads.
 | **200** | OK | Upload successful | None needed |
 | **400** | Bad Request | Invalid request payload | Check SDK version, report bug if persistent |
 | **401** | Unauthorized | Invalid API key or Project ID | Verify credentials at https://app.xping.io |
-| **403** | Forbidden | Valid credentials, insufficient permissions | Check project access in dashboard |
+| **403** | Forbidden | Valid credentials, insufficient permissions | Check project access in Xping Cloud |
 | **429** | Too Many Requests | Rate limit exceeded | Reduce frequency, increase batch size |
 | **500** | Internal Server Error | Xping API error | Retry automatically handled; contact support if persistent |
 | **503** | Service Unavailable | API temporarily down | Retry automatically handled; check status page |

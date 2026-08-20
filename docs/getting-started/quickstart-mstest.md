@@ -9,7 +9,7 @@ Get started with Xping SDK in your MSTest test projects in less than 5 minutes. 
 - How to install Xping SDK for MSTest
 - How to configure your API credentials
 - How to track your first test
-- How to verify results in the Xping dashboard
+- How to verify results in Xping Cloud
 
 ---
 
@@ -73,7 +73,7 @@ Create or update `appsettings.json` in your test project:
 ```
 
 > **Getting Your API Key:**
-> 1. Log in to [Xping Dashboard](https://app.xping.io)
+> 1. Log in to [Xping Cloud](https://app.xping.io)
 > 2. Navigate to **Account** → **Settings** → **API & Integration**
 > 3. Click **Create API Key** and copy it
 >
@@ -331,9 +331,9 @@ Xping SDK runs silently in the background, tracking execution data without affec
 
 ---
 
-## Step 6: View Results in Xping Dashboard
+## Step 6: View Results in Xping Cloud
 
-1. Open the [Xping Dashboard](https://app.xping.io)
+1. Open the [Xping Cloud](https://app.xping.io)
 2. Explore your test data across multiple tabs:
    - **Test Sessions** - View uploaded test runs with execution statistics, environment details, and duration
    - **Tests** - Browse all tests with confidence scores, success rates, and execution history
@@ -341,7 +341,7 @@ Xping SDK runs silently in the background, tracking execution data without affec
 
 Each test execution includes comprehensive tracking of pass/fail status, duration, confidence scores, environment information (OS, .NET version, CI/CD context), and trends over time.
 
-> **Learn More:** For detailed information about navigating the dashboard, filtering tests, and understanding the test detail view, see [Navigating the Dashboard](../guides/getting-started/navigating-the-dashboard.md).
+> **Learn More:** For detailed information about navigating Xping Cloud, filtering tests, and understanding the test detail view, see [Navigating Xping Cloud](../guides/getting-started/navigating-xping-cloud.md).
 
 ---
 
@@ -442,7 +442,7 @@ public class DatabaseTests : XpingTestBase
 }
 ```
 
-Categories are automatically captured and visible in the Xping dashboard for filtering and analysis.
+Categories are automatically captured and visible in Xping Cloud for filtering and analysis.
 
 ### Test Priorities
 
@@ -511,7 +511,7 @@ If you encounter issues while integrating or using the Xping SDK with MSTest, we
 
 ### Common Issues
 
-- **Tests not appearing in dashboard** - Configuration, credentials, and connectivity checks
+- **Tests not appearing in Xping Cloud** - Configuration, credentials, and connectivity checks
 - **TestContext is null** - Property visibility and initialization
 - **Data looks incomplete** - Flush and disposal timing
 - **Performance concerns** - Impact measurement and optimization

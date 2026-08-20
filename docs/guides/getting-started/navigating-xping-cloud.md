@@ -1,14 +1,14 @@
-# Navigating the Dashboard
+# Navigating Xping Cloud
 
-The Xping Dashboard provides multiple views for monitoring your test suite. After integrating the SDK and running tests, you'll see your data appear in the dashboard.
+Xping Cloud provides multiple views for monitoring your test suite. After integrating the SDK and running tests, you'll see your data appear in Xping Cloud.
 
 ---
 
-## Home Dashboard
+## Home
 
 The home page displays four tabs for different views of your test data:
 
-![Xping Dashboard - Tests View](../../media/Dashboard_Tests.png)
+![Xping Cloud - Tests View](../../media/Dashboard_Tests.png)
 
 ### Test Sessions Tab
 
@@ -69,9 +69,9 @@ All tabs provide filtering capabilities:
 
 ## The Test Detail View
 
-Clicking on any test in the dashboard takes you to a detailed analysis page. This page provides comprehensive insights about individual test behavior.
+Clicking on any test in Xping Cloud takes you to a detailed analysis page. This page provides comprehensive insights about individual test behavior.
 
-![Xping Dashboard - Tests View](../../media/Dashboard_TestView.png)
+![Xping Cloud - Tests View](../../media/Dashboard_TestView.png)
 
 ### Overview Section
 
@@ -140,4 +140,4 @@ All collected information about the test:
 
 - [Understanding Confidence Scores](./understanding-confidence-scores.md) - Learn what confidence scores mean
 - [Interpreting Test Results](./interpreting-test-results.md) - How to use the data to make decisions
-- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Find unreliable tests using the dashboard
+- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Find unreliable tests using Xping Cloud

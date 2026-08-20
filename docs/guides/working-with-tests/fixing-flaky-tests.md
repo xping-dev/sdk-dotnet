@@ -10,7 +10,7 @@ Follow this six-step workflow to systematically address flaky tests:
 
 ### 1. Review Xping Telemetry
 
-Check the test detail page in the Xping dashboard:
+Check the test detail page in Xping Cloud:
 - Execution times across runs
 - Environment pass rates (Local vs. CI)
 - Failure messages and patterns

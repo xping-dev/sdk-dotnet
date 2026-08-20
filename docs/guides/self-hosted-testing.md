@@ -1,9 +1,9 @@
 ---
 uid: guides.self-hosted-testing
-title: Self-Hosted Testing with Xping Cloud Platform
+title: Self-Hosted Testing with Xping Cloud
 ---
 
-# Self-Hosted Testing with Xping Cloud Platform
+# Self-Hosted Testing with Xping Cloud
 
 ## Overview
 
@@ -29,7 +29,7 @@ The self-hosted testing setup follows this architecture:
 │          └──────────────────┼──────────────────┘          │
 │                             ▼                             │
 │                ┌────────────────────────┐                 │
-│                │  Xping Cloud Platform  │                 │
+│                │      Xping Cloud       │                 │
 │                │     upload.xping.io    │                 │
 │                └────────────────────────┘                 │
 └───────────────────────────────────────────────────────────┘
@@ -85,7 +85,7 @@ Examples:
 - `sdk-dotnet-integration-tests` - Integration tests
 
 Benefits:
-- Clear organization in Xping dashboard
+- Clear organization in Xping Cloud
 - Easy filtering by test suite type
 - Consistent naming across environments
 
@@ -125,7 +125,7 @@ Create `appsettings.test.json` in test project directories:
 }
 ```
 
-**Note**: `Enabled` is set to `false` by default to prevent local development from uploading to Xping Cloud Platform. CI/CD will override this via environment variables.
+**Note**: `Enabled` is set to `false` by default to prevent local development from uploading to Xping Cloud. CI/CD will override this via environment variables.
 
 Add to `.csproj` to copy the configuration file:
 
@@ -209,7 +209,7 @@ In GitHub repository settings, add the secret:
 2. Click **New repository secret**
 3. Add:
    - Name: `XPING_API_KEY`
-   - Value: Your Xping API key from [Xping Dashboard](https://app.xping.io)
+   - Value: Your Xping API key from [Xping Cloud](https://app.xping.io)
 
 ### Step 6: Verify Setup
 
@@ -223,7 +223,7 @@ In GitHub repository settings, add the secret:
 2. **CI/CD verification** (with upload):
    - Push changes to trigger the CI pipeline
    - Monitor the GitHub Actions workflow
-   - Check Xping Dashboard for test results
+   - Check Xping Cloud for test results
 
 3. **Manual upload test** (local with environment variables):
    ```bash
@@ -235,9 +235,9 @@ In GitHub repository settings, add the secret:
 
 ## Monitoring and Insights
 
-### Xping Cloud Dashboard
+### Xping Cloud
 
-After successful setup, view test results at [Xping Dashboard](https://app.xping.io):
+After successful setup, view test results at [Xping Cloud](https://app.xping.io):
 
 1. **Test Execution Tracking**: See all test runs from CI/CD
 2. **Flaky Test Detection**: Identify unreliable tests automatically
@@ -256,7 +256,7 @@ After successful setup, view test results at [Xping Dashboard](https://app.xping
 
 ### Tests Not Uploading
 
-**Symptom**: No results appear in Xping Dashboard
+**Symptom**: No results appear in Xping Cloud
 
 **Causes and Solutions**:
 
@@ -455,7 +455,7 @@ env:
 ### Regular Reviews
 
 Schedule regular reviews of:
-- Xping Cloud dashboard for SDK tests
+- Xping Cloud for SDK tests
 - Flaky test reports
 - Test execution trends
 - Configuration optimization opportunities
@@ -468,7 +468,7 @@ Self-hosted testing with Xping Cloud provides:
 - **Confidence**: Demonstrate SDK quality to users
 - **Best practices**: Reference implementation for integration
 
-By following this guide, the Xping SDK's test suite will automatically upload results to Xping Cloud Platform during CI/CD runs, providing comprehensive observability into the SDK's own test health.
+By following this guide, the Xping SDK's test suite will automatically upload results to Xping Cloud during CI/CD runs, providing comprehensive observability into the SDK's own test health.
 
 ## Related Documentation
 

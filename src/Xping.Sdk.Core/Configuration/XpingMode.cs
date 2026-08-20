@@ -16,7 +16,7 @@ namespace Xping.Sdk.Core.Configuration;
 public enum XpingMode
 {
     /// <summary>
-    /// Resolve the mode from the rest of the configuration: <see cref="Connected"/> when
+    /// Resolve the mode from the rest of the configuration: <see cref="Cloud"/> when
     /// credentials are present or strict mode is enabled, otherwise <see cref="LocalOnly"/>.
     /// This is the default.
     /// </summary>
@@ -24,15 +24,15 @@ public enum XpingMode
 
     /// <summary>
     /// Collect test executions and write them to the local store without contacting the
-    /// Xping platform. No API key is required and no network calls are made.
+    /// Xping Cloud platform. No API key is required and no network calls are made.
     /// </summary>
     LocalOnly = 1,
 
     /// <summary>
-    /// Collect test executions and upload them to the Xping platform.
+    /// Collect test executions and upload them to the Xping Cloud platform.
     /// Requires a valid API key and project ID.
     /// </summary>
-    Connected = 2,
+    Cloud = 2,
 
     /// <summary>
     /// Disable the SDK entirely. No collection, no local storage, and no uploads.

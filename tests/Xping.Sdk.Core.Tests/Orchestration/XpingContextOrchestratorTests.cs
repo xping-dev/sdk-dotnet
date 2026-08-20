@@ -210,7 +210,7 @@ public sealed class XpingContextOrchestratorTests
     }
 
     [Fact]
-    public async Task ConnectedMode_CollectsAndUploads()
+    public async Task CloudMode_CollectsAndUploads()
     {
         // Arrange
         var (orchestrator, uploaderMock) = CreateOrchestrator(o =>
@@ -220,11 +220,11 @@ public sealed class XpingContextOrchestratorTests
         });
 
         // Act
-        orchestrator.RecordExecution(BuildExecution("ConnectedTest"));
+        orchestrator.RecordExecution(BuildExecution("CloudTest"));
         await orchestrator.FinalizeAsync();
 
         // Assert
-        Assert.Equal(XpingMode.Connected, orchestrator.ResolvedMode);
+        Assert.Equal(XpingMode.Cloud, orchestrator.ResolvedMode);
         Assert.True(orchestrator.CollectingStatus);
         Assert.True(orchestrator.UploadingStatus);
         uploaderMock.Verify(

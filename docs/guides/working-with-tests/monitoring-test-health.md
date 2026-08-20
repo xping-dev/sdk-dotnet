@@ -1,6 +1,6 @@
 # Monitoring Test Health
 
-Regular monitoring of test reliability helps you maintain a trustworthy test suite. This guide provides practical workflows for daily, weekly, and monthly health checks using the Xping dashboard.
+Regular monitoring of test reliability helps you maintain a trustworthy test suite. This guide provides practical workflows for daily, weekly, and monthly health checks using Xping Cloud.
 
 ---
 
@@ -10,7 +10,7 @@ Start your day with a quick reliability check:
 
 ### 1. Check the Flaky Tests Tab
 
-- Navigate to the **Flaky Tests** tab in the Xping dashboard
+- Navigate to the **Flaky Tests** tab in Xping Cloud
 - Look for any new entries that appeared since yesterday
 - These are tests with confidence scores below 0.60
 
@@ -222,4 +222,4 @@ In team retrospectives:
 - [Identifying Flaky Tests](./identifying-flaky-tests.md) - How to find problematic tests
 - [Fixing Flaky Tests](./fixing-flaky-tests.md) - Strategies for addressing issues
 - [Best Practices](./best-practices.md) - Team-level practices for reliability
-- [Navigating the Dashboard](../getting-started/navigating-the-dashboard.md) - Using the dashboard effectively
+- [Navigating Xping Cloud](../getting-started/navigating-xping-cloud.md) - Using Xping Cloud effectively

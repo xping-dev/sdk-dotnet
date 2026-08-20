@@ -29,7 +29,7 @@ public static class LocalSessionProperties
     /// Returns whether the session was recorded by a cloud-connected project.
     /// </summary>
     /// <param name="session">The session to inspect, or <see langword="null"/>.</param>
-    /// <returns><see langword="true"/> when the session was recorded in connected mode.</returns>
+    /// <returns><see langword="true"/> when the session was recorded in Cloud mode.</returns>
     /// <remarks>
     /// Sessions written before this property existed carry no key and read as not connected. That is
     /// the safe direction: the flag only ever suppresses output, so an old session at worst shows a
@@ -41,6 +41,6 @@ public static class LocalSessionProperties
             return false;
 
         return session.EnvironmentInfo.CustomProperties.TryGetValue(Mode, out string? mode) &&
-               string.Equals(mode, nameof(XpingMode.Connected), StringComparison.Ordinal);
+               string.Equals(mode, nameof(XpingMode.Cloud), StringComparison.Ordinal);
     }
 }

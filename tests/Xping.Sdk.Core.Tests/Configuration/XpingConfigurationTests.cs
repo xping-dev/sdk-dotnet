@@ -34,37 +34,37 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenApiKeyIsMissingInConnectedMode()
+    public void ValidateShouldReturnErrorsWhenApiKeyIsMissingInCloudMode()
     {
         // Arrange
         var config = new XpingConfiguration
         {
             ProjectId = "test-project",
-            Mode = XpingMode.Connected
+            Mode = XpingMode.Cloud
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("ApiKey is required in Connected mode.", errors);
+        Assert.Contains("ApiKey is required in Cloud mode.", errors);
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenProjectIdIsMissingInConnectedMode()
+    public void ValidateShouldReturnErrorsWhenProjectIdIsMissingInCloudMode()
     {
         // Arrange
         var config = new XpingConfiguration
         {
             ApiKey = "test-key",
-            Mode = XpingMode.Connected
+            Mode = XpingMode.Cloud
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("ProjectId is required in Connected mode.", errors);
+        Assert.Contains("ProjectId is required in Cloud mode.", errors);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class XpingConfigurationTests
         var errors = config.Validate();
 
         // Assert
-        Assert.Equal(XpingMode.Connected, config.ResolveMode());
+        Assert.Equal(XpingMode.Cloud, config.ResolveMode());
         Assert.Contains("ApiKey is required when StrictMode is enabled.", errors);
         Assert.Contains("ProjectId is required when StrictMode is enabled.", errors);
     }
@@ -101,7 +101,7 @@ public sealed class XpingConfigurationTests
     [InlineData(true, null, null, XpingMode.LocalOnly)]
     [InlineData(true, "key", null, XpingMode.LocalOnly)]
     [InlineData(true, null, "proj", XpingMode.LocalOnly)]
-    [InlineData(true, "key", "proj", XpingMode.Connected)]
+    [InlineData(true, "key", "proj", XpingMode.Cloud)]
     [InlineData(false, "key", "proj", XpingMode.Disabled)]
     [InlineData(false, null, null, XpingMode.Disabled)]
     public void ResolveModeShouldFollowCredentialsAndEnabledFlag(
@@ -122,7 +122,7 @@ public sealed class XpingConfigurationTests
     [Fact]
     public void ResolveModeShouldHonorExplicitModeOverCredentials()
     {
-        // Arrange — an explicit mode wins even when credentials would imply Connected.
+        // Arrange — an explicit mode wins even when credentials would imply Cloud.
         var config = new XpingConfiguration
         {
             ApiKey = "test-key",
@@ -142,7 +142,7 @@ public sealed class XpingConfigurationTests
         var config = new XpingConfiguration
         {
             Enabled = false,
-            Mode = XpingMode.Connected
+            Mode = XpingMode.Cloud
         };
 
         // Act & Assert

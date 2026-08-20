@@ -33,12 +33,12 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<WhereCommand>();
         services.AddTransient<ClearCommand>();
 
-        // Extension point for the Xping Dashboard work: an authenticated HTTP client with Polly
+        // Extension point for the Xping Cloud work: an authenticated HTTP client with Polly
         // resilience (mirroring XpingServiceCollectionExtensions.AddXpingUploader in
         // Xping.Sdk.Core) and token-storage services will register here, e.g.:
-        //   services.AddHttpClient<IDashboardClient, DashboardClient>((sp, client) => { ... })
-        //       .AddResilienceHandler("xping-dashboard-resilience", (builder, context) => { ... });
-        //   services.AddXpingDashboardAuth();
+        //   services.AddHttpClient<ICloudClient, CloudClient>((sp, client) => { ... })
+        //       .AddResilienceHandler("xping-cloud-resilience", (builder, context) => { ... });
+        //   services.AddXpingCloudAuth();
 
         return services;
     }

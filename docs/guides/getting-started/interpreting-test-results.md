@@ -1,6 +1,6 @@
 # Interpreting Test Results
 
-Once you've integrated the Xping SDK and your tests are running, the Xping Dashboard provides rich insights into test reliability. This guide explains how to interpret the data Xping collects and make informed decisions about your tests.
+Once you've integrated the Xping SDK and your tests are running, Xping Cloud provides rich insights into test reliability. This guide explains how to interpret the data Xping collects and make informed decisions about your tests.
 
 ---
 
@@ -147,6 +147,6 @@ Use this framework to decide what to do based on confidence scores:
 ## See Also
 
 - [Understanding Confidence Scores](./understanding-confidence-scores.md) - Learn how scores are calculated
-- [Navigating the Dashboard](./navigating-the-dashboard.md) - Find and view test data
-- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Use the dashboard to find unreliable tests
+- [Navigating Xping Cloud](./navigating-xping-cloud.md) - Find and view test data
+- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Use Xping Cloud to find unreliable tests
 - [Fixing Flaky Tests](../working-with-tests/fixing-flaky-tests.md) - Take action on low-confidence tests

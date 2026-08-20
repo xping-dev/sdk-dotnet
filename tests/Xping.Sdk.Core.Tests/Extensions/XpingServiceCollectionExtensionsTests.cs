@@ -288,7 +288,7 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         // Assert
         Assert.Equal("XpingUploader", uploader.GetType().Name);
-        Assert.Equal(XpingMode.Connected, options.ResolveMode());
+        Assert.Equal(XpingMode.Cloud, options.ResolveMode());
         Assert.True(options.CollectNetworkMetrics);
     }
 
@@ -318,9 +318,9 @@ public sealed class XpingServiceCollectionExtensionsTests
         // Arrange
         var services = new ServiceCollection();
 
-        // Act & Assert — missing ApiKey is only invalid once Connected mode is requested
+        // Act & Assert — missing ApiKey is only invalid once Cloud mode is requested
         Assert.Throws<InvalidOperationException>(() =>
-            services.AddXping(b => b.WithProjectId("proj").WithMode(XpingMode.Connected)));
+            services.AddXping(b => b.WithProjectId("proj").WithMode(XpingMode.Cloud)));
     }
 
     [Fact]
