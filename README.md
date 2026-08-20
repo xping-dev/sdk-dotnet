@@ -8,7 +8,7 @@
     <a href="https://codecov.io/gh/xping-dev/sdk-dotnet"><img src="https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO" alt="codecov"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   </p>
-  <img src="https://raw.githubusercontent.com/xping-dev/sdk-dotnet/main/docs/media/logo.svg" width="50" alt="Xping Logo" />
+  <img src="docs/media/logo.svg" width="50" alt="Xping Logo" />
   <h1>Xping for .NET</h1>
   <p align="center">
     <strong>Stop guessing. Start knowing which tests you can trust.</strong>
