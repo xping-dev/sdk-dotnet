@@ -4,6 +4,7 @@
  */
 
 using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,7 +67,7 @@ internal static class Program
                 error.WriteLine(parseError.Message);
 
             string verb = effectiveArgs.Length > 0 ? effectiveArgs[0] : string.Empty;
-            error.WriteLine(verb is "report" or "where" or "clear" or "version"
+            error.WriteLine(verb is "report" or "where" or "clear"
                 ? $"Run `xping {verb} --help` for usage."
                 : "Run `xping --help` for usage.");
             return 2;
@@ -120,7 +121,8 @@ internal static class Program
         root.Subcommands.Add(BuildReportCommand(services));
         root.Subcommands.Add(BuildWhereCommand(services));
         root.Subcommands.Add(BuildClearCommand(services));
-        root.Subcommands.Add(BuildVersionCommand(output));
+
+        UseCleanVersion(root, output);
 
         return root;
     }
@@ -385,19 +387,32 @@ internal static class Program
         return command;
     }
 
-    private static Command BuildVersionCommand(TextWriter output)
+    /// <summary>
+    /// Points the built-in <c>--version</c> option at the shared <see cref="XpingVersion"/>.
+    /// </summary>
+    /// <remarks>
+    /// The built-in action prints the raw informational version, which on a local build carries the
+    /// source-revision suffix (e.g. <c>1.0.0-rc.5+c670fc3…</c>). <see cref="XpingVersion.Current"/>
+    /// is the same clean SemVer the SDK reports in its User-Agent header and
+    /// <c>TestSession.SdkVersion</c>, so the two never disagree about what version is installed.
+    /// The option itself is left in place so its "cannot be combined with other arguments"
+    /// validation still applies.
+    /// </remarks>
+    private static void UseCleanVersion(RootCommand root, TextWriter output)
     {
-        Command command = new("version", "Print the tool version");
+        foreach (Option option in root.Options)
+        {
+            if (option is VersionOption versionOption)
+                versionOption.Action = new PrintVersionAction(output);
+        }
+    }
 
-        // Uses the shared XpingVersion (the same clean SemVer reported in the SDK's User-Agent
-        // header and TestSession.SdkVersion), so it may omit the local source-revision suffix
-        // (e.g. "+abc123") that System.CommandLine's built-in `--version` option can include.
-        command.SetAction(_ =>
+    private sealed class PrintVersionAction(TextWriter output) : SynchronousCommandLineAction
+    {
+        public override int Invoke(ParseResult parseResult)
         {
             output.WriteLine(XpingVersion.Current);
             return 0;
-        });
-
-        return command;
+        }
     }
 }

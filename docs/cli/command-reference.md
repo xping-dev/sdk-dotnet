@@ -221,9 +221,9 @@ Pass `--force` to delete without prompting.
 
 ---
 
-## `xping version`
+## `xping --version`
 
-Prints the tool version.
+Prints the tool version, e.g. `1.0.0-rc.5`.
 
 ---
 

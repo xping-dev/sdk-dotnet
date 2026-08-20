@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Reflection;
+
 namespace Xping.Cli.Tests;
 
 public sealed class ProgramTests
@@ -48,11 +50,26 @@ public sealed class ProgramTests
     }
 
     [Fact]
-    public void VersionPrintsAVersion()
+    public void VersionPrintsCleanSemVer()
     {
-        var (code, output, _) = Run("version");
+        var (code, output, _) = Run("--version");
+
+        string informational = typeof(Program).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        string expected = informational.Split('+')[0];
 
         Assert.Equal(0, code);
-        Assert.False(string.IsNullOrWhiteSpace(output));
+
+        // The build metadata suffix the built-in action would print is what this replaces.
+        Assert.Equal(expected, output.Trim());
+    }
+
+    [Fact]
+    public void VersionVerbIsNotACommand()
+    {
+        var (code, _, error) = Run("version");
+
+        Assert.Equal(2, code);
+        Assert.Contains("Unrecognized command or argument", error, StringComparison.Ordinal);
     }
 }
