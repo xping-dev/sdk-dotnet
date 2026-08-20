@@ -29,7 +29,7 @@ internal enum Severity
 /// How much data a finding rests on, measured in executions of the subject within the window.
 /// </summary>
 /// <remarks>
-/// These bands are shared verbatim with the Xping Dashboard. Local windows are small, so most local
+/// These bands are shared verbatim with Xping Cloud. Local windows are small, so most local
 /// findings will legitimately be <see cref="Low"/> or <see cref="Moderate"/> — that is correct, and
 /// must be surfaced rather than hidden.
 /// </remarks>

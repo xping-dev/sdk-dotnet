@@ -19,7 +19,7 @@ Xping SDK automatically detects CI/CD environments and captures relevant metadat
 
 The basic setup is the same across all CI/CD platforms:
 
-1. **Get your API key** from [Xping Dashboard](https://app.xping.io): **Account** → **Settings** → **API & Integration** → **Create API Key**
+1. **Get your API key** from [Xping Cloud](https://app.xping.io): **Account** → **Settings** → **API & Integration** → **Create API Key**
 2. **Choose a Project ID** - any meaningful identifier for your project (e.g., `"my-app"`, `"payment-service"`)
 3. **Store credentials as secrets/variables** in your CI/CD platform
 4. **Set environment variables in your pipeline**
@@ -454,7 +454,7 @@ Track test execution time to ensure Xping overhead is minimal:
 
 ## Troubleshooting CI/CD Issues
 
-### Tests not appearing in dashboard
+### Tests not appearing in Xping Cloud
 
 **Check these common issues:**
 
@@ -566,7 +566,7 @@ After setting up CI/CD integration:
 - [ ] Secrets/variables configured correctly
 - [ ] Environment variables set in pipeline
 - [ ] Test job runs successfully
-- [ ] Tests appear in Xping dashboard
+- [ ] Tests appear in Xping Cloud
 - [ ] CI metadata captured correctly (build number, commit SHA, etc.)
 - [ ] Test execution time overhead is acceptable (<5%)
 - [ ] Failed tests are tracked properly

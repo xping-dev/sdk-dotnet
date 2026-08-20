@@ -185,7 +185,7 @@ internal static class ServiceHelper
                 // Missing credentials, plus StrictMode on the options instance itself. The real
                 // pipeline binds the "Xping" section, so Xping:StrictMode=true would land on this
                 // property; setting it here keeps the helper faithful to that behavior. Strict mode
-                // forces Connected, which makes the absent credentials a hard error.
+                // forces Cloud, which makes the absent credentials a hard error.
                 services.Configure<XpingConfiguration>(o =>
                 {
                     o.ApiKey = null;

@@ -314,7 +314,7 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
-        return services.AddXpingEnvironment(XpingMode.Connected);
+        return services.AddXpingEnvironment(XpingMode.Cloud);
     }
 
     /// <summary>
@@ -415,8 +415,8 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     /// <remarks>
     /// <para>
-    /// Registered in <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> alike.
-    /// Connected users get the same local history, which is what makes the store useful beyond the
+    /// Registered in <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Cloud"/> alike.
+    /// Cloud users get the same local history, which is what makes the store useful beyond the
     /// zero-config case.
     /// </para>
     /// <para>
@@ -451,7 +451,7 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingUploader(this IServiceCollection services)
     {
-        return services.AddXpingUploader(XpingMode.Connected);
+        return services.AddXpingUploader(XpingMode.Cloud);
     }
 
     /// <summary>
@@ -467,7 +467,7 @@ public static class XpingServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddXpingUploader(this IServiceCollection services, XpingMode mode)
     {
-        if (mode != XpingMode.Connected)
+        if (mode != XpingMode.Cloud)
         {
             services.AddSingleton<IXpingUploader, NoOpXpingUploader>();
             return services;

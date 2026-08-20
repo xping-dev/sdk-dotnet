@@ -3,6 +3,7 @@
 <div align="center">
   <p align="center">
     <a href="https://www.nuget.org/packages/Xping.Sdk.Core/"><img src="https://img.shields.io/nuget/v/Xping.Sdk.Core?label=Xping.Sdk.Core" alt="NuGet"></a>
+    <a href="https://www.nuget.org/packages/Xping.Cli/"><img src="https://img.shields.io/nuget/v/Xping.Cli?label=Xping.Cli" alt="NuGet"></a>
     <a href="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml"><img src="https://github.com/xping-dev/sdk-dotnet/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
     <a href="https://codecov.io/gh/xping-dev/sdk-dotnet"><img src="https://codecov.io/gh/xping-dev/sdk-dotnet/graph/badge.svg?token=VUOVI3YUTO" alt="codecov"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
@@ -12,16 +13,18 @@
   <p align="center">
     <strong>Stop guessing. Start knowing which tests you can trust.</strong>
     <br />
-    Automatic flaky test detection and test reliability insights for .NET teams.
+    Test reliability analysis for .NET — accumulates history across <code>dotnet test</code> runs
+    so flaky tests stop being anecdotes.
+    <br />
+    <sub>Works with no account, no API key, and no network access.</sub>
   </p>
 </div>
-
 
 <div align="center">
   <p align="center">
     <a href="#quick-start"><strong>Quick Start</strong></a> •
-    <a href="#the-problem"><strong>The Problem</strong></a> •
-    <a href="#what-you-get"><strong>What You Get</strong></a> •
+    <a href="#local-vs-cloud"><strong>Local vs. Cloud</strong></a> •
+    <a href="#how-it-works"><strong>How It Works</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
     <a href="https://docs.xping.io/known-limitations.html"><strong>Known Limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
@@ -32,339 +35,328 @@
 
 ---
 
-## The Problem
+## Two ways to run Xping
 
-**How much time did your team waste debugging flaky tests last week?**
+|                | **Local** | **Cloud** |
+| -------------- | --------- | --------- |
+| **Setup**      | SDK package + CLI tool | + an API key |
+| **Account**    | Not required | Required ([invite-only](#connecting-to-xping-cloud)) |
+| **Your data**  | Stays in `.xping/` in your repo | Uploaded to Xping Cloud |
+| **History**    | Your machine, your runs | Every machine, every branch, CI included |
+| **You get**    | Observations and evidence from local runs | Confidence scores, evidence sufficiency, trends, PR comments |
 
-We've all been there. Your test passes locally but fails in CI. You re-run it and it passes. You waste hours investigating only to find out the test itself is unreliable, not your code.
-
-Traditional test frameworks tell you if a test passed or failed—but they don't tell you if you can **trust** that result. Teams spend countless hours:
-
-- Re-running tests hoping they'll pass
-- Debugging tests that fail intermittently
-- Wondering if failures are real bugs or environmental issues
-- Lacking visibility into test reliability across environments
-
-**Xping solves this.** We bring observability to testing, giving you confidence scores, flaky test detection, and actionable insights—all with minimal setup.
-
----
-
-## What You Get
-
-### For Everyone
-- **Automatic Flaky Test Detection** - Statistical analysis identifies unreliable tests before they become a problem
-- **Test Reliability Insights** - See which tests you can trust and which need attention
-- **Zero-Config Setup** - Add one attribute or line of code, start tracking immediately
-- **Minimal Overhead** - Less than 5ms per test, sub-1KB memory footprint
-
-### For Developers
-- **Focus on Real Bugs** - Stop chasing flaky tests, focus on actual issues
-- **Environment Comparison** - Understand how tests behave locally vs. CI/CD
-- **Historical Trends** - See test reliability over time
-
-### For QA & Engineering Leaders
-- **Data-Driven Decisions** - Quantify test suite quality with hard metrics
-- **Problem Identification** - Automatically spot flaky tests across your entire suite
-- **CI/CD Intelligence** - Works seamlessly with GitHub Actions, Azure DevOps, Jenkins, GitLab, and more
-
-### Technical Features
-- **Test Execution Tracking** - Automatically collect test results, duration, outcomes, and environment metadata
-- **Resilient Upload** - Retry policies and circuit breakers for reliable data delivery
-- **Multi-Framework Support** - NUnit, xUnit, and MSTest
-- **Flexible Configuration** - JSON, environment variables, or programmatic setup
+**Start local.** Nothing in the local path phones home, and you can add an API key later
+without changing a line of test code.
 
 ---
 
 ## Quick Start
 
-Get started in under 5 minutes:
-
-### 1. Install the SDK
+### 1. Install both pieces
 
 ```bash
-dotnet add package Xping.Sdk.NUnit    # or Xping.Sdk.XUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.XUnit    # or Xping.Sdk.NUnit / Xping.Sdk.MSTest
+
+dotnet new tool-manifest              # skip if you already have one
+dotnet tool install Xping.Cli
 ```
 
-### 2. Configure with environment variables
+The SDK records what happens during each run; the CLI reads what it recorded. You need
+both — the SDK alone writes history nothing reads.
 
-```bash
-export XPING_APIKEY="your-api-key"
-export XPING_PROJECTID="your-project-id"
-```
+### 2. Turn on tracking
 
-> **No account?** Skip this step. Without an API key the SDK runs in local-only
-> mode and records test history to a `.xping` folder in your repository — no
-> signup, no network calls. See [Try it without an account](#try-it-without-an-account).
-
-### 3. Add tracking to your tests
-
-**NUnit** - Add one attribute to track all tests:
-```csharp
-[assembly: XpingTrack]
-```
-
-**xUnit** - Add one line to AssemblyInfo.cs:
+**xUnit** — add one line to `AssemblyInfo.cs`:
 ```csharp
 [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
 ```
 
-**MSTest** - Inherit from base class:
+**NUnit** — add one assembly-level attribute:
+```csharp
+[assembly: XpingTrack]
+```
+
+**MSTest** — inherit from the base class:
 ```csharp
 [TestClass]
 public class MyTests : XpingTestBase { }
 ```
 
-### 4. Run your tests
-
-That's it! Run your tests normally and view insights at [app.xping.io](https://app.xping.io)
-
----
-
-## Try It Without an Account
-
-Xping works with no API key, no signup, and no network access. Add the SDK, run
-your tests a few times, then ask which of them you can trust:
+### 3. Run your tests — more than once
 
 ```bash
-dotnet tool install Xping.Cli     # into a tool manifest
+dotnet test
+```
+
+One run tells you nothing about reliability. A dozen tells you plenty. Run them the way
+you normally would and let the history build up.
+
+### 4. Ask what happened
+
+```bash
 dotnet xping report
 ```
 
 ```
-──────────────────────────────────────────────────────────────────────────
-  Xping · local run summary                             412 tests · 38.2s
-──────────────────────────────────────────────────────────────────────────
-  ✓ 405 passed     ✗ 4 failed     ○ 3 skipped
+Xping · SampleApp.MSTest · 9 runs · 2026-08-20 07:52 → 09:02 · main@bdbafba
+4 findings (4 high) · 17 tests · 14 healthy
 
-  ⚠  2 unstable tests · last 12 local runs
+HIGH  flaky            FlakyTest_PassesOnRetry
+      failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
+      evidence moderate | f_2b84a621
 
-     ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
-                    passed 9 of 12 runs · inconsistent
+HIGH  always failing   ThrowingTestIsTracked
+      failed 9 of 9 executions (100%), one failure mode:
+      System.InvalidOperationException
+      evidence low | f_c1774d82
 
-     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
-                    newly failing · first failure in this window
+HIGH  flaky            FlakyTest_RaceCondition_FailsIntermittently
+      failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
+      evidence low | f_d24c5aa9
 
-  ✗  1 test failed in all 12 runs - not flaky, likely real bugs
-     Auth.RejectsExpiredToken
-──────────────────────────────────────────────────────────────────────────
+HIGH  masked by retry  FlakyTest_PassesOnRetry
+      passed on retry 9 times in 9 of 9 runs, up to attempt 2
+      evidence moderate | f_e98db1e6
 ```
 
-The sparkline reads left to right, oldest run to newest — `●` passed, `○` failed.
-Everything stays on your machine. Add an API key whenever you want team-wide
-history across CI and every branch.
+No API key, no signup, no network calls. Everything lives in `.xping/` in your repository.
 
 [Running Without an Account →](https://docs.xping.io/getting-started/local-first.html)
 
-### Framework-Specific Guides
+### Framework-specific guides
 
-- [NUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-nunit.html) - Detailed setup, attributes, and best practices
-- [xUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-xunit.html) - Custom framework configuration and examples
-- [MSTest Setup Guide](https://docs.xping.io/getting-started/quickstart-mstest.html) - Base class usage and TestContext integration
+- [NUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-nunit.html) — attributes, filtering, best practices
+- [xUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-xunit.html) — custom framework configuration and examples
+- [MSTest Setup Guide](https://docs.xping.io/getting-started/quickstart-mstest.html) — base class usage and TestContext integration
 
 ---
 
-## Architecture
+## Why this exists
 
-### How It Works
+`dotnet test` is amnesiac. Every run starts from zero and discards everything the last one
+knew. A test that failed on Tuesday and passed on Wednesday leaves no trace that anyone can
+point at on Thursday, so "is that one flaky?" gets answered from memory and vibes — and
+usually settled by re-running until it goes green.
+
+Xping is the accumulation layer underneath that. The SDK records each execution with its
+outcome, duration, and environment; the CLI reads that history back and tells you which
+tests behaved consistently and which didn't. Nothing about your test code changes.
+
+---
+
+## Local vs. Cloud
+
+The local CLI reports **what it observed**. It does not assign confidence scores or name
+causes — a handful of runs on one machine isn't an evidence base strong enough to support
+that kind of claim, and we'd rather show you the runs than a number that implies more
+certainty than the data has. Scoring lives in Xping Cloud, where there's enough history
+across machines, branches, and CI to justify it.
+
+|                                        | Local | Cloud |
+| -------------------------------------- | :---: | :---: |
+| Run-by-run pass/fail history            | ✓ | ✓ |
+| Inconsistent and newly-failing tests    | ✓ | ✓ |
+| Consistently-failing tests (real bugs)  | ✓ | ✓ |
+| Duration and environment capture        | ✓ | ✓ |
+| Per-test confidence score               | — | ✓ |
+| Evidence sufficiency (ESS)              | — | ✓ |
+| Root-cause categorisation               | — | ✓ |
+| Reliability trends over time            | — | ✓ |
+| Cross-environment comparison            | — | ✓ |
+| History across CI, branches, teammates  | — | ✓ |
+| GitHub PR comments                      | — | ✓ |
+
+---
+
+## Connecting to Xping Cloud
+
+Set two environment variables. Nothing else changes — same packages, same attributes.
+
+```bash
+export XPING_APIKEY="your-api-key"
+export XPING_PROJECTID="your-project-id"
+```
+
+Runs are uploaded as they finish and analysed at [app.xping.io](https://app.xping.io):
+confidence scores per test, evidence sufficiency, root-cause categorisation, trends across
+environments, and PR comments on GitHub.
+
+> **Xping Cloud is currently invite-only.** We're running a small, high-touch pilot while
+> the scoring model settles. [Request access](https://xping.io) — or keep working locally,
+> which stays free and account-free regardless.
+
+For CI setup (GitHub Actions, Azure DevOps, Jenkins, GitLab), see the
+[Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html).
+
+---
+
+## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Your Test Project                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐          │
-│  │ NUnit Tests  │  │ xUnit Tests  │  │ MSTest Tests  │          │
-│  └──────┬───────┘  └───────┬──────┘  └────────┬──────┘          │
-└─────────┼──────────────────┼──────────────────┼─────────────────┘
-          │                  │                  │
-          ▼                  ▼                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Test Framework Adapters                      │
-│  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐          │
-│  │ Xping.NUnit  │  │ Xping.XUnit   │  │ Xping.MSTest │          │
-│  └──────┬───────┘  └───────┬───────┘  └───────┬──────┘          │
-└─────────┼──────────────────┼──────────────────┼─────────────────┘
-          │                  │                  │
-          └──────────────────┼──────────────────┘
-                             ▼
-          ┌─────────────────────────────────────┐
-          │         Xping.Sdk.Core              │
-          │                                     │
-          │  • Test Execution Tracking          │
-          │  • Environment Detection            │
-          │  • Configuration Management         │
-          │  • Resilient Upload                 │
-          └──────────────────┬──────────────────┘
-                             ▼
-                    Xping Cloud Platform
+              Your test project  (xUnit · NUnit · MSTest)
+                                │
+                                ▼
+                    Xping.Sdk.<framework> adapter
+                                │
+                                ▼
+                          Xping.Sdk.Core
+              tracking · environment detection · batching
+                                │
+              ┌─────────────────┴─────────────────┐
+              │  no API key                       │  API key set
+              ▼                                   ▼
+       .xping/ (local store)                 Xping Cloud
+              │                                   │
+              ▼                                   ▼
+      dotnet xping report            scores · trends · PR comments
 ```
+
+Adapters are thin — they hook the framework's execution pipeline and hand results to
+`Xping.Sdk.Core`, which owns collection, environment detection, and delivery. Overhead is
+under 5 ms per test.
 
 ---
 
 ## Configuration
 
-Xping SDK can be configured via **environment variables**, **appsettings.json**, or **programmatically**.
-
-### Environment Variables
+Configure via **environment variables**, **appsettings.json**, or **programmatically**.
 
 ```bash
-# Required
+# Cloud only
 export XPING_APIKEY="your-api-key"
 export XPING_PROJECTID="your-project-id"
 
-# Optional
+# Optional, either way
 export XPING_ENABLED="true"
 export XPING_BATCHSIZE="100"
 ```
 
-See the [Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html) for complete options including JSON configuration, CI/CD integration examples (GitHub Actions, Azure DevOps, Jenkins), and advanced settings.
+Without `XPING_APIKEY`, the SDK writes to `.xping/` and makes no network calls. Full
+options in the [Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html).
 
 ---
 
-## What Gets Collected?
+## Your Data
 
-### Test Execution Data
-- Test name and fully qualified name
-- Outcome (Passed, Failed, Skipped, etc.)
-- Duration (milliseconds)
-- Start and end timestamps (UTC)
-- Error message and stack trace (for failures)
-- Test categories/traits
+### What gets recorded
 
-### Environment Metadata
-- Operating system and version
-- .NET runtime version
-- Machine name
-- Network metrics (latency, packet loss)
-- CI/CD platform detection
-- Build/branch information (from CI environment)
+**Per test execution** — name and fully qualified name, outcome, duration, start and end
+timestamps (UTC), error message and stack trace on failure, categories and traits.
 
----
+**Per environment** — OS and version, .NET runtime version, machine name, CI platform
+detection, build and branch information from the CI environment, network metrics.
 
-## Privacy & Security
+### What never gets recorded
 
-We take data privacy seriously. Here's exactly what we collect and don't collect:
+No source code. No assertion values. No credentials or secrets. No personally identifiable
+information.
 
-### What We DON'T Collect
-- No source code
-- No sensitive data from test assertions
-- No credentials or secrets
-- No personally identifiable information (PII)
+### Local
 
-### Security Measures
-- **Encryption** - All data transmitted over HTTPS
-- **API Key Security** - Environment variable support (never commit keys to source control)
-- **Data Retention** - Configurable retention policies
-- **Open Source** - Full transparency, [review the code yourself](https://github.com/xping-dev/sdk-dotnet)
-- **Configurable Collection** - Stack traces and sampling are optional
+Everything is written to `.xping/` in your repository and stays there. No network calls are
+made without an API key. Add `.xping/` to your `.gitignore` — the history is machine-local
+and isn't meant to be shared through version control. To start over, delete the folder.
+
+### Cloud
+
+Data is transmitted over HTTPS. Keep API keys in environment variables or CI secrets, never
+in source control. Stack trace capture and sampling are configurable, and retention is set
+per workspace. The SDK is MIT-licensed and open source — [read exactly what it
+sends](https://github.com/xping-dev/sdk-dotnet).
 
 ---
 
-## What Problems Does Xping Solve?
+## What Xping Helps You Find
 
-Xping helps you identify and understand common test reliability issues. The SDK collects test execution data, and the Dashboard analyzes it to detect:
+Patterns that show up in accumulated execution history:
 
-- **Race Conditions** - Tests that fail intermittently due to timing issues
-- **External Service Dependencies** - Tests affected by network or service availability
-- **Shared State Issues** - Tests that interfere with each other
-- **Time-Based Flakiness** - Tests that fail at specific times or dates
-- **Resource Exhaustion** - Tests that leak resources over time
-- **Non-Deterministic Data** - Tests with random or unpredictable data
+- **Race conditions** — intermittent failures with no code change between runs
+- **External dependencies** — failures that track network or service availability
+- **Shared state** — tests that pass alone and fail in a suite
+- **Time-based flakiness** — failures clustered around dates, times, or timezones
+- **Resource exhaustion** — degradation over the course of a long run
+- **Non-deterministic data** — random inputs that occasionally hit an edge case
 
-Once tests are tracked with the SDK, the [Xping Dashboard](https://app.xping.io) provides:
-- Reliability scores and confidence metrics for each test
-- Automatic flaky test detection with pattern analysis
-- Environment comparison (local vs. CI/CD behavior)
-- Historical trends and performance insights
+Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See the
+[Common Flaky Patterns Guide](https://docs.xping.io/guides/working-with-tests/common-flaky-patterns.html)
+for worked examples.
 
-For detailed examples of each pattern and how Xping detects them, see the [Common Flaky Patterns Guide](https://docs.xping.io/guides/working-with-tests/common-flaky-patterns.html).
+---
+
+## Repository Layout
+
+| Path | Contents |
+| ---- | -------- |
+| `src/Xping.Sdk.Core` | Collection, environment detection, configuration, delivery |
+| `src/Xping.Sdk.XUnit` · `.NUnit` · `.MSTest` | Framework adapters |
+| `src/Xping.Cli` | `dotnet xping` — local analysis and reporting |
+| `samples/` | Runnable examples per framework |
+| `docs/` | Source for [docs.xping.io](https://docs.xping.io) |
 
 ---
 
 ## Documentation
 
-**Essential Resources:**
-- [Getting Started Guide](https://docs.xping.io/index.html#quick-start)
+- [Getting Started](https://docs.xping.io/index.html#quick-start)
+- [Running Without an Account](https://docs.xping.io/getting-started/local-first.html)
 - [Known Limitations](https://docs.xping.io/known-limitations.html)
 - [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
 - [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
 
-Complete documentation available at [docs.xping.io](https://docs.xping.io)
+Full documentation at [docs.xping.io](https://docs.xping.io).
 
 ---
 
 ## Contributing
 
-We welcome contributions! Whether it's:
-
-- Bug reports
-- Feature requests
-- Documentation improvements
-- Code contributions
-
-### Development Setup
+Bug reports, feature requests, documentation fixes, and code contributions are all welcome.
 
 ```bash
-# Clone the repository
 git clone https://github.com/xping-dev/sdk-dotnet.git
 cd sdk-dotnet
-
-# Restore dependencies
 dotnet restore
-
-# Build
 dotnet build
-
-# Run tests
 dotnet test
-
-# Run with coverage
-dotnet test /p:CollectCoverage=true
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## Roadmap
 
-Check our [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones) for planned features:
+Tracked in [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones):
+[Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1) ·
+[Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2)
 
-- [Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1) - Currently in progress
-- [Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2) - Future considerations
+Currently on the list:
 
-### Planned Features
-- Enhanced flaky test analytics
-- Test failure categorization (infrastructure vs. code)
-- Multi-language support (Java, Python, JavaScript)
-- Self-hosted deployment option
+- Quarantine — mark known-flaky tests so CI stops failing on them
+- Richer local analysis: duration regression, failure signature grouping
+- `xping mcp` — expose local history to AI coding agents
+- Azure DevOps and GitLab integration
 
 ---
 
-## Support & Community
+## Support
 
-- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) - Ask questions, share ideas
-- [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) - Report bugs, request features
-- [Email Support](mailto:support@xping.io) - Direct support
-- [Documentation](https://docs.xping.io) - Comprehensive guides
+- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) — questions and ideas
+- [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) — bugs and feature requests
+- [support@xping.io](mailto:support@xping.io) — direct support
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
-  <p>
-    <strong>Built by developers who hate flaky tests</strong>
-  </p>
-  <p>
-    <sub>Made by <a href="https://xping.io">Xping</a> • Follow us on <a href="https://github.com/xping-dev">GitHub</a></sub>
-  </p>
+  <p><strong>Built by developers who hate flaky tests</strong></p>
+  <p><sub>Made by <a href="https://xping.io">Xping</a> • Follow us on <a href="https://github.com/xping-dev">GitHub</a></sub></p>
   <br />
-  <p>
-    If Xping helps you build better software, give us a ⭐ on GitHub!
-  </p>
+  <p>If Xping helps you build better software, give us a ⭐ on GitHub!</p>
 </div>
 
 <p align="right">(<a href="#top">back to top</a>)</p>

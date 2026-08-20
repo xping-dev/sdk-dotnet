@@ -15,7 +15,7 @@ Make reliability part of your code review process:
 - [ ] All new tests have run at least 20 times
 - [ ] New tests have confidence scores > 0.60
 - [ ] No existing tests show declining trends due to these changes
-- [ ] Link to Xping dashboard showing test results
+- [ ] Link to Xping Cloud showing test results
 ```
 
 ### Set Minimum Thresholds
@@ -35,7 +35,7 @@ Define quality gates based on test importance:
 ### Display in Team Areas
 
 Keep reliability top-of-mind:
-- Show Xping dashboard during standups
+- Show Xping Cloud during standups
 - Display flaky test count on team information radiators
 - Include reliability metrics in sprint reviews
 - Share weekly summaries in team channels
@@ -299,7 +299,7 @@ Run known-flaky tests separately:
 
 - **Developers**: Write reliable tests from the start
 - **Reviewers**: Check Xping scores during PR review
-- **QA**: Monitor dashboard and report degradations
+- **QA**: Monitor Xping Cloud and report degradations
 - **Team Leads**: Prioritize reliability in sprint planning
 
 ### Celebrate Improvements
@@ -363,11 +363,11 @@ Then decide:
 
 ### Q: How do I share a specific test's data with my team?
 
-**A:** Each test has a unique URL (e.g., `/tests/{test-id}`). Copy and share this URL in your issue tracker, pull request, or team chat. Anyone with access to the dashboard can view the full test details.
+**A:** Each test has a unique URL (e.g., `/tests/{test-id}`). Copy and share this URL in your issue tracker, pull request, or team chat. Anyone with access to Xping Cloud can view the full test details.
 
 ### Q: Can I get notifications when a test's confidence drops?
 
-**A:** The current implementation calculates scores and flags low-confidence tests in the Flaky Tests tab. Check your dashboard regularly, or consider implementing your own alerting using the Xping API. Future versions may include built-in alerting capabilities.
+**A:** The current implementation calculates scores and flags low-confidence tests in the Flaky Tests tab. Check Xping Cloud regularly, or consider implementing your own alerting using the Xping API. Future versions may include built-in alerting capabilities.
 
 ### Q: Why does a test show "Insufficient Data"?
 

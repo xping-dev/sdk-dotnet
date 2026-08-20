@@ -17,10 +17,10 @@ Welcome to the Xping documentation for .NET! Xping is a test reliability platfor
 ### Xping SDK
 A lightweight library that integrates with your test framework (NUnit, xUnit, MSTest) to automatically track test executions. It collects test results, timing, environment data, and outcomes with minimal overhead (less than 5ms per test).
 
-### Xping Dashboard
+### Xping Cloud
 A cloud platform that analyzes your test data to identify flaky tests, calculate confidence scores, and provide actionable insights. Access it at [app.xping.io](https://app.xping.io).
 
-**How they work together:** The SDK collects test execution data and sends it to the Dashboard, where statistical analysis identifies patterns, detects flaky tests, and helps you understand your test suite's reliability.
+**How they work together:** The SDK collects test execution data and sends it to Xping Cloud, where statistical analysis identifies patterns, detects flaky tests, and helps you understand your test suite's reliability.
 
 ---
 
@@ -107,7 +107,7 @@ Add one attribute or line of code (framework-specific - see guides above)
 
 ### 5. Run Your Tests
 
-That's it! Run your tests normally and view insights in the [Xping Dashboard](https://app.xping.io)
+That's it! Run your tests normally and view insights in the [Xping Cloud](https://app.xping.io)
 
 ---
 
@@ -129,7 +129,7 @@ Practical guides for using Xping SDK features
 
 **Getting Started:**
 - [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md)
-- [Navigating the Dashboard](guides/getting-started/navigating-the-dashboard.md)
+- [Navigating Xping Cloud](guides/getting-started/navigating-xping-cloud.md)
 - [Interpreting Test Results](guides/getting-started/interpreting-test-results.md)
 
 **Working with Tests:**
@@ -193,8 +193,8 @@ Xping provides:
 ## How It Works
 
 1. **Track** - Xping SDK captures test execution data (duration, outcome, environment)
-2. **Send** - SDK securely transmits data to Xping Dashboard
-3. **Analyze** - Dashboard analyzes patterns across thousands of test runs
+2. **Send** - SDK securely transmits data to Xping Cloud
+3. **Analyze** - Xping Cloud analyzes patterns across thousands of test runs
 4. **Detect** - Statistical analysis identifies flaky tests and anomalies
 5. **Alert** - Get notified when test reliability drops
 6. **Improve** - Use insights to fix flaky tests and improve suite health
@@ -217,7 +217,7 @@ Explore complete working examples:
 - [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) - Ask questions and share feedback
 - [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) - Report bugs and request features
 - [Email Support](mailto:support@xping.io) - Direct support from our team
-- [Xping Dashboard](https://app.xping.io) - View your test insights
+- [Xping Cloud](https://app.xping.io) - View your test insights
 
 ---
 

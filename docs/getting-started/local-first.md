@@ -179,9 +179,9 @@ Local history contains only **your** runs, on **your** machine. It structurally 
 - Behaviour differences across operating systems or environments
 - More history than your retention window holds
 
-This is why the local report does not show a confidence score. The [confidence score](../guides/getting-started/understanding-confidence-scores.md) weighs six factors, several of which — environment consistency in particular — need data that does not exist on one developer's machine. Showing a number here that looked like the dashboard's but disagreed with it would be worse than showing none.
+This is why the local report does not show a confidence score. The [confidence score](../guides/getting-started/understanding-confidence-scores.md) weighs six factors, several of which — environment consistency in particular — need data that does not exist on one developer's machine. Showing a number here that looked like Xping Cloud's but disagreed with it would be worse than showing none.
 
-Local-only mode answers *"what is unstable on my machine, in my last N runs"*. The dashboard answers *"what is unstable across CI, every branch, and everyone's machines, over months"*.
+Local-only mode answers *"what is unstable on my machine, in my last N runs"*. Xping Cloud answers *"what is unstable across CI, every branch, and everyone's machines, over months"*.
 
 ---
 
@@ -194,7 +194,7 @@ export XPING_APIKEY="your-key"
 export XPING_PROJECTID="your-project"
 ```
 
-The SDK switches to connected mode and uploads as normal. It **keeps writing the local store**, so `dotnet xping report` continues to work offline and on your own machine.
+The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `dotnet xping report` continues to work offline and on your own machine.
 
 To stay local even with credentials present, set the mode explicitly:
 

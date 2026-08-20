@@ -33,7 +33,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the API key for authentication.
-    /// Required in <see cref="XpingMode.Connected"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
+    /// Required in <see cref="XpingMode.Cloud"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
     /// <remarks>
     /// This property intentionally carries no <c>[Required]</c> data annotation. Requiring it
@@ -45,7 +45,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the project ID.
-    /// Required in <see cref="XpingMode.Connected"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
+    /// Required in <see cref="XpingMode.Cloud"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
     /// <remarks>
     /// See the remarks on <see cref="ApiKey"/> for why this carries no <c>[Required]</c> annotation.
@@ -97,7 +97,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the operating mode. Defaults to <see cref="XpingMode.Auto"/>, which resolves to
-    /// <see cref="XpingMode.Connected"/> when credentials are present and
+    /// <see cref="XpingMode.Cloud"/> when credentials are present and
     /// <see cref="XpingMode.LocalOnly"/> otherwise. Use <see cref="ResolveMode"/> to obtain the
     /// effective mode.
     /// </summary>
@@ -186,12 +186,12 @@ public sealed class XpingConfiguration
     /// <list type="number">
     /// <item><description><see cref="Enabled"/> is <see langword="false"/> → <see cref="XpingMode.Disabled"/>.</description></item>
     /// <item><description><see cref="Mode"/> was set explicitly → that mode.</description></item>
-    /// <item><description><see cref="StrictMode"/> is <see langword="true"/> → <see cref="XpingMode.Connected"/>.</description></item>
-    /// <item><description>Credentials present → <see cref="XpingMode.Connected"/>.</description></item>
+    /// <item><description><see cref="StrictMode"/> is <see langword="true"/> → <see cref="XpingMode.Cloud"/>.</description></item>
+    /// <item><description>Credentials present → <see cref="XpingMode.Cloud"/>.</description></item>
     /// <item><description>Otherwise → <see cref="XpingMode.LocalOnly"/>.</description></item>
     /// </list>
     /// <para>
-    /// Strict mode deliberately forces <see cref="XpingMode.Connected"/>. Its purpose is to guarantee
+    /// Strict mode deliberately forces <see cref="XpingMode.Cloud"/>. Its purpose is to guarantee
     /// observability in CI, so a missing API key must remain a hard configuration error rather than
     /// silently degrading a pipeline to local-only collection.
     /// </para>
@@ -209,9 +209,9 @@ public sealed class XpingConfiguration
             return Mode;
 
         if (StrictMode)
-            return XpingMode.Connected;
+            return XpingMode.Cloud;
 
-        return HasCredentials ? XpingMode.Connected : XpingMode.LocalOnly;
+        return HasCredentials ? XpingMode.Cloud : XpingMode.LocalOnly;
     }
 
     /// <summary>
@@ -227,26 +227,26 @@ public sealed class XpingConfiguration
         {
             errors.Add(
                 $"Mode has an undefined value ({(int)Mode}). " +
-                "Valid values are Auto, LocalOnly, Connected, and Disabled.");
+                "Valid values are Auto, LocalOnly, Cloud, and Disabled.");
         }
 
         XpingMode mode = ResolveMode();
 
         // Credentials are only meaningful when the SDK will actually talk to the platform.
-        if (mode == XpingMode.Connected)
+        if (mode == XpingMode.Cloud)
         {
             if (string.IsNullOrWhiteSpace(ApiKey))
             {
                 errors.Add(StrictMode && Mode == XpingMode.Auto
                     ? "ApiKey is required when StrictMode is enabled."
-                    : "ApiKey is required in Connected mode.");
+                    : "ApiKey is required in Cloud mode.");
             }
 
             if (string.IsNullOrWhiteSpace(ProjectId))
             {
                 errors.Add(StrictMode && Mode == XpingMode.Auto
                     ? "ProjectId is required when StrictMode is enabled."
-                    : "ProjectId is required in Connected mode.");
+                    : "ProjectId is required in Cloud mode.");
             }
         }
 
@@ -313,7 +313,7 @@ public sealed class XpingConfiguration
     }
 
     private static bool IsDefinedMode(XpingMode mode) =>
-        mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Connected or XpingMode.Disabled;
+        mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;
 
     internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
 

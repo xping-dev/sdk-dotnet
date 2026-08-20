@@ -20,9 +20,9 @@ Xping SDK supports multiple configuration methods with the following priority or
 | Setting | Type | Default | Environment Variable | Description |
 |---------|------|---------|---------------------|-------------|
 | `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
-| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in connected mode; omit it to run [local-only](local-store.md). |
-| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | User-defined project identifier. Required in connected mode. |
-| `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Connected`, or `Disabled` |
+| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in Cloud mode; omit it to run [local-only](local-store.md). |
+| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | User-defined project identifier. Required in Cloud mode. |
+| `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud`, or `Disabled` |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
 | `Environment` | string | `Local` | `XPING_ENVIRONMENT` | Environment name |
@@ -56,9 +56,9 @@ Xping runs in one of three modes. The mode is resolved once at startup and deter
 
 | Value | Behaviour |
 |---|---|
-| `Auto` | Resolves to `Connected` when credentials are present, otherwise `LocalOnly`. |
+| `Auto` | Resolves to `Cloud` when credentials are present, otherwise `LocalOnly`. |
 | `LocalOnly` | Collects and writes the [local store](local-store.md). No network calls at all. |
-| `Connected` | Collects, uploads, **and** writes the local store. |
+| `Cloud` | Collects, uploads, **and** writes the local store. |
 | `Disabled` | Collects nothing. Equivalent to `Enabled = false`. |
 
 ### How `Auto` resolves
@@ -66,13 +66,13 @@ Xping runs in one of three modes. The mode is resolved once at startup and deter
 | Condition | Resolved mode |
 |---|---|
 | `Enabled = false` | `Disabled` |
-| `StrictMode = true` | `Connected` |
-| `ApiKey` **and** `ProjectId` present | `Connected` |
+| `StrictMode = true` | `Cloud` |
+| `ApiKey` **and** `ProjectId` present | `Cloud` |
 | Otherwise | `LocalOnly` |
 
 ### Strict mode still requires credentials
 
-`StrictMode` exists to guarantee observability in CI, so it forces `Connected`. A missing API key under strict mode remains a hard configuration error and will **not** silently degrade to local-only collection.
+`StrictMode` exists to guarantee observability in CI, so it forces `Cloud`. A missing API key under strict mode remains a hard configuration error and will **not** silently degrade to local-only collection.
 
 This is the intended split: local-only is the default for an unconfigured developer, never a silent downgrade for a configured pipeline.
 
@@ -142,7 +142,7 @@ XpingContext.Initialize(config);
 
 **Type:** `string`  
 **Default:** *None*  
-**Required:** In connected mode only  
+**Required:** In Cloud mode only  
 **Environment Variable:** `XPING_APIKEY`
 
 Your Xping authentication API key. This credential identifies your account and authorizes SDK operations.
@@ -150,7 +150,7 @@ Your Xping authentication API key. This credential identifies your account and a
 Omitting it is a supported configuration: the SDK resolves to [`LocalOnly`](#operating-mode) and records test history to disk instead of uploading. See [Running Without an Account](../getting-started/local-first.md).
 
 **Getting your API key:**
-1. Log in to [Xping Dashboard](https://app.xping.io)
+1. Log in to [Xping Cloud](https://app.xping.io)
 2. Navigate to **Account** → **Settings** → **API & Integration**
 3. Click **Create API Key** and copy it
 
@@ -190,7 +190,7 @@ XpingContext.Initialize(config);
 
 **Type:** `string`
 **Default:** *None*
-**Required:** In connected mode only
+**Required:** In Cloud mode only
 **Environment Variable:** `XPING_PROJECTID`
 
 A user-defined identifier for your project. Choose any meaningful name — Xping automatically creates the project when your tests first run.
@@ -448,7 +448,7 @@ export XPING_RETRYDELAY="5"
 **Default:** `"Local"`  
 **Environment Variable:** `XPING_ENVIRONMENT`
 
-Descriptive name for the execution environment. Used for filtering and analysis in the Xping dashboard.
+Descriptive name for the execution environment. Used for filtering and analysis in Xping Cloud.
 
 **Common values:**
 - `"Local"` - Developer workstation
@@ -610,7 +610,7 @@ Include full stack traces for failed tests in uploaded data. Stack traces help d
 - Privacy/security requirements (stack traces may contain sensitive paths)
 
 > When `CaptureStackTraces` is set to `false`, the uploaded payload for failed tests will include
-> `stackTraceOmitted: true`. This allows the Xping cloud platform to distinguish between a test
+> `stackTraceOmitted: true`. This allows Xping Cloud to distinguish between a test
 > that had no stack trace and one where the user explicitly disabled stack trace collection.
 
 **Example:**
@@ -1155,7 +1155,7 @@ else
 ### Reliability
 
 1. **Keep default retry settings** unless you have specific requirements
-2. **Monitor retry rates** in Xping dashboard
+2. **Monitor retry rates** in Xping Cloud
 3. **Increase timeouts** for slow networks
 4. **Enable auto-detect CI** for consistent environment tracking
 

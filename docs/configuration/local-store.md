@@ -5,7 +5,7 @@ title: Local Store
 
 # Local Store
 
-The Xping SDK records every test run to a local store on disk. This happens in **both** local-only and connected mode, so the [CLI](../cli/command-reference.md) works whether or not you have an account.
+The Xping SDK records every test run to a local store on disk. This happens in **both** local-only and Cloud mode, so the [CLI](../cli/command-reference.md) works whether or not you have an account.
 
 ---
 

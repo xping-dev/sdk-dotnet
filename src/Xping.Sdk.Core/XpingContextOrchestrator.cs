@@ -104,7 +104,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     /// <summary>
     /// Gets a value indicating whether test executions are being collected.
-    /// True in both <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Connected"/> modes.
+    /// True in both <see cref="XpingMode.LocalOnly"/> and <see cref="XpingMode.Cloud"/> modes.
     /// </summary>
     /// <remarks>
     /// Collection is deliberately decoupled from upload. A missing API key must not stop the SDK from
@@ -114,9 +114,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     /// <summary>
     /// Gets a value indicating whether the session will be uploaded to the Xping platform.
-    /// True only in <see cref="XpingMode.Connected"/> mode.
+    /// True only in <see cref="XpingMode.Cloud"/> mode.
     /// </summary>
-    protected bool IsUploading => _isHealthy && _mode == XpingMode.Connected;
+    protected bool IsUploading => _isHealthy && _mode == XpingMode.Cloud;
 
     /// <summary>
     /// Gets the service provider from the underlying host.
@@ -172,7 +172,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 // The periodic flush exists to stream batches to the cloud during long runs.
                 // In local-only mode there is nothing to stream: the session is written once at
                 // finalization, so the timer would only wake up to drain into a no-op uploader.
-                if (_mode == XpingMode.Connected && configuration.FlushInterval > TimeSpan.Zero)
+                if (_mode == XpingMode.Cloud && configuration.FlushInterval > TimeSpan.Zero)
                 {
                     _flushTimer = new Timer(
                         async void (_) =>

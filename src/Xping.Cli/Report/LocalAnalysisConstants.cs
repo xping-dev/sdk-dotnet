@@ -206,7 +206,7 @@ internal static class LocalAnalysisConstants
     /// Executions below which evidence is <c>Low</c> (15).
     /// </summary>
     /// <remarks>
-    /// These bands are shared verbatim with the Xping Dashboard. Divergence here produces a product
+    /// These bands are shared verbatim with Xping Cloud. Divergence here produces a product
     /// that contradicts itself in front of a customer.
     /// </remarks>
     public const int EvidenceModerateExecutions = 15;

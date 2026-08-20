@@ -11,10 +11,10 @@ This guide covers the most frequently encountered issues when using the Xping SD
 
 ## Connection & Network Issues
 
-### Tests Not Appearing in Dashboard
+### Tests Not Appearing in Xping Cloud
 
 **Symptoms:**
-- Tests run successfully but don't appear in Xping dashboard
+- Tests run successfully but don't appear in Xping Cloud
 - No error messages in test output
 - SDK appears to be working
 
@@ -279,7 +279,7 @@ Action: Verify credentials at https://app.xping.io
 
 **Solution:**
 
-1. Verify your API key at [Xping Dashboard](https://app.xping.io)
+1. Verify your API key at [Xping Cloud](https://app.xping.io)
 2. Navigate to **Account** → **Settings** → **API & Integration**
 3. Copy the correct API key
 4. Update your configuration:
@@ -310,12 +310,12 @@ Action: Check project access at https://app.xping.io
 
 **Solution:**
 
-1. Verify your API key status in [Xping Dashboard](https://app.xping.io)
+1. Verify your API key status in [Xping Cloud](https://app.xping.io)
 2. Navigate to **Account** → **Settings** → **API & Integration**
 3. Check that the API key has appropriate permissions
 4. If needed, create a new API key with full permissions
 
-> **Note:** The `ProjectId` is a user-defined identifier that Xping automatically creates when your tests first run. You don't need to create the project manually in the dashboard—just choose a meaningful name and Xping will handle the rest.
+> **Note:** The `ProjectId` is a user-defined identifier that Xping automatically creates when your tests first run. You don't need to create the project manually in Xping Cloud—just choose a meaningful name and Xping will handle the rest.
 
 ---
 
@@ -790,7 +790,7 @@ For detailed setup instructions, see the [Getting Started guides](../getting-sta
 ### Missing Test Results
 
 **Symptoms:**
-- Some tests appear in dashboard, others don't
+- Some tests appear in Xping Cloud, others don't
 - Inconsistent test result uploads
 
 **Common Causes:**
@@ -850,7 +850,7 @@ Individual upload failures may result in lost test data.
 1. Verify tests are actually flaky (not environment issues)
 2. Check that test names are consistent across runs
 3. Ensure sufficient pass/fail variation for detection
-4. Review dashboard filters—flaky tests may be filtered out
+4. Review Xping Cloud filters—flaky tests may be filtered out
 
 ---
 

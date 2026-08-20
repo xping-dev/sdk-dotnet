@@ -116,7 +116,7 @@ public sealed class XpingConfigurationBuilder
     /// </summary>
     /// <param name="mode">
     /// The mode to use. <see cref="XpingMode.Auto"/> (the default) resolves to
-    /// <see cref="XpingMode.Connected"/> when credentials are present and
+    /// <see cref="XpingMode.Cloud"/> when credentials are present and
     /// <see cref="XpingMode.LocalOnly"/> otherwise.
     /// </param>
     /// <returns>The builder instance for method chaining.</returns>

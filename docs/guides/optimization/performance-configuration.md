@@ -218,7 +218,7 @@ dotnet run -c Release -- --filter '*Collector*'
 ```
 
 **Benefits:**
-- Faster visibility in dashboard
+- Faster visibility in Xping Cloud
 - Lower memory footprint
 - More frequent uploads
 

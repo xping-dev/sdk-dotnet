@@ -103,7 +103,7 @@ public class XpingContext : XpingContextOrchestrator
     }
 
     /// <summary>
-    /// Flushes all pending test executions to the Cloud Platform.
+    /// Flushes all pending test executions to Xping Cloud.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     public static Task FlushAsync()

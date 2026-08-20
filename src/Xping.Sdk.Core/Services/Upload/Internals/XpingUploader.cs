@@ -332,7 +332,7 @@ internal sealed class XpingUploader(
 
         // Project state
         "Error.Project.ProjectDisabled" =>
-            "The target project is disabled and rejects uploads - re-enable it in the dashboard",
+            "The target project is disabled and rejects uploads - re-enable it in Xping Cloud",
 
         // Request content - a configuration or SDK-version problem
         "Error.Uploads.MissingProjectKey" =>
@@ -358,7 +358,7 @@ internal sealed class XpingUploader(
         402 => "Review the workspace subscription - a plan limit or billing issue is blocking uploads",
         403 => "Verify the API key has the UPLOAD scope and that this client's IP is permitted",
         404 => "Verify the ApiEndpoint configuration matches your deployment",
-        409 => "The target project rejected the upload in its current state - check it in the dashboard",
+        409 => "The target project rejected the upload in its current state - check it in Xping Cloud",
         413 => "Reduce the number of executions per upload",
         429 => "Reduce test execution frequency, or retry after the interval the server indicates",
         >= 500 => "Retry later; if this persists, contact support with the receipt of a failing run",

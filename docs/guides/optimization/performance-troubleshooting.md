@@ -171,7 +171,7 @@ dotnet-counters monitor --process-id <pid> --counters System.Runtime
 #### 3. API Key Invalid or Expired
 
 - Verify API key in configuration
-- Check key hasn't been revoked in Xping dashboard
+- Check key hasn't been revoked in Xping Cloud
 - Logs will show authentication errors
 
 #### 4. Running in Offline Environment (CI/CD)

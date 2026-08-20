@@ -13,7 +13,7 @@ namespace Xping.Sdk.Core.Services.Upload;
 public interface IXpingUploader
 {
     /// <summary>
-    /// Uploads a test session to the Xping Cloud Platform.
+    /// Uploads a test session to Xping Cloud.
     /// </summary>
     /// <param name="testSession">The test session to upload.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
