@@ -77,21 +77,40 @@ Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
 ```
 HIGH  flaky            GenerateMonthlySummary
       failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-      evidence moderate | f_2a91
+      evidence moderate | f_2a91c0de
 
 MED   slower           CheckoutFlow_Completes
       p50 340ms -> 1.2s (+264.7%), normalised +251.2%
-      evidence high | f_8c04
+      evidence high | f_8c04b71a
 
 LOW   stopped running  LegacyImport.Roundtrip
       ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | f_1d77
+      evidence moderate | f_1d77e3f5
 ```
 ````
 
 Only the top ten findings are shown by default. When some are withheld, one line follows the fence — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the fence.
 
 Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
+
+### Finding ids
+
+The `f_…` on each finding is a short, stable identity for that finding — a hash of what the
+finding claims (`flaky`, `slower`, `stopped running`, …) and the test or group it claims it
+about. Nothing else goes into it.
+
+It is stable **across runs**. Run `dotnet test` again, run `dotnet xping report` again, and a
+finding that is still there keeps the id it had — even though the run count moved and the
+numbers behind it changed. That is what makes it useful: paste a report into a pull request
+today and another next week, and the ids say which findings are the same ones and which are
+new.
+
+The id names the *claim*, not the measurement. Two reports can quote different failure rates
+under one id; the rate moved as runs accumulated, and it is the same finding observed again.
+For the numbers themselves, read the `headline` and `metrics` — not the id.
+
+Two findings about the same test carry different ids when they are different claims: a test
+that is both flaky and masked by a retry produces two findings and two ids.
 
 Copy the block, or pipe it:
 
@@ -146,7 +165,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
   },
   "findings": [
     {
-      "id": "f_2a91",
+      "id": "f_2a91c0de",
       "kind": "Flaky",
       "severity": "high",
       "evidenceLevel": "moderate",

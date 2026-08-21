@@ -87,7 +87,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 double impact = ImpactScorer.Score(FindingCandidateInputs.From(candidate), context.Tests);
 
                 findings.Add(new Finding(
-                    FindingId.Compute(candidate.Kind, candidate.Subject.SortKey, context.Window.Key),
+                    FindingId.Compute(candidate.Kind, candidate.Subject.SortKey),
                     candidate.Kind,
                     candidate.Cap(ImpactScorer.Band(impact)),
                     EvidenceLevelResolver.Resolve(executions),

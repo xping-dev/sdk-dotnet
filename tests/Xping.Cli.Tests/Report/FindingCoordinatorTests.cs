@@ -119,7 +119,7 @@ public sealed class FindingCoordinatorTests
     }
 
     [Fact]
-    public void FindingIdsAreStableAcrossRunsOverTheSameWindow()
+    public void FindingIdsAreStableAcrossRepeatedReports()
     {
         var coordinator = new FindingCoordinator(
             [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
@@ -131,6 +131,40 @@ public sealed class FindingCoordinatorTests
 
         Assert.Equal(first, second);
         Assert.StartsWith("f_", first, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FindingIdsSurviveTheWindowGrowingAsRunsAccumulate()
+    {
+        // The point of the id: after another `dotnet test`, the same claim about the same test is
+        // recognisably the same finding. Hashing the window would renumber it on every run, which
+        // is exactly when a reader most needs to tell "seen it" from "that's new".
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
+
+        using var warnings = new StringWriter();
+
+        string before = coordinator.Run(Context(sessionCount: 6), null, warnings).Findings[0].Id;
+        string after = coordinator.Run(Context(sessionCount: 9), null, warnings).Findings[0].Id;
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void FindingIdsDifferBetweenKindsAboutTheSameTest()
+    {
+        // kind is the other half of the identity; without it a flaky test and a retry-masked one
+        // would share an id and a consumer keyed on it would see one finding where there are two.
+        var coordinator = new FindingCoordinator(
+        [
+            new StubProvider("flaky", FindingKind.Flaky, "Test0"),
+            new StubProvider("masked", FindingKind.RetryMasked, "Test0")
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

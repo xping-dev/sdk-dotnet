@@ -16,7 +16,7 @@
     Test reliability analysis for .NET — accumulates history across <code>dotnet test</code> runs
     so flaky tests stop being anecdotes.
     <br />
-    <sub>Works with no account, no API key, and no network access.</sub>
+    <sub>Local mode requires no account and no network access.</sub>
   </p>
 </div>
 
@@ -45,8 +45,8 @@
 | **History**    | Your machine, your runs | Every machine, every branch, CI included |
 | **You get**    | Observations and evidence from local runs | Confidence scores, evidence sufficiency, trends, PR comments |
 
-**Start local.** Nothing in the local path phones home, and you can add an API key later
-without changing a line of test code.
+**Start local.** Nothing leaves your machine, and you can add an API key later without
+changing a line of test code.
 
 ---
 
@@ -119,7 +119,7 @@ HIGH  masked by retry  FlakyTest_PassesOnRetry
       evidence moderate | f_e98db1e6
 ```
 
-No API key, no signup, no network calls. Everything lives in `.xping/` in your repository.
+No API key, no signup, no network calls. Everything lives in `.xping/` in your machine.
 
 [Running Without an Account →](https://docs.xping.io/getting-started/local-first.html)
 
