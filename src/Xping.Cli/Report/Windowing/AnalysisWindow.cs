@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Globalization;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Windowing;
@@ -73,27 +72,6 @@ internal sealed record AnalysisWindow(
     /// </remarks>
     public bool MeetsReportingFloor =>
         SessionCount >= LocalAnalysisConstants.MinimumSessionsToReport;
-
-    /// <summary>
-    /// Gets a stable identity for this window, used to make finding ids window-scoped.
-    /// </summary>
-    /// <remarks>
-    /// Built from the session ids rather than the timestamps or the count: two windows holding the
-    /// same sessions are the same window regardless of which flag selected them, and a finding about
-    /// them should keep its id.
-    /// </remarks>
-    public string Key
-    {
-        get
-        {
-            // Sessions are already in a total order, so concatenating in sequence is deterministic.
-            var builder = new System.Text.StringBuilder(Sessions.Count * 33);
-            foreach (TestSession session in Sessions)
-                builder.Append(session.SessionId.ToString("N", CultureInfo.InvariantCulture)).Append('|');
-
-            return builder.ToString();
-        }
-    }
 
     /// <summary>
     /// Splits an ordered session list into its current and baseline slices.
