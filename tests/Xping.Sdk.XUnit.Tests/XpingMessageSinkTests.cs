@@ -5,6 +5,9 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using Moq;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.XUnit.Tests;
@@ -152,6 +155,61 @@ public sealed class XpingMessageSinkTests
             budgetDeclared: false);
 
         Assert.Equal(TestOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public void ResolveTimeoutBudget_TestCaseWithTimeout_ReturnsDeclaredBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeout: 500);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(500), budget);
+        Assert.Equal(TimeoutBudgetSource.Declared, source);
+    }
+
+    /// <summary>
+    /// xUnit reports "no timeout" as zero rather than as an absent value.
+    /// </summary>
+    [Fact]
+    public void ResolveTimeoutBudget_TestCaseWithZeroTimeout_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeout: 0);
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    /// <summary>
+    /// A test case from another xUnit extension need not be an <c>IXunitTestCase</c> at all.
+    /// </summary>
+    [Fact]
+    public void ResolveTimeoutBudget_NonXunitTestCase_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeout: null);
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    private static (TimeSpan? budget, TimeoutBudgetSource? source) InvokeResolveTimeoutBudget(int? timeout)
+    {
+        ITestCase testCase;
+        if (timeout is { } value)
+        {
+            var xunitCase = new Mock<IXunitTestCase>();
+            xunitCase.SetupGet(c => c.Timeout).Returns(value);
+            testCase = xunitCase.Object;
+        }
+        else
+        {
+            testCase = new Mock<ITestCase>().Object;
+        }
+
+        MethodInfo method = typeof(XpingMessageSink).GetMethod(
+            "ResolveTimeoutBudget",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        object? result = method.Invoke(null, [testCase]);
+        return ((TimeSpan? budget, TimeoutBudgetSource? source))result!;
     }
 
     private static TestOutcome InvokeClassifyFailure(

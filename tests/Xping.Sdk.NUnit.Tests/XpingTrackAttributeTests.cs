@@ -222,6 +222,75 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
         Assert.Equal(TestOutcome.Inconclusive, outcome);
     }
 
+    [Fact]
+    public void ResolveTimeoutBudget_TestWithoutTimeoutProperty_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeoutProperty: null);
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    /// <summary>
+    /// Both <c>[Timeout]</c> and <c>[CancelAfter]</c> write the same property, in milliseconds, so
+    /// one lookup covers them.
+    /// </summary>
+    [Fact]
+    public void ResolveTimeoutBudget_TestWithTimeoutProperty_ReturnsDeclaredBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeoutProperty: 500);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(500), budget);
+        Assert.Equal(TimeoutBudgetSource.Declared, source);
+    }
+
+    [Xunit.Theory]
+    [Xunit.InlineData(0)]
+    [Xunit.InlineData(-1)]
+    public void ResolveTimeoutBudget_NonPositiveTimeout_ReturnsNoBudget(int milliseconds)
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(milliseconds);
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    /// <summary>
+    /// NUnit stores property values untyped, so a non-integer must not be read as a budget.
+    /// </summary>
+    [Fact]
+    public void ResolveTimeoutBudget_NonIntegerTimeoutValue_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(timeoutProperty: "soon");
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    private static (TimeSpan? budget, TimeoutBudgetSource? source) InvokeResolveTimeoutBudget(
+        object? timeoutProperty)
+    {
+        MethodInfo target = typeof(XpingTrackAttributeTests).GetMethod(
+            nameof(SampleTestMethod), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var test = new global::NUnit.Framework.Internal.TestMethod(
+            new global::NUnit.Framework.Internal.MethodWrapper(typeof(XpingTrackAttributeTests), target));
+
+        if (timeoutProperty != null)
+            test.Properties.Set("Timeout", timeoutProperty);
+
+        MethodInfo method = typeof(XpingTrackAttribute).GetMethod(
+            "ResolveTimeoutBudget",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        object? value = method.Invoke(null, [test]);
+        return ((TimeSpan? budget, TimeoutBudgetSource? source))value!;
+    }
+
+    private static void SampleTestMethod()
+    {
+    }
+
     private static TestOutcome InvokeMapOutcome(ResultState resultState, string? message, bool budgetDeclared)
     {
         MethodInfo method = typeof(XpingTrackAttribute).GetMethod(

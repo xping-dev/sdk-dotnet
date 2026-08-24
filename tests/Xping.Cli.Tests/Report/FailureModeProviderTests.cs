@@ -171,6 +171,36 @@ public sealed class FailureModeProviderTests
         Assert.DoesNotContain(metrics, m => m.Label == "share of failures");
     }
 
+    /// <summary>
+    /// When a test both hangs and fails ordinarily, the split is the reason it was reported as
+    /// timing out rather than as a plain failure, so the finding states it. It is omitted when every
+    /// failure was a timeout, where "7 of 7" would be noise.
+    /// </summary>
+    [Fact]
+    public void TheTimingOutMetricsStateTheSplitWhenTheTestAlsoFailsOtherWays()
+    {
+        // 6 timeouts and 3 assertion failures: over the 50% share, but not all of them.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal switch
+                {
+                    >= 4 => TimedOut("Subject"),
+                    >= 1 => Failure("Subject"),
+                    _ => Passing("Subject"),
+                }]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(6, evidence.Timeouts);
+        Assert.Equal(9, evidence.Failures);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Contains(metrics, m => m.Label == "share of failures" && m.Value == "6 of 9 (66.7%)");
+    }
+
     [Fact]
     public void TheTimingOutHeadlineSaysSoWhenTheTestDeclaredNoLimit()
     {

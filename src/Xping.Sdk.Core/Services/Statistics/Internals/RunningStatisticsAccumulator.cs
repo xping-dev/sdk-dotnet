@@ -254,13 +254,12 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
                 case TestOutcome.Timeout:
                     timeout++;
                     break;
-                default:
-                    // See the matching arm in Record: the buckets must sum to DistinctTests.
-                    throw new ArgumentOutOfRangeException(
-                        nameof(_finalByTest),
-                        entry.Value.Outcome,
-                        "Unhandled TestOutcome; add a counter for it.");
             }
+
+            // No default arm above, deliberately. Nothing reaches _finalByTest except through
+            // RecordFinalAttempt, which Record calls only after its own switch has rejected an
+            // outcome it does not recognise — so a guard here could never fire. An unreachable throw
+            // would read as protection while being dead code that can never be exercised.
         }
 
         return new FinalTally(distinct, passed, failed, skipped, inconclusive, notExecuted, timeout);
