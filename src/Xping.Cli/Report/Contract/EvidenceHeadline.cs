@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Report.Contract;
 
@@ -252,8 +253,5 @@ internal static class EvidenceHeadline
     /// <summary>
     /// Formats a duration at the scale a reader thinks in.
     /// </summary>
-    private static string Duration(long milliseconds) =>
-        milliseconds < 1000
-            ? milliseconds.ToString(CultureInfo.InvariantCulture) + "ms"
-            : (milliseconds / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + "s";
+    private static string Duration(long milliseconds) => DurationFormatter.Format(milliseconds);
 }
