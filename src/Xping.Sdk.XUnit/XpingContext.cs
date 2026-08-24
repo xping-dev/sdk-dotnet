@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -179,54 +178,22 @@ public class XpingContext : XpingContextOrchestrator
 
         if (stats != null)
         {
-            // A retried test is recorded once per attempt, so the outcome counters count attempts.
-            // When any retry happened, report the test-level outcomes instead — a suite that recovered
-            // on retry is green — and keep the attempt count visible beside them.
-            bool retried = stats.DistinctTests > 0 && stats.DistinctTests != stats.Total;
+            SessionSummary summary = SessionSummary.From(stats);
 
-            int passed = retried ? stats.FinalPassed : stats.Passed;
-            int failed = retried ? stats.FinalFailed : stats.Failed;
-            int skipped = retried ? stats.FinalSkipped : stats.Skipped;
-            int inconclusive = retried ? stats.FinalInconclusive : stats.Inconclusive;
-            int notExecuted = retried ? stats.FinalNotExecuted : stats.NotExecuted;
-            int timedOut = retried ? stats.FinalTimeout : stats.Timeout;
-
-            var parts = new StringBuilder();
-            parts.Append($"{passed} passed");
-            if (failed > 0)        parts.Append($", {failed} failed");
-            if (timedOut > 0)      parts.Append($", {timedOut} timed out");
-            if (skipped > 0)       parts.Append($", {skipped} skipped");
-            if (inconclusive > 0)  parts.Append($", {inconclusive} inconclusive");
-            if (notExecuted > 0)   parts.Append($", {notExecuted} not executed");
-
-            // TotalDurationMs sums each test's own execution time; WallClockDurationMs is the
-            // elapsed time for the whole session (includes fixture setup/teardown, discovery, etc.).
-            // The gap between them is the framework overhead, which is what a slow-but-green suite
-            // usually needs to look at.
-            string overhead = DurationFormatter.FormatOverhead(
-                stats.TotalDurationMs, stats.WallClockDurationMs);
-
-            if (retried)
+            if (summary.Retried)
             {
-                int retries = stats.Total - stats.DistinctTests;
-
                 _logger.LogInformation(
                     "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
-                    stats.Total, stats.DistinctTests, stats.DistinctTests == 1 ? "test" : "tests",
-                    retries, retries == 1 ? "retry" : "retries",
-                    parts.ToString(),
-                    DurationFormatter.Format(stats.TotalDurationMs),
-                    DurationFormatter.Format(stats.WallClockDurationMs),
-                    overhead);
+                    summary.Total, summary.DistinctTests, summary.TestLabel,
+                    summary.Retries, summary.RetryLabel, summary.Outcomes,
+                    summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
             }
             else
             {
                 _logger.LogInformation(
                     "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
-                    stats.Total, parts.ToString(),
-                    DurationFormatter.Format(stats.TotalDurationMs),
-                    DurationFormatter.Format(stats.WallClockDurationMs),
-                    overhead);
+                    summary.Total, summary.Outcomes,
+                    summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
             }
         }
         else
