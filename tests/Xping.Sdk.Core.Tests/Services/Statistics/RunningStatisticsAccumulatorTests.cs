@@ -200,15 +200,48 @@ public sealed class RunningStatisticsAccumulatorTests
         accumulator.Record(BuildExecution("T4", TestOutcome.Skipped));
         accumulator.Record(BuildExecution("T5", TestOutcome.Inconclusive));
         accumulator.Record(BuildExecution("T6", TestOutcome.NotExecuted));
+        accumulator.Record(BuildExecution("T7", TestOutcome.Timeout));
 
         // Assert
         var snapshot = accumulator.GetSnapshot();
-        Assert.Equal(6, snapshot.Total);
+        Assert.Equal(7, snapshot.Total);
         Assert.Equal(2, snapshot.Passed);
         Assert.Equal(1, snapshot.Failed);
         Assert.Equal(1, snapshot.Skipped);
         Assert.Equal(1, snapshot.Inconclusive);
         Assert.Equal(1, snapshot.NotExecuted);
+        Assert.Equal(1, snapshot.Timeout);
+    }
+
+    /// <summary>
+    /// The report presents the per-outcome counters as a breakdown of <c>Total</c>, so an outcome
+    /// that lands in no bucket reads as data loss. Recording one execution of every declared member
+    /// keeps that invariant honest as members are added.
+    /// </summary>
+    [Fact]
+    public void Record_EveryDeclaredOutcome_BucketsSumToTotal()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        int index = 0;
+        foreach (TestOutcome outcome in Enum.GetValues<TestOutcome>())
+        {
+            accumulator.Record(BuildExecution($"T{index++}", outcome));
+        }
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        int bucketed = snapshot.Passed + snapshot.Failed + snapshot.Skipped +
+                       snapshot.Inconclusive + snapshot.NotExecuted + snapshot.Timeout;
+
+        Assert.Equal(snapshot.Total, bucketed);
+
+        int finalBucketed = snapshot.FinalPassed + snapshot.FinalFailed + snapshot.FinalSkipped +
+                            snapshot.FinalInconclusive + snapshot.FinalNotExecuted + snapshot.FinalTimeout;
+
+        Assert.Equal(snapshot.DistinctTests, finalBucketed);
     }
 
     // ---------------------------------------------------------------------------

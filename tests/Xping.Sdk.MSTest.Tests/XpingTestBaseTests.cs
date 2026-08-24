@@ -43,11 +43,72 @@ public class XpingTestBaseTests
     }
 
     [Fact]
-    public void MapOutcome_Timeout_ReturnsFailed()
+    public void MapOutcome_Timeout_ReturnsTimeout()
     {
         var outcome = InvokeMapOutcome(UnitTestOutcome.Timeout);
 
-        Assert.Equal(TestOutcome.Failed, outcome);
+        Assert.Equal(TestOutcome.Timeout, outcome);
+    }
+
+    [Fact]
+    public void ResolveTimeoutBudget_MethodWithoutTimeoutAttribute_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(nameof(BudgetSamples.NoTimeout));
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    [Fact]
+    public void ResolveTimeoutBudget_MethodWithTimeoutAttribute_ReturnsDeclaredBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(nameof(BudgetSamples.FiveSecondTimeout));
+
+        Assert.Equal(TimeSpan.FromSeconds(5), budget);
+        Assert.Equal(TimeoutBudgetSource.Declared, source);
+    }
+
+    /// <summary>
+    /// An infinite timeout is a declaration, not the absence of one, so it must not look like a test
+    /// that said nothing about how long it may run.
+    /// </summary>
+    [Fact]
+    public void ResolveTimeoutBudget_MethodWithInfiniteTimeout_ReturnsInfiniteWithNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(nameof(BudgetSamples.InfiniteTimeout));
+
+        Assert.Null(budget);
+        Assert.Equal(TimeoutBudgetSource.Infinite, source);
+    }
+
+    [Fact]
+    public void ResolveTimeoutBudget_NullMethod_ReturnsNoBudget()
+    {
+        var (budget, source) = InvokeResolveTimeoutBudget(methodName: null);
+
+        Assert.Null(budget);
+        Assert.Null(source);
+    }
+
+    /// <summary>
+    /// Methods carrying the timeout declarations the budget reader is tested against. They are never
+    /// executed; only their attributes are read.
+    /// </summary>
+    private static class BudgetSamples
+    {
+        public static void NoTimeout()
+        {
+        }
+
+        [Timeout(5000)]
+        public static void FiveSecondTimeout()
+        {
+        }
+
+        [Timeout(TestTimeout.Infinite)]
+        public static void InfiniteTimeout()
+        {
+        }
     }
 
     [Fact]
@@ -132,6 +193,25 @@ public class XpingTestBaseTests
 
         var result = method.Invoke(null, new object[] { outcome });
         return (TestOutcome)result!;
+    }
+
+    private static (TimeSpan? budget, TimeoutBudgetSource? source) InvokeResolveTimeoutBudget(string? methodName)
+    {
+        var method = typeof(XpingTestBase).GetMethod(
+            "ResolveTimeoutBudget",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        if (method == null)
+        {
+            throw new InvalidOperationException("ResolveTimeoutBudget method not found");
+        }
+
+        var target = methodName == null
+            ? null
+            : typeof(BudgetSamples).GetMethod(methodName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+        var result = method.Invoke(null, new object?[] { target });
+        return ((TimeSpan? budget, TimeoutBudgetSource? source))result!;
     }
 
     private static (string? stackTrace, bool stackTraceOmitted) InvokeResolveStackTrace(

@@ -92,6 +92,39 @@ public void FlakyTest()
 
 ---
 
+### Timeouts
+
+Xping records a test the framework killed for overrunning its timeout as `Outcome = Timeout` rather
+than `Failed`, and captures the budget the test declared alongside it. Two cases are not observable.
+
+#### A Hang That Takes Down The Test Host Is Not Recorded
+
+Every adapter is driven by a callback the framework raises after a test finishes — MSTest's
+`[TestCleanup]`, NUnit's `AfterTest`, xUnit's result message. If a hang brings down the whole test
+host, no callback runs and the execution is not recorded at all. Each framework's own `[Timeout]`
+handles the ordinary case, which is what Xping observes.
+
+#### NUnit's Blocking `[Timeout]` Is Not Tracked
+
+NUnit's `[Timeout]` on a synchronous test abandons the test thread without invoking
+`ITestAction.AfterTest`, so Xping never sees the result and records nothing for that test. Use
+`[CancelAfter]` instead, which cancels cooperatively and is tracked normally:
+
+```csharp
+[Test, CancelAfter(500)]
+public async Task MyTest(CancellationToken cancellationToken)
+{
+    // Tracked with Outcome = Timeout when it overruns
+    await Task.Delay(5000, cancellationToken);
+}
+```
+
+#### xUnit Applies A Timeout Only To Async Tests
+
+`[Fact(Timeout = ...)]` on a synchronous test is rejected by xUnit itself, which fails the test with
+"Tests marked with Timeout are only supported for async tests". Xping records that as `Failed`, not
+`Timeout` — it is a misconfigured test, not a hanging one.
+
 ## General Limitations
 
 ### CI Flaky Test: `RecordTest_AfterInitialize_DoesNotThrow` (NUnit Adapter Tests)

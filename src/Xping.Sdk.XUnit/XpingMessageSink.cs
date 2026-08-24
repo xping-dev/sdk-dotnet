@@ -10,6 +10,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
+using Xunit.Sdk;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
@@ -142,20 +143,26 @@ public sealed class XpingMessageSink(
         }
 
         DateTime endTime = DateTime.UtcNow;
-        TimeSpan duration = CalculateDuration(testFailed.ExecutionTime);
+        long endTimestamp = Stopwatch.GetTimestamp();
 
         // Extract exception type - XUnit provides an array of exception types
         string? exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
+        string errorMessage = string.Join(Environment.NewLine, testFailed.Messages);
+
+        TestOutcome outcome = ClassifyFailure(testFailed.ExceptionTypes, errorMessage);
+
+        TimeSpan duration = ResolveFailureDuration(
+            outcome, testFailed.ExecutionTime, data.StartTimestamp, endTimestamp);
 
         RecordTestExecution(
             test: data.Test,
-            outcome: TestOutcome.Failed,
+            outcome: outcome,
             startTime: data.StartTime,
             endTime: endTime,
             duration: duration,
             output: testFailed.Output,
             exceptionType: exceptionType,
-            errorMessage: string.Join(Environment.NewLine, testFailed.Messages),
+            errorMessage: errorMessage,
             stackTrace: string.Join(Environment.NewLine, testFailed.StackTraces),
             collectionName: data.CollectionName);
     }
@@ -328,6 +335,7 @@ public sealed class XpingMessageSink(
             ? detector.DetectRetryMetadata(test, outcome, attempt)
             : _retryDetector.DetectRetryMetadata(test, outcome);
         (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, captureStackTraces);
+        (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(testCase);
         // xUnit has no separate worker concept, so the collection name doubles as both
         // the concurrency worker key and the record's collection metadata.
         // Pass the attempt number so retried executions reuse the position of the first attempt.
@@ -349,6 +357,7 @@ public sealed class XpingMessageSink(
             .WithErrorMessageHash(_identityGenerator.GenerateErrorMessageHash(errorMessage))
             .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
+            .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -363,6 +372,52 @@ public sealed class XpingMessageSink(
         return testExecution;
     }
 
+    /// <summary>The exception xUnit throws when a test overruns its declared timeout.</summary>
+    private const string TimeoutExceptionType = "Xunit.Sdk.TestTimeoutException";
+
+    /// <summary>The message that exception carries, minus the duration.</summary>
+    private const string TimeoutMessagePrefix = "Test execution timed out after ";
+
+    /// <summary>
+    /// Decides whether a failed test failed or was stopped for running too long.
+    /// </summary>
+    /// <param name="exceptionTypes">The exception types xUnit recorded.</param>
+    /// <param name="errorMessage">The combined failure message.</param>
+    /// <returns><see cref="TestOutcome.Timeout"/> for a genuine overrun, otherwise <see cref="TestOutcome.Failed"/>.</returns>
+    /// <remarks>
+    /// Both conditions are required. The exception type alone would also catch xUnit's refusal to
+    /// apply a timeout to a synchronous test — <c>[Fact(Timeout = …)]</c> is only supported on async
+    /// tests, and a sync one fails immediately with "Tests marked with Timeout are only supported for
+    /// async tests". That is a misconfigured test, not a hanging one, and calling it a timeout would
+    /// point the reader at a deadlock that does not exist.
+    /// </remarks>
+    private static TestOutcome ClassifyFailure(string[]? exceptionTypes, string? errorMessage)
+    {
+        if (exceptionTypes == null || errorMessage == null)
+            return TestOutcome.Failed;
+
+        bool timedOut =
+            Array.Exists(exceptionTypes, t => string.Equals(t, TimeoutExceptionType, StringComparison.Ordinal)) &&
+            errorMessage.IndexOf(TimeoutMessagePrefix, StringComparison.Ordinal) >= 0;
+
+        return timedOut ? TestOutcome.Timeout : TestOutcome.Failed;
+    }
+
+    /// <summary>
+    /// Reads the timeout the test declared through <c>[Fact(Timeout = …)]</c>.
+    /// </summary>
+    /// <param name="testCase">The case that ran.</param>
+    /// <returns>The declared budget and its source, or two nulls when the test declared none.</returns>
+    private static (TimeSpan? Budget, TimeoutBudgetSource? Source) ResolveTimeoutBudget(ITestCase? testCase)
+    {
+        // xUnit stores the timeout on the case rather than in an attribute we would have to reflect
+        // over, and reports "no timeout" as zero rather than as an absent value.
+        if (testCase is not IXunitTestCase xunitTestCase || xunitTestCase.Timeout <= 0)
+            return (null, null);
+
+        return (TimeSpan.FromMilliseconds(xunitTestCase.Timeout), TimeoutBudgetSource.Declared);
+    }
+
     private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
         TestOutcome outcome,
         string? stackTrace,
@@ -370,7 +425,7 @@ public sealed class XpingMessageSink(
     {
         string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         bool stackTraceAvailable = normalizedStackTrace != null;
-        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
 
         if (!captureStackTraces)
         {
@@ -461,6 +516,28 @@ public sealed class XpingMessageSink(
 
         return metadata;
     }
+
+    /// <summary>
+    /// Chooses how long a failed test ran, given how the failure was classified.
+    /// </summary>
+    /// <param name="outcome">The outcome resolved for this execution.</param>
+    /// <param name="reportedExecutionTime">The execution time xUnit reported, in seconds.</param>
+    /// <param name="startTimestamp">The stopwatch timestamp taken when the test started.</param>
+    /// <param name="endTimestamp">The stopwatch timestamp taken when the result arrived.</param>
+    /// <returns>The duration to record.</returns>
+    /// <remarks>
+    /// xUnit reports an execution time of zero for a test it abandoned, because it never observed
+    /// that test finish. Measuring from the start notification instead is what keeps the recorded
+    /// duration comparable with the declared timeout budget — and that comparison is the whole reason
+    /// a timeout is worth telling apart from a failure. The skipped path measures the same way.
+    /// Ordinary failures keep xUnit's own figure, which excludes fixture setup and is the more
+    /// accurate reading whenever it is available.
+    /// </remarks>
+    internal static TimeSpan ResolveFailureDuration(
+        TestOutcome outcome, decimal reportedExecutionTime, long startTimestamp, long endTimestamp) =>
+        outcome == TestOutcome.Timeout
+            ? CalculateDuration(startTimestamp, endTimestamp)
+            : CalculateDuration(reportedExecutionTime);
 
     internal static TimeSpan CalculateDuration(long startTimestamp, long endTimestamp)
     {

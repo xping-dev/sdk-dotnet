@@ -82,6 +82,17 @@ internal static class LocalAnalysisConstants
     public const double AlwaysFailingRate = 0.90;
 
     /// <summary>
+    /// Share of a test's failures that must be timeouts before it is reported as timing out (0.50).
+    /// </summary>
+    /// <remarks>
+    /// A test that usually fails an assertion but hung once is still a failing test, and moving it
+    /// into the timeout bucket would point its reader at a deadlock that is not the main problem.
+    /// A test whose failures are mostly hangs is the reverse: reporting it as an ordinary failure
+    /// hands the reader an assertion message that was never written.
+    /// </remarks>
+    public const double TimingOutShareMin = 0.50;
+
+    /// <summary>
     /// Distinct tests failing with one signature before the cluster is reported as shared (3).
     /// </summary>
     /// <remarks>

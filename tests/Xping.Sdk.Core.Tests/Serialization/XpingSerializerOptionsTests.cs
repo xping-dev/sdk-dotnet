@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Serialization;
 
@@ -47,6 +48,42 @@ public sealed class XpingSerializerOptionsTests
         var obj = new { Outcome = TestOutcome.Passed };
         var json = JsonSerializer.Serialize(obj, XpingSerializerOptions.ApiOptions);
         Assert.Contains("\"passed\"", json, StringComparison.Ordinal); // camelCase enum + string form
+    }
+
+    /// <summary>
+    /// The wire form of an outcome is its camelCase name, so the name — not the numeric value — is
+    /// what the Xping Cloud API and any stored session are pinned to.
+    /// </summary>
+    [Fact]
+    public void ApiOptions_TimeoutOutcome_RoundTripsAsTheStringTimeout()
+    {
+        var json = JsonSerializer.Serialize(
+            new { Outcome = TestOutcome.Timeout }, XpingSerializerOptions.ApiOptions);
+
+        Assert.Contains("\"timeout\"", json, StringComparison.Ordinal);
+
+        var roundTripped = JsonSerializer.Deserialize<TestOutcome>(
+            "\"timeout\"", XpingSerializerOptions.ApiOptions);
+
+        Assert.Equal(TestOutcome.Timeout, roundTripped);
+    }
+
+    [Fact]
+    public void FileOptions_TestExecutionWithTimeoutBudget_RoundTripsBudgetAndSource()
+    {
+        var execution = new TestExecutionBuilder()
+            .WithTestName("HangsForever")
+            .WithOutcome(TestOutcome.Timeout)
+            .WithDuration(TimeSpan.FromMilliseconds(5000))
+            .WithTimeoutBudget(TimeSpan.FromMilliseconds(5000), TimeoutBudgetSource.Declared)
+            .Build();
+
+        var json = JsonSerializer.Serialize(execution, XpingSerializerOptions.FileOptions);
+        var roundTripped = JsonSerializer.Deserialize<TestExecution>(json, XpingSerializerOptions.FileOptions);
+
+        Assert.Equal(TestOutcome.Timeout, roundTripped!.Outcome);
+        Assert.Equal(TimeSpan.FromMilliseconds(5000), roundTripped.TimeoutBudget);
+        Assert.Equal(TimeoutBudgetSource.Declared, roundTripped.TimeoutBudgetSource);
     }
 
     [Fact]

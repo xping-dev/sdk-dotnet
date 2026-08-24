@@ -45,6 +45,7 @@ internal static class EvidenceHeadline
         RetryMaskedEvidence retry => RetryMasked(retry),
         FlakyEvidence flaky => Flaky(flaky),
         AlwaysFailingEvidence always => AlwaysFailing(always),
+        TimingOutEvidence timingOut => TimingOut(timingOut),
         SharedFailureEvidence shared => SharedFailure(shared),
         DurationRegressionEvidence regression => DurationRegression(regression),
         DurationUnstableEvidence unstable => DurationUnstable(unstable),
@@ -112,6 +113,39 @@ internal static class EvidenceHeadline
                 new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
                 new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
             ]);
+    }
+
+    private static (string, IReadOnlyList<MetricDto>) TimingOut(TimingOutEvidence e)
+    {
+        string headline =
+            $"timed out {e.Timeouts} of {e.Executions} executions ({Percent(e.TimeoutRate)}) " +
+            $"in {e.SessionsWithTimeouts} of {Runs(e.Sessions)}";
+
+        // The budget beside the observed run is the whole reading. Stated only when the test declared
+        // one: a limit that came from a suite-wide or runner-level setting is not in the session, and
+        // naming a number the report cannot see would be an invention.
+        if (e.DeclaredBudgetMs is { } budget)
+        {
+            headline += $", killed at its {Duration(budget)} limit";
+        }
+
+        List<MetricDto> metrics =
+        [
+            new("timed out", $"{e.Timeouts} of {e.Executions} executions ({Percent(e.TimeoutRate)})"),
+            new("runs affected", $"{e.SessionsWithTimeouts} of {e.Sessions}"),
+            new("declared limit", e.DeclaredBudgetMs is { } ms ? Duration(ms) : "none declared by the test")
+        ];
+
+        // Only when the test also failed some other way. "7 of 7 failures were timeouts" is noise;
+        // "5 of 9" is the reason this was not reported as an ordinary failure.
+        if (e.Timeouts != e.Failures)
+        {
+            metrics.Add(new MetricDto(
+                "share of failures",
+                $"{e.Timeouts} of {e.Failures} ({Percent(e.TimeoutShareOfFailures)})"));
+        }
+
+        return (headline, metrics);
     }
 
     private static (string, IReadOnlyList<MetricDto>) SharedFailure(SharedFailureEvidence e) =>

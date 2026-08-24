@@ -84,6 +84,9 @@ internal static class TestSessionFactory
     /// the field existed looks like, and because every fixture that predates concurrency analysis
     /// must keep meaning exactly what it did.
     /// </param>
+    /// <param name="timeoutBudgetMs">
+    /// The timeout the test declared for itself, or <see langword="null"/> when it declared none.
+    /// </param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -100,7 +103,8 @@ internal static class TestSessionFactory
         string? exceptionType = null,
         string? stackTrace = null,
         bool stackTraceOmitted = false,
-        int? concurrency = null)
+        int? concurrency = null,
+        int? timeoutBudgetMs = null)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint($"fp-{name}")
@@ -136,7 +140,10 @@ internal static class TestSessionFactory
             .WithStartTime(Epoch)
             .WithEndTime(Epoch.AddMilliseconds(durationMs))
             .WithRetry(retryMetadata)
-            .WithStackTraceOmitted(stackTraceOmitted);
+            .WithStackTraceOmitted(stackTraceOmitted)
+            .WithTimeoutBudget(
+                timeoutBudgetMs is { } budgetMs ? TimeSpan.FromMilliseconds(budgetMs) : null,
+                timeoutBudgetMs is null ? null : TimeoutBudgetSource.Declared);
 
         // Attached only when asked for. The execution builder already defaults the record, and that
         // default reports a concurrency of zero — which is precisely how concurrency analysis

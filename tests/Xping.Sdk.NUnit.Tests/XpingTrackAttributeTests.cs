@@ -6,6 +6,7 @@
 namespace Xping.Sdk.NUnit.Tests;
 
 using global::NUnit.Framework;
+using global::NUnit.Framework.Interfaces;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -146,6 +147,89 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
 
         Assert.Null(result.stackTrace);
         Assert.False(result.stackTraceOmitted);
+    }
+
+    [Fact]
+    public void MapOutcome_TimeoutMessageOnTestWithDeclaredBudget_ReturnsTimeout()
+    {
+        var outcome = InvokeMapOutcome(
+            ResultState.Failure, "Test exceeded Timeout value of 500ms", budgetDeclared: true);
+
+        Assert.Equal(TestOutcome.Timeout, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_CancelAfterMessageOnTestWithDeclaredBudget_ReturnsTimeout()
+    {
+        var outcome = InvokeMapOutcome(
+            ResultState.Failure, "Test exceeded CancelAfter value of 500ms", budgetDeclared: true);
+
+        Assert.Equal(TestOutcome.Timeout, outcome);
+    }
+
+    /// <summary>
+    /// NUnit gives a timed-out test the same result state as any other failure and marks it only in
+    /// the message, so a test is free to fail with text that reads exactly like the framework's. The
+    /// declared budget is what separates the two: a test that never declared a timeout cannot have
+    /// exceeded one, whatever it says.
+    /// </summary>
+    [Fact]
+    public void MapOutcome_TimeoutMessageOnTestWithoutDeclaredBudget_ReturnsFailed()
+    {
+        var outcome = InvokeMapOutcome(
+            ResultState.Failure, "Test exceeded Timeout value of 1ms", budgetDeclared: false);
+
+        Assert.Equal(TestOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_OrdinaryFailureOnTestWithDeclaredBudget_ReturnsFailed()
+    {
+        var outcome = InvokeMapOutcome(ResultState.Failure, "boom", budgetDeclared: true);
+
+        Assert.Equal(TestOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_Cancelled_ReturnsTimeout()
+    {
+        var outcome = InvokeMapOutcome(ResultState.Cancelled, null, budgetDeclared: false);
+
+        Assert.Equal(TestOutcome.Timeout, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_Success_ReturnsPassed()
+    {
+        var outcome = InvokeMapOutcome(ResultState.Success, null, budgetDeclared: true);
+
+        Assert.Equal(TestOutcome.Passed, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_Skipped_ReturnsSkipped()
+    {
+        var outcome = InvokeMapOutcome(ResultState.Skipped, null, budgetDeclared: false);
+
+        Assert.Equal(TestOutcome.Skipped, outcome);
+    }
+
+    [Fact]
+    public void MapOutcome_Inconclusive_ReturnsInconclusive()
+    {
+        var outcome = InvokeMapOutcome(ResultState.Inconclusive, null, budgetDeclared: false);
+
+        Assert.Equal(TestOutcome.Inconclusive, outcome);
+    }
+
+    private static TestOutcome InvokeMapOutcome(ResultState resultState, string? message, bool budgetDeclared)
+    {
+        MethodInfo method = typeof(XpingTrackAttribute).GetMethod(
+            "MapOutcome",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        object? value = method.Invoke(null, [resultState, message, budgetDeclared]);
+        return Assert.IsType<TestOutcome>(value);
     }
 
     private static (string? stackTrace, bool stackTraceOmitted) InvokeResolveStackTrace(

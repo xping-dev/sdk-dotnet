@@ -149,7 +149,7 @@ public abstract class XpingTestBase
         string workerKey,
         string className)
     {
-        var outcome = MapOutcome(context.CurrentTestOutcome);
+        var outcome = ResolveOutcome(context);
 
         // Resolve the real test method once, so both the assembly name and the pinned fingerprint
         // come from actual reflection data instead of parsing the fully qualified class name.
@@ -176,6 +176,9 @@ public abstract class XpingTestBase
 
         // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
         string? pinnedFingerprint = testMethod?.GetCustomAttribute<XpingFingerprintAttribute>(inherit: false)?.Fingerprint;
+
+        // Read the declared timeout from the same MethodInfo, which is already resolved.
+        (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(testMethod);
 
         // Generate stable test identity
         TestIdentity identity = services.IdentityGenerator.Generate(
@@ -217,6 +220,7 @@ public abstract class XpingTestBase
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
             .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
+            .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -227,6 +231,37 @@ public abstract class XpingTestBase
         return execution;
     }
 
+    /// <summary>
+    /// Determines how the current test ended, as seen from <c>[TestCleanup]</c>.
+    /// </summary>
+    /// <param name="context">The context of the test that just finished.</param>
+    /// <returns>The outcome to record.</returns>
+    /// <remarks>
+    /// <para>
+    /// A timeout is detected from the cancellation token, not from
+    /// <see cref="TestContext.CurrentTestOutcome"/>, because MSTest never reports
+    /// <see cref="UnitTestOutcome.Timeout"/> to cleanup. What it reports instead depends on how the
+    /// test was written: <see cref="UnitTestOutcome.InProgress"/> when the test body was abandoned
+    /// mid-run, <see cref="UnitTestOutcome.Failed"/> when it observed its cancellation token, and —
+    /// for a cooperatively-cancelled test that ignored the token — <see cref="UnitTestOutcome.Passed"/>,
+    /// even though the runner goes on to fail it. Reading the outcome alone therefore records a
+    /// timed-out test as not-executed, failed, or passed depending on an unrelated detail.
+    /// </para>
+    /// <para>
+    /// <c>IsCancellationRequested</c> is true for all three and false for every test that finished on
+    /// its own, including tests that declare a generous timeout and stay well inside it. It is also
+    /// true when the whole run is being torn down, which is still a test that was stopped rather than
+    /// one that disagreed with an assertion, so the classification holds.
+    /// </para>
+    /// </remarks>
+    private static TestOutcome ResolveOutcome(TestContext context)
+    {
+        if (context.CancellationTokenSource?.IsCancellationRequested == true)
+            return TestOutcome.Timeout;
+
+        return MapOutcome(context.CurrentTestOutcome);
+    }
+
     private static TestOutcome MapOutcome(UnitTestOutcome outcome)
     {
         return outcome switch
@@ -234,10 +269,35 @@ public abstract class XpingTestBase
             UnitTestOutcome.Passed => TestOutcome.Passed,
             UnitTestOutcome.Failed => TestOutcome.Failed,
             UnitTestOutcome.Inconclusive => TestOutcome.Inconclusive,
-            UnitTestOutcome.Timeout => TestOutcome.Failed,
+
+            // Kept for completeness. MSTest does not surface this value to cleanup, so a real timeout
+            // is classified by ResolveOutcome before reaching here.
+            UnitTestOutcome.Timeout => TestOutcome.Timeout,
             UnitTestOutcome.Aborted => TestOutcome.Failed,
             _ => TestOutcome.NotExecuted
         };
+    }
+
+    /// <summary>
+    /// Reads the timeout the test declared through <c>[Timeout]</c>.
+    /// </summary>
+    /// <param name="testMethod">The resolved test method, or <see langword="null"/> when it could not be found.</param>
+    /// <returns>The declared budget and its source, or two nulls when the test declared none.</returns>
+    private static (TimeSpan? Budget, TimeoutBudgetSource? Source) ResolveTimeoutBudget(MethodInfo? testMethod)
+    {
+        // inherit: true — [Timeout] on a base-class test method applies to the inherited test.
+        var attribute = testMethod?.GetCustomAttribute<TimeoutAttribute>(inherit: true);
+        if (attribute == null)
+            return (null, null);
+
+        int milliseconds = attribute.Timeout;
+
+        // TestTimeout.Infinite is a declaration that the test may run without limit, which is not the
+        // same as declaring nothing. Recorded as such so a reader can tell the two apart.
+        if (milliseconds == (int)TestTimeout.Infinite || milliseconds <= 0)
+            return (null, TimeoutBudgetSource.Infinite);
+
+        return (TimeSpan.FromMilliseconds(milliseconds), TimeoutBudgetSource.Declared);
     }
 
     private static TestMetadata ExtractMetadata(TestContext context)
@@ -309,7 +369,7 @@ public abstract class XpingTestBase
     {
         string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         bool stackTraceAvailable = normalizedStackTrace != null;
-        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
 
         if (!captureStackTraces)
         {

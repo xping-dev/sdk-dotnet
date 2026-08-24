@@ -15,6 +15,36 @@ using Xunit;
 /// </summary>
 public class SampleTests
 {
+    /// <summary>
+    /// TIMEOUT TEST: awaiting a dependency that never answers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The service accepted the request and stopped responding, so the await never resumes and the
+    /// test never reaches its assertion. xUnit's own timeout is what ends it.
+    /// </para>
+    /// <para>
+    /// Xping records this as <c>Outcome = Timeout</c>, not <c>Failed</c>, and stores the 500 ms
+    /// budget declared below alongside the measured duration.
+    /// </para>
+    /// <para>
+    /// The test is async deliberately: xUnit applies a timeout only to async tests and fails a
+    /// synchronous one outright with "Tests marked with Timeout are only supported for async tests".
+    /// Xping records that case as <c>Failed</c>, because it is a misconfigured test rather than a
+    /// hanging one.
+    /// </para>
+    /// </remarks>
+    [Fact(Timeout = 500)]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Timeout")]
+    public async Task TimeoutTest_UnresponsiveDependency_AwaitsForever()
+    {
+        // Never completes. xUnit races this await against its own 500 ms budget and kills the test.
+        var response = await UnresponsiveService.FetchAsync();
+
+        Assert.NotNull(response);
+    }
+
     [Fact]
     [Trait("Category", "Integration")]
     public void PassingTestIsTracked()
@@ -141,4 +171,31 @@ public class CollectionTests
 [CollectionDefinition("Sample Collection")]
 public class SampleCollection
 {
+}
+
+/// <summary>
+/// A downstream dependency that accepts a request and then never answers it.
+/// </summary>
+/// <remarks>
+/// Backed by a <see cref="TaskCompletionSource{TResult}"/> that nothing ever completes, which is
+/// what a hung service looks like to its caller: no exception, no data, no end. Modelled this way
+/// rather than with a long sleep because a sleep eventually returns, and the failure being
+/// reproduced is precisely the one that does not.
+/// </remarks>
+internal static class UnresponsiveService
+{
+    /// <summary>
+    /// Issues a request that never completes unless <paramref name="cancellationToken"/> fires.
+    /// </summary>
+    /// <param name="cancellationToken">Token that abandons the wait, when the caller supplies one.</param>
+    /// <returns>A task that never completes successfully.</returns>
+    public static async Task<string> FetchAsync(CancellationToken cancellationToken = default)
+    {
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (cancellationToken.Register(() => pending.TrySetCanceled(cancellationToken)))
+        {
+            return await pending.Task.ConfigureAwait(false);
+        }
+    }
 }

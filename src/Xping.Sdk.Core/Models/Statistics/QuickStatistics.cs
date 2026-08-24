@@ -19,7 +19,7 @@ namespace Xping.Sdk.Core.Models.Statistics;
 /// </para>
 /// <para>
 /// Two readings of the same session coexist here. The unprefixed counters
-/// (<see cref="Total"/>, <see cref="Passed"/>, <see cref="Failed"/>, …) count <b>executions</b>,
+/// (<see cref="Total"/>, <see cref="Passed"/>, <see cref="Failed"/>, <see cref="Timeout"/>, …) count <b>executions</b>,
 /// so every retry attempt is counted separately. The <c>Final*</c> counters
 /// (<see cref="DistinctTests"/>, <see cref="FinalPassed"/>, <see cref="FinalFailed"/>, …) count
 /// <b>distinct tests</b>, each one contributing only the outcome of its highest-numbered attempt.
@@ -45,6 +45,7 @@ public sealed class QuickStatistics
         Skipped = 0;
         Inconclusive = 0;
         NotExecuted = 0;
+        Timeout = 0;
         SuccessRate = 0.0;
         DistinctTests = 0;
         FinalPassed = 0;
@@ -52,6 +53,7 @@ public sealed class QuickStatistics
         FinalSkipped = 0;
         FinalInconclusive = 0;
         FinalNotExecuted = 0;
+        FinalTimeout = 0;
         FinalSuccessRate = 0.0;
         TotalDurationMs = 0L;
         WallClockDurationMs = 0L;
@@ -74,6 +76,7 @@ public sealed class QuickStatistics
         int skipped,
         int inconclusive,
         int notExecuted,
+        int timeout,
         double successRate,
         long totalDurationMs,
         long wallClockDurationMs,
@@ -87,6 +90,7 @@ public sealed class QuickStatistics
         Skipped = skipped;
         Inconclusive = inconclusive;
         NotExecuted = notExecuted;
+        Timeout = timeout;
         SuccessRate = successRate;
         TotalDurationMs = totalDurationMs;
         WallClockDurationMs = wallClockDurationMs;
@@ -124,6 +128,16 @@ public sealed class QuickStatistics
     /// Gets the number of tests that were not executed.
     /// </summary>
     public int NotExecuted { get; init; }
+
+    /// <summary>
+    /// Gets the number of tests killed by their framework for exceeding a timeout.
+    /// </summary>
+    /// <remarks>
+    /// Counted apart from <see cref="Failed"/> because a hang and a failed assertion are different
+    /// defects. Both are failures for the purpose of <see cref="SuccessRate"/>, which counts only
+    /// passes in its numerator, so a timeout has never inflated it.
+    /// </remarks>
+    public int Timeout { get; init; }
 
     /// <summary>
     /// Gets the proportion of executions that passed, as a ratio from 0.0 to 1.0.
@@ -173,6 +187,11 @@ public sealed class QuickStatistics
     /// Gets the number of distinct tests whose highest-numbered attempt was not executed.
     /// </summary>
     public int FinalNotExecuted { get; init; }
+
+    /// <summary>
+    /// Gets the number of distinct tests whose highest-numbered attempt timed out.
+    /// </summary>
+    public int FinalTimeout { get; init; }
 
     /// <summary>
     /// Gets the proportion of distinct tests that ended passed, as a ratio from 0.0 to 1.0.

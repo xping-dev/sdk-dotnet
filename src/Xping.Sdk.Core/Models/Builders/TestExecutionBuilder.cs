@@ -28,6 +28,8 @@ public sealed class TestExecutionBuilder
     private string? _errorMessageHash;
     private string? _stackTraceHash;
     private bool _stackTraceOmitted;
+    private TimeSpan? _timeoutBudget;
+    private TimeoutBudgetSource? _timeoutBudgetSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestExecutionBuilder"/> class.
@@ -222,6 +224,19 @@ public sealed class TestExecutionBuilder
     }
 
     /// <summary>
+    /// Sets the timeout the test declared for itself.
+    /// </summary>
+    /// <param name="budget">The declared timeout, or <see langword="null"/> when none applies.</param>
+    /// <param name="source">Where the budget came from, or <see langword="null"/> when none was declared.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestExecutionBuilder WithTimeoutBudget(TimeSpan? budget, TimeoutBudgetSource? source)
+    {
+        _timeoutBudget = budget;
+        _timeoutBudgetSource = source;
+        return this;
+    }
+
+    /// <summary>
     /// Builds an immutable <see cref="TestExecution"/> instance.
     /// </summary>
     /// <returns>A new immutable test execution.</returns>
@@ -243,7 +258,9 @@ public sealed class TestExecutionBuilder
             stackTraceHash: _stackTraceHash,
             stackTraceOmitted: _stackTraceOmitted,
             testOrchestrationRecord: _testOrchestrationRecord,
-            retry: _retry);
+            retry: _retry,
+            timeoutBudget: _timeoutBudget,
+            timeoutBudgetSource: _timeoutBudgetSource);
     }
 
     /// <summary>
@@ -268,6 +285,8 @@ public sealed class TestExecutionBuilder
         _errorMessageHash = null;
         _stackTraceHash = null;
         _stackTraceOmitted = false;
+        _timeoutBudget = null;
+        _timeoutBudgetSource = null;
         return this;
     }
 }

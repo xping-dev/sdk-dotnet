@@ -32,7 +32,7 @@ internal static class SessionOutcomes
         foreach (var outcome in FinalOutcomes(session).Values)
         {
             tests++;
-            if (outcome.Outcome == TestOutcome.Failed)
+            if (outcome.Outcome.IsFailure())
                 failures++;
         }
 
@@ -48,7 +48,7 @@ internal static class SessionOutcomes
     {
         foreach (var outcome in FinalOutcomes(session).Values)
         {
-            if (outcome.Outcome == TestOutcome.Failed)
+            if (outcome.Outcome.IsFailure())
                 return true;
         }
 
