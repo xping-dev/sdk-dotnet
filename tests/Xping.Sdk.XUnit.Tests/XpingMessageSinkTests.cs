@@ -52,7 +52,8 @@ public sealed class XpingMessageSinkTests
     {
         TestOutcome outcome = InvokeClassifyFailure(
             ["Xunit.Sdk.TestTimeoutException"],
-            "Test execution timed out after 500 milliseconds");
+            "Test execution timed out after 500 milliseconds",
+            budgetDeclared: true);
 
         Assert.Equal(TestOutcome.Timeout, outcome);
     }
@@ -67,7 +68,10 @@ public sealed class XpingMessageSinkTests
     {
         TestOutcome outcome = InvokeClassifyFailure(
             ["Xunit.Sdk.TestTimeoutException"],
-            "Tests marked with Timeout are only supported for async tests");
+            "Tests marked with Timeout are only supported for async tests",
+
+            // The budget is declared — that is exactly why xUnit rejected the test.
+            budgetDeclared: true);
 
         Assert.Equal(TestOutcome.Failed, outcome);
     }
@@ -75,7 +79,8 @@ public sealed class XpingMessageSinkTests
     [Fact]
     public void ClassifyFailure_AssertionException_ReturnsFailed()
     {
-        TestOutcome outcome = InvokeClassifyFailure(["Xunit.Sdk.TrueException"], "Assert.True() Failure");
+        TestOutcome outcome = InvokeClassifyFailure(
+            ["Xunit.Sdk.TrueException"], "Assert.True() Failure", budgetDeclared: true);
 
         Assert.Equal(TestOutcome.Failed, outcome);
     }
@@ -89,7 +94,8 @@ public sealed class XpingMessageSinkTests
     {
         TestOutcome outcome = InvokeClassifyFailure(
             ["System.InvalidOperationException"],
-            "Test execution timed out after 500 milliseconds");
+            "Test execution timed out after 500 milliseconds",
+            budgetDeclared: true);
 
         Assert.Equal(TestOutcome.Failed, outcome);
     }
@@ -97,7 +103,7 @@ public sealed class XpingMessageSinkTests
     [Fact]
     public void ClassifyFailure_NoExceptionTypes_ReturnsFailed()
     {
-        TestOutcome outcome = InvokeClassifyFailure(null, "boom");
+        TestOutcome outcome = InvokeClassifyFailure(null, "boom", budgetDeclared: true);
 
         Assert.Equal(TestOutcome.Failed, outcome);
     }
@@ -132,13 +138,30 @@ public sealed class XpingMessageSinkTests
         Assert.Equal(TimeSpan.FromMilliseconds(250), duration);
     }
 
-    private static TestOutcome InvokeClassifyFailure(string[]? exceptionTypes, string? errorMessage)
+    /// <summary>
+    /// <c>Xunit.Sdk.TestTimeoutException</c> is public and takes a duration, so a test can throw it
+    /// itself and produce evidence identical to a real overrun. A test that declared no timeout
+    /// cannot have exceeded one, whatever it throws.
+    /// </summary>
+    [Fact]
+    public void ClassifyFailure_ForgedTimeoutExceptionWithoutDeclaredBudget_ReturnsFailed()
+    {
+        TestOutcome outcome = InvokeClassifyFailure(
+            ["Xunit.Sdk.TestTimeoutException"],
+            "Test execution timed out after 500 milliseconds",
+            budgetDeclared: false);
+
+        Assert.Equal(TestOutcome.Failed, outcome);
+    }
+
+    private static TestOutcome InvokeClassifyFailure(
+        string[]? exceptionTypes, string? errorMessage, bool budgetDeclared)
     {
         MethodInfo method = typeof(XpingMessageSink).GetMethod(
             "ClassifyFailure",
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
-        object? value = method.Invoke(null, [exceptionTypes, errorMessage]);
+        object? value = method.Invoke(null, [exceptionTypes, errorMessage, budgetDeclared]);
         return Assert.IsType<TestOutcome>(value);
     }
 

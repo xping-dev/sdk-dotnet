@@ -149,7 +149,11 @@ public sealed class XpingMessageSink(
         string? exceptionType = testFailed.ExceptionTypes?.FirstOrDefault();
         string errorMessage = string.Join(Environment.NewLine, testFailed.Messages);
 
-        TestOutcome outcome = ClassifyFailure(testFailed.ExceptionTypes, errorMessage);
+        // The declared budget gates the classification, so it is resolved before the outcome.
+        (_, TimeoutBudgetSource? declaredSource) = ResolveTimeoutBudget(data.Test.TestCase);
+
+        TestOutcome outcome = ClassifyFailure(
+            testFailed.ExceptionTypes, errorMessage, budgetDeclared: declaredSource != null);
 
         TimeSpan duration = ResolveFailureDuration(
             outcome, testFailed.ExecutionTime, data.StartTimestamp, endTimestamp);
@@ -383,17 +387,30 @@ public sealed class XpingMessageSink(
     /// </summary>
     /// <param name="exceptionTypes">The exception types xUnit recorded.</param>
     /// <param name="errorMessage">The combined failure message.</param>
+    /// <param name="budgetDeclared">Whether the test declared a timeout budget.</param>
     /// <returns><see cref="TestOutcome.Timeout"/> for a genuine overrun, otherwise <see cref="TestOutcome.Failed"/>.</returns>
     /// <remarks>
-    /// Both conditions are required. The exception type alone would also catch xUnit's refusal to
-    /// apply a timeout to a synchronous test — <c>[Fact(Timeout = …)]</c> is only supported on async
-    /// tests, and a sync one fails immediately with "Tests marked with Timeout are only supported for
-    /// async tests". That is a misconfigured test, not a hanging one, and calling it a timeout would
+    /// <para>
+    /// All three conditions are required, and each excludes a case the other two let through.
+    /// </para>
+    /// <para>
+    /// <b>The exception type</b> is xUnit's marker for the event, but it is not proof of one:
+    /// <c>Xunit.Sdk.TestTimeoutException</c> is public and takes a duration, so a test can throw it
+    /// itself and produce byte-identical evidence. <b>The declared budget</b> is what settles that —
+    /// a test that declared no timeout cannot have exceeded one, whatever it throws. This mirrors the
+    /// same conjunction the NUnit adapter uses for the same reason.
+    /// </para>
+    /// <para>
+    /// <b>The message</b> excludes a case a declared budget does not: xUnit applies a timeout only to
+    /// async tests, and fails a synchronous one immediately with "Tests marked with Timeout are only
+    /// supported for async tests". That test *does* declare a budget, so only the message tells it
+    /// apart. It is a misconfigured test rather than a hanging one, and calling it a timeout would
     /// point the reader at a deadlock that does not exist.
+    /// </para>
     /// </remarks>
-    private static TestOutcome ClassifyFailure(string[]? exceptionTypes, string? errorMessage)
+    private static TestOutcome ClassifyFailure(string[]? exceptionTypes, string? errorMessage, bool budgetDeclared)
     {
-        if (exceptionTypes == null || errorMessage == null)
+        if (!budgetDeclared || exceptionTypes == null || errorMessage == null)
             return TestOutcome.Failed;
 
         bool timedOut =
