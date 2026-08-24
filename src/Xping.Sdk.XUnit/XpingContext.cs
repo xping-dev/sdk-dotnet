@@ -201,21 +201,32 @@ public class XpingContext : XpingContextOrchestrator
 
             // TotalDurationMs sums each test's own execution time; WallClockDurationMs is the
             // elapsed time for the whole session (includes fixture setup/teardown, discovery, etc.).
+            // The gap between them is the framework overhead, which is what a slow-but-green suite
+            // usually needs to look at.
+            string overhead = DurationFormatter.FormatOverhead(
+                stats.TotalDurationMs, stats.WallClockDurationMs);
+
             if (retried)
             {
                 int retries = stats.Total - stats.DistinctTests;
 
                 _logger.LogInformation(
-                    "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
+                    "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
                     stats.Total, stats.DistinctTests, stats.DistinctTests == 1 ? "test" : "tests",
                     retries, retries == 1 ? "retry" : "retries",
-                    parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
+                    parts.ToString(),
+                    DurationFormatter.Format(stats.TotalDurationMs),
+                    DurationFormatter.Format(stats.WallClockDurationMs),
+                    overhead);
             }
             else
             {
                 _logger.LogInformation(
-                    "Total tests recorded: {Total} · {Outcomes} · exec: {TotalDurationMs}ms · wall: {WallClockDurationMs}ms",
-                    stats.Total, parts.ToString(), stats.TotalDurationMs, stats.WallClockDurationMs);
+                    "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
+                    stats.Total, parts.ToString(),
+                    DurationFormatter.Format(stats.TotalDurationMs),
+                    DurationFormatter.Format(stats.WallClockDurationMs),
+                    overhead);
             }
         }
         else

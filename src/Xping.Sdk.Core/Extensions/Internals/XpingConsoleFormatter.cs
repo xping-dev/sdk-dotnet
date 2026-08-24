@@ -8,6 +8,7 @@
 using System.Globalization;
 using Serilog.Events;
 using Serilog.Formatting;
+using Serilog.Formatting.Display;
 
 namespace Xping.Sdk.Core.Extensions.Internals;
 
@@ -19,6 +20,12 @@ namespace Xping.Sdk.Core.Extensions.Internals;
 /// </summary>
 internal sealed class XpingConsoleFormatter : ITextFormatter
 {
+    // "lj" renders string properties literally instead of JSON-quoting them, so a value reads
+    // exec: 591ms rather than exec: "591ms". The formatter is immutable once built, so a single
+    // shared instance is safe across the sink's concurrent callers.
+    private static readonly MessageTemplateTextFormatter MessageFormatter =
+        new("{Message:lj}", CultureInfo.InvariantCulture);
+
     public void Format(LogEvent logEvent, TextWriter output)
     {
         var level = logEvent.Level switch
@@ -33,7 +40,7 @@ internal sealed class XpingConsoleFormatter : ITextFormatter
         };
 
         output.Write($"[Xping {logEvent.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture)} {level}] ");
-        logEvent.RenderMessage(output, CultureInfo.InvariantCulture);
+        MessageFormatter.Format(logEvent, output);
 
         if (logEvent.Exception is { } ex)
             output.Write($" \u2192 {ex.GetType().Name}: {ex.Message}");
