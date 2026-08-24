@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Report.Contract;
@@ -47,6 +48,7 @@ internal static class EvidenceHeadline
         FlakyEvidence flaky => Flaky(flaky),
         AlwaysFailingEvidence always => AlwaysFailing(always),
         TimingOutEvidence timingOut => TimingOut(timingOut),
+        BrokenFixtureEvidence fixture => BrokenFixture(fixture),
         SharedFailureEvidence shared => SharedFailure(shared),
         DurationRegressionEvidence regression => DurationRegression(regression),
         DurationUnstableEvidence unstable => DurationUnstable(unstable),
@@ -148,6 +150,49 @@ internal static class EvidenceHeadline
 
         return (headline, metrics);
     }
+
+    /// <summary>
+    /// Phrases a cluster whose cause is a named lifecycle member.
+    /// </summary>
+    /// <remarks>
+    /// Leads with the member, because it is the only part a reader acts on: the counts say how much
+    /// it costs, and the name says where to go. Falls back to naming the site alone when the framework
+    /// named no member — still more than "these tests fail alike", and still nothing invented.
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) BrokenFixture(BrokenFixtureEvidence e)
+    {
+        string subject = e.Member ?? Phrase(e.Site);
+
+        return
+        (
+            $"{subject} failed, blocking {e.TestsBlocked} tests in {e.SessionsAffected} of {Runs(e.Sessions)}",
+            [
+                new("failing member", subject),
+                new("where", Phrase(e.Site)),
+                new("tests blocked", e.TestsBlocked.ToString(CultureInfo.InvariantCulture)),
+                new("failures", e.Failures.ToString(CultureInfo.InvariantCulture)),
+                new("runs affected", $"{e.SessionsAffected} of {e.Sessions}"),
+                new("worst run", $"{e.MaxTestsInOneSession} tests")
+            ]);
+    }
+
+    /// <summary>
+    /// Turns a site's enum name into the words a person reads.
+    /// </summary>
+    /// <remarks>
+    /// Enum names are the JSON contract; a report pasted into a chat is read by people who have never
+    /// seen the enum. An unrecognised value prints as it came rather than as a blank.
+    /// </remarks>
+    private static string Phrase(string site) => site switch
+    {
+        nameof(FailureSite.TestSetup) => "per-test setup",
+        nameof(FailureSite.TestTeardown) => "per-test teardown",
+        nameof(FailureSite.FixtureSetup) => "fixture setup",
+        nameof(FailureSite.FixtureTeardown) => "fixture teardown",
+        nameof(FailureSite.AssemblySetup) => "assembly setup",
+        nameof(FailureSite.AssemblyTeardown) => "assembly teardown",
+        _ => site
+    };
 
     private static (string, IReadOnlyList<MetricDto>) SharedFailure(SharedFailureEvidence e) =>
     (

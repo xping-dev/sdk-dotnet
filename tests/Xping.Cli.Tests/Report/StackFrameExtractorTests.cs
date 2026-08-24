@@ -116,6 +116,35 @@ public sealed class StackFrameExtractorTests
         Assert.True(extraction.Degraded);
     }
 
+    /// <summary>
+    /// The CLR invokes a method interpreted the first time and through an emitted
+    /// <c>InvokeStub_{Type}</c> afterwards, so two runs of one failing method produce traces that
+    /// differ by that frame alone. Both traces below are real, captured from consecutive tests in a
+    /// single NUnit run whose shared <c>[SetUp]</c> threw. Left in, the extra frame gave them
+    /// different signatures and stopped three tests blocked by one broken fixture from grouping at
+    /// all.
+    /// </summary>
+    [Fact]
+    public void AReflectionInvokeStubDoesNotChangeTheFramesOfAnOtherwiseIdenticalTrace()
+    {
+        const string interpreted =
+            "   at SampleApp.NUnit.BrokenFixture.Setup() in /src/SampleTests.cs:line 180\n" +
+            "   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\n" +
+            "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)";
+
+        const string stubbed =
+            "   at SampleApp.NUnit.BrokenFixture.Setup() in /src/SampleTests.cs:line 180\n" +
+            "   at InvokeStub_BrokenFixture.Setup(Object, Object, IntPtr*)\n" +
+            "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)";
+
+        FrameExtraction first = StackFrameExtractor.Extract(interpreted);
+        FrameExtraction second = StackFrameExtractor.Extract(stubbed);
+
+        Assert.Equal(["SampleApp.NUnit.BrokenFixture.Setup()"], first.Frames);
+        Assert.Equal(first.Frames, second.Frames);
+        Assert.False(second.Degraded);
+    }
+
     [Fact]
     public void CarriageReturnsDoNotSurviveIntoAFrame()
     {

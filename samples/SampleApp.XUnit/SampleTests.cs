@@ -174,6 +174,49 @@ public class SampleCollection
 }
 
 /// <summary>
+/// Shared state every test in <see cref="BrokenFixtureTests"/> depends on, which fails to build.
+/// </summary>
+public sealed class UnprovisionedDatabase
+{
+    public UnprovisionedDatabase() =>
+        throw new InvalidOperationException("The shared test database was never provisioned.");
+}
+
+/// <summary>
+/// BROKEN FIXTURE: a class fixture that throws, taking every test in the class down with it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Nothing is wrong with the three tests below. The defect is in
+/// <see cref="UnprovisionedDatabase"/>'s constructor, and it is reported once per test that tried to
+/// use it — which is why one broken fixture arrives looking like a class full of broken tests.
+/// </para>
+/// <para>
+/// Xping records <c>Site = FixtureSetup</c> and names the fixture, so the report emits one
+/// <c>broken fixture</c> finding rather than three <c>always failing</c> ones.
+/// </para>
+/// <para>
+/// This is the one case a framework marks for itself: xUnit wraps the failure in
+/// <c>Xunit.Sdk.TestClassException</c> and names the fixture type in the message. A
+/// <c>ICollectionFixture&lt;T&gt;</c> that throws is the same event but arrives unwrapped, and is
+/// recognised from its constructor frame instead.
+/// </para>
+/// </remarks>
+public class BrokenFixtureTests(UnprovisionedDatabase database) : IClassFixture<UnprovisionedDatabase>
+{
+    private readonly UnprovisionedDatabase _database = database;
+
+    [Fact]
+    public void FirstTestNeedingTheDatabase() => Assert.NotNull(_database);
+
+    [Fact]
+    public void SecondTestNeedingTheDatabase() => Assert.NotNull(_database);
+
+    [Fact]
+    public void ThirdTestNeedingTheDatabase() => Assert.NotNull(_database);
+}
+
+/// <summary>
 /// A downstream dependency that accepts a request and then never answers it.
 /// </summary>
 /// <remarks>

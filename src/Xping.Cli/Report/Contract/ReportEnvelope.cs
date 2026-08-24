@@ -35,7 +35,7 @@ internal sealed record ReportEnvelope(
     TruncationDto Truncated)
 {
     /// <summary>The shape this build emits.</summary>
-    public const string CurrentSchemaVersion = "1.2";
+    public const string CurrentSchemaVersion = "1.3";
 }
 
 /// <summary>

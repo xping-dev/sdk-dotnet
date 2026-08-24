@@ -102,6 +102,18 @@ internal static class LocalAnalysisConstants
     public const int SharedFailureMinTests = 3;
 
     /// <summary>
+    /// Share of a cluster's failures that must agree on one lifecycle member before the cluster is
+    /// reported as a broken fixture rather than a shared failure (1.00).
+    /// </summary>
+    /// <remarks>
+    /// Every failure, with no exceptions allowed. The other thresholds here classify a measurement
+    /// against a line; this one licences the report to name a specific member as the defect, and a
+    /// finding that points at a line of code should not be emitted on a majority vote. A cluster that
+    /// only mostly agrees is still reported — as a shared failure, which claims less.
+    /// </remarks>
+    public const double BrokenFixtureSiteAgreement = 1.00;
+
+    /// <summary>
     /// Relative p50 duration increase required to report a regression (0.50).
     /// </summary>
     public const double DurationRegressionPct = 0.50;

@@ -30,6 +30,8 @@ public sealed class TestExecutionBuilder
     private bool _stackTraceOmitted;
     private TimeSpan? _timeoutBudget;
     private TimeoutBudgetSource? _timeoutBudgetSource;
+    private FailureSite? _site;
+    private string? _failureSiteMember;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestExecutionBuilder"/> class.
@@ -237,6 +239,19 @@ public sealed class TestExecutionBuilder
     }
 
     /// <summary>
+    /// Sets where in the test lifecycle the execution failed.
+    /// </summary>
+    /// <param name="site">The site, or <see langword="null"/> when the execution did not fail.</param>
+    /// <param name="member">The lifecycle member that failed, when the framework names one.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestExecutionBuilder WithFailureSite(FailureSite? site, string? member)
+    {
+        _site = site;
+        _failureSiteMember = member;
+        return this;
+    }
+
+    /// <summary>
     /// Builds an immutable <see cref="TestExecution"/> instance.
     /// </summary>
     /// <returns>A new immutable test execution.</returns>
@@ -260,7 +275,9 @@ public sealed class TestExecutionBuilder
             testOrchestrationRecord: _testOrchestrationRecord,
             retry: _retry,
             timeoutBudget: _timeoutBudget,
-            timeoutBudgetSource: _timeoutBudgetSource);
+            timeoutBudgetSource: _timeoutBudgetSource,
+            site: _site,
+            failureSiteMember: _failureSiteMember);
     }
 
     /// <summary>
@@ -287,6 +304,8 @@ public sealed class TestExecutionBuilder
         _stackTraceOmitted = false;
         _timeoutBudget = null;
         _timeoutBudgetSource = null;
+        _site = null;
+        _failureSiteMember = null;
         return this;
     }
 }

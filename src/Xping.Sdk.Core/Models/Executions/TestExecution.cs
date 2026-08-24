@@ -26,6 +26,8 @@ public sealed class TestExecution
         Duration = TimeSpan.Zero;
         TimeoutBudget = null;
         TimeoutBudgetSource = null;
+        Site = null;
+        FailureSiteMember = null;
         TestName = string.Empty;
         StartTimeUtc = DateTime.UtcNow;
         EndTimeUtc = DateTime.UtcNow;
@@ -52,7 +54,9 @@ public sealed class TestExecution
         string? stackTraceHash,
         bool stackTraceOmitted,
         TimeSpan? timeoutBudget,
-        TimeoutBudgetSource? timeoutBudgetSource)
+        TimeoutBudgetSource? timeoutBudgetSource,
+        FailureSite? site,
+        string? failureSiteMember)
     {
         ExecutionId = executionId;
         Identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -70,6 +74,8 @@ public sealed class TestExecution
         StackTraceOmitted = stackTraceOmitted;
         TimeoutBudget = timeoutBudget;
         TimeoutBudgetSource = timeoutBudgetSource;
+        Site = site;
+        FailureSiteMember = failureSiteMember;
         TestOrchestrationRecord = testOrchestrationRecord;
         Retry = retry;
     }
@@ -217,4 +223,34 @@ public sealed class TestExecution
     /// declared no timeout at all.
     /// </summary>
     public TimeoutBudgetSource? TimeoutBudgetSource { get; init; }
+
+    /// <summary>
+    /// Gets where in the test lifecycle this execution failed, or <see langword="null"/> when it did
+    /// not fail.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null and <see cref="Executions.FailureSite.Unknown"/> say different things, and the difference
+    /// matters to anyone reading the record: null means the question does not apply because nothing
+    /// went wrong, while <c>Unknown</c> means it failed and the adapter could not tell where.
+    /// </para>
+    /// <para>
+    /// Its value is in separating one broken lifecycle member from many broken tests. A <c>[SetUp]</c>
+    /// that throws is reported once per test that tried to use it, and without this field those
+    /// executions are indistinguishable from a class full of genuinely failing tests.
+    /// </para>
+    /// </remarks>
+    public FailureSite? Site { get; init; }
+
+    /// <summary>
+    /// Gets the lifecycle member that failed, such as <c>OrdersFixture.OneTimeSetUp</c>, or
+    /// <see langword="null"/> when the framework does not name one.
+    /// </summary>
+    /// <remarks>
+    /// Names the member inside the class;
+    /// <see cref="Executions.TestOrchestrationRecord.CollectionName"/> already carries the class
+    /// itself. The pair is what lets a finding say which member to go and fix rather than only that
+    /// some shared code broke.
+    /// </remarks>
+    public string? FailureSiteMember { get; init; }
 }

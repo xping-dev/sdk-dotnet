@@ -28,6 +28,17 @@ public sealed class FailureModeProviderTests
         TestSessionFactory.Execution(
             name, TestOutcome.Failed, exceptionType: SharedType, errorMessage: SharedMessage);
 
+    /// <summary>The same shared failure, recorded in a named lifecycle member.</summary>
+    private static TestExecution FixtureFailure(
+        string name, FailureSite site = FailureSite.TestSetup, string? member = "SampleTests.Setup") =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            exceptionType: SharedType,
+            errorMessage: SharedMessage,
+            failureSite: site,
+            failureSiteMember: member);
+
     /// <summary>A second failure every test can share, distinct from <see cref="SharedFailure"/>.</summary>
     private static TestExecution OtherSharedFailure(string name) =>
         TestSessionFactory.Execution(
@@ -311,6 +322,177 @@ public sealed class FailureModeProviderTests
             ["fp-Alpha", "fp-Beta", "fp-Gamma"],
             evidence.Members.Select(m => m.Fingerprint));
     }
+
+    /// <summary>
+    /// The point of the failure site: the same three failures, but every one of them recorded in the
+    /// same setup method, so the report can name the member to fix instead of listing three tests.
+    /// </summary>
+    [Fact]
+    public void ThreeTestsBlockedByOneLifecycleMemberNameIt()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.BrokenFixture);
+        var evidence = Assert.IsType<BrokenFixtureEvidence>(candidate.Evidence);
+
+        Assert.Equal("SampleTests.Setup", evidence.Member);
+        Assert.Equal(nameof(FailureSite.TestSetup), evidence.Site);
+        Assert.Equal(3, evidence.TestsBlocked);
+        Assert.Equal(
+            ["fp-Alpha", "fp-Beta", "fp-Gamma"],
+            evidence.Members.Select(m => m.Fingerprint));
+    }
+
+    /// <summary>
+    /// A broken fixture replaces the shared failure rather than joining it. Reporting both would
+    /// charge one cause twice — the thing clustering exists to prevent.
+    /// </summary>
+    [Fact]
+    public void ABrokenFixtureIsNotAlsoReportedAsASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.Single(candidates);
+    }
+
+    /// <summary>
+    /// Two different broken setup methods failing with one signature are two defects. Naming either
+    /// would send the reader to the wrong one, so the finding claims only what it can support.
+    /// </summary>
+    [Fact]
+    public void FailuresDisagreeingOnTheMemberStayASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", member: "SampleTests.Setup"),
+                    FixtureFailure("Beta", member: "OtherTests.Setup"),
+                    FixtureFailure("Gamma", member: "SampleTests.Setup")
+                ])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// One failure the adapter could not place is enough to withhold the claim. Sites are all-or
+    /// nothing here because the finding points at a line of code, and a majority vote is not evidence
+    /// that the minority came from the same place.
+    /// </summary>
+    [Fact]
+    public void OneFailureWithoutASiteKeepsTheClusterASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// A test body is not a fixture. Three tests failing alike inside their own bodies is a shared
+    /// cause the report cannot name, which is exactly what a shared failure says.
+    /// </summary>
+    [Fact]
+    public void FailuresInTheTestBodyAreNotABrokenFixture()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", FailureSite.TestBody, member: null),
+                    FixtureFailure("Beta", FailureSite.TestBody, member: null),
+                    FixtureFailure("Gamma", FailureSite.TestBody, member: null)
+                ])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// An unresolved site is an admission, not an observation, and must not license the claim.
+    /// </summary>
+    [Fact]
+    public void FailuresWithAnUnknownSiteAreNotABrokenFixture()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", FailureSite.Unknown, member: null),
+                    FixtureFailure("Beta", FailureSite.Unknown, member: null),
+                    FixtureFailure("Gamma", FailureSite.Unknown, member: null)
+                ])
+        ];
+
+        Assert.Single(Analyze(sessions), c => c.Kind == FindingKind.SharedFailure);
+    }
+
+    /// <summary>
+    /// The subject is the same cluster whichever kind describes it, so promoting it must not move the
+    /// finding's id — otherwise every stored finding would move the first time an adapter learned to
+    /// name a member.
+    /// </summary>
+    [Fact]
+    public void PromotingAClusterDoesNotChangeItsSubject()
+    {
+        TestSession[] unnamed =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        TestSession[] named =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        FindingCandidate shared = Single(Analyze(unnamed), FindingKind.SharedFailure);
+        FindingCandidate fixture = Single(Analyze(named), FindingKind.BrokenFixture);
+
+        Assert.Equal(shared.Subject.SortKey, fixture.Subject.SortKey);
+    }
+
+    /// <summary>Four runs in which nothing fails, so a cluster in the fifth is the only finding.</summary>
+    private static TestSession[] FourQuietRuns() =>
+        [.. Enumerable.Range(0, 4).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]))];
 
     [Fact]
     public void ClusterMembersDoNotAlsoAppearIndividually()

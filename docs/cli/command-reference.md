@@ -93,6 +93,33 @@ Only the top ten findings are shown by default. When some are withheld, one line
 
 Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
 
+### Finding kinds
+
+Every value `--kind` accepts. A kind is what a finding *claims*; the words in brackets are how the
+report prints it.
+
+| Kind | Printed as | Claims |
+|---|---|---|
+| `RetryMasked` | masked by retry | The test failed and passed on retry, never reaching the run's outcome |
+| `Flaky` | flaky | The test both passes and fails, or fails in varying ways |
+| `AlwaysFailing` | always failing | The test fails almost always, in one consistent way |
+| `TimingOut` | timing out | The test is mostly killed for overrunning its timeout rather than failing |
+| `BrokenFixture` | broken fixture | Several tests fail alike because one shared lifecycle member is broken, and that member is named |
+| `SharedFailure` | shared failure | Several tests fail with one signature in one run — one cause, not many |
+| `DurationRegression` | slower | The test's median duration has increased against its own baseline |
+| `DurationUnstable` | unstable timing | The test's duration varies too much for a regression to be measurable |
+| `OrderDependent` | order dependent | The test fails when it runs after one particular predecessor |
+| `ParallelSensitive` | concurrency | The test's failure rate differs between parallel and serial execution |
+| `NetworkDependent` | network | The test's failures cluster in runs with degraded or absent network |
+| `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
+| `NeverRun` | never run | The test was expected but never executed |
+
+`BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
+about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
+in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixture constructor — and
+stays a shared failure otherwise. Which failures an adapter can place, and which it cannot, is in
+[known limitations](../known-limitations.md).
+
 ### Finding ids
 
 The `f_…` on each finding is a short, stable identity for that finding — a hash of what the
@@ -153,7 +180,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.3",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

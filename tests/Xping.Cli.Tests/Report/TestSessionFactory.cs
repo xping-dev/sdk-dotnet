@@ -87,6 +87,12 @@ internal static class TestSessionFactory
     /// <param name="timeoutBudgetMs">
     /// The timeout the test declared for itself, or <see langword="null"/> when it declared none.
     /// </param>
+    /// <param name="failureSite">
+    /// Where in the lifecycle the failure happened, or <see langword="null"/> for an execution
+    /// recorded by an adapter that resolved no site — which is what every stored execution from
+    /// before this field existed looks like.
+    /// </param>
+    /// <param name="failureSiteMember">The lifecycle member that failed, when one was named.</param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -104,7 +110,9 @@ internal static class TestSessionFactory
         string? stackTrace = null,
         bool stackTraceOmitted = false,
         int? concurrency = null,
-        int? timeoutBudgetMs = null)
+        int? timeoutBudgetMs = null,
+        FailureSite? failureSite = null,
+        string? failureSiteMember = null)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint($"fp-{name}")
@@ -143,7 +151,8 @@ internal static class TestSessionFactory
             .WithStackTraceOmitted(stackTraceOmitted)
             .WithTimeoutBudget(
                 timeoutBudgetMs is { } budgetMs ? TimeSpan.FromMilliseconds(budgetMs) : null,
-                timeoutBudgetMs is null ? null : TimeoutBudgetSource.Declared);
+                timeoutBudgetMs is null ? null : TimeoutBudgetSource.Declared)
+            .WithFailureSite(failureSite, failureSiteMember);
 
         // Attached only when asked for. The execution builder already defaults the record, and that
         // default reports a concurrency of zero — which is precisely how concurrency analysis

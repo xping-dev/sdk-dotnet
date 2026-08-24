@@ -177,6 +177,49 @@ public class MethodLevelTracking
 }
 
 /// <summary>
+/// BROKEN FIXTURE: shared setup that fails, taking every test in the fixture down with it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Nothing is wrong with the three tests below. The defect is in <see cref="Setup"/>, and it is
+/// reported once per test that tried to use it — which is why a single broken line of shared setup
+/// arrives looking like a class full of broken tests.
+/// </para>
+/// <para>
+/// Xping records <c>Site = TestSetup</c> and <c>FailureSiteMember = BrokenFixture.Setup</c> on all
+/// three executions. The report groups them and, because they agree on the member, names it: one
+/// <c>broken fixture</c> finding instead of three <c>always failing</c> ones.
+/// </para>
+/// <para>
+/// NUnit reports this identically to a body failure — <c>ResultState.Site</c> is <c>Test</c> either
+/// way, and the message carries no marker — so the stack trace is the only evidence, and
+/// <c>[SetUp]</c> is matched by reflecting the fixture's own lifecycle methods. A broken
+/// <c>[OneTimeSetUp]</c> would be a better demonstration still, but NUnit skips a fixture's children
+/// when it throws, so no execution reaches Xping at all; see docs/known-limitations.md.
+/// </para>
+/// </remarks>
+[TestFixture]
+[XpingTrack]
+public class BrokenFixture
+{
+    [SetUp]
+    public void Setup() =>
+        throw new InvalidOperationException("The shared test database was never provisioned.");
+
+    [Test]
+    [Category("BrokenFixture")]
+    public void FirstTestNeedingTheDatabase() => Assert.Pass();
+
+    [Test]
+    [Category("BrokenFixture")]
+    public void SecondTestNeedingTheDatabase() => Assert.Pass();
+
+    [Test]
+    [Category("BrokenFixture")]
+    public void ThirdTestNeedingTheDatabase() => Assert.Pass();
+}
+
+/// <summary>
 /// A downstream dependency that accepts a request and then never answers it.
 /// </summary>
 /// <remarks>

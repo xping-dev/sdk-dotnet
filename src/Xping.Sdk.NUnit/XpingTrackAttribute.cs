@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using NUnit.Framework;
@@ -11,6 +12,13 @@ using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Diagnostics;
+
+// Both namespaces declare a FailureSite. The alias makes the unqualified name mean Xping's, which is
+// the one the rest of this file records; NUnit's own is spelled out where it is used. Adopting the
+// same word deliberately — it is NUnit's vocabulary, and the report reuses it.
+using FailureSite = Xping.Sdk.Core.Models.Executions.FailureSite;
+using NUnitSite = global::NUnit.Framework.Interfaces.FailureSite;
 
 namespace Xping.Sdk.NUnit;
 
@@ -42,6 +50,22 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     private const int MaxTypeSegmentsScanned = 2;
 
     private static readonly string[] _lineSeparators = ["\r\n", "\r", "\n"];
+
+    // NUnit appends a teardown failure to the test's own trace under this separator, in both NUnit 3
+    // and 4. It is the only thing that says which frames below it belong to teardown rather than to
+    // the test, and unlike the message prefix it is written by the framework into a field no test
+    // author supplies.
+    private const string TearDownStackSeparator = "--TearDown";
+
+    // Prefix NUnit puts in front of the message of a test whose teardown failed. Identical in NUnit 3
+    // and 4 apart from a leading newline, which is why the message is trimmed before comparing.
+    private const string TearDownMessagePrefix = "TearDown : ";
+
+    // Lifecycle members of a fixture, resolved once per type. BeforeTest/AfterTest run for every test,
+    // and reflecting the same fixture's methods on each of them would put a hierarchy walk in the path
+    // of every test in the suite.
+    private static readonly ConcurrentDictionary<Type, IReadOnlyDictionary<string, FailureSite>>
+        _lifecycleMembers = new();
 
     // Separator ExceptionHelper.BuildMessage places between the type name and the message.
     private static readonly string[] _typeMessageSeparators = [" : "];
@@ -234,6 +258,12 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         (string? configuredStackTrace, bool stackTraceOmitted) =
             ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
+        // Resolved from the raw trace rather than the configured one: ResolveStackTrace nulls it when
+        // the user opted out of capture, and the site is a classification rather than the trace itself,
+        // so it survives that choice.
+        (FailureSite? failureSite, string? failureSiteMember) =
+            ResolveFailureSite(outcome, test, errorMessage, stackTrace);
+
         // Detect retry metadata first, so the attempt number is available when claiming a position.
         RetryMetadata? retryMetadata = services.RetryDetector.DetectRetryMetadata(test, outcome);
 
@@ -258,6 +288,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
             .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
+            .WithFailureSite(failureSite, failureSiteMember)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -266,6 +297,188 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         services.ExecutionTracker.RecordTestCompletion(workerId, identity.TestFingerprint, test.Name, outcome);
 
         return execution;
+    }
+
+    /// <summary>
+    /// Determines where in the test lifecycle a failing execution failed.
+    /// </summary>
+    /// <param name="outcome">The outcome Xping resolved.</param>
+    /// <param name="test">The test that ran, used to reflect its fixture's lifecycle members.</param>
+    /// <param name="message">The failure message NUnit recorded.</param>
+    /// <param name="stackTrace">The raw stack trace, before any capture setting is applied.</param>
+    /// <returns>The site and the member that failed, or two nulls when the test did not fail.</returns>
+    /// <remarks>
+    /// <para>
+    /// NUnit reports no site of its own here. <see cref="ResultState.Site"/> is <c>Test</c> for every
+    /// test-level result — including one whose <c>[SetUp]</c> threw — because the states that do carry
+    /// a site (<c>SetUpFailure</c>, <c>TearDownError</c>) are recorded on the enclosing suite, which
+    /// this adapter never sees. So the stack trace is the evidence, and the fixture's own lifecycle
+    /// methods are what it is matched against.
+    /// </para>
+    /// <para>
+    /// Teardown is the one case needing two signals together. NUnit lists the test method in the trace
+    /// even when the body passed and only teardown failed, so frames alone cannot separate "the body
+    /// failed" from "teardown failed"; and the message prefix alone is forgeable, since a test may fail
+    /// with any text it likes. Requiring the prefix and a teardown frame under the framework's own
+    /// separator makes neither sufficient on its own.
+    /// </para>
+    /// </remarks>
+    internal static (FailureSite? Site, string? Member) ResolveFailureSite(
+        TestOutcome outcome, ITest? test, string? message, string? stackTrace)
+    {
+        if (!outcome.IsFailure())
+        {
+            return (null, null);
+        }
+
+        // A test the framework stopped left no trace describing where it was stopped, and the frame it
+        // was interrupted on says only where the clock ran out. Recording a site here would name a
+        // member on no evidence.
+        if (outcome == TestOutcome.Timeout)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        IReadOnlyDictionary<string, FailureSite> members = LifecycleMembersOf(test);
+        if (members.Count == 0)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        var candidates = new List<string>(members.Keys);
+        (string? body, string? teardown) = SplitAtTearDown(stackTrace);
+
+        if (teardown != null && StartsWithTearDownPrefix(message))
+        {
+            string? match = StackFrameLookup.FirstMatch(teardown, candidates);
+            if (match != null && members[match].IsLifecycle())
+            {
+                return (members[match], StackFrameLookup.Shorten(match));
+            }
+        }
+
+        string? frame = StackFrameLookup.FirstMatch(body, candidates);
+        if (frame == null)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        FailureSite site = members[frame];
+
+        // The test method is named by the record already; repeating it as the failing member would add
+        // a column that never says anything new.
+        return (site, site == FailureSite.TestBody ? null : StackFrameLookup.Shorten(frame));
+    }
+
+    /// <summary>
+    /// Splits a trace into the test's own frames and those NUnit appended for a teardown failure.
+    /// </summary>
+    private static (string? Body, string? TearDown) SplitAtTearDown(string? stackTrace)
+    {
+        if (string.IsNullOrEmpty(stackTrace))
+        {
+            return (stackTrace, null);
+        }
+
+        // Non-null after the check above.
+        int separator = stackTrace!.IndexOf(TearDownStackSeparator, StringComparison.Ordinal);
+
+        return separator < 0
+            ? (stackTrace, null)
+            : (stackTrace.Substring(0, separator),
+               stackTrace.Substring(separator + TearDownStackSeparator.Length));
+    }
+
+    private static bool StartsWithTearDownPrefix(string? message) =>
+        message != null &&
+        message.TrimStart().StartsWith(TearDownMessagePrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Maps a fixture's lifecycle methods, and its test methods, to the site each one represents.
+    /// </summary>
+    /// <remarks>
+    /// <c>[OneTimeSetUp]</c> and <c>[OneTimeTearDown]</c> are included even though neither is currently
+    /// reachable: NUnit skips a fixture's children when one-time setup throws, so no execution is
+    /// recorded, and one-time teardown runs after the last test has already been reported as passed.
+    /// They are mapped rather than omitted because the cost is one dictionary entry and the alternative
+    /// is a silent misclassification if a future NUnit does surface them.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, FailureSite> LifecycleMembersOf(ITest? test)
+    {
+        Type? fixture = test?.TypeInfo?.Type;
+
+        return fixture == null
+            ? new Dictionary<string, FailureSite>(0)
+            : _lifecycleMembers.GetOrAdd(fixture, MapLifecycleMembers);
+    }
+
+    private static IReadOnlyDictionary<string, FailureSite> MapLifecycleMembers(Type fixture)
+    {
+        var members = new Dictionary<string, FailureSite>(StringComparer.Ordinal);
+
+        try
+        {
+            const BindingFlags flags =
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+            // Walked rather than flattened: a [SetUp] declared non-public on a base fixture is
+            // inherited by NUnit and would be missed by FlattenHierarchy, which skips private members.
+            for (Type? type = fixture; type != null && type != typeof(object); type = type.BaseType)
+            {
+                foreach (MethodInfo method in type.GetMethods(flags))
+                {
+                    FailureSite? site = SiteOf(method);
+                    if (site == null)
+                    {
+                        continue;
+                    }
+
+                    // A method overridden in a derived fixture appears twice; the derived one is seen
+                    // first and is the one that runs.
+                    string key = StackFrameLookup.Member(type.FullName, method.Name);
+                    if (!members.ContainsKey(key))
+                    {
+                        members[key] = site.Value;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // A fixture whose members cannot be reflected — a type from an assembly that fails to
+            // load its dependencies — leaves the site unresolved rather than failing the test.
+            return new Dictionary<string, FailureSite>(0);
+        }
+
+        return members;
+    }
+
+    private static FailureSite? SiteOf(MethodInfo method)
+    {
+        if (method.IsDefined(typeof(SetUpAttribute), inherit: true))
+            return FailureSite.TestSetup;
+
+        if (method.IsDefined(typeof(TearDownAttribute), inherit: true))
+            return FailureSite.TestTeardown;
+
+        if (method.IsDefined(typeof(OneTimeSetUpAttribute), inherit: true))
+            return FailureSite.FixtureSetup;
+
+        if (method.IsDefined(typeof(OneTimeTearDownAttribute), inherit: true))
+            return FailureSite.FixtureTeardown;
+
+        // Test methods are mapped too, so that a body failure is recognised as such rather than
+        // falling through to Unknown alongside the failures nothing could classify.
+        if (method.IsDefined(typeof(TestAttribute), inherit: true) ||
+            method.IsDefined(typeof(TestCaseAttribute), inherit: true) ||
+            method.IsDefined(typeof(TestCaseSourceAttribute), inherit: true) ||
+            method.IsDefined(typeof(TheoryAttribute), inherit: true))
+        {
+            return FailureSite.TestBody;
+        }
+
+        return null;
     }
 
     private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
@@ -328,7 +541,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         // Matches() compares Status and Label while ignoring Site, so SetUpFailure lands here too.
         if (outcome.Matches(ResultState.Failure))
         {
-            if (outcome.Site == FailureSite.Child)
+            if (outcome.Site == NUnitSite.Child)
             {
                 // A suite rollup: the failing type belongs to a child test, not to this one.
                 return null;

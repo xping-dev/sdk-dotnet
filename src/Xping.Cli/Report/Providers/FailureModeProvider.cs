@@ -58,6 +58,12 @@ internal sealed record SignatureView(
 /// <param name="ErrorMessage">The message as recorded, elided to the budget.</param>
 /// <param name="StackTrace">The extracted frames — not the raw blob, which is mostly runner noise.</param>
 /// <param name="SignatureHash">Which signature this failure carries.</param>
+/// <param name="Site">
+/// Where in the lifecycle it failed, as the adapter recorded it, or null when the adapter recorded
+/// none. Published on every exemplar rather than only on a cluster, because a lone test whose own
+/// setup is broken never reaches a cluster and would otherwise read as a broken test.
+/// </param>
+/// <param name="SiteMember">The lifecycle member that failed, when the framework named one.</param>
 internal sealed record FailureExemplar(
     string SessionId,
     DateTime StartedAt,
@@ -67,7 +73,9 @@ internal sealed record FailureExemplar(
     string? ExceptionType,
     string? ErrorMessage,
     IReadOnlyList<string> StackTrace,
-    string SignatureHash);
+    string SignatureHash,
+    string? Site,
+    string? SiteMember);
 
 /// <summary>
 /// One execution of the same test that did not fail.
@@ -184,6 +192,38 @@ internal sealed record TimingOutEvidence(
     ContrastExecution? Contrast) : FindingEvidence;
 
 /// <summary>
+/// Evidence that one shared lifecycle member is broken, and every test that used it failed.
+/// </summary>
+/// <param name="Site">Where in the lifecycle it failed, as every member of the cluster recorded it.</param>
+/// <param name="Member">
+/// The lifecycle member the failures agree on, or null when the frameworks named none. The whole
+/// point of the finding: the one place to go and fix.
+/// </param>
+/// <param name="Signature">The way they fail.</param>
+/// <param name="TestsBlocked">Distinct tests this member took down.</param>
+/// <param name="Members">Those tests, in ordinal order, with their failure counts.</param>
+/// <param name="Failures">Failures across all of them.</param>
+/// <param name="SessionsAffected">Sessions in which at least one of them failed this way.</param>
+/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="MaxTestsInOneSession">The most tests it blocked within a single session.</param>
+/// <param name="LastSeenAt">Start of the newest session it appeared in.</param>
+/// <param name="LastSeenSha">Commit that session ran at, when one was recorded.</param>
+/// <param name="Exemplars">Up to three failures, raw, from different tests where possible.</param>
+internal sealed record BrokenFixtureEvidence(
+    string Site,
+    string? Member,
+    SignatureView Signature,
+    int TestsBlocked,
+    IReadOnlyList<ClusterMember> Members,
+    int Failures,
+    int SessionsAffected,
+    int Sessions,
+    int MaxTestsInOneSession,
+    DateTime LastSeenAt,
+    string? LastSeenSha,
+    IReadOnlyList<FailureExemplar> Exemplars) : FindingEvidence;
+
+/// <summary>
 /// Evidence that several tests fail the same way.
 /// </summary>
 /// <param name="Signature">The way they fail.</param>
@@ -239,7 +279,13 @@ internal sealed class FailureModeProvider : IFindingProvider
 
     /// <inheritdoc/>
     public IReadOnlyList<FindingKind> Kinds =>
-        [FindingKind.Flaky, FindingKind.AlwaysFailing, FindingKind.TimingOut, FindingKind.SharedFailure];
+    [
+        FindingKind.Flaky,
+        FindingKind.AlwaysFailing,
+        FindingKind.TimingOut,
+        FindingKind.BrokenFixture,
+        FindingKind.SharedFailure
+    ];
 
     /// <inheritdoc/>
     public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
@@ -305,6 +351,16 @@ internal sealed class FailureModeProvider : IFindingProvider
         return clusters;
     }
 
+    /// <summary>
+    /// Builds the finding for one cluster, naming the lifecycle member when the failures agree on one.
+    /// </summary>
+    /// <remarks>
+    /// Both kinds describe the same measurement and differ only in what can be said about its cause.
+    /// A cluster whose every failure was recorded in the same lifecycle member is not "forty tests
+    /// failing alike" — it is one broken member reported forty times, and the finding says so. A
+    /// cluster that disagrees, or whose adapter recorded no site, stays a shared failure, which claims
+    /// only what was measured.
+    /// </remarks>
     private static FindingCandidate SharedFailure(AnalysisContext context, SignatureGroup cluster)
     {
         var members = new List<ClusterMember>(cluster.Fingerprints.Count);
@@ -334,15 +390,96 @@ internal sealed class FailureModeProvider : IFindingProvider
                 unreliability = Math.Max(unreliability, (double)failures / executions);
         }
 
+        // Unchanged by the promotion below: the id identifies the claim's subject, and the subject is
+        // the same cluster whichever kind describes it. Recomputing it from the member would move
+        // every finding's id the first time an adapter learned to name one.
         string groupId = string.Create(CultureInfo.InvariantCulture, $"sig_{cluster.Signature.Hash}");
 
+        FailureSite? site = AgreedSite(cluster);
+        FindingKind kind = site == null ? FindingKind.SharedFailure : FindingKind.BrokenFixture;
+        string? assembly = references.Count > 0 ? references[0].Assembly : null;
+
+        FindingEvidence evidence = site == null
+            ? BuildSharedEvidence(context, cluster, members)
+            : BuildBrokenFixtureEvidence(context, cluster, members, site.Value);
+
         return new FindingCandidate(
-            FindingKind.SharedFailure,
+            kind,
             new FindingSubject.Group(groupId, references),
-            BuildSharedEvidence(context, cluster, members),
+            evidence,
             unreliability,
             cluster.NewestSessionIndex,
-            DrillDown.ForGroup(FindingKind.SharedFailure, references.Count > 0 ? references[0].Assembly : null));
+            DrillDown.ForGroup(kind, assembly));
+    }
+
+    /// <summary>
+    /// Returns the lifecycle site every failure in a cluster agrees on, or null when they do not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Agreement has to be total, per <see cref="LocalAnalysisConstants.BrokenFixtureSiteAgreement"/>.
+    /// The member is part of the agreement, not just the site: two different broken setup methods
+    /// failing with one signature are two defects, and naming either of them would send the reader to
+    /// the wrong one.
+    /// </para>
+    /// <para>
+    /// A cluster containing an execution recorded before the adapter knew about sites, or by an
+    /// adapter that could not resolve one, has a null or unknown site among its failures and stays a
+    /// shared failure. That is the intended behaviour rather than a gap: the report claims a cause
+    /// only when every failure it is speaking for supports it.
+    /// </para>
+    /// </remarks>
+    private static FailureSite? AgreedSite(SignatureGroup cluster)
+    {
+        FailureSite? site = null;
+        string? member = null;
+        bool first = true;
+
+        foreach (ExecutionRef failure in cluster.Failures)
+        {
+            FailureSite? candidate = failure.Execution.Site;
+
+            if (candidate == null || !candidate.Value.IsLifecycle())
+                return null;
+
+            if (first)
+            {
+                site = candidate;
+                member = failure.Execution.FailureSiteMember;
+                first = false;
+                continue;
+            }
+
+            if (candidate != site ||
+                !string.Equals(member, failure.Execution.FailureSiteMember, StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        return site;
+    }
+
+    private static BrokenFixtureEvidence BuildBrokenFixtureEvidence(
+        AnalysisContext context, SignatureGroup cluster, List<ClusterMember> members, FailureSite site)
+    {
+        List<ExecutionRef> exemplars = Spread(
+            cluster.Failures, f => f.Execution.Identity.TestFingerprint);
+
+        return new BrokenFixtureEvidence(
+            site.ToString(),
+            cluster.Failures[0].Execution.FailureSiteMember,
+            ToView(context, cluster.Signature, cluster.Failures.Count,
+                cluster.OldestSessionIndex, cluster.FirstSeenAt, cluster.FirstSeenSha),
+            members.Count,
+            members,
+            cluster.Failures.Count,
+            cluster.SessionCount,
+            context.Window.SessionCount,
+            cluster.MaxTestsInOneSession,
+            cluster.Failures[0].Session.StartedAt,
+            RevisionContext.ReadSha(cluster.Failures[0].Session),
+            [.. exemplars.Select(e => ToExemplar(context, e))]);
     }
 
     private static SharedFailureEvidence BuildSharedEvidence(
@@ -678,7 +815,9 @@ internal sealed class FailureModeProvider : IFindingProvider
             // the one useful line out of view.
             signature?.Frames ?? [],
 
-            signature?.Hash ?? string.Empty);
+            signature?.Hash ?? string.Empty,
+            reference.Execution.Site?.ToString(),
+            reference.Execution.FailureSiteMember);
     }
 
     /// <summary>

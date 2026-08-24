@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
@@ -11,6 +12,7 @@ using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Diagnostics;
 using Xping.Sdk.MSTest.Retry;
 
 namespace Xping.Sdk.MSTest;
@@ -35,6 +37,12 @@ public abstract class XpingTestBase
     // cleanup continuation can resume on a different pool thread, which would split the test's start
     // and end — and its ordering chain — across two worker keys.
     private string? _workerKey;
+
+    // Lifecycle members of a test class, resolved once per type. Cleanup runs for every test, and
+    // walking the same class's hierarchy on each of them would put reflection in the path of the
+    // whole suite.
+    private static readonly ConcurrentDictionary<Type, IReadOnlyDictionary<string, FailureSite>>
+        _lifecycleMembers = new();
 
     // Resolved once on first XpingTestInitialize() call and reused for every cleanup on this instance.
     // The DI singletons are the same each time, so a single resolution per instance is enough.
@@ -193,6 +201,12 @@ public abstract class XpingTestBase
         (string? configuredStackTrace, bool stackTraceOmitted) =
             ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
+        // Resolved from the raw trace, before ResolveStackTrace nulls it for a user who opted out of
+        // capture. The site is a classification rather than the trace itself, so it survives that
+        // choice.
+        (FailureSite? failureSite, string? failureSiteMember) =
+            ResolveFailureSite(outcome, testMethod?.ReflectedType, stackTrace);
+
         // Detect retry metadata first so the attempt number is available when claiming a position.
         // The MSTest detector numbers attempts by counting the executions already recorded for this
         // test identity, which is why it needs the fingerprint resolved above.
@@ -217,6 +231,7 @@ public abstract class XpingTestBase
             .WithEndTime(endTime)
             .WithMetadata(metadata)
             .WithException(GetExceptionType(context), errorMessage, configuredStackTrace)
+            .WithFailureSite(failureSite, failureSiteMember)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
             .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
@@ -229,6 +244,136 @@ public abstract class XpingTestBase
         services.ExecutionTracker.RecordTestCompletion(workerKey, identity.TestFingerprint, testName, outcome);
 
         return execution;
+    }
+
+    /// <summary>
+    /// Determines where in the test lifecycle a failing execution failed.
+    /// </summary>
+    /// <param name="outcome">The outcome Xping resolved.</param>
+    /// <param name="testClass">The resolved test class, or <see langword="null"/> when it could not be found.</param>
+    /// <param name="stackTrace">The failing exception's stack trace, before any capture setting is applied.</param>
+    /// <returns>The site and the member that failed, or two nulls when the test did not fail.</returns>
+    /// <remarks>
+    /// <para>
+    /// MSTest exposes no site. <see cref="TestContext.CurrentTestOutcome"/> is <c>Failed</c> whether the
+    /// body or a <c>[TestInitialize]</c> threw, and <see cref="TestContext.TestException"/> holds the
+    /// exception the user's code raised with no wrapper and no message prefix around it. The stack
+    /// trace is the only thing that differs between the two, so the class's own lifecycle methods are
+    /// what it is matched against.
+    /// </para>
+    /// <para>
+    /// Several sites are unreachable through this hook and are mapped anyway, since the cost is a
+    /// dictionary entry and the alternative is a silent misclassification if MSTest changes: a
+    /// <c>[TestCleanup]</c> that throws aborts the cleanup chain before this base class runs, and a
+    /// failing <c>[ClassInitialize]</c> aborts the class before <c>[TestInitialize]</c> — in both cases
+    /// no execution is recorded at all. See <c>docs/known-limitations.md</c>.
+    /// </para>
+    /// </remarks>
+    internal static (FailureSite? Site, string? Member) ResolveFailureSite(
+        TestOutcome outcome, Type? testClass, string? stackTrace)
+    {
+        if (!outcome.IsFailure())
+        {
+            return (null, null);
+        }
+
+        // A test the runner stopped was interrupted wherever it happened to be. The frame on top says
+        // where the clock ran out, not what is broken.
+        if (outcome == TestOutcome.Timeout)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        if (testClass == null)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        IReadOnlyDictionary<string, FailureSite> members =
+            _lifecycleMembers.GetOrAdd(testClass, MapLifecycleMembers);
+
+        string? frame = StackFrameLookup.FirstMatch(stackTrace, new List<string>(members.Keys));
+        if (frame == null)
+        {
+            return (FailureSite.Unknown, null);
+        }
+
+        FailureSite site = members[frame];
+
+        // The record already names the test; repeating it as the failing member would add a column
+        // that never says anything new.
+        return (site, site == FailureSite.TestBody ? null : StackFrameLookup.Shorten(frame));
+    }
+
+    private static IReadOnlyDictionary<string, FailureSite> MapLifecycleMembers(Type testClass)
+    {
+        var members = new Dictionary<string, FailureSite>(StringComparer.Ordinal);
+
+        try
+        {
+            const BindingFlags flags =
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+            // Walked rather than flattened: MSTest inherits a base class's [TestInitialize], and
+            // FlattenHierarchy skips private members, so a non-public one would be missed.
+            for (Type? type = testClass; type != null && type != typeof(object); type = type.BaseType)
+            {
+                foreach (MethodInfo method in type.GetMethods(flags))
+                {
+                    FailureSite? site = SiteOf(method);
+                    if (site == null)
+                    {
+                        continue;
+                    }
+
+                    // A method overridden in a derived class appears twice; the derived one is seen
+                    // first and is the one that runs.
+                    string key = StackFrameLookup.Member(type.FullName, method.Name);
+                    if (!members.ContainsKey(key))
+                    {
+                        members[key] = site.Value;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // A class whose members cannot be reflected leaves the site unresolved rather than
+            // failing the test.
+            return new Dictionary<string, FailureSite>(0);
+        }
+
+        return members;
+    }
+
+    private static FailureSite? SiteOf(MethodInfo method)
+    {
+        if (method.IsDefined(typeof(TestInitializeAttribute), inherit: true))
+            return FailureSite.TestSetup;
+
+        if (method.IsDefined(typeof(TestCleanupAttribute), inherit: true))
+            return FailureSite.TestTeardown;
+
+        if (method.IsDefined(typeof(ClassInitializeAttribute), inherit: true))
+            return FailureSite.FixtureSetup;
+
+        if (method.IsDefined(typeof(ClassCleanupAttribute), inherit: true))
+            return FailureSite.FixtureTeardown;
+
+        if (method.IsDefined(typeof(AssemblyInitializeAttribute), inherit: true))
+            return FailureSite.AssemblySetup;
+
+        if (method.IsDefined(typeof(AssemblyCleanupAttribute), inherit: true))
+            return FailureSite.AssemblyTeardown;
+
+        // Test methods are mapped too, so a body failure is recognised as such rather than falling
+        // through to Unknown alongside the failures nothing could classify. [DataTestMethod] derives
+        // from [TestMethod], so one check covers both.
+        if (method.IsDefined(typeof(TestMethodAttribute), inherit: true))
+            return FailureSite.TestBody;
+
+        return null;
     }
 
     /// <summary>

@@ -45,6 +45,18 @@ internal enum FindingKind
     /// </remarks>
     TimingOut,
 
+    /// <summary>
+    /// Several tests fail alike because one shared lifecycle member is broken, and that member is
+    /// named.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="SharedFailure"/> whose cause is known. Sorted ahead of it because naming the
+    /// member to fix is strictly more actionable than reporting that several tests fail the same way,
+    /// and the two never contend: a cluster becomes this only when every failure in it agrees on the
+    /// member, and stays a <see cref="SharedFailure"/> otherwise.
+    /// </remarks>
+    BrokenFixture,
+
     /// <summary>Several tests fail with one signature in one session — one cause, not many.</summary>
     SharedFailure,
 
