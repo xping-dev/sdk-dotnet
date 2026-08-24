@@ -14,7 +14,7 @@
     <strong>Stop guessing. Start knowing which tests you can trust.</strong>
     <br />
     Test reliability analysis for .NET — accumulates history across <code>dotnet test</code> runs
-    so flaky tests stop being anecdotes.
+    so flaky tests become measurable, not remembered.
     <br />
     <sub>Local mode requires no account and no network access.</sub>
   </p>
@@ -135,8 +135,8 @@ No API key, no signup, no network calls. Everything lives in `.xping/` in your m
 
 `dotnet test` is amnesiac. Every run starts from zero and discards everything the last one
 knew. A test that failed on Tuesday and passed on Wednesday leaves no trace that anyone can
-point at on Thursday, so "is that one flaky?" gets answered from memory and vibes — and
-usually settled by re-running until it goes green.
+point at on Thursday, so "is that one flaky?" gets answered from memory rather than
+evidence — and usually settled by re-running until it goes green.
 
 Xping is the accumulation layer underneath that. The SDK records each execution with its
 outcome, duration, and environment; the CLI reads that history back and tells you which
