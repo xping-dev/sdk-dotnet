@@ -200,15 +200,83 @@ public sealed class RunningStatisticsAccumulatorTests
         accumulator.Record(BuildExecution("T4", TestOutcome.Skipped));
         accumulator.Record(BuildExecution("T5", TestOutcome.Inconclusive));
         accumulator.Record(BuildExecution("T6", TestOutcome.NotExecuted));
+        accumulator.Record(BuildExecution("T7", TestOutcome.Timeout));
 
         // Assert
         var snapshot = accumulator.GetSnapshot();
-        Assert.Equal(6, snapshot.Total);
+        Assert.Equal(7, snapshot.Total);
         Assert.Equal(2, snapshot.Passed);
         Assert.Equal(1, snapshot.Failed);
         Assert.Equal(1, snapshot.Skipped);
         Assert.Equal(1, snapshot.Inconclusive);
         Assert.Equal(1, snapshot.NotExecuted);
+        Assert.Equal(1, snapshot.Timeout);
+    }
+
+    /// <summary>
+    /// The counters must fail loudly rather than silently drop an outcome they do not know about.
+    /// The cast is the only way to reach that arm — every declared member has a bucket — and that is
+    /// the point: it stands in for the member someone adds later without updating this switch.
+    /// </summary>
+    [Fact]
+    public void Record_UnknownOutcome_ThrowsRatherThanSilentlyMiscounting()
+    {
+        var accumulator = new RunningStatisticsAccumulator();
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => accumulator.Record(BuildExecution("T1", (TestOutcome)999)));
+    }
+
+    /// <summary>
+    /// The rejection happens before any bookkeeping, so a rejected execution leaves no trace in
+    /// either the per-execution counters or the distinct-test ones. That ordering is what makes a
+    /// second guard on the distinct-test pass unnecessary — nothing can reach it.
+    /// </summary>
+    [Fact]
+    public void Record_UnknownOutcome_RejectsBeforeRecordingAnything()
+    {
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("Subject", TestOutcome.Passed));
+
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => accumulator.Record(BuildAttempt("Other", (TestOutcome)999)));
+
+        Assert.Equal("execution", ex.ParamName);
+
+        var snapshot = accumulator.GetSnapshot();
+        Assert.Equal(1, snapshot.Passed);
+        Assert.Equal(1, snapshot.DistinctTests);
+    }
+
+    /// <summary>
+    /// The report presents the per-outcome counters as a breakdown of <c>Total</c>, so an outcome
+    /// that lands in no bucket reads as data loss. Recording one execution of every declared member
+    /// keeps that invariant honest as members are added.
+    /// </summary>
+    [Fact]
+    public void Record_EveryDeclaredOutcome_BucketsSumToTotal()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        int index = 0;
+        foreach (TestOutcome outcome in Enum.GetValues<TestOutcome>())
+        {
+            accumulator.Record(BuildExecution($"T{index++}", outcome));
+        }
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        int bucketed = snapshot.Passed + snapshot.Failed + snapshot.Skipped +
+                       snapshot.Inconclusive + snapshot.NotExecuted + snapshot.Timeout;
+
+        Assert.Equal(snapshot.Total, bucketed);
+
+        int finalBucketed = snapshot.FinalPassed + snapshot.FinalFailed + snapshot.FinalSkipped +
+                            snapshot.FinalInconclusive + snapshot.FinalNotExecuted + snapshot.FinalTimeout;
+
+        Assert.Equal(snapshot.DistinctTests, finalBucketed);
     }
 
     // ---------------------------------------------------------------------------

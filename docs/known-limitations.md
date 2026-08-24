@@ -92,14 +92,47 @@ public void FlakyTest()
 
 ---
 
+### Timeouts
+
+Xping records a test the framework killed for overrunning its timeout as `Outcome = Timeout` rather
+than `Failed`, and captures the budget the test declared alongside it. Two cases are not observable.
+
+#### A Hang That Takes Down The Test Host Is Not Recorded
+
+Every adapter is driven by a callback the framework raises after a test finishes — MSTest's
+`[TestCleanup]`, NUnit's `AfterTest`, xUnit's result message. If a hang brings down the whole test
+host, no callback runs and the execution is not recorded at all. Each framework's own `[Timeout]`
+handles the ordinary case, which is what Xping observes.
+
+#### NUnit's Blocking `[Timeout]` Is Not Tracked
+
+NUnit's `[Timeout]` on a synchronous test abandons the test thread without invoking
+`ITestAction.AfterTest`, so Xping never sees the result and records nothing for that test. Use
+`[CancelAfter]` instead, which cancels cooperatively and is tracked normally:
+
+```csharp
+[Test, CancelAfter(500)]
+public async Task MyTest(CancellationToken cancellationToken)
+{
+    // Tracked with Outcome = Timeout when it overruns
+    await Task.Delay(5000, cancellationToken);
+}
+```
+
+#### xUnit Applies A Timeout Only To Async Tests
+
+`[Fact(Timeout = ...)]` on a synchronous test is rejected by xUnit itself, which fails the test with
+"Tests marked with Timeout are only supported for async tests". Xping records that as `Failed`, not
+`Timeout` — it is a misconfigured test, not a hanging one.
+
 ## General Limitations
 
-### CI Flaky Test: `RecordTest_AfterInitialize_DoesNotThrow` (NUnit Adapter Tests)
+### CI Flaky Tests: `XpingContextTests` (NUnit Adapter Tests)
 
-**Affected Test**: `Xping.Sdk.NUnit.Tests.XpingContextTests.RecordTest_AfterInitialize_DoesNotThrow`
+**Affected Tests**: `Xping.Sdk.NUnit.Tests.XpingContextTests` — `RecordTest_AfterInitialize_DoesNotThrow`, `FlushAsync_AfterInitialize_DoesNotThrow`, `IsInitialized_AfterInitialize_ReturnsTrue`
 **Affected Versions**: All versions
-**Impact**: Intermittent `Assert.Null()` failure in CI when `XPING_ENABLED=true`
-**Status**: Intentionally left unfixed — this is a real-world flaky test that the Xping platform is expected to detect and flag automatically.
+**Impact**: Intermittent failure in CI when `XPING_ENABLED=true`. Since the tests carry `[RetryFact(3)]` this no longer fails the build; it surfaces as a **RetryMasked** finding instead.
+**Status**: The race is intentionally left in place — it is a real-world flaky test that the Xping platform is expected to detect and flag automatically. Only its handling changed.
 
 **Observed failure**:
 ```
@@ -126,7 +159,13 @@ The race window opens when:
 
 **Why CI-specific**: With `XPING_ENABLED=true` in CI (`XPING_APIKEY` is set), `ShutdownAsync()` triggers real network I/O (session finalization + upload), significantly widening the race window. Locally, the SDK is disabled (no credentials), so disposal is instant and the window is near-zero.
 
-**Why this test exists as-is**: This is a deliberate example of a flaky test caused by a legitimate environmental and concurrency issue. Its purpose is to demonstrate Xping's ability to detect, correlate, and report flaky tests automatically across CI runs. Fixing it would eliminate a valuable real-world validation case for the SDK's own flaky test detection pipeline.
+**Why these tests exist as-is**: A deliberate example of a flaky test caused by a legitimate environmental and concurrency issue. Its purpose is to demonstrate Xping's ability to detect, correlate, and report flaky tests automatically across CI runs. Removing the race would eliminate a valuable real-world validation case for the SDK's own flaky test detection pipeline.
+
+**Why `[RetryFact(3)]`**: Retrying does not fix the race and is not meant to — it changes what the flake produces. Without it the test either goes green, in which case nobody learns anything, or goes red and blocks a build over a defect in the test harness rather than in the SDK. With it the build stays green *and* Xping records both attempts, because xRetry is the retry library Xping instruments from inside the retry loop (see the xUnit section above). Attempt 1 is persisted as `Failed` with its real `ArgumentNullException`, attempt 2 as `Passed` with `PassedOnRetry = true`, and the pair is reported as a `RetryMasked` finding — the one flakiness signal that needs no history at all and is otherwise invisible in a green build.
+
+Which is a better demonstration than the original: the flake is now caught every time it occurs, rather than only on the runs where it happened to turn CI red.
+
+All three affected tests take the same path — `Initialize()` followed by a call that dereferences the static instance — so all three carry the attribute. Only `RecordTest_AfterInitialize_DoesNotThrow` has been observed failing so far; the other two are the same race waiting for a wider window.
 
 ---
 

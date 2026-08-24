@@ -6,6 +6,7 @@
 namespace Xping.Sdk.NUnit.Tests;
 
 using global::NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Models.Executions;
 using Xunit;
 
 /// <summary>
@@ -212,6 +213,25 @@ public sealed class XpingTrackAttributeExceptionTypeTests
 
         Assert.Null(XpingTrackAttribute.ExtractExceptionType(ResultState.Cancelled, message));
         Assert.Null(XpingTrackAttribute.ExtractExceptionType(ResultState.NotRunnable, message));
+    }
+
+    /// <summary>
+    /// NUnit reports a timeout as an ordinary Failure, which the assertion arm would otherwise label
+    /// AssertionException — a claim that something asserted, when nothing did.
+    /// </summary>
+    [Fact]
+    public void ResolveExceptionType_Timeout_ReturnsNullRatherThanAssertionException()
+    {
+        Assert.Null(XpingTrackAttribute.ResolveExceptionType(
+            TestOutcome.Timeout, ResultState.Failure, "Test exceeded CancelAfter value of 500ms"));
+    }
+
+    [Fact]
+    public void ResolveExceptionType_OrdinaryFailure_DelegatesToExtractExceptionType()
+    {
+        Assert.Equal(
+            AssertionExceptionName,
+            XpingTrackAttribute.ResolveExceptionType(TestOutcome.Failed, ResultState.Failure, "boom"));
     }
 
     [Fact]

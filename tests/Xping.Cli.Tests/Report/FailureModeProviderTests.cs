@@ -70,6 +70,154 @@ public sealed class FailureModeProviderTests
                 [ordinal >= total - failing ? failure("Subject") : Passing("Subject")]))];
     }
 
+    /// <summary>A test the framework killed for overrunning the budget it declared.</summary>
+    private static TestExecution TimedOut(string name, int budgetMs = 500, int durationMs = 505) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Timeout,
+            durationMs: durationMs,
+            exceptionType: "Xunit.Sdk.TestTimeoutException",
+            errorMessage: $"Test execution timed out after {budgetMs} milliseconds",
+            timeoutBudgetMs: budgetMs);
+
+    [Fact]
+    public void ATestMostlyKilledForOverrunningItsBudgetIsTimingOut()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n)));
+
+        FindingCandidate candidate = Single(candidates, FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(9, evidence.Timeouts);
+        Assert.Equal(9, evidence.Failures);
+        Assert.Equal(10, evidence.Executions);
+        Assert.Equal(1.0, evidence.TimeoutShareOfFailures);
+        Assert.Equal(500, evidence.DeclaredBudgetMs);
+        Assert.Equal(9, evidence.ObservedDurationsMs.Count);
+        Assert.All(evidence.ObservedDurationsMs, ms => Assert.Equal(505, ms));
+    }
+
+    /// <summary>
+    /// The whole reason the kind exists: without it these nine hangs would be reported as a broken
+    /// test, with a failure signature built from a stack frame wherever the runner interrupted it.
+    /// </summary>
+    [Fact]
+    public void ATimingOutTestIsNotAlsoReportedAsAlwaysFailingOrFlaky()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n)));
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.AlwaysFailing);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.Flaky);
+    }
+
+    /// <summary>
+    /// A test that mostly disagrees with an assertion but hung once is still a failing test. Moving
+    /// it into the timeout bucket would point its reader at a deadlock that is not the problem.
+    /// </summary>
+    [Fact]
+    public void ATestFailingMostlyOnAssertionsStaysFlakyDespiteOneTimeout()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal switch
+                {
+                    9 => TimedOut("Subject"),
+                    >= 5 => Failure("Subject"),
+                    _ => Passing("Subject"),
+                }]))];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.TimingOut);
+        Single(candidates, FindingKind.Flaky);
+    }
+
+    /// <summary>
+    /// A budget is only recorded when the test declared one. When it did not, the limit it hit came
+    /// from a suite-wide or runner-level setting the session does not carry, and the finding says so
+    /// by omitting the field rather than inventing a number.
+    /// </summary>
+    [Fact]
+    public void ATimingOutTestWithNoDeclaredBudgetReportsNoBudget()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(
+            total: 10,
+            failing: 9,
+            failure: n => TestSessionFactory.Execution(n, TestOutcome.Timeout, errorMessage: "killed")));
+
+        var evidence = Assert.IsType<TimingOutEvidence>(Single(candidates, FindingKind.TimingOut).Evidence);
+
+        Assert.Null(evidence.DeclaredBudgetMs);
+    }
+
+    /// <summary>
+    /// The budget beside the observed duration is the reading the kind exists to publish, so it has
+    /// to survive into the sentence a reader is actually shown.
+    /// </summary>
+    [Fact]
+    public void TheTimingOutHeadlineNamesTheLimitTheTestWasKilledAt()
+    {
+        FindingCandidate candidate = Single(
+            Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n))), FindingKind.TimingOut);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Equal("timed out 9 of 10 executions (90%) in 9 of 10 runs, killed at its 500ms limit", headline);
+        Assert.Contains(metrics, m => m.Label == "declared limit" && m.Value == "500ms");
+
+        // Only stated when the test also failed some other way; here every failure was a timeout.
+        Assert.DoesNotContain(metrics, m => m.Label == "share of failures");
+    }
+
+    /// <summary>
+    /// When a test both hangs and fails ordinarily, the split is the reason it was reported as
+    /// timing out rather than as a plain failure, so the finding states it. It is omitted when every
+    /// failure was a timeout, where "7 of 7" would be noise.
+    /// </summary>
+    [Fact]
+    public void TheTimingOutMetricsStateTheSplitWhenTheTestAlsoFailsOtherWays()
+    {
+        // 6 timeouts and 3 assertion failures: over the 50% share, but not all of them.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal switch
+                {
+                    >= 4 => TimedOut("Subject"),
+                    >= 1 => Failure("Subject"),
+                    _ => Passing("Subject"),
+                }]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(6, evidence.Timeouts);
+        Assert.Equal(9, evidence.Failures);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Contains(metrics, m => m.Label == "share of failures" && m.Value == "6 of 9 (66.7%)");
+    }
+
+    [Fact]
+    public void TheTimingOutHeadlineSaysSoWhenTheTestDeclaredNoLimit()
+    {
+        FindingCandidate candidate = Single(
+            Analyze(Runs(
+                total: 10,
+                failing: 9,
+                failure: n => TestSessionFactory.Execution(n, TestOutcome.Timeout, errorMessage: "killed"))),
+            FindingKind.TimingOut);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.DoesNotContain("limit", headline, StringComparison.Ordinal);
+        Assert.Contains(metrics, m => m.Label == "declared limit" && m.Value == "none declared by the test");
+    }
+
     [Fact]
     public void ATestFailingAlmostAlwaysTheSameWayIsAlwaysFailing()
     {

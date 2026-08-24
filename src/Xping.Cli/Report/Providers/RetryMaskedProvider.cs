@@ -167,7 +167,7 @@ internal sealed class RetryMaskedProvider : IFindingProvider
 
         foreach (var outcome in finalOutcomes.Values)
         {
-            if (outcome.Outcome == TestOutcome.Failed)
+            if (outcome.Outcome.IsFailure())
                 return true;
         }
 
@@ -238,7 +238,7 @@ internal sealed class RetryMaskedProvider : IFindingProvider
             // What the retry hid. Read from the last failure before the pass, because that is the
             // attempt whose message the developer never saw.
             string? errorMessage = preceding
-                .LastOrDefault(e => e.Execution.Outcome == TestOutcome.Failed)?
+                .LastOrDefault(e => e.Execution.Outcome.IsFailure())?
                 .Execution.ErrorMessage;
 
             exemplars.Add(new RetryMaskedExemplar(

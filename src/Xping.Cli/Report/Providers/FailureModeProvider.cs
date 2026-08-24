@@ -148,6 +148,42 @@ internal sealed record AlwaysFailingEvidence(
     ContrastExecution? Contrast) : FindingEvidence;
 
 /// <summary>
+/// Evidence that a test is being killed for running too long rather than failing outright.
+/// </summary>
+/// <param name="Timeouts">Executions that timed out, after any discounting.</param>
+/// <param name="Failures">All failures counted, timeouts included.</param>
+/// <param name="Executions">Executions they were counted against.</param>
+/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsWithTimeouts">Sessions this test timed out in.</param>
+/// <param name="TimeoutRate"><paramref name="Timeouts"/> over <paramref name="Executions"/>.</param>
+/// <param name="TimeoutShareOfFailures"><paramref name="Timeouts"/> over <paramref name="Failures"/>.</param>
+/// <param name="DiscountedExecutions">Executions left out of the counts above.</param>
+/// <param name="DeclaredBudgetMs">
+/// The timeout the test declared for itself, or null when it declared none — which means the limit
+/// it hit came from a suite-wide or runner-level setting this report cannot see.
+/// </param>
+/// <param name="ObservedDurationsMs">
+/// How long the timed-out runs lasted, newest first. Published beside the budget because the pair is
+/// the whole point: a duration sitting on its declared ceiling is what distinguishes a test that was
+/// killed from one that disagreed with an assertion.
+/// </param>
+/// <param name="Exemplars">Up to three timed-out runs, raw.</param>
+/// <param name="Contrast">One execution that did not fail, or null when it never passed.</param>
+internal sealed record TimingOutEvidence(
+    int Timeouts,
+    int Failures,
+    int Executions,
+    int Sessions,
+    int SessionsWithTimeouts,
+    double TimeoutRate,
+    double TimeoutShareOfFailures,
+    int DiscountedExecutions,
+    long? DeclaredBudgetMs,
+    IReadOnlyList<long> ObservedDurationsMs,
+    IReadOnlyList<FailureExemplar> Exemplars,
+    ContrastExecution? Contrast) : FindingEvidence;
+
+/// <summary>
 /// Evidence that several tests fail the same way.
 /// </summary>
 /// <param name="Signature">The way they fail.</param>
@@ -203,7 +239,7 @@ internal sealed class FailureModeProvider : IFindingProvider
 
     /// <inheritdoc/>
     public IReadOnlyList<FindingKind> Kinds =>
-        [FindingKind.Flaky, FindingKind.AlwaysFailing, FindingKind.SharedFailure];
+        [FindingKind.Flaky, FindingKind.AlwaysFailing, FindingKind.TimingOut, FindingKind.SharedFailure];
 
     /// <inheritdoc/>
     public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
@@ -372,6 +408,20 @@ internal sealed class FailureModeProvider : IFindingProvider
         ContrastExecution? contrast = Contrast(considered);
         int sessionsSinceLast = failures.Min(f => f.SessionIndex);
 
+        // Timeouts first, because a hang is a different defect from a disagreement and the branches
+        // below cannot describe it. Their evidence is built from failure signatures, and a killed
+        // test leaves none worth grouping: no assertion message, and a stack frame pointing wherever
+        // the runner happened to interrupt it. Classified here, the finding can instead publish the
+        // one comparison that does explain it — how long the test ran against the budget it declared.
+        List<ExecutionRef> timeouts =
+            [.. failures.Where(e => e.Execution.Outcome == TestOutcome.Timeout)];
+
+        if (timeouts.Count > 0 &&
+            (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
+        {
+            return TimingOut(context, test, considered, failures, timeouts, discounted);
+        }
+
         // A single failure mode occurring on almost every run is a broken test, not a flaky one, and
         // is reported apart because the remedy is entirely different — and because leaving it in the
         // flaky bucket is how a real regression gets ignored. Both arms are classifications against
@@ -420,6 +470,57 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             sessionsSinceLast,
             DrillDown.ForTest(FindingKind.Flaky, test));
+    }
+
+    /// <summary>
+    /// Builds the finding for a test whose failures are mostly the framework killing it.
+    /// </summary>
+    private static FindingCandidate TimingOut(
+        AnalysisContext context,
+        TestReference test,
+        List<ExecutionRef> considered,
+        List<ExecutionRef> failures,
+        List<ExecutionRef> timeouts,
+        int discounted)
+    {
+        double timeoutRate = (double)timeouts.Count / considered.Count;
+
+        int sessionsWithTimeouts = timeouts.Select(t => t.Session.SessionId).Distinct().Count();
+
+        List<ExecutionRef> ordered = [.. timeouts
+            .OrderBy(t => t.SessionIndex)
+            .ThenBy(t => t.Execution.Retry?.AttemptNumber ?? 1)
+            .ThenBy(t => t.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
+                StringComparer.Ordinal)];
+
+        // Taken from the newest timed-out run rather than from any of them: a test's declared budget
+        // can change between sessions, and the current one is what the reader would find in the
+        // source today. Absent when the test declares none — the limit it hit then came from a
+        // suite-wide or runner-level setting the session record does not carry, and inventing a
+        // number for it would be worse than saying nothing.
+        long? declaredBudgetMs = ordered[0].Execution.TimeoutBudget is TimeSpan budget
+            ? (long)budget.TotalMilliseconds
+            : null;
+
+        return new FindingCandidate(
+            FindingKind.TimingOut,
+            new FindingSubject.SingleTest(test),
+            new TimingOutEvidence(
+                timeouts.Count,
+                failures.Count,
+                considered.Count,
+                context.Window.SessionCount,
+                sessionsWithTimeouts,
+                FindingOrder.Round(timeoutRate),
+                FindingOrder.Round((double)timeouts.Count / failures.Count),
+                discounted,
+                declaredBudgetMs,
+                [.. ordered.Select(t => (long)t.Execution.Duration.TotalMilliseconds)],
+                [.. ordered.Take(MaxExemplars).Select(t => ToExemplar(context, t))],
+                Contrast(considered)),
+            timeoutRate,
+            timeouts.Min(t => t.SessionIndex),
+            DrillDown.ForTest(FindingKind.TimingOut, test));
     }
 
     /// <summary>

@@ -241,7 +241,9 @@ options in the [Configuration Reference](https://docs.xping.io/configuration/con
 ### What gets recorded
 
 **Per test execution** — name and fully qualified name, outcome, duration, start and end
-timestamps (UTC), error message and stack trace on failure, categories and traits.
+timestamps (UTC), error message and stack trace on failure, the declared timeout budget when
+the test sets one, categories and traits. A test the framework killed for overrunning its
+timeout is recorded as a timeout, not folded into ordinary failures.
 
 **Per environment** — OS and version, .NET runtime version, machine name, CI platform
 detection, build and branch information from the CI environment, network metrics.

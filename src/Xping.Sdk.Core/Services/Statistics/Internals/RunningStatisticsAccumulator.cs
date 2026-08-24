@@ -25,6 +25,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     private long _skipped;
     private long _inconclusive;
     private long _notExecuted;
+    private long _timeout;
     private long _totalDurationTicks;
 
     // Final attempt per distinct test — the scalar counters above cannot express this, because a
@@ -64,6 +65,17 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             case TestOutcome.NotExecuted:
                 Interlocked.Increment(ref _notExecuted);
                 break;
+            case TestOutcome.Timeout:
+                Interlocked.Increment(ref _timeout);
+                break;
+            default:
+                // Every outcome must land in exactly one bucket, because the report presents the
+                // buckets as a breakdown of Total. A member added without a case here would inflate
+                // Total and balance nowhere, which reads as data loss rather than as a missing arm.
+                throw new ArgumentOutOfRangeException(
+                    nameof(execution),
+                    execution.Outcome,
+                    "Unhandled TestOutcome; add a counter for it.");
         }
 
         RecordFinalAttempt(execution);
@@ -93,6 +105,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         long skipped = Interlocked.Read(ref _skipped);
         long inconclusive = Interlocked.Read(ref _inconclusive);
         long notExecuted = Interlocked.Read(ref _notExecuted);
+        long timeout = Interlocked.Read(ref _timeout);
         long durationTicks = Interlocked.Read(ref _totalDurationTicks);
 
         FinalTally finalTally = TallyFinalAttempts();
@@ -122,6 +135,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             skipped: (int)skipped,
             inconclusive: (int)inconclusive,
             notExecuted: (int)notExecuted,
+            timeout: (int)timeout,
             successRate: successRate,
             totalDurationMs: totalMs,
             wallClockDurationMs: wallClockMs,
@@ -135,6 +149,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             FinalSkipped = finalTally.Skipped,
             FinalInconclusive = finalTally.Inconclusive,
             FinalNotExecuted = finalTally.NotExecuted,
+            FinalTimeout = finalTally.Timeout,
             FinalSuccessRate = finalTally.DistinctTests == 0
                 ? 0.0
                 : (double)finalTally.Passed / finalTally.DistinctTests
@@ -150,6 +165,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         Interlocked.Exchange(ref _skipped, 0L);
         Interlocked.Exchange(ref _inconclusive, 0L);
         Interlocked.Exchange(ref _notExecuted, 0L);
+        Interlocked.Exchange(ref _timeout, 0L);
         Interlocked.Exchange(ref _totalDurationTicks, 0L);
 
         _finalByTest.Clear();
@@ -212,6 +228,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         int skipped = 0;
         int inconclusive = 0;
         int notExecuted = 0;
+        int timeout = 0;
 
         foreach (KeyValuePair<(string Assembly, string Test), FinalAttempt> entry in _finalByTest)
         {
@@ -234,10 +251,18 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
                 case TestOutcome.NotExecuted:
                     notExecuted++;
                     break;
+                case TestOutcome.Timeout:
+                    timeout++;
+                    break;
             }
+
+            // No default arm above, deliberately. Nothing reaches _finalByTest except through
+            // RecordFinalAttempt, which Record calls only after its own switch has rejected an
+            // outcome it does not recognise — so a guard here could never fire. An unreachable throw
+            // would read as protection while being dead code that can never be exercised.
         }
 
-        return new FinalTally(distinct, passed, failed, skipped, inconclusive, notExecuted);
+        return new FinalTally(distinct, passed, failed, skipped, inconclusive, notExecuted, timeout);
     }
 
     /// <summary>
@@ -259,7 +284,8 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         int failed,
         int skipped,
         int inconclusive,
-        int notExecuted)
+        int notExecuted,
+        int timeout)
     {
         public int DistinctTests { get; } = distinctTests;
 
@@ -272,5 +298,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         public int Inconclusive { get; } = inconclusive;
 
         public int NotExecuted { get; } = notExecuted;
+
+        public int Timeout { get; } = timeout;
     }
 }

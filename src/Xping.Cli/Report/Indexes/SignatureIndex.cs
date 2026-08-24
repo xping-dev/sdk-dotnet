@@ -157,7 +157,7 @@ internal sealed class SignatureIndex
                 // Only failures are signed. A skipped execution carries its skip reason in
                 // ErrorMessage, which would otherwise be normalised and grouped as though the test
                 // had failed that way.
-                if (execution.Outcome != TestOutcome.Failed)
+                if (!execution.Outcome.IsFailure())
                     continue;
 
                 string fingerprint = execution.Identity.TestFingerprint;

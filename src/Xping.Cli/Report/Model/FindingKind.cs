@@ -36,6 +36,15 @@ internal enum FindingKind
     /// <summary>The test fails almost always and in one consistent way. Broken, not flaky.</summary>
     AlwaysFailing,
 
+    /// <summary>The test is mostly killed for overrunning its timeout rather than failing outright.</summary>
+    /// <remarks>
+    /// Reported apart from <see cref="AlwaysFailing"/> and <see cref="Flaky"/> because a hang is a
+    /// different defect with a different remedy, and because the evidence differs: a timed-out test
+    /// leaves no assertion message and no stack frame worth grouping on, so pooling it with ordinary
+    /// failures produces signatures that describe nothing.
+    /// </remarks>
+    TimingOut,
+
     /// <summary>Several tests fail with one signature in one session — one cause, not many.</summary>
     SharedFailure,
 

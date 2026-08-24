@@ -191,10 +191,12 @@ public class XpingContext : XpingContextOrchestrator
             int skipped = retried ? stats.FinalSkipped : stats.Skipped;
             int inconclusive = retried ? stats.FinalInconclusive : stats.Inconclusive;
             int notExecuted = retried ? stats.FinalNotExecuted : stats.NotExecuted;
+            int timedOut = retried ? stats.FinalTimeout : stats.Timeout;
 
             var parts = new StringBuilder();
             parts.Append($"{passed} passed");
             if (failed > 0)        parts.Append($", {failed} failed");
+            if (timedOut > 0)      parts.Append($", {timedOut} timed out");
             if (skipped > 0)       parts.Append($", {skipped} skipped");
             if (inconclusive > 0)  parts.Append($", {inconclusive} inconclusive");
             if (notExecuted > 0)   parts.Append($", {notExecuted} not executed");

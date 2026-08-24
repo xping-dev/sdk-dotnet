@@ -38,6 +38,39 @@ public class SampleTests
         Assert.That(result, Is.EqualTo(84));
     }
 
+    /// <summary>
+    /// TIMEOUT TEST: awaiting a dependency that never answers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A correctly written async client passes its cancellation token down to the service call — and
+    /// still hangs, because the service accepted the request and stopped responding. The token is
+    /// what eventually ends the wait; nothing here reaches an assertion.
+    /// </para>
+    /// <para>
+    /// Xping records this as <c>Outcome = Timeout</c>, not <c>Failed</c>, and stores the 500 ms
+    /// budget declared below alongside the measured duration.
+    /// </para>
+    /// <para>
+    /// Uses <c>[CancelAfter]</c> rather than the older <c>[Timeout]</c> deliberately. A blocking
+    /// <c>[Timeout]</c> abandons the test thread without ever invoking <c>ITestAction.AfterTest</c>,
+    /// which is the hook Xping tracks from — so such a test is not recorded at all. This is a real
+    /// NUnit constraint, not an Xping one; see docs/known-limitations.md.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Category("Unit")]
+    [Category("Timeout")]
+    [CancelAfter(500)]
+    [Description("Verifies that a test killed for overrunning its budget is tracked as a timeout")]
+    public async Task TimeoutTest_UnresponsiveDependency_AwaitsForever(CancellationToken cancellationToken)
+    {
+        // Never completes on its own. Only the token NUnit cancels at 500 ms ends the wait.
+        var response = await UnresponsiveService.FetchAsync(cancellationToken);
+
+        Assert.That(response, Is.Not.Null);
+    }
+
     [Test]
     [Category("Unit")]
     [Description("Verifies that a test which throws an exception is properly tracked")]
@@ -140,5 +173,32 @@ public class MethodLevelTracking
     {
         // This test won't be tracked (no XpingTrack attribute)
         Assert.Pass("This test is NOT tracked");
+    }
+}
+
+/// <summary>
+/// A downstream dependency that accepts a request and then never answers it.
+/// </summary>
+/// <remarks>
+/// Backed by a <see cref="TaskCompletionSource{TResult}"/> that nothing ever completes, which is
+/// what a hung service looks like to its caller: no exception, no data, no end. Modelled this way
+/// rather than with a long sleep because a sleep eventually returns, and the failure being
+/// reproduced is precisely the one that does not.
+/// </remarks>
+internal static class UnresponsiveService
+{
+    /// <summary>
+    /// Issues a request that never completes unless <paramref name="cancellationToken"/> fires.
+    /// </summary>
+    /// <param name="cancellationToken">Token that abandons the wait, when the caller supplies one.</param>
+    /// <returns>A task that never completes successfully.</returns>
+    public static async Task<string> FetchAsync(CancellationToken cancellationToken = default)
+    {
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (cancellationToken.Register(() => pending.TrySetCanceled(cancellationToken)))
+        {
+            return await pending.Task.ConfigureAwait(false);
+        }
     }
 }

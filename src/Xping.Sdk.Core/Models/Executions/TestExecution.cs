@@ -24,6 +24,8 @@ public sealed class TestExecution
         Retry = new RetryMetadata();
         Outcome = TestOutcome.NotExecuted;
         Duration = TimeSpan.Zero;
+        TimeoutBudget = null;
+        TimeoutBudgetSource = null;
         TestName = string.Empty;
         StartTimeUtc = DateTime.UtcNow;
         EndTimeUtc = DateTime.UtcNow;
@@ -48,7 +50,9 @@ public sealed class TestExecution
         string? stackTrace,
         string? errorMessageHash,
         string? stackTraceHash,
-        bool stackTraceOmitted)
+        bool stackTraceOmitted,
+        TimeSpan? timeoutBudget,
+        TimeoutBudgetSource? timeoutBudgetSource)
     {
         ExecutionId = executionId;
         Identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -64,6 +68,8 @@ public sealed class TestExecution
         ErrorMessageHash = errorMessageHash;
         StackTraceHash = stackTraceHash;
         StackTraceOmitted = stackTraceOmitted;
+        TimeoutBudget = timeoutBudget;
+        TimeoutBudgetSource = timeoutBudgetSource;
         TestOrchestrationRecord = testOrchestrationRecord;
         Retry = retry;
     }
@@ -185,4 +191,30 @@ public sealed class TestExecution
     /// <see langword="null"/> because the user opted out — not because no stack trace existed.
     /// </summary>
     public bool StackTraceOmitted { get; init; }
+
+    /// <summary>
+    /// Gets the timeout the test declared for itself, or <see langword="null"/> when it declared none
+    /// or declared an unlimited one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read from the test framework's own attribute — MSTest's <c>[Timeout]</c>, NUnit's
+    /// <c>[Timeout]</c> or <c>[CancelAfter]</c>, xUnit's <c>[Fact(Timeout = …)]</c>. Xping records
+    /// what the author declared; it never enforces it. Enforcement belongs to the framework, which
+    /// already does it.
+    /// </para>
+    /// <para>
+    /// Its value is in the comparison with <see cref="Duration"/>. A test killed at its ceiling and
+    /// a test that failed an assertion both used to look alike; the budget beside the duration is
+    /// what turns "it failed" into "it was killed at the 5 s limit it set itself". Check
+    /// <see cref="TimeoutBudgetSource"/> to tell a missing declaration from an unlimited one.
+    /// </para>
+    /// </remarks>
+    public TimeSpan? TimeoutBudget { get; init; }
+
+    /// <summary>
+    /// Gets where <see cref="TimeoutBudget"/> came from, or <see langword="null"/> when the test
+    /// declared no timeout at all.
+    /// </summary>
+    public TimeoutBudgetSource? TimeoutBudgetSource { get; init; }
 }

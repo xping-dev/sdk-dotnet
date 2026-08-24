@@ -20,7 +20,8 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
 
 ### Execution Details
 - **Execution ID**: Unique identifier for each test run
-- **Outcome**: Passed, Failed, Skipped, or Inconclusive
+- **Outcome**: Passed, Failed, Timeout, Skipped, Inconclusive, or NotExecuted
+- **Timeout Budget**: The timeout the test declared for itself, when it declared one
 - **Duration**: How long the test took to execute
 - **Start & End Times**: Precise UTC timestamps
 - **Error Messages**: Failure details and exception messages

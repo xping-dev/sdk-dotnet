@@ -19,7 +19,7 @@ namespace Xping.Cli.Report.Indexes;
 internal sealed record ExecutionRef(TestSession Session, int SessionIndex, TestExecution Execution)
 {
     /// <summary>Gets a value indicating whether this execution failed.</summary>
-    public bool Failed => Execution.Outcome == TestOutcome.Failed;
+    public bool Failed => Execution.Outcome.IsFailure();
 }
 
 /// <summary>

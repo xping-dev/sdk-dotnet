@@ -24,6 +24,27 @@ public sealed class SessionViewTests
         return SessionView.For(TestSessionFactory.Session(0, executions), index: 0);
     }
 
+    /// <summary>
+    /// A timed-out test has to count as a failure everywhere a failed one does. Every "did this go
+    /// wrong" check used to compare against <c>Failed</c> alone, and a check left behind would report
+    /// a session that ended with a hung test as having ended green.
+    /// </summary>
+    [Fact]
+    public void ATimedOutTestCountsAsAFailureOfItsSession()
+    {
+        SessionView view = SessionView.For(
+            TestSessionFactory.Session(
+                0,
+                [
+                    TestSessionFactory.Execution("Hangs", TestOutcome.Timeout, errorMessage: "killed"),
+                    TestSessionFactory.Execution("Passes")
+                ]),
+            index: 0);
+
+        Assert.Equal(2, view.Tests);
+        Assert.Equal(1, view.Failures);
+    }
+
     [Fact]
     public void ASessionThatFailedWidelyAndOftenIsFlaggedEnvironmental()
     {

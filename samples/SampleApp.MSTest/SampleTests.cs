@@ -33,6 +33,35 @@ public class CalculatorTests : XpingTestBase
         throw new InvalidOperationException("This is a test exception for tracking purposes.");
     }
 
+    /// <summary>
+    /// TIMEOUT TEST: sync-over-async block on a dependency that never answers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The most common way a .NET test hangs for real: a synchronous method blocks on an async call
+    /// with <c>.GetAwaiter().GetResult()</c>, and the call never comes back. The thread is parked
+    /// forever, so MSTest's <c>[Timeout]</c> is what finally ends the test.
+    /// </para>
+    /// <para>
+    /// Xping records this as <c>Outcome = Timeout</c>, not <c>Failed</c>, and stores the 500 ms
+    /// budget declared below alongside the measured duration. That pair is the tell: a duration
+    /// sitting on its declared ceiling means the test was killed, whereas a failed test would have
+    /// reached an assertion and left a message behind. Nothing here asserted anything.
+    /// </para>
+    /// </remarks>
+    [TestMethod("Verifies that a test killed for overrunning its timeout is tracked as a timeout")]
+    [TestCategory("Unit")]
+    [TestCategory("Timeout")]
+    [Timeout(500)]
+    public void TimeoutTest_UnresponsiveDependency_BlocksForever()
+    {
+        // Blocks the calling thread on a task that is never completed. No exception is thrown and no
+        // result arrives — the test simply stops making progress.
+        var response = UnresponsiveService.FetchAsync().GetAwaiter().GetResult();
+
+        Assert.IsNotNull(response);
+    }
+
     [TestMethod]
     [TestCategory("Unit")]
     [TestCategory("Fast")]
@@ -186,4 +215,31 @@ public static class Calculator
     public static int Add(int a, int b) => a + b;
     public static int Subtract(int a, int b) => a - b;
     public static int Divide(int a, int b) => a / b;
+}
+
+/// <summary>
+/// A downstream dependency that accepts a request and then never answers it.
+/// </summary>
+/// <remarks>
+/// Backed by a <see cref="TaskCompletionSource{TResult}"/> that nothing ever completes, which is
+/// what a hung service looks like to its caller: no exception, no data, no end. Modelled this way
+/// rather than with a long sleep because a sleep eventually returns, and the failure being
+/// reproduced is precisely the one that does not.
+/// </remarks>
+internal static class UnresponsiveService
+{
+    /// <summary>
+    /// Issues a request that never completes unless <paramref name="cancellationToken"/> fires.
+    /// </summary>
+    /// <param name="cancellationToken">Token that abandons the wait, when the caller supplies one.</param>
+    /// <returns>A task that never completes successfully.</returns>
+    public static async Task<string> FetchAsync(CancellationToken cancellationToken = default)
+    {
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (cancellationToken.Register(() => pending.TrySetCanceled(cancellationToken)))
+        {
+            return await pending.Task.ConfigureAwait(false);
+        }
+    }
 }

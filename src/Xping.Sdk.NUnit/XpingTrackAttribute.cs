@@ -195,7 +195,12 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         string? fixtureName)
     {
         var result = TestContext.CurrentContext.Result;
-        var outcome = MapOutcome(result.Outcome);
+
+        // Resolved before the outcome: NUnit reports a timeout as an ordinary failure whose message
+        // carries the only marker, and that marker is only trustworthy on a test that declared a
+        // budget in the first place. See MapOutcome.
+        (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(test);
+        var outcome = MapOutcome(result.Outcome, result.Message, timeoutBudgetSource != null);
 
         // Generate stable test identity
         var fullyQualifiedName = test.FullName;
@@ -248,10 +253,11 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(ExtractExceptionType(result.Outcome, result.Message), errorMessage, configuredStackTrace)
+            .WithException(ResolveExceptionType(outcome, result.Outcome, result.Message), errorMessage, configuredStackTrace)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
             .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
             .WithStackTraceOmitted(stackTraceOmitted)
+            .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
             .Build();
@@ -268,7 +274,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         bool captureStackTraces)
     {
         bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
-        bool stackTraceOmitted = !captureStackTraces && outcome == TestOutcome.Failed && stackTraceAvailable;
+        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
 
         if (!captureStackTraces)
         {
@@ -277,6 +283,24 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         return (stackTrace, false);
     }
+
+    /// <summary>
+    /// Determines the exception type to record, given how the execution was classified.
+    /// </summary>
+    /// <param name="outcome">The outcome Xping resolved for this execution.</param>
+    /// <param name="resultState">The state NUnit recorded.</param>
+    /// <param name="message">The failure message, if any.</param>
+    /// <returns>The full exception type name, or <see langword="null"/> when none is known.</returns>
+    /// <remarks>
+    /// A timeout records no type. NUnit reports it as an ordinary <see cref="ResultState.Failure"/>,
+    /// which would otherwise be read as an assertion and labelled <c>AssertionException</c> — and
+    /// nothing about a test the runner stopped asserted anything. Naming NUnit's internal timeout
+    /// exception instead would be no better: for <c>[CancelAfter]</c> no exception is thrown at all,
+    /// so the record would claim a type that never existed. The outcome already carries the fact that
+    /// this was a timeout; the type has nothing truthful to add.
+    /// </remarks>
+    internal static string? ResolveExceptionType(TestOutcome outcome, ResultState? resultState, string? message) =>
+        outcome == TestOutcome.Timeout ? null : ExtractExceptionType(resultState, message);
 
     /// <summary>
     /// Determines the exception type for a completed test from its <see cref="ResultState"/>.
@@ -372,12 +396,59 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         candidate.IndexOf('.') > 0 &&
         candidate.IndexOf(' ') < 0;
 
-    private static TestOutcome MapOutcome(ResultState resultState)
+    /// <summary>
+    /// The text NUnit puts in front of the message of a test it stopped for exceeding its budget.
+    /// </summary>
+    /// <remarks>
+    /// Two of them, because NUnit 4 renamed the attribute: <c>[Timeout]</c> produces the first and
+    /// <c>[CancelAfter]</c> the second. Both are still current — <c>[Timeout]</c> is deprecated, not
+    /// removed — and both must be recognised.
+    /// </remarks>
+    private static readonly string[] TimeoutMessagePrefixes =
+    [
+        "Test exceeded Timeout value of ",
+        "Test exceeded CancelAfter value of "
+    ];
+
+    /// <summary>
+    /// Maps an NUnit result onto a <see cref="TestOutcome"/>.
+    /// </summary>
+    /// <param name="resultState">The state NUnit recorded.</param>
+    /// <param name="message">The failure message, if any.</param>
+    /// <param name="budgetDeclared">Whether the test declared a timeout budget.</param>
+    /// <returns>The outcome to record.</returns>
+    /// <remarks>
+    /// <para>
+    /// NUnit has no result state for a timeout: a test it stops for exceeding its budget is reported
+    /// as an ordinary <see cref="ResultState.Failure"/>, and the only thing distinguishing it is the
+    /// prefix NUnit writes on the message. That prefix alone is not enough to classify on, because a
+    /// test is free to fail with a message that begins the same way — <c>Assert.Fail("Test exceeded
+    /// Timeout value of 1ms")</c> is indistinguishable from the real thing by text.
+    /// </para>
+    /// <para>
+    /// So the two conditions are required together: the framework's prefix, and a budget actually
+    /// declared on the test. A test that declares no timeout cannot have exceeded one, whatever its
+    /// message says, which is what makes the check safe against user text.
+    /// </para>
+    /// </remarks>
+    private static TestOutcome MapOutcome(ResultState resultState, string? message, bool budgetDeclared)
     {
         // NUnit 3 uses Success status
         if (resultState == ResultState.Success)
         {
             return TestOutcome.Passed;
+        }
+
+        // A cancelled test was stopped rather than finished, which is the same class of event as a
+        // timeout and closer to it than the NotExecuted this used to fall through to.
+        if (resultState == ResultState.Cancelled)
+        {
+            return TestOutcome.Timeout;
+        }
+
+        if (budgetDeclared && HasTimeoutMessage(message))
+        {
+            return TestOutcome.Timeout;
         }
 
         if (resultState == ResultState.Failure ||
@@ -403,6 +474,49 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         }
 
         return TestOutcome.NotExecuted;
+    }
+
+    private static bool HasTimeoutMessage(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return false;
+
+        foreach (string prefix in TimeoutMessagePrefixes)
+        {
+            if (message!.StartsWith(prefix, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Reads the timeout the test declared through <c>[Timeout]</c> or <c>[CancelAfter]</c>.
+    /// </summary>
+    /// <param name="test">The test that ran.</param>
+    /// <returns>The declared budget and its source, or two nulls when the test declared none.</returns>
+    /// <remarks>
+    /// Both attributes write the same <c>Timeout</c> property, in milliseconds, so one lookup covers
+    /// them. The property is also inherited from the fixture and assembly levels by NUnit itself, so
+    /// a suite-wide default is picked up without extra work here.
+    /// </remarks>
+    private static (TimeSpan? Budget, TimeoutBudgetSource? Source) ResolveTimeoutBudget(ITest test)
+    {
+        // The literal rather than NUnit.Framework.Internal.PropertyNames.Timeout: that class lives in
+        // an internal namespace, and the adapter compiles against NUnit 3 while also running against
+        // NUnit 4. The property name itself is part of the published test model and is unchanged
+        // across both.
+        const string timeoutPropertyName = "Timeout";
+
+        if (!test.Properties.ContainsKey(timeoutPropertyName))
+            return (null, null);
+
+        object? value = test.Properties.Get(timeoutPropertyName);
+
+        if (value is not int milliseconds || milliseconds <= 0)
+            return (null, null);
+
+        return (TimeSpan.FromMilliseconds(milliseconds), TimeoutBudgetSource.Declared);
     }
 
     private static TestMetadata ExtractMetadata(ITest test)
