@@ -401,6 +401,112 @@ public sealed class ShareableOutputTests
     }
 
     // ---------------------------------------------------------------------
+    // The source location trailer
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The location is the difference between knowing a test is flaky and being able to open it, so
+    /// it goes on the trailer whenever the SDK captured one.
+    /// </summary>
+    [Fact]
+    public void AFindingCarryingASourceLocationEndsItsTrailerWithFileAndLine()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", "tests/CartTests.cs", 42)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("tests/CartTests.cs:42", trailer.TrimEnd(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFindingWithAFileButNoLineShowsTheFileAlone()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", "tests/CartTests.cs", null)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("tests/CartTests.cs", trailer.TrimEnd(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CartTests.cs:", trailer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFindingWithNoSourceLocationSaysNothingAboutOne()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", null, null)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("f_2a91", trailer.TrimEnd(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A long path must not push the trailer past the fence, and must not be paid for by the
+    /// evidence level: truncation cuts from the left, so without a budget of its own the path would
+    /// survive whole and eat the words in front of it.
+    /// </summary>
+    [Fact]
+    public void ALongPathIsElidedRatherThanTheRestOfTheTrailer()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/Integration/Checkout/Regression/Baskets/CartTests.cs",
+            1042)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.Contains("evidence moderate | f_2a91 | ", trailer, StringComparison.Ordinal);
+        Assert.EndsWith("CartTests.cs:1042", trailer.TrimEnd(), StringComparison.Ordinal);
+        Assert.Contains("...", trailer, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The elision cuts at a directory boundary, so what is left still reads as a path rather than
+    /// as a name broken part-way through.
+    /// </summary>
+    [Fact]
+    public void AnElidedPathKeepsWholeDirectorySegments()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/Integration/Checkout/Regression/Baskets/CartTests.cs",
+            1042)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+        string path = trailer.Split(" | ", StringSplitOptions.None)[^1].TrimEnd();
+
+        Assert.StartsWith(".../", path, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The width invariant, restated for the trailer specifically: a path is the longest thing the
+    /// SDK can put on one of these lines.
+    /// </summary>
+    [Fact]
+    public void ATrailerWithAVeryLongPathStillFitsInsideTheFence()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/" + string.Join("/", Enumerable.Repeat("VeryLongDirectoryName", 12)) + "/CartTests.cs",
+            1042)));
+
+        Assert.All(Fenced(report), line => Assert.True(
+            line.Length <= FenceWidth,
+            $"'{line}' is {line.Length} columns, over the {FenceWidth} the fence allows"));
+    }
+
+    // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
 
@@ -449,6 +555,26 @@ public sealed class ShareableOutputTests
         }
 
         return builder.ToString();
+    }
+
+    private static FindingDto Finding(
+        string kind,
+        string severity,
+        string name,
+        string headline,
+        string? sourceFile,
+        int? sourceLineNumber)
+    {
+        FindingDto finding = Finding(kind, severity, name, headline);
+
+        return finding with
+        {
+            Subject = finding.Subject with
+            {
+                SourceFile = sourceFile,
+                SourceLineNumber = sourceLineNumber
+            }
+        };
     }
 
     private static FindingDto Finding(string kind, string severity, string name, string headline) =>

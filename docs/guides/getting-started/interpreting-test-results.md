@@ -14,6 +14,11 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
 - **Fully Qualified Name**: Complete namespace path to the test
 - **Class Name & Namespace**: Organizational structure
 - **Assembly**: The test project name
+- **Source Location**: The file and line the test is declared at, read from the test assembly's
+  Portable PDB and made relative to the repository root. Shown as the last segment of a finding's
+  trailer, so a report says where to open a flaky test, not just which one it is. Absent when the
+  assembly was built without debug symbols — see
+  [known limitations](../../known-limitations.md).
 - **Categories & Tags**: Test classifications for filtering and organization
 - **Description**: Test documentation (if provided)
 - **Custom Attributes**: Additional metadata from test attributes

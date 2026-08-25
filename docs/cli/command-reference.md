@@ -86,15 +86,15 @@ Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
 ```
 HIGH  flaky            GenerateMonthlySummary
       failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-      evidence moderate | f_2a91c0de
+      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 
 MED   slower           CheckoutFlow_Completes
       p50 340ms -> 1.2s (+264.7%), normalised +251.2%
-      evidence high | f_8c04b71a
+      evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
 
 LOW   stopped running  LegacyImport.Roundtrip
       ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | f_1d77e3f5
+      evidence moderate | f_1d77e3f5 | tests/Legacy/ImportTests.cs:41
 ```
 ````
 
@@ -179,6 +179,30 @@ xping report | wl-copy         # Linux (Wayland)
 
 When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
 
+
+### Source locations
+
+The last segment of a finding's trailer is where the test is declared:
+
+```
+      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+```
+
+It is the file and the line the test's body opens on, made relative to the repository root, and it
+is printed whenever the SDK captured one rather than being reserved for a verbose mode — knowing a
+test is flaky is only half of what you need to fix it.
+
+None of NUnit, MSTest or xUnit reports this, so the SDK reads it from the test assembly's Portable
+PDB. That means a build with `DebugType=none` has no location to report, and the trailer ends at
+the finding id instead. A long path is shortened from the left at a directory boundary
+(`.../Billing/SummaryTests.cs:88`) so the rest of the trailer stays readable inside the fence.
+
+A group finding — one covering several tests at once, like a broken fixture — names no single file,
+because its members are declared in different places. The members and their own locations are in
+the JSON output.
+
+See [known limitations](../known-limitations.md) for what the line number can and cannot tell you.
+
 ### `--summary`
 
 One line, for a chat message, a commit trailer or a CI step title:
@@ -226,7 +250,8 @@ Every finding carries a `headline` — the same sentence the rendered report pri
       "kind": "Flaky",
       "severity": "high",
       "evidenceLevel": "moderate",
-      "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests" },
+      "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests",
+                    "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },
       "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",
       "metrics": [
         { "label": "failed", "value": "7 of 20 executions (35%)" },

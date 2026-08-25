@@ -324,11 +324,15 @@ public sealed class XpingMessageSink(
         // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
         string? pinnedFingerprint = ReadPinnedFingerprint(testMethod.Method);
 
+        (string? sourceFile, int? sourceLineNumber) = ResolveSourceLocation(testCase, testMethod);
+
         TestIdentity identity = _identityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
             displayName,
+            sourceFile,
+            sourceLineNumber,
             testFingerprint: pinnedFingerprint);
 
         // Extract test metadata
@@ -637,22 +641,6 @@ public sealed class XpingMessageSink(
             tags.Add("type:fact");
         }
 
-        // Add source file info if available
-        if (testCase.SourceInformation != null)
-        {
-            if (!string.IsNullOrEmpty(testCase.SourceInformation.FileName))
-            {
-                string fileName = testCase.SourceInformation.FileName;
-                customAttributes.Add("SourceFile", fileName);
-            }
-
-            if (testCase.SourceInformation.LineNumber.HasValue)
-            {
-                string lineNumber = testCase.SourceInformation.LineNumber.Value.ToString(CultureInfo.InvariantCulture);
-                customAttributes.Add("SourceLine", lineNumber);
-            }
-        }
-
         // Add test output if present
         if (!string.IsNullOrEmpty(output))
         {
@@ -713,6 +701,36 @@ public sealed class XpingMessageSink(
     /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
     /// Returns null when the attribute is absent (SHA256 will be computed instead).
     /// </summary>
+    /// <summary>
+    /// Determines where the test method is declared.
+    /// </summary>
+    /// <param name="testCase">The test case xUnit reported.</param>
+    /// <param name="testMethod">The test method, used when the runner supplied nothing.</param>
+    /// <returns>The source file and line, or two nulls when neither route produced one.</returns>
+    /// <remarks>
+    /// <para>
+    /// xUnit is the only one of the three frameworks that discovers source information itself, but
+    /// only when the runner asked it to — <c>ITestCase.SourceInformation</c> is null under a runner
+    /// that did not enable it, which is why the PDB fallback is needed here as well as in the other
+    /// two adapters.
+    /// </para>
+    /// <para>
+    /// The runner's path goes through the same relativizer as the fallback, so a report does not
+    /// spell the same file two ways depending on which route found it.
+    /// </para>
+    /// </remarks>
+    internal static (string? File, int? Line) ResolveSourceLocation(ITestCase testCase, ITestMethod testMethod)
+    {
+        ISourceInformation? source = testCase.SourceInformation;
+
+        if (source != null && !string.IsNullOrEmpty(source.FileName))
+        {
+            return (SourceLocationLookup.Relativize(source.FileName!, repositoryRoot: null), source.LineNumber);
+        }
+
+        return SourceLocationLookup.Of(ResolveMethodInfo(testMethod.Method));
+    }
+
     private static string? ReadPinnedFingerprint(IMethodInfo method)
     {
         MethodInfo? methodInfo = ResolveMethodInfo(method);

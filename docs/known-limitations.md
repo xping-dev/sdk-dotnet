@@ -276,6 +276,57 @@ exactly like one that needs one.
 
 ## General Limitations
 
+### Source Location Comes From The PDB, And Points At The Body
+
+**Affected Frameworks**: NUnit, MSTest, xUnit
+**Affected Versions**: 1.0.0-rc and later
+
+A finding's trailer ends with the file and line the test is declared at:
+
+```
+HIGH  flaky            FlakyTest_PassesOnRetry
+      failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode
+      evidence low | f_8f042eab | .../SampleApp.MSTest/SampleTests.cs:135
+```
+
+None of the three frameworks reports this, so the SDK reads it from the assembly's Portable PDB,
+keyed by the test method's metadata token — the same route Test Explorer uses. That brings four
+limits worth knowing:
+
+**The line is the body's opening brace, not the attribute.** A PDB records where *code* is, and an
+attribute is not code. For
+
+```csharp
+[Test]                       // line 40
+public void Checkout()       // line 41
+{                            // line 42  <- reported
+    Assert.That(...);
+}
+```
+
+the SDK records line 42. This matches what your IDE navigates to.
+
+**No PDB, no location.** Building with `DebugType=none` strips the symbols, and the trailer simply
+omits the location — everything else about the test is still recorded. Both the default portable
+PDB (a `.pdb` beside the assembly) and `DebugType=embedded` work. A test assembly shipped to another
+machine without its `.pdb` also loses it.
+
+**Paths are made relative to the repository when possible.** A PDB stores the absolute path of the
+machine that compiled the assembly, so the SDK trims it against the nearest enclosing `.git` or
+solution file, and strips the `/_/` root that a deterministic CI build
+(`ContinuousIntegrationBuild=true`) rewrites paths to. When neither applies — an assembly built
+somewhere other than where it runs, with no deterministic rewrite — the absolute path is recorded
+verbatim.
+
+**MSTest cannot tell overloads apart.** The MSTest adapter resolves a test's `MethodInfo` from
+`TestContext.FullyQualifiedTestClassName` and `TestContext.TestName`, which name a method but not its
+signature. A test class with two overloads of the same test method name resolves to whichever the
+runtime lists first, so the reported line may belong to the other one. This is a pre-existing limit
+of the adapter's method resolution (it also affects the pinned fingerprint and the timeout budget);
+source location just makes it visible. NUnit and xUnit hand over the method directly and are
+unaffected.
+
+
 ### CI Flaky Tests: `XpingContextTests` (NUnit Adapter Tests)
 
 **Affected Tests**: `Xping.Sdk.NUnit.Tests.XpingContextTests` — `RecordTest_AfterInitialize_DoesNotThrow`, `FlushAsync_AfterInitialize_DoesNotThrow`, `IsInitialized_AfterInitialize_ReturnsTrue`
@@ -343,3 +394,4 @@ When reporting, please include:
 | 1.3.0   | Documented MSTest retry attempt tracking and how attempt numbers are derived |
 | 1.4.0   | Documented the binning limits of `TimeSensitive` |
 | 1.5.0   | Documented how the retry findings read attempt numbers, and why the declared retry limit is never interpreted |
+| 1.6.0   | Documented where source location comes from, and what it cannot answer |

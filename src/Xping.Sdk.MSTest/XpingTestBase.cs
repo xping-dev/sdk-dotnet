@@ -188,12 +188,19 @@ public abstract class XpingTestBase
         // Read the declared timeout from the same MethodInfo, which is already resolved.
         (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(testMethod);
 
+        // MSTest's TestContext carries no source information, so the declaration site comes from the
+        // assembly's PDB, keyed by the MethodInfo already resolved above. It inherits that
+        // resolution's limits: an overloaded test method matches by name alone.
+        (string? sourceFile, int? sourceLineNumber) = SourceLocationLookup.Of(testMethod);
+
         // Generate stable test identity
         TestIdentity identity = services.IdentityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
             testName,
+            sourceFile,
+            sourceLineNumber,
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = GetErrorMessage(context) ?? string.Empty;

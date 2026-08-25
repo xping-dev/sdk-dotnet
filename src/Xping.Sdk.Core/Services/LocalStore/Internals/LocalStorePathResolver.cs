@@ -6,6 +6,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using Xping.Sdk.Core.Services.Diagnostics;
 
 namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 
@@ -37,10 +38,6 @@ internal static class LocalStorePathResolver
     internal const string StoreDirectoryName = ".xping";
     internal const string SessionsDirectoryName = "sessions";
 
-    // Bounds the upward walk. A repository nested deeper than this is pathological, and an unbounded
-    // walk on a detached or virtualised path would climb to the filesystem root.
-    private const int MaxWalkDepth = 32;
-
     /// <summary>
     /// Resolves the store root directory, or <see langword="null"/> when no writable location exists.
     /// </summary>
@@ -56,7 +53,7 @@ internal static class LocalStorePathResolver
 
         string? origin = startDirectory ?? GetAssemblyDirectory();
 
-        string? repoRoot = FindRepositoryRoot(origin);
+        string? repoRoot = RepositoryRoot.Find(origin);
         if (repoRoot != null)
         {
             string candidate = Path.Combine(repoRoot, StoreDirectoryName);
@@ -159,49 +156,6 @@ internal static class LocalStorePathResolver
         {
             return Directory.GetCurrentDirectory();
         }
-    }
-
-    private static string? FindRepositoryRoot(string? startDirectory)
-    {
-        if (string.IsNullOrEmpty(startDirectory))
-            return null;
-
-        DirectoryInfo? current;
-        try
-        {
-            current = new DirectoryInfo(startDirectory!);
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
-
-        for (int depth = 0; current != null && depth < MaxWalkDepth; depth++, current = current.Parent)
-        {
-            try
-            {
-                if (!current.Exists)
-                    continue;
-
-                if (Directory.Exists(Path.Combine(current.FullName, ".git")) ||
-                    File.Exists(Path.Combine(current.FullName, ".git")) ||
-                    current.EnumerateFiles("*.sln").Any() ||
-                    current.EnumerateFiles("*.slnx").Any())
-                {
-                    return current.FullName;
-                }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // A directory we cannot enumerate is not a repository root we can use; keep walking.
-            }
-            catch (IOException)
-            {
-                // Same reasoning: transient or virtualised paths must not abort resolution.
-            }
-        }
-
-        return null;
     }
 
     private static string? GetProfileFallback(string? origin)
