@@ -18,9 +18,10 @@ namespace Xping.Cli.Report.Providers;
 /// transcribed, and none of them decides anything: the conditions are decided on attempts observed.
 /// </remarks>
 /// <param name="AttributeName">
-/// The retry mechanism in use, as the SDK named it, or <see langword="null"/> when the adapter did
-/// not identify one. An empty name means the adapter could not name the mechanism, which is not the
-/// same as it having no name.
+/// The retry mechanism in use, as the SDK named it, or <see langword="null"/> when the adapter
+/// recorded no name for it. Never an empty string: an adapter that could not name the mechanism is
+/// normalised to <see langword="null"/> on the way in, so a reader has one absent value to check
+/// rather than two.
 /// </param>
 /// <param name="MaxRetriesAsDeclared">
 /// The limit the retry attribute declared, verbatim — named so the ambiguity cannot be read away.
@@ -955,8 +956,9 @@ internal sealed class RetryProvider : IFindingProvider
             return new RetryConfiguration(null, 0, null, 0);
 
         return new RetryConfiguration(
-            // Reported as the SDK recorded it, never inferred. An empty name means the adapter did
-            // not identify the mechanism, which is not the same as it having no name.
+            // Reported as the SDK recorded it, never inferred. An empty name is what an adapter
+            // writes when it could not identify the mechanism, and publishing that verbatim would
+            // put a blank where a reader expects a name; absent says the same thing honestly.
             string.IsNullOrEmpty(retry.RetryAttributeName) ? null : retry.RetryAttributeName,
             retry.MaxRetries,
 

@@ -92,13 +92,18 @@ internal static class EvidenceHeadline
     /// Leads with the pair of counts rather than with a percentage: "1 -&gt; 3" is the whole finding,
     /// and "+200%" is the same fact said in a unit nobody retries in. The count of runs behind each
     /// side is in the sentence, because it is what separates a trend from a fortnight ago's noise.
+    /// Those two counts share one trailing unit, as every other headline here does with "3 of 12
+    /// runs": naming it on the first number and not the second reads as though the two were counting
+    /// different things, and naming it twice reads as though they might not be. The word is literal
+    /// rather than pluralised, because it has to follow "earlier" rather than the number it counts,
+    /// and because the provider's floors put both counts at two or more.
     /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) RetryDeepening(RetryDeepeningEvidence e)
     {
         string headline =
             $"attempts to pass {e.Baseline.TypicalAttempts} -> {e.Current.TypicalAttempts} " +
-            $"({Signed(e.Delta.Attempts)}) over {Runs(e.Current.RunsSettledGreen)} against " +
-            $"{e.Baseline.RunsSettledGreen} before";
+            $"({Signed(e.Delta.Attempts)}) across {e.Current.RunsSettledGreen} recent and " +
+            $"{e.Baseline.RunsSettledGreen} earlier runs";
 
         if (e.RetryWallClockMs > 0)
             headline += $", {Duration(e.RetryWallClockMs)} spent retrying";

@@ -223,6 +223,28 @@ public sealed class ShareableOutputTests
         Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheRetryHeadlinesNameTheirUnitOnceAndAtTheEnd()
+    {
+        // Pinned as whole sentences because the two counts either side of a retry comparison share
+        // one trailing unit, as "3 of 12 runs" does everywhere else here. Naming it on the first
+        // number and not the second reads as though the two were counting different things.
+        var (deepening, _) = EvidenceHeadline.For(
+            FindingKind.RetryDeepening, EvidenceFor(FindingKind.RetryDeepening));
+
+        Assert.Equal(
+            "attempts to pass 1 -> 3 (+2) across 3 recent and 14 earlier runs, " +
+            "2.4s spent retrying",
+            deepening);
+
+        var (exhausted, _) = EvidenceHeadline.For(
+            FindingKind.RetryExhausted, EvidenceFor(FindingKind.RetryExhausted));
+
+        Assert.Equal(
+            "gave up after 3 attempts in 6 of 7 retried runs (85.7%), 41s spent retrying",
+            exhausted);
+    }
+
     // ---------------------------------------------------------------------
     // The fenced report
     // ---------------------------------------------------------------------
