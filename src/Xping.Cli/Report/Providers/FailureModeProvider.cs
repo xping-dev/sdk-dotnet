@@ -417,10 +417,12 @@ internal sealed class FailureModeProvider : IFindingProvider
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Agreement has to be total, per <see cref="LocalAnalysisConstants.BrokenFixtureSiteAgreement"/>.
-    /// The member is part of the agreement, not just the site: two different broken setup methods
-    /// failing with one signature are two defects, and naming either of them would send the reader to
-    /// the wrong one.
+    /// Agreement has to be total, and deliberately is not a tunable threshold. Every other constant in
+    /// <see cref="LocalAnalysisConstants"/> classifies a measurement against a line; this decides
+    /// whether the report may name a specific member as the defect, and a finding that points at a
+    /// line of code should not be emitted on a majority vote. The member is part of the agreement, not
+    /// just the site: two different broken setup methods failing with one signature are two defects,
+    /// and naming either of them would send the reader to the wrong one.
     /// </para>
     /// <para>
     /// A cluster containing an execution recorded before the adapter knew about sites, or by an

@@ -230,7 +230,7 @@ public sealed class TestExecution
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Null and <see cref="Executions.FailureSite.Unknown"/> say different things, and the difference
+    /// Null and <see cref="FailureSite.Unknown"/> say different things, and the difference
     /// matters to anyone reading the record: null means the question does not apply because nothing
     /// went wrong, while <c>Unknown</c> means it failed and the adapter could not tell where.
     /// </para>
@@ -248,7 +248,7 @@ public sealed class TestExecution
     /// </summary>
     /// <remarks>
     /// Names the member inside the class;
-    /// <see cref="Executions.TestOrchestrationRecord.CollectionName"/> already carries the class
+    /// <see cref="TestOrchestrationRecord.CollectionName"/> already carries the class
     /// itself. The pair is what lets a finding say which member to go and fix rather than only that
     /// some shared code broke.
     /// </remarks>
