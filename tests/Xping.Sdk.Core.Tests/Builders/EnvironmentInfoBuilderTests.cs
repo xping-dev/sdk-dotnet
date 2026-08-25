@@ -59,6 +59,40 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Null(info.TimeZoneId);
     }
 
+    [Theory]
+    [InlineData("America/New_York")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void WithLocalTimeZone_GivenHalfAPair_ShouldThrow(string? timeZoneId)
+    {
+        // An offset with no usable zone is not a partial reading, it is an unusable one: analysis
+        // excludes it as quietly as it excludes a run that recorded nothing, so the mistake has to
+        // surface here or nowhere.
+        var builder = new EnvironmentInfoBuilder();
+
+        if (timeZoneId == "America/New_York")
+        {
+            // The zone without the offset, the other way round.
+            Assert.Throws<ArgumentException>(() => builder.WithLocalTimeZone(null, timeZoneId));
+            return;
+        }
+
+        Assert.Throws<ArgumentException>(
+            () => builder.WithLocalTimeZone(TimeSpan.FromHours(2), timeZoneId));
+    }
+
+    [Fact]
+    public void WithLocalTimeZone_GivenAWhitespaceZoneAndNoOffset_ShouldRecordNeither()
+    {
+        // Neither half is present, so there is nothing to reject — but a zone that names nothing
+        // must not be stored as though it named something.
+        var info = new EnvironmentInfoBuilder().WithLocalTimeZone(null, "   ").Build();
+
+        Assert.Null(info.UtcOffset);
+        Assert.Null(info.TimeZoneId);
+    }
+
     [Fact]
     public void WithMachineName_ShouldSetMachineName()
     {
