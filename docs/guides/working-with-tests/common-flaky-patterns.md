@@ -157,10 +157,6 @@ Two things gate every finding: at least five executions on each side, and **fail
 least three separate local days**. The second is what stops one bad evening being reported as an
 evening pattern.
 
-This reads the time zone and UTC offset the SDK records with each run. Runs recorded before that
-field existed are excluded rather than assumed to be on UTC, so an existing `.xping/` store produces
-nothing here until new runs accumulate.
-
 ### Example
 
 ```csharp
@@ -193,54 +189,7 @@ reading tells you where to look and nothing about what to fix.
 
 ---
 
-## Pattern 5: Resource Exhaustion
-
-### Symptoms
-- Failures increase as test suite runs longer
-- "Out of memory", "too many open files", or connection pool errors
-- First runs pass, later runs fail
-- Performance degrades over time
-
-### How Xping Identifies It
-
-**It does not.** This pattern is documented because it is worth recognising by hand, not because
-Xping detects it.
-
-The SDK records no memory, GC, or handle counters — see
-[What gets recorded](../../../README.md#what-gets-recorded) — so there is no signal a leak could be
-found in. It does record each execution's position in the run and the time elapsed since the run
-started, but nothing reads them, so "degrades late in a long run" is not reported either.
-
-To recognise it yourself: run the suite with `--filter` narrowed to the suspect tests and see
-whether they pass in isolation, and compare a full run's early and late failures by hand.
-
-### Example
-
-```csharp
-[Test]
-public async Task ProcessLargeFile_Succeeds()
-{
-    // File handle never disposed - leak!
-    var stream = File.OpenRead("large-file.txt");
-    var processor = new FileProcessor();
-
-    await processor.ProcessAsync(stream);
-    // Missing stream.Dispose() or 'using' statement
-
-    Assert.That(processor.Status, Is.EqualTo(ProcessStatus.Success));
-}
-
-// After 100 runs, OS runs out of file handles
-```
-
-**Xping Detection:** none. Xping will report the test as `Flaky` once it starts failing, which says
-it is unreliable without saying that a leak is why.
-
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#resource-exhaustion).
-
----
-
-## Pattern 6: Non-Deterministic Test Data
+## Pattern 5: Non-Deterministic Test Data
 
 ### Symptoms
 - Failures related to unexpected data values
@@ -292,11 +241,7 @@ Use this table to quickly identify the pattern based on Xping factor scores:
 | **External Services** | ✅ High | 🟡 Medium | 🔴 Low | 🔴 Low | Clustered |
 | **Shared State** | 🟡 Medium | ✅ High | ✅ High | 🔴 Low | Order-dependent |
 | **Time-Based** | 🟡 Medium | 🟡 Medium | 🟡 Medium | ✅ High | Temporal |
-| **Resource Exhaustion** | 🔴 Low | 🟡 Medium | 🟡 Medium | 🔴 Low | Degrades over time |
 | **Non-Deterministic Data** | ✅ High | 🟡 Medium | ✅ High | ✅ High | Truly random |
-
-These are the shapes to look for by eye. Only some of them have a finding behind them today —
-`TimeSensitive` covers the time-based row; resource exhaustion has none, per Pattern 5.
 
 ---
 

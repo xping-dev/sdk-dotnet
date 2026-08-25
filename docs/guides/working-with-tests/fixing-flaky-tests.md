@@ -315,58 +315,6 @@ After implementing a fix:
 
 ---
 
-### Resource Exhaustion
-
-**Indicators:**
-- Pass rate degrades over time within a test run
-- Execution stability decreases
-- "Out of memory" or "too many open files" errors
-
-Xping does not detect this — it records no memory, GC, or handle counters. The indicators above are
-ones to check by hand; the fixes below stand regardless.
-
-**Fixes:**
-
-1. **Proper Resource Disposal**
-   ```csharp
-   // BAD: Resource leak
-   [Test]
-   public async Task ProcessFile_Succeeds()
-   {
-       var stream = File.OpenRead("large-file.txt");
-       await processor.ProcessAsync(stream);
-       // Stream never disposed!
-   }
-
-   // GOOD: Using statement
-   [Test]
-   public async Task ProcessFile_Succeeds()
-   {
-       using var stream = File.OpenRead("large-file.txt");
-       await processor.ProcessAsync(stream);
-   } // Stream automatically disposed
-   ```
-
-2. **Reset Connection Pools**
-   ```csharp
-   [TearDown]
-   public void TearDown()
-   {
-       // Reset database connection pool
-       SqlConnection.ClearAllPools();
-   }
-   ```
-
-3. **Limit Parallelism If Needed**
-   ```csharp
-   // In your test project file (.csproj) for resource-intensive tests
-   <PropertyGroup>
-       <MaxParallelThreads>4</MaxParallelThreads>
-   </PropertyGroup>
-   ```
-
----
-
 ### Non-Deterministic Data
 
 **Indicators:**

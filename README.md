@@ -281,10 +281,6 @@ Patterns that show up in accumulated execution history:
   one side of a daylight-saving change
 - **Non-deterministic data** — random inputs that occasionally hit an edge case
 
-Resource exhaustion — a suite that degrades as it runs long — is **not** detected. Nothing
-records memory, GC or handle counters, so there is no signal behind it; see
-[Known Limitations](https://docs.xping.io/known-limitations.html).
-
 Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See the
 [Common Flaky Patterns Guide](https://docs.xping.io/guides/working-with-tests/common-flaky-patterns.html)
 for worked examples.

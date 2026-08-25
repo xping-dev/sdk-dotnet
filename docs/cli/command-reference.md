@@ -119,9 +119,7 @@ report prints it.
 weekend against weekday, and — when the window contains two UTC offsets for one time zone, which is
 what a daylight-saving change looks like — one side of the change against the other. The failing
 side must span at least three separate local days, so a bad afternoon is not reported as an
-afternoon pattern. It needs the time zone the SDK records per run, so runs recorded before that
-field existed are excluded rather than read as UTC; see
-[known limitations](../known-limitations.md).
+afternoon pattern.
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
