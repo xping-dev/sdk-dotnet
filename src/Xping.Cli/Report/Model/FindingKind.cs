@@ -72,6 +72,16 @@ internal enum FindingKind
     /// <summary>The test's failure rate differs between parallel and serial execution.</summary>
     ParallelSensitive,
 
+    /// <summary>The test's failures cluster at one time of day, day group, or UTC offset.</summary>
+    /// <remarks>
+    /// Sorted here because it says the same sort of thing as the two kinds either side of it — the
+    /// test's failures track a condition of the environment rather than anything in the test — and
+    /// because it is the weakest of the three. Concurrency and network are conditions the suite
+    /// imposed; a clock reading is a condition the suite merely ran under, and correlating with one
+    /// is a lead rather than a cause.
+    /// </remarks>
+    TimeSensitive,
+
     /// <summary>The test's failures cluster in sessions with degraded or absent network.</summary>
     NetworkDependent,
 

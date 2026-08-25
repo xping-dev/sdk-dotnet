@@ -70,6 +70,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IFindingProvider, DurationProvider>();
         services.AddSingleton<IFindingProvider, VanishedProvider>();
         services.AddSingleton<IFindingProvider, ParallelSensitiveProvider>();
+        services.AddSingleton<IFindingProvider, TimeSensitiveProvider>();
 
         return services;
     }

@@ -147,7 +147,9 @@ Are failures predictable or random?
 
 **What Xping looks for:**
 - Recurring error messages or exception types
-- Time-based failure patterns (e.g., only fails on Mondays)
+- Time-based failure patterns — failures clustered in one local six-hour part of the day, at
+  weekends, or on one side of a daylight-saving change. A single weekday ("only fails on Mondays")
+  is too fine to measure over a two-week window and is not looked for
 - Correlation with other test failures
 - Random failures are harder to fix and score lower
 

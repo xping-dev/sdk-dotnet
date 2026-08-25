@@ -51,6 +51,7 @@ internal static class ReportVocabulary
         nameof(FindingKind.DurationUnstable) => "unstable timing",
         nameof(FindingKind.OrderDependent) => "order dependent",
         nameof(FindingKind.ParallelSensitive) => "concurrency",
+        nameof(FindingKind.TimeSensitive) => "time sensitive",
         nameof(FindingKind.NetworkDependent) => "network",
         nameof(FindingKind.Vanished) => "stopped running",
         nameof(FindingKind.NeverRun) => "never run",

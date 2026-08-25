@@ -246,7 +246,9 @@ the test sets one, categories and traits. A test the framework killed for overru
 timeout is recorded as a timeout, not folded into ordinary failures.
 
 **Per environment** — OS and version, .NET runtime version, machine name, CI platform
-detection, build and branch information from the CI environment, network metrics.
+detection, build and branch information from the CI environment, network metrics, and the
+machine's time zone and UTC offset at the start of the run — which is what lets a failure be
+placed at a local time of day rather than only at a UTC instant.
 
 ### What never gets recorded
 
@@ -275,8 +277,8 @@ Patterns that show up in accumulated execution history:
 - **Race conditions** — intermittent failures with no code change between runs
 - **External dependencies** — failures that track network or service availability
 - **Shared state** — tests that pass alone and fail in a suite
-- **Time-based flakiness** — failures clustered around dates, times, or timezones
-- **Resource exhaustion** — degradation over the course of a long run
+- **Time-based flakiness** — failures clustered in one local time of day, at weekends, or on
+  one side of a daylight-saving change
 - **Non-deterministic data** — random inputs that occasionally hit an edge case
 
 Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See the

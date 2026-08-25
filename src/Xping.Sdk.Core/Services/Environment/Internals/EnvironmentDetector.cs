@@ -33,6 +33,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private readonly Lazy<string> _environmentName;
     private readonly Lazy<CIPlatform?> _ciPlatform;
     private readonly Lazy<bool> _isContainer;
+    private readonly Lazy<TimeZoneInfo?> _localTimeZone;
     private readonly Lazy<Dictionary<string, string>> _customProperties;
 
     // Cache network metrics per endpoint (instance-level, thread-safe)
@@ -56,6 +57,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         _environmentName = new Lazy<string>(() => DetectEnvironmentName(_configuration));
         _ciPlatform = new Lazy<CIPlatform?>(DetectCiPlatform);
         _isContainer = new Lazy<bool>(DetectIsContainer);
+        _localTimeZone = new Lazy<TimeZoneInfo?>(DetectLocalTimeZone);
         _customProperties = new Lazy<Dictionary<string, string>>(() =>
             CollectCustomProperties(_operatingSystem.Value, _ciPlatform.Value, _isContainer.Value));
     }
@@ -97,9 +99,38 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         _builder.WithEnvironmentName(_environmentName.Value);
         _builder.WithIsCIEnvironment(_ciPlatform.Value.HasValue);
         _builder.WithNetworkMetrics(networkMetrics);
+
+        // Resolved against now rather than cached with the zone: the offset is a property of the
+        // instant, not of the machine, and a suite started either side of a daylight-saving
+        // transition is exactly the case this field exists to make visible.
+        TimeZoneInfo? zone = _localTimeZone.Value;
+        _builder.WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id);
+
         _builder.AddCustomProperties(_customProperties.Value);
 
         return _builder.Build();
+    }
+
+    /// <summary>
+    /// Reads the machine's time zone, or returns <see langword="null"/> when it has no usable one.
+    /// </summary>
+    /// <remarks>
+    /// A container built without a time zone database throws here rather than reporting UTC, and a
+    /// misconfigured <c>TZ</c> variable does the same. Neither is a reason to fail a test run, and
+    /// substituting UTC would be worse than recording nothing: analysis distinguishes "not captured"
+    /// from "captured as UTC", and a fabricated zero would put every such machine in the same bin as
+    /// a genuine UTC one.
+    /// </remarks>
+    private static TimeZoneInfo? DetectLocalTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.Local;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private async Task<NetworkMetrics?> GetNetworkMetricsAsync(CancellationToken cancellationToken = default)

@@ -134,16 +134,28 @@ public class UserServiceTests
 ## Pattern 4: Time-Based Flakiness
 
 ### Symptoms
-- Failures at specific times (end of month, weekends, timezone changes)
+- Failures at specific times (overnight, weekends, timezone changes)
 - Date/time comparison failures
 - Intermittent failures that aren't immediately reproducible
 - Daylight saving time issues
 
 ### How Xping Identifies It
-- **Failure Pattern Analysis**: Shows temporal clustering (failures at specific times)
-- **Low Execution Stability**: No clear cause for variance
-- **Historical Pass Rate**: Periodic dips corresponding to time periods
-- **Environment Consistency**: Different behavior across timezones
+
+`dotnet xping report` emits a **`TimeSensitive`** finding when a test's failure rate depends on when
+it ran. It splits the test's executions three ways and reports the widest gap:
+
+- **Local time of day** — the worst six-hour quarter of the local day against the rest of it. Six
+  hours rather than one, because a fortnight of runs cannot fill twenty-four hourly bins.
+- **Weekend against weekday** — read on the machine's own clock. Note that a single weekday
+  ("only fails on Mondays") is *not* detectable at the default window, which holds at most two of
+  any given day.
+- **UTC offset** — when the window contains two offsets for one time zone, which is what a daylight
+  saving change looks like, the two sides are compared. This is how DST is detected without a
+  timezone database.
+
+Two things gate every finding: at least five executions on each side, and **failures spanning at
+least three separate local days**. The second is what stops one bad evening being reported as an
+evening pattern.
 
 ### Example
 
@@ -163,57 +175,21 @@ public void ScheduleEvent_CreatesEventForToday()
 ```
 
 **Xping Detection:**
-- Failure Pattern: 0.44 (temporal clustering around specific times)
-- Execution Stability: 0.51 (inconsistent but no clear reason)
-- Overall Confidence: 0.47 (Unreliable)
+
+```
+MED   time sensitive   ...ScheduleEvent_CreatesEventForToday
+      failed 100% in 00:00-06:00 local against 0% in the rest of the
+      day, gap 100 pts across 4 days
+```
+
+The finding says *when*, never *why*. It is capped at medium severity for that reason: a clock
+reading tells you where to look and nothing about what to fix.
 
 > **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#time-based-flakiness).
 
 ---
 
-## Pattern 5: Resource Exhaustion
-
-### Symptoms
-- Failures increase as test suite runs longer
-- "Out of memory", "too many open files", or connection pool errors
-- First runs pass, later runs fail
-- Performance degrades over time
-
-### How Xping Identifies It
-- **Pass Rate Degrades**: Within a single test session over time
-- **Execution Stability Decreases**: Later tests take longer
-- **Dependency Impact**: Shows cascade patterns (failures spread to more tests)
-- **Position in Suite**: Tests later in execution order fail more often
-
-### Example
-
-```csharp
-[Test]
-public async Task ProcessLargeFile_Succeeds()
-{
-    // File handle never disposed - leak!
-    var stream = File.OpenRead("large-file.txt");
-    var processor = new FileProcessor();
-
-    await processor.ProcessAsync(stream);
-    // Missing stream.Dispose() or 'using' statement
-
-    Assert.That(processor.Status, Is.EqualTo(ProcessStatus.Success));
-}
-
-// After 100 runs, OS runs out of file handles
-```
-
-**Xping Detection:**
-- Execution Stability: 0.36 (degrades over time)
-- Historical Pass Rate: 0.44 (first runs pass, later fail)
-- Overall Confidence: 0.38 (Highly Unreliable)
-
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#resource-exhaustion).
-
----
-
-## Pattern 6: Non-Deterministic Test Data
+## Pattern 5: Non-Deterministic Test Data
 
 ### Symptoms
 - Failures related to unexpected data values
@@ -265,7 +241,6 @@ Use this table to quickly identify the pattern based on Xping factor scores:
 | **External Services** | ✅ High | 🟡 Medium | 🔴 Low | 🔴 Low | Clustered |
 | **Shared State** | 🟡 Medium | ✅ High | ✅ High | 🔴 Low | Order-dependent |
 | **Time-Based** | 🟡 Medium | 🟡 Medium | 🟡 Medium | ✅ High | Temporal |
-| **Resource Exhaustion** | 🔴 Low | 🟡 Medium | 🟡 Medium | 🔴 Low | Degrades over time |
 | **Non-Deterministic Data** | ✅ High | 🟡 Medium | ✅ High | ✅ High | Truly random |
 
 ---

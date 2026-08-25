@@ -337,6 +337,22 @@ public sealed class XpingJsonDeserializerTests
         Assert.Equal("5,5,10", parameterized.Identity.ParameterHash);
     }
 
+    [Fact]
+    public async Task Deserialize_EnvironmentInfo_RecordedBeforeTheTimeZoneField_ShouldLeaveItUnset()
+    {
+        // This fixture was captured before the offset was collected, which is what every session in
+        // an existing local store looks like. It must deserialize to null rather than to a zero
+        // offset: temporal analysis excludes the first and would happily bin the second as UTC.
+        var serializer = BuildSerializer();
+        using var stream = OpenResourceStream();
+
+        var session = await serializer.DeserializeAsync<TestSession>(stream);
+
+        Assert.NotNull(session);
+        Assert.Null(session!.EnvironmentInfo.UtcOffset);
+        Assert.Null(session.EnvironmentInfo.TimeZoneId);
+    }
+
     // ---------------------------------------------------------------------------
     // TestOrchestrationRecord fields
     // ---------------------------------------------------------------------------

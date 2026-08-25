@@ -47,6 +47,7 @@ public sealed class ShareableOutputTests
         nameof(FindingKind.DurationRegression),
         nameof(FindingKind.DurationUnstable),
         nameof(FindingKind.ParallelSensitive),
+        nameof(FindingKind.TimeSensitive),
         nameof(FindingKind.Vanished)
     ];
 
@@ -132,6 +133,16 @@ public sealed class ShareableOutputTests
                     new ConcurrencyDelta(0.5, 50),
                     8,
                     new ConcurrencyRange(1, 14, 9),
+                    [],
+                    null),
+
+            FindingKind.TimeSensitive =>
+                new TimeSensitiveEvidence(
+                    "LocalTimeOfDay",
+                    new TimeArm(9, 10, 10, 0.9, 7, "18:00-24:00 local"),
+                    new TimeArm(0, 6, 6, 0, 0, "the rest of the day"),
+                    new TimeDelta(0.9, 90),
+                    "Europe/Berlin",
                     [],
                     null),
 

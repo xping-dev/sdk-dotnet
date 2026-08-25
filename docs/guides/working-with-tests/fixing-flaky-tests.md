@@ -254,8 +254,8 @@ After implementing a fix:
 ### Time-Based Flakiness
 
 **Indicators:**
-- Temporal clustering in failure pattern
-- Fails at specific times or dates
+- A `TimeSensitive` finding from `dotnet xping report`
+- Fails at specific local times or dates
 - Inconsistent with no clear environmental cause
 
 **Fixes:**
@@ -311,55 +311,6 @@ After implementing a fix:
 
    // GOOD: Relative comparison with tolerance
    Assert.That(event.CreatedAt, Is.EqualTo(DateTime.UtcNow).Within(TimeSpan.FromSeconds(5)));
-   ```
-
----
-
-### Resource Exhaustion
-
-**Indicators:**
-- Pass rate degrades over time within a test run
-- Execution stability decreases
-- "Out of memory" or "too many open files" errors
-
-**Fixes:**
-
-1. **Proper Resource Disposal**
-   ```csharp
-   // BAD: Resource leak
-   [Test]
-   public async Task ProcessFile_Succeeds()
-   {
-       var stream = File.OpenRead("large-file.txt");
-       await processor.ProcessAsync(stream);
-       // Stream never disposed!
-   }
-
-   // GOOD: Using statement
-   [Test]
-   public async Task ProcessFile_Succeeds()
-   {
-       using var stream = File.OpenRead("large-file.txt");
-       await processor.ProcessAsync(stream);
-   } // Stream automatically disposed
-   ```
-
-2. **Reset Connection Pools**
-   ```csharp
-   [TearDown]
-   public void TearDown()
-   {
-       // Reset database connection pool
-       SqlConnection.ClearAllPools();
-   }
-   ```
-
-3. **Limit Parallelism If Needed**
-   ```csharp
-   // In your test project file (.csproj) for resource-intensive tests
-   <PropertyGroup>
-       <MaxParallelThreads>4</MaxParallelThreads>
-   </PropertyGroup>
    ```
 
 ---

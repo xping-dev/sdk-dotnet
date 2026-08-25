@@ -63,6 +63,80 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task BuildEnvironmentInfoAsync_OnAnyMachine_CapturesTheLocalOffsetAndZone()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        // The pair is all-or-nothing whatever the machine offers, so this half holds everywhere.
+        Assert.Equal(info.UtcOffset.HasValue, info.TimeZoneId != null);
+
+        if (LocalTimeZoneOrNull() is not { } local)
+        {
+            // A machine with no usable zone — the case the detector is written to tolerate, and the
+            // one this test would otherwise crash in while asserting that it works.
+            Assert.Null(info.UtcOffset);
+            Assert.Null(info.TimeZoneId);
+            return;
+        }
+
+        // Asserted against the running machine's own zone rather than a fixed value: the point is
+        // that the detector reads the real clock, and pinning an expected offset would only test
+        // whichever agent happened to run the suite.
+        Assert.Equal(local.GetUtcOffset(DateTime.UtcNow), info.UtcOffset);
+        Assert.Equal(local.Id, info.TimeZoneId);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_OnConsecutiveCalls_ReportsTheOffsetOfEachCall()
+    {
+        // The zone is cached; the offset must not be. A suite running either side of a
+        // daylight-saving transition depends on the second reading differing from the first, and a
+        // cached offset would silently report the same figure forever.
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo first = await detector.BuildEnvironmentInfoAsync();
+        EnvironmentInfo second = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(first.TimeZoneId, second.TimeZoneId);
+
+        if (LocalTimeZoneOrNull() is not { } local)
+        {
+            Assert.Null(second.UtcOffset);
+            return;
+        }
+
+        Assert.Equal(local.GetUtcOffset(DateTime.UtcNow), second.UtcOffset);
+    }
+
+    /// <summary>
+    /// Reads the running machine's time zone the same tolerant way the detector does.
+    /// </summary>
+    /// <returns>The zone, or <see langword="null"/> when the machine has no usable one.</returns>
+    /// <remarks>
+    /// A test that reached for <see cref="TimeZoneInfo.Local"/> directly would throw on a machine
+    /// with no time zone database — a minimal container, a broken <c>TZ</c> — which is precisely the
+    /// case <c>EnvironmentDetector.DetectLocalTimeZone</c> exists to survive. Asserting the contract
+    /// with an expression that violates it is how a guard gets deleted as flaky later.
+    /// </remarks>
+    private static TimeZoneInfo? LocalTimeZoneOrNull()
+    {
+        try
+        {
+            return TimeZoneInfo.Local;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    [Fact]
     public async Task BuildEnvironmentInfoAsync_WithGitHubActions_CapturesNormalizedBranchAndConfiguredCiName()
     {
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");

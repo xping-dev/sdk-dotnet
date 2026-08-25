@@ -21,6 +21,8 @@ public sealed class EnvironmentInfoBuilder
     private string _environmentName;
     private bool _isCIEnvironment;
     private NetworkMetrics? _networkMetrics;
+    private TimeSpan? _utcOffset;
+    private string? _timeZoneId;
     private readonly Dictionary<string, string> _customProperties;
 
     /// <summary>
@@ -100,6 +102,55 @@ public sealed class EnvironmentInfoBuilder
     }
 
     /// <summary>
+    /// Sets the machine's local time zone.
+    /// </summary>
+    /// <param name="utcOffset">
+    /// The offset from UTC, or <see langword="null"/> when it could not be determined.
+    /// </param>
+    /// <param name="timeZoneId">
+    /// The zone identifier, or <see langword="null"/> when it could not be determined.
+    /// </param>
+    /// <returns>This builder.</returns>
+    /// <exception cref="ArgumentException">
+    /// One of the two was supplied without the other.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// Both or neither. Neither is worth anything alone: an offset with no zone cannot tell a
+    /// daylight-saving shift apart from a machine that moved, and a zone with no offset needs a time
+    /// zone database the reader may not have.
+    /// </para>
+    /// <para>
+    /// Half a pair throws rather than being stored, because the alternative is worse than a loud
+    /// failure. Analysis excludes a run it cannot place on a local clock, and it does so silently —
+    /// the same way it treats a run that recorded no zone at all. A caller that set one field and
+    /// forgot the other would get no error, no warning, and no findings, with nothing anywhere to
+    /// say why. This is a caller mistake rather than a detection failure, so it is not covered by
+    /// the rule that a run must never be taken down by telemetry: the detector reads both from one
+    /// <see cref="TimeZoneInfo"/> and cannot produce a half pair.
+    /// </para>
+    /// </remarks>
+    public EnvironmentInfoBuilder WithLocalTimeZone(TimeSpan? utcOffset, string? timeZoneId)
+    {
+        // Whitespace counts as absent. It reaches analysis as a zone that names nothing, which is
+        // indistinguishable from having no zone and would be excluded just as quietly.
+        bool hasZone = !string.IsNullOrWhiteSpace(timeZoneId);
+
+        if (utcOffset.HasValue != hasZone)
+        {
+            throw new ArgumentException(
+                "A local time zone is recorded as an offset and a zone identifier together, or not " +
+                "at all. Supplying one without the other produces a run that analysis silently " +
+                "excludes.",
+                utcOffset.HasValue ? nameof(timeZoneId) : nameof(utcOffset));
+        }
+
+        _utcOffset = utcOffset;
+        _timeZoneId = hasZone ? timeZoneId : null;
+        return this;
+    }
+
+    /// <summary>
     /// Adds a custom property.
     /// </summary>
     public EnvironmentInfoBuilder AddCustomProperty(string key, string value)
@@ -137,6 +188,8 @@ public sealed class EnvironmentInfoBuilder
             environmentName: _environmentName,
             isCIEnvironment: _isCIEnvironment,
             networkMetrics: _networkMetrics,
+            utcOffset: _utcOffset,
+            timeZoneId: _timeZoneId,
             customProperties: new ReadOnlyDictionary<string, string>(_customProperties));
     }
 
@@ -152,6 +205,8 @@ public sealed class EnvironmentInfoBuilder
         _environmentName = string.Empty;
         _isCIEnvironment = false;
         _networkMetrics = null;
+        _utcOffset = null;
+        _timeZoneId = null;
         _customProperties.Clear();
         return this;
     }

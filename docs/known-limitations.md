@@ -220,6 +220,21 @@ constructor frame instead.
 
 ---
 
+## Local Analysis
+
+### `TimeSensitive` Bins Are Coarse, And Deliberately
+
+**Impact**: a test that fails only on Mondays, or only at month end, is not reported as
+time-sensitive. Neither is one whose failures all fall inside a single day.
+
+**Reason**: the default window is twenty runs over fourteen days. That is at most two of any given
+weekday and one month boundary, which cannot support a rate. The axes are therefore a six-hour
+quarter of the local day, weekend against weekday, and one UTC offset against another — and every
+finding additionally requires failures spanning three separate local days, so a single bad evening
+is not reported as an evening pattern. A finer bin would fire more often and mean less.
+
+---
+
 ## General Limitations
 
 ### CI Flaky Tests: `XpingContextTests` (NUnit Adapter Tests)
@@ -287,3 +302,4 @@ When reporting, please include:
 | 1.1.0   | Added known CI flaky test `RecordTest_AfterInitialize_DoesNotThrow` as intentional flakiness example |
 | 1.2.0   | Documented xUnit retry attempt tracking and the retry libraries it covers |
 | 1.3.0   | Documented MSTest retry attempt tracking and how attempt numbers are derived |
+| 1.4.0   | Documented the binning limits of `TimeSensitive` |
