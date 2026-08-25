@@ -306,9 +306,12 @@ public void Checkout()       // line 41
 
 Which of the two you get depends on the build configuration. A debug build gives the opening brace
 its own sequence point, so line 42 is reported. An optimised build has no reason to keep a point for
-a brace that generates no code, so the first statement — line 43 — is the first thing the PDB can
-name. Both land inside the method, which is what the location is for; neither ever points at the
-attribute or the signature.
+a brace that generates no code, so the first *executable* statement — line 43 — is the first thing
+the PDB can name. The gap is not always one line: a body opening with a comment or a blank line
+reports the brace under Debug and the first real statement below them under Release.
+
+Both land inside the method, which is what the location is for; neither ever points at the attribute
+or the signature.
 
 **No PDB, no location.** Building with `DebugType=none` strips the symbols, and the trailer simply
 omits the location — everything else about the test is still recorded. Both the default portable

@@ -35,10 +35,10 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// <para>
 /// Which line that is depends on how the assembly was built. A debug build gives the opening brace
 /// its own sequence point and that is what comes back; an optimised build keeps no point for a brace
-/// that generates no code, so the first statement is the first thing the PDB can name. The two
-/// differ by a line and both sit inside the method, so nothing downstream needs to know which it
-/// got — but a test pinning one exact line will pass under one configuration and fail under the
-/// other.
+/// that generates no code, so the first executable statement is the first thing the PDB can name —
+/// which may be several lines down when the body opens with comments. Both sit inside the method, so
+/// nothing downstream needs to know which it got, but a test pinning one exact line will pass under
+/// one configuration and fail under the other.
 /// </para>
 /// <para>
 /// Every failure is silent. A missing PDB, a <c>DebugType=none</c> build, a single-file host with no
