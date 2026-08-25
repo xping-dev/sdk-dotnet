@@ -110,6 +110,8 @@ report prints it.
 | Kind | Printed as | Claims |
 |---|---|---|
 | `RetryMasked` | masked by retry | The test failed and passed on retry, never reaching the run's outcome |
+| `RetryDeepening` | deeper retries | The test used to pass on fewer attempts than it now needs |
+| `RetryExhausted` | out of retries | The retries ran out and the test still failed the run |
 | `Flaky` | flaky | The test both passes and fails, or fails in varying ways |
 | `AlwaysFailing` | always failing | The test fails almost always, in one consistent way |
 | `TimingOut` | timing out | The test is mostly killed for overrunning its timeout rather than failing |
@@ -123,6 +125,18 @@ report prints it.
 | `NetworkDependent` | network | The test's failures cluster in runs with degraded or absent network |
 | `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
 | `NeverRun` | never run | The test was expected but never executed |
+
+The three retry kinds are one judgement about one mechanism, and a test gets at most one of them:
+`RetryExhausted` first, then `RetryDeepening`, then `RetryMasked` — red beats worsening beats
+standing. Each is decided on the attempts an adapter actually recorded. A run counts as out of
+retries when its last recorded attempt failed and an earlier attempt exists — never by comparing an
+attempt number against the configured limit. That limit is published beside the finding as
+`maxRetriesAsDeclared` and nothing is decided by it: retry attributes disagree about whether the
+number counts total attempts or retries after the first, so the report records it the way the
+attribute spelled it rather than guessing. `RetryDeepening` compares the recent runs against the
+earlier ones and needs five earlier passing runs to compare against, so it stays quiet on a short
+history. A test can still be reported as both out of retries and flaky: those are different claims
+about the same red run, and they carry different ids.
 
 `TimeSensitive` reads three axes and reports the widest gap: the local six-hour quarter of the day,
 weekend against weekday, and — when the window contains two UTC offsets for one time zone, which is
@@ -196,7 +210,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.4",
+  "schemaVersion": "1.5",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

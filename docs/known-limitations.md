@@ -233,6 +233,45 @@ quarter of the local day, weekend against weekday, and one UTC offset against an
 finding additionally requires failures spanning three separate local days, so a single bad evening
 is not reported as an evening pattern. A finer bin would fire more often and mean less.
 
+### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
+
+**Impact**: a test whose retry attribute allows three retries but which only ever recorded two
+attempts is not reported as out of retries, and a test recorded as having failed a fourth attempt is
+— whatever its attribute says.
+
+**Reason**: `MaxRetries` is recorded verbatim by every adapter, and retry attributes disagree about
+what it counts. NUnit writes NUnit's `TryCount`, which is total attempts including the first; an
+xUnit or MSTest retry library writes whatever its own limit is called, which may or may not include
+the first attempt. Comparing an attempt number against it would report identical behaviour as
+exhausted on one framework and as fine on another. The report therefore reads only what happened —
+the highest attempt recorded for the test in that run failed, and an earlier attempt exists — and
+publishes the declared limit beside it as `maxRetriesAsDeclared`, under a name that says whose
+number it is.
+
+**Related**: `DelayBetweenRetries` is recorded by the xUnit and MSTest adapters and not by NUnit, so
+the `configured wait` metric is absent on NUnit even where the attribute declares a delay. It is
+never added to the measured retry time: whether the framework actually waited is not in the session.
+
+---
+
+### `RetryDeepening` Needs A Baseline, And Often Does Not Have One
+
+**Impact**: a test that has plainly started needing more attempts may be reported only as
+`RetryMasked`, or not at all.
+
+**Reason**: the finding compares a test's recent runs against its earlier ones, and needs five
+earlier runs it settled green in and two recent ones before it will compare them. A test that runs
+under a filter, was added this fortnight, or fails outright in most of the window does not reach
+that, and a window below eight runs narrows the recent slice to a single run, which is a coin toss
+rather than a trend. Both arms also set environmental runs aside, because one outage inside a
+three-run "now" fabricates the change outright.
+
+**Related**: the comparison is only as good as the adapter's attempt tracking. Where attempts are
+not recorded — see the xUnit and MSTest sections above — a test that needs three attempts looks
+exactly like one that needs one.
+
+---
+
 ---
 
 ## General Limitations
@@ -303,3 +342,4 @@ When reporting, please include:
 | 1.2.0   | Documented xUnit retry attempt tracking and the retry libraries it covers |
 | 1.3.0   | Documented MSTest retry attempt tracking and how attempt numbers are derived |
 | 1.4.0   | Documented the binning limits of `TimeSensitive` |
+| 1.5.0   | Documented how the retry findings read attempt numbers, and why the declared retry limit is never interpreted |

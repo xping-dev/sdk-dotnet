@@ -138,6 +138,42 @@ internal static class LocalAnalysisConstants
     public const double DurationTrivialMs = 50;
 
     /// <summary>
+    /// Extra attempts a typical passing run must now need before a deepening is reported (1).
+    /// </summary>
+    /// <remarks>
+    /// Both sides of the comparison are nearest-rank medians of attempt numbers, so the difference
+    /// is always a whole attempt; a fractional threshold would round to this one and pretend to a
+    /// precision the measurement does not have. One is also the smallest change worth a developer's
+    /// attention and the most common: a test that used to pass first time and now needs two has
+    /// doubled what every one of its runs costs, and a bar of two would silence exactly that case.
+    /// </remarks>
+    public const int RetryDeepeningMinAttempts = 1;
+
+    /// <summary>
+    /// Runs whose retries must have run out before exhaustion is reported (2).
+    /// </summary>
+    /// <remarks>
+    /// One exhausted run is an incident. The claim this kind makes is that retries are not rescuing
+    /// the test, and that has to have happened twice before it is a pattern rather than a bad
+    /// afternoon — the guard <see cref="TimeSensitiveMinArmDays"/> supplies for a temporal split.
+    /// Deliberately stricter than <c>RetryMasked</c>, which reports a single
+    /// occurrence: a masked failure is invisible without the report, whereas an exhausted run
+    /// already went red in the runner's own output.
+    /// </remarks>
+    public const int RetryExhaustedMinRuns = 2;
+
+    /// <summary>
+    /// Share of a test's retried runs that must have run out before exhaustion is reported (0.50).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same figure as <see cref="TimingOutShareMin"/> and applied the same way.
+    /// Below half, the retries rescue the test more often than not and the attribute is earning its
+    /// keep; reporting that as retries running out would point a reader at the mitigation when the
+    /// problem is the test.
+    /// </remarks>
+    public const double RetryExhaustedShareMin = 0.50;
+
+    /// <summary>
     /// Failure rate given a predecessor required to suspect order dependence (0.70).
     /// </summary>
     public const double OrderDependentConditionalMin = 0.70;

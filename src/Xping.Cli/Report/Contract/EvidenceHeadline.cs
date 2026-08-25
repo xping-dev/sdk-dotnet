@@ -45,6 +45,8 @@ internal static class EvidenceHeadline
         FindingKind kind, FindingEvidence evidence) => evidence switch
     {
         RetryMaskedEvidence retry => RetryMasked(retry),
+        RetryDeepeningEvidence deepening => RetryDeepening(deepening),
+        RetryExhaustedEvidence exhausted => RetryExhausted(exhausted),
         FlakyEvidence flaky => Flaky(flaky),
         AlwaysFailingEvidence always => AlwaysFailing(always),
         TimingOutEvidence timingOut => TimingOut(timingOut),
@@ -74,13 +76,111 @@ internal static class EvidenceHeadline
         [
             new("masked", $"{e.MaskedOccurrences} of {e.Executions} executions ({Percent(e.MaskedRate)})"),
             new("runs affected", $"{e.SessionsWithMasking} of {e.Sessions}"),
-            new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture))
+            new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture)),
+            new("time retrying", Duration(e.RetryWallClockMs))
         ];
 
-        if (e.RetryAttributeName is { Length: > 0 } attribute)
-            metrics.Add(new MetricDto("mechanism", attribute));
+        AppendConfiguration(metrics, e.Configuration, e.ConfiguredDelayTotalMs);
 
         return (headline, metrics);
+    }
+
+    /// <summary>
+    /// Phrases a test that now needs more attempts to pass than it used to.
+    /// </summary>
+    /// <remarks>
+    /// Leads with the pair of counts rather than with a percentage: "1 -&gt; 3" is the whole finding,
+    /// and "+200%" is the same fact said in a unit nobody retries in. The count of runs behind each
+    /// side is in the sentence, because it is what separates a trend from a fortnight ago's noise.
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) RetryDeepening(RetryDeepeningEvidence e)
+    {
+        string headline =
+            $"attempts to pass {e.Baseline.TypicalAttempts} -> {e.Current.TypicalAttempts} " +
+            $"({Signed(e.Delta.Attempts)}) over {Runs(e.Current.RunsSettledGreen)} against " +
+            $"{e.Baseline.RunsSettledGreen} before";
+
+        if (e.RetryWallClockMs > 0)
+            headline += $", {Duration(e.RetryWallClockMs)} spent retrying";
+
+        List<MetricDto> metrics =
+        [
+            new(
+                "attempts to pass",
+                $"{e.Baseline.TypicalAttempts} -> {e.Current.TypicalAttempts} ({Signed(e.Delta.Attempts)})"),
+            new("recent runs", $"{e.Current.RunsSettledGreen} of {e.Current.Runs} passed"),
+            new("earlier runs", $"{e.Baseline.RunsSettledGreen} of {e.Baseline.Runs} passed"),
+            new("deepest attempt", e.Current.MaxAttempts.ToString(CultureInfo.InvariantCulture)),
+            new("time retrying", Duration(e.RetryWallClockMs))
+        ];
+
+        AppendConfiguration(metrics, e.Configuration, e.ConfiguredDelayTotalMs);
+
+        return (headline, metrics);
+    }
+
+    /// <summary>
+    /// Phrases a test whose retries ran out.
+    /// </summary>
+    /// <remarks>
+    /// The declared limit is a metric and never the headline. It is the number the attribute wrote
+    /// down, the frameworks disagree about what it counts, and putting it in the sentence would
+    /// invite a reader to do the subtraction this report deliberately refuses to do.
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) RetryExhausted(RetryExhaustedEvidence e)
+    {
+        string headline =
+            $"gave up after {Attempts(e.MaxAttemptObserved)} in {e.ExhaustedRuns} of " +
+            $"{e.RetriedRuns} retried runs ({Percent(e.ExhaustedRate)})";
+
+        if (e.RetryWallClockMs > 0)
+            headline += $", {Duration(e.RetryWallClockMs)} spent retrying";
+
+        List<MetricDto> metrics =
+        [
+            new(
+                "gave up",
+                $"{e.ExhaustedRuns} of {e.RetriedRuns} retried runs ({Percent(e.ExhaustedRate)})"),
+            new("rescued", $"{e.RescuedRuns} of {e.RetriedRuns}"),
+            new("runs affected", $"{e.ExhaustedRuns} of {e.RunsConsidered}"),
+            new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture)),
+            new("retries spent", e.RetryAttemptsSpent.ToString(CultureInfo.InvariantCulture)),
+            new("time retrying", Duration(e.RetryWallClockMs))
+        ];
+
+        AppendConfiguration(metrics, e.Configuration, e.ConfiguredDelayTotalMs);
+
+        return (headline, metrics);
+    }
+
+    /// <summary>
+    /// Appends the pairs a retry attribute declared, each only when it declared one.
+    /// </summary>
+    /// <remarks>
+    /// The declared limit is always stated, with its provenance in the value rather than in the
+    /// label: a reader who sees "3" beside an observed fourth attempt must be able to see that the
+    /// two numbers were written by different parties and are not in contradiction. Configured waiting
+    /// is a separate pair from measured attempt time and is never added to it — whether the framework
+    /// actually waited is not in the session.
+    /// </remarks>
+    private static void AppendConfiguration(
+        List<MetricDto> metrics, RetryConfiguration configuration, long configuredDelayTotalMs)
+    {
+        metrics.Add(new MetricDto(
+            "declared limit",
+            configuration.MaxRetriesAsDeclared > 0
+                ? $"{configuration.MaxRetriesAsDeclared.ToString(CultureInfo.InvariantCulture)} " +
+                  "(as the attribute declared it)"
+                : "none recorded by the adapter"));
+
+        if (configuration.AttributeName is { Length: > 0 } attribute)
+            metrics.Add(new MetricDto("mechanism", attribute));
+
+        if (configuration.Reason is { Length: > 0 } reason)
+            metrics.Add(new MetricDto("declared reason", reason));
+
+        if (configuredDelayTotalMs > 0)
+            metrics.Add(new MetricDto("configured wait", Duration(configuredDelayTotalMs)));
     }
 
     private static (string, IReadOnlyList<MetricDto>) Flaky(FlakyEvidence e)
@@ -289,6 +389,15 @@ internal static class EvidenceHeadline
 
     private static string Days(int count) =>
         count == 1 ? "1 day" : $"{count.ToString(CultureInfo.InvariantCulture)} days";
+
+    private static string Attempts(int count) =>
+        count == 1 ? "1 attempt" : $"{count.ToString(CultureInfo.InvariantCulture)} attempts";
+
+    /// <summary>
+    /// Formats a whole-number change, keeping the plus that a bare number would drop.
+    /// </summary>
+    private static string Signed(int value) =>
+        (value >= 0 ? "+" : string.Empty) + value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Formats a rate in [0,1] as a whole percentage.

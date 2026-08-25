@@ -39,6 +39,8 @@ public sealed class ShareableOutputTests
     public static TheoryData<string> EveryEvidenceShape() =>
     [
         nameof(FindingKind.RetryMasked),
+        nameof(FindingKind.RetryDeepening),
+        nameof(FindingKind.RetryExhausted),
         nameof(FindingKind.Flaky),
         nameof(FindingKind.AlwaysFailing),
         nameof(FindingKind.TimingOut),
@@ -80,12 +82,42 @@ public sealed class ShareableOutputTests
             Site: nameof(FailureSite.TestBody),
             SiteMember: null);
 
+        RetryConfiguration configuration = new("RetryAttribute", 2, "NetworkError", 250);
+
+        RetryAttemptExemplar attemptExemplar = new(
+            "11111111-1111-1111-1111-111111111111",
+            new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
+            "a3f9c2e",
+            Attempts: 3,
+            Outcome: nameof(TestOutcome.Failed),
+            RetryWallClockMs: 8_200,
+            "boom");
+
         return kind switch
         {
             FindingKind.RetryMasked =>
                 new RetryMaskedEvidence(
-                    4, 20, 20, 3, 0.2, 3, "RetryAttribute", 2, 12_400,
+                    4, 20, 20, 3, 0.2, 3, configuration, 12_400, 750,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", []),
+
+            FindingKind.RetryDeepening =>
+                new RetryDeepeningEvidence(
+                    new RetryDepthProfile(3, 4, 3, 0, 3),
+                    new RetryDepthProfile(1, 2, 14, 0, 14),
+                    new RetryDepthDelta(2, 200),
+                    configuration,
+                    2_400,
+                    500,
+                    0,
+                    "a3f9c2e",
+                    [attemptExemplar],
+                    attemptExemplar),
+
+            FindingKind.RetryExhausted =>
+                new RetryExhaustedEvidence(
+                    6, 7, 1, 20, 20, 0.857, 3, 12, configuration, 41_000, 3_000, 0,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e",
+                    [attemptExemplar], attemptExemplar),
 
             FindingKind.Flaky =>
                 new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),

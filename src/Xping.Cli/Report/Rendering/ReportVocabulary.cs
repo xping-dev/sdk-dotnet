@@ -42,6 +42,8 @@ internal static class ReportVocabulary
     public static string LabelFor(string kind) => kind switch
     {
         nameof(FindingKind.RetryMasked) => "masked by retry",
+        nameof(FindingKind.RetryDeepening) => "deeper retries",
+        nameof(FindingKind.RetryExhausted) => "out of retries",
         nameof(FindingKind.Flaky) => "flaky",
         nameof(FindingKind.AlwaysFailing) => "always failing",
         nameof(FindingKind.TimingOut) => "timing out",
