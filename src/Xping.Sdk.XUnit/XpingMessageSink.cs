@@ -698,10 +698,6 @@ public sealed class XpingMessageSink(
     }
 
     /// <summary>
-    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
-    /// Returns null when the attribute is absent (SHA256 will be computed instead).
-    /// </summary>
-    /// <summary>
     /// Determines where the test method is declared.
     /// </summary>
     /// <param name="testCase">The test case xUnit reported.</param>
@@ -731,6 +727,10 @@ public sealed class XpingMessageSink(
         return SourceLocationLookup.Of(ResolveMethodInfo(testMethod.Method));
     }
 
+    /// <summary>
+    /// Reads the pinned fingerprint from <see cref="XpingFingerprintAttribute"/> on the test method.
+    /// Returns null when the attribute is absent (SHA256 will be computed instead).
+    /// </summary>
     private static string? ReadPinnedFingerprint(IMethodInfo method)
     {
         MethodInfo? methodInfo = ResolveMethodInfo(method);

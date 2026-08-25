@@ -24,6 +24,9 @@ namespace Xping.Cli.Tests.Report;
 public sealed class ShareableOutputTests
 {
     private const int FenceWidth = 72;
+
+    // Severity marker, two spaces, kind label, two spaces — the column the trailer starts at.
+    private const int Indent = 6;
     private const string Fence = "```";
 
     // ---------------------------------------------------------------------
@@ -506,6 +509,56 @@ public sealed class ShareableOutputTests
             $"'{line}' is {line.Length} columns, over the {FenceWidth} the fence allows"));
     }
 
+    /// <summary>
+    /// The trailer's budget must spend the fence exactly, neither overrunning it nor eliding a path
+    /// that would have fitted. Both failure directions are invisible in ordinary output — one shows
+    /// up only at the widest paths, the other only as an ellipsis nobody questions — so the boundary
+    /// is pinned here.
+    /// </summary>
+    [Theory]
+    [InlineData("moderate")]
+    [InlineData("high")]
+    public void ThePathIsGivenEveryColumnTheTrailerHasLeftAndNoMore(string evidence)
+    {
+        // Grow one column at a time and find the longest path that survives whole.
+        string longest = "";
+        for (int length = 10; length < FenceWidth; length++)
+        {
+            string path = "tests/" + new string('x', length - 10) + ".cs";
+            string trailer = Trailer(Render(Envelope(FindingWith(evidence, path, null))));
+
+            if (!trailer.Contains("...", StringComparison.Ordinal))
+                longest = path;
+        }
+
+        Assert.NotEqual("", longest);
+
+        // That path fills the line to the fence, proving no column was left unspent.
+        string full = Trailer(Render(Envelope(FindingWith(evidence, longest, null))));
+        Assert.Equal(FenceWidth, full.Length);
+        Assert.EndsWith(longest, full, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The location may be dropped when the trailer has no room, but it must never be the reason the
+    /// line overflows or the head gets cut — a finding id long enough to squeeze the budget must
+    /// still leave "evidence …" readable.
+    /// </summary>
+    [Fact]
+    public void AnOversizedTrailerDropsTheLocationRatherThanTruncatingTheEvidence()
+    {
+        FindingDto finding = FindingWith("moderate", "tests/Cart/CartTests.cs", 42) with
+        {
+            Id = new string('f', FenceWidth - Indent - "evidence moderate | ".Length)
+        };
+
+        string trailer = Trailer(Render(Envelope(finding)));
+
+        Assert.True(trailer.Length <= FenceWidth, $"'{trailer}' is {trailer.Length} columns");
+        Assert.StartsWith("evidence moderate | ", trailer.TrimStart(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CartTests", trailer, StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
@@ -556,6 +609,14 @@ public sealed class ShareableOutputTests
 
         return builder.ToString();
     }
+
+    private static FindingDto FindingWith(string evidence, string? sourceFile, int? sourceLineNumber) =>
+        Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", sourceFile, sourceLineNumber)
+            with { EvidenceLevel = evidence };
+
+    /// <summary>Returns the dim trailer line of a single-finding report.</summary>
+    private static string Trailer(string report) =>
+        Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal)).TrimEnd();
 
     private static FindingDto Finding(
         string kind,

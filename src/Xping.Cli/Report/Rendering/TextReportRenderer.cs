@@ -202,7 +202,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             foreach (string part in trailer)
                 spent += part.Length + SeparatorWidth;
 
-            trailer.Add(FitPath(location, budget - spent));
+            // spent counts one separator per segment already in the list, which is exactly the
+            // number string.Join adds once the location makes a third — two separators for three
+            // segments — so the joined line lands on the budget rather than three columns over it.
+            if (FitPath(location, budget - spent) is { } fitted)
+                trailer.Add(fitted);
         }
 
         builder.Append(' ', Indent)
@@ -298,10 +302,17 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// separator rather than mid-segment keeps the result reading as a path: <c>.../CartTests.cs:42</c>
     /// rather than <c>...t/Cart/CartTests.cs:42</c>.
     /// </remarks>
-    private static string FitPath(string value, int width)
+    private static string? FitPath(string value, int width)
     {
-        if (value.Length <= width || width <= 3)
+        if (value.Length <= width)
             return value;
+
+        // Under four columns not even an ellipsis and one character fit. Returning the value
+        // untouched — as Fit() does at this width — would hand back a segment wider than its budget
+        // and put the whole trailer back under left truncation, which is the one thing this method
+        // exists to prevent. Nothing is the honest answer.
+        if (width <= 3)
+            return null;
 
         // Left to right, so the first separator that fits keeps the longest tail.
         for (int slash = 0; slash < value.Length; slash++)
@@ -313,7 +324,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
                 return string.Concat("...", value.AsSpan(slash));
         }
 
-        // A single segment longer than the budget: no boundary to cut at, so cut mid-name.
+        // A single segment longer than the budget: no boundary to cut at, so cut mid-name. Safe to
+        // delegate here because the width <= 3 case Fit() passes through was ruled out above.
         return Fit(value, width);
     }
 

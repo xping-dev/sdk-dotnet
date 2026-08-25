@@ -29,12 +29,19 @@ public sealed class XpingMessageSinkSourceLocationTests
     [Fact]
     public void TheRunnersOwnSourceInformationIsUsedWhenItSuppliedAny()
     {
+        const string supplied = "/build/shop/tests/CartTests.cs";
+
         (string? file, int? line) = XpingMessageSink.ResolveSourceLocation(
-            TestCase(fileName: "/build/shop/tests/CartTests.cs", lineNumber: 42),
+            TestCase(fileName: supplied, lineNumber: 42),
             TestMethod(nameof(Probe)));
 
-        Assert.Equal("/build/shop/tests/CartTests.cs", file);
+        // Compared against the relativizer's own answer rather than the literal: the runner's path
+        // goes through it too, and on a machine where "/build/shop" happened to look like a checkout
+        // the literal would be shortened and this would fail for a reason unrelated to what it tests.
+        // The line settles which route ran regardless — the fallback resolves this file, not line 42.
+        Assert.Equal(SourceLocationLookup.Relativize(supplied, repositoryRoot: null), file);
         Assert.Equal(42, line);
+        Assert.DoesNotContain(ThisFile, file, StringComparison.Ordinal);
     }
 
     /// <summary>
