@@ -188,9 +188,11 @@ The last segment of a finding's trailer is where the test is declared:
       evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 ```
 
-It is the file and the line the test's body opens on, made relative to the repository root, and it
+It is the file and the line the test's body starts on, made relative to the repository root, and it
 is printed whenever the SDK captured one rather than being reserved for a verbose mode — knowing a
-test is flaky is only half of what you need to fix it.
+test is flaky is only half of what you need to fix it. Whether that line is the opening brace or the
+first statement depends on how the assembly was built; see
+[known limitations](../known-limitations.md).
 
 None of NUnit, MSTest or xUnit reports this, so the SDK reads it from the test assembly's Portable
 PDB. That means a build with `DebugType=none` has no location to report, and the trailer ends at

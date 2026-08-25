@@ -53,8 +53,7 @@ public sealed class SourceLocationLookupTests
 
         Assert.NotNull(file);
         Assert.EndsWith(ThisFile, file, StringComparison.Ordinal);
-        Assert.NotNull(line);
-        Assert.Equal(SyncProbe(), line);
+        AssertBodyStart(line, SyncProbe());
     }
 
     /// <summary>
@@ -69,7 +68,7 @@ public sealed class SourceLocationLookupTests
 
         Assert.NotNull(file);
         Assert.EndsWith(ThisFile, file, StringComparison.Ordinal);
-        Assert.Equal(await AsyncProbe(), line);
+        AssertBodyStart(line, await AsyncProbe());
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public sealed class SourceLocationLookupTests
 
         Assert.NotNull(file);
         Assert.EndsWith(ThisFile, file, StringComparison.Ordinal);
-        Assert.Equal(IteratorProbe().First(), line);
+        AssertBodyStart(line, IteratorProbe().First());
     }
 
     [Fact]
@@ -89,7 +88,7 @@ public sealed class SourceLocationLookupTests
 
         Assert.NotNull(file);
         Assert.EndsWith(ThisFile, file, StringComparison.Ordinal);
-        Assert.Equal(GenericProbe<string>(), line);
+        AssertBodyStart(line, GenericProbe<string>());
     }
 
     [Fact]
@@ -101,7 +100,7 @@ public sealed class SourceLocationLookupTests
 
         Assert.NotNull(file);
         Assert.EndsWith(ThisFile, file, StringComparison.Ordinal);
-        Assert.Equal(Nested.Probe(), line);
+        AssertBodyStart(line, Nested.Probe());
     }
 
     /// <summary>
@@ -227,12 +226,13 @@ public sealed class SourceLocationLookupTests
     // ---------------------------------------------------------------------------
     // Probes
     //
-    // Each returns the line its own body opens on, which is what the PDB records. Declared here so
-    // an edit that moves them keeps the assertions honest.
+    // Each returns the line of its own first statement, captured as it runs. Every one of them puts
+    // that statement immediately below the opening brace, which is what lets the assertions accept
+    // either line without accepting anything else — see AssertBodyStart.
     // ---------------------------------------------------------------------------
 
     private static int SyncProbe()
-    {   // <- the opening brace is the line a PDB reports
+    {
         return Line();
     }
 
@@ -266,13 +266,28 @@ public sealed class SourceLocationLookupTests
     // ---------------------------------------------------------------------------
 
     /// <summary>
-    /// Returns the line the calling method's body opens on.
+    /// Returns the line of the call — which, in every probe, is its first statement.
+    /// </summary>
+    private static int Line([System.Runtime.CompilerServices.CallerLineNumber] int line = 0) => line;
+
+    /// <summary>
+    /// Asserts a resolved line is the start of the body whose first statement is at
+    /// <paramref name="firstStatement"/>.
     /// </summary>
     /// <remarks>
-    /// <c>[CallerLineNumber]</c> gives the line of the <i>call</i>, and every probe calls this on the
-    /// first line of its body — one line below the opening brace the PDB reports.
+    /// Two lines are accepted because the compiler emits two different answers and both are correct.
+    /// A debug build gives the method's opening brace its own sequence point, so that is what comes
+    /// back; an optimised build has no reason to keep a point for a brace that generates no code, and
+    /// the first thing with a sequence point is the first statement. Pinning either one alone passes
+    /// under one configuration and fails under the other — which is exactly what CI caught. What
+    /// holds under both is that the line is where the body starts, and the probes are written with
+    /// their first statement directly below the brace so that span is these two lines and no more.
     /// </remarks>
-    private static int Line([System.Runtime.CompilerServices.CallerLineNumber] int line = 0) => line - 1;
+    private static void AssertBodyStart(int? actual, int firstStatement)
+    {
+        Assert.NotNull(actual);
+        Assert.InRange(actual.Value, firstStatement - 1, firstStatement);
+    }
 
     private static (string? File, int? Line) Of(string name) =>
         SourceLocationLookup.Of(typeof(SourceLocationLookupTests).GetMethod(name, Probes)!);

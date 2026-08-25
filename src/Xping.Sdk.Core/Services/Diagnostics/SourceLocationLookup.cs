@@ -27,10 +27,18 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// sequence points — the same route VSTest's <c>DiaSession</c> takes to populate Test Explorer.
 /// </para>
 /// <para>
-/// The line reported is the method body's opening brace, not the <c>[Test]</c> attribute and not the
+/// The line reported is where the method body starts, not the <c>[Test]</c> attribute and not the
 /// signature. A PDB records where code is, and an attribute is not code; the first sequence point of
 /// a method body is the nearest true thing available. This matches what <c>DiaSession</c> returns, so
 /// a test navigated to from a report lands where the IDE would have put it.
+/// </para>
+/// <para>
+/// Which line that is depends on how the assembly was built. A debug build gives the opening brace
+/// its own sequence point and that is what comes back; an optimised build keeps no point for a brace
+/// that generates no code, so the first statement is the first thing the PDB can name. The two
+/// differ by a line and both sit inside the method, so nothing downstream needs to know which it
+/// got — but a test pinning one exact line will pass under one configuration and fail under the
+/// other.
 /// </para>
 /// <para>
 /// Every failure is silent. A missing PDB, a <c>DebugType=none</c> build, a single-file host with no

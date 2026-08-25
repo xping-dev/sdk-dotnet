@@ -276,7 +276,7 @@ exactly like one that needs one.
 
 ## General Limitations
 
-### Source Location Comes From The PDB, And Points At The Body
+### Source Location Comes From The PDB, And Points At The Start Of The Body
 
 **Affected Frameworks**: NUnit, MSTest, xUnit
 **Affected Versions**: 1.0.0-rc and later
@@ -293,18 +293,22 @@ None of the three frameworks reports this, so the SDK reads it from the assembly
 keyed by the test method's metadata token — the same route Test Explorer uses. That brings four
 limits worth knowing:
 
-**The line is the body's opening brace, not the attribute.** A PDB records where *code* is, and an
+**The line is where the body starts, not the attribute.** A PDB records where *code* is, and an
 attribute is not code. For
 
 ```csharp
 [Test]                       // line 40
 public void Checkout()       // line 41
-{                            // line 42  <- reported
-    Assert.That(...);
+{                            // line 42  <- Debug build
+    Assert.That(...);        // line 43  <- Release build
 }
 ```
 
-the SDK records line 42. This matches what your IDE navigates to.
+Which of the two you get depends on the build configuration. A debug build gives the opening brace
+its own sequence point, so line 42 is reported. An optimised build has no reason to keep a point for
+a brace that generates no code, so the first statement — line 43 — is the first thing the PDB can
+name. Both land inside the method, which is what the location is for; neither ever points at the
+attribute or the signature.
 
 **No PDB, no location.** Building with `DebugType=none` strips the symbols, and the trailer simply
 omits the location — everything else about the test is still recorded. Both the default portable
