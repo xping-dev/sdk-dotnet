@@ -211,7 +211,10 @@ public static class SourceLocationLookup
         }
         catch (ArgumentException)
         {
-            // A path spelled for another platform can carry characters this one rejects.
+            // A path spelled for another platform can carry characters this one rejects. Reachable
+            // only on .NET Framework, which this netstandard2.0 assembly still targets: .NET Core
+            // stopped validating path characters here, so the same call returns a value there and
+            // no test in this repository can enter this branch.
             return null;
         }
     }

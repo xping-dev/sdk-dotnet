@@ -10,7 +10,12 @@ using global::NUnit.Framework.Internal;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
+using Moq;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.Retry;
 using Xunit;
 using Assert = Xunit.Assert;
 
@@ -87,6 +92,121 @@ public sealed class XpingTrackAttributeSourceLocationTests
 
         Assert.Null(file);
         Assert.Null(line);
+    }
+
+    // ---------------------------------------------------------------------
+    // Through CreateTestExecution
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The wiring, not just the lookup: the location has to survive the journey from
+    /// <c>ITest.Method.MethodInfo</c> into the identity the execution carries.
+    /// </summary>
+    [Fact]
+    public void ARecordedExecutionCarriesTheDeclarationSiteOfItsTestMethod()
+    {
+        TestIdentity identity = Identify(nameof(SampleTestMethod));
+
+        Assert.NotNull(identity.SourceFile);
+        Assert.EndsWith(ThisFile, identity.SourceFile, StringComparison.Ordinal);
+        AssertBodyStart(identity.SourceLineNumber, nameof(SampleTestMethod));
+    }
+
+    [Fact]
+    public void AnAsyncTestRecordsTheLineOfItsOwnBody()
+    {
+        TestIdentity identity = Identify(nameof(AsyncSampleTestMethod));
+
+        Assert.NotNull(identity.SourceFile);
+        AssertBodyStart(identity.SourceLineNumber, nameof(AsyncSampleTestMethod));
+    }
+
+    /// <summary>
+    /// Two tests in one fixture must not collapse onto one line once the identity is built — the
+    /// same property the lookup guarantees, checked after the value has been through the adapter.
+    /// </summary>
+    [Fact]
+    public void TwoRecordedExecutionsCarryDifferentLines()
+    {
+        Assert.NotEqual(
+            Identify(nameof(SampleTestMethod)).SourceLineNumber,
+            Identify(nameof(AsyncSampleTestMethod)).SourceLineNumber);
+    }
+
+    /// <summary>
+    /// Runs the adapter's own execution builder and returns the identity it asked for.
+    /// </summary>
+    private static TestIdentity Identify(string methodName)
+    {
+        TestIdentity? captured = null;
+
+        var identityGenerator = new Mock<ITestIdentityGenerator>();
+        identityGenerator
+            .Setup(g => g.Generate(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<object[]?>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<int?>(),
+                It.IsAny<string?>()))
+            .Returns<string, string, object[]?, string?, string?, int?, string?>(
+                (_, assembly, _, _, sourceFile, sourceLineNumber, _) => captured = new TestIdentity
+                {
+                    Assembly = assembly,
+                    SourceFile = sourceFile,
+                    SourceLineNumber = sourceLineNumber
+                });
+
+        var executionTracker = new Mock<IExecutionTracker>();
+        executionTracker
+            .Setup(t => t.CreateExecutionContext(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>()))
+            .Returns(new TestOrchestrationRecord());
+
+        object services = Activator.CreateInstance(
+            typeof(XpingAttributeServices),
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            args:
+            [
+                executionTracker.Object,
+                new Mock<IRetryDetector<ITest>>().Object,
+                identityGenerator.Object,
+                true
+            ],
+            culture: null)!;
+
+        MethodInfo create = typeof(XpingTrackAttribute).GetMethod(
+            "CreateTestExecution", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        create.Invoke(
+            null,
+            [
+                services,
+                TestFor(methodName),
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                TimeSpan.FromMilliseconds(1),
+                "worker-1",
+                typeof(XpingTrackAttributeSourceLocationTests).FullName
+            ]);
+
+        Assert.NotNull(captured);
+        return captured;
+    }
+
+    /// <summary>
+    /// Asserts a line is the start of the named probe's body.
+    /// </summary>
+    /// <remarks>
+    /// A debug build reports the opening brace and an optimised build the first statement, so the
+    /// value is checked against the lookup's own answer for the same method rather than a constant:
+    /// the point here is that the adapter carried it through unchanged, not what the compiler chose.
+    /// </remarks>
+    private static void AssertBodyStart(int? actual, string methodName)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(SourceLocationLookup.Of(TestFor(methodName).Method?.MethodInfo).Line, actual);
     }
 
     // ---------------------------------------------------------------------

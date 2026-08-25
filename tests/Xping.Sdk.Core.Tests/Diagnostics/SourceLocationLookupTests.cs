@@ -104,8 +104,8 @@ public sealed class SourceLocationLookupTests
     }
 
     /// <summary>
-    /// A dynamic method has no metadata token to look up. It must come back empty rather than
-    /// throwing, because the same swallow protects every other shape the runtime can produce.
+    /// A dynamic method belongs to an anonymous assembly with no location, so there is no file to
+    /// look beside and the lookup stops before it reads anything.
     /// </summary>
     [Fact]
     public void AMethodWithNoMetadataResolvesToNothingRatherThanThrowing()
@@ -113,6 +113,36 @@ public sealed class SourceLocationLookupTests
         var dynamic = new DynamicMethod("Probe", typeof(void), Type.EmptyTypes);
         ILGenerator il = dynamic.GetILGenerator();
         il.Emit(System.Reflection.Emit.OpCodes.Ret);
+
+        (string? file, int? line) = SourceLocationLookup.Of(dynamic);
+
+        Assert.Null(file);
+        Assert.Null(line);
+    }
+
+    /// <summary>
+    /// The same shape, but reaching further in: a dynamic method anchored to a real module resolves
+    /// to an assembly that <i>does</i> have symbols, so the PDB opens and the failure happens at the
+    /// metadata read instead.
+    /// </summary>
+    /// <remarks>
+    /// This is what the blanket <c>catch</c> in the resolver is for, and the only test that reaches
+    /// it. <c>MetadataToken</c> throws <see cref="InvalidOperationException"/> for a method that was
+    /// never written to metadata — a shape mocking and proxy libraries emit routinely — and a test
+    /// run must not end because the SDK went looking for a line number.
+    /// </remarks>
+    [Fact]
+    public void AMethodWithoutATokenInAnAssemblyThatHasSymbolsStillResolvesToNothing()
+    {
+        var dynamic = new DynamicMethod(
+            "Probe", typeof(void), Type.EmptyTypes, typeof(SourceLocationLookupTests).Module);
+        ILGenerator il = dynamic.GetILGenerator();
+        il.Emit(System.Reflection.Emit.OpCodes.Ret);
+
+        // The premise: this method's assembly is the one these tests read symbols from all through
+        // this file, so the lookup gets past the "no PDB" exit and into the read itself.
+        Assert.NotEqual(string.Empty, dynamic.Module.Assembly.Location);
+        Assert.Throws<InvalidOperationException>(() => dynamic.MetadataToken);
 
         (string? file, int? line) = SourceLocationLookup.Of(dynamic);
 
@@ -148,6 +178,43 @@ public sealed class SourceLocationLookupTests
 
         for (int i = 0; i < actual.Length; i++)
             Assert.Equal(expected[i % methods.Length], actual[i]);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Nothing to read
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The documented <c>DebugType=none</c> behaviour, exercised against a real assembly that ships
+    /// without symbols rather than by rebuilding one.
+    /// </summary>
+    /// <remarks>
+    /// The shared framework has no <c>.pdb</c> beside it, so a BCL method takes the same path a test
+    /// assembly built without symbols would: the PDB never opens, and the location is absent instead
+    /// of the run being disturbed. This is the case a user hits by building with
+    /// <c>DebugType=none</c>, and it is the one the report has to survive.
+    /// </remarks>
+    [Fact]
+    public void AMethodInAnAssemblyWithNoSymbolsResolvesToNothing()
+    {
+        (string? file, int? line) = SourceLocationLookup.Of(typeof(object).GetMethod(nameof(ToString)));
+
+        Assert.Null(file);
+        Assert.Null(line);
+    }
+
+    /// <summary>
+    /// A method with no body has a metadata token but no sequence points, so the lookup reaches the
+    /// PDB and finds nothing there — a different path from having no PDB at all.
+    /// </summary>
+    [Fact]
+    public void AMethodWithNoBodyResolvesToNothing()
+    {
+        (string? file, int? line) = SourceLocationLookup.Of(
+            typeof(Bodyless).GetMethod(nameof(Bodyless.Declared)));
+
+        Assert.Null(file);
+        Assert.Null(line);
     }
 
     // ---------------------------------------------------------------------------
@@ -214,6 +281,42 @@ public sealed class SourceLocationLookupTests
     }
 
     [Fact]
+    public void AnEmptyPathIsReturnedUnchanged()
+    {
+        Assert.Equal(string.Empty, SourceLocationLookup.Relativize(string.Empty, repositoryRoot: null));
+    }
+
+    /// <summary>
+    /// No deterministic root, no tree on this machine, and no root supplied: there is nothing to
+    /// shorten against, and the absolute path is kept rather than dropped.
+    /// </summary>
+    [Fact]
+    public void APathWithNoRootAnywhereIsKeptVerbatim()
+    {
+        const string path = "/elsewhere/agent/work/CartTests.cs";
+
+        Assert.Equal(path, SourceLocationLookup.Relativize(path, repositoryRoot: null));
+    }
+
+    /// <summary>
+    /// A malformed path is carried through rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// On .NET, <see cref="Path.GetDirectoryName(string)"/> accepts this and returns a directory, so
+    /// what is covered here is the ordinary route with odd input. The <c>ArgumentException</c> guard
+    /// in the resolver is for the .NET Framework side of the netstandard2.0 target, where the same
+    /// call rejects invalid path characters — unreachable from this test project, and kept because
+    /// the assembly is built to run there too.
+    /// </remarks>
+    [Fact]
+    public void AMalformedPathIsKeptRatherThanThrowing()
+    {
+        const string path = "\u0000invalid/CartTests.cs";
+
+        Assert.Equal(path, SourceLocationLookup.Relativize(path, repositoryRoot: null));
+    }
+
+    [Fact]
     public void APathThatMerelySharesAPrefixWithTheRootIsNotTruncated()
     {
         // "/build/shop-legacy" is not inside "/build/shop", and a naive prefix test would report it
@@ -251,6 +354,12 @@ public sealed class SourceLocationLookupTests
     private static int GenericProbe<T>()
     {
         return Line();
+    }
+
+    /// <summary>Declares a method the compiler emits no body, and so no sequence points, for.</summary>
+    private abstract class Bodyless
+    {
+        public abstract int Declared();
     }
 
     private static class Nested
