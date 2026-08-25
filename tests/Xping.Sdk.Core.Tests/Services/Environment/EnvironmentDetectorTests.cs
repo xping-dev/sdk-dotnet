@@ -63,6 +63,39 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task BuildEnvironmentInfoAsync_OnAnyMachine_CapturesTheLocalOffsetAndZone()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        // Asserted against the running machine's own zone rather than a fixed value: the point is
+        // that the detector reads the real clock, and pinning an expected offset would only test
+        // whichever agent happened to run the suite.
+        Assert.Equal(TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow), info.UtcOffset);
+        Assert.Equal(TimeZoneInfo.Local.Id, info.TimeZoneId);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_OnConsecutiveCalls_ReportsTheOffsetOfEachCall()
+    {
+        // The zone is cached; the offset must not be. A suite running either side of a
+        // daylight-saving transition depends on the second reading differing from the first, and a
+        // cached offset would silently report the same figure forever.
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo first = await detector.BuildEnvironmentInfoAsync();
+        EnvironmentInfo second = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(first.TimeZoneId, second.TimeZoneId);
+        Assert.Equal(TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow), second.UtcOffset);
+    }
+
+    [Fact]
     public async Task BuildEnvironmentInfoAsync_WithGitHubActions_CapturesNormalizedBranchAndConfiguredCiName()
     {
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");

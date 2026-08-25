@@ -709,6 +709,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             EnvironmentName = environment.EnvironmentName,
             IsCIEnvironment = environment.IsCIEnvironment,
             NetworkMetrics = environment.NetworkMetrics,
+            UtcOffset = environment.UtcOffset,
+            TimeZoneId = environment.TimeZoneId,
             CustomProperties = new ReadOnlyDictionary<string, string>(properties)
         };
     }

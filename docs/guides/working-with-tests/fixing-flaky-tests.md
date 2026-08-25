@@ -254,8 +254,8 @@ After implementing a fix:
 ### Time-Based Flakiness
 
 **Indicators:**
-- Temporal clustering in failure pattern
-- Fails at specific times or dates
+- A `TimeSensitive` finding from `dotnet xping report`
+- Fails at specific local times or dates
 - Inconsistent with no clear environmental cause
 
 **Fixes:**
@@ -321,6 +321,9 @@ After implementing a fix:
 - Pass rate degrades over time within a test run
 - Execution stability decreases
 - "Out of memory" or "too many open files" errors
+
+Xping does not detect this — it records no memory, GC, or handle counters. The indicators above are
+ones to check by hand; the fixes below stand regardless.
 
 **Fixes:**
 

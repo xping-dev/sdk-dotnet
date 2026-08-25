@@ -220,6 +220,45 @@ constructor frame instead.
 
 ---
 
+## Local Analysis
+
+### Resource Exhaustion Is Not Detected
+
+**Impact**: A test that fails because the suite leaked memory, file handles, or connections is
+reported as `Flaky` — unreliable, with no indication that resource pressure is why. A suite that
+degrades as it runs long is not reported at all.
+
+**Reason**: nothing collects it. The SDK records no memory, GC, handle, or connection counter at any
+point, so there is no signal for an analyzer to read. `GlobalPosition` and `SuiteElapsedTime` *are*
+recorded per execution, but no finding provider consumes them.
+
+**What works**: `DurationRegression` catches a test that got slower against its own baseline across
+runs, which sometimes has the same underlying cause.
+
+### `TimeSensitive` Needs Runs Recorded With A Time Zone
+
+**Impact**: an existing `.xping/` store produces no `TimeSensitive` findings until new runs
+accumulate in it.
+
+**Reason**: placing a failure at a local time of day needs the machine's UTC offset, which the SDK
+began recording only recently. A run without one is **excluded** from the analysis rather than read
+as UTC — a machine two hours ahead would otherwise have every evening run filed as an afternoon one.
+The report is silent about this rather than warning, because "excluded" and "no pattern" produce the
+same correct answer: no finding.
+
+### `TimeSensitive` Bins Are Coarse, And Deliberately
+
+**Impact**: a test that fails only on Mondays, or only at month end, is not reported as
+time-sensitive. Neither is one whose failures all fall inside a single day.
+
+**Reason**: the default window is twenty runs over fourteen days. That is at most two of any given
+weekday and one month boundary, which cannot support a rate. The axes are therefore a six-hour
+quarter of the local day, weekend against weekday, and one UTC offset against another — and every
+finding additionally requires failures spanning three separate local days, so a single bad evening
+is not reported as an evening pattern. A finer bin would fire more often and mean less.
+
+---
+
 ## General Limitations
 
 ### CI Flaky Tests: `XpingContextTests` (NUnit Adapter Tests)
@@ -287,3 +326,4 @@ When reporting, please include:
 | 1.1.0   | Added known CI flaky test `RecordTest_AfterInitialize_DoesNotThrow` as intentional flakiness example |
 | 1.2.0   | Documented xUnit retry attempt tracking and the retry libraries it covers |
 | 1.3.0   | Documented MSTest retry attempt tracking and how attempt numbers are derived |
+| 1.4.0   | Documented that resource exhaustion is not detected, and the limits of `TimeSensitive` |

@@ -28,12 +28,36 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal(string.Empty, info.EnvironmentName);
         Assert.False(info.IsCIEnvironment);
         Assert.Null(info.NetworkMetrics);
+        Assert.Null(info.UtcOffset);
+        Assert.Null(info.TimeZoneId);
         Assert.Empty(info.CustomProperties);
     }
 
     // ---------------------------------------------------------------------------
     // With* methods
     // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WithLocalTimeZone_ShouldSetOffsetAndZone()
+    {
+        var info = new EnvironmentInfoBuilder()
+            .WithLocalTimeZone(TimeSpan.FromHours(-5), "America/New_York")
+            .Build();
+
+        Assert.Equal(TimeSpan.FromHours(-5), info.UtcOffset);
+        Assert.Equal("America/New_York", info.TimeZoneId);
+    }
+
+    [Fact]
+    public void WithLocalTimeZone_WithNoZoneAvailable_ShouldLeaveBothUnset()
+    {
+        // A machine with no usable time zone records nothing, not a zero offset. Analysis treats the
+        // two differently, and a fabricated zero would be indistinguishable from a genuine UTC host.
+        var info = new EnvironmentInfoBuilder().WithLocalTimeZone(null, null).Build();
+
+        Assert.Null(info.UtcOffset);
+        Assert.Null(info.TimeZoneId);
+    }
 
     [Fact]
     public void WithMachineName_ShouldSetMachineName()
@@ -180,6 +204,7 @@ public sealed class EnvironmentInfoBuilderTests
             .WithMachineName("host")
             .WithOperatingSystem("Windows")
             .WithIsCIEnvironment(true)
+            .WithLocalTimeZone(TimeSpan.FromHours(2), "Europe/Berlin")
             .AddCustomProperty("k", "v");
 
         // Act
@@ -190,6 +215,8 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal(string.Empty, info.MachineName);
         Assert.Equal(string.Empty, info.OperatingSystem);
         Assert.False(info.IsCIEnvironment);
+        Assert.Null(info.UtcOffset);
+        Assert.Null(info.TimeZoneId);
         Assert.Empty(info.CustomProperties);
     }
 
@@ -216,6 +243,7 @@ public sealed class EnvironmentInfoBuilderTests
             .WithEnvironmentName("CI")
             .WithIsCIEnvironment(true)
             .WithNetworkMetrics(metrics)
+            .WithLocalTimeZone(TimeSpan.FromHours(2), "Europe/Berlin")
             .AddCustomProperty("branch", "main")
             .Build();
 
@@ -226,6 +254,8 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal("CI", info.EnvironmentName);
         Assert.True(info.IsCIEnvironment);
         Assert.NotNull(info.NetworkMetrics);
+        Assert.Equal(TimeSpan.FromHours(2), info.UtcOffset);
+        Assert.Equal("Europe/Berlin", info.TimeZoneId);
         Assert.Equal("main", info.CustomProperties["branch"]);
     }
 }

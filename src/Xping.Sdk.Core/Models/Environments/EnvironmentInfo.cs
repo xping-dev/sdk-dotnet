@@ -36,6 +36,8 @@ public sealed class EnvironmentInfo
         string environmentName,
         bool isCIEnvironment,
         NetworkMetrics? networkMetrics,
+        TimeSpan? utcOffset,
+        string? timeZoneId,
         IReadOnlyDictionary<string, string> customProperties)
     {
         MachineName = machineName;
@@ -45,6 +47,8 @@ public sealed class EnvironmentInfo
         EnvironmentName = environmentName;
         IsCIEnvironment = isCIEnvironment;
         NetworkMetrics = networkMetrics;
+        UtcOffset = utcOffset;
+        TimeZoneId = timeZoneId;
         CustomProperties = customProperties;
     }
 
@@ -83,6 +87,41 @@ public sealed class EnvironmentInfo
     /// This property is only populated when a network metrics collection is enabled.
     /// </summary>
     public NetworkMetrics? NetworkMetrics { get; init; }
+
+    /// <summary>
+    /// Gets the machine's offset from UTC when the session started, or <see langword="null"/> when it
+    /// was not captured.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Timestamps elsewhere in a session are UTC, which is unambiguous but says nothing about when a
+    /// run happened <i>locally</i>. "Fails overnight" and "fails after lunch" are claims about the
+    /// developer's clock, and on a machine that is not on UTC they cannot be recovered from the
+    /// instant alone.
+    /// </para>
+    /// <para>
+    /// <see langword="null"/> means nothing was recorded — either the session predates this field, or
+    /// the machine had no usable time zone. It never means UTC. Analysis that treated the two alike
+    /// would invent the very measurement it is trying to make.
+    /// </para>
+    /// <para>
+    /// Captured once, when the environment is detected. A run that crosses a daylight-saving
+    /// transition keeps the offset it started at; the shift shows up as a difference between
+    /// sessions, which is where it is analysed.
+    /// </para>
+    /// </remarks>
+    public TimeSpan? UtcOffset { get; init; }
+
+    /// <summary>
+    /// Gets the machine's time zone identifier, or <see langword="null"/> when it was not captured.
+    /// </summary>
+    /// <remarks>
+    /// A Windows identifier on Windows ("W. Europe Standard Time") and an IANA one elsewhere
+    /// ("Europe/Berlin"); the two are not translated, because nothing needs them to be. Its use is to
+    /// tell one machine's offset change apart from another's: two sessions with different offsets are
+    /// a daylight-saving shift only if they agree on the zone.
+    /// </remarks>
+    public string? TimeZoneId { get; init; }
 
     /// <summary>
     /// Gets the custom properties for additional environment information.

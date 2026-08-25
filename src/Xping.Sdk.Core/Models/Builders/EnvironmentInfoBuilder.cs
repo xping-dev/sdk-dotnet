@@ -21,6 +21,8 @@ public sealed class EnvironmentInfoBuilder
     private string _environmentName;
     private bool _isCIEnvironment;
     private NetworkMetrics? _networkMetrics;
+    private TimeSpan? _utcOffset;
+    private string? _timeZoneId;
     private readonly Dictionary<string, string> _customProperties;
 
     /// <summary>
@@ -100,6 +102,28 @@ public sealed class EnvironmentInfoBuilder
     }
 
     /// <summary>
+    /// Sets the machine's local time zone.
+    /// </summary>
+    /// <param name="utcOffset">
+    /// The offset from UTC, or <see langword="null"/> when it could not be determined.
+    /// </param>
+    /// <param name="timeZoneId">
+    /// The zone identifier, or <see langword="null"/> when it could not be determined.
+    /// </param>
+    /// <returns>This builder.</returns>
+    /// <remarks>
+    /// Both are passed together because neither is worth much alone: the offset without the zone
+    /// cannot distinguish a daylight-saving shift from a machine that moved, and the zone without the
+    /// offset requires a time zone database the reader may not have.
+    /// </remarks>
+    public EnvironmentInfoBuilder WithLocalTimeZone(TimeSpan? utcOffset, string? timeZoneId)
+    {
+        _utcOffset = utcOffset;
+        _timeZoneId = timeZoneId;
+        return this;
+    }
+
+    /// <summary>
     /// Adds a custom property.
     /// </summary>
     public EnvironmentInfoBuilder AddCustomProperty(string key, string value)
@@ -137,6 +161,8 @@ public sealed class EnvironmentInfoBuilder
             environmentName: _environmentName,
             isCIEnvironment: _isCIEnvironment,
             networkMetrics: _networkMetrics,
+            utcOffset: _utcOffset,
+            timeZoneId: _timeZoneId,
             customProperties: new ReadOnlyDictionary<string, string>(_customProperties));
     }
 
@@ -152,6 +178,8 @@ public sealed class EnvironmentInfoBuilder
         _environmentName = string.Empty;
         _isCIEnvironment = false;
         _networkMetrics = null;
+        _utcOffset = null;
+        _timeZoneId = null;
         _customProperties.Clear();
         return this;
     }

@@ -195,6 +195,14 @@ internal static class TestSessionFactory
     /// <param name="branch">Branch it ran on, or <see langword="null"/> for none.</param>
     /// <param name="startedAt">Explicit start time; defaults to one minute per ordinal.</param>
     /// <param name="customProperties">Extra environment properties, such as the recording mode.</param>
+    /// <param name="utcOffset">
+    /// The machine's offset from UTC, or <see langword="null"/> to record none at all. Null is the
+    /// default because it is what a session written before the field existed looks like, and because
+    /// every fixture that predates temporal analysis must keep meaning exactly what it did.
+    /// </param>
+    /// <param name="timeZoneId">
+    /// The zone the offset came from. Only meaningful alongside <paramref name="utcOffset"/>.
+    /// </param>
     /// <returns>The session.</returns>
     public static TestSession Session(
         int ordinal,
@@ -202,7 +210,9 @@ internal static class TestSessionFactory
         string? sha = null,
         string? branch = null,
         DateTime? startedAt = null,
-        IReadOnlyDictionary<string, string>? customProperties = null)
+        IReadOnlyDictionary<string, string>? customProperties = null,
+        TimeSpan? utcOffset = null,
+        string? timeZoneId = "Europe/Berlin")
     {
         var properties = new Dictionary<string, string>();
         if (sha != null)
@@ -219,6 +229,7 @@ internal static class TestSessionFactory
         EnvironmentInfo environment = new EnvironmentInfoBuilder()
             .WithMachineName("dev-box")
             .WithEnvironmentName("Local")
+            .WithLocalTimeZone(utcOffset, utcOffset is null ? null : timeZoneId)
             .AddCustomProperties(properties)
             .Build();
 

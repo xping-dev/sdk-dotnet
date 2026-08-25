@@ -134,16 +134,32 @@ public class UserServiceTests
 ## Pattern 4: Time-Based Flakiness
 
 ### Symptoms
-- Failures at specific times (end of month, weekends, timezone changes)
+- Failures at specific times (overnight, weekends, timezone changes)
 - Date/time comparison failures
 - Intermittent failures that aren't immediately reproducible
 - Daylight saving time issues
 
 ### How Xping Identifies It
-- **Failure Pattern Analysis**: Shows temporal clustering (failures at specific times)
-- **Low Execution Stability**: No clear cause for variance
-- **Historical Pass Rate**: Periodic dips corresponding to time periods
-- **Environment Consistency**: Different behavior across timezones
+
+`dotnet xping report` emits a **`TimeSensitive`** finding when a test's failure rate depends on when
+it ran. It splits the test's executions three ways and reports the widest gap:
+
+- **Local time of day** — the worst six-hour quarter of the local day against the rest of it. Six
+  hours rather than one, because a fortnight of runs cannot fill twenty-four hourly bins.
+- **Weekend against weekday** — read on the machine's own clock. Note that a single weekday
+  ("only fails on Mondays") is *not* detectable at the default window, which holds at most two of
+  any given day.
+- **UTC offset** — when the window contains two offsets for one time zone, which is what a daylight
+  saving change looks like, the two sides are compared. This is how DST is detected without a
+  timezone database.
+
+Two things gate every finding: at least five executions on each side, and **failures spanning at
+least three separate local days**. The second is what stops one bad evening being reported as an
+evening pattern.
+
+This reads the time zone and UTC offset the SDK records with each run. Runs recorded before that
+field existed are excluded rather than assumed to be on UTC, so an existing `.xping/` store produces
+nothing here until new runs accumulate.
 
 ### Example
 
@@ -163,9 +179,15 @@ public void ScheduleEvent_CreatesEventForToday()
 ```
 
 **Xping Detection:**
-- Failure Pattern: 0.44 (temporal clustering around specific times)
-- Execution Stability: 0.51 (inconsistent but no clear reason)
-- Overall Confidence: 0.47 (Unreliable)
+
+```
+MED   time sensitive   ...ScheduleEvent_CreatesEventForToday
+      failed 100% in 00:00-06:00 local against 0% in the rest of the
+      day, gap 100 pts across 4 days
+```
+
+The finding says *when*, never *why*. It is capped at medium severity for that reason: a clock
+reading tells you where to look and nothing about what to fix.
 
 > **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#time-based-flakiness).
 
@@ -180,10 +202,17 @@ public void ScheduleEvent_CreatesEventForToday()
 - Performance degrades over time
 
 ### How Xping Identifies It
-- **Pass Rate Degrades**: Within a single test session over time
-- **Execution Stability Decreases**: Later tests take longer
-- **Dependency Impact**: Shows cascade patterns (failures spread to more tests)
-- **Position in Suite**: Tests later in execution order fail more often
+
+**It does not.** This pattern is documented because it is worth recognising by hand, not because
+Xping detects it.
+
+The SDK records no memory, GC, or handle counters — see
+[What gets recorded](../../../README.md#what-gets-recorded) — so there is no signal a leak could be
+found in. It does record each execution's position in the run and the time elapsed since the run
+started, but nothing reads them, so "degrades late in a long run" is not reported either.
+
+To recognise it yourself: run the suite with `--filter` narrowed to the suspect tests and see
+whether they pass in isolation, and compare a full run's early and late failures by hand.
 
 ### Example
 
@@ -204,10 +233,8 @@ public async Task ProcessLargeFile_Succeeds()
 // After 100 runs, OS runs out of file handles
 ```
 
-**Xping Detection:**
-- Execution Stability: 0.36 (degrades over time)
-- Historical Pass Rate: 0.44 (first runs pass, later fail)
-- Overall Confidence: 0.38 (Highly Unreliable)
+**Xping Detection:** none. Xping will report the test as `Flaky` once it starts failing, which says
+it is unreliable without saying that a leak is why.
 
 > **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#resource-exhaustion).
 
@@ -267,6 +294,9 @@ Use this table to quickly identify the pattern based on Xping factor scores:
 | **Time-Based** | 🟡 Medium | 🟡 Medium | 🟡 Medium | ✅ High | Temporal |
 | **Resource Exhaustion** | 🔴 Low | 🟡 Medium | 🟡 Medium | 🔴 Low | Degrades over time |
 | **Non-Deterministic Data** | ✅ High | 🟡 Medium | ✅ High | ✅ High | Truly random |
+
+These are the shapes to look for by eye. Only some of them have a finding behind them today —
+`TimeSensitive` covers the time-based row; resource exhaustion has none, per Pattern 5.
 
 ---
 

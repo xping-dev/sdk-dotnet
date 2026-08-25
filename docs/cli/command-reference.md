@@ -110,9 +110,18 @@ report prints it.
 | `DurationUnstable` | unstable timing | The test's duration varies too much for a regression to be measurable |
 | `OrderDependent` | order dependent | The test fails when it runs after one particular predecessor |
 | `ParallelSensitive` | concurrency | The test's failure rate differs between parallel and serial execution |
+| `TimeSensitive` | time sensitive | The test's failures cluster at one local time of day, day group, or UTC offset |
 | `NetworkDependent` | network | The test's failures cluster in runs with degraded or absent network |
 | `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
 | `NeverRun` | never run | The test was expected but never executed |
+
+`TimeSensitive` reads three axes and reports the widest gap: the local six-hour quarter of the day,
+weekend against weekday, and — when the window contains two UTC offsets for one time zone, which is
+what a daylight-saving change looks like — one side of the change against the other. The failing
+side must span at least three separate local days, so a bad afternoon is not reported as an
+afternoon pattern. It needs the time zone the SDK records per run, so runs recorded before that
+field existed are excluded rather than read as UTC; see
+[known limitations](../known-limitations.md).
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
@@ -180,7 +189,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.3",
+  "schemaVersion": "1.4",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

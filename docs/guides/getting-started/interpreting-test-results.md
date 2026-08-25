@@ -39,13 +39,13 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
 - **Test Framework**: NUnit, xUnit, MSTest with version numbers
 - **Environment Name**: "Local", "CI", "Staging", "Production"
 - **CI/CD Context**: Whether running in continuous integration
+- **Time Zone and UTC Offset**: The machine's clock at the start of the run, which is what places a
+  failure at a local time of day rather than only at a UTC instant
 
 ### Execution Context
-- **Position in Suite**: Order of test execution
-- **Global Position**: Position across all parallel threads
+- **Position in Suite**: Order of test execution **on its worker** — not across the run
+- **Global Position**: Position across all parallel threads; this is the run-wide ordinal
 - **Worker ID**: Parallel execution worker/thread identifier
-- **Test Suite ID**: Identifier grouping tests in the same run
-- **Total Tests in Suite**: Size of the test suite
 - **Suite Elapsed Time**: Time since test suite started
 - **Collection/Fixture Name**: Framework-specific grouping
 

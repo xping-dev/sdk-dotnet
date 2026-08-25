@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Serialization;
 
 namespace Xping.Sdk.Core.Tests.Serialization;
@@ -252,6 +254,37 @@ public sealed class XpingJsonSerializerTests
         var restored = serializer.Deserialize<SampleRecord>(json);
 
         Assert.Equal(original, restored);
+    }
+
+    [Fact]
+    public void RoundTrip_EnvironmentInfo_ShouldPreserveTheLocalTimeZone()
+    {
+        var serializer = BuildSerializer();
+        var original = new EnvironmentInfoBuilder()
+            .WithMachineName("build-agent-01")
+            .WithLocalTimeZone(TimeSpan.FromHours(-5.5), "Some/Zone")
+            .Build();
+
+        var restored = serializer.Deserialize<EnvironmentInfo>(serializer.Serialize(original));
+
+        Assert.NotNull(restored);
+        Assert.Equal(TimeSpan.FromHours(-5.5), restored!.UtcOffset);
+        Assert.Equal("Some/Zone", restored.TimeZoneId);
+    }
+
+    [Fact]
+    public void RoundTrip_EnvironmentInfo_WithNoTimeZone_ShouldStayNullRatherThanBecomeZero()
+    {
+        // The distinction analysis depends on: a machine that recorded nothing must not come back
+        // from JSON looking like a machine that recorded UTC.
+        var serializer = BuildSerializer();
+        var original = new EnvironmentInfoBuilder().WithMachineName("build-agent-01").Build();
+
+        var restored = serializer.Deserialize<EnvironmentInfo>(serializer.Serialize(original));
+
+        Assert.NotNull(restored);
+        Assert.Null(restored!.UtcOffset);
+        Assert.Null(restored.TimeZoneId);
     }
 
     [Fact]

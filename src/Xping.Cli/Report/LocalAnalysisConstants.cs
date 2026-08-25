@@ -178,6 +178,46 @@ internal static class LocalAnalysisConstants
     public const int ParallelSensitiveMinArmExecutions = 5;
 
     /// <summary>
+    /// Difference in failure rate across a test's temporal split that indicates sensitivity (0.30).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same figure as <see cref="ParallelSensitivityDelta"/>, and applied the same
+    /// way: two arms, an absolute comparison, either direction qualifying. The two findings ask the
+    /// same question of different axes, and giving them different bars would mean a gap that counts
+    /// as concurrency sensitivity does not count as time sensitivity, for no reason a reader could
+    /// discover.
+    /// </remarks>
+    public const double TimeSensitivityDelta = 0.30;
+
+    /// <summary>
+    /// Executions each side of a temporal split needs before the two are compared (5).
+    /// </summary>
+    /// <remarks>
+    /// Matches <see cref="ParallelSensitiveMinArmExecutions"/> for the same reason it was chosen
+    /// there: below five a side, one unlucky execution clears
+    /// <see cref="TimeSensitivityDelta"/> on its own.
+    /// </remarks>
+    public const int TimeSensitiveMinArmExecutions = 5;
+
+    /// <summary>
+    /// Distinct local dates the failing side of a temporal split must span (3).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The guard the other thresholds cannot supply. Five failures inside one afternoon clear both
+    /// the arm size and the delta, and reporting that as "fails between 12:00 and 18:00" describes a
+    /// single bad session in the language of a recurring pattern.
+    /// </para>
+    /// <para>
+    /// Three dates is what makes the claim a pattern rather than an incident: the behaviour has to
+    /// have come back, on days that are not each other. It is also why this finding stays quiet on
+    /// most windows, which is the correct outcome — a fortnight of runs rarely contains three
+    /// separate days that agree.
+    /// </para>
+    /// </remarks>
+    public const int TimeSensitiveMinArmDays = 3;
+
+    /// <summary>
     /// Session failure rate at which the session itself is suspected, not the tests (0.30).
     /// </summary>
     /// <remarks>

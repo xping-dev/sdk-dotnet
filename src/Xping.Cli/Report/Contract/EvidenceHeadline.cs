@@ -53,6 +53,7 @@ internal static class EvidenceHeadline
         DurationRegressionEvidence regression => DurationRegression(regression),
         DurationUnstableEvidence unstable => DurationUnstable(unstable),
         ParallelSensitiveEvidence parallel => ParallelSensitive(parallel),
+        TimeSensitiveEvidence time => TimeSensitive(time),
         VanishedEvidence vanished => Vanished(vanished),
 
         // A kind whose provider ships later. Naming the kind is honest and useless in equal measure,
@@ -244,6 +245,32 @@ internal static class EvidenceHeadline
             new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}")
         ]);
 
+    /// <summary>
+    /// Phrases a split of a test's executions by when they ran.
+    /// </summary>
+    /// <remarks>
+    /// The distinct-day count is in the headline rather than only in the metrics, because it is what
+    /// separates this finding from a coincidence and a reader skimming a fence will not open the
+    /// evidence to look for it. "failed 80% in 18:00-24:00 local" invites belief on its own; the same
+    /// sentence ending "across 4 days" says how much belief it has earned.
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) TimeSensitive(TimeSensitiveEvidence e) =>
+    (
+        $"failed {Percent(e.Worse.FailureRate)} in {e.Worse.Label} against " +
+        $"{Percent(e.Other.FailureRate)} in {e.Other.Label}, gap {Points(e.Delta.FailureRatePct)} " +
+        $"across {Days(e.Worse.DistinctFailureDates)}",
+        [
+            new(
+                e.Worse.Label,
+                $"{e.Worse.Failures} of {e.Worse.Executions} executions ({Percent(e.Worse.FailureRate)})"),
+            new(
+                e.Other.Label,
+                $"{e.Other.Failures} of {e.Other.Executions} executions ({Percent(e.Other.FailureRate)})"),
+            new("gap", Points(e.Delta.FailureRatePct)),
+            new("spread", $"failures on {Days(e.Worse.DistinctFailureDates)}, in {Runs(e.Worse.Sessions)}"),
+            new("time zone", e.TimeZoneId)
+        ]);
+
     private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e) =>
     (
         $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier runs, " +
@@ -259,6 +286,9 @@ internal static class EvidenceHeadline
 
     private static string Runs(int count) =>
         count == 1 ? "1 run" : $"{count.ToString(CultureInfo.InvariantCulture)} runs";
+
+    private static string Days(int count) =>
+        count == 1 ? "1 day" : $"{count.ToString(CultureInfo.InvariantCulture)} days";
 
     /// <summary>
     /// Formats a rate in [0,1] as a whole percentage.
