@@ -17,18 +17,17 @@
 > your test projects can stay on any supported .NET version.
 
 ```bash
-dotnet new tool-manifest        # if your repo has no manifest yet
-dotnet tool install Xping.Cli
+dotnet tool install -g Xping.Cli
 ```
 
-Then run it as `dotnet xping`. To install for your user account instead, use `dotnet tool install -g Xping.Cli` and run it as `xping`.
+This puts an `xping` command on your `PATH`. To pin the version alongside a repo instead, install it into a tool manifest (`dotnet new tool-manifest && dotnet tool install Xping.Cli`) and invoke it as `dotnet xping`.
 
 ## Use
 
 Add an Xping SDK adapter to your test project, run `dotnet test` a few times, then:
 
 ```bash
-dotnet xping report
+xping report
 ```
 
 ```
@@ -59,7 +58,6 @@ The sparkline reads left to right, oldest run to newest — `●` passed, `○` 
 | `xping report` | Report flakiness from recent local runs |
 | `xping report --all` | Report across every test assembly in the solution |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
-| `xping report --details` | Print per-test run history |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |
 

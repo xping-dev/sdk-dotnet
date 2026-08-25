@@ -46,7 +46,7 @@
   <line x1="260" y1="452" x2="260" y2="486" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <rect x="90" y="490" width="340" height="64" rx="8" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
-  <text x="260" y="516" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2328">dotnet xping report</text>
+  <text x="260" y="516" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2328">xping report</text>
   <text x="260" y="536" text-anchor="middle" font-size="12.5" fill="#656d76">observations · evidence · offline</text>
 
   <text x="260" y="586" text-anchor="middle" font-size="12" fill="#656d76">Evidence only — no confidence scores,</text>

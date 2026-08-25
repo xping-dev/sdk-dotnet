@@ -19,7 +19,7 @@ namespace Xping.Sdk.Core.Services.Reporting.Internals;
 /// </para>
 /// <para>
 /// The line exists so the CLI is discoverable. Without it a developer with no API key sees nothing
-/// after a test run and has no reason to learn that <c>dotnet xping report</c> exists. It stays
+/// after a test run and has no reason to learn that <c>xping report</c> exists. It stays
 /// silent on clean runs and in CI so it never becomes recurring noise.
 /// </para>
 /// </remarks>
@@ -52,7 +52,7 @@ internal static class RetryFlakeHint
         string subject = flaked == 1 ? "1 test" : $"{flaked} tests";
 
         return $"[Xping] {subject} flaked on retry this run - " +
-               "run `dotnet xping report` for local history";
+               "run `xping report` for local history";
     }
 
     /// <summary>

@@ -254,7 +254,7 @@ After implementing a fix:
 ### Time-Based Flakiness
 
 **Indicators:**
-- A `TimeSensitive` finding from `dotnet xping report`
+- A `TimeSensitive` finding from `xping report`
 - Fails at specific local times or dates
 - Inconsistent with no clear environmental cause
 

@@ -45,7 +45,11 @@ public sealed class RetryFlakeHintTests
 
         Assert.NotNull(hint);
         Assert.Contains("1 test flaked on retry", hint, StringComparison.Ordinal);
-        Assert.Contains("dotnet xping report", hint, StringComparison.Ordinal);
+        Assert.Contains("`xping report`", hint, StringComparison.Ordinal);
+
+        // The command must be the one a globally installed tool answers to. `dotnet xping` only
+        // works for a tool-manifest install, which is not what the docs tell users to do.
+        Assert.DoesNotContain("dotnet xping", hint, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -8,10 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RollForward>Major</RollForward>
 
-    <!-- Packaged as a .NET tool. Installed into a tool manifest it is invoked as
-         `dotnet xping`; installed globally it is invoked as `xping`. -->
+    <!-- Packaged as a .NET tool. The documented install is global (`dotnet tool install -g`),
+         which puts an `xping` command on PATH - the name every command the tool prints uses.
+         A tool-manifest install still works and is invoked as `dotnet xping`. -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>xping</ToolCommandName>
+
+    <!-- System.CommandLine takes the root command's displayed name from the entry assembly, so
+         without this the tool's help output would print `Usage: Xping.Cli [command]` - a name
+         the user cannot type. The package is still Xping.Cli; only the assembly file is renamed,
+         so pin RootNamespace to keep new files defaulting to the Xping.Cli namespace. -->
+    <AssemblyName>xping</AssemblyName>
+    <RootNamespace>Xping.Cli</RootNamespace>
 
     <PackageId>Xping.Cli</PackageId>
     <Description>Command-line companion for the Xping SDK. Reads the local run store written by Xping.Sdk.Core and reports test flakiness from recent local runs. No account required.</Description>

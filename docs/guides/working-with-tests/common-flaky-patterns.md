@@ -141,7 +141,7 @@ public class UserServiceTests
 
 ### How Xping Identifies It
 
-`dotnet xping report` emits a **`TimeSensitive`** finding when a test's failure rate depends on when
+`xping report` emits a **`TimeSensitive`** finding when a test's failure rate depends on when
 it ran. It splits the test's executions three ways and reports the widest gap:
 
 - **Local time of day** — the worst six-hour quarter of the local day against the rest of it. Six

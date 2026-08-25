@@ -632,7 +632,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         bool stored = WriteLocalSession(executions, environment, DateTime.UtcNow);
 
-        // Gated on the write because the hint points at `dotnet xping report`, and a run that was
+        // Gated on the write because the hint points at `xping report`, and a run that was
         // never stored is a run that report cannot show.
         if (stored)
             WriteRetryFlakeHint(executions, environment?.IsCIEnvironment ?? false);

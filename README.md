@@ -57,12 +57,14 @@ changing a line of test code.
 ```bash
 dotnet add package Xping.Sdk.XUnit    # or Xping.Sdk.NUnit / Xping.Sdk.MSTest
 
-dotnet new tool-manifest              # skip if you already have one
-dotnet tool install Xping.Cli
+dotnet tool install -g Xping.Cli      # puts `xping` on your PATH
 ```
 
 The SDK records what happens during each run; the CLI reads what it recorded. You need
 both — the SDK alone writes history nothing reads.
+
+> The CLI targets `net10.0` and needs the .NET 10 SDK or runtime. The SDK packages target
+> `netstandard2.0`, so your test projects can stay on any supported .NET version.
 
 ### 2. Turn on tracking
 
@@ -94,7 +96,7 @@ you normally would and let the history build up.
 ### 4. Ask what happened
 
 ```bash
-dotnet xping report
+xping report
 ```
 
 ```
@@ -208,7 +210,7 @@ For CI setup (GitHub Actions, Azure DevOps, Jenkins, GitLab), see the
        .xping/ (local store)                 Xping Cloud
               │                                   │
               ▼                                   ▼
-      dotnet xping report            scores · trends · PR comments
+        xping report                 scores · trends · PR comments
 ```
 
 Adapters are thin — they hook the framework's execution pipeline and hand results to
@@ -293,7 +295,7 @@ for worked examples.
 | ---- | -------- |
 | `src/Xping.Sdk.Core` | Collection, environment detection, configuration, delivery |
 | `src/Xping.Sdk.XUnit` · `.NUnit` · `.MSTest` | Framework adapters |
-| `src/Xping.Cli` | `dotnet xping` — local analysis and reporting |
+| `src/Xping.Cli` | `xping` — local analysis and reporting |
 | `samples/` | Runnable examples per framework |
 | `docs/` | Source for [docs.xping.io](https://docs.xping.io) |
 

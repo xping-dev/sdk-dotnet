@@ -20,7 +20,7 @@ The store is resolved in this order:
 To see where it resolved to:
 
 ```bash
-dotnet xping where
+xping where
 ```
 
 The repository root is preferred because flakiness history is only meaningful per repository. A single shared folder would blend unrelated projects and break running the CLI inside a repo and getting *that repo's* answer.

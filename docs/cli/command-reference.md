@@ -17,22 +17,31 @@ The SDK records runs; the CLI interprets them. Keeping analysis out of the test 
 > older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
 > your test projects can stay on any supported .NET version.
 
-### As a local tool (recommended)
+### As a global tool (recommended)
+
+```bash
+dotnet tool install -g Xping.Cli
+```
+
+Invoke it as `xping`, from any directory. This is how the tool refers to itself: every command it
+prints — in help text, in error hints, in the `drillDown` field of `--format json` — is a bare
+`xping` command you can paste back into the shell.
+
+> Global tools install to `~/.dotnet/tools` (`%USERPROFILE%\.dotnet\tools` on Windows), which the
+> .NET SDK normally adds to your `PATH`. If your shell answers `command not found: xping`, add that
+> directory to `PATH` and reopen the terminal.
+
+### As a local tool
 
 ```bash
 dotnet new tool-manifest        # if your repo has no manifest yet
 dotnet tool install Xping.Cli
 ```
 
-Invoke it as `dotnet xping`. The version is pinned in `.config/dotnet-tools.json`, so everyone on the team gets identical output. Teammates run `dotnet tool restore` once.
-
-### As a global tool
-
-```bash
-dotnet tool install -g Xping.Cli
-```
-
-Invoke it as `xping`. Note that `dotnet xping` only works for tools installed into a manifest.
+Invoke it as `dotnet xping`. The version is pinned in `.config/dotnet-tools.json`, so everyone on
+the team gets identical output; teammates run `dotnet tool restore` once. Choose this if pinning
+the CLI version alongside your repo matters more than the shorter command — the rest of this page
+writes `xping`, and each of those becomes `dotnet xping` for a manifest install.
 
 ---
 
@@ -41,7 +50,7 @@ Invoke it as `xping`. Note that `dotnet xping` only works for tools installed in
 Reports test reliability findings from recent local runs.
 
 ```bash
-dotnet xping report [options]
+xping report [options]
 ```
 
 | Option | Default | Description |
@@ -133,7 +142,7 @@ The `f_…` on each finding is a short, stable identity for that finding — a h
 finding claims (`flaky`, `slower`, `stopped running`, …) and the test or group it claims it
 about. Nothing else goes into it.
 
-It is stable **across runs**. Run `dotnet test` again, run `dotnet xping report` again, and a
+It is stable **across runs**. Run `dotnet test` again, run `xping report` again, and a
 finding that is still there keeps the id it had — even though the run count moved and the
 numbers behind it changed. That is what makes it useful: paste a report into a pull request
 today and another next week, and the ids say which findings are the same ones and which are
@@ -149,9 +158,9 @@ that is both flaky and masked by a retry produces two findings and two ids.
 Copy the block, or pipe it:
 
 ```bash
-dotnet xping report | pbcopy          # macOS
-dotnet xping report | clip            # Windows
-dotnet xping report | wl-copy         # Linux (Wayland)
+xping report | pbcopy          # macOS
+xping report | clip            # Windows
+xping report | wl-copy         # Linux (Wayland)
 ```
 
 When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
@@ -161,7 +170,7 @@ When stdout is not a terminal the report drops everything that is not the report
 One line, for a chat message, a commit trailer or a CI step title:
 
 ```bash
-$ dotnet xping report --summary
+$ xping report --summary
 Xping: 3 findings (1 high, 2 medium) in 20 runs of Checkout.Tests
 ```
 
@@ -180,7 +189,7 @@ Analysing them together would pool unrelated suites: one assembly's history woul
 For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
 
 ```bash
-dotnet xping report --all --format json > findings.json
+xping report --all --format json > findings.json
 ```
 
 Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from:
@@ -225,7 +234,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 Prints where the local store lives and what it holds.
 
 ```bash
-dotnet xping where [--directory <path>]
+xping where [--directory <path>]
 ```
 
 ```
@@ -247,7 +256,7 @@ The store location is discovered by walking up for a repository root, so this is
 Deletes recorded runs.
 
 ```bash
-dotnet xping clear [options]
+xping clear [options]
 ```
 
 | Option | Description |

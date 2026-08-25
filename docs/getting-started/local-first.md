@@ -5,7 +5,7 @@ title: Running Without an Account
 
 # Running Without an Account
 
-Xping works with no API key, no signup, and no network access. Add the SDK to your test project, run your tests a few times, and `dotnet xping report` will tell you which of your tests are unreliable.
+Xping works with no API key, no signup, and no network access. Add the SDK to your test project, run your tests a few times, and `xping report` will tell you which of your tests are unreliable.
 
 This is **local-only mode**. Everything stays on your machine.
 
@@ -64,18 +64,19 @@ Each run is recorded to a local store. Cross-run flakiness detection needs at le
 > your test projects can stay on any supported .NET version.
 
 ```bash
-dotnet new tool-manifest        # if your repo has no manifest yet
-dotnet tool install Xping.Cli
+dotnet tool install -g Xping.Cli
 ```
 
-This makes `dotnet xping` available in your repository, pinned to a version your whole team shares. To install it for your user account instead, use `dotnet tool install -g Xping.Cli` and invoke it as `xping`.
+This puts an `xping` command on your `PATH`, usable from any repository. If your shell answers `command not found: xping`, add `~/.dotnet/tools` to your `PATH` and reopen the terminal.
+
+To pin the CLI version alongside your repo instead, install it into a tool manifest — see [Installation](../cli/command-reference.md#installation) in the CLI reference.
 
 ---
 
 ## Step 4: Read the report
 
 ```bash
-dotnet xping report
+xping report
 ```
 
 ```
@@ -136,8 +137,8 @@ Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly 
 To see one suite, or all of them:
 
 ```bash
-dotnet xping report --assembly Billing.Tests
-dotnet xping report --all
+xping report --assembly Billing.Tests
+xping report --all
 ```
 
 `--all` analyses each assembly against **its own** run history and merges the findings, so a suite that has run 3 times is never described against another suite's 12-run window.
@@ -147,7 +148,7 @@ dotnet xping report --all
 ## Where your data lives
 
 ```bash
-dotnet xping where
+xping where
 ```
 
 ```
@@ -164,8 +165,8 @@ It keeps the last 50 runs and prunes automatically. See [Local Store](../configu
 To delete history:
 
 ```bash
-dotnet xping clear                              # prompts before deleting
-dotnet xping clear --assembly Billing.Tests     # only one suite
+xping clear                              # prompts before deleting
+xping clear --assembly Billing.Tests     # only one suite
 ```
 
 ---
@@ -194,7 +195,7 @@ export XPING_APIKEY="your-key"
 export XPING_PROJECTID="your-project"
 ```
 
-The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `dotnet xping report` continues to work offline and on your own machine.
+The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `xping report` continues to work offline and on your own machine.
 
 To stay local even with credentials present, set the mode explicitly:
 

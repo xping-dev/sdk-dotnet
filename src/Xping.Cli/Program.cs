@@ -111,9 +111,9 @@ internal static class Program
 
     private static RootCommand BuildRootCommand(IServiceProvider services, TextWriter output)
     {
-        // RootCommand's displayed name comes from the running executable (ExecutableName), which
-        // is "xping" once packed as a tool (ToolCommandName in the csproj); under `dotnet run` in
-        // this repo it shows the assembly name instead, which is expected and harmless.
+        // The name in the usage line comes from the entry assembly, which the csproj pins to
+        // "xping" via AssemblyName. Under `dotnet test` here it is the test host's name instead,
+        // so only the packed tool shows the real thing - the release workflow asserts on it.
         RootCommand root = new(
             "xping - local test reliability reports\n\n" +
             "Runs are recorded by the Xping SDK. No account is required.");
