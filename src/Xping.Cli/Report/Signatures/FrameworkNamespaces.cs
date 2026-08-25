@@ -26,6 +26,14 @@ namespace Xping.Cli.Report.Signatures;
 /// signature precision; the opposite error costs the diagnostic entirely.
 /// </para>
 /// <para>
+/// One entry is not a namespace at all. The CLR emits a reflection invoke stub named
+/// <c>InvokeStub_{Type}</c> in the global namespace, and whether it appears is a property of how many
+/// times the runtime has already invoked that method — interpreted the first time, through an emitted
+/// stub afterwards. Two runs of the same failing method therefore produce traces that differ by one
+/// frame, which is enough to give them different signatures and stop them grouping. It is runtime
+/// scaffolding by any reading, and it is filtered as such.
+/// </para>
+/// <para>
 /// <c>Xping.</c> is deliberately absent. In this repository Xping is the code under test, and
 /// denying it would blind the report to its own failures.
 /// </para>
@@ -58,6 +66,11 @@ internal static class FrameworkNamespaces
         "Internal.",
         "Microsoft.",
         "System.",
+
+        // Reflection invoke stubs the CLR emits into the global namespace. See the remarks above:
+        // their presence varies between runs of the same method, so a frame that survived here would
+        // make a signature depend on how warm the runtime was.
+        "InvokeStub_",
     ];
 
     /// <summary>

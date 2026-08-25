@@ -218,6 +218,44 @@ public static class Calculator
 }
 
 /// <summary>
+/// BROKEN FIXTURE: shared setup that fails, taking every test in the class down with it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Nothing is wrong with the three tests below. The defect is in <see cref="Setup"/>, and it is
+/// reported once per test that tried to use it — which is why a single broken line of shared setup
+/// arrives looking like a class full of broken tests.
+/// </para>
+/// <para>
+/// Xping records <c>Site = TestSetup</c> and <c>FailureSiteMember = BrokenFixture.Setup</c> on all
+/// three executions, and the report names the member instead of listing three broken tests.
+/// </para>
+/// <para>
+/// MSTest exposes no site of its own: <c>CurrentTestOutcome</c> is <c>Failed</c> either way and
+/// <c>TestException</c> is the raw exception with no wrapper around it, so the stack trace is the
+/// only evidence. A broken <c>[ClassInitialize]</c> would demonstrate this better, but MSTest aborts
+/// the class before <c>[TestInitialize]</c> runs and Xping sees nothing at all; see
+/// docs/known-limitations.md.
+/// </para>
+/// </remarks>
+[TestClass]
+public class BrokenFixture : XpingTestBase
+{
+    [TestInitialize]
+    public void Setup() =>
+        throw new InvalidOperationException("The shared test database was never provisioned.");
+
+    [TestMethod]
+    public void FirstTestNeedingTheDatabase() { }
+
+    [TestMethod]
+    public void SecondTestNeedingTheDatabase() { }
+
+    [TestMethod]
+    public void ThirdTestNeedingTheDatabase() { }
+}
+
+/// <summary>
 /// A downstream dependency that accepts a request and then never answers it.
 /// </summary>
 /// <remarks>

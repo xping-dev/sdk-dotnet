@@ -45,6 +45,7 @@ internal static class ReportVocabulary
         nameof(FindingKind.Flaky) => "flaky",
         nameof(FindingKind.AlwaysFailing) => "always failing",
         nameof(FindingKind.TimingOut) => "timing out",
+        nameof(FindingKind.BrokenFixture) => "broken fixture",
         nameof(FindingKind.SharedFailure) => "shared failure",
         nameof(FindingKind.DurationRegression) => "slower",
         nameof(FindingKind.DurationUnstable) => "unstable timing",

@@ -125,6 +125,101 @@ public async Task MyTest(CancellationToken cancellationToken)
 "Tests marked with Timeout are only supported for async tests". Xping records that as `Failed`, not
 `Timeout` — it is a misconfigured test, not a hanging one.
 
+## Fixture Failures
+
+Xping records **where** a failing test failed — the test body, per-test setup or teardown, or a
+one-time fixture — in `TestExecution.Site`, and names the member in `FailureSiteMember`. When every
+failure in a cluster agrees on one member, `xping report` reports a **broken fixture** naming it
+instead of N separate failing tests.
+
+What is reachable differs by framework, and none of the three reports a failure site of its own. The
+tables below record what was observed by running each package, not what its documentation says.
+
+**Affected Versions**: NUnit 3.14 and 4.2, MSTest 3.7, xUnit 2.9
+
+### What is recorded
+
+| Lifecycle member | NUnit | MSTest | xUnit |
+|---|---|---|---|
+| Test body | `TestBody` | `TestBody` | `TestBody` |
+| Per-test setup | `TestSetup` (`[SetUp]`) | `TestSetup` (`[TestInitialize]`) | `TestSetup` (constructor, `InitializeAsync`) |
+| Per-test teardown | `TestTeardown` (`[TearDown]`) | **not recorded** | `TestTeardown` (`Dispose`, `DisposeAsync`) |
+| One-time fixture setup | **not recorded** | **not recorded** | `FixtureSetup` (`IClassFixture<T>`, `ICollectionFixture<T>`) |
+| One-time fixture teardown | **not recorded** | **not recorded** | **not recorded** |
+| Assembly setup / teardown | **not recorded** | **not recorded** | **not recorded** |
+
+A failure Xping cannot place is recorded as `Unknown` rather than assumed to be in the test body, and
+a cluster containing one is reported as a plain shared failure. The report never names a member it did
+not observe.
+
+### NUnit: `[OneTimeSetUp]` And `[OneTimeTearDown]` Are Not Observable
+
+**Impact**: A broken `[OneTimeSetUp]` produces **no Xping records at all**, not failing ones
+
+**Reason**: `XpingTrackAttribute` is an `ITestAction`, and the hook only fires for tests that execute.
+When `[OneTimeSetUp]` throws, NUnit marks the fixture's children failed without running them, so
+neither `BeforeTest` nor `AfterTest` is invoked — for the child tests or for the fixture itself. The
+runner reports N failing tests; Xping sees none of them.
+
+`[OneTimeTearDown]` is the mirror image: it runs after the last test has already been reported, so a
+test whose fixture teardown then throws is recorded by Xping as **passed**, while the runner fails it.
+
+**Workaround**: move the work into `[SetUp]`. It runs per test rather than once, which costs time, but
+it is recorded — and a `[SetUp]` that breaks for every test in a fixture produces exactly the broken
+fixture finding a `[OneTimeSetUp]` would have.
+
+### NUnit: The Framework Reports No Failure Site
+
+**Impact**: none directly; recorded because it explains why the site is derived from the stack trace
+
+**Reason**: `ResultState.Site` is `Test` for every test-level result, including one whose `[SetUp]`
+threw. The states that carry a site — `SetUpFailure`, `SetUpError`, `TearDownError` — are recorded on
+the enclosing *suite*, which the adapter never sees. Xping therefore matches the stack trace against
+the fixture's own lifecycle methods. A failure with no stack trace cannot be placed, which is why
+disabling `CaptureStackTraces` does not remove the site (it is resolved first) but a framework that
+supplies no trace leaves it `Unknown`.
+
+### MSTest: A Throwing `[TestCleanup]` Discards The Whole Record
+
+**Impact**: The test produces **no `TestExecution` at all**
+
+**Reason**: MSTest runs `[TestCleanup]` methods derived-class first and stops at the first one that
+throws. `XpingTestBase.XpingTestCleanup` is declared on the base class, so a `[TestCleanup]` of your
+own that throws prevents it from running, and the record is never built. The runner reports the test
+as failed; Xping reports nothing.
+
+**Workaround**: wrap the body of your `[TestCleanup]` in a `try`/`catch` and assert the failure inside
+the test instead.
+
+### MSTest: `[ClassInitialize]` And `[ClassCleanup]` Are Not Observable
+
+**Impact**: A broken `[ClassInitialize]` produces **no Xping records**; a broken `[ClassCleanup]`
+leaves its tests recorded as **passed**
+
+**Reason**: `[ClassInitialize]` failing aborts the class before any `[TestInitialize]` runs, and
+`[ClassCleanup]` runs after every test has been recorded. The adapter has no hook at either point.
+`[AssemblyInitialize]` and `[AssemblyCleanup]` are unobservable for the same reason.
+
+**Workaround**: move the work into `[TestInitialize]`, which is recorded.
+
+### xUnit: Fixture Disposal Is Not Attributed To A Test
+
+**Impact**: A class or collection fixture whose `Dispose` throws leaves its tests recorded as
+**passed**
+
+**Reason**: xUnit reports it as `ITestClassCleanupFailure` / `ITestCollectionCleanupFailure` /
+`ITestAssemblyCleanupFailure`, which carry no test and arrive after every test in the class has already
+been reported. `XpingMessageSink` forwards these messages to the runner without recording them, since
+there is no execution to attach them to.
+
+**What works**: fixture *construction* is fully recorded. xUnit wraps a failing `IClassFixture<T>`
+constructor in `Xunit.Sdk.TestClassException` and names the fixture type in the message, which is the
+only first-class failure-site signal any of the three frameworks provides. An `ICollectionFixture<T>`
+constructor is **not** wrapped — it arrives as the bare exception — and is recognised from its
+constructor frame instead.
+
+---
+
 ## General Limitations
 
 ### CI Flaky Tests: `XpingContextTests` (NUnit Adapter Tests)

@@ -8,6 +8,7 @@ using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -40,6 +41,8 @@ public sealed class ShareableOutputTests
         nameof(FindingKind.RetryMasked),
         nameof(FindingKind.Flaky),
         nameof(FindingKind.AlwaysFailing),
+        nameof(FindingKind.TimingOut),
+        nameof(FindingKind.BrokenFixture),
         nameof(FindingKind.SharedFailure),
         nameof(FindingKind.DurationRegression),
         nameof(FindingKind.DurationUnstable),
@@ -72,7 +75,9 @@ public sealed class ShareableOutputTests
             "System.InvalidOperationException",
             "boom",
             ["MyApp.Tests.CheckoutTests.Completes()"],
-            "abc123");
+            "abc123",
+            Site: nameof(FailureSite.TestBody),
+            SiteMember: null);
 
         return kind switch
         {
@@ -86,6 +91,20 @@ public sealed class ShareableOutputTests
 
             FindingKind.AlwaysFailing =>
                 new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, signature, [exemplar], null),
+
+            FindingKind.TimingOut =>
+                new TimingOutEvidence(
+                    9, 10, 20, 20, 9, 0.45, 0.9, 0, 500, [512, 508, 503], [exemplar], null),
+
+            FindingKind.BrokenFixture =>
+                new BrokenFixtureEvidence(
+                    nameof(FailureSite.TestSetup),
+                    "CheckoutFixture.Setup",
+                    signature,
+                    12,
+                    [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+                    47, 3, 20, 12,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
 
             FindingKind.SharedFailure =>
                 new SharedFailureEvidence(

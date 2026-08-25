@@ -101,6 +101,7 @@ internal static class LocalAnalysisConstants
     /// </remarks>
     public const int SharedFailureMinTests = 3;
 
+
     /// <summary>
     /// Relative p50 duration increase required to report a regression (0.50).
     /// </summary>

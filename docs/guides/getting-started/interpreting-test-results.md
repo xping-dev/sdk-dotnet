@@ -22,6 +22,11 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
 - **Execution ID**: Unique identifier for each test run
 - **Outcome**: Passed, Failed, Timeout, Skipped, Inconclusive, or NotExecuted
 - **Timeout Budget**: The timeout the test declared for itself, when it declared one
+- **Failure Site**: Where a failing test failed — `TestBody`, `TestSetup`, `TestTeardown`,
+  `FixtureSetup`, `FixtureTeardown`, `AssemblySetup`, `AssemblyTeardown`, or `Unknown` when the
+  adapter could not tell. Absent for a test that did not fail
+- **Failure Site Member**: The lifecycle member that failed, such as `OrdersFixture.Setup`, when the
+  framework named one
 - **Duration**: How long the test took to execute
 - **Start & End Times**: Precise UTC timestamps
 - **Error Messages**: Failure details and exception messages
