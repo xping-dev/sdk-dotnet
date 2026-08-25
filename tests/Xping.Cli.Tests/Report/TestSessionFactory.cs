@@ -66,6 +66,15 @@ internal static class TestSessionFactory
     /// <param name="passedOnRetry">Whether this attempt is a pass that followed a failure.</param>
     /// <param name="maxRetries">Retries the attribute allows.</param>
     /// <param name="retryAttributeName">The retry mechanism the SDK identified.</param>
+    /// <param name="retryReason">
+    /// The reason the retry attribute declared, or <see langword="null"/> when it declared none.
+    /// An empty string is reachable on purpose: it is what the MSTest adapter writes where the other
+    /// two leave null, and the report has to read it as an absence rather than as a blank reason.
+    /// </param>
+    /// <param name="retryDelayMs">
+    /// The delay the retry attribute declared between attempts. Zero means the adapter recorded
+    /// none, which is what every NUnit execution looks like.
+    /// </param>
     /// <param name="errorMessage">Failure text, when the execution failed.</param>
     /// <param name="executionId">Explicit execution id; defaults to one derived from the inputs.</param>
     /// <param name="retry">
@@ -103,6 +112,8 @@ internal static class TestSessionFactory
         bool passedOnRetry = false,
         int maxRetries = 0,
         string retryAttributeName = "",
+        string? retryReason = null,
+        int retryDelayMs = 0,
         string? errorMessage = null,
         Guid? executionId = null,
         bool retry = true,
@@ -126,14 +137,26 @@ internal static class TestSessionFactory
             .WithSourceLineNumber(10)
             .Build();
 
-        RetryMetadata? retryMetadata = retry
-            ? new RetryMetadataBuilder()
+        RetryMetadata? retryMetadata = null;
+
+        if (retry)
+        {
+            RetryMetadataBuilder retryBuilder = new RetryMetadataBuilder()
                 .WithAttemptNumber(attempt)
                 .WithMaxRetries(maxRetries)
                 .WithPassedOnRetry(passedOnRetry)
-                .WithRetryAttributeName(retryAttributeName)
-                .Build()
-            : null;
+                .WithRetryAttributeName(retryAttributeName);
+
+            // Applied only when set, so every fixture written before these existed keeps meaning
+            // exactly what it did — an unset reason stays null rather than becoming an empty string.
+            if (retryReason != null)
+                retryBuilder.WithRetryReason(retryReason);
+
+            if (retryDelayMs > 0)
+                retryBuilder.WithDelayBetweenRetries(TimeSpan.FromMilliseconds(retryDelayMs));
+
+            retryMetadata = retryBuilder.Build();
+        }
 
         TestExecutionBuilder builder = new TestExecutionBuilder()
 

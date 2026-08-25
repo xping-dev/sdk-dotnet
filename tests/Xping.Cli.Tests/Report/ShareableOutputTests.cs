@@ -39,6 +39,8 @@ public sealed class ShareableOutputTests
     public static TheoryData<string> EveryEvidenceShape() =>
     [
         nameof(FindingKind.RetryMasked),
+        nameof(FindingKind.RetryDeepening),
+        nameof(FindingKind.RetryExhausted),
         nameof(FindingKind.Flaky),
         nameof(FindingKind.AlwaysFailing),
         nameof(FindingKind.TimingOut),
@@ -80,12 +82,42 @@ public sealed class ShareableOutputTests
             Site: nameof(FailureSite.TestBody),
             SiteMember: null);
 
+        RetryConfiguration configuration = new("RetryAttribute", 2, "NetworkError", 250);
+
+        RetryAttemptExemplar attemptExemplar = new(
+            "11111111-1111-1111-1111-111111111111",
+            new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
+            "a3f9c2e",
+            Attempts: 3,
+            Outcome: nameof(TestOutcome.Failed),
+            RetryWallClockMs: 8_200,
+            "boom");
+
         return kind switch
         {
             FindingKind.RetryMasked =>
                 new RetryMaskedEvidence(
-                    4, 20, 20, 3, 0.2, 3, "RetryAttribute", 2, 12_400,
+                    4, 20, 20, 3, 0.2, 3, configuration, 12_400, 750,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", []),
+
+            FindingKind.RetryDeepening =>
+                new RetryDeepeningEvidence(
+                    new RetryDepthProfile(3, 4, 3, 0, 3),
+                    new RetryDepthProfile(1, 2, 14, 0, 14),
+                    new RetryDepthDelta(2, 200),
+                    configuration,
+                    2_400,
+                    500,
+                    0,
+                    "a3f9c2e",
+                    [attemptExemplar],
+                    attemptExemplar),
+
+            FindingKind.RetryExhausted =>
+                new RetryExhaustedEvidence(
+                    6, 7, 1, 20, 20, 0.857, 3, 12, configuration, 41_000, 3_000, 0,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e",
+                    [attemptExemplar], attemptExemplar),
 
             FindingKind.Flaky =>
                 new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),
@@ -189,6 +221,28 @@ public sealed class ShareableOutputTests
 
         // An adapter that captures no failure detail is not the same as a failure that had none.
         Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRetryHeadlinesNameTheirUnitOnceAndAtTheEnd()
+    {
+        // Pinned as whole sentences because the two counts either side of a retry comparison share
+        // one trailing unit, as "3 of 12 runs" does everywhere else here. Naming it on the first
+        // number and not the second reads as though the two were counting different things.
+        var (deepening, _) = EvidenceHeadline.For(
+            FindingKind.RetryDeepening, EvidenceFor(FindingKind.RetryDeepening));
+
+        Assert.Equal(
+            "attempts to pass 1 -> 3 (+2) across 3 recent and 14 earlier runs, " +
+            "2.4s spent retrying",
+            deepening);
+
+        var (exhausted, _) = EvidenceHeadline.For(
+            FindingKind.RetryExhausted, EvidenceFor(FindingKind.RetryExhausted));
+
+        Assert.Equal(
+            "gave up after 3 attempts in 6 of 7 retried runs (85.7%), 41s spent retrying",
+            exhausted);
     }
 
     // ---------------------------------------------------------------------

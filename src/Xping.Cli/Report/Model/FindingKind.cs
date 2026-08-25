@@ -30,6 +30,28 @@ internal enum FindingKind
     /// </remarks>
     RetryMasked,
 
+    /// <summary>
+    /// The test needs more attempts to pass than it used to.
+    /// </summary>
+    /// <remarks>
+    /// Masking plus a direction. Sorted immediately after <see cref="RetryMasked"/> because it says
+    /// the same thing and more, but costs a baseline to compute where masking costs nothing — and a
+    /// test that has deepened is necessarily masked, so the two are decided together.
+    /// </remarks>
+    RetryDeepening,
+
+    /// <summary>
+    /// The test's retries ran out and it failed the run anyway.
+    /// </summary>
+    /// <remarks>
+    /// Needs no history — one run that spent its retries is one observation — and every attempt's
+    /// failure text is in the evidence, so it is fully actionable. Sorted after
+    /// <see cref="RetryDeepening"/> because a deepening is a cost nobody can see any other way,
+    /// whereas an exhausted run already went red in the runner output; and ahead of
+    /// <see cref="Flaky"/> because it is strictly more informative about that same red run.
+    /// </remarks>
+    RetryExhausted,
+
     /// <summary>The test both passes and fails, or fails in varying ways.</summary>
     Flaky,
 

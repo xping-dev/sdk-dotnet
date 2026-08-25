@@ -231,6 +231,75 @@ public void ProcessUsers_SortsCorrectly()
 
 ---
 
+## Pattern 6: Retries That Are Papering Over A Regression
+
+### Symptoms
+- The build is green, but the suite keeps getting slower
+- A test with a retry attribute that "has always been a bit flaky"
+- A red build on a test that has a retry attribute, so retries are apparently not the answer
+- Nobody can say when it started
+
+### How Xping Identifies It
+
+Retry data answers two questions no other finding can, and `xping report` emits a distinct kind for
+each. Both are decided on the attempts an adapter actually recorded, never on the limit the retry
+attribute declared.
+
+- **`RetryDeepening`** — the test still passes, but it now needs more attempts to do it than it used
+  to. The recent runs are compared against the earlier ones on the attempts a *typical* passing run
+  needed, by nearest rank, so one unlucky run cannot invent the trend or hide it. This is the one
+  signal that fires while the build is still green, and it is the cheapest possible warning that
+  something is decaying.
+- **`RetryExhausted`** — the retries ran out and the test failed the run anyway. A run counts when
+  its last recorded attempt failed and an earlier attempt exists. The evidence carries how often the
+  retries *did* rescue the test, which is what separates a mitigation that is slipping from one that
+  has never worked at all.
+
+A test gets at most one retry finding: out of retries, then deeper retries, then masked by retry.
+`RetryDeepening` is capped at medium severity, because nothing has failed a build yet — the claim is
+that something is about to.
+
+### Example
+
+```csharp
+[RetryFact(3)]
+public async Task Checkout_CompletesWithinTheServiceBudget()
+{
+    var checkout = new CheckoutService(_client);
+
+    // The service got slower. The retry still saves the build, so nobody noticed -
+    // but where this used to pass first time, it now needs a third attempt.
+    var result = await checkout.CompleteAsync(_basket);
+
+    Assert.True(result.Succeeded);
+}
+```
+
+**Xping Detection:**
+
+```
+MED   deeper retries  ...Checkout_CompletesWithinTheServiceBudget
+      attempts to pass 1 -> 3 (+2) over 3 runs against 14 before,
+      2.4s spent retrying
+```
+
+And once the retry budget stops covering it:
+
+```
+HIGH  out of retries  ...Checkout_CompletesWithinTheServiceBudget
+      gave up after 3 attempts in 6 of 7 retried runs (86%), 41s spent
+      retrying
+```
+
+The second block is the argument for deleting the retry attribute rather than raising it: the
+retries are no longer buying a green build, only wall-clock.
+
+> **Related**: Retry attempt tracking differs by framework — see
+> [Known Limitations](../../known-limitations.md). Where an adapter cannot record each attempt,
+> silence here is indistinguishable from "no retries happened".
+
+---
+
 ## Pattern Recognition Summary
 
 Use this table to quickly identify the pattern based on Xping factor scores:
@@ -242,6 +311,7 @@ Use this table to quickly identify the pattern based on Xping factor scores:
 | **Shared State** | 🟡 Medium | ✅ High | ✅ High | 🔴 Low | Order-dependent |
 | **Time-Based** | 🟡 Medium | 🟡 Medium | 🟡 Medium | ✅ High | Temporal |
 | **Non-Deterministic Data** | ✅ High | 🟡 Medium | ✅ High | ✅ High | Truly random |
+| **Retries Papering Over It** | 🟡 Medium | 🔴 Low | ✅ High | 🟡 Medium | Worsening over time |
 
 ---
 

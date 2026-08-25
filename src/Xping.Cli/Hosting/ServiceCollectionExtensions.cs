@@ -66,7 +66,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<FindingCoordinator>();
 
         services.AddSingleton<IFindingProvider, FailureModeProvider>();
-        services.AddSingleton<IFindingProvider, RetryMaskedProvider>();
+        services.AddSingleton<IFindingProvider, RetryProvider>();
         services.AddSingleton<IFindingProvider, DurationProvider>();
         services.AddSingleton<IFindingProvider, VanishedProvider>();
         services.AddSingleton<IFindingProvider, ParallelSensitiveProvider>();
