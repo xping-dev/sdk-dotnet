@@ -184,7 +184,7 @@ confidence scores per test, evidence sufficiency, root-cause categorisation, tre
 environments, and PR comments on GitHub.
 
 > **Xping Cloud is currently invite-only.** We're running a small, high-touch pilot while
-> the scoring model settles. [Request access](https://xping.io) — or keep working locally,
+> the scoring model settles. [Request access](https://xping.io/contact?pilot=True) — or keep working locally,
 > which stays free and account-free regardless.
 
 For CI setup (GitHub Actions, Azure DevOps, Jenkins, GitLab), see the
