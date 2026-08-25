@@ -244,13 +244,20 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         var displayName = test.Name;
 
         // Read the pinned fingerprint from [XpingFingerprint] if present on the test method
-        string? pinnedFingerprint = ReadPinnedFingerprint(test.Method?.MethodInfo);
+        MethodInfo? testMethod = test.Method?.MethodInfo;
+        string? pinnedFingerprint = ReadPinnedFingerprint(testMethod);
+
+        // NUnit's test model carries no source information of its own, so the declaration site comes
+        // from the assembly's PDB, keyed by the MethodInfo already resolved above.
+        (string? sourceFile, int? sourceLineNumber) = SourceLocationLookup.Of(testMethod);
 
         TestIdentity identity = services.IdentityGenerator.Generate(
             fullyQualifiedName,
             assemblyName,
             parameters,
             displayName,
+            sourceFile,
+            sourceLineNumber,
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = result.Message ?? string.Empty;

@@ -44,6 +44,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
     private const string Fence = "```";
 
+    // Width of the " | " the trailer's segments are joined with.
+    private const int SeparatorWidth = 3;
+
     // Severity marker, two spaces, kind label, two spaces. Everything after this is the subject.
     private const int MarkerWidth = 4;
     private const int Indent = MarkerWidth + 2;
@@ -182,17 +185,32 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             finding.Id
         };
 
+        const int budget = FenceWidth - Indent;
+
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
         if (finding.Subject.SourceFile is { Length: > 0 } file)
         {
-            trailer.Add(finding.Subject.SourceLineNumber is { } line
+            string location = finding.Subject.SourceLineNumber is { } line
                 ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                : file);
+                : file;
+
+            // The path absorbs the truncation rather than the line as a whole. Fit() cuts from the
+            // left, so applied to the joined trailer it would eat "evidence high" and leave the
+            // path — the one segment that can afford to lose its head — untouched.
+            int spent = 0;
+            foreach (string part in trailer)
+                spent += part.Length + SeparatorWidth;
+
+            // spent counts one separator per segment already in the list, which is exactly the
+            // number string.Join adds once the location makes a third — two separators for three
+            // segments — so the joined line lands on the budget rather than three columns over it.
+            if (FitPath(location, budget - spent) is { } fitted)
+                trailer.Add(fitted);
         }
 
         builder.Append(' ', Indent)
-               .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), FenceWidth - Indent)));
+               .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), budget)));
     }
 
     /// <summary>
@@ -273,6 +291,42 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             return value;
 
         return string.Concat("...", value.AsSpan(value.Length - (width - 3)));
+    }
+
+    /// <summary>
+    /// Truncates a path from the left, cutting at a directory boundary.
+    /// </summary>
+    /// <remarks>
+    /// The tail is the half worth keeping — the file and line are what a reader opens, while the
+    /// leading directories are the part that varies with where the repository sits. Cutting at a
+    /// separator rather than mid-segment keeps the result reading as a path: <c>.../CartTests.cs:42</c>
+    /// rather than <c>...t/Cart/CartTests.cs:42</c>.
+    /// </remarks>
+    private static string? FitPath(string value, int width)
+    {
+        if (value.Length <= width)
+            return value;
+
+        // Under four columns not even an ellipsis and one character fit. Returning the value
+        // untouched — as Fit() does at this width — would hand back a segment wider than its budget
+        // and put the whole trailer back under left truncation, which is the one thing this method
+        // exists to prevent. Nothing is the honest answer.
+        if (width <= 3)
+            return null;
+
+        // Left to right, so the first separator that fits keeps the longest tail.
+        for (int slash = 0; slash < value.Length; slash++)
+        {
+            if (value[slash] != '/')
+                continue;
+
+            if (value.Length - slash + 3 <= width)
+                return string.Concat("...", value.AsSpan(slash));
+        }
+
+        // A single segment longer than the budget: no boundary to cut at, so cut mid-name. Safe to
+        // delegate here because the width <= 3 case Fit() passes through was ruled out above.
+        return Fit(value, width);
     }
 
     /// <summary>

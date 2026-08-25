@@ -24,6 +24,9 @@ namespace Xping.Cli.Tests.Report;
 public sealed class ShareableOutputTests
 {
     private const int FenceWidth = 72;
+
+    // Severity marker, two spaces, kind label, two spaces — the column the trailer starts at.
+    private const int Indent = 6;
     private const string Fence = "```";
 
     // ---------------------------------------------------------------------
@@ -401,6 +404,162 @@ public sealed class ShareableOutputTests
     }
 
     // ---------------------------------------------------------------------
+    // The source location trailer
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The location is the difference between knowing a test is flaky and being able to open it, so
+    /// it goes on the trailer whenever the SDK captured one.
+    /// </summary>
+    [Fact]
+    public void AFindingCarryingASourceLocationEndsItsTrailerWithFileAndLine()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", "tests/CartTests.cs", 42)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("tests/CartTests.cs:42", trailer.TrimEnd(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFindingWithAFileButNoLineShowsTheFileAlone()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", "tests/CartTests.cs", null)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("tests/CartTests.cs", trailer.TrimEnd(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CartTests.cs:", trailer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFindingWithNoSourceLocationSaysNothingAboutOne()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", null, null)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.EndsWith("f_2a91", trailer.TrimEnd(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A long path must not push the trailer past the fence, and must not be paid for by the
+    /// evidence level: truncation cuts from the left, so without a budget of its own the path would
+    /// survive whole and eat the words in front of it.
+    /// </summary>
+    [Fact]
+    public void ALongPathIsElidedRatherThanTheRestOfTheTrailer()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/Integration/Checkout/Regression/Baskets/CartTests.cs",
+            1042)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+
+        Assert.Contains("evidence moderate | f_2a91 | ", trailer, StringComparison.Ordinal);
+        Assert.EndsWith("CartTests.cs:1042", trailer.TrimEnd(), StringComparison.Ordinal);
+        Assert.Contains("...", trailer, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The elision cuts at a directory boundary, so what is left still reads as a path rather than
+    /// as a name broken part-way through.
+    /// </summary>
+    [Fact]
+    public void AnElidedPathKeepsWholeDirectorySegments()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/Integration/Checkout/Regression/Baskets/CartTests.cs",
+            1042)));
+
+        string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
+        string path = trailer.Split(" | ", StringSplitOptions.None)[^1].TrimEnd();
+
+        Assert.StartsWith(".../", path, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The width invariant, restated for the trailer specifically: a path is the longest thing the
+    /// SDK can put on one of these lines.
+    /// </summary>
+    [Fact]
+    public void ATrailerWithAVeryLongPathStillFitsInsideTheFence()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "CartTests.Checkout",
+            "failed 7 of 20",
+            "tests/" + string.Join("/", Enumerable.Repeat("VeryLongDirectoryName", 12)) + "/CartTests.cs",
+            1042)));
+
+        Assert.All(Fenced(report), line => Assert.True(
+            line.Length <= FenceWidth,
+            $"'{line}' is {line.Length} columns, over the {FenceWidth} the fence allows"));
+    }
+
+    /// <summary>
+    /// The trailer's budget must spend the fence exactly, neither overrunning it nor eliding a path
+    /// that would have fitted. Both failure directions are invisible in ordinary output — one shows
+    /// up only at the widest paths, the other only as an ellipsis nobody questions — so the boundary
+    /// is pinned here.
+    /// </summary>
+    [Theory]
+    [InlineData("moderate")]
+    [InlineData("high")]
+    public void ThePathIsGivenEveryColumnTheTrailerHasLeftAndNoMore(string evidence)
+    {
+        // Grow one column at a time and find the longest path that survives whole.
+        string longest = "";
+        for (int length = 10; length < FenceWidth; length++)
+        {
+            string path = "tests/" + new string('x', length - 10) + ".cs";
+            string trailer = Trailer(Render(Envelope(FindingWith(evidence, path, null))));
+
+            if (!trailer.Contains("...", StringComparison.Ordinal))
+                longest = path;
+        }
+
+        Assert.NotEqual("", longest);
+
+        // That path fills the line to the fence, proving no column was left unspent.
+        string full = Trailer(Render(Envelope(FindingWith(evidence, longest, null))));
+        Assert.Equal(FenceWidth, full.Length);
+        Assert.EndsWith(longest, full, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The location may be dropped when the trailer has no room, but it must never be the reason the
+    /// line overflows or the head gets cut — a finding id long enough to squeeze the budget must
+    /// still leave "evidence …" readable.
+    /// </summary>
+    [Fact]
+    public void AnOversizedTrailerDropsTheLocationRatherThanTruncatingTheEvidence()
+    {
+        FindingDto finding = FindingWith("moderate", "tests/Cart/CartTests.cs", 42) with
+        {
+            Id = new string('f', FenceWidth - Indent - "evidence moderate | ".Length)
+        };
+
+        string trailer = Trailer(Render(Envelope(finding)));
+
+        Assert.True(trailer.Length <= FenceWidth, $"'{trailer}' is {trailer.Length} columns");
+        Assert.StartsWith("evidence moderate | ", trailer.TrimStart(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CartTests", trailer, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
 
@@ -449,6 +608,34 @@ public sealed class ShareableOutputTests
         }
 
         return builder.ToString();
+    }
+
+    private static FindingDto FindingWith(string evidence, string? sourceFile, int? sourceLineNumber) =>
+        Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", sourceFile, sourceLineNumber)
+            with { EvidenceLevel = evidence };
+
+    /// <summary>Returns the dim trailer line of a single-finding report.</summary>
+    private static string Trailer(string report) =>
+        Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal)).TrimEnd();
+
+    private static FindingDto Finding(
+        string kind,
+        string severity,
+        string name,
+        string headline,
+        string? sourceFile,
+        int? sourceLineNumber)
+    {
+        FindingDto finding = Finding(kind, severity, name, headline);
+
+        return finding with
+        {
+            Subject = finding.Subject with
+            {
+                SourceFile = sourceFile,
+                SourceLineNumber = sourceLineNumber
+            }
+        };
     }
 
     private static FindingDto Finding(string kind, string severity, string name, string headline) =>
