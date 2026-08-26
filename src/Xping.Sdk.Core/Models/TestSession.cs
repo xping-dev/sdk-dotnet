@@ -27,6 +27,7 @@ public sealed class TestSession
         StartedAt = DateTime.UtcNow;
         EnvironmentInfo = new EnvironmentInfo();
         Executions = [];
+        Assemblies = [];
         SessionState = TestSessionState.Initial;
         PullRequestContext = null;
         QuickStatistics = null;
@@ -41,6 +42,7 @@ public sealed class TestSession
         DateTime startedAt,
         EnvironmentInfo environmentInfo,
         IReadOnlyCollection<TestExecution> executions,
+        IReadOnlyCollection<string> assemblies,
         DateTime? endedAt,
         int? totalTestsExpected,
         TestSessionState sessionState,
@@ -51,6 +53,7 @@ public sealed class TestSession
         StartedAt = startedAt;
         EnvironmentInfo = environmentInfo.RequireNotNull();
         Executions = executions.RequireNotNull();
+        Assemblies = [.. assemblies.RequireNotNull()];
         EndedAt = endedAt;
         TotalTestsExpected = totalTestsExpected;
         SessionState = sessionState;
@@ -84,6 +87,25 @@ public sealed class TestSession
     /// Gets the test executions in this session.
     /// </summary>
     public IReadOnlyCollection<TestExecution> Executions { get; init; }
+
+    /// <summary>
+    /// Gets the distinct test assemblies this session covers, in ordinal order.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A session records one test host process, not one test assembly: VSTest batches test projects
+    /// sharing a target framework and architecture into a single host. This is the session-level
+    /// projection of each execution's <c>Identity.Assembly</c>, and it is what the platform splits a
+    /// session into projects by when no project is pinned via <c>ProjectId</c>.
+    /// </para>
+    /// <para>
+    /// Cumulative across the uploads of one session rather than describing a single batch. The
+    /// finalizing upload is assembled after the collector has been drained and therefore carries no
+    /// executions of its own, so a per-batch value would be empty on exactly the upload that closes
+    /// the run — the one that also carries <see cref="QuickStatistics"/>.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> Assemblies { get; init; }
 
     /// <summary>
     /// Gets the total number of tests expected in this session.

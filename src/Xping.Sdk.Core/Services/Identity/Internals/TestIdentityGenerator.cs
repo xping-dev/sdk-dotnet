@@ -31,10 +31,13 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
             throw new ArgumentNullException(nameof(fullyQualifiedName));
         }
 
-        if (string.IsNullOrWhiteSpace(assembly))
-        {
-            throw new ArgumentNullException(nameof(assembly));
-        }
+        // A blank assembly is accepted and normalized to empty rather than rejected. The adapters
+        // cannot always resolve one - a synthetic NUnit test with no TypeInfo, an MSTest class that
+        // will not resolve by name - and every adapter records inside a catch-all, so throwing here
+        // silently dropped the execution instead of reporting it. An execution nothing can attribute
+        // to a project is still a test that ran; it is reported as unattributed and the orchestrator
+        // warns about it at finalization. SessionAssemblies already skips empty names.
+        assembly = string.IsNullOrWhiteSpace(assembly) ? string.Empty : assembly;
 
         // Parse fully qualified name into components
         (string @namespace, string className, string methodName) = ParseFullyQualifiedName(fullyQualifiedName);

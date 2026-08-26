@@ -24,6 +24,7 @@ public sealed class TestSessionBuilder
     private TestSessionState _sessionState;
     private PullRequestContext? _pullRequestContext;
     private QuickStatistics? _quickStatistics;
+    private readonly SortedSet<string> _assemblies = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestSessionBuilder"/> class.
@@ -161,6 +162,31 @@ public sealed class TestSessionBuilder
     }
 
     /// <summary>
+    /// Sets the distinct test assemblies the session covers.
+    /// </summary>
+    /// <param name="assemblies">
+    /// The assembly names. Duplicates, <see langword="null"/> and empty entries are discarded, and
+    /// the result is sorted ordinally so that two runs of the same solution list their assemblies
+    /// identically however the host happened to interleave them.
+    /// </param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestSessionBuilder WithAssemblies(IEnumerable<string>? assemblies)
+    {
+        _assemblies.Clear();
+
+        if (assemblies == null)
+            return this;
+
+        foreach (string assembly in assemblies)
+        {
+            if (!string.IsNullOrEmpty(assembly))
+                _assemblies.Add(assembly);
+        }
+
+        return this;
+    }
+
+    /// <summary>
     /// Builds an immutable <see cref="TestSession"/> instance.
     /// </summary>
     /// <returns>A new immutable test session.</returns>
@@ -171,6 +197,7 @@ public sealed class TestSessionBuilder
             startedAt: _startedAt,
             environmentInfo: _environmentInfo,
             executions: _executions.AsReadOnly(),
+            assemblies: _assemblies,
             endedAt: _endedAt,
             totalTestsExpected: _totalTestsExpected,
             sessionState: _sessionState,
@@ -189,6 +216,7 @@ public sealed class TestSessionBuilder
         _endedAt = null;
         _environmentInfo = new EnvironmentInfo();
         _executions.Clear();
+        _assemblies.Clear();
         _totalTestsExpected = null;
         _sessionState = TestSessionState.Initial;
         _pullRequestContext = null;

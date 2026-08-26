@@ -68,25 +68,32 @@ public sealed class XpingTestBaseAssemblyNameTests
     }
 
     [Fact]
-    public void CreateTestExecution_UnresolvableTestClass_FallsBackToNamespaceHeuristic()
+    public void CreateTestExecution_UnresolvableTestClass_NamesNoAssemblyRatherThanGuessing()
     {
+        // The namespace-root fallback used to answer "NonExistent" here. That value now names an
+        // Xping Cloud project when none is pinned, and a plausible-looking wrong name is worse than
+        // an empty one: empty is reported as unattributed, wrong is silently filed under a project
+        // nobody meant to create.
         var context = new MockTestContext("SomeMethod", "NonExistent.Namespace.Class");
 
         InvokeCreateTestExecution(context, out string? capturedAssembly);
 
-        Assert.Equal("NonExistent", capturedAssembly);
+        Assert.Equal(string.Empty, capturedAssembly);
     }
 
     [Fact]
-    public void ExtractAssemblyName_WithMultiSegmentNamespace_ReturnsFirstSegmentAsFallback()
+    public void CreateTestExecution_UnresolvableTestMethod_StillResolvesAssemblyFromTheClass()
     {
-        MethodInfo method = typeof(XpingTestBase).GetMethod(
-            "ExtractAssemblyName",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
+        // A method lookup that misses must not throw away a type that already answered the
+        // question — the assembly comes from the resolved class, not from the MethodInfo.
+        string fullClassName = typeof(SampleTestClass).FullName!;
+        string expectedAssembly = typeof(SampleTestClass).Assembly.GetName().Name!;
 
-        var result = (string?)method.Invoke(null, ["MyCompany.Billing.Tests.InvoiceTests"]);
+        var context = new MockTestContext("NoSuchMethodOnThisClass", fullClassName);
 
-        Assert.Equal("MyCompany", result);
+        InvokeCreateTestExecution(context, out string? capturedAssembly);
+
+        Assert.Equal(expectedAssembly, capturedAssembly);
     }
 
     private static TestExecution InvokeCreateTestExecution(TestContext context, out string? capturedAssembly)

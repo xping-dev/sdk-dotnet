@@ -323,8 +323,9 @@ internal sealed class XpingUploader(
         "Error.ApiKey.RateLimitExceeded" =>
             "Back off and retry later, or reduce upload frequency by batching more executions per upload",
         "Error.Subscription.ProjectLimitReached" =>
-            "Upgrade the plan, or upload to an existing project - the X-Project-Id header names a new " +
-            "project and the workspace is already at its project limit",
+            "This run names a project the workspace does not have yet and the project limit is " +
+            "reached - upgrade the plan, or set ProjectId to report into an existing project. " +
+            "A solution-wide run reports one project per test assembly, so it can request several at once",
         "Error.Subscription.TestRunLimitReached" or "Error.Subscription.UsageLimitExceeded" =>
             "Upgrade the plan to continue ingesting test results this billing period",
         "Error.Billing.PaymentFailed" or "Error.Billing.CardDeclined" or "Error.Billing.InsufficientFunds" =>
@@ -336,7 +337,9 @@ internal sealed class XpingUploader(
 
         // Request content - a configuration or SDK-version problem
         "Error.Uploads.MissingProjectKey" =>
-            "Set ProjectId in your Xping configuration; it is sent as the X-Project-Id header",
+            "The upload named no project: no ProjectId is configured and no test assembly could be " +
+            "resolved for this session. Set ProjectId to pin one, or check that your tests report " +
+            "an assembly name",
         "Error.Uploads.MissingSessionId" =>
             "The upload was sent without a session id - this indicates an SDK defect, please report it",
         "Error.Uploads.UnrecognizedPayload" or "Error.Uploads.UnrecognizedState" =>
@@ -353,7 +356,7 @@ internal sealed class XpingUploader(
     /// </summary>
     private static string GetActionForStatusCode(int statusCode, string baseUrl) => statusCode switch
     {
-        400 or 422 => "Check the upload configuration (ApiEndpoint, ProjectId) and the SDK version",
+        400 or 422 => "Check the upload configuration (ApiEndpoint) and the SDK version",
         401 => $"Verify the ApiKey is set and valid for {baseUrl}",
         402 => "Review the workspace subscription - a plan limit or billing issue is blocking uploads",
         403 => "Verify the API key has the UPLOAD scope and that this client's IP is permitted",

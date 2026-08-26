@@ -22,12 +22,11 @@ This guide covers the most frequently encountered issues when using the Xping SD
 
 #### 1. Missing or Invalid Credentials
 
-Check that both `ApiKey` and `ProjectId` are configured:
+Check that `ApiKey` is configured (`ProjectId` is optional):
 
 ```bash
 # Verify environment variables are set
 echo $XPING_APIKEY
-echo $XPING_PROJECTID
 ```
 
 Or check your `appsettings.json`:
@@ -36,7 +35,6 @@ Or check your `appsettings.json`:
 {
   "Xping": {
     "ApiKey": "xpg_live_your_key_here",
-    "ProjectId": "your-project-id"
   }
 }
 ```
@@ -256,7 +254,7 @@ The SDK's resilience system has detected repeated upload failures (50% failure r
 1. **Wait for automatic reset:** The circuit breaker reopens after 30 seconds
 2. **Check network connectivity:** Verify connection to `upload.xping.io`
 3. **Review logs:** Enable debug logging to see underlying failure reasons
-4. **Verify credentials:** Ensure API key and project ID are valid
+4. **Verify credentials:** Ensure the API key is valid
 
 **Prevention:** Address the root cause (network, credentials, API issues) before the circuit breaker triggers.
 
@@ -268,7 +266,7 @@ The SDK's resilience system has detected repeated upload failures (50% failure r
 
 **Error Message:**
 ```
-Authentication failed (401): Invalid API Key or Project ID
+Authentication failed (401): Invalid API Key
 Action: Verify credentials at https://app.xping.io
 ```
 
@@ -315,7 +313,19 @@ Action: Check project access at https://app.xping.io
 3. Check that the API key has appropriate permissions
 4. If needed, create a new API key with full permissions
 
-> **Note:** The `ProjectId` is a user-defined identifier that Xping automatically creates when your tests first run. You don't need to create the project manually in Xping Cloud—just choose a meaningful name and Xping will handle the rest.
+> **Note:** You don't need to create a project manually in Xping Cloud. With no `ProjectId` set, each test assembly gets its own project, named after the assembly and created on the first run.
+
+
+### My tests created several projects
+
+That is the default. Each test assembly reports into its own project, so a solution-wide
+`dotnet test` covering `Billing.Tests`, `Api.Tests` and `Web.Tests` produces three projects.
+
+To report them all as one project instead, pin it:
+
+```bash
+export XPING_PROJECTID="my-app"
+```
 
 ---
 
@@ -858,7 +868,7 @@ Individual upload failures may result in lost test data.
 
 Before seeking support, verify:
 
-- ✅ API Key and Project ID are configured correctly
+- ✅ API Key is configured correctly
 - ✅ Network connectivity to `upload.xping.io` is working
 - ✅ SDK is enabled (`Enabled = true`)
 - ✅ Configuration is valid (proper JSON syntax, value ranges)

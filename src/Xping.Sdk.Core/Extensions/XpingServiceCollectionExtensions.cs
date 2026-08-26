@@ -485,8 +485,19 @@ public static class XpingServiceCollectionExtensions
             // Configure headers
             client.DefaultRequestHeaders.Accept.Add(
                 new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-            client.DefaultRequestHeaders.Add("X-API-Key", config.ApiKey);
-            client.DefaultRequestHeaders.Add("X-Project-Id", config.ProjectId);
+            if (!string.IsNullOrWhiteSpace(config.ApiKey))
+                client.DefaultRequestHeaders.Add("X-API-Key", config.ApiKey);
+
+            // Sent only when a project is pinned, and its absence is meaningful: it tells the
+            // platform to split the session by test assembly instead. There is nothing to send in
+            // the derived case anyway - this delegate runs when the orchestrator resolves
+            // IXpingUploader, before any test has executed and therefore before any assembly name
+            // exists. Add() also throws on a null value, and that throw would surface inside
+            // GetRequiredService<IXpingUploader>() where the orchestrator's catch-all turns it into
+            // a silent "SDK disabled".
+            if (config.ProjectPin is { } projectPin)
+                client.DefaultRequestHeaders.Add("X-Project-Id", projectPin);
+
             client.DefaultRequestHeaders.Add("User-Agent", $"Xping-SDK-DotNet/{XpingVersion.Current}");
         })
         .AddResilienceHandler("xping-upload-resilience", (builder, context) =>

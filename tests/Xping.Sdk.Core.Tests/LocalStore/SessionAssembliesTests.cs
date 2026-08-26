@@ -44,6 +44,7 @@ public sealed class SessionAssembliesTests
             .WithEndedAt(new DateTime(2026, 8, 1, 9, 5, 0, DateTimeKind.Utc))
             .WithEnvironmentInfo(environment)
             .AddExecutions(executions)
+            .WithAssemblies(SessionAssemblies.Of(executions))
             .WithTotalTestsExpected(executions.Length)
             .WithSessionState(TestSessionState.Finalized)
             .WithQuickStatistics(new QuickStatistics())
@@ -99,7 +100,44 @@ public sealed class SessionAssembliesTests
 
     [Fact]
     public void OfTreatsANullSessionAsCoveringNothing() =>
-        Assert.Empty(SessionAssemblies.Of(null));
+        Assert.Empty(SessionAssemblies.Of((TestSession?)null));
+
+    [Fact]
+    public void OfTreatsNullExecutionsAsCoveringNothing() =>
+        Assert.Empty(SessionAssemblies.Of((IReadOnlyCollection<TestExecution>?)null));
+
+    [Fact]
+    public void ProjectNarrowsAssembliesToTheKeptOne()
+    {
+        // Arrange — a projection that still claimed to cover the assemblies it just stripped would
+        // make a scoped report list assemblies it does not contain.
+        TestSession session = Session(
+            Execution("A", "Alpha.Tests"),
+            Execution("B", "Beta.Tests"));
+
+        // Act
+        TestSession? projected = SessionAssemblies.Project(session, "Alpha.Tests");
+
+        // Assert
+        Assert.NotNull(projected);
+        Assert.Equal(["Alpha.Tests"], projected!.Assemblies);
+    }
+
+    [Fact]
+    public void ExcludingDropsTheRemovedAssemblyFromAssemblies()
+    {
+        // Arrange
+        TestSession session = Session(
+            Execution("A", "Alpha.Tests"),
+            Execution("B", "Beta.Tests"));
+
+        // Act
+        TestSession? remaining = SessionAssemblies.Excluding(session, "Alpha.Tests");
+
+        // Assert
+        Assert.NotNull(remaining);
+        Assert.Equal(["Beta.Tests"], remaining!.Assemblies);
+    }
 
     // -----------------------------------------------------------------------
     // Covers

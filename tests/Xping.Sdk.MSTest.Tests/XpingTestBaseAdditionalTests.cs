@@ -149,11 +149,12 @@ public class XpingTestBaseAdditionalTests
     }
 
     [Fact]
-    public void ExtractAssemblyName_MethodExists()
+    public void FindTestClassForContext_MethodExists()
     {
-        // Arrange
+        // Arrange — replaces ExtractAssemblyName, whose namespace-root heuristic was removed:
+        // the assembly now comes from the resolved test class.
         var method = typeof(XpingTestBase).GetMethod(
-            "ExtractAssemblyName",
+            "FindTestClassForContext",
             BindingFlags.NonPublic | BindingFlags.Static);
 
         // Act & Assert

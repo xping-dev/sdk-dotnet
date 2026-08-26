@@ -66,7 +66,6 @@ Create or update `appsettings.json` in your test project:
 {
   "Xping": {
     "ApiKey": "your-api-key-here",
-    "ProjectId": "your-project-id-here",
     "Enabled": true
   }
 }
@@ -77,10 +76,12 @@ Create or update `appsettings.json` in your test project:
 > 2. Navigate to **Account** → **Settings** → **API & Integration**
 > 3. Click **Create API Key** and copy it
 >
-> **About Project ID:**
-> The `ProjectId` is a user-defined identifier for your project (e.g., `"my-app"`, `"payment-service"`). 
-> Choose any meaningful name—Xping will automatically create the project in your workspace when your tests first run. 
-> The platform requires that project names are unique within your workspace. Check [Configuration Reference](../configuration/configuration-reference.md#projectid) for more information.
+> **About your project:**
+> You do not name it. Xping derives the project from your test assembly, so a test project called
+> `PaymentService.Tests` reports into a project of that name, created automatically on the first run.
+> A solution with several test projects gets one Xping project each. To report them all as a single
+> project instead, set `ProjectId` — see the
+> [Configuration Reference](../configuration/configuration-reference.md#projectid).
 
 Make sure the file is copied to output directory by adding this to your `.csproj`:
 
@@ -99,17 +100,14 @@ Set environment variables (useful for CI/CD):
 ```bash
 # Linux/macOS
 export XPING__APIKEY="your-api-key-here"
-export XPING__PROJECTID="your-project-id-here"
 export XPING__ENABLED="true"
 
 # Windows (PowerShell)
 $env:XPING__APIKEY="your-api-key-here"
-$env:XPING__PROJECTID="your-project-id-here"
 $env:XPING__ENABLED="true"
 
 # Windows (Command Prompt)
 set XPING__APIKEY=your-api-key-here
-set XPING__PROJECTID=your-project-id-here
 set XPING__ENABLED=true
 ```
 
@@ -132,7 +130,6 @@ internal static class ModuleInitializer
         var config = new XpingConfiguration
         {
             ApiKey = "your-api-key-here",
-            ProjectId = "your-project-id-here",
             Enabled = true
         };
         

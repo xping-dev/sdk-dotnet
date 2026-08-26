@@ -314,16 +314,14 @@ Ensure setup fixtures follow the patterns shown in Step 2, with a single initial
 
 ### 1. Separate Projects for Different Test Suites
 
-Use distinct `ProjectId` values for each test project:
-- Core SDK tests
-- Framework adapter tests
-- Integration tests
-- Performance benchmarks
-
-This enables:
+This happens automatically. Each test assembly reports into its own project, named after the
+assembly, so core SDK tests, framework adapter tests, integration tests and benchmarks stay
+separate with no configuration:
 - Granular analysis per test suite
 - Independent monitoring
 - Clear failure attribution
+
+Set `ProjectId` only if you want the opposite — every test assembly reporting as one project.
 
 ### 2. Disable Local Uploads
 
