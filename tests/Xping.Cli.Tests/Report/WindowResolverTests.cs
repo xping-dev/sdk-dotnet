@@ -248,4 +248,50 @@ public sealed class WindowResolverTests
 
         Assert.Equal(2, result.Window!.SessionCount);
     }
+
+    [Fact]
+    public void ARunSharedBySeveralSuitesCountsOnceForEachOfThem()
+    {
+        // One test host, two test projects, one session. Each suite ran twice and its window has to
+        // say two — not one because the run was labelled elsewhere, and not four because both
+        // suites' executions were pooled into it.
+        TestSession[] sessions =
+        [
+            Mixed(0),
+            Mixed(1)
+        ];
+
+        WindowResult alpha = CreateResolver()
+            .Resolve(new FakeSessionSource(sessions), new WindowRequest(null, null, "Alpha.Tests"));
+        WindowResult beta = CreateResolver()
+            .Resolve(new FakeSessionSource(sessions), new WindowRequest(null, null, "Beta.Tests"));
+
+        Assert.Equal(2, alpha.Window!.SessionCount);
+        Assert.Equal(2, beta.Window!.SessionCount);
+    }
+
+    [Fact]
+    public void AScopedWindowCarriesOnlyThatSuitesExecutions()
+    {
+        TestSession[] sessions = [Mixed(0)];
+
+        WindowResult result = CreateResolver()
+            .Resolve(new FakeSessionSource(sessions), new WindowRequest(null, null, "Alpha.Tests"));
+
+        TestSession scoped = Assert.Single(result.Window!.Sessions);
+
+        Assert.All(
+            scoped.Executions, e => Assert.Equal("Alpha.Tests", e.Identity.Assembly));
+    }
+
+    /// <summary>
+    /// Builds a session recording both suites, as one shared test host produces.
+    /// </summary>
+    private static TestSession Mixed(int ordinal) =>
+        TestSessionFactory.Session(
+            ordinal,
+            [
+                TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests"),
+                TestSessionFactory.Execution("Beta", assembly: "Beta.Tests")
+            ]);
 }

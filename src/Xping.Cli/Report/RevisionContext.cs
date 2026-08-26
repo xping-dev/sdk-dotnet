@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report.Store;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report;
@@ -35,12 +34,20 @@ internal sealed record RevisionContext(string? Sha, string? Branch, string? Asse
     /// Builds the context from the newest session in a window.
     /// </summary>
     /// <param name="sessions">The analysed sessions, newest first.</param>
+    /// <param name="assembly">The assembly the report was scoped to, when one was chosen.</param>
     /// <returns>
     /// The context, or <see langword="null"/> when nothing is known. It is never fabricated: a null
     /// context says "this report cannot tell you what was checked out", which is honest, where an
     /// invented one would be quietly wrong.
     /// </returns>
-    public static RevisionContext? FromNewest(IReadOnlyList<TestSession> sessions)
+    /// <remarks>
+    /// The assembly is passed in rather than recovered from the sessions. It is the scope the report
+    /// was actually run under, and a session can cover several assemblies, so re-deriving it here
+    /// would be a second guess at a question already answered — and free to disagree with the answer
+    /// the report was built from.
+    /// </remarks>
+    public static RevisionContext? FromNewest(
+        IReadOnlyList<TestSession> sessions, string? assembly)
     {
         if (sessions.Count == 0)
             return null;
@@ -49,7 +56,6 @@ internal sealed record RevisionContext(string? Sha, string? Branch, string? Asse
 
         string? sha = ReadSha(newest);
         string? branch = ReadProperty(newest, BranchProperty);
-        string? assembly = LocalSessionSource.AssemblyOf(newest);
 
         if (sha == null && branch == null && assembly == null)
             return null;

@@ -133,6 +133,30 @@ public sealed class JsonSessionStoreTests : IDisposable
             .Build();
     }
 
+    /// <summary>
+    /// Builds one session recording several test assemblies, as a shared test host produces.
+    /// </summary>
+    private static TestSession BuildMixedSession(
+        DateTime startedAt, params (string Assembly, int TestCount)[] assemblies)
+    {
+        var executions = new List<TestExecution>();
+
+        foreach ((string assembly, int count) in assemblies)
+        {
+            for (int i = 0; i < count; i++)
+                executions.Add(BuildExecution($"{assembly}Test{i}", assembly: assembly));
+        }
+
+        return new TestSessionBuilder()
+            .WithSessionId(Guid.NewGuid())
+            .WithStartedAt(startedAt)
+            .WithEndedAt(startedAt.AddMinutes(1))
+            .WithEnvironmentInfo(new EnvironmentInfoBuilder().WithMachineName("dev-box").Build())
+            .AddExecutions(executions)
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
+    }
+
     [Fact]
     public void WriteThenReadPreservesEverythingAnalysisNeeds()
     {
@@ -316,6 +340,148 @@ public sealed class JsonSessionStoreTests : IDisposable
 
         TestSession remaining = Assert.Single(store.ReadRecent(10).Sessions);
         Assert.Equal("Beta.Tests", remaining.Executions.First().Identity.Assembly);
+    }
+
+    [Fact]
+    public void ARunCoveringSeveralAssembliesIsARunOfEachOfThem()
+    {
+        // `dotnet test` over a solution puts several test projects in one host, and the host writes
+        // one session. Each project's history has to contain that run, or a report on one of them
+        // silently loses every solution-wide run while another inherits its tests.
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
+            ("Alpha.Tests", 2),
+            ("Beta.Tests", 3)));
+
+        Assert.Single(store.ReadRecent(10, "Alpha.Tests").Sessions);
+        Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
+    }
+
+    [Fact]
+    public void AScopedReadNarrowsAMixedRunToTheRequestedAssembly()
+    {
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
+            ("Alpha.Tests", 2),
+            ("Beta.Tests", 3)));
+
+        TestSession alpha = Assert.Single(store.ReadRecent(10, "Alpha.Tests").Sessions);
+        TestSession beta = Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
+
+        Assert.Equal(2, alpha.Executions.Count);
+        Assert.Equal(3, beta.Executions.Count);
+        Assert.All(alpha.Executions, e => Assert.Equal("Alpha.Tests", e.Identity.Assembly));
+        Assert.All(beta.Executions, e => Assert.Equal("Beta.Tests", e.Identity.Assembly));
+    }
+
+    [Fact]
+    public void AMixedRunCostsOneSlotOfTheRequestedMaximum()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 4; i++)
+        {
+            store.Write(BuildMixedSession(
+                baseTime.AddMinutes(i), ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+        }
+
+        Assert.Equal(2, store.ReadRecent(2, "Alpha.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void ScopedReadingIsUnaffectedByWhichAssemblyRanFirst()
+    {
+        // The rule this replaces took the first execution that named an assembly, so a run was
+        // reachable under one of its assemblies and invisible under the rest.
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Beta.Tests", 1), ("Alpha.Tests", 1)));
+
+        Assert.Equal(2, store.ReadRecent(10, "Alpha.Tests").Sessions.Count);
+        Assert.Equal(2, store.ReadRecent(10, "Beta.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void DeleteScopedToAnAssemblyFindsRunsWhereItWasNotNamedFirst()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        Assert.Equal(1, store.Delete("Beta.Tests"));
+        Assert.Empty(store.ReadRecent(10, "Beta.Tests").Sessions);
+    }
+
+    [Fact]
+    public void DeleteScopedToAnAssemblyKeepsTheRestOfASharedRun()
+    {
+        // The run held two suites. Clearing one of them must not clear the other, or `xping clear`
+        // would destroy history its caller never named — the failure this scoping exists to prevent.
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 2), ("Beta.Tests", 3)));
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+
+        TestSession remaining = Assert.Single(store.ReadRecent(10).Sessions);
+
+        Assert.Equal(3, remaining.Executions.Count);
+        Assert.All(remaining.Executions, e => Assert.Equal("Beta.Tests", e.Identity.Assembly));
+    }
+
+    [Fact]
+    public void AStrippedRunKeepsItsIdentityAndStaysReadable()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        TestSession written = BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1));
+        store.Write(written);
+        store.Delete("Alpha.Tests");
+
+        TestSession remaining = Assert.Single(store.ReadRecent(10).Sessions);
+
+        // Same run, rewritten in place: the filename encodes the ticks and session id, so a rewrite
+        // that changed either would leave the old file behind beside the new one.
+        Assert.Equal(written.SessionId, remaining.SessionId);
+        Assert.Equal(written.StartedAt, remaining.StartedAt);
+        Assert.Single(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+        Assert.Empty(Directory.GetFiles(SessionsDirectory, "*.tmp"));
+    }
+
+    [Fact]
+    public void DeleteRemovesARunThatRecordedTheScopedAssemblyAndNothingElse()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Alpha.Tests"));
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+        Assert.Empty(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+    }
+
+    [Fact]
+    public void ARunThatNamedNoAssemblyIsUnreachableByAnyScope()
+    {
+        // It cannot be attributed, so it cannot be scoped to. It stays in the store — `xping where`
+        // still accounts for it — but no report can claim it belongs to a suite.
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), assembly: string.Empty));
+
+        Assert.Single(store.ReadRecent(10).Sessions);
+        Assert.Empty(store.ReadRecent(10, "Alpha.Tests").Sessions);
     }
 
     [Fact]

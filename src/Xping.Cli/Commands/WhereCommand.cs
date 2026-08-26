@@ -56,8 +56,14 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // A large window: this is a diagnostic, so completeness beats speed.
         IReadOnlyList<TestSession> sessions = store.ReadRecent(500).Sessions;
 
+        // A run is listed under every assembly it executed, so the run counts below can add up to
+        // more than the file count above. That is the honest reading: one `dotnet test` across a
+        // solution is one run of each test project it covered, and each of them has that much
+        // history. Collapsing it to a single arbitrary assembly is what this listing exists to
+        // stop the reader believing.
         var byAssembly = sessions
-            .GroupBy(AssemblyOf, StringComparer.Ordinal)
+            .SelectMany(AssemblyPairs)
+            .GroupBy(pair => pair.Assembly, pair => pair.Session, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .ThenBy(g => g.Key, StringComparer.Ordinal);
 
@@ -90,17 +96,21 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             : string.Format(CultureInfo.InvariantCulture, "{0:0.0} KB", bytes / 1024.0);
 
     /// <summary>
-    /// Gets the assembly a session belongs to, using the same rule the store's filter uses.
+    /// Pairs a session with each test assembly it executed.
     /// </summary>
-    private static string AssemblyOf(TestSession session)
+    /// <remarks>
+    /// A session that named no assembly at all is still listed, under <c>(unknown)</c>. It is
+    /// invisible to every scoped report — there is nothing to scope it by — so a diagnostic that
+    /// dropped it too would leave the runs unaccounted for and the file count unexplained.
+    /// </remarks>
+    private static IEnumerable<(string Assembly, TestSession Session)> AssemblyPairs(
+        TestSession session)
     {
-        foreach (var execution in session.Executions)
-        {
-            if (!string.IsNullOrEmpty(execution.Identity.Assembly))
-                return execution.Identity.Assembly;
-        }
+        IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
 
-        return "(unknown)";
+        return assemblies.Count == 0
+            ? [("(unknown)", session)]
+            : assemblies.Select(assembly => (assembly, session));
     }
 
     private static string Truncate(string value, int max) =>

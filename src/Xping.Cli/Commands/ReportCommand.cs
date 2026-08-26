@@ -56,7 +56,7 @@ internal sealed class ReportCommand(
             return ReportUnavailable(resolved, store, options);
 
         var context = new AnalysisContext(
-            resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions));
+            resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
         IReadOnlySet<FindingKind>? kinds =
             options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
