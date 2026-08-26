@@ -176,17 +176,6 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets the sampling rate.
-    /// </summary>
-    /// <param name="samplingRate">The sampling rate (0.0 to 1.0).</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithSamplingRate(double samplingRate)
-    {
-        _configuration.SamplingRate = samplingRate;
-        return this;
-    }
-
-    /// <summary>
     /// Sets the timeout for upload operations.
     /// </summary>
     /// <param name="uploadTimeout">The upload timeout.</param>

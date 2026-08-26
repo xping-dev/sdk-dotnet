@@ -330,21 +330,7 @@ Keep `Enabled: false` in `appsettings.json` to prevent:
 - Accidental uploads during debugging
 - Credential exposure
 
-### 3. Use Sampling in High-Volume Scenarios
-
-For large test suites (>1000 tests), consider sampling:
-
-```json
-{
-  "Xping": {
-    "SamplingRate": 0.1
-  }
-}
-```
-
-This uploads 10% of test executions while maintaining statistical significance.
-
-### 4. Monitor SDK Overhead
+### 3. Monitor SDK Overhead
 
 Use benchmarks to ensure SDK doesn't significantly impact test performance:
 
@@ -354,7 +340,7 @@ dotnet run --project tests/Xping.Sdk.Benchmarks/
 
 Target: <5 ms overhead per test execution.
 
-### 5. Test Xping Integration in Integration Tests
+### 4. Test Xping Integration in Integration Tests
 
 Create integration tests specifically for Xping upload functionality:
 
@@ -396,7 +382,6 @@ public async Task Xping_UploadsSuccessfully_WhenEnabled()
      }
    }
    ```
-3. **Use sampling**: Reduce data volume while maintaining insights
 
 ## Advanced Configuration
 
@@ -410,14 +395,12 @@ Use different configurations for different branches:
   if: github.ref == 'refs/heads/main'
   env:
     XPING_ENVIRONMENT: Production
-    XPING_SAMPLINGRATE: 1.0
 
 # Development branch
 - name: Run Tests (Development)
   if: github.ref == 'refs/heads/develop'
   env:
     XPING_ENVIRONMENT: Development
-    XPING_SAMPLINGRATE: 0.5
 ```
 
 ### Custom Retry Configuration

@@ -62,8 +62,7 @@ dotnet-trace collect --process-id <pid> --providers Microsoft-Windows-DotNETRunt
 {
   "Xping": {
     "Enabled": true,  // Should be true
-    "BatchSize": 100, // Reasonable default
-    "SamplingRate": 1.0 // No sampling unless intentional
+    "BatchSize": 100  // Reasonable default
   }
 }
 ```
@@ -141,9 +140,8 @@ dotnet-counters monitor --process-id <pid> --counters System.Runtime
 ```json
 {
   "Xping": {
-    "BatchSize": 50,          // Smaller batches
-    "FlushIntervalSeconds": 15, // More frequent uploads
-    "SamplingRate": 0.5       // Track 50% of tests
+    "BatchSize": 50,           // Smaller batches
+    "FlushIntervalSeconds": 15 // More frequent uploads
   }
 }
 ```

@@ -32,7 +32,6 @@ public class ConfigurationBenchmarks
             ["Xping:Enabled"] = "true",
             ["Xping:BatchSize"] = "100",
             ["Xping:FlushInterval"] = "00:00:30",
-            ["Xping:SamplingRate"] = "1.0"
         };
 
         _jsonConfig = new ConfigurationBuilder()
@@ -72,8 +71,7 @@ public class ConfigurationBenchmarks
             ProjectId = "test-project-id",
             Enabled = true,
             BatchSize = 100,
-            FlushInterval = TimeSpan.FromSeconds(30),
-            SamplingRate = 1.0
+            FlushInterval = TimeSpan.FromSeconds(30)
         };
     }
 

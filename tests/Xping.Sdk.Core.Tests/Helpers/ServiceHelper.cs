@@ -33,7 +33,6 @@ internal static class ServiceHelper
             o.ApiKey = "test-key";
             o.ProjectId = "test-project";
             o.BatchSize = 100;
-            o.SamplingRate = 1.0;
             o.Enabled = true;
             configure?.Invoke(o);
         });
@@ -76,7 +75,6 @@ internal static class ServiceHelper
                     o.ApiKey = "test-key";
                     o.ProjectId = "test-project";
                     o.BatchSize = 100;
-                    o.SamplingRate = 1.0;
                     o.Enabled = true;
                     o.FlushInterval = TimeSpan.Zero; // disable background timer by default
                     configure?.Invoke(o);
@@ -232,7 +230,6 @@ internal static class ServiceHelper
                     o.ApiKey = "test-key";
                     o.ProjectId = "test-project";
                     o.BatchSize = 100;
-                    o.SamplingRate = 1.0;
                     o.Enabled = true;
                     o.FlushInterval = TimeSpan.Zero;
                     configure?.Invoke(o);

@@ -39,8 +39,7 @@ internal sealed class NoOpTestExecutionCollector : ITestExecutionCollector
         return Task.FromResult(new CollectorStats
         {
             TotalRecorded = 0,
-            BufferCount = 0,
-            TotalSampled = 0
+            BufferCount = 0
         });
     }
 

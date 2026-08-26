@@ -48,14 +48,12 @@ Core test recording functionality performance:
 | Benchmark | Mean | Allocated | Throughput |
 |-----------|------|-----------|------------|
 | **RecordSingleTest** | 309.0 ns | 328 B | 3.2M tests/sec |
-| **RecordWithSampling** | 345.8 ns | 344 B | 2.9M tests/sec |
 | **RecordWithoutRetry** | 303.8 ns | 320 B | 3.3M tests/sec |
 | **RecordBatch_100Tests** | 31.07 µs | 33.2 KB | 3.2M tests/sec |
 
 **Analysis:**
 - Sub-microsecond recording overhead per test
 - Linear scaling with batch size (310ns per test)
-- Sampling adds minimal overhead (~37ns)
 - Memory allocation proportional to test data captured
 
 ### 2.2 Upload Benchmarks

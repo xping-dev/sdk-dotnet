@@ -31,7 +31,7 @@ public sealed class TestExecutionCollectorTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void RecordTest_ShouldEnqueueExecution_WhenEnabledAndSampled()
+    public void RecordTest_ShouldEnqueueExecution_WhenEnabled()
     {
         // Arrange
         using var collector = BuildCollector();
@@ -83,24 +83,10 @@ public sealed class TestExecutionCollectorTests
     }
 
     [Fact]
-    public void RecordTest_ShouldDropAll_WhenSamplingRateIsZero()
+    public void RecordTest_ShouldBufferEveryExecution()
     {
         // Arrange
-        using var collector = BuildCollector(o => o.SamplingRate = 0.0);
-
-        // Act
-        for (int i = 0; i < 10; i++)
-            collector.RecordTest(BuildExecution($"Test{i}"));
-
-        // Assert
-        Assert.Empty(collector.Drain());
-    }
-
-    [Fact]
-    public void RecordTest_ShouldIncludeAll_WhenSamplingRateIsOne()
-    {
-        // Arrange
-        using var collector = BuildCollector(o => o.SamplingRate = 1.0);
+        using var collector = BuildCollector();
 
         // Act
         for (int i = 0; i < 5; i++)
@@ -211,10 +197,10 @@ public sealed class TestExecutionCollectorTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task GetStatsAsync_ShouldReflectRecordedAndSampledCounts()
+    public async Task GetStatsAsync_ShouldReflectRecordedCount()
     {
         // Arrange
-        using var collector = BuildCollector(o => { o.SamplingRate = 1.0; o.BatchSize = 100; });
+        using var collector = BuildCollector(o => o.BatchSize = 100);
 
         for (int i = 0; i < 4; i++)
             collector.RecordTest(BuildExecution($"Test{i}"));
@@ -224,26 +210,7 @@ public sealed class TestExecutionCollectorTests
 
         // Assert
         Assert.Equal(4, stats.TotalRecorded);
-        Assert.Equal(4, stats.TotalSampled);
         Assert.Equal(4, stats.BufferCount);
-    }
-
-    [Fact]
-    public async Task GetStatsAsync_ShouldReflectZeroSampled_WhenSamplingRateIsZero()
-    {
-        // Arrange
-        using var collector = BuildCollector(o => o.SamplingRate = 0.0);
-
-        for (int i = 0; i < 5; i++)
-            collector.RecordTest(BuildExecution($"Test{i}"));
-
-        // Act
-        var stats = await collector.GetStatsAsync();
-
-        // Assert
-        Assert.Equal(5, stats.TotalRecorded);
-        Assert.Equal(0, stats.TotalSampled);
-        Assert.Equal(0, stats.BufferCount);
     }
 
     [Fact]

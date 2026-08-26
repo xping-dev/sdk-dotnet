@@ -20,7 +20,6 @@ This directory contains sample configuration files for the Xping SDK.
     "EnableOfflineQueue": true,
     "MaxRetries": 3,
     "RetryDelay": "00:00:02",
-    "SamplingRate": 1.0,
     "UploadTimeout": "00:00:30",
     "CollectNetworkMetrics" : true
   }
@@ -37,7 +36,6 @@ export XPING_PROJECTID="your-project-id"
 export XPING_BATCHSIZE="200"
 export XPING_ENVIRONMENT="Production"
 export XPING_ENABLED="true"
-export XPING_SAMPLINGRATE="0.5"
 ```
 
 ## Configuration via Code (Programmatic)
@@ -51,7 +49,6 @@ var config = new XpingConfigurationBuilder()
     .WithProjectId("your-project-id")
     .WithBatchSize(200)
     .WithEnvironment("Production")
-    .WithSamplingRate(0.5)
     .Build();
 
 // Direct instantiation
@@ -60,8 +57,7 @@ var config = new XpingConfiguration
     ApiKey = "your-api-key",
     ProjectId = "your-project-id",
     BatchSize = 200,
-    Environment = "Production",
-    SamplingRate = 0.5
+    Environment = "Production"
 };
 ```
 
@@ -135,12 +131,6 @@ creating one project per test project. Set it to pin every assembly in the run t
   
 - **RetryDelay** (TimeSpan): Delay between retry attempts
   - Default: `00:00:02` (2 seconds)
-
-### Sampling Configuration
-
-- **SamplingRate** (double): Percentage of tests to track (0.0 to 1.0)
-  - Default: `1.0` (100%)
-  - Valid range: 0.0-1.0
 
 ### Timeout Configuration
 

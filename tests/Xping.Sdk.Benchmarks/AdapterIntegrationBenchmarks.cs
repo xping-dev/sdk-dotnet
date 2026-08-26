@@ -43,8 +43,7 @@ public class AdapterIntegrationBenchmarks
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
             BatchSize = 100,
-            FlushInterval = TimeSpan.FromSeconds(5),
-            SamplingRate = 1.0
+            FlushInterval = TimeSpan.FromSeconds(5)
         };
 
         _collector = new TestExecutionCollector(Options.Create(_config));

@@ -69,12 +69,6 @@ public sealed class XpingConfiguration
     public int BatchSize { get; set; } = 100;
 
     /// <summary>
-    /// Gets or sets the sampling rate (0.0 to 1.0, where 1.0 means 100% of tests are tracked).
-    /// </summary>
-    [Range(0.0, 1.0, ErrorMessage = "SamplingRate must be between 0.0 and 1.0")]
-    public double SamplingRate { get; set; } = 1.0;
-
-    /// <summary>
     /// Gets or sets the flush interval for automatically uploading batches.
     /// </summary>
     public TimeSpan FlushInterval { get; set; } = TimeSpan.FromSeconds(30);
@@ -293,11 +287,6 @@ public sealed class XpingConfiguration
         if (RetryDelay < TimeSpan.Zero)
         {
             errors.Add("RetryDelay cannot be negative.");
-        }
-
-        if (SamplingRate < 0.0 || SamplingRate > 1.0)
-        {
-            errors.Add("SamplingRate must be between 0.0 and 1.0.");
         }
 
         if (UploadTimeout <= TimeSpan.Zero)

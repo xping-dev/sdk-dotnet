@@ -349,14 +349,14 @@ public static class XpingServiceCollectionExtensions
     #region Feature: Test Execution Collection
 
     /// <summary>
-    /// Adds test execution collection services (collectors, batching, sampling).
+    /// Adds test execution collection services (collectors, batching).
     /// Use this when you need a test collection without upload capabilities.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingCollectors(this IServiceCollection services)
     {
-        // Register a test execution collector for batching and sampling
+        // Register a test execution collector for batching
         services.AddSingleton<ITestExecutionCollector, TestExecutionCollector>();
         // Register a time provider for high-resolution elapsed time tracking
         services.AddSingleton<ITimeProvider, StopwatchTimeProvider>();
@@ -659,10 +659,6 @@ public static class XpingServiceCollectionExtensions
                 config.RetryDelay = ts;
         }
 
-        // Sampling Options
-        if (GetEnv("SAMPLINGRATE") is { } samplingRate && double.TryParse(samplingRate, out var sr))
-            config.SamplingRate = sr;
-
         // Timeout Options
         if (GetEnv("UPLOADTIMEOUT") is { } uploadTimeout)
         {
@@ -716,7 +712,6 @@ public static class XpingServiceCollectionExtensions
         target.EnableCompression = source.EnableCompression;
         target.MaxRetries = source.MaxRetries;
         target.RetryDelay = source.RetryDelay;
-        target.SamplingRate = source.SamplingRate;
         target.UploadTimeout = source.UploadTimeout;
         target.CollectNetworkMetrics = source.CollectNetworkMetrics;
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;

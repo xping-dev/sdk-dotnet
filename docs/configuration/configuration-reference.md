@@ -33,7 +33,6 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
 | `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
 | `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
-| `SamplingRate` | double | `1.0` | `XPING_SAMPLINGRATE` | Percentage of tests tracked |
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
 | `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
@@ -887,52 +886,6 @@ XpingContext.Initialize(config);
 
 ---
 
-### SamplingRate
-
-**Type:** `double`  
-**Default:** `1.0` (100%)  
-**Valid Range:** `0.0` to `1.0`  
-**Environment Variable:** `XPING_SAMPLINGRATE`
-
-Percentage of tests to track. Use sampling for very large test suites to reduce overhead and API usage.
-
-**Values:**
-- `1.0` - Track all tests (100%)
-- `0.5` - Track half of tests (50%)
-- `0.1` - Track 10% of tests
-- `0.0` - Track no tests (equivalent to `Enabled = false`)
-
-**Sampling behavior:**
-- Random: Each test is randomly sampled with the specified probability
-- Statistically representative: Distributed evenly across test suite over multiple runs
-- Non-deterministic: Different tests may be sampled in each test run
-
-**Use cases:**
-- Large suites (10,000+ tests) where full tracking is costly
-- Initial deployment to assess SDK impact
-- Cost optimization while maintaining statistical significance
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "SamplingRate": 0.1
-  }
-}
-```
-
-```bash
-export XPING_SAMPLINGRATE="0.1"
-```
-
-**Statistical considerations:**
-- 10% sampling: ~1,000 samples needed for 95% confidence
-- 50% sampling: ~384 samples needed for 95% confidence
-- 100% sampling: Complete data, no statistical uncertainty
-
----
-
 ## Configuration Examples
 
 ### Complete JSON Configuration
@@ -952,7 +905,6 @@ export XPING_SAMPLINGRATE="0.1"
     "EnableCompression": true,
     "MaxRetries": 3,
     "RetryDelay": "00:00:02",
-    "SamplingRate": 1.0,
     "UploadTimeout": "00:00:30",
     "CollectNetworkMetrics": true,
     "EnablePullRequestDetection": true,
@@ -1017,7 +969,6 @@ var config = new XpingConfigurationBuilder()
     .WithFlushInterval(TimeSpan.FromMinutes(1))
     .WithEnvironment("Staging")
     .WithMaxRetries(5)
-    .WithSamplingRate(0.5)
     .Build();
 
 XpingContext.Initialize(config);
@@ -1109,7 +1060,6 @@ Xping SDK validates configuration on initialization and provides clear error mes
 | `FlushInterval` | Must be greater than zero |
 | `MaxRetries` | Must be between 0 and 10 |
 | `RetryDelay` | Cannot be negative |
-| `SamplingRate` | Must be between 0.0 and 1.0 |
 | `UploadTimeout` | Must be greater than zero |
 
 ### Handling Validation Errors
@@ -1165,8 +1115,6 @@ else
 
 3. **Enable compression** unless debugging network issues
 
-4. **Use sampling** for very large suites (>10,000 tests)
-
 ### Reliability
 
 1. **Keep default retry settings** unless you have specific requirements
@@ -1199,8 +1147,7 @@ else
    {
      "Xping": {
        "BatchSize": 500,
-       "FlushInterval": "00:02:00",
-       "SamplingRate": 0.1
+       "FlushInterval": "00:02:00"
      }
    }
    ```

@@ -270,7 +270,7 @@ and isn't meant to be shared through version control. To start over, delete the 
 ### Cloud
 
 Data is transmitted over HTTPS. Keep API keys in environment variables or CI secrets, never
-in source control. Stack trace capture and sampling are configurable, and retention is set
+in source control. Stack trace capture is configurable, and retention is set
 per workspace. The SDK is MIT-licensed and open source — [read exactly what it
 sends](https://github.com/xping-dev/sdk-dotnet).
 

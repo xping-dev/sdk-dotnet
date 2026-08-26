@@ -48,7 +48,6 @@ Measure performance of core SDK components:
 ### 2. Integration Benchmarks
 End-to-end performance measurements:
 - Complete test lifecycle (record → buffer → batch → upload)
-- Sampling performance at various rates
 
 ### 3. Adapter Benchmarks
 Framework-specific overhead:

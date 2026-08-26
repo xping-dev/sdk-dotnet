@@ -325,7 +325,6 @@ Enable `XpingLogLevel.Debug` and check the initialization messages:
   - ProjectId: my-project
   - BatchSize: 100
   - FlushInterval: 00:00:30
-  - SamplingRate: 1.0
   - Enabled: True
   - Environment: CI
 ```
@@ -342,7 +341,6 @@ Console.WriteLine($"API Endpoint: {config.ApiEndpoint}");
 Console.WriteLine($"Project ID: {config.ProjectId}");
 Console.WriteLine($"Batch Size: {config.BatchSize}");
 Console.WriteLine($"SDK Enabled: {config.Enabled}");
-Console.WriteLine($"Sampling Rate: {config.SamplingRate}");
 ```
 
 ---

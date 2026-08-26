@@ -19,9 +19,4 @@ public sealed class CollectorStats
     /// Gets or sets the total number of tests currently in the buffer.
     /// </summary>
     public int BufferCount { get; set; }
-
-    /// <summary>
-    /// Gets or sets the total number of tests sampled out (not recorded due to sampling).
-    /// </summary>
-    public long TotalSampled { get; set; }
 }

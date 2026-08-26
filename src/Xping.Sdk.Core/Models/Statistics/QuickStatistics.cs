@@ -12,10 +12,9 @@ namespace Xping.Sdk.Core.Models.Statistics;
 /// </summary>
 /// <remarks>
 /// <para>
-/// These statistics represent the full test population, regardless of the sampling rate
-/// configured for the <c>Executions</c> payload. When sampling is active, <see cref="Total"/>
-/// may exceed the combined count of executions across all batch uploads
-/// (i.e. <see cref="Total"/> may be greater than the sum of all uploaded execution counts).
+/// These statistics cover every execution the session recorded. Nothing is dropped between
+/// recording and upload, so <see cref="Total"/> equals the combined count of executions across
+/// all batch uploads.
 /// </para>
 /// <para>
 /// Two readings of the same session coexist here. The unprefixed counters
