@@ -270,6 +270,21 @@ public sealed class SessionAssembliesTests
         Assert.Equal(session.SdkVersion, remaining.SdkVersion);
     }
 
+    [Theory]
+    [InlineData(null, "Alpha.Tests")]
+    [InlineData("session", "")]
+    [InlineData("session", null)]
+    public void NeitherFilterAcceptsAMissingSessionOrAssembly(string? which, string? assembly)
+    {
+        // An empty assembly is not a name, it is the absence of one — matching executions against it
+        // would gather up every unattributable run under a scope nobody asked for.
+        TestSession? session = which == null ? null : Session(Execution("A", "Alpha.Tests"));
+
+        Assert.Null(SessionAssemblies.Project(session, assembly!));
+        Assert.Null(SessionAssemblies.Excluding(session, assembly!));
+        Assert.False(SessionAssemblies.Covers(session, assembly!));
+    }
+
     [Fact]
     public void ProjectReturnsTheSessionItselfWhenItCoversNothingElse()
     {
