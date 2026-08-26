@@ -16,8 +16,8 @@ namespace Xping.Sdk.Core.Configuration;
 public enum XpingMode
 {
     /// <summary>
-    /// Resolve the mode from the rest of the configuration: <see cref="Cloud"/> when
-    /// credentials are present or strict mode is enabled, otherwise <see cref="LocalOnly"/>.
+    /// Resolve the mode from the rest of the configuration: <see cref="Cloud"/> when an API key is
+    /// present or strict mode is enabled, otherwise <see cref="LocalOnly"/>.
     /// This is the default.
     /// </summary>
     Auto = 0,
