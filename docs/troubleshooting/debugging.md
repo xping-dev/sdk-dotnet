@@ -246,7 +246,7 @@ These indicate failures that prevent SDK functionality:
 #### Configuration Errors
 
 ```
-[Error] Upload skipped: API Key and Project ID are required but not configured
+[Error] Upload skipped: API Key is required but not configured
 [Info] Action: Configure credentials in appsettings.json or environment variables
 [Info]   - Set the XPING__APIKEY environment variable
 [Info]   - Or add 'Xping' section to appsettings.json

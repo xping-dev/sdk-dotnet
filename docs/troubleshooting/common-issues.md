@@ -254,7 +254,7 @@ The SDK's resilience system has detected repeated upload failures (50% failure r
 1. **Wait for automatic reset:** The circuit breaker reopens after 30 seconds
 2. **Check network connectivity:** Verify connection to `upload.xping.io`
 3. **Review logs:** Enable debug logging to see underlying failure reasons
-4. **Verify credentials:** Ensure API key and project ID are valid
+4. **Verify credentials:** Ensure the API key is valid
 
 **Prevention:** Address the root cause (network, credentials, API issues) before the circuit breaker triggers.
 
@@ -266,7 +266,7 @@ The SDK's resilience system has detected repeated upload failures (50% failure r
 
 **Error Message:**
 ```
-Authentication failed (401): Invalid API Key or Project ID
+Authentication failed (401): Invalid API Key
 Action: Verify credentials at https://app.xping.io
 ```
 
@@ -868,7 +868,7 @@ Individual upload failures may result in lost test data.
 
 Before seeking support, verify:
 
-- ✅ API Key and Project ID are configured correctly
+- ✅ API Key is configured correctly
 - ✅ Network connectivity to `upload.xping.io` is working
 - ✅ SDK is enabled (`Enabled = true`)
 - ✅ Configuration is valid (proper JSON syntax, value ranges)

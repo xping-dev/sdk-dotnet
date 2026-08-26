@@ -107,7 +107,7 @@ public sealed class XpingConfiguration
 
     /// <summary>
     /// Gets or sets the operating mode. Defaults to <see cref="XpingMode.Auto"/>, which resolves to
-    /// <see cref="XpingMode.Cloud"/> when credentials are present and
+    /// <see cref="XpingMode.Cloud"/> when an <see cref="ApiKey"/> is present and
     /// <see cref="XpingMode.LocalOnly"/> otherwise. Use <see cref="ResolveMode"/> to obtain the
     /// effective mode.
     /// </summary>
@@ -242,7 +242,7 @@ public sealed class XpingConfiguration
 
         XpingMode mode = ResolveMode();
 
-        // Credentials are only meaningful when the SDK will actually talk to the platform.
+        // The API key is only meaningful when the SDK will actually talk to the platform.
         if (mode == XpingMode.Cloud)
         {
             // ApiKey is the only credential Cloud mode requires. ProjectId is optional: when it is

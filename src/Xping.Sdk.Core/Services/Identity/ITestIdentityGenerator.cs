@@ -31,7 +31,11 @@ public interface ITestIdentityGenerator
     /// Generates a complete test identity from test metadata.
     /// </summary>
     /// <param name="fullyQualifiedName">The fully qualified test name (Namespace.Class.Method).</param>
-    /// <param name="assembly">The assembly name where the test is defined.</param>
+    /// <param name="assembly">
+    /// The assembly name where the test is defined, or an empty string when the adapter could not
+    /// resolve one. An execution with no assembly is still recorded, but cannot be attributed to a
+    /// project.
+    /// </param>
     /// <param name="parameters">Optional parameters for parameterized tests.</param>
     /// <param name="displayName">Optional display name for human readability.</param>
     /// <param name="sourceFile">Optional source file path.</param>
@@ -45,7 +49,7 @@ public interface ITestIdentityGenerator
     /// When null or whitespace the SHA256-based algorithm runs as normal.
     /// </param>
     /// <returns>A complete TestIdentity with stable TestFingerprint hash.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when fullyQualifiedName or assembly is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when fullyQualifiedName is null or blank.</exception>
     /// <exception cref="ArgumentException">Thrown when fullyQualifiedName is an invalid format.</exception>
     TestIdentity Generate(
         string fullyQualifiedName,

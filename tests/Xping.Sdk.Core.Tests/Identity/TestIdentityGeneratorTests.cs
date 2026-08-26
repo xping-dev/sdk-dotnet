@@ -6,6 +6,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Tests.Helpers;
 
@@ -95,14 +96,24 @@ public sealed class TestIdentityGeneratorTests
         Assert.Throws<ArgumentNullException>(() => generator.Generate(string.Empty, ValidAssembly));
     }
 
-    [Fact]
-    public void Generate_ShouldThrowArgumentNullException_ForNullAssembly()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Generate_ShouldRecordAnUnattributedIdentity_ForBlankAssembly(string? assembly)
     {
-        // Arrange
+        // Arrange — the adapters cannot always resolve an assembly, and they all record inside a
+        // catch-all. Throwing here dropped the execution outright instead of reporting it as
+        // unattributed, which is data a customer paid to collect and would never see.
         var generator = BuildGenerator();
 
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => generator.Generate(ValidFqn, null!));
+        // Act
+        TestIdentity identity = generator.Generate(ValidFqn, assembly!);
+
+        // Assert
+        Assert.Equal(string.Empty, identity.Assembly);
+        Assert.Equal(ValidFqn, identity.FullyQualifiedName);
+        Assert.NotEmpty(identity.TestFingerprint);
     }
 
     [Fact]

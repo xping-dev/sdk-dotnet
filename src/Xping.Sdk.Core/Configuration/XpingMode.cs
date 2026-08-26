@@ -30,7 +30,8 @@ public enum XpingMode
 
     /// <summary>
     /// Collect test executions and upload them to the Xping Cloud platform.
-    /// Requires a valid API key and project ID.
+    /// Requires a valid API key. A project id is optional: with none pinned, the project is derived
+    /// from the test assembly each execution belongs to.
     /// </summary>
     Cloud = 2,
 

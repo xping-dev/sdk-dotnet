@@ -35,9 +35,14 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets the project ID.
+    /// Pins every execution in the session to one project. Optional.
     /// </summary>
-    /// <param name="projectId">The project ID.</param>
+    /// <remarks>
+    /// Leave this unset and the project is derived from the test assembly each execution belongs
+    /// to, giving one project per test project. Set it only to override that — for example in a
+    /// monorepo where several test assemblies should report as a single project.
+    /// </remarks>
+    /// <param name="projectId">The project to pin the session to.</param>
     /// <returns>The builder instance for method chaining.</returns>
     public XpingConfigurationBuilder WithProjectId(string projectId)
     {
@@ -116,7 +121,7 @@ public sealed class XpingConfigurationBuilder
     /// </summary>
     /// <param name="mode">
     /// The mode to use. <see cref="XpingMode.Auto"/> (the default) resolves to
-    /// <see cref="XpingMode.Cloud"/> when credentials are present and
+    /// <see cref="XpingMode.Cloud"/> when an API key is present and
     /// <see cref="XpingMode.LocalOnly"/> otherwise.
     /// </param>
     /// <returns>The builder instance for method chaining.</returns>

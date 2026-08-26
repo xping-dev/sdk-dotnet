@@ -311,7 +311,7 @@ jobs:
     
     environment:
       XPING__APIKEY: $XPING_APIKEY
-        XPING__ENABLED: "true"
+      XPING__ENABLED: "true"
       XPING__AUTODETECTCIENVIRONMENT: "true"
     
     steps:
