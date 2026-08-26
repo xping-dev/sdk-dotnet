@@ -47,7 +47,19 @@ internal sealed class ReportCommand(
         // solution shares one store, so an unscoped report would pool unrelated suites: one
         // assembly's history would contain another's tests and its session count would be the
         // solution-wide total.
-        string? assembly = options.Assembly ?? source.NewestAssembly();
+        string? assembly = options.Assembly;
+
+        if (assembly == null)
+        {
+            assembly = source.NewestAssembly();
+
+            // Every report is scoped to exactly one assembly, so there is no unscoped fallback to
+            // fall back to. A store holding runs that none of them attributes to an assembly has
+            // nothing to scope by, and reporting on them anyway would pool every suite together and
+            // produce numbers no --assembly value can reproduce.
+            if (assembly == null && source.Read(1, null).Sessions.Count > 0)
+                return ReportNothingAttributable(store);
+        }
 
         WindowResult resolved = windowResolver.Resolve(
             source, new WindowRequest(options.Runs, options.Since, assembly));
@@ -56,7 +68,7 @@ internal sealed class ReportCommand(
             return ReportUnavailable(resolved, store, options);
 
         var context = new AnalysisContext(
-            resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions));
+            resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
         IReadOnlySet<FindingKind>? kinds =
             options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
@@ -149,6 +161,25 @@ internal sealed class ReportCommand(
 
         if (result.UnreadableSessions > 0)
             error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
+
+        return ExitCodes.InsufficientData;
+    }
+
+    /// <summary>
+    /// Explains that the store holds runs but nothing that can be attributed to a test assembly.
+    /// </summary>
+    /// <remarks>
+    /// Exit code 2 for the same reason every other unavailable case uses it: the report could not
+    /// be produced, which a build step has to tell apart from a report that found problems.
+    /// </remarks>
+    private int ReportNothingAttributable(ILocalSessionStore store)
+    {
+        TextWriter error = io.Error;
+
+        error.WriteLine($"No runs in {store.StorePath} record which test assembly they belong to.");
+        error.WriteLine(
+            "A report always covers one assembly, so there is nothing to report on. " +
+            "Run your tests again with the Xping SDK installed, then try again.");
 
         return ExitCodes.InsufficientData;
     }

@@ -60,7 +60,7 @@ xping report [options]
 | `--top <n>` | `10` | Findings to show. Excludes `--all` |
 | `--all` | off | Show **every finding** rather than the top ones |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
-| `--assembly <name>` | newest | Restrict the report to one test assembly |
+| `--assembly <name>` | newest | Scope the report to one test assembly |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
 | `--format <f>` | `text` | `text`, `json` or `summary` |
 | `--json` | off | Alias for `--format json` |
@@ -216,13 +216,17 @@ Xping: 3 findings (1 high, 2 medium) in 20 runs of Checkout.Tests
 
 ### Scoping
 
-Every test project in a solution shares one store. Without `--assembly`, the report covers the assembly that ran most recently and says so when others exist:
+Every test project in a solution shares one store. Without `--assembly`, the report covers one assembly and says so when others exist:
 
 ```
 Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly to switch).
 ```
 
 Analysing them together would pool unrelated suites: one assembly's history would contain another's tests, and its run count would be the solution-wide total.
+
+**A run can belong to more than one assembly.** A *run* is one test host process, and `dotnet test` over a solution puts several test projects in a single host. One run of that kind is one run of **each** assembly it covered, and `--assembly` narrows it to that assembly's tests rather than choosing between runs. So `Checkout.Tests` and `Billing.Tests` can each report 20 runs from the same 20 solution-wide invocations, each seeing only its own tests.
+
+Runs recorded before the SDK could name the assembly belong to no suite. They stay in the store and `xping where` still counts them, but no `--assembly` value reaches them.
 
 ### `--format json`
 
@@ -302,7 +306,7 @@ xping clear [options]
 
 | Option | Description |
 |---|---|
-| `--assembly <name>` | Only delete runs for one test assembly |
+| `--assembly <name>` | Only delete one test assembly's history |
 | `--force` | Skip the confirmation prompt |
 | `--directory <path>` | Resolve the store from this directory |
 
@@ -311,6 +315,8 @@ Local history is not recoverable — it is not in version control, and in local-
 ```
 Delete all 36 runs from /Users/you/src/my-repo/.xping? [y/N]
 ```
+
+`--assembly` is exact. A run recorded by a solution-wide `dotnet test` holds several test projects' history, and clearing one of them strips that project out and keeps the run — the other suites keep every run they had.
 
 When stdin is not interactive (a script, a CI step, a pipeline), `clear` **refuses** rather than assuming consent:
 

@@ -63,6 +63,25 @@ public sealed class ReportCommandTests : IDisposable
     private static void SeedStable(string assembly, int count, int startOrdinal = 0) =>
         Seed(assembly, startOrdinal, [.. Enumerable.Repeat<string[]>(["Alpha", "Beta"], count)]);
 
+    /// <summary>
+    /// Writes <paramref name="count"/> sessions that each recorded both assemblies, as one test host
+    /// running two test projects does.
+    /// </summary>
+    private static void SeedMixed(string first, string second, int count)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < count; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("FirstSuiteTest", assembly: first),
+                    TestSessionFactory.Execution("SecondSuiteTest", assembly: second)
+                ]));
+        }
+    }
+
     private static (int Code, string Output) RunReport(params string[] args)
     {
         using var output = new StringWriter();
@@ -128,6 +147,23 @@ public sealed class ReportCommandTests : IDisposable
 
         Assert.Equal(5, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("Alpha.Tests", root.GetProperty("context").GetProperty("assembly").GetString());
+    }
+
+    [Fact]
+    public void ScopesTheReportToTheRequestedAssemblyWhenARunCoveredSeveral()
+    {
+        SeedMixed("Alpha.Tests", "Beta.Tests", 5);
+
+        JsonElement alpha = RunJson("--assembly", "Alpha.Tests");
+        JsonElement beta = RunJson("--assembly", "Beta.Tests");
+
+        // Both suites see all five runs, and each sees only its own test.
+        Assert.Equal(5, alpha.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal(5, beta.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal("Alpha.Tests", alpha.GetProperty("context").GetProperty("assembly").GetString());
+        Assert.Equal("Beta.Tests", beta.GetProperty("context").GetProperty("assembly").GetString());
+        Assert.Equal(1, alpha.GetProperty("summary").GetProperty("tests").GetInt32());
+        Assert.Equal(1, beta.GetProperty("summary").GetProperty("tests").GetInt32());
     }
 
     [Fact]

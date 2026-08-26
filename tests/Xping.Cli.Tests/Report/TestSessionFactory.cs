@@ -12,6 +12,7 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -294,7 +295,23 @@ internal static class TestSessionFactory
     public static AnalysisContext Context(params TestSession[] sessions)
     {
         AnalysisWindow window = Window(sessions);
-        return new AnalysisContext(window, RevisionContext.FromNewest(window.Sessions));
+
+        // Unscoped, as the fixtures are: a context built here stands in for a report the caller did
+        // not narrow, so the scope is whatever the newest session turns out to cover.
+        string? assembly = window.Sessions.Count == 0
+            ? null
+            : FirstAssemblyOf(window.Sessions[0]);
+
+        return new AnalysisContext(window, RevisionContext.FromNewest(window.Sessions, assembly));
+    }
+
+    /// <summary>
+    /// Returns the first assembly a session covers, or <see langword="null"/> when it covers none.
+    /// </summary>
+    internal static string? FirstAssemblyOf(TestSession session)
+    {
+        IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
+        return assemblies.Count == 0 ? null : assemblies[0];
     }
 }
 
@@ -322,29 +339,28 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     public int UnreadableCount { get; set; }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Narrows rather than selects, exactly as <see cref="LocalSessionSource"/> does. A fake that
+    /// merely filtered would let a test assert the behaviour of the fake instead of the behaviour of
+    /// the store — and would go on passing after the store stopped doing what it claims.
+    /// </remarks>
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
-        IEnumerable<TestSession> matching = _sessions;
-
-        if (assembly != null)
-        {
-            matching = matching.Where(s =>
-                string.Equals(LocalSessionSource.AssemblyOf(s), assembly, StringComparison.Ordinal));
-        }
+        IEnumerable<TestSession> matching = assembly == null
+            ? _sessions
+            : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
 
         return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableCount);
     }
 
     /// <inheritdoc/>
     public string? NewestAssembly() =>
-        _sessions.Count == 0 ? null : LocalSessionSource.AssemblyOf(_sessions[0]);
+        _sessions.Count == 0 ? null : TestSessionFactory.FirstAssemblyOf(_sessions[0]);
 
     /// <inheritdoc/>
     public IReadOnlyList<string> KnownAssemblies() =>
         _sessions
-            .Select(LocalSessionSource.AssemblyOf)
-            .Where(a => a is { Length: > 0 })
-            .Select(a => a!)
+            .SelectMany(SessionAssemblies.Of)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(a => a, StringComparer.Ordinal)
             .ToList();

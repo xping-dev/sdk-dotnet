@@ -9,7 +9,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Serialization;
 
 namespace Xping.Sdk.Core.Services.LocalStore.Internals;
@@ -129,10 +128,18 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 if (session.Executions.Count == 0)
                     continue;
 
-                if (assembly != null &&
-                    !string.Equals(GetAssembly(session), assembly, StringComparison.Ordinal))
+                // A run is not asked which assembly it is, but which assemblies it covers: one test
+                // host can execute several test projects, and each of them owns its own slice of the
+                // run. Narrowing here rather than downstream means the whole analysis pipeline —
+                // window bounds, session counts, every provider — sees one assembly's history and
+                // nothing else, without any of it having to know that scoping happened.
+                if (assembly != null)
                 {
-                    continue;
+                    TestSession? scoped = SessionAssemblies.Project(session, assembly);
+                    if (scoped == null)
+                        continue;
+
+                    session = scoped;
                 }
 
                 sessions.Add(session);
@@ -164,34 +171,38 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             if (!Directory.Exists(directory))
                 return 0;
 
-            var targets = new List<string>();
+            int cleared = 0;
 
             foreach (string file in Directory.GetFiles(directory, SearchPattern))
             {
                 if (assembly == null)
                 {
-                    targets.Add(file);
+                    if (StoreRetention.TryDelete(new FileInfo(file), _logger))
+                        cleared++;
+
                     continue;
                 }
 
-                TestSession? session = TryReadFile(file);
-
                 // An unreadable session has no assembly to match, so a scoped delete leaves it alone.
-                if (session != null &&
-                    string.Equals(GetAssembly(session), assembly, StringComparison.Ordinal))
-                {
-                    targets.Add(file);
-                }
+                TestSession? session = TryReadFile(file);
+                if (!SessionAssemblies.Covers(session, assembly))
+                    continue;
+
+                // A run can hold several test projects' history, because one test host can execute
+                // several at once. Deleting the file would take the others with it, so the run is
+                // stripped of the named assembly and written back carrying the rest. Only a run that
+                // recorded nothing else is deleted outright.
+                TestSession? remaining = SessionAssemblies.Excluding(session, assembly);
+
+                bool removed = remaining == null
+                    ? StoreRetention.TryDelete(new FileInfo(file), _logger)
+                    : TryRewriteFile(file, remaining);
+
+                if (removed)
+                    cleared++;
             }
 
-            int deleted = 0;
-            foreach (string file in targets)
-            {
-                if (StoreRetention.TryDelete(new FileInfo(file), _logger))
-                    deleted++;
-            }
-
-            return deleted;
+            return cleared;
         }
         catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
         {
@@ -215,26 +226,6 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
         return string.CompareOrdinal(
             left.SessionId.ToString("N"), right.SessionId.ToString("N"));
-    }
-
-    /// <summary>
-    /// Returns the test assembly a session belongs to, or <see langword="null"/> when unknown.
-    /// </summary>
-    /// <remarks>
-    /// Taken from the first execution that names one rather than from the first execution outright:
-    /// an execution recorded before identity generation completed carries an empty assembly, and
-    /// treating that as the session's assembly would hide the whole session from a scoped report.
-    /// </remarks>
-    private static string? GetAssembly(TestSession session)
-    {
-        foreach (TestExecution execution in session.Executions)
-        {
-            string candidate = execution.Identity.Assembly;
-            if (!string.IsNullOrEmpty(candidate))
-                return candidate;
-        }
-
-        return null;
     }
 
     private static string BuildFileName(TestSession session)
@@ -264,10 +255,48 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             writer.Write(JsonSerializer.Serialize(session, options));
         }
 
+        // Put the file in place in one step rather than deleting the destination and moving after.
+        // The two-step form leaves a window in which the old file is already gone and its
+        // replacement is not yet in place, and a process killed inside that window loses the run
+        // outright. Writing a new session never opened that window — the filename carries fresh
+        // ticks and a fresh id, so there was nothing to delete — but rewriting one opens it every
+        // time, because the destination always exists.
+        //
+        // Two calls rather than File.Move's overwrite overload, which netstandard2.0 does not have:
+        // Replace needs the destination to exist and Move needs it not to. Both are atomic, and the
+        // race between the check and the call throws IOException, which the callers already treat as
+        // "the write did not happen".
         if (File.Exists(path))
-            File.Delete(path);
+            File.Replace(tempPath, path, destinationBackupFileName: null);
+        else
+            File.Move(tempPath, path);
+    }
 
-        File.Move(tempPath, path);
+    /// <summary>
+    /// Replaces a session file with a stripped copy of the run it holds.
+    /// </summary>
+    /// <remarks>
+    /// The name is unchanged: it encodes the run's start ticks and session id, and stripping one
+    /// assembly out of a run alters neither. Writing through <see cref="WriteFile"/> keeps the
+    /// temp-file-then-move guarantee, so a crash mid-rewrite leaves the original run in place rather
+    /// than a half-written file under a name the reader trusts.
+    /// </remarks>
+    /// <returns><see langword="true"/> when the file was rewritten.</returns>
+    private bool TryRewriteFile(string path, TestSession session)
+    {
+        try
+        {
+            WriteFile(path, session);
+            return true;
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            // Same contract as every other path here: storage problems degrade to "did not happen",
+            // never to an exception. The run is left whole, which is the safe direction — the caller
+            // reports fewer runs cleared than it matched, and nothing is lost.
+            _logger.LogDebug("Session file '{Path}' not rewritten: {Message}", path, ex.Message);
+            return false;
+        }
     }
 
     private TestSession? TryReadFile(string path)

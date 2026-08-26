@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using Xping.Cli.Commands;
+using Xping.Cli.Report;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
@@ -78,6 +79,38 @@ public sealed class CliSurfaceTests : IDisposable
                 startOrdinal + i,
                 [TestSessionFactory.Execution("Sample", assembly: assembly)]));
         }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="count"/> sessions that each recorded both assemblies, as one test host
+    /// running two test projects does.
+    /// </summary>
+    private void SeedMixedSessions(string first, string second, int count)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < count; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                _nextOrdinal++,
+                [
+                    TestSessionFactory.Execution("FirstSuiteTest", assembly: first),
+                    TestSessionFactory.Execution("SecondSuiteTest", assembly: second)
+                ]));
+        }
+    }
+
+    /// <summary>
+    /// Writes one session whose executions name no assembly, as a run recorded before identity
+    /// generation completed looks.
+    /// </summary>
+    private void SeedUnattributableSession()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        store.Write(TestSessionFactory.Session(
+            _nextOrdinal++,
+            [TestSessionFactory.Execution("Mystery", assembly: string.Empty)]));
     }
 
     private static (int Code, string Output) Run(params string[] args)
@@ -170,6 +203,75 @@ public sealed class CliSurfaceTests : IDisposable
         var (_, output) = Run("report", "--assembly", "Alpha.Tests", "--ascii");
 
         Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASolutionWideRunIsReportableUnderEveryAssemblyItCovered()
+    {
+        // One `dotnet test` over a solution, one session file, two suites. Before this, one of the
+        // two reports came back empty and the other counted the wrong tests.
+        SeedMixedSessions("Alpha.Tests", "Beta.Tests", 6);
+
+        var (alphaCode, alpha) = Run("report", "--assembly", "Alpha.Tests", "--ascii");
+        var (betaCode, beta) = Run("report", "--assembly", "Beta.Tests", "--ascii");
+
+        Assert.Equal(0, alphaCode);
+        Assert.Equal(0, betaCode);
+        Assert.Contains("6 runs", alpha, StringComparison.Ordinal);
+        Assert.Contains("6 runs", beta, StringComparison.Ordinal);
+        Assert.Contains("Alpha.Tests", alpha, StringComparison.Ordinal);
+        Assert.Contains("Beta.Tests", beta, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheScopeNoticeCountsAnAssemblyThatSharedTheSameRun()
+    {
+        SeedMixedSessions("Alpha.Tests", "Beta.Tests", 6);
+
+        var (_, output) = Run("report", "--ascii");
+
+        Assert.Contains("Reporting on Alpha.Tests", output, StringComparison.Ordinal);
+        Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoScopingWalksPastANewestRunThatNamesNoAssembly()
+    {
+        // Stopping at the unattributable run would leave the report unscoped, which pools every
+        // suite in the store into one set of numbers no --assembly value can reproduce. Beta is
+        // seeded last, so landing on it proves the walk stops at the newest run that names an
+        // assembly rather than falling through to whatever else it finds.
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnattributableSession();
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(0, code);
+        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
+        Assert.Contains("6 runs", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoreWithNothingAttributableIsReportedAsSuchRatherThanPooled()
+    {
+        SeedUnattributableSession();
+        SeedUnattributableSession();
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains(
+            "record which test assembly they belong to", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmptyStoreIsStillDistinguishableFromAnUnattributableOne()
+    {
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains("No runs recorded yet", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -292,6 +394,21 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     [Fact]
+    public void WhereCountsASharedRunUnderEveryAssemblyItCovered()
+    {
+        // Three files, but six runs of history: each run belongs to both suites. The file count and
+        // the per-assembly counts answer different questions and are not meant to agree.
+        SeedMixedSessions("Alpha.Tests", "Beta.Tests", 3);
+
+        var (code, output) = Run("where");
+
+        Assert.Equal(0, code);
+        Assert.Contains("3 runs", output, StringComparison.Ordinal);
+        Assert.Matches(@"Alpha\.Tests\s+3 runs", output);
+        Assert.Matches(@"Beta\.Tests\s+3 runs", output);
+    }
+
+    [Fact]
     public void WhereReportsAnEmptyStoreWithoutFailing()
     {
         var (code, output) = Run("where");
@@ -363,6 +480,43 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         Assert.Contains("Nothing to clear", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClearScopedToAnAssemblyLeavesTheRestOfASharedRunReportable()
+    {
+        // The two suites shared every run. Clearing one has to leave the other with its full
+        // history, or `xping clear --assembly` would destroy history its caller never named.
+        SeedMixedSessions("Alpha.Tests", "Beta.Tests", 4);
+
+        var (code, output) = Run("clear", "--assembly", "Alpha.Tests", "--force");
+
+        Assert.Equal(0, code);
+        Assert.Contains("Deleted 4 runs.", output, StringComparison.Ordinal);
+
+        var (reportCode, report) = Run("report", "--assembly", "Beta.Tests", "--ascii");
+
+        Assert.Equal(0, reportCode);
+        Assert.Contains("4 runs", report, StringComparison.Ordinal);
+
+        var (_, gone) = Run("report", "--assembly", "Alpha.Tests", "--ascii");
+
+        Assert.Contains("No runs recorded for assembly 'Alpha.Tests'", gone, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClearScopedToASharedAssemblyKeepsTheRunOnDisk()
+    {
+        SeedMixedSessions("Alpha.Tests", "Beta.Tests", 3);
+
+        Run("clear", "--assembly", "Alpha.Tests", "--force");
+
+        var (_, output) = Run("where");
+
+        // Three runs still stored, now belonging to one suite instead of two.
+        Assert.Contains("3 runs", output, StringComparison.Ordinal);
+        Assert.Contains("Beta.Tests", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Alpha.Tests", output, StringComparison.Ordinal);
     }
 
     [Fact]

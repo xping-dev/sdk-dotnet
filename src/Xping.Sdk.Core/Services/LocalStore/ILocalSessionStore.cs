@@ -88,13 +88,22 @@ public interface ILocalSessionStore
     /// </summary>
     /// <param name="maxSessions">Maximum number of sessions to return.</param>
     /// <param name="assembly">
-    /// When supplied, only sessions whose executions belong to this test assembly are returned.
+    /// When supplied, only sessions that recorded this test assembly are returned, each narrowed to
+    /// that assembly's executions.
     /// </param>
     /// <returns>The sessions and the count of files that could not be read.</returns>
     /// <remarks>
+    /// <para>
     /// The assembly filter matters whenever a solution has more than one test project. All of them
     /// share one store, so without it a report would mix unrelated suites: an assembly's history
     /// would contain other assemblies' tests, and its session count would be the solution-wide total.
+    /// </para>
+    /// <para>
+    /// A session is narrowed rather than selected, because one session records a test host process
+    /// and a host can run several test projects at once. A solution-wide <c>dotnet test</c> is one
+    /// run of each assembly it covered, and each of them reads back carrying only its own
+    /// executions. See <see cref="SessionAssemblies"/>.
+    /// </para>
     /// </remarks>
     LocalSessionReadResult ReadRecent(int maxSessions, string? assembly = null);
 
@@ -102,8 +111,14 @@ public interface ILocalSessionStore
     /// Deletes stored sessions.
     /// </summary>
     /// <param name="assembly">
-    /// When supplied, only sessions recorded for this test assembly are deleted; otherwise all are.
+    /// When supplied, only this test assembly's history is deleted; otherwise every session is.
     /// </param>
-    /// <returns>The number of sessions deleted.</returns>
+    /// <returns>The number of sessions whose history for that assembly was removed.</returns>
+    /// <remarks>
+    /// Deletion is scoped the same way <see cref="ReadRecent"/> is, because one session can record
+    /// several test projects. A run that covered the named assembly and nothing else is deleted; a
+    /// run that also covered others is stripped of it and kept, so clearing one suite's history
+    /// never takes another's with it.
+    /// </remarks>
     int Delete(string? assembly = null);
 }

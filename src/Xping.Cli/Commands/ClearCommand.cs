@@ -19,6 +19,10 @@ namespace Xping.Cli.Commands;
 /// mode — so this confirms before deleting. When stdin is not interactive the command refuses rather
 /// than assuming consent, which keeps a stray `xping clear` in a script from silently discarding
 /// weeks of history.
+/// <para>
+/// Scoping with <c>--assembly</c> is exact: one run can hold several test projects' history, and
+/// clearing one of them leaves the rest of that run intact.
+/// </para>
 /// </remarks>
 internal sealed class ClearCommand(
     ILocalSessionStoreFactory storeFactory,
