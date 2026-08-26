@@ -45,8 +45,7 @@ public class CollectorBenchmarks
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
             BatchSize = 10000, // Large batch to avoid flushing during benchmark
-            FlushInterval = TimeSpan.Zero, // Disable automatic flushing
-            SamplingRate = 1.0 // 100% sampling
+            FlushInterval = TimeSpan.Zero // Disable automatic flushing
         };
 
         _collector = new TestExecutionCollector(Options.Create(_config));
@@ -114,17 +113,6 @@ public class CollectorBenchmarks
     public TestExecution CreateTestExecutionObject()
     {
         return CreateTestExecution("Benchmark.Test.Method");
-    }
-
-    /// <summary>
-    /// Benchmark: Sampling logic overhead.
-    /// Measures the cost of sampling decision with 100% sampling rate.
-    /// </summary>
-    [Benchmark(Description = "Sampling with 100% rate")]
-    public void SamplingOverhead100Percent()
-    {
-        // This will go through sampling logic (always sample)
-        _collector!.RecordTest(_sampleExecution!);
     }
 
     /// <summary>

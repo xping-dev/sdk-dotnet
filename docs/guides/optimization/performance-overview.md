@@ -57,7 +57,7 @@ Breaking down the 0.7-0.8µs per test:
    Add to in-memory buffer, check batch threshold, minimal allocation (Gen0 only)
 
 3. **Processing** (~200-300ns)
-   Apply sampling rules, enrich with metadata, and prepare for upload
+   Enrich with metadata and prepare for upload
 
 **Network upload happens asynchronously** - it never blocks your tests.
 

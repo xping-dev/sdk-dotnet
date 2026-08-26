@@ -29,7 +29,6 @@ public sealed class XpingConfigurationTests
         Assert.True(config.EnableCompression);
         Assert.Equal(3, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(2), config.RetryDelay);
-        Assert.Equal(1.0, config.SamplingRate);
         Assert.Equal(TimeSpan.FromSeconds(30), config.UploadTimeout);
     }
 
@@ -293,33 +292,6 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenSamplingRateIsInvalid()
-    {
-        // Arrange
-        var config1 = new XpingConfiguration
-        {
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            SamplingRate = -0.1
-        };
-
-        var config2 = new XpingConfiguration
-        {
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            SamplingRate = 1.5
-        };
-
-        // Act
-        var errors1 = config1.Validate();
-        var errors2 = config2.Validate();
-
-        // Assert
-        Assert.Contains("SamplingRate must be between 0.0 and 1.0.", errors1);
-        Assert.Contains("SamplingRate must be between 0.0 and 1.0.", errors2);
-    }
-
-    [Fact]
     public void ValidateShouldReturnNoErrorsForValidConfiguration()
     {
         // Arrange
@@ -453,7 +425,6 @@ public sealed class XpingConfigurationTests
             EnableCompression = false,
             MaxRetries = 5,
             RetryDelay = TimeSpan.FromSeconds(5),
-            SamplingRate = 0.5,
             UploadTimeout = TimeSpan.FromMinutes(2)
         };
 
@@ -470,7 +441,6 @@ public sealed class XpingConfigurationTests
         Assert.False(config.EnableCompression);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
-        Assert.Equal(0.5, config.SamplingRate);
         Assert.Equal(TimeSpan.FromMinutes(2), config.UploadTimeout);
     }
 

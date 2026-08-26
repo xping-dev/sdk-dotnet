@@ -515,15 +515,6 @@ env:
     }
 ```
 
-### Sampling for Large Test Suites
-
-For very large test suites (>10,000 tests), use sampling:
-
-```yaml
-env:
-  XPING__SAMPLINGRATE: 0.1  # Track 10% of tests
-```
-
 ### Separate Projects per Branch
 
 Track different branches in different Xping projects:

@@ -17,11 +17,9 @@ internal sealed class TestExecutionCollector(
     private readonly object _statsLock = new();
     private readonly ConcurrentQueue<TestExecution> _buffer = new();
     private readonly XpingConfiguration _configuration = options.Value;
-    private readonly Random _random = new();
 
     // Collector stats
     private long _totalRecorded;
-    private long _totalSampled;
     private volatile bool _disposed;
 
     public event EventHandler? BufferFull;
@@ -45,17 +43,9 @@ internal sealed class TestExecutionCollector(
             return;
         }
 
-        // Always count as recorded
+        // Every execution that reaches here is buffered. There is no sampling, and no other
+        // path that drops one, so the recorded count and the buffered count never diverge.
         Interlocked.Increment(ref _totalRecorded);
-
-        // Apply sampling - if not sampled, drop the test
-        if (!ShouldSample())
-        {
-            return;
-        }
-
-        // Test passed sampling - count it and add to buffer
-        Interlocked.Increment(ref _totalSampled);
         _buffer.Enqueue(execution);
 
         // Check if we need to notify buffer full based on the configured batch size
@@ -92,7 +82,6 @@ internal sealed class TestExecutionCollector(
             CollectorStats stats = new()
             {
                 TotalRecorded = Interlocked.Read(ref _totalRecorded),
-                TotalSampled = Interlocked.Read(ref _totalSampled),
                 BufferCount = _buffer.Count
             };
 
@@ -111,31 +100,5 @@ internal sealed class TestExecutionCollector(
             return;
 
         _disposed = true;
-    }
-
-    /// <summary>
-    /// Determines whether a test should be sampled based on the sampling rate.
-    /// Random is used for non-cryptographic sampling decisions only.
-    /// </summary>
-    /// <returns>True if the test should be sampled; otherwise, false.</returns>
-    private bool ShouldSample()
-    {
-        switch (_configuration.SamplingRate)
-        {
-            // If the sampling rate is 1.0 (100%), always include
-            case >= 1.0:
-                return true;
-            // If the sampling rate is 0.0 (0%), never include
-            case <= 0.0:
-                return false;
-        }
-
-        // Use thread-safe random sampling
-        lock (_random)
-        {
-#pragma warning disable CA5394 // Random is acceptable for sampling, not security
-            return _random.NextDouble() <= _configuration.SamplingRate;
-#pragma warning restore CA5394
-        }
     }
 }

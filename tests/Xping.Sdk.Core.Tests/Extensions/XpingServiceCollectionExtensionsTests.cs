@@ -159,7 +159,6 @@ public sealed class XpingServiceCollectionExtensionsTests
             ApiKey = "my-api-key",
             ProjectId = "my-project",
             BatchSize = 42,
-            SamplingRate = 0.75,
             Environment = "Staging"
         };
         var services = new ServiceCollection();
@@ -173,7 +172,6 @@ public sealed class XpingServiceCollectionExtensionsTests
         Assert.Equal("my-api-key", bound.ApiKey);
         Assert.Equal("my-project", bound.ProjectId);
         Assert.Equal(42, bound.BatchSize);
-        Assert.Equal(0.75, bound.SamplingRate);
         Assert.Equal("Staging", bound.Environment);
     }
 
@@ -526,22 +524,6 @@ public sealed class XpingServiceCollectionExtensionsTests
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.False(bound.Enabled);
-    }
-
-    [Fact]
-    public void BindEnvVars_SAMPLINGRATE_ShouldParseDouble()
-    {
-        // Use "0" — parses correctly in any locale (no decimal separator ambiguity).
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_SAMPLINGRATE", "0");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.Equal(0.0, bound.SamplingRate);
     }
 
     [Fact]

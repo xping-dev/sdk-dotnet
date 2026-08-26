@@ -45,7 +45,6 @@ public sealed class XpingConfigurationBuilderTests
             .WithEnableCompression(false)
             .WithMaxRetries(5)
             .WithRetryDelay(TimeSpan.FromSeconds(5))
-            .WithSamplingRate(0.5)
             .WithUploadTimeout(TimeSpan.FromMinutes(2));
 
         // Act
@@ -65,7 +64,6 @@ public sealed class XpingConfigurationBuilderTests
         Assert.False(config.EnableCompression);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
-        Assert.Equal(0.5, config.SamplingRate);
         Assert.Equal(TimeSpan.FromMinutes(2), config.UploadTimeout);
     }
 
@@ -219,20 +217,6 @@ public sealed class XpingConfigurationBuilderTests
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
         Assert.Contains("BatchSize cannot exceed 1000", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuilderShouldValidateSamplingRate()
-    {
-        // Arrange
-        var builder = new XpingConfigurationBuilder()
-            .WithApiKey("test-key")
-            .WithProjectId("test-project")
-            .WithSamplingRate(1.5);
-
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
-        Assert.Contains("SamplingRate must be between 0.0 and 1.0", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

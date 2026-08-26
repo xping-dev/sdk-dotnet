@@ -52,32 +52,15 @@ Maximum time before buffered tests are uploaded:
 
 ---
 
-### Sampling
+### Completeness
 
-Reduce overhead for very large suites by sampling a subset of tests:
+Xping records every execution. There is no sampling knob, and that is deliberate: retry detection,
+flake analysis, and vanished-test findings all reason over the full execution set. A dropped
+attempt does not read as "missing" — it reads as a test that failed, or as a test that stopped
+running.
 
-```json
-{
-  "Xping": {
-    "SamplingRate": 1.0
-  }
-}
-```
-
-**Values:**
-- **1.0** (default): Track all tests
-- **0.5**: Track 50% of tests randomly
-- **0.1**: Track 10% of tests
-
-**When to use sampling:**
-- ✅ Very large test suites (>50k tests)
-- ✅ Performance-sensitive environments
-- ✅ Exploratory monitoring of flaky patterns
-
-**When NOT to use sampling:**
-- ❌ Small/medium test suites (overhead already negligible)
-- ❌ Comprehensive flaky test detection (need all data)
-- ❌ Exact pass/fail statistics (sampling introduces variance)
+Overhead is ~300 ns per recorded test (~15 ms for a 50k-test suite), so there is nothing to trade
+away.
 
 ---
 
@@ -106,7 +89,6 @@ The SDK is pre-configured for excellent performance out of the box. **Don't opti
 **Default configuration:**
 - BatchSize: 100
 - FlushInterval: 30s
-- SamplingRate: 1.0
 - Enabled: true
 
 **These defaults work well for 95% of use cases.**
@@ -154,18 +136,7 @@ Is your test suite < 500 tests?
 
 ---
 
-### 4. Consider Sampling Only for Massive Suites
-
-**Guideline:**
-- <10k tests: **No sampling needed** (overhead already tiny)
-- 10k-50k tests: **Consider 50% sampling** if performance is critical
-- >50k tests: **Use 10-25% sampling** for exploration, 100% for production
-
-**Remember:** Sampling reduces data completeness for flaky test detection.
-
----
-
-### 5. Understand CI/CD Overhead
+### 4. Understand CI/CD Overhead
 
 In CI/CD environments, Xping overhead is even less noticeable:
 
@@ -183,7 +154,7 @@ In CI/CD environments, Xping overhead is even less noticeable:
 
 ---
 
-### 6. Monitor Long-Term Trends
+### 5. Monitor Long-Term Trends
 
 While Xping has minimal overhead, track performance over time:
 
@@ -248,8 +219,7 @@ dotnet run -c Release -- --filter '*Collector*'
 {
   "Xping": {
     "BatchSize": 50,
-    "FlushIntervalSeconds": 15,
-    "SamplingRate": 0.5
+    "FlushIntervalSeconds": 15
   }
 }
 ```
@@ -267,15 +237,13 @@ dotnet run -c Release -- --filter '*Collector*'
 {
   "Xping": {
     "BatchSize": 1000,
-    "FlushIntervalSeconds": 120,
-    "SamplingRate": 0.25
+    "FlushIntervalSeconds": 120
   }
 }
 ```
 
 **Benefits:**
 - Manageable overhead at scale
-- Representative sampling
 - Efficient resource usage
 
 ---

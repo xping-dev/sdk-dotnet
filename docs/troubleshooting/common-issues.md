@@ -363,16 +363,7 @@ Action: Reduce test execution frequency or contact support
    }
    ```
 
-3. **Use sampling** for very large test suites:
-   ```json
-   {
-     "Xping": {
-       "SamplingRate": 0.5  // Track 50% of tests
-     }
-   }
-   ```
-
-4. **Coordinate with team:** Ensure multiple team members aren't running tests against the same project simultaneously
+3. **Coordinate with team:** Ensure multiple team members aren't running tests against the same project simultaneously
 
 5. **Contact support** if you need higher rate limits for legitimate use cases
 
@@ -460,7 +451,6 @@ Configuration property names are **case-sensitive** in JSON:
 
 1. **Invalid Value Ranges:**
    - `BatchSize`: Must be between 1 and 1000
-   - `SamplingRate`: Must be between 0.0 and 1.0
    - `MaxRetries`: Must be between 0 and 10
    - `FlushInterval`: Must be greater than zero
 
@@ -805,23 +795,7 @@ For detailed setup instructions, see the [Getting Started guides](../getting-sta
 
 **Common Causes:**
 
-#### 1. Sampling Enabled
-
-If sampling is configured, only a percentage of tests are tracked:
-
-```json
-{
-  "Xping": {
-    "SamplingRate": 0.5  // Only 50% of tests tracked
-  }
-}
-```
-
-**Solution:** Set `SamplingRate` to `1.0` (100%) to track all tests.
-
----
-
-#### 2. Test Name Issues
+#### 1. Test Name Issues
 
 Very long test names may be truncated or rejected.
 
@@ -829,7 +803,7 @@ Very long test names may be truncated or rejected.
 
 ---
 
-#### 3. Upload Failures
+#### 2. Upload Failures
 
 Individual upload failures may result in lost test data.
 
