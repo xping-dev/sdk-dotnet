@@ -76,20 +76,29 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
     /// Returns the assembly to scope to when the caller named none.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The newest run can cover several assemblies at once, and a report covers one. Taking the
     /// first in ordinal order makes the choice deterministic and repeatable, which matters more than
     /// which one wins: it is not a silent choice, because the report names the assembly it settled
     /// on and counts the ones it left out.
+    /// </para>
+    /// <para>
+    /// The newest run may also name no assembly at all, so this walks back to the newest one that
+    /// does rather than reading only the first. Stopping at an unattributable run would return
+    /// <see langword="null"/> and leave the caller unscoped, which is the one outcome auto-scoping
+    /// exists to avoid: an unscoped report pools every suite in the store into one.
+    /// </para>
     /// </remarks>
     public string? NewestAssembly()
     {
-        LocalSessionReadResult newest = store.ReadRecent(1);
+        foreach (TestSession session in store.ReadRecent(DiscoveryWindow).Sessions)
+        {
+            IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
+            if (assemblies.Count > 0)
+                return assemblies[0];
+        }
 
-        if (newest.Sessions.Count == 0)
-            return null;
-
-        IReadOnlyList<string> assemblies = SessionAssemblies.Of(newest.Sessions[0]);
-        return assemblies.Count == 0 ? null : assemblies[0];
+        return null;
     }
 
     /// <remarks>

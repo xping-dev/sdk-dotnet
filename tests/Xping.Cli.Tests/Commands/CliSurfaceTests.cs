@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using Xping.Cli.Commands;
+using Xping.Cli.Report;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
@@ -97,6 +98,19 @@ public sealed class CliSurfaceTests : IDisposable
                     TestSessionFactory.Execution("SecondSuiteTest", assembly: second)
                 ]));
         }
+    }
+
+    /// <summary>
+    /// Writes one session whose executions name no assembly, as a run recorded before identity
+    /// generation completed looks.
+    /// </summary>
+    private void SeedUnattributableSession()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        store.Write(TestSessionFactory.Session(
+            _nextOrdinal++,
+            [TestSessionFactory.Execution("Mystery", assembly: string.Empty)]));
     }
 
     private static (int Code, string Output) Run(params string[] args)
@@ -218,6 +232,46 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Contains("Reporting on Alpha.Tests", output, StringComparison.Ordinal);
         Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoScopingWalksPastANewestRunThatNamesNoAssembly()
+    {
+        // Stopping at the unattributable run would leave the report unscoped, which pools every
+        // suite in the store into one set of numbers no --assembly value can reproduce. Beta is
+        // seeded last, so landing on it proves the walk stops at the newest run that names an
+        // assembly rather than falling through to whatever else it finds.
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnattributableSession();
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(0, code);
+        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
+        Assert.Contains("6 runs", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoreWithNothingAttributableIsReportedAsSuchRatherThanPooled()
+    {
+        SeedUnattributableSession();
+        SeedUnattributableSession();
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains(
+            "record which test assembly they belong to", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmptyStoreIsStillDistinguishableFromAnUnattributableOne()
+    {
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains("No runs recorded yet", output, StringComparison.Ordinal);
     }
 
     [Fact]
