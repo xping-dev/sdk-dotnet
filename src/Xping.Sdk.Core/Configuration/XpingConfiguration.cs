@@ -44,11 +44,21 @@ public sealed class XpingConfiguration
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// Gets or sets the project ID.
-    /// Required in <see cref="XpingMode.Cloud"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
+    /// Gets or sets the project every execution in this session is pinned to. Optional.
+    /// Ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
     /// <remarks>
-    /// See the remarks on <see cref="ApiKey"/> for why this carries no <c>[Required]</c> annotation.
+    /// <para>
+    /// When left unset, Xping derives the project from the test assembly each execution belongs to,
+    /// so a solution-wide <c>dotnet test</c> reports one project per test project. That is the
+    /// default because a test assembly is already the unit a developer thinks in, and it needs no
+    /// bookkeeping to keep unique.
+    /// </para>
+    /// <para>
+    /// Set this only to override that — for example in a monorepo where several test assemblies
+    /// should report into a single project. It is a hard pin: every execution in the session lands
+    /// in this project regardless of which assembly it came from.
+    /// </para>
     /// </remarks>
     public string? ProjectId { get; set; }
 
@@ -187,7 +197,7 @@ public sealed class XpingConfiguration
     /// <item><description><see cref="Enabled"/> is <see langword="false"/> → <see cref="XpingMode.Disabled"/>.</description></item>
     /// <item><description><see cref="Mode"/> was set explicitly → that mode.</description></item>
     /// <item><description><see cref="StrictMode"/> is <see langword="true"/> → <see cref="XpingMode.Cloud"/>.</description></item>
-    /// <item><description>Credentials present → <see cref="XpingMode.Cloud"/>.</description></item>
+    /// <item><description><see cref="ApiKey"/> present → <see cref="XpingMode.Cloud"/>.</description></item>
     /// <item><description>Otherwise → <see cref="XpingMode.LocalOnly"/>.</description></item>
     /// </list>
     /// <para>
@@ -211,7 +221,7 @@ public sealed class XpingConfiguration
         if (StrictMode)
             return XpingMode.Cloud;
 
-        return HasCredentials ? XpingMode.Cloud : XpingMode.LocalOnly;
+        return HasApiKey ? XpingMode.Cloud : XpingMode.LocalOnly;
     }
 
     /// <summary>
@@ -235,18 +245,13 @@ public sealed class XpingConfiguration
         // Credentials are only meaningful when the SDK will actually talk to the platform.
         if (mode == XpingMode.Cloud)
         {
+            // ApiKey is the only credential Cloud mode requires. ProjectId is optional: when it is
+            // unset the project is derived from each execution's test assembly.
             if (string.IsNullOrWhiteSpace(ApiKey))
             {
                 errors.Add(StrictMode && Mode == XpingMode.Auto
                     ? "ApiKey is required when StrictMode is enabled."
                     : "ApiKey is required in Cloud mode.");
-            }
-
-            if (string.IsNullOrWhiteSpace(ProjectId))
-            {
-                errors.Add(StrictMode && Mode == XpingMode.Auto
-                    ? "ProjectId is required when StrictMode is enabled."
-                    : "ProjectId is required in Cloud mode.");
             }
         }
 
@@ -318,8 +323,23 @@ public sealed class XpingConfiguration
     internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
 
     /// <summary>
-    /// Gets a value indicating whether both an API key and a project ID have been supplied.
+    /// Gets a value indicating whether an API key has been supplied.
     /// </summary>
-    internal bool HasCredentials =>
-        !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(ProjectId);
+    /// <remarks>
+    /// This alone decides whether <see cref="XpingMode.Auto"/> resolves to
+    /// <see cref="XpingMode.Cloud"/>. <see cref="ProjectId"/> is deliberately not part of it: a
+    /// project is named by the test assembly when none is pinned, so requiring one would make the
+    /// common case unreachable.
+    /// </remarks>
+    internal bool HasApiKey => !string.IsNullOrWhiteSpace(ApiKey);
+
+    /// <summary>
+    /// Gets the pinned project, or <see langword="null"/> when project identity is derived from the
+    /// test assembly.
+    /// </summary>
+    /// <remarks>
+    /// Whitespace is treated as unset, so a blank placeholder left in a configuration template
+    /// (<c>"ProjectId": ""</c>) means "derive" rather than "pin the empty string".
+    /// </remarks>
+    internal string? ProjectPin => string.IsNullOrWhiteSpace(ProjectId) ? null : ProjectId!.Trim();
 }

@@ -76,10 +76,12 @@ Configuration sources are loaded in the following order (later sources override 
 
 ## Required Configuration
 
-The following configuration values are **required**:
+Only one value is **required** to connect to Xping Cloud:
 
 - `ApiKey` - Your Xping API key
-- `ProjectId` - Your Xping project ID
+
+`ProjectId` is optional. Leave it unset and Xping names the project after each test assembly,
+creating one project per test project. Set it to pin every assembly in the run to a single project.
 
 ## Configuration Reference
 
@@ -91,8 +93,8 @@ The following configuration values are **required**:
 - **ApiKey** (string): Your API key for authentication
   - **Required**
   
-- **ProjectId** (string): Your project identifier
-  - **Required**
+- **ProjectId** (string): Pins every test assembly in the run to this one project
+  - Optional — omit for one project per test assembly
 
 ### Batch Configuration
 

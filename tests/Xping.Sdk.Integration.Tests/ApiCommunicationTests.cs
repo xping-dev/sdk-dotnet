@@ -45,7 +45,7 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task FlushAsync_WithValidTestExecution_SendsCorrectRequestHeaders()
+    public async Task FlushAsync_WithPinnedProject_SendsCorrectRequestHeaders()
     {
         // Arrange
         XpingCtx.Initialize(CreateConfig());
@@ -64,6 +64,27 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
         request.Headers.Should().ContainKey("X-Project-Id");
         request.Headers["X-Project-Id"].Should().Be("test-project");
         request.Body.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task FlushAsync_WithoutProjectId_OmitsProjectHeader()
+    {
+        // Arrange — the absence of the header is the signal that tells the platform to derive one
+        // project per test assembly instead of pinning the session to a single project.
+        XpingConfiguration config = CreateConfig();
+        config.ProjectId = null;
+
+        XpingCtx.Initialize(config);
+        XpingCtx.RecordTest(CreateTestExecution());
+
+        // Act
+        await XpingCtx.FlushAsync().ConfigureAwait(true);
+
+        // Assert
+        var requests = _mockServer.ReceivedRequests;
+        requests.Should().HaveCount(1);
+        requests[0].Headers.Should().ContainKey("X-API-Key");
+        requests[0].Headers.Should().NotContainKey("X-Project-Id");
     }
 
     [Fact]

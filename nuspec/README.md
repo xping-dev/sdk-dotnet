@@ -108,7 +108,6 @@ Configure Xping SDK using `appsettings.json` or environment variables:
 {
   "Xping": {
     "ApiKey": "your-api-key",
-    "ProjectId": "your-project-id",
     "Enabled": true,
     "ApiEndpoint": "https://upload.xping.io/v1",
     "BatchSize": 100,
@@ -121,7 +120,6 @@ Configure Xping SDK using `appsettings.json` or environment variables:
 
 ```bash
 export XPING_APIKEY="your-api-key"
-export XPING_PROJECTID="your-project-id"
 export XPING_ENABLED="true"
 ```
 

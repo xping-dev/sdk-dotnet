@@ -172,12 +172,14 @@ across machines, branches, and CI to justify it.
 
 ## Connecting to Xping Cloud
 
-Set two environment variables. Nothing else changes — same packages, same attributes.
+Set one environment variable. Nothing else changes — same packages, same attributes.
 
 ```bash
 export XPING_APIKEY="your-api-key"
-export XPING_PROJECTID="your-project-id"
 ```
+
+Your project is named after your test assembly, so a solution with several test projects gets
+one Xping project each. Set `XPING_PROJECTID` to report them all as a single project instead.
 
 Runs are uploaded as they finish and analysed at [app.xping.io](https://app.xping.io):
 confidence scores per test, evidence sufficiency, root-cause categorisation, trends across
@@ -226,6 +228,8 @@ Configure via **environment variables**, **appsettings.json**, or **programmatic
 ```bash
 # Cloud only
 export XPING_APIKEY="your-api-key"
+
+# Optional: pin every test assembly to one project instead of one project each
 export XPING_PROJECTID="your-project-id"
 
 # Optional, either way

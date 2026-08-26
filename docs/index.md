@@ -93,13 +93,12 @@ Sign up at [app.xping.io](https://app.xping.io) and get your API key from **Acco
 ```json
 {
   "Xping": {
-    "ApiKey": "your-api-key",
-    "ProjectId": "your-project-name"
+    "ApiKey": "your-api-key"
   }
 }
 ```
 
-> **Note:** `ProjectId` is any meaningful identifier you choose (e.g., `"my-app"`). Xping automatically creates the project when tests first run. You can have multiple projects to organize tests across different applications or components.
+> **Note:** That is the whole configuration. Your project is named after your test assembly — a test project called `PaymentService.Tests` reports into a project of that name, created automatically when tests first run. A solution with several test projects gets one Xping project each. To report them all as a single project instead, set `ProjectId`; see the [configuration reference](configuration/configuration-reference.md#projectid).
 
 ### 4. Add Tracking to Your Tests
 

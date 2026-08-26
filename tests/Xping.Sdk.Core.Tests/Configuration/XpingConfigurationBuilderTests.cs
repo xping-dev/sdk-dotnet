@@ -109,16 +109,19 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void BuildShouldThrowWhenProjectIdIsMissingInCloudMode()
+    public void BuildShouldSucceedWithoutProjectIdInCloudMode()
     {
-        // Arrange
+        // Arrange — ProjectId is an optional pin, not a credential.
         var builder = new XpingConfigurationBuilder()
             .WithApiKey("test-key")
             .WithMode(XpingMode.Cloud);
 
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
-        Assert.Contains("ProjectId is required", exception.Message, StringComparison.Ordinal);
+        // Act
+        var config = builder.Build();
+
+        // Assert
+        Assert.Null(config.ProjectId);
+        Assert.Equal(XpingMode.Cloud, config.ResolveMode());
     }
 
     [Fact]
@@ -167,7 +170,6 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Null(config);
         Assert.NotEmpty(errors);
         Assert.Contains("ApiKey is required in Cloud mode.", errors);
-        Assert.Contains("ProjectId is required in Cloud mode.", errors);
     }
 
     [Fact]

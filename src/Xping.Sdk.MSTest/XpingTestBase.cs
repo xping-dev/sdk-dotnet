@@ -159,19 +159,22 @@ public abstract class XpingTestBase
     {
         var outcome = ResolveOutcome(context);
 
-        // Resolve the real test method once, so both the assembly name and the pinned fingerprint
-        // come from actual reflection data instead of parsing the fully qualified class name.
-        MethodInfo? testMethod = FindTestMethodForContext(context);
+        // Resolve the test class first, then the method on it, so both the assembly name and the
+        // pinned fingerprint come from actual reflection data.
+        Type? testType = FindTestClassForContext(context);
+        MethodInfo? testMethod = testType == null ? null : FindTestMethod(testType, context);
 
-        // The assembly's simple name (e.g. "MyApp.Tests") — TestContext exposes no assembly
-        // member directly, so resolve it from the resolved test class type. Uses ReflectedType,
-        // not DeclaringType: FindTestMethodForContext searches inherited methods too, so for a
-        // test method inherited from a base fixture in another assembly, DeclaringType would be
-        // that base class rather than the actual test project. Falls back to the namespace-root
-        // heuristic only when the type can't be resolved.
-        var fullClassName = context.FullyQualifiedTestClassName ?? string.Empty;
-        var assemblyName = testMethod?.ReflectedType?.Assembly.GetName().Name
-            ?? ExtractAssemblyName(fullClassName);
+        // The assembly's simple name (e.g. "MyApp.Tests") — TestContext exposes no assembly member
+        // directly, so it comes from the resolved test class. Taken from the type rather than the
+        // method so that a method lookup that misses (an overload, a source-generated wrapper) does
+        // not throw away a type that already answered the question.
+        //
+        // There is deliberately no fallback. The previous one parsed the first dot-segment of the
+        // fully qualified class name, so "Payment.Service.Tests.FooTest" yielded "Payment" — a
+        // namespace root, not an assembly. That value now names the Xping Cloud project when none
+        // is pinned, and a plausible-looking wrong name is worse than an empty one: empty is
+        // reported as unattributed, wrong is silently filed under a project nobody meant to create.
+        var assemblyName = testType?.Assembly.GetName().Name ?? string.Empty;
 
         // Build the fully qualified test name
         var fullyQualifiedName = $"{context.FullyQualifiedTestClassName}.{context.TestName}";
@@ -502,15 +505,6 @@ public abstract class XpingTestBase
         return builder.Build();
     }
 
-    private static string ExtractAssemblyName(string fullyQualifiedClassName)
-    {
-        if (string.IsNullOrEmpty(fullyQualifiedClassName))
-            return string.Empty;
-
-        var firstDotIndex = fullyQualifiedClassName.IndexOf('.');
-        return firstDotIndex >= 0 ? fullyQualifiedClassName.Substring(0, firstDotIndex) : fullyQualifiedClassName;
-    }
-
     private static string? GetExceptionType(TestContext context) =>
         GetTestException(context)?.GetType().FullName;
 
@@ -620,11 +614,15 @@ public abstract class XpingTestBase
     }
 
     /// <summary>
-    /// Locates the BCL <see cref="MethodInfo"/> for the currently running MSTest method by
-    /// resolving the type via its fully qualified class name and stripping parameterized suffixes
-    /// from the test name. Mirrors the pattern used in MSTestRetryDetector.
+    /// Locates the BCL <see cref="Type"/> for the currently running MSTest class by resolving its
+    /// fully qualified class name. Mirrors the pattern used in MSTestRetryDetector.
     /// </summary>
-    private static MethodInfo? FindTestMethodForContext(TestContext context)
+    /// <remarks>
+    /// Split out from <see cref="FindTestMethodForContext"/> so that a failed <i>method</i> lookup
+    /// no longer discards a perfectly good <i>type</i>. The type alone answers which assembly the
+    /// test belongs to, and that answer now names the Xping Cloud project when none is pinned.
+    /// </remarks>
+    private static Type? FindTestClassForContext(TestContext context)
     {
         try
         {
@@ -634,7 +632,7 @@ public abstract class XpingTestBase
                 return null;
             }
 
-            Type? type = Type.GetType(fullClassName)
+            return Type.GetType(fullClassName)
                 ?? AppDomain.CurrentDomain.GetAssemblies()
                     .SelectMany(a =>
                     {
@@ -642,12 +640,21 @@ public abstract class XpingTestBase
                         catch { return Array.Empty<Type>(); }
                     })
                     .FirstOrDefault(t => t.FullName == fullClassName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
-            if (type == null)
-            {
-                return null;
-            }
-
+    /// <summary>
+    /// Locates the BCL <see cref="MethodInfo"/> for the currently running MSTest method on an
+    /// already-resolved type, stripping parameterized suffixes from the test name.
+    /// </summary>
+    private static MethodInfo? FindTestMethod(Type type, TestContext context)
+    {
+        try
+        {
             var methodName = context.TestName ?? string.Empty;
 
             // Strip parameterized suffix: "MethodName (arg1, arg2)" → "MethodName"
@@ -666,5 +673,16 @@ public abstract class XpingTestBase
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Locates the BCL <see cref="MethodInfo"/> for the currently running MSTest method by
+    /// resolving the type via its fully qualified class name and stripping parameterized suffixes
+    /// from the test name.
+    /// </summary>
+    private static MethodInfo? FindTestMethodForContext(TestContext context)
+    {
+        Type? type = FindTestClassForContext(context);
+        return type == null ? null : FindTestMethod(type, context);
     }
 }

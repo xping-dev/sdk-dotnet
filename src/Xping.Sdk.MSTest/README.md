@@ -65,7 +65,6 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 {
   "Xping": {
     "ApiKey": "your-api-key-here",
-    "ProjectId": "your-project-id-here",
     "ApiEndpoint": "https://upload.xping.io/v1",
     "Environment": "Development",
     "EnableOfflineQueue": true,
@@ -76,9 +75,9 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 
 **Required Fields:**
 - `ApiKey` - Your Xping API authentication key (mandatory)
-- `ProjectId` - Your Xping project identifier (mandatory)
 
 **Optional Fields:**
+- `ProjectId` - Pins every test assembly in the run to one project. Omit it and Xping names the project after each test assembly, creating one project per test project.
 - `ApiEndpoint` - API server URL (default: `https://upload.xping.io/v1`)
 - `Environment` - Environment name (default: `Local`)
 - `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
@@ -86,7 +85,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 
 Or use environment variables:
 - `XPING_APIKEY` (required)
-- `XPING_PROJECTID` (required)
+- `XPING_PROJECTID` (optional: pins every test assembly to one project instead of one project each)
 - `XPING_API_ENDPOINT`
 - `XPING_ENVIRONMENT`
 

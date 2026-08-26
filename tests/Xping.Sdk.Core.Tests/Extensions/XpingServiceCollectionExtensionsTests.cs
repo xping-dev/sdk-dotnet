@@ -292,6 +292,25 @@ public sealed class XpingServiceCollectionExtensionsTests
         Assert.True(options.CollectNetworkMetrics);
     }
 
+    [Fact]
+    public void AddXping_WithApiKeyOnly_ShouldRegisterHttpUploader()
+    {
+        // Arrange — proves the registration-time mode probe agrees with the runtime one now that
+        // ProjectId is out of the credential set. Resolving the uploader also runs the typed-client
+        // delegate, which would throw if it still added a null X-Project-Id header.
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddXping(new XpingConfiguration { ApiKey = "key" });
+        var provider = services.BuildServiceProvider();
+        var uploader = provider.GetRequiredService<IXpingUploader>();
+        var options = provider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        // Assert
+        Assert.Equal("XpingUploader", uploader.GetType().Name);
+        Assert.Equal(XpingMode.Cloud, options.ResolveMode());
+    }
+
     // ---------------------------------------------------------------------------
     // AddXping(Action<XpingConfigurationBuilder>)
     // ---------------------------------------------------------------------------

@@ -228,7 +228,17 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         // Generate stable test identity
         var fullyQualifiedName = test.FullName;
-        var assemblyName = test.TypeInfo?.Assembly.GetName().Name ?? string.Empty;
+
+        // Exhaust NUnit's model before giving up: TypeInfo is null for some synthetic and
+        // parameterized wrappers, and an empty name here would make TestIdentityGenerator throw,
+        // which AfterTest's catch-all would swallow - dropping the execution entirely. The assembly
+        // also names the Cloud project when none is pinned, so a miss costs more than a label.
+        // ReflectedType before DeclaringType so a fixture inherited from a base class in another
+        // assembly is attributed to the test project, not to the base.
+        var assemblyName = test.TypeInfo?.Assembly.GetName().Name
+            ?? test.Method?.MethodInfo?.ReflectedType?.Assembly.GetName().Name
+            ?? test.Method?.MethodInfo?.DeclaringType?.Assembly.GetName().Name
+            ?? string.Empty;
 
         // Extract test case arguments if parameterized
         object[]? parameters = null;

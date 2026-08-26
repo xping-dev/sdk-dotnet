@@ -248,7 +248,7 @@ These indicate failures that prevent SDK functionality:
 ```
 [Error] Upload skipped: API Key and Project ID are required but not configured
 [Info] Action: Configure credentials in appsettings.json or environment variables
-[Info]   - Set XPING__APIKEY and XPING__PROJECTID environment variables
+[Info]   - Set the XPING__APIKEY environment variable
 [Info]   - Or add 'Xping' section to appsettings.json
 ```
 
@@ -401,7 +401,7 @@ For advanced troubleshooting, inspect HTTP requests and responses:
 5. Inspect request headers, body, and response
 
 **What to check:**
-- Request headers include `X-API-Key` and `X-Project-Id`
+- Request headers include `X-API-Key`, and `X-Project-Id` only when a project is pinned
 - Request body contains test execution data
 - Response status code and body
 
@@ -468,7 +468,7 @@ This logs all HTTP requests and responses, including Xping SDK uploads.
 
 | Error Message | Meaning | Solution |
 |---------------|---------|----------|
-| `API Key and Project ID are required` | Missing credentials | Configure `ApiKey` and `ProjectId` |
+| `ApiKey is required in Cloud mode.` | Missing credentials | Configure `ApiKey` |
 | `Circuit breaker is open` | Too many consecutive failures | Fix underlying issue, wait for reset |
 | `Network error: Unable to connect` | Network connectivity issue | Check firewall, DNS, proxy |
 | `HTTP request failed: Timeout` | Request took too long | Increase `UploadTimeout` or reduce `BatchSize` |

@@ -45,14 +45,28 @@ public static class SessionAssemblies
     /// attributed to anything; it is reported as covering nothing rather than guessed at.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<string> Of(TestSession? session)
+    public static IReadOnlyList<string> Of(TestSession? session) => Of(session?.Executions);
+
+    /// <summary>
+    /// Returns the distinct test assemblies a set of executions covers.
+    /// </summary>
+    /// <param name="executions">The executions to inspect, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The assembly names in ordinal order, or an empty list when the executions name none.
+    /// </returns>
+    /// <remarks>
+    /// Derived from the executions rather than read back from <see cref="TestSession.Assemblies"/>
+    /// so that there is one definition of "which assemblies does this cover". A stored session
+    /// holds every execution, so derivation is exact.
+    /// </remarks>
+    public static IReadOnlyList<string> Of(IReadOnlyCollection<TestExecution>? executions)
     {
-        if (session == null)
+        if (executions == null)
             return [];
 
         var names = new SortedSet<string>(StringComparer.Ordinal);
 
-        foreach (TestExecution execution in session.Executions)
+        foreach (TestExecution execution in executions)
         {
             string candidate = execution.Identity.Assembly;
             if (!string.IsNullOrEmpty(candidate))
@@ -163,6 +177,9 @@ public static class SessionAssemblies
             EndedAt = session.EndedAt,
             EnvironmentInfo = session.EnvironmentInfo,
             Executions = executions.AsReadOnly(),
+            // Recomputed, never copied: a session projected onto one assembly must not keep
+            // claiming to cover the assemblies this filter just stripped out of it.
+            Assemblies = Of(executions),
             SessionState = session.SessionState,
             PullRequestContext = session.PullRequestContext,
             SdkVersion = session.SdkVersion,

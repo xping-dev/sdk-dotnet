@@ -73,6 +73,23 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly List<TestExecution> _localExecutions = [];
     private readonly object _localExecutionsLock = new();
 
+    // Every test assembly this session has recorded an execution for, and the count of executions
+    // that named none.
+    //
+    // Accumulated across flushes rather than derived per batch. A single flush sees only the
+    // executions it drained, and the finalizing flush - the one carrying QuickStatistics and
+    // closing the run - is assembled after the drain loop has emptied the collector, so it sees
+    // none at all. A per-batch value would be empty on exactly the upload the platform needs it on.
+    //
+    // Mutated only inside BuildSessionAsync, which both call sites (FlushOnceAsync and
+    // FinalFlushAsync) enter holding _flushLock, so this needs no lock of its own.
+    private readonly SortedSet<string> _sessionAssemblies = new(StringComparer.Ordinal);
+    private int _unattributedExecutionCount;
+
+    // Whether a project was pinned via configuration. Captured in the constructor because the
+    // finalize-time diagnostic below needs it and IOptions is not read again after startup.
+    private bool _hasProjectPin;
+
     private PullRequestContext? _pullRequestContext;
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
@@ -157,6 +174,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
             _mode = configuration.ResolveMode();
             _isHealthy = _mode != XpingMode.Disabled;
+            _hasProjectPin = configuration.ProjectPin != null;
 
             // Optional so that hosts composed without the local-store feature still work.
             _localSessionStore = _mode == XpingMode.Disabled
@@ -204,11 +222,20 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                         "{Reason} - results stay on this machine.",
                         SessionId, configuration.Environment, reason);
                 }
-                else
+                else if (configuration.ProjectPin is { } projectPin)
                 {
                     _logger.LogInformation(
-                        "Initialized. SessionId: {SessionId}, Project: {ProjectId}, Environment: {Environment}",
-                        SessionId, configuration.ProjectId, configuration.Environment);
+                        "Initialized. SessionId: {SessionId}, Project: {ProjectId} (pinned), Environment: {Environment}",
+                        SessionId, projectPin, configuration.Environment);
+                }
+                else
+                {
+                    // State which routing the run will get. Without this the developer cannot tell
+                    // a derived project from a misconfigured one until results appear in Cloud.
+                    _logger.LogInformation(
+                        "Initialized. SessionId: {SessionId}, Environment: {Environment}. " +
+                        "One project per test assembly - set ProjectId to report everything into one project instead.",
+                        SessionId, configuration.Environment);
                 }
             }
             else
@@ -404,6 +431,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             (uploadResult, drainedCount) = await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
         } while (drainedCount > 0 && uploadResult.Success);
 
+        WarnAboutUnattributableExecutions();
+
         // Send the finalized session with QuickStatistics so the cloud can post the PR comment.
         uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
 
@@ -422,6 +451,36 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         return uploadResult;
+    }
+
+    /// <summary>
+    /// Warns when executions cannot be attributed to a project.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than in the adapters because the assembly name is resolved per test in
+    /// three different framework packages, none of which can reach the core SDK's logging, and
+    /// because the interesting condition - "nothing in this whole run named an assembly" - is only
+    /// knowable once the run is over.
+    /// </remarks>
+    private void WarnAboutUnattributableExecutions()
+    {
+        if (_mode != XpingMode.Cloud || _hasProjectPin)
+            return;
+
+        if (_unattributedExecutionCount > 0)
+        {
+            _logger.LogWarning(
+                "{Count} executions carry no test assembly and cannot be attributed to a project.",
+                _unattributedExecutionCount);
+        }
+
+        if (_sessionAssemblies.Count == 0 && _unattributedExecutionCount > 0)
+        {
+            _logger.LogWarning(
+                "No test assembly could be resolved for this session, so no project can be derived " +
+                "and the results will be rejected. Set ProjectId to pin a project, or report this " +
+                "as an SDK defect.");
+        }
     }
 
     /// <summary>
@@ -526,6 +585,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
+        for (int i = 0; i < executions.Count; i++)
+        {
+            string assembly = executions[i].Identity.Assembly;
+
+            if (string.IsNullOrEmpty(assembly))
+                _unattributedExecutionCount++;
+            else
+                _sessionAssemblies.Add(assembly);
+        }
+
         _lastEnvironmentInfo = environmentInfo;
         AccumulateLocalExecutions(executions);
 
@@ -535,6 +604,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             .WithEndedAt(DateTime.UtcNow)
             .WithEnvironmentInfo(environmentInfo)
             .AddExecutions(executions)
+            .WithAssemblies(_sessionAssemblies)
             .WithTotalTestsExpected(totalTestsExpected)
             .WithSessionState(sessionState)
             .WithPullRequestContext(_pullRequestContext);
@@ -662,6 +732,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 .WithEndedAt(endedAt)
                 .WithEnvironmentInfo(WithRecordingMode(environment ?? new EnvironmentInfo()))
                 .AddExecutions(executions)
+                .WithAssemblies(_sessionAssemblies)
                 .WithTotalTestsExpected(GetTotalTestsExpected())
                 .WithSessionState(TestSessionState.Finalized)
                 .WithPullRequestContext(_pullRequestContext)

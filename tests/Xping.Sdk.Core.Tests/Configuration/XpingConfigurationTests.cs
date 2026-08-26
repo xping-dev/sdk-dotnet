@@ -51,9 +51,10 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenProjectIdIsMissingInCloudMode()
+    public void ValidateShouldSucceedWhenProjectIdIsMissingInCloudMode()
     {
-        // Arrange
+        // Arrange — ProjectId is optional: with none pinned, the project is derived from each
+        // execution's test assembly.
         var config = new XpingConfiguration
         {
             ApiKey = "test-key",
@@ -64,7 +65,7 @@ public sealed class XpingConfigurationTests
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("ProjectId is required in Cloud mode.", errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
@@ -94,20 +95,20 @@ public sealed class XpingConfigurationTests
         // Assert
         Assert.Equal(XpingMode.Cloud, config.ResolveMode());
         Assert.Contains("ApiKey is required when StrictMode is enabled.", errors);
-        Assert.Contains("ProjectId is required when StrictMode is enabled.", errors);
     }
 
     [Theory]
     [InlineData(true, null, null, XpingMode.LocalOnly)]
-    [InlineData(true, "key", null, XpingMode.LocalOnly)]
+    [InlineData(true, "key", null, XpingMode.Cloud)]
     [InlineData(true, null, "proj", XpingMode.LocalOnly)]
     [InlineData(true, "key", "proj", XpingMode.Cloud)]
     [InlineData(false, "key", "proj", XpingMode.Disabled)]
     [InlineData(false, null, null, XpingMode.Disabled)]
-    public void ResolveModeShouldFollowCredentialsAndEnabledFlag(
+    public void ResolveModeShouldFollowApiKeyAndEnabledFlag(
         bool enabled, string? apiKey, string? projectId, XpingMode expected)
     {
-        // Arrange
+        // Arrange — the API key alone decides Cloud. A pinned project without a key is still
+        // local-only: a project name is not a credential.
         var config = new XpingConfiguration
         {
             Enabled = enabled,
@@ -117,6 +118,40 @@ public sealed class XpingConfigurationTests
 
         // Act & Assert
         Assert.Equal(expected, config.ResolveMode());
+    }
+
+    [Fact]
+    public void ResolveModeShouldBeCloudWhenApiKeyIsSetWithoutProjectId()
+    {
+        // Arrange — the headline of this feature: an API key on its own connects to Cloud.
+        var config = new XpingConfiguration { ApiKey = "test-key" };
+
+        // Act & Assert
+        Assert.Equal(XpingMode.Cloud, config.ResolveMode());
+        Assert.Empty(config.Validate());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ProjectPinShouldBeNullWhenProjectIdIsBlank(string? projectId)
+    {
+        // Arrange — a blank placeholder left in a config template means "derive", not "pin ''".
+        var config = new XpingConfiguration { ProjectId = projectId };
+
+        // Act & Assert
+        Assert.Null(config.ProjectPin);
+    }
+
+    [Fact]
+    public void ProjectPinShouldTrimProjectId()
+    {
+        // Arrange
+        var config = new XpingConfiguration { ProjectId = "  my-project  " };
+
+        // Act & Assert
+        Assert.Equal("my-project", config.ProjectPin);
     }
 
     [Fact]

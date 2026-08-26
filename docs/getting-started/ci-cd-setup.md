@@ -38,7 +38,7 @@ Store your Xping credentials as GitHub Secrets:
 1. Go to **Repository Settings** → **Secrets and variables** → **Actions**
 2. Add the following secrets:
    - `XPING_APIKEY`: Your Xping API key (from Account → Settings → API & Integration)
-   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_PROJECTID` *(optional)*: Pins every test assembly to one project. Omit it and each test assembly gets its own project, named after the assembly.
 
 ### Workflow Example
 
@@ -73,7 +73,6 @@ jobs:
       - name: Run tests with Xping
         env:
           XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
-          XPING__PROJECTID: ${{ secrets.XPING_PROJECTID }}
           XPING__ENABLED: true
           XPING__AUTODETECTCIENVIRONMENT: true
         run: dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
@@ -103,7 +102,7 @@ Store your Xping credentials as Pipeline Variables:
 2. Create a variable group named `Xping`
 3. Add the following variables:
    - `XPING.ApiKey`: Your Xping API key (mark as secret)
-   - `XPING.ProjectId`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING.ProjectId` *(optional)*: Pins every test assembly to one project. Omit it and each test assembly gets its own project, named after the assembly.
 
 ### Pipeline Example (YAML)
 
@@ -144,7 +143,6 @@ steps:
     arguments: '--no-build --configuration Release'
   env:
     XPING__APIKEY: $(XPING.ApiKey)
-    XPING__PROJECTID: $(XPING.ProjectId)
     XPING__ENABLED: true
     XPING__AUTODETECTCIENVIRONMENT: true
 ```
@@ -171,7 +169,7 @@ Store your Xping credentials as CI/CD Variables:
 1. Go to **Settings** → **CI/CD** → **Variables**
 2. Add the following variables:
    - `XPING_APIKEY`: Your Xping API key (mark as masked)
-   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_PROJECTID` *(optional)*: Pins every test assembly to one project. Omit it and each test assembly gets its own project, named after the assembly.
 
 ### Pipeline Example (.gitlab-ci.yml)
 
@@ -207,7 +205,6 @@ test:
     - dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
   variables:
     XPING__APIKEY: $XPING_APIKEY
-    XPING__PROJECTID: $XPING_PROJECTID
 ```
 
 ### Captured Metadata
@@ -242,7 +239,6 @@ pipeline {
     
     environment {
         XPING__APIKEY = credentials('xping-api-key')
-        XPING__PROJECTID = credentials('xping-project-id')
         XPING__ENABLED = 'true'
         XPING__AUTODETECTCIENVIRONMENT = 'true'
     }
@@ -298,7 +294,7 @@ Store your Xping credentials as Environment Variables:
 1. Go to **Project Settings** → **Environment Variables**
 2. Add the following variables:
    - `XPING_APIKEY`: Your Xping API key
-   - `XPING_PROJECTID`: Your chosen project identifier (e.g., `"my-app"`)
+   - `XPING_PROJECTID` *(optional)*: Pins every test assembly to one project. Omit it and each test assembly gets its own project, named after the assembly.
 
 ### Pipeline Example (.circleci/config.yml)
 
@@ -315,8 +311,7 @@ jobs:
     
     environment:
       XPING__APIKEY: $XPING_APIKEY
-      XPING__PROJECTID: $XPING_PROJECTID
-      XPING__ENABLED: "true"
+        XPING__ENABLED: "true"
       XPING__AUTODETECTCIENVIRONMENT: "true"
     
     steps:

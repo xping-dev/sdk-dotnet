@@ -89,13 +89,9 @@ public class ConfigurationBenchmarks
             ProjectId = "test-project-id"
         };
 
-        // Simple validation logic
-        return !string.IsNullOrWhiteSpace(config.ApiKey) &&
-               !string.IsNullOrWhiteSpace(config.ProjectId) &&
-               config.BatchSize > 0 &&
-               config.FlushInterval >= TimeSpan.Zero &&
-               config.SamplingRate >= 0.0 &&
-               config.SamplingRate <= 1.0;
+        // Measure the real thing rather than a hand-rolled copy of it: the inline predicate this
+        // replaced still required ProjectId long after Validate() stopped doing so.
+        return config.IsValid();
     }
 
     /// <summary>

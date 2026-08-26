@@ -21,7 +21,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 |---------|------|---------|---------------------|-------------|
 | `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
 | `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in Cloud mode; omit it to run [local-only](local-store.md). |
-| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | User-defined project identifier. Required in Cloud mode. |
+| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | Optional. Pins the whole session to one project; omit it to get one project per test assembly. |
 | `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud`, or `Disabled` |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
@@ -67,7 +67,7 @@ Xping runs in one of three modes. The mode is resolved once at startup and deter
 |---|---|
 | `Enabled = false` | `Disabled` |
 | `StrictMode = true` | `Cloud` |
-| `ApiKey` **and** `ProjectId` present | `Cloud` |
+| `ApiKey` present | `Cloud` |
 | Otherwise | `LocalOnly` |
 
 ### Strict mode still requires credentials
@@ -189,27 +189,43 @@ XpingContext.Initialize(config);
 ### ProjectId
 
 **Type:** `string`
-**Default:** *None*
-**Required:** In Cloud mode only
+**Default:** *None — the project is derived from the test assembly*
+**Required:** No
 **Environment Variable:** `XPING_PROJECTID`
 
-A user-defined identifier for your project. Choose any meaningful name — Xping automatically creates the project when your tests first run.
+**You usually do not need to set this.** When `ProjectId` is unset, Xping derives the project from the test assembly each execution belongs to. A test project called `PaymentService.Tests` reports into a project of that name, created automatically the first time your tests run.
 
-**Characteristics:**
-- User-defined, not retrieved from the platform
-- Must be unique within your workspace
-- Case-insensitive (e.g., `"my-app"` and `"My-App"` refer to the same project and are normalized to lowercase)
-- Commonly follows naming conventions: `"my-app"`, `"payment-service"`, `"frontend"`
+That means a solution-wide `dotnet test` produces **one project per test project**:
 
-**Validation Rules:**
-- **Required:** Cannot be null, empty, or whitespace-only
+| Test assembly | Project |
+|---|---|
+| `Billing.Tests` | `billing-tests` |
+| `Api.Tests` | `api-tests` |
+| `Web.Tests` | `web-tests` |
+
+This mirrors how the [`xping` CLI](../guides/local-store.md) already scopes local reports — `xping report --assembly Billing.Tests` — so local and cloud views agree on what a project is.
+
+**Set `ProjectId` only to override that.** It is a hard pin: every execution in the session lands in that one project regardless of which assembly it came from. The case for it is a monorepo where several test assemblies should report as a single project:
+
+```json
+{
+  "Xping": {
+    "ProjectId": "payment-service"
+  }
+}
+```
+
+**Validation Rules** (applied by the platform to a pinned value):
 - **Character Set:** ASCII alphanumeric characters, hyphens (`-`), and underscores (`_`) only
 - **Format:** Must start with an alphanumeric character (a-z, 0-9), followed by any combination of alphanumeric, hyphens, or underscores
 - **Whitespace:** No spaces or whitespace characters allowed (including internal whitespace)
 - **Maximum Length:** 128 characters
-- **Normalization:** Automatically converted to lowercase
+- **Normalization:** Automatically converted to lowercase, so `"my-app"` and `"My-App"` are the same project
+- A blank value (`""`) is treated as unset, not as a pin
 
-> **Important:** Once selected, avoid changing your ProjectId. Modifying it will create a new project in Xping, causing previously uploaded test executions to become disassociated from your current project. There is currently no automated migration path to transfer historical data between projects.
+> **Important:** A project is identified by its name, and there is no automated migration between projects. Renaming a test assembly therefore starts a *new* project and leaves the old history behind — as does changing a pinned `ProjectId`. Pin a value if you expect to rename the assembly.
+
+> **Note:** Because a solution-wide run can create several projects at once, a first run on a plan with a low project limit may hit that limit. Pin a `ProjectId` to report into a single project instead.
 
 **Example:**
 
@@ -855,11 +871,11 @@ XpingContext.Initialize(config);
 
 ```
 # Resilient mode (default) — configuration error
-[Error] Configuration validation failed: ApiKey is required.; ProjectId is required.
+[Error] Configuration validation failed: ApiKey is required.
         SDK disabled - tests will run without observability tracking.
 
 # Strict mode — configuration error
-[Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required., ProjectId is required.
+[Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required.
 
 # Resilient mode (default) — network error
 [Error] Network error occurred
@@ -1088,7 +1104,6 @@ Xping SDK validates configuration on initialization and provides clear error mes
 | Setting | Validation |
 |---------|------------|
 | `ApiKey` | Must not be empty or whitespace |
-| `ProjectId` | Must not be empty or whitespace |
 | `ApiEndpoint` | Must be valid HTTP/HTTPS URL |
 | `BatchSize` | Must be between 1 and 1000 |
 | `FlushInterval` | Must be greater than zero |
@@ -1237,7 +1252,7 @@ else
 **Solutions:**
 1. Check error messages for specific issues
 
-2. Verify required settings (`ApiKey`, `ProjectId`) are provided
+2. Verify the required setting (`ApiKey`) is provided
 
 3. Ensure numeric values are within valid ranges
 

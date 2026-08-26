@@ -121,6 +121,128 @@ public sealed class XpingContextOrchestratorTests
     private static TestExecution BuildExecution(string name = "Test")
         => new TestExecutionBuilder().WithTestName(name).WithOutcome(TestOutcome.Passed).Build();
 
+    private static TestExecution BuildExecutionInAssembly(string assembly, string name = "Test")
+        => new TestExecutionBuilder()
+            .WithTestName(name)
+            .WithOutcome(TestOutcome.Passed)
+            .WithIdentity(new TestIdentity { Assembly = assembly, FullyQualifiedName = name })
+            .Build();
+
+    /// <summary>
+    /// Captures every session handed to the uploader, in order.
+    /// </summary>
+    private static List<TestSession> CaptureUploads(Mock<IXpingUploader> uploaderMock)
+    {
+        var sessions = new List<TestSession>();
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((session, _) => sessions.Add(session))
+            .ReturnsAsync(new UploadResult { Success = true });
+        return sessions;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Session assemblies — what the platform splits a session into projects by
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CloudMode_IsEnteredWithApiKeyAlone()
+    {
+        // Arrange — ProjectId is no longer part of the credential set.
+        var (orchestrator, _) = CreateOrchestrator(o =>
+        {
+            o.ApiKey = "test-key";
+            o.ProjectId = null;
+        });
+
+        // Assert
+        Assert.Equal(XpingMode.Cloud, orchestrator.ResolvedMode);
+        Assert.True(orchestrator.UploadingStatus);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task UploadedSession_ListsEachAssemblyOnceInOrdinalOrder()
+    {
+        // Arrange — one test host process can batch several test projects, so a session covers
+        // however many assemblies ran in it.
+        var (orchestrator, uploaderMock) = CreateOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act — deliberately out of order and with a repeat.
+        orchestrator.RecordExecution(BuildExecutionInAssembly("B.Tests", "One"));
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "Two"));
+        orchestrator.RecordExecution(BuildExecutionInAssembly("B.Tests", "Three"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        Assert.NotEmpty(uploads);
+        Assert.Equal(["A.Tests", "B.Tests"], uploads[^1].Assemblies);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizedSession_CarriesAssembliesEvenThoughItCarriesNoExecutions()
+    {
+        // Arrange — the load-bearing case. FinalFlushAsync builds its session *after* the drain
+        // loop has emptied the collector, so the finalizing upload has no executions of its own.
+        // Deriving the assembly list from that session's own executions would leave it empty on
+        // exactly the upload that closes the run and carries QuickStatistics.
+        var (orchestrator, uploaderMock) = CreateOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "One"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        TestSession finalized = Assert.Single(uploads, u => u.SessionState == TestSessionState.Finalized);
+        Assert.Empty(finalized.Executions);
+        Assert.Equal(["A.Tests"], finalized.Assemblies);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task UploadedSession_AccumulatesAssembliesAcrossFlushes()
+    {
+        // Arrange — a flush only sees the batch it drained, so the set has to accumulate.
+        var (orchestrator, uploaderMock) = CreateOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "One"));
+        await orchestrator.FlushAsync();
+        orchestrator.RecordExecution(BuildExecutionInAssembly("B.Tests", "Two"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        Assert.Equal(["A.Tests", "B.Tests"], uploads[^1].Assemblies);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task UploadedSession_ExcludesExecutionsThatNameNoAssembly()
+    {
+        // Arrange — an execution recorded before identity generation completed names no assembly.
+        // It is still reported, but it cannot be attributed to a project.
+        var (orchestrator, uploaderMock) = CreateOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly(string.Empty, "Orphan"));
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "Named"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        Assert.Equal(["A.Tests"], uploads[^1].Assemblies);
+
+        await orchestrator.DisposeAsync();
+    }
+
     // ---------------------------------------------------------------------------
     // Local-only mode
     // ---------------------------------------------------------------------------
