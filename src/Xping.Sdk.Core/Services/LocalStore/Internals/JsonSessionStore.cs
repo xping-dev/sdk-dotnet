@@ -255,10 +255,21 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             writer.Write(JsonSerializer.Serialize(session, options));
         }
 
+        // Put the file in place in one step rather than deleting the destination and moving after.
+        // The two-step form leaves a window in which the old file is already gone and its
+        // replacement is not yet in place, and a process killed inside that window loses the run
+        // outright. Writing a new session never opened that window — the filename carries fresh
+        // ticks and a fresh id, so there was nothing to delete — but rewriting one opens it every
+        // time, because the destination always exists.
+        //
+        // Two calls rather than File.Move's overwrite overload, which netstandard2.0 does not have:
+        // Replace needs the destination to exist and Move needs it not to. Both are atomic, and the
+        // race between the check and the call throws IOException, which the callers already treat as
+        // "the write did not happen".
         if (File.Exists(path))
-            File.Delete(path);
-
-        File.Move(tempPath, path);
+            File.Replace(tempPath, path, destinationBackupFileName: null);
+        else
+            File.Move(tempPath, path);
     }
 
     /// <summary>

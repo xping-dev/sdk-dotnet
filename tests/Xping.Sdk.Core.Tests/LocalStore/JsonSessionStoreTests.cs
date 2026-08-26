@@ -459,6 +459,47 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void ARewriteNeverLeavesTheStoreWithoutTheRunItIsReplacing()
+    {
+        // The destination is replaced in one step. Deleting it first and moving after would leave a
+        // window with neither file present, and a process killed inside it loses the run — which on
+        // a scoped clear means losing the suites the caller asked to keep.
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        string path = Assert.Single(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+        DateTime before = File.GetLastWriteTimeUtc(path);
+
+        store.Delete("Alpha.Tests");
+
+        // Same path, still there, and actually rewritten rather than left alone.
+        Assert.True(File.Exists(path));
+        Assert.True(File.GetLastWriteTimeUtc(path) >= before);
+        Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
+    }
+
+    [Fact]
+    public void AStaleTempFileFromAnEarlierCrashDoesNotBlockAWriteOrCountAsARun()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        string path = Assert.Single(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+        File.WriteAllText(path + ".tmp", "leftover from a killed process");
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+
+        // The stale temp is overwritten by the rewrite, and never read as a session either way: the
+        // store's search pattern ends at .json.gz, so a .tmp is invisible to every read.
+        TestSession remaining = Assert.Single(store.ReadRecent(10).Sessions);
+        Assert.Equal("Beta.Tests", remaining.Executions.First().Identity.Assembly);
+    }
+
+    [Fact]
     public void DeleteRemovesARunThatRecordedTheScopedAssemblyAndNothingElse()
     {
         JsonSessionStore store = CreateStore();
