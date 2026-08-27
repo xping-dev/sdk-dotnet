@@ -230,11 +230,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 }
                 else
                 {
-                    // State which routing the run will get. Without this the developer cannot tell
-                    // a derived project from a misconfigured one until results appear in Cloud.
                     _logger.LogInformation(
-                        "Initialized. SessionId: {SessionId}, Environment: {Environment}. " +
-                        "One project per test assembly - set ProjectId to report everything into one project instead.",
+                        "Initialized. SessionId: {SessionId}, Environment: {Environment}",
                         SessionId, configuration.Environment);
                 }
             }
