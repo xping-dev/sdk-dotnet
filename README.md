@@ -277,12 +277,12 @@ your suite.
                         │
                         ▼
                   Xping.Sdk.Core
-      tracking · environment detection · batching
+         tracking · environment detection
                         │
       ┌─────────────────┴─────────────────┐
       │  no upload key                    │  XPING_APIKEY set
       ▼                                   ▼
-.xping/ (local store)   ─── upload ───▶  Xping Cloud
+.xping/ (local store) ─ batched upload ─▶ Xping Cloud
       │                                   │  scoring · root cause · trends
       │                                   │
       │                                   ├──────────────────────┐
