@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
+
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
@@ -204,7 +206,7 @@ public static class SessionAssemblies
     /// carried no breakdown, and one whose breakdown said nothing about this assembly, are both
     /// reported the same way the SDK reports a run it could not attribute.
     /// </returns>
-    private static SortedDictionary<string, AssemblyStatistics>? FilterStatistics(
+    private static ReadOnlyDictionary<string, AssemblyStatistics>? FilterStatistics(
         IReadOnlyDictionary<string, AssemblyStatistics>? statistics, string assembly, bool keepMatches)
     {
         if (statistics == null || statistics.Count == 0)
@@ -220,6 +222,8 @@ public static class SessionAssemblies
                 kept.Add(entry.Key, entry.Value);
         }
 
-        return kept.Count == 0 ? null : kept;
+        // Wrapped for the same reason the accumulator wraps its own snapshot: what lands on a
+        // TestSession has to be as immutable as the rest of it.
+        return kept.Count == 0 ? null : new ReadOnlyDictionary<string, AssemblyStatistics>(kept);
     }
 }

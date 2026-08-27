@@ -4,6 +4,7 @@
  */
 
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
@@ -135,7 +136,10 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             snapshot[entry.Key] = ToStatistics(entry.Value, final);
         }
 
-        return snapshot;
+        // Wrapped rather than returned directly: this value is handed to the session and travels to
+        // the upload and the local store, and a snapshot a consumer can cast back and mutate is not
+        // a snapshot. The wrapper keeps the sorted enumeration order underneath it.
+        return new ReadOnlyDictionary<string, AssemblyStatistics>(snapshot);
     }
 
     /// <inheritdoc/>

@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
+
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 
@@ -16,8 +18,11 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// </summary>
 internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
 {
+    // One shared instance, so it has to be genuinely read-only: a consumer casting the returned
+    // value back to Dictionary would otherwise corrupt every later caller's empty breakdown.
     private static readonly IReadOnlyDictionary<string, AssemblyStatistics> NoAssemblies =
-        new Dictionary<string, AssemblyStatistics>(StringComparer.Ordinal);
+        new ReadOnlyDictionary<string, AssemblyStatistics>(
+            new Dictionary<string, AssemblyStatistics>(StringComparer.Ordinal));
 
     /// <inheritdoc/>
     public void Record(TestExecution execution)
