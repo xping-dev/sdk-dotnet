@@ -4,6 +4,7 @@
  */
 
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
@@ -16,29 +17,30 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// compound slowest-test state, and a <see cref="ConcurrentDictionary{TKey,TValue}"/> holding the
 /// final attempt of each distinct test.
 /// </summary>
+/// <remarks>
+/// Every counter is kept twice: once for the whole test host process, and once per test assembly the
+/// host ran. A solution-wide <c>dotnet test</c> batches several test projects into one host, so the
+/// host-wide reading alone cannot be attributed to any of them. Both readings run through the same
+/// <see cref="Tally"/>, so a <see cref="TestOutcome"/> added without a counter fails the same way in
+/// both rather than balancing in one and silently not in the other.
+/// </remarks>
 internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
 {
-    // Outcome counters — stored as long for Interlocked.Read/Add compatibility
-    private long _total;
-    private long _passed;
-    private long _failed;
-    private long _skipped;
-    private long _inconclusive;
-    private long _notExecuted;
-    private long _timeout;
-    private long _totalDurationTicks;
+    // The whole test host process.
+    private readonly Counters _hostWide = new();
+
+    // One entry per test assembly that recorded an execution. Executions naming no assembly are real
+    // — identity generation can fail before the name is known — and are counted host-wide only,
+    // never under an empty-string key, consistent with SessionAssemblies.Of skipping them.
+    private readonly ConcurrentDictionary<string, Counters> _byAssembly = new(StringComparer.Ordinal);
 
     // Final attempt per distinct test — the scalar counters above cannot express this, because a
     // retried test arrives as several executions and only its last attempt decides whether it passed.
     // The key carries the assembly because TestFingerprint hashes the fully qualified name and the
     // parameters only, so identical names in two assemblies would otherwise collide. A ValueTuple key
-    // keeps the per-execution path free of the string concatenation a composite key would need.
+    // keeps the per-execution path free of the string concatenation a composite key would need, and
+    // it is what lets the distinct-test counters be grouped by assembly with no extra state.
     private readonly ConcurrentDictionary<(string Assembly, string Test), FinalAttempt> _finalByTest = new();
-
-    // Slowest test — requires a lock because name + duration must update atomically
-    private readonly object _slowestLock = new();
-    private long _slowestDurationTicks;
-    private string? _slowestTestName;
 
     /// <inheritdoc/>
     public void Record(TestExecution execution)
@@ -46,51 +48,16 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         if (execution == null)
             throw new ArgumentNullException(nameof(execution));
 
-        Interlocked.Increment(ref _total);
+        // Host-wide first, because Tally resolves the outcome's counter before mutating anything: an
+        // outcome with no bucket throws with every total still where it was, and without having
+        // created an assembly entry for an execution that was never counted.
+        Tally(_hostWide, execution);
 
-        switch (execution.Outcome)
-        {
-            case TestOutcome.Passed:
-                Interlocked.Increment(ref _passed);
-                break;
-            case TestOutcome.Failed:
-                Interlocked.Increment(ref _failed);
-                break;
-            case TestOutcome.Skipped:
-                Interlocked.Increment(ref _skipped);
-                break;
-            case TestOutcome.Inconclusive:
-                Interlocked.Increment(ref _inconclusive);
-                break;
-            case TestOutcome.NotExecuted:
-                Interlocked.Increment(ref _notExecuted);
-                break;
-            case TestOutcome.Timeout:
-                Interlocked.Increment(ref _timeout);
-                break;
-            default:
-                // Every outcome must land in exactly one bucket, because the report presents the
-                // buckets as a breakdown of Total. A member added without a case here would inflate
-                // Total and balance nowhere, which reads as data loss rather than as a missing arm.
-                throw new ArgumentOutOfRangeException(
-                    nameof(execution),
-                    execution.Outcome,
-                    "Unhandled TestOutcome; add a counter for it.");
-        }
+        string assembly = execution.Identity.Assembly;
+        if (!string.IsNullOrEmpty(assembly))
+            Tally(_byAssembly.GetOrAdd(assembly, static _ => new Counters()), execution);
 
         RecordFinalAttempt(execution);
-
-        long ticks = execution.Duration.Ticks;
-        Interlocked.Add(ref _totalDurationTicks, ticks);
-
-        lock (_slowestLock)
-        {
-            if (ticks > _slowestDurationTicks)
-            {
-                _slowestDurationTicks = ticks;
-                _slowestTestName = execution.TestName;
-            }
-        }
     }
 
     /// <inheritdoc/>
@@ -99,28 +66,22 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     /// <inheritdoc/>
     public QuickStatistics GetSnapshot(TimeSpan wallClockElapsed)
     {
-        long total = Interlocked.Read(ref _total);
-        long passed = Interlocked.Read(ref _passed);
-        long failed = Interlocked.Read(ref _failed);
-        long skipped = Interlocked.Read(ref _skipped);
-        long inconclusive = Interlocked.Read(ref _inconclusive);
-        long notExecuted = Interlocked.Read(ref _notExecuted);
-        long timeout = Interlocked.Read(ref _timeout);
-        long durationTicks = Interlocked.Read(ref _totalDurationTicks);
+        long total = Interlocked.Read(ref _hostWide.Total);
+        long passed = Interlocked.Read(ref _hostWide.Passed);
+        long failed = Interlocked.Read(ref _hostWide.Failed);
+        long skipped = Interlocked.Read(ref _hostWide.Skipped);
+        long inconclusive = Interlocked.Read(ref _hostWide.Inconclusive);
+        long notExecuted = Interlocked.Read(ref _hostWide.NotExecuted);
+        long timeout = Interlocked.Read(ref _hostWide.Timeout);
+        long durationTicks = Interlocked.Read(ref _hostWide.TotalDurationTicks);
 
-        FinalTally finalTally = TallyFinalAttempts();
+        FinalCounts finalTally = TallyFinalAttempts();
 
         double successRate = total == 0 ? 0.0 : (double)passed / total;
         long totalMs = durationTicks / TimeSpan.TicksPerMillisecond;
         long averageMs = total == 0 ? 0L : totalMs / total;
 
-        long slowestTicks;
-        string? slowestName;
-        lock (_slowestLock)
-        {
-            slowestTicks = _slowestDurationTicks;
-            slowestName = _slowestTestName;
-        }
+        (long slowestTicks, string? slowestName) = ReadSlowest(_hostWide);
 
         // Clamp to zero: a caller computing elapsed via DateTime.UtcNow - startedAt could pass a
         // negative value if the system clock jumps backwards.
@@ -157,24 +118,142 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     }
 
     /// <inheritdoc/>
+    public IReadOnlyDictionary<string, AssemblyStatistics> GetSnapshotByAssembly()
+    {
+        Dictionary<string, FinalCounts> finalByAssembly = TallyFinalAttemptsByAssembly();
+
+        // Sorted so that two runs of the same solution serialize their assemblies in the same order
+        // however the host happened to interleave them, matching SessionAssemblies.Of.
+        var snapshot = new SortedDictionary<string, AssemblyStatistics>(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, Counters> entry in _byAssembly)
+        {
+            // A concurrent Record adds the assembly's counters before its final attempt, so an entry
+            // can briefly exist with no distinct-test tally yet. Reporting zeros for it is the same
+            // answer GetSnapshot gives for an execution recorded midway through its own snapshot.
+            finalByAssembly.TryGetValue(entry.Key, out FinalCounts? final);
+
+            snapshot[entry.Key] = ToStatistics(entry.Value, final);
+        }
+
+        // Wrapped rather than returned directly: this value is handed to the session and travels to
+        // the upload and the local store, and a snapshot a consumer can cast back and mutate is not
+        // a snapshot. The wrapper keeps the sorted enumeration order underneath it.
+        return new ReadOnlyDictionary<string, AssemblyStatistics>(snapshot);
+    }
+
+    /// <inheritdoc/>
     public void Reset()
     {
-        Interlocked.Exchange(ref _total, 0L);
-        Interlocked.Exchange(ref _passed, 0L);
-        Interlocked.Exchange(ref _failed, 0L);
-        Interlocked.Exchange(ref _skipped, 0L);
-        Interlocked.Exchange(ref _inconclusive, 0L);
-        Interlocked.Exchange(ref _notExecuted, 0L);
-        Interlocked.Exchange(ref _timeout, 0L);
-        Interlocked.Exchange(ref _totalDurationTicks, 0L);
-
+        _hostWide.Reset();
+        _byAssembly.Clear();
         _finalByTest.Clear();
+    }
 
-        lock (_slowestLock)
+    /// <summary>
+    /// Adds one execution to a set of counters.
+    /// </summary>
+    /// <remarks>
+    /// The outcome's counter is resolved before anything is mutated, so an outcome that lands in no
+    /// bucket leaves the totals untouched. That ordering is what makes the distinct-test pass need
+    /// no guard of its own.
+    /// </remarks>
+    private static void Tally(Counters counters, TestExecution execution)
+    {
+        ref long outcomeBucket = ref Bucket(counters, execution);
+
+        long ticks = execution.Duration.Ticks;
+
+        Interlocked.Increment(ref counters.Total);
+        Interlocked.Increment(ref outcomeBucket);
+        Interlocked.Add(ref counters.TotalDurationTicks, ticks);
+
+        lock (counters.SlowestLock)
         {
-            _slowestDurationTicks = 0L;
-            _slowestTestName = null;
+            if (ticks > counters.SlowestDurationTicks)
+            {
+                counters.SlowestDurationTicks = ticks;
+                counters.SlowestTestName = execution.TestName;
+            }
         }
+    }
+
+    /// <summary>
+    /// Returns the counter an execution's outcome belongs in.
+    /// </summary>
+    /// <remarks>
+    /// One switch serves both the host-wide and the per-assembly counters. A second copy of it would
+    /// let a newly added <see cref="TestOutcome"/> balance in one reading and silently not in the
+    /// other, which reads as data loss in whichever one missed it.
+    /// </remarks>
+    private static ref long Bucket(Counters counters, TestExecution execution)
+    {
+        switch (execution.Outcome)
+        {
+            case TestOutcome.Passed:
+                return ref counters.Passed;
+            case TestOutcome.Failed:
+                return ref counters.Failed;
+            case TestOutcome.Skipped:
+                return ref counters.Skipped;
+            case TestOutcome.Inconclusive:
+                return ref counters.Inconclusive;
+            case TestOutcome.NotExecuted:
+                return ref counters.NotExecuted;
+            case TestOutcome.Timeout:
+                return ref counters.Timeout;
+            default:
+                // Every outcome must land in exactly one bucket, because the report presents the
+                // buckets as a breakdown of Total. A member added without a case here would inflate
+                // Total and balance nowhere, which reads as data loss rather than as a missing arm.
+                throw new ArgumentOutOfRangeException(
+                    nameof(execution),
+                    execution.Outcome,
+                    "Unhandled TestOutcome; add a counter for it.");
+        }
+    }
+
+    /// <summary>
+    /// Reads the slowest-test pair atomically.
+    /// </summary>
+    private static (long Ticks, string? Name) ReadSlowest(Counters counters)
+    {
+        lock (counters.SlowestLock)
+        {
+            return (counters.SlowestDurationTicks, counters.SlowestTestName);
+        }
+    }
+
+    /// <summary>
+    /// Reduces one assembly's counters and distinct-test tally to its published statistics.
+    /// </summary>
+    private static AssemblyStatistics ToStatistics(Counters counters, FinalCounts? final)
+    {
+        long total = Interlocked.Read(ref counters.Total);
+        long durationTicks = Interlocked.Read(ref counters.TotalDurationTicks);
+
+        (long slowestTicks, string? slowestName) = ReadSlowest(counters);
+
+        return new AssemblyStatistics
+        {
+            Total = (int)total,
+            Passed = (int)Interlocked.Read(ref counters.Passed),
+            Failed = (int)Interlocked.Read(ref counters.Failed),
+            Skipped = (int)Interlocked.Read(ref counters.Skipped),
+            Inconclusive = (int)Interlocked.Read(ref counters.Inconclusive),
+            NotExecuted = (int)Interlocked.Read(ref counters.NotExecuted),
+            Timeout = (int)Interlocked.Read(ref counters.Timeout),
+            DistinctTests = final?.DistinctTests ?? 0,
+            FinalPassed = final?.Passed ?? 0,
+            FinalFailed = final?.Failed ?? 0,
+            FinalSkipped = final?.Skipped ?? 0,
+            FinalInconclusive = final?.Inconclusive ?? 0,
+            FinalNotExecuted = final?.NotExecuted ?? 0,
+            FinalTimeout = final?.Timeout ?? 0,
+            TotalDurationMs = durationTicks / TimeSpan.TicksPerMillisecond,
+            SlowestTestName = slowestName,
+            SlowestTestDurationMs = slowestTicks / TimeSpan.TicksPerMillisecond
+        };
     }
 
     /// <summary>
@@ -220,49 +299,86 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     /// the same enumeration as the buckets, so the two always agree even if a concurrent
     /// <see cref="Record"/> adds an entry midway.
     /// </summary>
-    private FinalTally TallyFinalAttempts()
+    private FinalCounts TallyFinalAttempts()
     {
-        int distinct = 0;
-        int passed = 0;
-        int failed = 0;
-        int skipped = 0;
-        int inconclusive = 0;
-        int notExecuted = 0;
-        int timeout = 0;
+        var counts = new FinalCounts();
+
+        foreach (KeyValuePair<(string Assembly, string Test), FinalAttempt> entry in _finalByTest)
+            counts.Add(entry.Value.Outcome);
+
+        return counts;
+    }
+
+    /// <summary>
+    /// Tallies the recorded final attempts into per-outcome counts, grouped by the assembly each test
+    /// belongs to. The key already carries the assembly, so no state beyond this pass is involved.
+    /// </summary>
+    /// <remarks>
+    /// Tests whose execution named no assembly are left out entirely rather than collected under an
+    /// empty key: an execution recorded before identity generation completed cannot be attributed,
+    /// and the host-wide statistics are where it is counted.
+    /// </remarks>
+    private Dictionary<string, FinalCounts> TallyFinalAttemptsByAssembly()
+    {
+        var byAssembly = new Dictionary<string, FinalCounts>(StringComparer.Ordinal);
 
         foreach (KeyValuePair<(string Assembly, string Test), FinalAttempt> entry in _finalByTest)
         {
-            distinct++;
+            string assembly = entry.Key.Assembly;
 
-            switch (entry.Value.Outcome)
-            {
-                case TestOutcome.Passed:
-                    passed++;
-                    break;
-                case TestOutcome.Failed:
-                    failed++;
-                    break;
-                case TestOutcome.Skipped:
-                    skipped++;
-                    break;
-                case TestOutcome.Inconclusive:
-                    inconclusive++;
-                    break;
-                case TestOutcome.NotExecuted:
-                    notExecuted++;
-                    break;
-                case TestOutcome.Timeout:
-                    timeout++;
-                    break;
-            }
+            if (string.IsNullOrEmpty(assembly))
+                continue;
 
-            // No default arm above, deliberately. Nothing reaches _finalByTest except through
-            // RecordFinalAttempt, which Record calls only after its own switch has rejected an
-            // outcome it does not recognise — so a guard here could never fire. An unreachable throw
-            // would read as protection while being dead code that can never be exercised.
+            if (!byAssembly.TryGetValue(assembly, out FinalCounts? counts))
+                byAssembly[assembly] = counts = new FinalCounts();
+
+            counts.Add(entry.Value.Outcome);
         }
 
-        return new FinalTally(distinct, passed, failed, skipped, inconclusive, notExecuted, timeout);
+        return byAssembly;
+    }
+
+    /// <summary>
+    /// The execution-level counters for one scope — the whole host, or one test assembly.
+    /// </summary>
+    /// <remarks>
+    /// Fields rather than properties: <see cref="Interlocked"/> needs a <see langword="ref"/> to the
+    /// storage itself.
+    /// </remarks>
+    private sealed class Counters
+    {
+        // Outcome counters — stored as long for Interlocked.Read/Add compatibility
+        internal long Total;
+        internal long Passed;
+        internal long Failed;
+        internal long Skipped;
+        internal long Inconclusive;
+        internal long NotExecuted;
+        internal long Timeout;
+        internal long TotalDurationTicks;
+
+        // Slowest test — requires a lock because name + duration must update atomically
+        internal readonly object SlowestLock = new();
+        internal long SlowestDurationTicks;
+        internal string? SlowestTestName;
+
+        internal void Reset()
+        {
+            Interlocked.Exchange(ref Total, 0L);
+            Interlocked.Exchange(ref Passed, 0L);
+            Interlocked.Exchange(ref Failed, 0L);
+            Interlocked.Exchange(ref Skipped, 0L);
+            Interlocked.Exchange(ref Inconclusive, 0L);
+            Interlocked.Exchange(ref NotExecuted, 0L);
+            Interlocked.Exchange(ref Timeout, 0L);
+            Interlocked.Exchange(ref TotalDurationTicks, 0L);
+
+            lock (SlowestLock)
+            {
+                SlowestDurationTicks = 0L;
+                SlowestTestName = null;
+            }
+        }
     }
 
     /// <summary>
@@ -276,29 +392,55 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     }
 
     /// <summary>
-    /// The distinct-test counts derived from <see cref="_finalByTest"/> in a single pass.
+    /// The distinct-test counts derived from <see cref="_finalByTest"/> in a single pass, for the
+    /// whole host or for one assembly.
     /// </summary>
-    private readonly struct FinalTally(
-        int distinctTests,
-        int passed,
-        int failed,
-        int skipped,
-        int inconclusive,
-        int notExecuted,
-        int timeout)
+    private sealed class FinalCounts
     {
-        public int DistinctTests { get; } = distinctTests;
+        public int DistinctTests { get; private set; }
 
-        public int Passed { get; } = passed;
+        public int Passed { get; private set; }
 
-        public int Failed { get; } = failed;
+        public int Failed { get; private set; }
 
-        public int Skipped { get; } = skipped;
+        public int Skipped { get; private set; }
 
-        public int Inconclusive { get; } = inconclusive;
+        public int Inconclusive { get; private set; }
 
-        public int NotExecuted { get; } = notExecuted;
+        public int NotExecuted { get; private set; }
 
-        public int Timeout { get; } = timeout;
+        public int Timeout { get; private set; }
+
+        public void Add(TestOutcome outcome)
+        {
+            DistinctTests++;
+
+            switch (outcome)
+            {
+                case TestOutcome.Passed:
+                    Passed++;
+                    break;
+                case TestOutcome.Failed:
+                    Failed++;
+                    break;
+                case TestOutcome.Skipped:
+                    Skipped++;
+                    break;
+                case TestOutcome.Inconclusive:
+                    Inconclusive++;
+                    break;
+                case TestOutcome.NotExecuted:
+                    NotExecuted++;
+                    break;
+                case TestOutcome.Timeout:
+                    Timeout++;
+                    break;
+            }
+
+            // No default arm above, deliberately. Nothing reaches _finalByTest except through
+            // RecordFinalAttempt, which Record calls only after Bucket has rejected an outcome it
+            // does not recognise — so a guard here could never fire. An unreachable throw would read
+            // as protection while being dead code that can never be exercised.
+        }
     }
 }

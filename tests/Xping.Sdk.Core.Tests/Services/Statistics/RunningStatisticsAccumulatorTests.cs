@@ -5,6 +5,7 @@
 
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 
 namespace Xping.Sdk.Core.Tests.Services.Statistics;
@@ -854,5 +855,311 @@ public sealed class RunningStatisticsAccumulatorTests
         Assert.Equal(1, snapshot.DistinctTests);
         Assert.Equal(1, snapshot.FinalPassed);
         Assert.Equal(1.0, snapshot.FinalSuccessRate);
+    }
+
+    // ---------------------------------------------------------------------------
+    // GetSnapshotByAssembly — the same reading, attributed
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GetSnapshotByAssembly_WithNoRecordedExecutions_IsEmptyRatherThanNull()
+    {
+        var accumulator = new RunningStatisticsAccumulator();
+
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.NotNull(breakdown);
+        Assert.Empty(breakdown);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_TwoAssemblies_ReportsEachOnItsOwnExecutions()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("A2", TestOutcome.Failed, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("B1", TestOutcome.Passed, assembly: "Billing.Tests"));
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(2, breakdown.Count);
+        Assert.Equal(2, breakdown["Api.Tests"].Total);
+        Assert.Equal(1, breakdown["Api.Tests"].Passed);
+        Assert.Equal(1, breakdown["Api.Tests"].Failed);
+        Assert.Equal(1, breakdown["Billing.Tests"].Total);
+        Assert.Equal(1, breakdown["Billing.Tests"].Passed);
+        Assert.Equal(0, breakdown["Billing.Tests"].Failed);
+    }
+
+    /// <summary>
+    /// The breakdown exists to be attributable, which is only worth anything if it also adds back up
+    /// to the host-wide reading it decomposes.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_EveryOutcome_EntriesSumToTheHostWideSnapshot()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — every declared outcome, spread across two assemblies
+        int index = 0;
+        foreach (TestOutcome outcome in Enum.GetValues<TestOutcome>())
+        {
+            string assembly = index % 2 == 0 ? "Api.Tests" : "Billing.Tests";
+            accumulator.Record(BuildAttempt($"T{index++}", outcome, assembly: assembly));
+        }
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(snapshot.Total, breakdown.Values.Sum(a => a.Total));
+        Assert.Equal(snapshot.Passed, breakdown.Values.Sum(a => a.Passed));
+        Assert.Equal(snapshot.Failed, breakdown.Values.Sum(a => a.Failed));
+        Assert.Equal(snapshot.Skipped, breakdown.Values.Sum(a => a.Skipped));
+        Assert.Equal(snapshot.Inconclusive, breakdown.Values.Sum(a => a.Inconclusive));
+        Assert.Equal(snapshot.NotExecuted, breakdown.Values.Sum(a => a.NotExecuted));
+        Assert.Equal(snapshot.Timeout, breakdown.Values.Sum(a => a.Timeout));
+        Assert.Equal(snapshot.DistinctTests, breakdown.Values.Sum(a => a.DistinctTests));
+        Assert.Equal(snapshot.TotalDurationMs, breakdown.Values.Sum(a => a.TotalDurationMs));
+
+        // And each entry's own buckets remain a breakdown of its own Total
+        foreach (AssemblyStatistics entry in breakdown.Values)
+        {
+            Assert.Equal(
+                entry.Total,
+                entry.Passed + entry.Failed + entry.Skipped +
+                entry.Inconclusive + entry.NotExecuted + entry.Timeout);
+        }
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_RetryInOneAssembly_ScopesTheDistinctTestCountersToIt()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — Api retried a flaky test to green; Billing failed outright
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Failed, attemptNumber: 1, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("flaky", TestOutcome.Passed, attemptNumber: 2, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("broken", TestOutcome.Failed, assembly: "Billing.Tests"));
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        AssemblyStatistics api = breakdown["Api.Tests"];
+        Assert.Equal(2, api.Total);
+        Assert.Equal(1, api.DistinctTests);
+        Assert.Equal(1, api.FinalPassed);
+        Assert.Equal(0, api.FinalFailed);
+        Assert.Equal(1.0, api.FinalSuccessRate);
+
+        AssemblyStatistics billing = breakdown["Billing.Tests"];
+        Assert.Equal(1, billing.Total);
+        Assert.Equal(1, billing.DistinctTests);
+        Assert.Equal(0, billing.FinalPassed);
+        Assert.Equal(1, billing.FinalFailed);
+        Assert.Equal(0.0, billing.FinalSuccessRate);
+    }
+
+    /// <summary>
+    /// TestFingerprint hashes the fully qualified name and parameters only, so two assemblies can
+    /// present the same one. Each must still report the test as its own.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_SameFingerprintInTwoAssemblies_CountsOneDistinctTestInEach()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("Shared", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("Shared", TestOutcome.Passed, assembly: "Billing.Tests"));
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(1, breakdown["Api.Tests"].DistinctTests);
+        Assert.Equal(1, breakdown["Billing.Tests"].DistinctTests);
+        Assert.Equal(2, accumulator.GetSnapshot().DistinctTests);
+    }
+
+    /// <summary>
+    /// The ratios are the reason this type exists: a rate copied from the host-wide statistics would
+    /// describe every assembly but the one it is filed under.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_DerivedRatios_ComeFromThatAssemblysOwnCounters()
+    {
+        // Arrange — Api is all green, Billing all red, so the host-wide rate matches neither
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests",
+            duration: TimeSpan.FromMilliseconds(100)));
+        accumulator.Record(BuildAttempt("A2", TestOutcome.Passed, assembly: "Api.Tests",
+            duration: TimeSpan.FromMilliseconds(300)));
+        accumulator.Record(BuildAttempt("B1", TestOutcome.Failed, assembly: "Billing.Tests",
+            duration: TimeSpan.FromMilliseconds(1000)));
+
+        // Assert
+        var snapshot = accumulator.GetSnapshot();
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(2.0 / 3.0, snapshot.SuccessRate, precision: 5);
+
+        Assert.Equal(1.0, breakdown["Api.Tests"].SuccessRate);
+        Assert.Equal(1.0, breakdown["Api.Tests"].FinalSuccessRate);
+        Assert.Equal(200L, breakdown["Api.Tests"].AverageDurationMs);
+
+        Assert.Equal(0.0, breakdown["Billing.Tests"].SuccessRate);
+        Assert.Equal(0.0, breakdown["Billing.Tests"].FinalSuccessRate);
+        Assert.Equal(1000L, breakdown["Billing.Tests"].AverageDurationMs);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_SlowestTest_IsTheAssemblysOwnNotTheHosts()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("Quick", TestOutcome.Passed, assembly: "Api.Tests",
+            duration: TimeSpan.FromMilliseconds(10)));
+        accumulator.Record(BuildAttempt("Slower", TestOutcome.Passed, assembly: "Api.Tests",
+            duration: TimeSpan.FromMilliseconds(50)));
+        accumulator.Record(BuildAttempt("Slowest", TestOutcome.Passed, assembly: "Billing.Tests",
+            duration: TimeSpan.FromMilliseconds(900)));
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal("Slowest", accumulator.GetSnapshot().SlowestTestName);
+
+        Assert.Equal("Slower", breakdown["Api.Tests"].SlowestTestName);
+        Assert.Equal(50L, breakdown["Api.Tests"].SlowestTestDurationMs);
+        Assert.Equal("Slowest", breakdown["Billing.Tests"].SlowestTestName);
+        Assert.Equal(900L, breakdown["Billing.Tests"].SlowestTestDurationMs);
+    }
+
+    /// <summary>
+    /// An execution recorded before identity generation completed carries no assembly. It is real and
+    /// must still be counted, but filing it under an empty key would invent an assembly that never
+    /// existed — so the host-wide reading is where it lands, and the entries can sum to less than it.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_ExecutionNamingNoAssembly_CreatesNoEntryButStillCountsHostWide()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        accumulator.Record(BuildAttempt("Attributed", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.Record(BuildExecution("Unattributed", TestOutcome.Passed));
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(["Api.Tests"], breakdown.Keys);
+        Assert.Equal(1, breakdown["Api.Tests"].Total);
+        Assert.Equal(2, accumulator.GetSnapshot().Total);
+    }
+
+    /// <summary>
+    /// Ordinal order, matching <c>SessionAssemblies.Of</c>, so two runs of the same solution serialize
+    /// their assemblies identically however the host happened to interleave them.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_KeysAreInOrdinalOrder()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — recorded in an order that is neither ordinal nor its reverse
+        accumulator.Record(BuildAttempt("M1", TestOutcome.Passed, assembly: "Middle.Tests"));
+        accumulator.Record(BuildAttempt("Z1", TestOutcome.Passed, assembly: "Zeta.Tests"));
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Alpha.Tests"));
+
+        // Assert
+        Assert.Equal(
+            ["Alpha.Tests", "Middle.Tests", "Zeta.Tests"],
+            accumulator.GetSnapshotByAssembly().Keys);
+    }
+
+    /// <summary>
+    /// The rejection happens before the assembly bucket is touched, so an execution that was never
+    /// counted cannot conjure an entry for an assembly that has recorded nothing.
+    /// </summary>
+    [Fact]
+    public void GetSnapshotByAssembly_UnknownOutcome_LeavesNoEntryBehind()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => accumulator.Record(BuildAttempt("T1", (TestOutcome)999, assembly: "Api.Tests")));
+
+        // Assert
+        Assert.Empty(accumulator.GetSnapshotByAssembly());
+    }
+
+    [Fact]
+    public void Reset_AfterRecordingAcrossAssemblies_ClearsTheBreakdown()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("B1", TestOutcome.Passed, assembly: "Billing.Tests"));
+        accumulator.Reset();
+
+        // Act
+        accumulator.Record(BuildAttempt("C1", TestOutcome.Passed, assembly: "Catalog.Tests"));
+
+        // Assert — an assembly recorded before the reset must not resurface
+        Assert.Equal(["Catalog.Tests"], accumulator.GetSnapshotByAssembly().Keys);
+    }
+
+    [Fact]
+    public async Task GetSnapshotByAssembly_ConcurrentRecordsAcrossAssemblies_EachEntryIsConsistent()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        string[] assemblies = ["Api.Tests", "Billing.Tests", "Catalog.Tests"];
+        const int parallelism = 8;
+        const int recordsPerTask = 100;
+
+        // Act — every task records into every assembly, so the buckets are genuinely contended
+        var tasks = Enumerable.Range(0, parallelism)
+            .Select(task => Task.Run(() =>
+            {
+                for (int i = 0; i < recordsPerTask; i++)
+                {
+                    foreach (string assembly in assemblies)
+                        accumulator.Record(BuildAttempt($"{assembly}-{task}-{i}", TestOutcome.Passed, assembly: assembly));
+                }
+            }));
+
+        await Task.WhenAll(tasks);
+
+        // Assert
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        Assert.Equal(assemblies.Length, breakdown.Count);
+
+        foreach (string assembly in assemblies)
+        {
+            Assert.Equal(parallelism * recordsPerTask, breakdown[assembly].Total);
+            Assert.Equal(parallelism * recordsPerTask, breakdown[assembly].Passed);
+            Assert.Equal(parallelism * recordsPerTask, breakdown[assembly].DistinctTests);
+        }
+
+        Assert.Equal(
+            accumulator.GetSnapshot().Total,
+            breakdown.Values.Sum(a => a.Total));
     }
 }

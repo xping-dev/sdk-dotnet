@@ -93,6 +93,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private PullRequestContext? _pullRequestContext;
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
+    private IReadOnlyDictionary<string, AssemblyStatistics>? _finalizedStatisticsByAssembly;
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
@@ -615,7 +616,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 ? wallClockAware.GetSnapshot(DateTime.UtcNow - StartedAt)
                 : _statisticsAccumulator.GetSnapshot();
 
-            _builder.WithQuickStatistics(stats);
+            _builder
+                .WithQuickStatistics(stats)
+                .WithStatisticsByAssembly(_statisticsAccumulator.GetSnapshotByAssembly());
         }
 
         return _builder.Build();
@@ -631,6 +634,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // Kept for the local store, which rebuilds its own session from the accumulated
             // executions and has no other source for the accumulated statistics.
             _finalizedStatistics = session.QuickStatistics;
+            _finalizedStatisticsByAssembly = session.StatisticsByAssembly;
 
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
             result.QuickStatistics = session.QuickStatistics;
@@ -711,8 +715,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <remarks>
     /// Rebuilt from the accumulated executions rather than reusing the session that was uploaded:
     /// that one is assembled after the collector has been drained and therefore carries no
-    /// executions at all. Only <see cref="QuickStatistics"/> and the environment survive from it,
-    /// and both are captured at finalization for exactly this purpose.
+    /// executions at all. Only the statistics — host-wide and per assembly — and the environment
+    /// survive from it, and all are captured at finalization for exactly this purpose.
     /// </remarks>
     /// <returns><see langword="true"/> when the session was written.</returns>
     private bool WriteLocalSession(
@@ -734,6 +738,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 .WithSessionState(TestSessionState.Finalized)
                 .WithPullRequestContext(_pullRequestContext)
                 .WithQuickStatistics(_finalizedStatistics)
+                .WithStatisticsByAssembly(_finalizedStatisticsByAssembly)
                 .Build();
 
             return _localSessionStore.Write(session);

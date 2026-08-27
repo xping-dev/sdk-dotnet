@@ -243,6 +243,76 @@ public sealed class XpingContextOrchestratorTests
         await orchestrator.DisposeAsync();
     }
 
+    [Fact]
+    public async Task FinalizedSession_CarriesStatisticsForEachAssemblyItCovered()
+    {
+        // Arrange — QuickStatistics counts the whole host process, so on a session covering several
+        // test projects it belongs to none of them. The breakdown is the reading that does.
+        var (orchestrator, uploaderMock) = CreateStatsOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "One"));
+        orchestrator.RecordExecution(BuildExecutionInAssembly("B.Tests", "Two"));
+        orchestrator.RecordExecution(BuildExecutionInAssembly("B.Tests", "Three"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert — an entry per assembly, even though the finalizing upload carries no executions.
+        TestSession finalized = Assert.Single(uploads, u => u.SessionState == TestSessionState.Finalized);
+        Assert.Empty(finalized.Executions);
+
+        Assert.NotNull(finalized.StatisticsByAssembly);
+        Assert.Equal(["A.Tests", "B.Tests"], finalized.StatisticsByAssembly.Keys);
+        Assert.Equal(1, finalized.StatisticsByAssembly["A.Tests"].Total);
+        Assert.Equal(2, finalized.StatisticsByAssembly["B.Tests"].Total);
+
+        // And they still add back up to the host-wide reading they decompose.
+        Assert.NotNull(finalized.QuickStatistics);
+        Assert.Equal(finalized.QuickStatistics.Total, finalized.StatisticsByAssembly.Values.Sum(a => a.Total));
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PartialUploads_CarryNoStatisticsByAssembly()
+    {
+        // Arrange — the breakdown accompanies QuickStatistics, which only the finalized upload has.
+        var (orchestrator, uploaderMock) = CreateStatsOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly("A.Tests", "One"));
+        await orchestrator.FlushAsync();
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        foreach (TestSession upload in uploads.Where(u => u.SessionState != TestSessionState.Finalized))
+            Assert.Null(upload.StatisticsByAssembly);
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizedSession_OmitsTheBreakdownWhenNothingCouldBeAttributed()
+    {
+        // Arrange — an execution recorded before identity generation completed names no assembly.
+        // It is counted host-wide, but filing it under an empty key would invent a project.
+        var (orchestrator, uploaderMock) = CreateStatsOrchestrator(o => o.ApiKey = "test-key");
+        var uploads = CaptureUploads(uploaderMock);
+
+        // Act
+        orchestrator.RecordExecution(BuildExecutionInAssembly(string.Empty, "Orphan"));
+        await orchestrator.FinalizeAsync();
+
+        // Assert
+        TestSession finalized = Assert.Single(uploads, u => u.SessionState == TestSessionState.Finalized);
+        Assert.Null(finalized.StatisticsByAssembly);
+        Assert.NotNull(finalized.QuickStatistics);
+        Assert.Equal(1, finalized.QuickStatistics.Total);
+
+        await orchestrator.DisposeAsync();
+    }
+
     // ---------------------------------------------------------------------------
     // Local-only mode
     // ---------------------------------------------------------------------------

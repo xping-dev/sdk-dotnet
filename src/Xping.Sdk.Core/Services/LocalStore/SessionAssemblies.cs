@@ -3,8 +3,11 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
+
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 
 namespace Xping.Sdk.Core.Services.LocalStore;
 
@@ -114,10 +117,13 @@ public static class SessionAssemblies
     /// therefore never holds both.
     /// </para>
     /// <para>
+    /// The session's statistics are split the way the counters themselves split.
     /// <see cref="TestSession.QuickStatistics"/> and <see cref="TestSession.TotalTestsExpected"/> are
-    /// dropped. Both describe the whole host process rather than this slice of it, and a
+    /// dropped: both describe the whole host process rather than this slice of it, and a
     /// solution-wide count carried onto one assembly's history would be wrong in exactly the way
-    /// this projection exists to prevent.
+    /// this projection exists to prevent. <see cref="TestSession.StatisticsByAssembly"/> is narrowed
+    /// to the one entry instead of dropped — it already is this slice, counted by the SDK that saw
+    /// the run.
     /// </para>
     /// </remarks>
     public static TestSession? Project(TestSession? session, string assembly) =>
@@ -135,7 +141,8 @@ public static class SessionAssemblies
     /// <remarks>
     /// The complement of <see cref="Project"/>, and what makes a scoped delete safe: one run can
     /// hold several test projects' history, so deleting a run outright to clear one of them would
-    /// take the others with it. Stripping lets the run survive carrying only what was not asked for.
+    /// take the others with it. Stripping lets the run survive carrying only what was not asked for
+    /// — including the statistics of every assembly but the removed one.
     /// </remarks>
     public static TestSession? Excluding(TestSession? session, string assembly) =>
         Filter(session, assembly, keepMatches: false);
@@ -184,7 +191,39 @@ public static class SessionAssemblies
             PullRequestContext = session.PullRequestContext,
             SdkVersion = session.SdkVersion,
             TotalTestsExpected = null,
-            QuickStatistics = null
+            QuickStatistics = null,
+            // Kept, unlike the two above, because it is the one statistic that decomposes: each
+            // entry already counts exactly one assembly's executions.
+            StatisticsByAssembly = FilterStatistics(session.StatisticsByAssembly, assembly, keepMatches)
         };
+    }
+
+    /// <summary>
+    /// Keeps or drops one assembly's entry in a session's per-assembly statistics.
+    /// </summary>
+    /// <returns>
+    /// The narrowed breakdown, or <see langword="null"/> when nothing is left — a session that
+    /// carried no breakdown, and one whose breakdown said nothing about this assembly, are both
+    /// reported the same way the SDK reports a run it could not attribute.
+    /// </returns>
+    private static ReadOnlyDictionary<string, AssemblyStatistics>? FilterStatistics(
+        IReadOnlyDictionary<string, AssemblyStatistics>? statistics, string assembly, bool keepMatches)
+    {
+        if (statistics == null || statistics.Count == 0)
+            return null;
+
+        var kept = new SortedDictionary<string, AssemblyStatistics>(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, AssemblyStatistics> entry in statistics)
+        {
+            bool matches = string.Equals(entry.Key, assembly, StringComparison.Ordinal);
+
+            if (matches == keepMatches)
+                kept.Add(entry.Key, entry.Value);
+        }
+
+        // Wrapped for the same reason the accumulator wraps its own snapshot: what lands on a
+        // TestSession has to be as immutable as the rest of it.
+        return kept.Count == 0 ? null : new ReadOnlyDictionary<string, AssemblyStatistics>(kept);
     }
 }

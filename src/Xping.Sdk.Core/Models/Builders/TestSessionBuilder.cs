@@ -24,6 +24,7 @@ public sealed class TestSessionBuilder
     private TestSessionState _sessionState;
     private PullRequestContext? _pullRequestContext;
     private QuickStatistics? _quickStatistics;
+    private IReadOnlyDictionary<string, AssemblyStatistics>? _statisticsByAssembly;
     private readonly SortedSet<string> _assemblies = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -38,6 +39,7 @@ public sealed class TestSessionBuilder
         _sessionState = TestSessionState.Initial;
         _pullRequestContext = null;
         _quickStatistics = null;
+        _statisticsByAssembly = null;
     }
 
     /// <summary>
@@ -162,6 +164,23 @@ public sealed class TestSessionBuilder
     }
 
     /// <summary>
+    /// Sets the per-assembly breakdown of the quick statistics for the finalized session.
+    /// Should only be set on the <see cref="TestSessionState.Finalized"/> upload.
+    /// </summary>
+    /// <param name="statistics">
+    /// The breakdown keyed by assembly name, or <c>null</c> for partial uploads. An empty breakdown
+    /// is stored as <c>null</c>: a finalized session that attributed nothing says so by carrying no
+    /// breakdown at all rather than an empty object on the wire.
+    /// </param>
+    /// <returns>The builder instance for method chaining.</returns>
+    public TestSessionBuilder WithStatisticsByAssembly(
+        IReadOnlyDictionary<string, AssemblyStatistics>? statistics)
+    {
+        _statisticsByAssembly = statistics is { Count: > 0 } ? statistics : null;
+        return this;
+    }
+
+    /// <summary>
     /// Sets the distinct test assemblies the session covers.
     /// </summary>
     /// <param name="assemblies">
@@ -202,7 +221,8 @@ public sealed class TestSessionBuilder
             totalTestsExpected: _totalTestsExpected,
             sessionState: _sessionState,
             pullRequestContext: _pullRequestContext,
-            quickStatistics: _quickStatistics);
+            quickStatistics: _quickStatistics,
+            statisticsByAssembly: _statisticsByAssembly);
     }
 
     /// <summary>
@@ -221,6 +241,7 @@ public sealed class TestSessionBuilder
         _sessionState = TestSessionState.Initial;
         _pullRequestContext = null;
         _quickStatistics = null;
+        _statisticsByAssembly = null;
         return this;
     }
 }
