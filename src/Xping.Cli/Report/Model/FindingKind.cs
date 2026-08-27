@@ -10,9 +10,9 @@ namespace Xping.Cli.Report.Model;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every kind is declared from the outset, including those no provider implements yet. The enum is
-/// part of the JSON contract, so a consumer written against it should not need updating each time a
-/// provider ships; and <c>--kind</c> should reject a typo rather than a not-yet-implemented value.
+/// Every kind here is implemented by a provider and rests on an input that varies between runs. That
+/// is the bar for declaring one at all: a member the data can never answer reads as a promise in the
+/// JSON contract and in <c>--kind</c>, and leaves a reader waiting for a finding that cannot arrive.
 /// </para>
 /// <para>
 /// Declaration order is a tiebreaker in the finding sort, so it must not be reordered casually. It
@@ -88,28 +88,19 @@ internal enum FindingKind
     /// <summary>The test's duration varies too much for a regression to be measurable.</summary>
     DurationUnstable,
 
-    /// <summary>The test fails when it runs after one particular predecessor.</summary>
-    OrderDependent,
-
-    /// <summary>The test's failure rate differs between parallel and serial execution.</summary>
+    /// <summary>The test's failure rate moves with how many tests ran alongside it.</summary>
     ParallelSensitive,
 
     /// <summary>The test's failures cluster at one time of day, day group, or UTC offset.</summary>
     /// <remarks>
-    /// Sorted here because it says the same sort of thing as the two kinds either side of it — the
-    /// test's failures track a condition of the environment rather than anything in the test — and
-    /// because it is the weakest of the three. Concurrency and network are conditions the suite
-    /// imposed; a clock reading is a condition the suite merely ran under, and correlating with one
-    /// is a lead rather than a cause.
+    /// Sorted after <see cref="ParallelSensitive"/> because it says the same sort of thing — the
+    /// test's failures track a condition of its surroundings rather than anything in the test — and
+    /// because it is the weaker of the two. Concurrency is a condition the suite imposed; a clock
+    /// reading is a condition the suite merely ran under, and correlating with one is a lead rather
+    /// than a cause.
     /// </remarks>
     TimeSensitive,
 
-    /// <summary>The test's failures cluster in sessions with degraded or absent network.</summary>
-    NetworkDependent,
-
     /// <summary>The test appeared throughout the baseline and has stopped running.</summary>
-    Vanished,
-
-    /// <summary>The test was expected but never executed.</summary>
-    NeverRun
+    Vanished
 }

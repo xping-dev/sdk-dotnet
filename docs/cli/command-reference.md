@@ -119,12 +119,9 @@ report prints it.
 | `SharedFailure` | shared failure | Several tests fail with one signature in one run — one cause, not many |
 | `DurationRegression` | slower | The test's median duration has increased against its own baseline |
 | `DurationUnstable` | unstable timing | The test's duration varies too much for a regression to be measurable |
-| `OrderDependent` | order dependent | The test fails when it runs after one particular predecessor |
-| `ParallelSensitive` | concurrency | The test's failure rate differs between parallel and serial execution |
+| `ParallelSensitive` | concurrency | The test's failure rate moves with how many tests ran alongside it |
 | `TimeSensitive` | time sensitive | The test's failures cluster at one local time of day, day group, or UTC offset |
-| `NetworkDependent` | network | The test's failures cluster in runs with degraded or absent network |
 | `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
-| `NeverRun` | never run | The test was expected but never executed |
 
 The three retry kinds are one judgement about one mechanism, and a test gets at most one of them:
 `RetryExhausted` first, then `RetryDeepening`, then `RetryMasked` — red beats worsening beats

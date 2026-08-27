@@ -110,7 +110,7 @@ public sealed class FindingOrderTests
             Build("f_1", Severity.High, 0.9, FindingKind.Flaky, "fp-A"),
             Build("f_2", Severity.High, 0.9, FindingKind.Flaky, "fp-B"),
             Build("f_3", Severity.Medium, 0.4, FindingKind.Vanished, "fp-C"),
-            Build("f_4", Severity.Low, 0.1, FindingKind.NeverRun, "fp-D"),
+            Build("f_4", Severity.Low, 0.1, FindingKind.Vanished, "fp-D"),
             Build("f_5", Severity.Medium, 0.4, FindingKind.Flaky, "fp-E")
         ];
 
