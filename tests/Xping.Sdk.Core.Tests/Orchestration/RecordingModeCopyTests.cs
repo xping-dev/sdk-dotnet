@@ -91,7 +91,6 @@ public sealed class RecordingModeCopyTests
             .WithFramework(".NET")
             .WithEnvironmentName("CI")
             .WithIsCIEnvironment(true)
-            .WithNetworkMetrics(new NetworkMetricsBuilder().WithIsOnline(true).Build())
             .WithLocalTimeZone(TimeSpan.FromHours(-5.5), "Some/Zone")
             .AddCustomProperties(new Dictionary<string, string> { ["Git.Branch"] = "main" })
             .Build();

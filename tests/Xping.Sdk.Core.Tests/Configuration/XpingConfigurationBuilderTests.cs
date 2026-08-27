@@ -220,20 +220,6 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
-    public void WithCollectNetworkMetrics_ShouldSetProperty()
-    {
-        // Arrange & Act
-        var config = new XpingConfigurationBuilder()
-            .WithApiKey("test-key")
-            .WithProjectId("test-project")
-            .WithCollectNetworkMetrics(false)
-            .Build();
-
-        // Assert
-        Assert.False(config.CollectNetworkMetrics);
-    }
-
-    [Fact]
     public void BuilderShouldValidateNegativeRetryDelay()
     {
         // Arrange

@@ -27,7 +27,6 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal(string.Empty, info.Framework);
         Assert.Equal(string.Empty, info.EnvironmentName);
         Assert.False(info.IsCIEnvironment);
-        Assert.Null(info.NetworkMetrics);
         Assert.Null(info.UtcOffset);
         Assert.Null(info.TimeZoneId);
         Assert.Empty(info.CustomProperties);
@@ -146,27 +145,6 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.False(info.IsCIEnvironment);
     }
 
-    [Fact]
-    public void WithNetworkMetrics_ShouldSetNetworkMetrics()
-    {
-        var metrics = new NetworkMetricsBuilder().WithLatencyMs(50).Build();
-        var info = new EnvironmentInfoBuilder().WithNetworkMetrics(metrics).Build();
-
-        Assert.NotNull(info.NetworkMetrics);
-        Assert.Equal(50, info.NetworkMetrics!.LatencyMs);
-    }
-
-    [Fact]
-    public void WithNetworkMetrics_Null_ShouldSetNetworkMetricsToNull()
-    {
-        var info = new EnvironmentInfoBuilder()
-            .WithNetworkMetrics(new NetworkMetricsBuilder().Build())
-            .WithNetworkMetrics(null)
-            .Build();
-
-        Assert.Null(info.NetworkMetrics);
-    }
-
     // ---------------------------------------------------------------------------
     // AddCustomProperty
     // ---------------------------------------------------------------------------
@@ -268,7 +246,6 @@ public sealed class EnvironmentInfoBuilderTests
     [Fact]
     public void Build_ShouldSupportFullFluentChain()
     {
-        var metrics = new NetworkMetricsBuilder().WithIsOnline(true).Build();
         var info = new EnvironmentInfoBuilder()
             .WithMachineName("ci-runner")
             .WithOperatingSystem("macOS 14")
@@ -276,7 +253,6 @@ public sealed class EnvironmentInfoBuilderTests
             .WithFramework("net9.0")
             .WithEnvironmentName("CI")
             .WithIsCIEnvironment(true)
-            .WithNetworkMetrics(metrics)
             .WithLocalTimeZone(TimeSpan.FromHours(2), "Europe/Berlin")
             .AddCustomProperty("branch", "main")
             .Build();
@@ -287,7 +263,6 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal("net9.0", info.Framework);
         Assert.Equal("CI", info.EnvironmentName);
         Assert.True(info.IsCIEnvironment);
-        Assert.NotNull(info.NetworkMetrics);
         Assert.Equal(TimeSpan.FromHours(2), info.UtcOffset);
         Assert.Equal("Europe/Berlin", info.TimeZoneId);
         Assert.Equal("main", info.CustomProperties["branch"]);

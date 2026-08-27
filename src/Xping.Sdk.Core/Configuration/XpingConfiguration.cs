@@ -134,12 +134,6 @@ public sealed class XpingConfiguration
     public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Gets or sets a value indicating whether to collect network reliability metrics.
-    /// Network metrics include latency, connection type, and online status.
-    /// </summary>
-    public bool CollectNetworkMetrics { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets a value indicating whether to detect pull request context from CI/CD environment variables
     /// and include it in session uploads to enable PR comment posting.
     /// </summary>

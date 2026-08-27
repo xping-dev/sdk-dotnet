@@ -3,14 +3,12 @@
  * License: [MIT]
  */
 
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Services.Network;
 
 namespace Xping.Sdk.Core.Services.Environment.Internals;
 
@@ -23,7 +21,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 {
     private readonly EnvironmentInfoBuilder _builder = new();
     private readonly XpingConfiguration _configuration;
-    private readonly INetworkMetricsCollector _networkMetricsCollector;
 
     // Instance-level lazy initialization for thread-safe, cached detection
     private readonly Lazy<string> _machineName;
@@ -36,18 +33,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private readonly Lazy<TimeZoneInfo?> _localTimeZone;
     private readonly Lazy<Dictionary<string, string>> _customProperties;
 
-    // Cache network metrics per endpoint (instance-level, thread-safe)
-    private readonly ConcurrentDictionary<string, NetworkMetrics?> _networkMetricsCache = new();
-
     /// <summary>
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
     /// </summary>
-    public EnvironmentDetector(
-        IOptions<XpingConfiguration> options,
-        INetworkMetricsCollector networkMetricsCollector)
+    public EnvironmentDetector(IOptions<XpingConfiguration> options)
     {
         _configuration = options.Value;
-        _networkMetricsCollector = networkMetricsCollector;
 
         // Initialize instance-level lazy fields
         _machineName = new Lazy<string>(GetMachineName);
@@ -87,10 +78,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     IReadOnlyDictionary<string, string> IEnvironmentDetector.CustomProperties => _customProperties.Value;
 
     /// <inheritdoc/>
-    async Task<EnvironmentInfo> IEnvironmentDetector.BuildEnvironmentInfoAsync(CancellationToken cancellationToken)
+    Task<EnvironmentInfo> IEnvironmentDetector.BuildEnvironmentInfoAsync(CancellationToken cancellationToken)
     {
-        NetworkMetrics? networkMetrics = await GetNetworkMetricsAsync(cancellationToken).ConfigureAwait(false);
-
         _builder.Reset();
         _builder.WithMachineName(_machineName.Value);
         _builder.WithOperatingSystem(_operatingSystem.Value);
@@ -98,7 +87,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         _builder.WithFramework(_framework.Value);
         _builder.WithEnvironmentName(_environmentName.Value);
         _builder.WithIsCIEnvironment(_ciPlatform.Value.HasValue);
-        _builder.WithNetworkMetrics(networkMetrics);
 
         // Resolved against now rather than cached with the zone: the offset is a property of the
         // instant, not of the machine, and a suite started either side of a daylight-saving
@@ -108,7 +96,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
         _builder.AddCustomProperties(_customProperties.Value);
 
-        return _builder.Build();
+        // Nothing here awaits any more: every field is read from a cached lazy or the local clock.
+        // The interface stays task-returning so a detector that does need to await — the no-op one,
+        // or a future source of environment data — is not a signature change away.
+        return Task.FromResult(_builder.Build());
     }
 
     /// <summary>
@@ -129,40 +120,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
         catch (Exception)
         {
-            return null;
-        }
-    }
-
-    private async Task<NetworkMetrics?> GetNetworkMetricsAsync(CancellationToken cancellationToken = default)
-    {
-        if (!_configuration.CollectNetworkMetrics || string.IsNullOrWhiteSpace(_configuration.ApiEndpoint))
-        {
-            return null;
-        }
-
-        string endpoint = _configuration.ApiEndpoint;
-
-        // Check cache first
-        if (_networkMetricsCache.TryGetValue(endpoint, out NetworkMetrics? cached))
-        {
-            return cached;
-        }
-
-        // Collect metrics asynchronously
-        try
-        {
-            NetworkMetrics? metrics = await _networkMetricsCollector
-                .CollectAsync(endpoint, cancellationToken)
-                .ConfigureAwait(false);
-
-            // Cache the result
-            _networkMetricsCache[endpoint] = metrics;
-            return metrics;
-        }
-        catch
-        {
-            // Cache null result to avoid repeated failures
-            _networkMetricsCache[endpoint] = null;
             return null;
         }
     }

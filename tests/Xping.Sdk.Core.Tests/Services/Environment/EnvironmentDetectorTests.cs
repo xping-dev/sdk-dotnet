@@ -9,7 +9,6 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
-using Xping.Sdk.Core.Services.Network;
 
 namespace Xping.Sdk.Core.Tests.Services.Environment;
 
@@ -416,12 +415,7 @@ public sealed class EnvironmentDetectorTests
 
     private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
     {
-        XpingConfiguration resolvedConfiguration = configuration ?? new XpingConfiguration();
-        resolvedConfiguration.CollectNetworkMetrics = false;
-
-        return new EnvironmentDetector(
-            Options.Create(resolvedConfiguration),
-            Mock.Of<INetworkMetricsCollector>());
+        return new EnvironmentDetector(Options.Create(configuration ?? new XpingConfiguration()));
     }
 
     private static CompositeDisposable ClearEnvironmentVariables(IEnumerable<string> variableNames)

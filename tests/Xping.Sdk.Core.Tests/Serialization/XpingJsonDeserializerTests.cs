@@ -154,23 +154,6 @@ public sealed class XpingJsonDeserializerTests
     }
 
     [Fact]
-    public async Task Deserialize_EnvironmentInfo_NetworkMetrics_ShouldBePopulated()
-    {
-        var serializer = BuildSerializer();
-        using var stream = OpenResourceStream();
-
-        var session = await serializer.DeserializeAsync<TestSession>(stream);
-
-        Assert.NotNull(session);
-        var networkMetrics = session!.EnvironmentInfo.NetworkMetrics;
-        Assert.NotNull(networkMetrics);
-        Assert.Equal(0, networkMetrics!.LatencyMs);
-        Assert.True(networkMetrics.IsOnline);
-        Assert.Equal("WiFi", networkMetrics.ConnectionType);
-        Assert.Equal(0, networkMetrics.PacketLossPercent);
-    }
-
-    [Fact]
     public async Task Deserialize_EnvironmentInfo_CustomProperties_ShouldBePopulated()
     {
         var serializer = BuildSerializer();

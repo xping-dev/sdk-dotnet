@@ -187,17 +187,6 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets whether to collect network reliability metrics.
-    /// </summary>
-    /// <param name="collectNetworkMetrics">Whether to collect network metrics.</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithCollectNetworkMetrics(bool collectNetworkMetrics)
-    {
-        _configuration.CollectNetworkMetrics = collectNetworkMetrics;
-        return this;
-    }
-
-    /// <summary>
     /// Sets whether to detect pull request context from CI/CD environment variables.
     /// When enabled, the SDK reads GitHub Actions (and future GitLab/Azure DevOps) variables
     /// and includes the pull request context in every session upload.
