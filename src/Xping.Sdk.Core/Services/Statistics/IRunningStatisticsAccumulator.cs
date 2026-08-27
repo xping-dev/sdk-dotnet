@@ -31,6 +31,29 @@ public interface IRunningStatisticsAccumulator
     QuickStatistics GetSnapshot();
 
     /// <summary>
+    /// Returns an immutable snapshot of the statistics accumulated so far, broken down by the test
+    /// assembly each execution belongs to. Safe to call at any time, including concurrently with
+    /// <see cref="Record"/>.
+    /// </summary>
+    /// <returns>
+    /// One entry per assembly that recorded an execution, keyed by assembly name in ordinal order;
+    /// empty when nothing was recorded, never <see langword="null"/>.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// A session records one test host process, not one test assembly, so <see cref="GetSnapshot"/>
+    /// counts every test project a solution-wide <c>dotnet test</c> batched into that host. This is
+    /// the same reading attributed to each of them.
+    /// </para>
+    /// <para>
+    /// Only the counters that decompose appear here — see <see cref="AssemblyStatistics"/> for what
+    /// is deliberately absent. An execution naming no assembly is counted by
+    /// <see cref="GetSnapshot"/> alone rather than under an empty key.
+    /// </para>
+    /// </remarks>
+    IReadOnlyDictionary<string, AssemblyStatistics> GetSnapshotByAssembly();
+
+    /// <summary>
     /// Resets all counters and totals to zero.
     /// </summary>
     void Reset();

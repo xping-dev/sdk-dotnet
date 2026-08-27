@@ -7,8 +7,10 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Serialization;
 
 namespace Xping.Sdk.Core.Tests.Serialization;
@@ -347,6 +349,90 @@ public sealed class XpingJsonSerializerTests
 
         await Assert.ThrowsAsync<JsonException>(
             () => serializer.DeserializeAsync<SampleRecord>(stream));
+    }
+
+    // ---------------------------------------------------------------------------
+    // StatisticsByAssembly — dictionary keys are assembly names, not properties
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The camel-case naming policy applies to property names. Assembly names are data, and a key
+    /// rewritten to <c>api.Tests</c> would no longer match the <c>identity.assembly</c> on the
+    /// executions it summarises — which is what the platform joins them on.
+    /// </summary>
+    [Fact]
+    public void Serialize_StatisticsByAssembly_KeepsAssemblyNamesVerbatim()
+    {
+        var serializer = BuildSerializer();
+        TestSession session = BuildSessionWithBreakdown();
+
+        string json = serializer.Serialize(session);
+
+        Assert.Contains("\"statisticsByAssembly\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Api.Tests\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"api.Tests\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RoundTrip_StatisticsByAssembly_RestoresEveryCounterAndRecomputesTheRatios()
+    {
+        var serializer = BuildSerializer();
+        TestSession session = BuildSessionWithBreakdown();
+
+        string json = serializer.Serialize(session);
+        TestSession restored = Assert.IsType<TestSession>(serializer.Deserialize<TestSession>(json));
+
+        Assert.NotNull(restored.StatisticsByAssembly);
+        Assert.Equal(["Api.Tests"], restored.StatisticsByAssembly.Keys);
+
+        AssemblyStatistics api = restored.StatisticsByAssembly["Api.Tests"];
+        Assert.Equal(4, api.Total);
+        Assert.Equal(3, api.Passed);
+        Assert.Equal(1, api.Failed);
+        Assert.Equal(3, api.DistinctTests);
+        Assert.Equal(3, api.FinalPassed);
+        Assert.Equal(800L, api.TotalDurationMs);
+        Assert.Equal("Slowest", api.SlowestTestName);
+        Assert.Equal(500L, api.SlowestTestDurationMs);
+
+        // The ratios are computed, not stored, so they come back derived from the counters above
+        // rather than from whatever the JSON happened to carry.
+        Assert.Equal(0.75, api.SuccessRate);
+        Assert.Equal(1.0, api.FinalSuccessRate);
+        Assert.Equal(200L, api.AverageDurationMs);
+    }
+
+    [Fact]
+    public void Serialize_SessionWithoutBreakdown_OmitsTheProperty()
+    {
+        var serializer = BuildSerializer();
+
+        string json = serializer.Serialize(new TestSessionBuilder().Build());
+
+        Assert.DoesNotContain("statisticsByAssembly", json, StringComparison.Ordinal);
+    }
+
+    private static TestSession BuildSessionWithBreakdown()
+    {
+        var breakdown = new SortedDictionary<string, AssemblyStatistics>(StringComparer.Ordinal)
+        {
+            ["Api.Tests"] = new AssemblyStatistics
+            {
+                Total = 4,
+                Passed = 3,
+                Failed = 1,
+                DistinctTests = 3,
+                FinalPassed = 3,
+                TotalDurationMs = 800L,
+                SlowestTestName = "Slowest",
+                SlowestTestDurationMs = 500L
+            }
+        };
+
+        return new TestSessionBuilder()
+            .WithSessionState(TestSessionState.Finalized)
+            .WithStatisticsByAssembly(breakdown)
+            .Build();
     }
 
     // ---------------------------------------------------------------------------

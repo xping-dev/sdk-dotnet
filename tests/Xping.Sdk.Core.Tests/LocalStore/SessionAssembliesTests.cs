@@ -48,7 +48,26 @@ public sealed class SessionAssembliesTests
             .WithTotalTestsExpected(executions.Length)
             .WithSessionState(TestSessionState.Finalized)
             .WithQuickStatistics(new QuickStatistics())
+            .WithStatisticsByAssembly(StatisticsFor(executions))
             .Build();
+    }
+
+    /// <summary>
+    /// Stands in for what the SDK's accumulator emits: one entry per assembly the run covered,
+    /// counting only that assembly's executions.
+    /// </summary>
+    private static SortedDictionary<string, AssemblyStatistics> StatisticsFor(
+        params TestExecution[] executions)
+    {
+        var byAssembly = new SortedDictionary<string, AssemblyStatistics>(StringComparer.Ordinal);
+
+        foreach (string assembly in SessionAssemblies.Of(executions))
+        {
+            int total = executions.Count(e => e.Identity.Assembly == assembly);
+            byAssembly[assembly] = new AssemblyStatistics { Total = total, Passed = total };
+        }
+
+        return byAssembly;
     }
 
     // -----------------------------------------------------------------------
@@ -225,6 +244,43 @@ public sealed class SessionAssembliesTests
     }
 
     [Fact]
+    public void ProjectNarrowsTheCountsThatDescribeOneAssembly()
+    {
+        // The complement of the test above: what decomposes is kept, scoped to the assembly asked
+        // for, because each entry already counts nothing but that assembly's executions.
+        TestSession session = Session(
+            Execution("A", "Alpha.Tests"),
+            Execution("B", "Beta.Tests"),
+            Execution("C", "Beta.Tests"));
+
+        TestSession projected = Assert.IsType<TestSession>(
+            SessionAssemblies.Project(session, "Beta.Tests"));
+
+        Assert.NotNull(projected.StatisticsByAssembly);
+        Assert.Equal(["Beta.Tests"], projected.StatisticsByAssembly.Keys);
+        Assert.Equal(2, projected.StatisticsByAssembly["Beta.Tests"].Total);
+    }
+
+    [Fact]
+    public void ProjectDropsTheBreakdownWhenItSaysNothingAboutThatAssembly()
+    {
+        // A run whose executions name the assembly but whose breakdown does not is a run the SDK could
+        // not attribute. Reporting no statistics is the honest answer, not an empty object.
+        TestSession session = new()
+        {
+            SessionId = Guid.NewGuid(),
+            StartedAt = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
+            Executions = [Execution("A", "Alpha.Tests"), Execution("B", "Beta.Tests")],
+            StatisticsByAssembly = StatisticsFor(Execution("B", "Beta.Tests"))
+        };
+
+        TestSession projected = Assert.IsType<TestSession>(
+            SessionAssemblies.Project(session, "Alpha.Tests"));
+
+        Assert.Null(projected.StatisticsByAssembly);
+    }
+
+    [Fact]
     public void ProjectPreservesTheSdkVersionThatRecordedTheRun()
     {
         // Guards against rebuilding through TestSessionBuilder, which stamps the running assembly's
@@ -332,5 +388,20 @@ public sealed class SessionAssembliesTests
             Execution("B", "Alpha.Tests"));
 
         Assert.Same(session, SessionAssemblies.Project(session, "Alpha.Tests"));
+    }
+
+    [Fact]
+    public void ExcludingRemovesOnlyThatAssemblysStatistics()
+    {
+        TestSession session = Session(
+            Execution("A", "Alpha.Tests"),
+            Execution("B", "Beta.Tests"),
+            Execution("C", "Gamma.Tests"));
+
+        TestSession remaining = Assert.IsType<TestSession>(
+            SessionAssemblies.Excluding(session, "Beta.Tests"));
+
+        Assert.NotNull(remaining.StatisticsByAssembly);
+        Assert.Equal(["Alpha.Tests", "Gamma.Tests"], remaining.StatisticsByAssembly.Keys);
     }
 }

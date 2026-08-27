@@ -144,6 +144,39 @@ public sealed class NoOpRunningStatisticsAccumulatorTests
     }
 
     // ---------------------------------------------------------------------------
+    // GetSnapshotByAssembly — returns an empty breakdown
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GetSnapshotByAssembly_WithNoRecordedExecutions_IsEmptyRatherThanNull()
+    {
+        // Arrange
+        var accumulator = new NoOpRunningStatisticsAccumulator();
+
+        // Act
+        var breakdown = accumulator.GetSnapshotByAssembly();
+
+        // Assert
+        Assert.NotNull(breakdown);
+        Assert.Empty(breakdown);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_AfterRecordingExecutions_StillReturnsAnEmptyBreakdown()
+    {
+        // Arrange — no-op accumulator discards all recordings, assembly and all
+        var accumulator = new NoOpRunningStatisticsAccumulator();
+        accumulator.Record(new TestExecutionBuilder()
+            .WithIdentity(new TestIdentityBuilder().WithAssembly("Api.Tests").Build())
+            .WithTestName("Test")
+            .WithOutcome(TestOutcome.Passed)
+            .Build());
+
+        // Act & Assert
+        Assert.Empty(accumulator.GetSnapshotByAssembly());
+    }
+
+    // ---------------------------------------------------------------------------
     // Reset — no-op
     // ---------------------------------------------------------------------------
 

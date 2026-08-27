@@ -31,6 +31,7 @@ public sealed class TestSession
         SessionState = TestSessionState.Initial;
         PullRequestContext = null;
         QuickStatistics = null;
+        StatisticsByAssembly = null;
         SdkVersion = XpingVersion.Current;
     }
 
@@ -47,7 +48,8 @@ public sealed class TestSession
         int? totalTestsExpected,
         TestSessionState sessionState,
         PullRequestContext? pullRequestContext,
-        QuickStatistics? quickStatistics)
+        QuickStatistics? quickStatistics,
+        IReadOnlyDictionary<string, AssemblyStatistics>? statisticsByAssembly)
     {
         SessionId = sessionId.RequireCondition(arg => arg != Guid.Empty, "Session ID cannot be empty.");
         StartedAt = startedAt;
@@ -59,6 +61,7 @@ public sealed class TestSession
         SessionState = sessionState;
         PullRequestContext = pullRequestContext;
         QuickStatistics = quickStatistics;
+        StatisticsByAssembly = statisticsByAssembly;
         SdkVersion = XpingVersion.Current;
     }
 
@@ -131,6 +134,27 @@ public sealed class TestSession
     /// Only populated on the <c>TestSessionState.Finalized</c> upload; <c>null</c> otherwise.
     /// </summary>
     public QuickStatistics? QuickStatistics { get; init; }
+
+    /// <summary>
+    /// Gets <see cref="QuickStatistics"/> broken down by the test assembly each execution belongs
+    /// to, keyed by assembly name in ordinal order.
+    /// Only populated on the <c>TestSessionState.Finalized</c> upload; <c>null</c> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="QuickStatistics"/> counts the whole test host process, and a solution-wide
+    /// <c>dotnet test</c> batches several test projects into one host — so it is the one part of the
+    /// payload that cannot be attributed to any of the <see cref="Assemblies"/>. This is the reading
+    /// that can.
+    /// </para>
+    /// <para>
+    /// Only the counters that decompose appear per assembly; see <see cref="AssemblyStatistics"/> for
+    /// what is deliberately absent from it and stays on <see cref="QuickStatistics"/> alone. An
+    /// execution naming no assembly is counted host-wide only, so the entries can sum to less than
+    /// <see cref="QuickStatistics"/> but never to more.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, AssemblyStatistics>? StatisticsByAssembly { get; init; }
 
     /// <summary>
     /// Gets the version of the Xping SDK that produced this session (e.g. <c>"1.2.3"</c>).
