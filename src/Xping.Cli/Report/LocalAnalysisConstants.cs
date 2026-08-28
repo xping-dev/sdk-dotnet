@@ -174,25 +174,6 @@ internal static class LocalAnalysisConstants
     public const double RetryExhaustedShareMin = 0.50;
 
     /// <summary>
-    /// Failure rate given a predecessor required to suspect order dependence (0.70).
-    /// </summary>
-    public const double OrderDependentConditionalMin = 0.70;
-
-    /// <summary>
-    /// Highest unconditional failure rate an order-dependent test may have (0.30).
-    /// </summary>
-    /// <remarks>
-    /// The pair of bounds is the finding: high failure after one predecessor, low failure otherwise.
-    /// A test that fails everywhere is not order-dependent, it is broken.
-    /// </remarks>
-    public const double OrderDependentUnconditionalMax = 0.30;
-
-    /// <summary>
-    /// Executions preceded by the same test required before the pairing counts (5).
-    /// </summary>
-    public const int OrderDependentMinPairings = 5;
-
-    /// <summary>
     /// Difference in failure rate across a test's concurrency split that indicates sensitivity (0.30).
     /// </summary>
     /// <remarks>

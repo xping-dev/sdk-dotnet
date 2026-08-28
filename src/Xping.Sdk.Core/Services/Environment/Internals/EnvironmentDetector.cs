@@ -3,14 +3,12 @@
  * License: [MIT]
  */
 
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Services.Network;
 
 namespace Xping.Sdk.Core.Services.Environment.Internals;
 
@@ -21,9 +19,7 @@ namespace Xping.Sdk.Core.Services.Environment.Internals;
 /// </summary>
 internal sealed class EnvironmentDetector : IEnvironmentDetector
 {
-    private readonly EnvironmentInfoBuilder _builder = new();
     private readonly XpingConfiguration _configuration;
-    private readonly INetworkMetricsCollector _networkMetricsCollector;
 
     // Instance-level lazy initialization for thread-safe, cached detection
     private readonly Lazy<string> _machineName;
@@ -36,18 +32,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private readonly Lazy<TimeZoneInfo?> _localTimeZone;
     private readonly Lazy<Dictionary<string, string>> _customProperties;
 
-    // Cache network metrics per endpoint (instance-level, thread-safe)
-    private readonly ConcurrentDictionary<string, NetworkMetrics?> _networkMetricsCache = new();
-
     /// <summary>
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
     /// </summary>
-    public EnvironmentDetector(
-        IOptions<XpingConfiguration> options,
-        INetworkMetricsCollector networkMetricsCollector)
+    public EnvironmentDetector(IOptions<XpingConfiguration> options)
     {
         _configuration = options.Value;
-        _networkMetricsCollector = networkMetricsCollector;
 
         // Initialize instance-level lazy fields
         _machineName = new Lazy<string>(GetMachineName);
@@ -87,28 +77,36 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     IReadOnlyDictionary<string, string> IEnvironmentDetector.CustomProperties => _customProperties.Value;
 
     /// <inheritdoc/>
-    async Task<EnvironmentInfo> IEnvironmentDetector.BuildEnvironmentInfoAsync(CancellationToken cancellationToken)
+    Task<EnvironmentInfo> IEnvironmentDetector.BuildEnvironmentInfoAsync(CancellationToken cancellationToken)
     {
-        NetworkMetrics? networkMetrics = await GetNetworkMetricsAsync(cancellationToken).ConfigureAwait(false);
-
-        _builder.Reset();
-        _builder.WithMachineName(_machineName.Value);
-        _builder.WithOperatingSystem(_operatingSystem.Value);
-        _builder.WithRuntimeVersion(_runtimeVersion.Value);
-        _builder.WithFramework(_framework.Value);
-        _builder.WithEnvironmentName(_environmentName.Value);
-        _builder.WithIsCIEnvironment(_ciPlatform.Value.HasValue);
-        _builder.WithNetworkMetrics(networkMetrics);
-
         // Resolved against now rather than cached with the zone: the offset is a property of the
         // instant, not of the machine, and a suite started either side of a daylight-saving
         // transition is exactly the case this field exists to make visible.
         TimeZoneInfo? zone = _localTimeZone.Value;
-        _builder.WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id);
 
-        _builder.AddCustomProperties(_customProperties.Value);
+        // A local builder, as in ExecutionTracker.CreateExecutionContext. This type is registered as
+        // a singleton so the detection lazies are paid for once, and a builder held alongside them
+        // would be shared by every caller: two concurrent calls could interleave their Reset() and
+        // With...() calls and emit an EnvironmentInfo mixing fields from both.
+        EnvironmentInfo environmentInfo = new EnvironmentInfoBuilder()
+            .WithMachineName(_machineName.Value)
+            .WithOperatingSystem(_operatingSystem.Value)
+            .WithRuntimeVersion(_runtimeVersion.Value)
+            .WithFramework(_framework.Value)
+            .WithEnvironmentName(_environmentName.Value)
+            .WithIsCIEnvironment(_ciPlatform.Value.HasValue)
+            .WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id)
+            .AddCustomProperties(_customProperties.Value)
+            .Build();
 
-        return _builder.Build();
+        // Nothing here awaits, and nothing observes the token: every field is read from a cached
+        // lazy or the local clock, so there is no operation for a cancellation to interrupt. Both
+        // callers already check the token before arriving — FlushOnceAsync and FinalFlushAsync enter
+        // through _flushLock.WaitAsync(cancellationToken), which throws on an already-cancelled one
+        // — so a check here would be unreachable, and throwing during finalization would abandon the
+        // run rather than persist it. The interface stays task-returning so a detector that does
+        // need to await is not a signature change away.
+        return Task.FromResult(environmentInfo);
     }
 
     /// <summary>
@@ -129,40 +127,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
         catch (Exception)
         {
-            return null;
-        }
-    }
-
-    private async Task<NetworkMetrics?> GetNetworkMetricsAsync(CancellationToken cancellationToken = default)
-    {
-        if (!_configuration.CollectNetworkMetrics || string.IsNullOrWhiteSpace(_configuration.ApiEndpoint))
-        {
-            return null;
-        }
-
-        string endpoint = _configuration.ApiEndpoint;
-
-        // Check cache first
-        if (_networkMetricsCache.TryGetValue(endpoint, out NetworkMetrics? cached))
-        {
-            return cached;
-        }
-
-        // Collect metrics asynchronously
-        try
-        {
-            NetworkMetrics? metrics = await _networkMetricsCollector
-                .CollectAsync(endpoint, cancellationToken)
-                .ConfigureAwait(false);
-
-            // Cache the result
-            _networkMetricsCache[endpoint] = metrics;
-            return metrics;
-        }
-        catch
-        {
-            // Cache null result to avoid repeated failures
-            _networkMetricsCache[endpoint] = null;
             return null;
         }
     }

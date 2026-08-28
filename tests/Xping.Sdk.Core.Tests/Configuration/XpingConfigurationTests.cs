@@ -398,16 +398,6 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void CollectNetworkMetrics_ShouldBeSettable()
-    {
-        // Arrange
-        var config = new XpingConfiguration { CollectNetworkMetrics = false };
-
-        // Act & Assert
-        Assert.False(config.CollectNetworkMetrics);
-    }
-
-    [Fact]
     public void ShouldAllowSettingAllProperties()
     {
         // Arrange & Act

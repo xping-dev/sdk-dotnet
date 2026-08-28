@@ -24,8 +24,6 @@ using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Identity.Internals;
-using Xping.Sdk.Core.Services.Network;
-using Xping.Sdk.Core.Services.Network.Internals;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Serialization.Internals;
 using Xping.Sdk.Core.Services.PullRequest;
@@ -116,7 +114,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromConfiguration(configuration)
-            .AddXpingEnvironment(mode)
+            .AddXpingEnvironment()
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
@@ -152,7 +150,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(config)
-            .AddXpingEnvironment(mode)
+            .AddXpingEnvironment()
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
@@ -187,7 +185,7 @@ public static class XpingServiceCollectionExtensions
             .AddXpingInfrastructure()
             .AddXpingSerialization()
             .AddXpingConfigurationFromInstance(configuration)
-            .AddXpingEnvironment(mode)
+            .AddXpingEnvironment()
             .AddXpingCollectors()
             .AddXpingPullRequest()
             .AddXpingStatistics()
@@ -308,38 +306,16 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Adds environment detection services for detecting OS, runtime, CI platform, containers, etc.
-    /// Use this when you need environment diagnostics without the full SDK.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
-    {
-        return services.AddXpingEnvironment(XpingMode.Cloud);
-    }
-
-    /// <summary>
-    /// Adds environment detection services for the given operating mode.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="mode">The resolved operating mode.</param>
     /// <returns>The service collection for chaining.</returns>
     /// <remarks>
-    /// In <see cref="XpingMode.LocalOnly"/> mode, network metrics collection is suppressed.
-    /// <c>NetworkMetricsCollector</c> performs a DNS lookup and four sequential ICMP pings on every
-    /// session build; that is hundreds of milliseconds of latency and a surprising outbound call for
-    /// a mode whose entire contract is that it does not touch the network.
+    /// Takes no mode. Detection reads the runtime, the environment block and the local clock, which
+    /// cost the same and mean the same whether or not a session will be uploaded.
     /// </remarks>
-    public static IServiceCollection AddXpingEnvironment(this IServiceCollection services, XpingMode mode)
+    public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
-        // Register a network metrics collector for diagnostics used in environment detection
-        services.AddSingleton<INetworkMetricsCollector, NetworkMetricsCollector>();
-        // Register an environment detector e.g for CI platform detection
         services.AddSingleton<IEnvironmentDetector, EnvironmentDetector>();
-
-        if (mode == XpingMode.LocalOnly)
-        {
-            services.PostConfigure<XpingConfiguration>(options => options.CollectNetworkMetrics = false);
-        }
 
         return services;
     }
@@ -668,11 +644,6 @@ public static class XpingServiceCollectionExtensions
                 config.UploadTimeout = ts;
         }
 
-        // Network Metrics Options
-        if (GetEnv("COLLECTNETWORKMETRICS") is { } collectMetrics
-            && bool.TryParse(collectMetrics, out var cm))
-            config.CollectNetworkMetrics = cm;
-
         // PR Detection Options
         if (GetEnv("ENABLEPULLREQUESTDETECTION") is { } enablePr
             && bool.TryParse(enablePr, out var pr))
@@ -713,7 +684,6 @@ public static class XpingServiceCollectionExtensions
         target.MaxRetries = source.MaxRetries;
         target.RetryDelay = source.RetryDelay;
         target.UploadTimeout = source.UploadTimeout;
-        target.CollectNetworkMetrics = source.CollectNetworkMetrics;
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
         target.CollectLocalGitAuthor = source.CollectLocalGitAuthor;
         target.StrictMode = source.StrictMode;

@@ -9,12 +9,6 @@
     "framework": ".NET",
     "environmentName": "Local",
     "isCIEnvironment": false,
-    "networkMetrics": {
-      "latencyMs": 0,
-      "isOnline": true,
-      "connectionType": "WiFi",
-      "packetLossPercent": 0
-    },
     "customProperties": {
       "Platform": "macOS",
       "ProcessorArchitecture": "Arm64",

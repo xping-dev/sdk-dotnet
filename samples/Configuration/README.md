@@ -20,8 +20,7 @@ This directory contains sample configuration files for the Xping SDK.
     "EnableOfflineQueue": true,
     "MaxRetries": 3,
     "RetryDelay": "00:00:02",
-    "UploadTimeout": "00:00:30",
-    "CollectNetworkMetrics" : true
+    "UploadTimeout": "00:00:30"
   }
 }
 ```

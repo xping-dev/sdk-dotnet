@@ -11,7 +11,6 @@ using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Identity;
-using Xping.Sdk.Core.Services.Network;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Upload;
 
@@ -122,7 +121,7 @@ public sealed class XpingServiceCollectionExtensionsTests
         // Arrange
         var services = new ServiceCollection();
         services.Configure<XpingConfiguration>(o => { o.ApiKey = "k"; o.ProjectId = "p"; });
-        services.AddXpingCollectors(); // INetworkMetricsCollector registered here would be absent — test both
+        services.AddXpingCollectors();
 
         // Act
         services.AddXpingEnvironment();
@@ -130,20 +129,6 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         // Assert
         Assert.NotNull(provider.GetRequiredService<IEnvironmentDetector>());
-    }
-
-    [Fact]
-    public void AddXpingEnvironment_ShouldRegister_INetworkMetricsCollector()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-        // Act
-        services.AddXpingEnvironment();
-        var provider = services.BuildServiceProvider();
-
-        // Assert
-        Assert.NotNull(provider.GetRequiredService<INetworkMetricsCollector>());
     }
 
     // ---------------------------------------------------------------------------
@@ -265,15 +250,14 @@ public sealed class XpingServiceCollectionExtensionsTests
         var uploader = provider.GetRequiredService<IXpingUploader>();
         var options = provider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-        // Assert — the no-op uploader stands in for the HTTP pipeline, and network probing is off
-        // so that local-only mode makes no outbound calls at all.
+        // Assert — the no-op uploader stands in for the HTTP pipeline, so local-only mode makes no
+        // outbound calls at all.
         Assert.Equal("NoOpXpingUploader", uploader.GetType().Name);
         Assert.Equal(XpingMode.LocalOnly, options.ResolveMode());
-        Assert.False(options.CollectNetworkMetrics);
     }
 
     [Fact]
-    public void AddXping_WithCredentials_ShouldRegisterHttpUploaderAndKeepNetworkMetrics()
+    public void AddXping_WithCredentials_ShouldRegisterHttpUploader()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -287,7 +271,6 @@ public sealed class XpingServiceCollectionExtensionsTests
         // Assert
         Assert.Equal("XpingUploader", uploader.GetType().Name);
         Assert.Equal(XpingMode.Cloud, options.ResolveMode());
-        Assert.True(options.CollectNetworkMetrics);
     }
 
     [Fact]
@@ -349,31 +332,6 @@ public sealed class XpingServiceCollectionExtensionsTests
         // Act & Assert
         Assert.ThrowsAny<Exception>(() =>
             services.AddXping((Action<XpingConfigurationBuilder>)null!));
-    }
-
-    // ---------------------------------------------------------------------------
-    // AddXpingConfigurationFromInstance — CollectNetworkMetrics coverage
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void AddXpingConfigurationFromInstance_ShouldCopy_CollectNetworkMetrics()
-    {
-        // Arrange
-        var config = new XpingConfiguration
-        {
-            ApiKey = "test-key",
-            ProjectId = "test-project",
-            CollectNetworkMetrics = false
-        };
-        var services = new ServiceCollection();
-
-        // Act
-        services.AddXpingConfigurationFromInstance(config);
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        // Assert
-        Assert.False(bound.CollectNetworkMetrics);
     }
 
     // ---------------------------------------------------------------------------
@@ -614,21 +572,6 @@ public sealed class XpingServiceCollectionExtensionsTests
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.Equal(TimeSpan.FromMinutes(1), bound.UploadTimeout);
-    }
-
-    [Fact]
-    public void BindEnvVars_COLLECTNETWORKMETRICS_ShouldParseBool()
-    {
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_COLLECTNETWORKMETRICS", "false");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.False(bound.CollectNetworkMetrics);
     }
 
     [Fact]

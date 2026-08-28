@@ -35,7 +35,6 @@ public sealed class EnvironmentInfo
         string framework,
         string environmentName,
         bool isCIEnvironment,
-        NetworkMetrics? networkMetrics,
         TimeSpan? utcOffset,
         string? timeZoneId,
         IReadOnlyDictionary<string, string> customProperties)
@@ -46,7 +45,6 @@ public sealed class EnvironmentInfo
         Framework = framework;
         EnvironmentName = environmentName;
         IsCIEnvironment = isCIEnvironment;
-        NetworkMetrics = networkMetrics;
         UtcOffset = utcOffset;
         TimeZoneId = timeZoneId;
         CustomProperties = customProperties;
@@ -81,12 +79,6 @@ public sealed class EnvironmentInfo
     /// Gets a value indicating whether the test was executed in a CI/CD environment.
     /// </summary>
     public bool IsCIEnvironment { get; init; }
-
-    /// <summary>
-    /// Gets the network reliability metrics collected during test execution.
-    /// This property is only populated when a network metrics collection is enabled.
-    /// </summary>
-    public NetworkMetrics? NetworkMetrics { get; init; }
 
     /// <summary>
     /// Gets the machine's offset from UTC when the session started, or <see langword="null"/> when it

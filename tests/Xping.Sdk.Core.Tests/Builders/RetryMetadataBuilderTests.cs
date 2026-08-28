@@ -4,6 +4,7 @@
  */
 
 using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Core.Tests.Builders;
 
@@ -179,5 +180,33 @@ public sealed class RetryMetadataBuilderTests
         Assert.Equal("Flaky", retry.RetryReason);
         Assert.Equal("RetryAttribute", retry.RetryAttributeName);
         Assert.Equal("xunit", retry.AdditionalMetadata["framework"]);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Build — isolation from the builder that produced it
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Build_ThenReset_ShouldLeaveTheBuiltInstanceUntouched()
+    {
+        var builder = new RetryMetadataBuilder().AddMetadata("library", "xRetry");
+
+        RetryMetadata metadata = builder.Build();
+        builder.Reset();
+
+        Assert.Equal("xRetry", metadata.AdditionalMetadata["library"]);
+    }
+
+    [Fact]
+    public void Build_Twice_ShouldNotShareAdditionalMetadataBetweenInstances()
+    {
+        var builder = new RetryMetadataBuilder().AddMetadata("library", "xRetry");
+
+        RetryMetadata first = builder.Build();
+        builder.Reset().AddMetadata("library", "Polly");
+        RetryMetadata second = builder.Build();
+
+        Assert.Equal("xRetry", first.AdditionalMetadata["library"]);
+        Assert.Equal("Polly", second.AdditionalMetadata["library"]);
     }
 }

@@ -226,7 +226,7 @@ public sealed class FindingCoordinatorTests
     {
         public string Name => "lazy-broken";
 
-        public IReadOnlyList<FindingKind> Kinds => [FindingKind.OrderDependent];
+        public IReadOnlyList<FindingKind> Kinds => [FindingKind.ParallelSensitive];
 
         public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
         {

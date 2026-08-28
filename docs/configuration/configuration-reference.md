@@ -34,7 +34,6 @@ Xping SDK supports multiple configuration methods with the following priority or
 | `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
 | `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
-| `CollectNetworkMetrics` | bool | `true` | `XPING_COLLECTNETWORKMETRICS` | Network metrics collection |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
@@ -84,7 +83,7 @@ export XPING_PROJECTID="..."
 
 ### Local-only makes no network calls
 
-In `LocalOnly` mode the SDK does not create an HTTP client, retry pipeline, or circuit breaker, and network metrics collection is disabled. `CollectNetworkMetrics` performs a DNS lookup and several pings, which would be several hundred milliseconds of pure waste when nothing will be uploaded.
+In `LocalOnly` mode the SDK does not create an HTTP client, retry pipeline, or circuit breaker. Nothing in the local path opens a socket.
 
 ### Staying local with credentials present
 
@@ -677,38 +676,6 @@ export XPING_ENABLECOMPRESSION="false"
 
 ---
 
-### CollectNetworkMetrics
-
-**Type:** `bool`  
-**Default:** `true`  
-**Environment Variable:** `XPING_COLLECTNETWORKMETRICS`
-
-Collect network reliability metrics including latency, connection type, and online status. Helps identify network-related test flakiness.
-
-**Collected metrics:**
-- Network latency measurements
-- Connection type (WiFi, Ethernet, Cellular)
-- Online/offline status changes
-- DNS resolution times
-
-**Privacy note:** Only connection metadata is collected—no personal data or network content.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "CollectNetworkMetrics": false
-  }
-}
-```
-
-```bash
-export XPING_COLLECTNETWORKMETRICS="false"
-```
-
----
-
 ### EnablePullRequestDetection
 
 **Type:** `bool`
@@ -906,7 +873,6 @@ XpingContext.Initialize(config);
     "MaxRetries": 3,
     "RetryDelay": "00:00:02",
     "UploadTimeout": "00:00:30",
-    "CollectNetworkMetrics": true,
     "EnablePullRequestDetection": true,
     "CollectLocalGitAuthor": false
   }

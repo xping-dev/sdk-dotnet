@@ -20,7 +20,6 @@ public sealed class EnvironmentInfoBuilder
     private string _framework;
     private string _environmentName;
     private bool _isCIEnvironment;
-    private NetworkMetrics? _networkMetrics;
     private TimeSpan? _utcOffset;
     private string? _timeZoneId;
     private readonly Dictionary<string, string> _customProperties;
@@ -89,15 +88,6 @@ public sealed class EnvironmentInfoBuilder
     public EnvironmentInfoBuilder WithIsCIEnvironment(bool isCIEnvironment)
     {
         _isCIEnvironment = isCIEnvironment;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets the network metrics.
-    /// </summary>
-    public EnvironmentInfoBuilder WithNetworkMetrics(NetworkMetrics? networkMetrics)
-    {
-        _networkMetrics = networkMetrics;
         return this;
     }
 
@@ -178,6 +168,12 @@ public sealed class EnvironmentInfoBuilder
     /// <summary>
     /// Builds an immutable <see cref="EnvironmentInfo"/> instance.
     /// </summary>
+    /// <remarks>
+    /// The collections are copied rather than wrapped. <c>ReadOnlyDictionary</c> and
+    /// <c>ReadOnlyCollection</c> are views over the source, and <see cref="Reset"/> clears the
+    /// builder's collections in place — so wrapping would leave every instance ever built sharing
+    /// one backing store, and emptied by the next reset.
+    /// </remarks>
     public EnvironmentInfo Build()
     {
         return new EnvironmentInfo(
@@ -187,10 +183,10 @@ public sealed class EnvironmentInfoBuilder
             framework: _framework,
             environmentName: _environmentName,
             isCIEnvironment: _isCIEnvironment,
-            networkMetrics: _networkMetrics,
             utcOffset: _utcOffset,
             timeZoneId: _timeZoneId,
-            customProperties: new ReadOnlyDictionary<string, string>(_customProperties));
+            customProperties: new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(_customProperties)));
     }
 
     /// <summary>
@@ -204,7 +200,6 @@ public sealed class EnvironmentInfoBuilder
         _framework = string.Empty;
         _environmentName = string.Empty;
         _isCIEnvironment = false;
-        _networkMetrics = null;
         _utcOffset = null;
         _timeZoneId = null;
         _customProperties.Clear();
