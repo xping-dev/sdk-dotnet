@@ -7,7 +7,7 @@ Get started with Xping SDK in your MSTest test projects in less than 5 minutes. 
 ## What You'll Learn
 
 - How to install Xping SDK for MSTest
-- How to configure your API credentials
+- How to run local-only, and how to add cloud upload later
 - How to track your first test
 - How to verify results in Xping Cloud
 
@@ -19,7 +19,7 @@ Before you begin, make sure you have:
 
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
-- Optionally, an **Xping account** with API credentials ([Sign up](https://app.xping.io)) — without one the SDK runs [local-only](local-first.md) and records history to disk
+- **No Xping account needed.** Without an API key the SDK runs [local-only](local-first.md): every run is recorded to `.xping/` in your repo and no network call is made. An account is required only to upload to Xping Cloud, which is currently invite-only.
 - An existing **MSTest test project** or create a new one
 
 > **New to MSTest?** Create a test project with: `dotnet new mstest -n MyTestProject`
@@ -56,32 +56,58 @@ Add to your `.csproj` file:
 
 ## Step 2: Configuration
 
-Configure Xping with your API credentials. There are three ways to configure:
+**Skip this step if you are starting local-only.** With no API key configured, the SDK records
+every run to `.xping/` in your repository and makes no network calls — see
+[Running Without an Account](local-first.md). Come back here when you want to upload to Xping Cloud.
 
-### Option A: Configuration File (Recommended)
+### Option A: Environment Variable (Recommended)
 
-Create or update `appsettings.json` in your test project:
+The API key is a credential. Keep it out of your repository — set it in your shell on a dev
+machine, and as a secret in CI:
 
-```json
-{
-  "Xping": {
-    "ApiKey": "your-api-key-here",
-    "Enabled": true
-  }
-}
+```bash
+# Linux/macOS
+export XPING_APIKEY="your-api-key-here"
+
+# Windows (PowerShell)
+$env:XPING_APIKEY="your-api-key-here"
+
+# Windows (Command Prompt)
+set XPING_APIKEY=your-api-key-here
 ```
+
+That is the whole setup. Every other setting has a working default.
 
 > **Getting Your API Key:**
 > 1. Log in to [Xping Cloud](https://app.xping.io)
 > 2. Navigate to **Account** → **Settings** → **API & Integration**
 > 3. Click **Create API Key** and copy it
 >
-> **About your project:**
-> You do not name it. Xping derives the project from your test assembly, so a test project called
-> `PaymentService.Tests` reports into a project of that name, created automatically on the first run.
-> A solution with several test projects gets one Xping project each. To report them all as a single
-> project instead, set `ProjectId` — see the
-> [Configuration Reference](../configuration/configuration-reference.md#projectid).
+> Xping Cloud is currently invite-only. [Request access](https://xping.io/contact?pilot=True), or
+> keep working locally — that stays free and account-free.
+
+For CI, store it as a pipeline secret rather than a plain variable. See
+[CI/CD Integration](ci-cd-setup.md).
+
+### Option B: appsettings.json (Non-Secret Settings Only)
+
+`appsettings.json` is the right place for tuning — batch size, flush interval, environment name —
+and the wrong place for the API key:
+
+```json
+{
+  "Xping": {
+    "Enabled": true,
+    "BatchSize": 100,
+    "CaptureStackTraces": true
+  }
+}
+```
+
+> **⚠️ Do not put `ApiKey` here.** `appsettings.json` is committed to source control and copied
+> into your build output, so a key placed in it leaks to everyone with repository access and into
+> every build artifact. The SDK *will* read it from there — it just should not have to. Use
+> `XPING_APIKEY` instead.
 
 Make sure the file is copied to output directory by adding this to your `.csproj`:
 
@@ -93,27 +119,30 @@ Make sure the file is copied to output directory by adding this to your `.csproj
 </ItemGroup>
 ```
 
-### Option B: Environment Variables
+Settings resolve in this order, highest first: `XPING_*` environment variables →
+`Xping__*` environment variables → `appsettings.{Environment}.json` → `appsettings.json`.
 
-Set environment variables (useful for CI/CD):
+### About your project
+
+You do not name it. Xping derives the project from the test assembly each execution belongs to, so
+a test project called `PaymentService.Tests` reports into a project of that name, created
+automatically on the first run. A solution with several test projects gets one Xping project each.
+
+`ProjectId` is **optional** and exists only to override that — set it when several test assemblies
+should report into a single project, for example in a monorepo. It is a hard pin: every execution
+in the session lands in that project regardless of which assembly it came from.
 
 ```bash
-# Linux/macOS
-export XPING__APIKEY="your-api-key-here"
-export XPING__ENABLED="true"
-
-# Windows (PowerShell)
-$env:XPING__APIKEY="your-api-key-here"
-$env:XPING__ENABLED="true"
-
-# Windows (Command Prompt)
-set XPING__APIKEY=your-api-key-here
-set XPING__ENABLED=true
+export XPING_PROJECTID="payment-platform"   # optional; only to merge assemblies
 ```
+
+See [ProjectId](../configuration/configuration-reference.md#projectid) in the Configuration
+Reference.
 
 ### Option C: Programmatic Configuration
 
-Configure in code using assembly-level initialization:
+Pass a configuration object to `Initialize` from assembly-level initialization. Read the key from
+the environment — never a literal:
 
 ```csharp
 [TestClass]
@@ -124,14 +153,18 @@ public static class XpingInitializer
     {
         var config = new XpingConfiguration
         {
-            ApiKey = "your-api-key-here",
-            Enabled = true
+            ApiKey = Environment.GetEnvironmentVariable("XPING_APIKEY"),
+            BatchSize = 200
         };
-        
+
         XpingContext.Initialize(config);
     }
 }
 ```
+
+> Passing a configuration object replaces the file-and-environment pipeline for that session — the
+> SDK uses exactly what you hand it. Only reach for this when you need settings computed at
+> runtime; `XPING_APIKEY` alone covers the normal case.
 
 ---
 
@@ -158,14 +191,19 @@ public static class XpingSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        // Flush any remaining test data and dispose
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        // Finalize the session (flushes and uploads what is left), then release resources
+        await XpingContext.FinalizeAsync().ConfigureAwait(false);
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
     }
 }
 ```
 
 > **Important:** Place this class in your test project. MSTest will automatically discover and execute these methods once per test assembly.
+
+`FinalizeAsync` closes the session and delivers everything still buffered; `ShutdownAsync` disposes
+the host. Both are required — skipping `FinalizeAsync` loses the last batch. `FinalizeAndShutdownAsync()`
+does the pair in one call if you prefer. (`FlushAsync` also exists, but it flushes mid-session and
+does not close the run; you rarely need it.)
 
 ---
 
@@ -328,15 +366,48 @@ Xping SDK runs silently in the background, tracking execution data without affec
 
 ---
 
-## Step 6: View Results in Xping Cloud
+## Step 6: Read the Results
 
-1. Open the [Xping Cloud](https://app.xping.io)
+Run your suite **more than once** before reading anything. One run tells you nothing about
+reliability; cross-run flakiness detection needs at least three.
+
+### Locally — `xping report`
+
+Install the CLI once, then ask what happened:
+
+```bash
+dotnet tool install -g Xping.Cli      # puts `xping` on your PATH; needs .NET 10
+xping report
+```
+
+```
+Xping · MyTestProject · 9 runs · 2026-08-20 07:52 → 09:02 · main@bdbafba
+2 findings (2 high) · 17 tests · 15 healthy
+
+HIGH  flaky            FlakyTest_PassesOnRetry
+      failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
+      evidence moderate | f_2b84a621
+
+HIGH  always failing   ThrowingTestIsTracked
+      failed 9 of 9 executions (100%), one failure mode:
+      System.InvalidOperationException
+      evidence low | f_c1774d82
+```
+
+`xping report --format json` emits the same findings as a versioned envelope, which is what you
+hand an agent. See the [CLI Command Reference](../cli/command-reference.md) for every flag and
+finding kind.
+
+### In Xping Cloud — with an API key
+
+1. Open [Xping Cloud](https://app.xping.io)
 2. Explore your test data across multiple tabs:
    - **Test Sessions** - View uploaded test runs with execution statistics, environment details, and duration
    - **Tests** - Browse all tests with confidence scores, success rates, and execution history
    - **Flaky Tests** - Identify unreliable tests that need attention
 
-Each test execution includes comprehensive tracking of pass/fail status, duration, confidence scores, environment information (OS, .NET version, CI/CD context), and trends over time.
+Cloud adds what a single machine cannot supply: confidence scores, evidence sufficiency,
+root-cause categorisation, and trends across CI, branches, and teammates.
 
 > **Learn More:** For detailed information about navigating Xping Cloud, filtering tests, and understanding the test detail view, see [Navigating Xping Cloud](../guides/getting-started/navigating-xping-cloud.md).
 

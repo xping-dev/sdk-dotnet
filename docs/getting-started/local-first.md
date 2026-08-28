@@ -79,48 +79,67 @@ To pin the CLI version alongside your repo instead, install it into a tool manif
 xping report
 ```
 
+````
+Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+3 findings (1 high, 2 medium) · 412 tests · 409 healthy
+
 ```
-──────────────────────────────────────────────────────────────────────────
-  Xping · local run summary                             412 tests · 38.2s
-──────────────────────────────────────────────────────────────────────────
-  ✓ 405 passed     ✗ 4 failed     ○ 3 skipped
+HIGH  flaky            GenerateMonthlySummary
+      failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 
-  ⚠  2 unstable tests · last 12 local runs
+MED   slower           CheckoutFlow_Completes
+      p50 340ms -> 1.2s (+264.7%), normalised +251.2%
+      evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
 
-     ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
-                    passed 9 of 12 runs · inconsistent
-
-     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
-                    newly failing · first failure in this window
-
-  ✗  1 test failed in all 12 runs - not flaky, likely real bugs
-     Auth.RejectsExpiredToken
-──────────────────────────────────────────────────────────────────────────
+LOW   stopped running  LegacyImport.Roundtrip
+      ran in 12 of 17 earlier runs, absent from the last 3
+      evidence moderate | f_1d77e3f5 | tests/Legacy/ImportTests.cs:41
 ```
+````
 
 ### How to read it
 
-The sparkline runs **left to right, oldest to newest**. `●` is a pass, `○` a failure. The pattern is the point:
+Each finding is four things: a **severity**, a **kind**, the **test**, and the **evidence** behind
+the claim.
 
-| Pattern | What Xping calls it |
+| Part | Means |
 |---|---|
-| `●●○●●●○●●●●○` | **Flaky across runs** — passes and fails without a clear cause |
-| `●●●●●●●●●●●○` | **Newly failing** — passed every earlier run, failed the most recent |
-| `●●●●●●●●○○○○` | **Flaky across runs** — broke recently and stayed broken, but it has both passed and failed in the window |
-| `○○○○○○○○○○○○` | **Consistently failing** — never passed; listed separately as a likely real bug |
+| `HIGH` / `MED` / `LOW` | Impact ranking. Findings are ordered most severe first, so the top of the block is the part worth reading. |
+| `flaky`, `slower`, `stopped running` | The *kind* — what the finding claims. There are sixteen; the [CLI reference](../cli/command-reference.md#finding-kinds) lists them all. |
+| The counts line | The measurement the claim rests on, in plain numbers. |
+| `evidence low\|moderate\|high` | How much history stands behind it. A `low`-evidence finding is a lead, not a verdict. |
+| `f_2a91c0de` | A stable id for that finding, so you can refer to it in a ticket or diff two reports. |
 
-Separating "flaky" from "consistently failing" is deliberate. A test that never passes is not unreliable, it is broken, and the fix is completely different.
+The report body sits inside a fenced code block and stays under 72 columns, so pasting it into
+Slack, a PR, or a ticket keeps its columns. Only the top ten findings show by default —
+`--all` shows the rest.
+
+Separating **flaky** from **always failing** is deliberate. A test that never passes is not
+unreliable, it is broken, and the fix is completely different.
 
 ---
 
 ## What gets flagged
 
-Four signals, in order of how strongly they imply flakiness:
+The report distinguishes sixteen finding kinds. The ones you meet first:
 
-1. **Flaked on retry** — failed and then passed within a single run. The strongest signal, and the only one available on your very first run.
-2. **Flaky across runs** — both passed and failed within the analysed window.
-3. **Newly failing** — passed in every earlier run, failed in the most recent.
-4. **Consistently failing** — never passed. Reported separately as a likely real bug.
+| Printed as | `--kind` value | Claims |
+|---|---|---|
+| masked by retry | `RetryMasked` | The test failed and passed on retry, never reaching the run's outcome. The strongest flakiness signal, and the only one available from a single run. |
+| flaky | `Flaky` | The test both passes and fails, or fails in varying ways. |
+| always failing | `AlwaysFailing` | The test fails almost always, in one consistent way — a likely real bug, not flake. |
+| timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
+| slower | `DurationRegression` | The test's median duration has regressed against its own baseline. |
+| stopped running | `Vanished` | The test appeared throughout the baseline and has stopped running. |
+
+The rest — order dependence, concurrency sensitivity, broken fixtures, shared failures, time-of-day
+and network clustering — are in the [CLI reference](../cli/command-reference.md#finding-kinds).
+Restrict the report to one or more with `--kind`:
+
+```bash
+xping report --kind Flaky --kind AlwaysFailing
+```
 
 Skipped and not-executed tests are ignored; they carry no reliability signal.
 
@@ -188,12 +207,19 @@ Local-only mode answers *"what is unstable on my machine, in my last N runs"*. X
 
 ## Connecting later
 
-Nothing is lost by starting local. Add an API key whenever you want:
+Nothing is lost by starting local. Add an API key whenever you want — that is the only variable
+you need, and no test code changes:
 
 ```bash
 export XPING_APIKEY="your-key"
-export XPING_PROJECTID="your-project"
 ```
+
+You do not name a project. Xping derives one per test assembly, created on first upload.
+`XPING_PROJECTID` is optional and only pins several assemblies into a single project — see
+[ProjectId](../configuration/configuration-reference.md#projectid).
+
+Keep the key out of your repository: export it from your shell or a secret store, never
+`appsettings.json`, which is committed and copied into build output.
 
 The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `xping report` continues to work offline and on your own machine.
 
