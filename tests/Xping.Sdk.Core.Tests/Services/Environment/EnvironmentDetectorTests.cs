@@ -4,7 +4,6 @@
  */
 
 using Microsoft.Extensions.Options;
-using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;

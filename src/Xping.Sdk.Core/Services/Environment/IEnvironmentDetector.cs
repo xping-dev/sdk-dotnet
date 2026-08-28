@@ -65,7 +65,15 @@ public interface IEnvironmentDetector
     /// Builds a complete EnvironmentInfo object with all detected values.
     /// This is a convenience method that aggregates all properties.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <remarks>
+    /// Observing the token is optional, and neither implementation shipped here does. Both read
+    /// cached values and the local clock, which leaves nothing for a token to interrupt. The
+    /// parameter exists for an implementation that does reach out for its data — without it, adding
+    /// one would be a signature change across every caller.
+    /// </remarks>
+    /// <param name="cancellationToken">
+    /// Cancellation token, honoured only by implementations with something to cancel.
+    /// </param>
     /// <returns>Complete environment information.</returns>
     Task<EnvironmentInfo> BuildEnvironmentInfoAsync(
         CancellationToken cancellationToken = default);
