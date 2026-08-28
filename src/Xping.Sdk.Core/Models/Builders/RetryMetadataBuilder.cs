@@ -118,6 +118,12 @@ public sealed class RetryMetadataBuilder
     /// <summary>
     /// Builds an immutable <see cref="RetryMetadata"/> instance.
     /// </summary>
+    /// <remarks>
+    /// The collections are copied rather than wrapped. <c>ReadOnlyDictionary</c> and
+    /// <c>ReadOnlyCollection</c> are views over the source, and <see cref="Reset"/> clears the
+    /// builder's collections in place — so wrapping would leave every instance ever built sharing
+    /// one backing store, and emptied by the next reset.
+    /// </remarks>
     public RetryMetadata Build()
     {
         return new RetryMetadata(
@@ -127,7 +133,8 @@ public sealed class RetryMetadataBuilder
             delayBetweenRetries: _delayBetweenRetries,
             retryReason: _retryReason,
             retryAttributeName: _retryAttributeName,
-            additionalMetadata: new ReadOnlyDictionary<string, string>(_additionalMetadata));
+            additionalMetadata: new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(_additionalMetadata)));
     }
 
     /// <summary>

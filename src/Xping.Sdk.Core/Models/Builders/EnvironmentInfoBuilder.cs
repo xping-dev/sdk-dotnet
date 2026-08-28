@@ -168,6 +168,12 @@ public sealed class EnvironmentInfoBuilder
     /// <summary>
     /// Builds an immutable <see cref="EnvironmentInfo"/> instance.
     /// </summary>
+    /// <remarks>
+    /// The collections are copied rather than wrapped. <c>ReadOnlyDictionary</c> and
+    /// <c>ReadOnlyCollection</c> are views over the source, and <see cref="Reset"/> clears the
+    /// builder's collections in place — so wrapping would leave every instance ever built sharing
+    /// one backing store, and emptied by the next reset.
+    /// </remarks>
     public EnvironmentInfo Build()
     {
         return new EnvironmentInfo(
@@ -179,7 +185,8 @@ public sealed class EnvironmentInfoBuilder
             isCIEnvironment: _isCIEnvironment,
             utcOffset: _utcOffset,
             timeZoneId: _timeZoneId,
-            customProperties: new ReadOnlyDictionary<string, string>(_customProperties));
+            customProperties: new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(_customProperties)));
     }
 
     /// <summary>

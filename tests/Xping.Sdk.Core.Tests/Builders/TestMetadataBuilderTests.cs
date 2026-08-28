@@ -4,6 +4,7 @@
  */
 
 using Xping.Sdk.Core.Models.Builders;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Core.Tests.Builders;
 
@@ -234,5 +235,38 @@ public sealed class TestMetadataBuilderTests
     {
         var builder = new TestMetadataBuilder();
         Assert.Same(builder, builder.Reset());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Build — isolation from the builder that produced it
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Build_ThenReset_ShouldLeaveTheBuiltInstanceUntouched()
+    {
+        var builder = new TestMetadataBuilder()
+            .AddCategory("integration")
+            .AddTag("framework:xUnit")
+            .AddCustomAttribute("owner", "platform");
+
+        TestMetadata metadata = builder.Build();
+        builder.Reset();
+
+        Assert.Equal(["integration"], metadata.Categories);
+        Assert.Equal(["framework:xUnit"], metadata.Tags);
+        Assert.Equal("platform", metadata.CustomAttributes["owner"]);
+    }
+
+    [Fact]
+    public void Build_Twice_ShouldNotShareCollectionsBetweenInstances()
+    {
+        var builder = new TestMetadataBuilder().AddCategory("integration");
+
+        TestMetadata first = builder.Build();
+        builder.Reset().AddCategory("unit");
+        TestMetadata second = builder.Build();
+
+        Assert.Equal(["integration"], first.Categories);
+        Assert.Equal(["unit"], second.Categories);
     }
 }

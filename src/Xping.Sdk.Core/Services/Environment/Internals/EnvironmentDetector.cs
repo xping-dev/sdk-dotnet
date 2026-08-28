@@ -19,7 +19,6 @@ namespace Xping.Sdk.Core.Services.Environment.Internals;
 /// </summary>
 internal sealed class EnvironmentDetector : IEnvironmentDetector
 {
-    private readonly EnvironmentInfoBuilder _builder = new();
     private readonly XpingConfiguration _configuration;
 
     // Instance-level lazy initialization for thread-safe, cached detection
@@ -80,26 +79,30 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     /// <inheritdoc/>
     Task<EnvironmentInfo> IEnvironmentDetector.BuildEnvironmentInfoAsync(CancellationToken cancellationToken)
     {
-        _builder.Reset();
-        _builder.WithMachineName(_machineName.Value);
-        _builder.WithOperatingSystem(_operatingSystem.Value);
-        _builder.WithRuntimeVersion(_runtimeVersion.Value);
-        _builder.WithFramework(_framework.Value);
-        _builder.WithEnvironmentName(_environmentName.Value);
-        _builder.WithIsCIEnvironment(_ciPlatform.Value.HasValue);
-
         // Resolved against now rather than cached with the zone: the offset is a property of the
         // instant, not of the machine, and a suite started either side of a daylight-saving
         // transition is exactly the case this field exists to make visible.
         TimeZoneInfo? zone = _localTimeZone.Value;
-        _builder.WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id);
 
-        _builder.AddCustomProperties(_customProperties.Value);
+        // A local builder, as in ExecutionTracker.CreateExecutionContext. This type is registered as
+        // a singleton so the detection lazies are paid for once, and a builder held alongside them
+        // would be shared by every caller: two concurrent calls could interleave their Reset() and
+        // With...() calls and emit an EnvironmentInfo mixing fields from both.
+        EnvironmentInfo environmentInfo = new EnvironmentInfoBuilder()
+            .WithMachineName(_machineName.Value)
+            .WithOperatingSystem(_operatingSystem.Value)
+            .WithRuntimeVersion(_runtimeVersion.Value)
+            .WithFramework(_framework.Value)
+            .WithEnvironmentName(_environmentName.Value)
+            .WithIsCIEnvironment(_ciPlatform.Value.HasValue)
+            .WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id)
+            .AddCustomProperties(_customProperties.Value)
+            .Build();
 
         // Nothing here awaits any more: every field is read from a cached lazy or the local clock.
         // The interface stays task-returning so a detector that does need to await — the no-op one,
         // or a future source of environment data — is not a signature change away.
-        return Task.FromResult(_builder.Build());
+        return Task.FromResult(environmentInfo);
     }
 
     /// <summary>

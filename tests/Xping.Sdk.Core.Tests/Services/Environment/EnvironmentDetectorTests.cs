@@ -413,6 +413,35 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain("Git.SHA", info.CustomProperties.Keys);
     }
 
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_OnConcurrentCalls_ReturnsIndependentInstances()
+    {
+        // The detector is a DI singleton so its detection lazies are paid for once. A builder held
+        // alongside them would be shared by every caller, and concurrent calls could interleave
+        // their Reset()/With...() calls into one another's output.
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo[] built = await Task.WhenAll(
+            Enumerable.Range(0, 32).Select(_ => Task.Run(() => detector.BuildEnvironmentInfoAsync())));
+
+        EnvironmentInfo expected = built[0];
+
+        Assert.All(built, info =>
+        {
+            Assert.Equal(expected.MachineName, info.MachineName);
+            Assert.Equal(expected.OperatingSystem, info.OperatingSystem);
+            Assert.Equal(expected.RuntimeVersion, info.RuntimeVersion);
+            Assert.Equal(expected.Framework, info.Framework);
+            Assert.Equal(expected.EnvironmentName, info.EnvironmentName);
+            Assert.Equal(expected.CustomProperties, info.CustomProperties);
+        });
+
+        // Every call must own its properties: one instance's dictionary cannot be another's.
+        Assert.Equal(built.Length, built.Distinct(ReferenceEqualityComparer.Instance).Count());
+    }
+
     private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
     {
         return new EnvironmentDetector(Options.Create(configuration ?? new XpingConfiguration()));

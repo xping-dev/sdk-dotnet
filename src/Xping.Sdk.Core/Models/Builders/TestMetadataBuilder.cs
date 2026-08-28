@@ -121,12 +121,19 @@ public sealed class TestMetadataBuilder
     /// <summary>
     /// Builds an immutable <see cref="TestMetadata"/> instance.
     /// </summary>
+    /// <remarks>
+    /// The collections are copied rather than wrapped. <c>ReadOnlyDictionary</c> and
+    /// <c>ReadOnlyCollection</c> are views over the source, and <see cref="Reset"/> clears the
+    /// builder's collections in place — so wrapping would leave every instance ever built sharing
+    /// one backing store, and emptied by the next reset.
+    /// </remarks>
     public TestMetadata Build()
     {
         return new TestMetadata(
-            categories: _categories.AsReadOnly(),
-            tags: _tags.AsReadOnly(),
-            customAttributes: new ReadOnlyDictionary<string, string>(_customAttributes),
+            categories: new List<string>(_categories).AsReadOnly(),
+            tags: new List<string>(_tags).AsReadOnly(),
+            customAttributes: new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(_customAttributes)),
             description: _description);
     }
 

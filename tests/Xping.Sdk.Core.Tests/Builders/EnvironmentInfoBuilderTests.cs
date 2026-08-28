@@ -267,4 +267,33 @@ public sealed class EnvironmentInfoBuilderTests
         Assert.Equal("Europe/Berlin", info.TimeZoneId);
         Assert.Equal("main", info.CustomProperties["branch"]);
     }
+
+    // ---------------------------------------------------------------------------
+    // Build — isolation from the builder that produced it
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Build_ThenReset_ShouldLeaveTheBuiltInstanceUntouched()
+    {
+        var builder = new EnvironmentInfoBuilder().AddCustomProperty("branch", "main");
+
+        EnvironmentInfo info = builder.Build();
+        builder.Reset();
+
+        Assert.Equal("main", info.CustomProperties["branch"]);
+    }
+
+    [Fact]
+    public void Build_Twice_ShouldNotShareCustomPropertiesBetweenInstances()
+    {
+        var builder = new EnvironmentInfoBuilder().AddCustomProperty("branch", "main");
+
+        EnvironmentInfo first = builder.Build();
+        builder.Reset().AddCustomProperty("branch", "release");
+        EnvironmentInfo second = builder.Build();
+
+        Assert.Equal("main", first.CustomProperties["branch"]);
+        Assert.Equal("release", second.CustomProperties["branch"]);
+    }
+
 }
