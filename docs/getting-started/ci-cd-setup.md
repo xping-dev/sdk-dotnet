@@ -20,12 +20,23 @@ Xping SDK automatically detects CI/CD environments and captures relevant metadat
 The basic setup is the same across all CI/CD platforms:
 
 1. **Get your API key** from [Xping Cloud](https://app.xping.io): **Account** → **Settings** → **API & Integration** → **Create API Key**
-2. **Choose a Project ID** - any meaningful identifier for your project (e.g., `"my-app"`, `"payment-service"`)
-3. **Store credentials as secrets/variables** in your CI/CD platform
-4. **Set environment variables in your pipeline**
-5. **Run your tests normally** - Xping SDK handles the rest
+2. **Store it as a secret** in your CI/CD platform — never as a plain variable, and never in `appsettings.json`
+3. **Expose it to the test step** as `XPING_APIKEY`
+4. **Run your tests normally** - Xping SDK handles the rest
 
-> **Note:** The Project ID is user-defined and doesn't need to exist beforehand. Xping automatically creates the project in your workspace when tests first run, requiring only that the name is unique within your workspace.
+That is the whole setup. One secret, one environment variable.
+
+> **You do not choose a project name.** Xping derives the project from the test assembly each
+> execution belongs to, and creates it on the first upload. A solution with several test projects
+> gets one Xping project each.
+>
+> `XPING_PROJECTID` is **optional** and exists only to override that — set it when several test
+> assemblies should report into a single project. See
+> [ProjectId](../configuration/configuration-reference.md#projectid).
+
+> **`XPING_APIKEY` is upload-only.** It can write test runs and nothing else, so the key sitting in
+> your CI secrets is not a way into your data. Reading history back is a person's action,
+> authenticated in [Xping Cloud](https://app.xping.io).
 
 ---
 
@@ -72,9 +83,9 @@ jobs:
       
       - name: Run tests with Xping
         env:
-          XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
-          XPING__ENABLED: true
-          XPING__AUTODETECTCIENVIRONMENT: true
+          XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+          XPING_ENABLED: true
+          XPING_AUTODETECTCIENVIRONMENT: true
         run: dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
 ```
 
@@ -142,9 +153,9 @@ steps:
     command: 'test'
     arguments: '--no-build --configuration Release'
   env:
-    XPING__APIKEY: $(XPING.ApiKey)
-    XPING__ENABLED: true
-    XPING__AUTODETECTCIENVIRONMENT: true
+    XPING_APIKEY: $(XPING.ApiKey)
+    XPING_ENABLED: true
+    XPING_AUTODETECTCIENVIRONMENT: true
 ```
 
 ### Captured Metadata
@@ -181,8 +192,8 @@ stages:
   - test
 
 variables:
-  XPING__ENABLED: "true"
-  XPING__AUTODETECTCIENVIRONMENT: "true"
+  XPING_ENABLED: "true"
+  XPING_AUTODETECTCIENVIRONMENT: "true"
 
 before_script:
   - dotnet --version
@@ -204,7 +215,7 @@ test:
   script:
     - dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
   variables:
-    XPING__APIKEY: $XPING_APIKEY
+    XPING_APIKEY: $XPING_APIKEY
 ```
 
 ### Captured Metadata
@@ -229,7 +240,9 @@ Store your Xping credentials using Jenkins Credentials:
 1. Go to **Manage Jenkins** → **Credentials**
 2. Add **Secret text** credentials:
    - ID: `xping-api-key`, Secret: Your Xping API key
-   - ID: `xping-project-id`, Secret: Your chosen project identifier (e.g., `"my-app"`)
+
+   That is the only credential needed. `XPING_PROJECTID` is optional and only pins several test
+   assemblies into a single project — omit it and each assembly gets its own.
 
 ### Pipeline Example (Jenkinsfile)
 
@@ -238,9 +251,9 @@ pipeline {
     agent any
     
     environment {
-        XPING__APIKEY = credentials('xping-api-key')
-        XPING__ENABLED = 'true'
-        XPING__AUTODETECTCIENVIRONMENT = 'true'
+        XPING_APIKEY = credentials('xping-api-key')
+        XPING_ENABLED = 'true'
+        XPING_AUTODETECTCIENVIRONMENT = 'true'
     }
     
     stages {
@@ -310,9 +323,9 @@ jobs:
       - image: mcr.microsoft.com/dotnet/sdk:8.0
     
     environment:
-      XPING__APIKEY: $XPING_APIKEY
-      XPING__ENABLED: "true"
-      XPING__AUTODETECTCIENVIRONMENT: "true"
+      XPING_APIKEY: $XPING_APIKEY
+      XPING_ENABLED: "true"
+      XPING_AUTODETECTCIENVIRONMENT: "true"
     
     steps:
       - checkout
@@ -347,6 +360,46 @@ Xping automatically captures:
 
 ---
 
+## Gating the Build on Findings
+
+The SDK records; the CLI reads. If you want CI to *act* on what was recorded — not just ship it to
+Xping Cloud — add the `xping` tool to the job. It reads the same `.xping/` store the SDK just
+wrote, so this works with or without an API key:
+
+```yaml
+- name: Install Xping CLI
+  run: dotnet tool install -g Xping.Cli
+
+- name: Run tests
+  env:
+    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+  run: dotnet test --no-build --configuration Release
+
+- name: Check reliability findings
+  if: always()
+  run: xping report --fail-on high
+```
+
+`--fail-on high` exits non-zero when a high-severity finding appears. Useful variants:
+
+```bash
+xping report --summary            # one line, good as a CI step title
+xping report --format json        # versioned envelope, for a script or an agent
+xping report --no-color --ascii   # for log collectors that mangle ANSI
+```
+
+> The CLI targets `net10.0`. If your build agent is on an older SDK, either add a .NET 10 setup
+> step or run the check in a separate job — the SDK packages themselves target `netstandard2.0` and
+> are unaffected.
+>
+> A fresh CI runner starts with an empty store, so its report covers only that job's runs. The
+> cross-run history that makes findings meaningful accumulates in Xping Cloud, or on developer
+> machines that keep their `.xping/` between runs.
+
+Full flag list: [CLI Command Reference](../cli/command-reference.md).
+
+---
+
 ## Best Practices
 
 ### 1. Always Use Secrets for Credentials
@@ -354,22 +407,22 @@ Xping automatically captures:
 **✅ Do:**
 ```yaml
 env:
-  XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
+  XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
 ```
 
 **❌ Don't:**
 ```yaml
 env:
-  XPING__APIKEY: "pk_live_1234567890abcdef"  # Never hardcode!
+  XPING_APIKEY: "pk_live_1234567890abcdef"  # Never hardcode!
 ```
 
 ### 2. Enable Auto-Detection
 
-Set `XPING__AUTODETECTCIENVIRONMENT: true` to automatically capture CI/CD metadata:
+Set `XPING_AUTODETECTCIENVIRONMENT: true` to automatically capture CI/CD metadata:
 
 ```yaml
 env:
-  XPING__AUTODETECTCIENVIRONMENT: true
+  XPING_AUTODETECTCIENVIRONMENT: true
 ```
 
 ### 3. Use Descriptive Environment Names
@@ -378,9 +431,9 @@ Override the auto-detected environment with a descriptive name:
 
 ```yaml
 env:
-  XPING__ENVIRONMENT: "Production-CI"
+  XPING_ENVIRONMENT: "Production-CI"
   # or
-  XPING__ENVIRONMENT: "PR-${{ github.event.pull_request.number }}"
+  XPING_ENVIRONMENT: "PR-${{ github.event.pull_request.number }}"
 ```
 
 ### 4. Conditional Execution for PRs
@@ -391,7 +444,7 @@ Only track tests for main branches and pull requests:
 - name: Run tests with Xping
   if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
   env:
-    XPING__ENABLED: true
+    XPING_ENABLED: true
   run: dotnet test
 ```
 
@@ -402,9 +455,9 @@ Xping SDK includes retry logic with exponential backoff, but you can add explici
 ```yaml
 - name: Run tests with Xping
   env:
-    XPING__ENABLED: true
-    XPING__MAXRETRIES: 5
-    XPING__RETRYDELAY: "00:00:03"
+    XPING_ENABLED: true
+    XPING_MAXRETRIES: 5
+    XPING_RETRYDELAY: "00:00:03"
   run: dotnet test
   continue-on-error: false  # Don't fail build if Xping upload fails
 ```
@@ -455,12 +508,12 @@ Track test execution time to ensure Xping overhead is minimal:
 
 1. **Credentials not set**: Verify environment variables are accessible
    ```bash
-   echo "API Key set: $([[ -n "$XPING__APIKEY" ]] && echo "Yes" || echo "No")"
+   echo "API Key set: $([[ -n "$XPING_APIKEY" ]] && echo "Yes" || echo "No")"
    ```
 
-2. **Network restrictions**: Ensure your CI environment can reach `api.xping.io`
+2. **Network restrictions**: Ensure your CI environment can reach the upload endpoint
    ```bash
-   curl -I https://api.xping.io/health
+   curl -I https://upload.xping.io/v1
    ```
 
 3. **Insufficient permissions**: Some CI systems restrict outbound network calls
@@ -475,13 +528,15 @@ If some tests are tracked but not all:
 2. **Increase flush interval**: Give more time for batch uploads
    ```yaml
    env:
-     XPING__FLUSHINTERVAL: "00:02:00"
+     XPING_FLUSHINTERVAL: "00:02:00"
    ```
 
-3. **Review logs**: Enable detailed logging
+3. **Fail loudly instead of silently**: by default the SDK degrades quietly when it cannot upload.
+   Set `XPING_STRICTMODE` to turn configuration and delivery problems into an error rather than a
+   silent no-op:
    ```yaml
    env:
-     XPING__LOGLEVEL: "Debug"
+     XPING_STRICTMODE: "true"
    ```
 
 ### Performance degradation
@@ -492,7 +547,7 @@ If tests run slower in CI:
 2. **Increase batch size**: Reduce number of API calls
    ```yaml
    env:
-     XPING__BATCHSIZE: 500
+     XPING_BATCHSIZE: 500
    ```
 
 3. **Use async mode**: Ensure async operations aren't blocking
@@ -501,38 +556,24 @@ If tests run slower in CI:
 
 ## Advanced Configuration
 
-### Custom Metadata
+### Merging Several Test Assemblies into One Project
 
-Add custom properties in CI environment:
-
-```yaml
-env:
-  XPING__CUSTOMENVIRONMENT: |
-    {
-      "BuildAgent": "${{ runner.name }}",
-      "Executor": "${{ github.actor }}",
-      "PullRequest": "${{ github.event.pull_request.number }}"
-    }
-```
-
-### Separate Projects per Branch
-
-Track different branches in different Xping projects:
+By default each test assembly reports into its own Xping project. Set `XPING_PROJECTID` to collapse
+them — useful in a monorepo where a dozen test projects are really one product:
 
 ```yaml
-- name: Set Xping Project
-  run: |
-    if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-      echo "XPING__PROJECTID=${{ secrets.XPING_PROJECT_MAIN }}" >> $GITHUB_ENV
-    else
-      echo "XPING__PROJECTID=${{ secrets.XPING_PROJECT_DEV }}" >> $GITHUB_ENV
-    fi
-
 - name: Run tests
   env:
-    XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
+    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+    XPING_PROJECTID: payment-platform
   run: dotnet test
 ```
+
+It is a hard pin: every execution in the session lands in that project regardless of which assembly
+it came from. Leave it unset unless you specifically want that.
+
+> Branch is captured automatically from CI metadata and does not need its own project. Splitting
+> branches across projects fragments the history the confidence score depends on.
 
 ### Custom CI Environment Label
 
