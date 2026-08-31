@@ -39,6 +39,7 @@ internal sealed record ExecutionRef(TestSession Session, int SessionIndex, TestE
 internal sealed class TestIndex
 {
     private readonly Dictionary<string, List<ExecutionRef>> _byFingerprint;
+    private readonly Dictionary<string, int> _sessionsRunIn;
     private readonly Dictionary<string, TestReference> _references;
     private readonly Dictionary<Guid, int> _sessionPositions;
     private readonly HashSet<Guid> _sessionsWithFinalFailures;
@@ -46,6 +47,7 @@ internal sealed class TestIndex
     private TestIndex(
         AnalysisWindow window,
         Dictionary<string, List<ExecutionRef>> byFingerprint,
+        Dictionary<string, int> sessionsRunIn,
         Dictionary<string, TestReference> references,
         Dictionary<Guid, int> sessionPositions,
         HashSet<Guid> sessionsWithFinalFailures,
@@ -53,6 +55,7 @@ internal sealed class TestIndex
     {
         Window = window;
         _byFingerprint = byFingerprint;
+        _sessionsRunIn = sessionsRunIn;
         _references = references;
         _sessionPositions = sessionPositions;
         _sessionsWithFinalFailures = sessionsWithFinalFailures;
@@ -114,15 +117,23 @@ internal sealed class TestIndex
     /// <param name="fingerprint">The test to measure.</param>
     /// <returns>A value in [0,1].</returns>
     /// <remarks>
+    /// <para>
     /// A test that runs in every session is worth more attention than one that runs occasionally,
     /// because it costs the whole team on every build.
+    /// </para>
+    /// <para>
+    /// Counted in sessions, not executions. A retried test records an execution per attempt, so
+    /// dividing attempts by sessions would read a test that runs in a quarter of builds and retries
+    /// four times as one that runs in every build — and would do it worst for exactly the tests the
+    /// retry findings already report.
+    /// </para>
     /// </remarks>
     public double RunFrequencyOf(string fingerprint)
     {
         if (Window.SessionCount == 0)
             return 0;
 
-        return Math.Min(1.0, (double)ExecutionsOf(fingerprint).Count / Window.SessionCount);
+        return Math.Min(1.0, (double)_sessionsRunIn.GetValueOrDefault(fingerprint) / Window.SessionCount);
     }
 
     /// <summary>
@@ -173,6 +184,7 @@ internal sealed class TestIndex
     public static TestIndex Build(AnalysisWindow window)
     {
         var byFingerprint = new Dictionary<string, List<ExecutionRef>>(StringComparer.Ordinal);
+        var sessionsRunIn = new Dictionary<string, int>(StringComparer.Ordinal);
         var references = new Dictionary<string, TestReference>(StringComparer.Ordinal);
         var sessionPositions = new Dictionary<Guid, int>();
         var sessionsWithFinalFailures = new HashSet<Guid>();
@@ -194,6 +206,12 @@ internal sealed class TestIndex
                     byFingerprint[fingerprint] = executions;
                 }
 
+                // Sessions are walked one at a time, so a fingerprint's executions arrive grouped by
+                // session: the session count only advances when the last one recorded came from a
+                // different session, and never counts a retry twice.
+                if (executions.Count == 0 || executions[^1].SessionIndex != position)
+                    sessionsRunIn[fingerprint] = sessionsRunIn.GetValueOrDefault(fingerprint) + 1;
+
                 executions.Add(new ExecutionRef(session, position, execution));
 
                 // Sessions are walked newest first, so the first identity seen for a fingerprint is
@@ -210,7 +228,13 @@ internal sealed class TestIndex
         var fingerprints = byFingerprint.Keys.OrderBy(f => f, StringComparer.Ordinal).ToList();
 
         return new TestIndex(
-            window, byFingerprint, references, sessionPositions, sessionsWithFinalFailures, fingerprints);
+            window,
+            byFingerprint,
+            sessionsRunIn,
+            references,
+            sessionPositions,
+            sessionsWithFinalFailures,
+            fingerprints);
     }
 
     private static TestReference ToReference(TestExecution execution)
