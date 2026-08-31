@@ -82,6 +82,21 @@ internal static class LocalAnalysisConstants
     public const double AlwaysFailingRate = 0.90;
 
     /// <summary>
+    /// Share of a test's failures the dominant failure mode must account for before the test is
+    /// called broken rather than flaky (0.70).
+    /// </summary>
+    /// <remarks>
+    /// Applied alongside <see cref="AlwaysFailingRate"/>, and the reason that threshold is reachable
+    /// at all. Failure modes are compared by exact hash over the exception type, the normalised
+    /// message and five frames, so two runs of one broken assertion count as two modes whenever the
+    /// message carries the data that differed — <c>Expected: "Alice" but was: "Bob"</c> against
+    /// <c>"Carol"</c>. Demanding a single mode let a name in an error message decide the most severe
+    /// classification the report makes. Below this share the failures genuinely do not agree, and a
+    /// test that fails a different way every time is flaky however often it fails.
+    /// </remarks>
+    public const double AlwaysFailingModalShareMin = 0.70;
+
+    /// <summary>
     /// Share of a test's failures that must be timeouts before it is reported as timing out (0.50).
     /// </summary>
     /// <remarks>

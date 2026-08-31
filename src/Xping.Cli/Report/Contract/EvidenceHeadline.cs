@@ -206,22 +206,35 @@ internal static class EvidenceHeadline
 
     private static (string, IReadOnlyList<MetricDto>) AlwaysFailing(AlwaysFailingEvidence e)
     {
+        // "One failure mode" is a claim about every failure, and the classification no longer
+        // requires that. Where the failures were not identical the share says so, so a reader who
+        // opens two exemplars and finds different messages is not left thinking the report misread
+        // them.
+        bool sole = e.ModalSignatureShare >= 1.0;
+
+        string mode = sole
+            ? "one failure mode"
+            : $"one dominant failure mode ({Percent(e.ModalSignatureShare)} of failures)";
+
         string headline =
-            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}), " +
-            "one failure mode";
+            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}), {mode}";
 
         // Named only when the adapter recorded a type. An adapter that captures no failure detail is
         // not the same as a failure that had none, and inventing a name here would hide the gap.
         if (e.Signature.ExceptionType is { Length: > 0 } type)
             headline += $": {type}";
 
-        return (
-            headline,
-            [
-                new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
-                new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
-                new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
-            ]);
+        List<MetricDto> metrics =
+        [
+            new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
+            new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+            new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
+        ];
+
+        if (!sole)
+            metrics.Add(new MetricDto("dominant mode", $"{Percent(e.ModalSignatureShare)} of failures"));
+
+        return (headline, metrics);
     }
 
     private static (string, IReadOnlyList<MetricDto>) TimingOut(TimingOutEvidence e)

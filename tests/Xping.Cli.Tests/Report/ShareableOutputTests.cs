@@ -126,7 +126,7 @@ public sealed class ShareableOutputTests
                 new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),
 
             FindingKind.AlwaysFailing =>
-                new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, signature, [exemplar], null),
+                new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, signature, 1.0, [exemplar], null),
 
             FindingKind.TimingOut =>
                 new TimingOutEvidence(
@@ -220,10 +220,32 @@ public sealed class ShareableOutputTests
 
         var (headline, _) = EvidenceHeadline.For(
             FindingKind.AlwaysFailing,
-            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, unnamed, [], null));
+            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, unnamed, 1.0, [], null));
 
         // An adapter that captures no failure detail is not the same as a failure that had none.
         Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAlwaysFailingHeadlineSaysWhenTheFailuresWereNotIdentical()
+    {
+        // "One failure mode" is a claim about every failure, and the classification only requires a
+        // dominant one. A reader who opens two exemplars and finds different messages has to be able
+        // to see that the report already knew.
+        var (headline, metrics) = EvidenceHeadline.For(
+            FindingKind.AlwaysFailing, EvidenceFor(FindingKind.AlwaysFailing) switch
+            {
+                AlwaysFailingEvidence e => e with { ModalSignatureShare = 0.895 },
+                var other => other
+            });
+
+        Assert.Equal(
+            "failed 19 of 20 executions (95%), one dominant failure mode (89.5% of failures): " +
+            "System.InvalidOperationException",
+            headline);
+
+        Assert.Contains(
+            metrics, m => m.Label == "dominant mode" && m.Value == "89.5% of failures");
     }
 
     [Fact]

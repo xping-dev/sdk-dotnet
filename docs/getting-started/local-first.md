@@ -128,7 +128,7 @@ The report distinguishes sixteen finding kinds. The ones you meet first:
 |---|---|---|
 | masked by retry | `RetryMasked` | The test failed and passed on retry, never reaching the run's outcome. The strongest flakiness signal, and the only one available from a single run. |
 | flaky | `Flaky` | The test both passes and fails, or fails in varying ways. |
-| always failing | `AlwaysFailing` | The test fails almost always, in one consistent way — a likely real bug, not flake. |
+| always failing | `AlwaysFailing` | The test fails almost always, in one dominant way — a likely real bug, not flake. |
 | timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
 | slower | `DurationRegression` | The test's median duration has regressed against its own baseline. |
 | stopped running | `Vanished` | The test appeared throughout the baseline and has stopped running. |
