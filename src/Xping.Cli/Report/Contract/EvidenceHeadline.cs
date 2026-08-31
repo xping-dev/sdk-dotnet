@@ -209,8 +209,9 @@ internal static class EvidenceHeadline
         // "One failure mode" is a claim about every failure, and the classification no longer
         // requires that. Where the failures were not identical the share says so, so a reader who
         // opens two exemplars and finds different messages is not left thinking the report misread
-        // them.
-        bool sole = e.ModalSignatureShare >= 1.0;
+        // them. Counted rather than read off the published share, which is rounded to three places
+        // and would round a share of 1999 failures in 2000 up into that claim.
+        bool sole = e.Signature.Occurrences == e.Failures;
 
         string mode = sole
             ? "one failure mode"

@@ -126,7 +126,9 @@ public sealed class ShareableOutputTests
                 new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),
 
             FindingKind.AlwaysFailing =>
-                new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, signature, 1.0, [exemplar], null),
+                new AlwaysFailingEvidence(
+                    19, 20, 20, 19, 0.95, 0, signature with { Occurrences = 19 }, 1.0,
+                    [exemplar], null),
 
             FindingKind.TimingOut =>
                 new TimingOutEvidence(
@@ -215,7 +217,7 @@ public sealed class ShareableOutputTests
     public void AHeadlineNamesTheFailureTypeOnlyWhenTheAdapterRecordedOne()
     {
         SignatureView unnamed = new(
-            "abc123", null, "no detail", [], false, true, 3,
+            "abc123", null, "no detail", [], false, true, 19,
             new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), null, 0, true, false);
 
         var (headline, _) = EvidenceHeadline.For(
@@ -235,7 +237,12 @@ public sealed class ShareableOutputTests
         var (headline, metrics) = EvidenceHeadline.For(
             FindingKind.AlwaysFailing, EvidenceFor(FindingKind.AlwaysFailing) switch
             {
-                AlwaysFailingEvidence e => e with { ModalSignatureShare = 0.895 },
+                // 17 of the 19 failures agreed, which is what a share below one means.
+                AlwaysFailingEvidence e => e with
+                {
+                    Signature = e.Signature with { Occurrences = 17 },
+                    ModalSignatureShare = 0.895
+                },
                 var other => other
             });
 
