@@ -137,8 +137,9 @@ about the same red run, and they carry different ids.
 
 `TimeSensitive` reads three axes and reports the widest gap: the local six-hour quarter of the day,
 weekend against weekday, and — when the window contains two UTC offsets for one time zone, which is
-what a daylight-saving change looks like — one side of the change against the other. The failing
-side must span at least three separate local days, so a bad afternoon is not reported as an
+what a daylight-saving change looks like — one side of the change against the other. Each side is
+counted in runs rather than attempts, since every attempt of a run is read on the same clock. The
+failing side must span at least three separate local days, so a bad afternoon is not reported as an
 afternoon pattern.
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said

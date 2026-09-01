@@ -39,6 +39,7 @@ internal sealed record ExecutionRef(TestSession Session, int SessionIndex, TestE
 internal sealed class TestIndex
 {
     private readonly Dictionary<string, List<ExecutionRef>> _byFingerprint;
+    private readonly Dictionary<string, List<ExecutionRef>> _runsByFingerprint;
     private readonly Dictionary<string, int> _sessionsRunIn;
     private readonly Dictionary<string, TestReference> _references;
     private readonly Dictionary<Guid, int> _sessionPositions;
@@ -47,6 +48,7 @@ internal sealed class TestIndex
     private TestIndex(
         AnalysisWindow window,
         Dictionary<string, List<ExecutionRef>> byFingerprint,
+        Dictionary<string, List<ExecutionRef>> runsByFingerprint,
         Dictionary<string, int> sessionsRunIn,
         Dictionary<string, TestReference> references,
         Dictionary<Guid, int> sessionPositions,
@@ -55,6 +57,7 @@ internal sealed class TestIndex
     {
         Window = window;
         _byFingerprint = byFingerprint;
+        _runsByFingerprint = runsByFingerprint;
         _sessionsRunIn = sessionsRunIn;
         _references = references;
         _sessionPositions = sessionPositions;
@@ -81,6 +84,41 @@ internal sealed class TestIndex
     /// <returns>Its executions, or an empty list when the test is not in the window.</returns>
     public IReadOnlyList<ExecutionRef> ExecutionsOf(string fingerprint) =>
         _byFingerprint.TryGetValue(fingerprint, out List<ExecutionRef>? executions) ? executions : [];
+
+    /// <summary>
+    /// Gets the runs of one test, newest session first — one entry per session.
+    /// </summary>
+    /// <param name="fingerprint">The test to look up.</param>
+    /// <returns>Its runs, or an empty list when the test is not in the window.</returns>
+    /// <remarks>
+    /// <para>
+    /// The session is the unit of independence in this data; the attempt is not. A test that failed,
+    /// retried and passed produces several <see cref="ExecutionRef"/> entries that are neither
+    /// independent of each other nor independently informative, and any gate or rate that counts them
+    /// separately is claiming a sample size it does not have.
+    /// </para>
+    /// <para>
+    /// Each run is represented by its deciding attempt — the highest attempt number recorded for the
+    /// fingerprint in that session — so <see cref="ExecutionRef.Failed"/> on a run answers the same
+    /// question <see cref="SessionOutcomes"/> answers about the session: did this test end it red.
+    /// The two must never disagree, or the report would call a session green while flagging a test
+    /// inside it as having blocked the build.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<ExecutionRef> RunsOf(string fingerprint) =>
+        _runsByFingerprint.TryGetValue(fingerprint, out List<ExecutionRef>? runs) ? runs : [];
+
+    /// <summary>
+    /// Gets how many distinct sessions a test ran in.
+    /// </summary>
+    /// <param name="fingerprint">The test to look up.</param>
+    /// <returns>The session count, or zero when the test is not in the window.</returns>
+    /// <remarks>
+    /// The denominator every per-test floor is applied to. Counted in sessions rather than in
+    /// executions because a single session that retried five times would otherwise clear a floor of
+    /// five on its own, which is the opposite of what a floor is for.
+    /// </remarks>
+    public int SessionsRunIn(string fingerprint) => _sessionsRunIn.GetValueOrDefault(fingerprint);
 
     /// <summary>
     /// Gets the display identity of one test.
@@ -184,6 +222,7 @@ internal sealed class TestIndex
     public static TestIndex Build(AnalysisWindow window)
     {
         var byFingerprint = new Dictionary<string, List<ExecutionRef>>(StringComparer.Ordinal);
+        var runsByFingerprint = new Dictionary<string, List<ExecutionRef>>(StringComparer.Ordinal);
         var sessionsRunIn = new Dictionary<string, int>(StringComparer.Ordinal);
         var references = new Dictionary<string, TestReference>(StringComparer.Ordinal);
         var sessionPositions = new Dictionary<Guid, int>();
@@ -206,13 +245,32 @@ internal sealed class TestIndex
                     byFingerprint[fingerprint] = executions;
                 }
 
+                if (!runsByFingerprint.TryGetValue(fingerprint, out List<ExecutionRef>? runs))
+                {
+                    runs = [];
+                    runsByFingerprint[fingerprint] = runs;
+                }
+
+                var reference = new ExecutionRef(session, position, execution);
+
                 // Sessions are walked one at a time, so a fingerprint's executions arrive grouped by
                 // session: the session count only advances when the last one recorded came from a
                 // different session, and never counts a retry twice.
                 if (executions.Count == 0 || executions[^1].SessionIndex != position)
+                {
                     sessionsRunIn[fingerprint] = sessionsRunIn.GetValueOrDefault(fingerprint) + 1;
+                    runs.Add(reference);
+                }
+                else if (AttemptOf(execution) >= AttemptOf(runs[^1].Execution))
+                {
+                    // Same session, so this attempt replaces the run's representative when it is at
+                    // least as late. Attempts are not guaranteed to arrive in order, and the
+                    // comparison is `>=` rather than `>` for the reason SessionOutcomes gives: on
+                    // equal attempt numbers the last one recorded is the one that session ended on.
+                    runs[^1] = reference;
+                }
 
-                executions.Add(new ExecutionRef(session, position, execution));
+                executions.Add(reference);
 
                 // Sessions are walked newest first, so the first identity seen for a fingerprint is
                 // the most recent one. That matters after a rename: the report should show what the
@@ -230,12 +288,22 @@ internal sealed class TestIndex
         return new TestIndex(
             window,
             byFingerprint,
+            runsByFingerprint,
             sessionsRunIn,
             references,
             sessionPositions,
             sessionsWithFinalFailures,
             fingerprints);
     }
+
+    /// <summary>
+    /// Reads the attempt number an execution recorded, defaulting an unretried run to its first.
+    /// </summary>
+    /// <remarks>
+    /// The same reading <see cref="SessionOutcomes"/> takes. An adapter that never retried records no
+    /// retry block at all, and that run is its own deciding attempt.
+    /// </remarks>
+    private static int AttemptOf(TestExecution execution) => execution.Retry?.AttemptNumber ?? 1;
 
     private static TestReference ToReference(TestExecution execution)
     {

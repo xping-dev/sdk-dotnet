@@ -18,7 +18,7 @@ public sealed class ParallelSensitiveProviderTests
     private const string Subject = "Subject";
 
     // Ten sessions, five a side of the median, is the smallest window the finding can fire in:
-    // ParallelSensitiveMinArmExecutions is 5 and both arms have to clear it.
+    // ParallelSensitiveMinArmSessions is 5 and both arms have to clear it.
     private const int Sessions = 10;
 
     // ---------------------------------------------------------------------------------------
@@ -32,6 +32,27 @@ public sealed class ParallelSensitiveProviderTests
 
         Assert.Equal(FindingKind.ParallelSensitive, candidate.Kind);
         Assert.Equal(Subject, Named(candidate));
+    }
+
+    [Fact]
+    public void AnArmFilledByRetriesWithinTooFewSessionsIsDeclined()
+    {
+        // Four sessions of four attempts put eight executions either side of the median, which used
+        // to be well clear of the gate. They are four occasions, and the gate now counts those.
+        Assert.Empty(Analyze(RetriedWithin(sessions: 4, attemptsPerSession: 4)));
+    }
+
+    [Fact]
+    public void TheSameShapeOverFiveSessionsQualifiesAndKeepsItsExecutionDenominators()
+    {
+        // The concurrency readings are real and distinct, so the rate stays over executions once the
+        // arms rest on enough separate occasions. The evidence publishes both numbers.
+        ParallelSensitiveEvidence evidence = EvidenceFrom(RetriedWithin(sessions: 5, attemptsPerSession: 4));
+
+        Assert.Equal(10, evidence.High.Executions);
+        Assert.Equal(5, evidence.High.Sessions);
+        Assert.Equal(10, evidence.Low.Executions);
+        Assert.Equal(5, evidence.Low.Sessions);
     }
 
     [Fact]
@@ -291,6 +312,50 @@ public sealed class ParallelSensitiveProviderTests
     // ---------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a window in which the subject retries within each session, taking a fresh concurrency
+    /// reading on every attempt: quiet on the earlier attempts and crowded on the later ones.
+    /// </summary>
+    /// <param name="sessions">How many sessions to build.</param>
+    /// <param name="attemptsPerSession">Attempts each session takes, all but the last failing.</param>
+    /// <returns>The sessions.</returns>
+    /// <remarks>
+    /// The concurrency genuinely differs between attempts, so the arms are real; what they are not
+    /// is independent occasions. Four sessions of four attempts fill both arms with eight executions
+    /// apiece and used to clear a gate of five a side on four afternoons' worth of evidence.
+    /// </remarks>
+    private static List<TestSession> RetriedWithin(int sessions, int attemptsPerSession)
+    {
+        List<TestSession> built = [];
+
+        for (int ordinal = 0; ordinal < sessions; ordinal++)
+        {
+            List<TestExecution> executions = [];
+
+            for (int attempt = 1; attempt <= attemptsPerSession; attempt++)
+            {
+                // The suite empties out as the run goes on, so the later attempts are the quiet arm
+                // and the earlier the crowded one. Every attempt fails but the last.
+                bool crowded = attempt <= attemptsPerSession / 2;
+
+                executions.Add(TestSessionFactory.Execution(
+                    Subject,
+                    attempt == attemptsPerSession ? TestOutcome.Passed : TestOutcome.Failed,
+                    attempt: attempt,
+                    maxRetries: attemptsPerSession - 1,
+                    passedOnRetry: attempt == attemptsPerSession,
+                    errorMessage: attempt == attemptsPerSession ? null : "boom",
+                    executionId: TestSessionFactory.ExecutionIdFor(
+                        Subject, (ordinal * attemptsPerSession) + attempt, TestOutcome.Failed),
+                    concurrency: crowded ? 8 : 2));
+            }
+
+            built.Add(TestSessionFactory.Session(ordinal, executions));
+        }
+
+        return built;
+    }
 
     /// <summary>
     /// Builds a window where the subject runs once per session, quiet in the older half and crowded

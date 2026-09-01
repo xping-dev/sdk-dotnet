@@ -154,8 +154,10 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         List<Measured> considered = Considered(context, fingerprint);
 
         // Fewer than two arms' worth cannot be split at all, and checking here saves sorting the
-        // overwhelming majority of tests, which never vary their concurrency.
-        if (considered.Count < LocalAnalysisConstants.ParallelSensitiveMinArmExecutions * 2)
+        // overwhelming majority of tests, which never vary their concurrency. An execution count is a
+        // conservative stand-in for the session gate below — a test cannot have run in more sessions
+        // than it has executions — so this rejects only tests that gate would reject anyway.
+        if (considered.Count < LocalAnalysisConstants.ParallelSensitiveMinArmSessions * 2)
             return null;
 
         int median = MedianConcurrency(considered);
@@ -165,8 +167,15 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
         // An empty high arm is a test whose concurrency never varied. That is the common case and it
         // is not a finding: the question was asked and the data answered it.
-        if (low.Count < LocalAnalysisConstants.ParallelSensitiveMinArmExecutions ||
-            high.Count < LocalAnalysisConstants.ParallelSensitiveMinArmExecutions)
+        //
+        // Gated on distinct sessions rather than on executions, while the rates below stay over
+        // executions. The asymmetry is deliberate and is what separates this provider from the
+        // temporal one: concurrency genuinely differs between attempts within a session, so those
+        // executions are real, distinct readings and collapsing them would discard the signal. What
+        // they are not is independent occasions — ten attempts across two sessions are one afternoon,
+        // and a gate counting them would let it pass for ten.
+        if (DistinctSessions(low) < LocalAnalysisConstants.ParallelSensitiveMinArmSessions ||
+            DistinctSessions(high) < LocalAnalysisConstants.ParallelSensitiveMinArmSessions)
         {
             return null;
         }
@@ -291,12 +300,28 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         return failures;
     }
 
+    /// <summary>
+    /// Counts the distinct sessions an arm's executions came from.
+    /// </summary>
+    /// <remarks>
+    /// The arm gate's denominator, and the figure the evidence publishes beside the execution count,
+    /// so a reader can see how many independent occasions a rate over twelve executions rests on.
+    /// </remarks>
+    private static int DistinctSessions(List<Measured> arm)
+    {
+        var sessions = new HashSet<Guid>();
+
+        foreach (Measured measured in arm)
+            sessions.Add(measured.Reference.Session.SessionId);
+
+        return sessions.Count;
+    }
+
     private static ConcurrencyArm Summarise(List<Measured> arm, double rate)
     {
         int failures = 0;
         int min = int.MaxValue;
         int max = int.MinValue;
-        var sessions = new HashSet<Guid>();
 
         foreach (Measured measured in arm)
         {
@@ -305,11 +330,10 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
             min = Math.Min(min, measured.Concurrency);
             max = Math.Max(max, measured.Concurrency);
-            sessions.Add(measured.Reference.Session.SessionId);
         }
 
         return new ConcurrencyArm(
-            failures, arm.Count, sessions.Count, FindingOrder.Round(rate), min, max);
+            failures, arm.Count, DistinctSessions(arm), FindingOrder.Round(rate), min, max);
     }
 
     private static ConcurrencyRange Range(List<Measured> considered)

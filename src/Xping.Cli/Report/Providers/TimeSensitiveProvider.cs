@@ -12,7 +12,7 @@ using Xping.Sdk.Core.Models;
 namespace Xping.Cli.Report.Providers;
 
 /// <summary>
-/// One execution, published so the bin it landed in can be checked.
+/// One run, published so the bin it landed in can be checked.
 /// </summary>
 /// <remarks>
 /// <see cref="StartedAt"/> is the start of the run the execution belongs to, not of the execution
@@ -36,10 +36,14 @@ internal sealed record TimeExemplar(
 /// <summary>
 /// One side of a temporal split, always carrying the counts its rate was computed from.
 /// </summary>
-/// <param name="Failures">Executions in this arm that failed.</param>
-/// <param name="Executions">Executions in this arm.</param>
-/// <param name="Sessions">Distinct runs those executions came from.</param>
-/// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
+/// <remarks>
+/// Denominated in runs, not executions. A session is read on one clock, so every attempt of a test
+/// within it falls in the same arm at the same local hour; the arm is built from one observation per
+/// session and there is no second, execution-denominated count to publish alongside this one.
+/// </remarks>
+/// <param name="Failures">Runs in this arm that ended with the test failing.</param>
+/// <param name="Sessions">Runs in this arm, one per session.</param>
+/// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Sessions"/>.</param>
 /// <param name="DistinctFailureDates">
 /// Separate local calendar days this arm's <b>failures</b> fell on — the quantity the three-day gate
 /// is applied to, published so a reader can check it. It is the difference between a pattern and an
@@ -50,7 +54,6 @@ internal sealed record TimeExemplar(
 /// <param name="Label">What this arm is called in the report, such as <c>12:00-18:00 local</c>.</param>
 internal sealed record TimeArm(
     int Failures,
-    int Executions,
     int Sessions,
     double FailureRate,
     int DistinctFailureDates,
@@ -81,12 +84,12 @@ internal sealed record TimeDelta(double FailureRate, double FailureRatePct);
 /// <param name="Other">Everything else.</param>
 /// <param name="Delta">The signed difference in failure rate, which the threshold was applied to.</param>
 /// <param name="TimeZoneId">
-/// The zone every considered execution agreed on. Load-bearing rather than decorative: a local hour
+/// The zone every considered run agreed on. Load-bearing rather than decorative: a local hour
 /// means nothing without it, and the offset axis is only a daylight-saving shift because the zone
 /// did not change.
 /// </param>
-/// <param name="Exemplars">Up to three executions from the worse arm, newest first.</param>
-/// <param name="Contrast">One execution typical of the other arm.</param>
+/// <param name="Exemplars">Up to three runs from the worse arm, newest first.</param>
+/// <param name="Contrast">One run typical of the other arm.</param>
 internal sealed record TimeSensitiveEvidence(
     string Axis,
     TimeArm Worse,
@@ -110,7 +113,7 @@ internal sealed record TimeSensitiveEvidence(
 /// <para>
 /// <b>Every reading is local, and local is not derivable from the stored instant.</b> Timestamps are
 /// UTC; "fails overnight" is a claim about the developer's clock. The offset that turns one into the
-/// other is recorded per session, and an execution whose session recorded none is <b>excluded</b>
+/// other is recorded per session, and a run whose session recorded none is <b>excluded</b>
 /// rather than assumed to be on UTC — the same rule, for the same reason, that the concurrency
 /// provider applies to an execution with no orchestration record. It follows that a store written
 /// before that field existed produces nothing here, which is correct: the question was never asked
@@ -119,11 +122,21 @@ internal sealed record TimeSensitiveEvidence(
 /// <para>
 /// <b>This is a screening heuristic, not a hypothesis test.</b> Trying three axes and reporting the
 /// widest gap is a multiple comparison, and nothing here corrects for one. Three things contain it:
-/// an absolute threshold rather than a computed significance, a floor of five executions each side,
+/// an absolute threshold rather than a computed significance, a floor of five sessions each side,
 /// and — the one that does the real work — a requirement that the failing arm span three distinct
 /// local dates. Without the last, five failures in a single afternoon clear every other gate and get
 /// reported as an afternoon pattern. At most one finding is emitted per test, for the widest
 /// qualifying gap, so the three axes cannot each claim the same test.
+/// </para>
+/// <para>
+/// <b>Every arm is one observation per session.</b> A test contributes the verdict of its deciding
+/// attempt and nothing else, taken from <see cref="TestIndex.RunsOf"/>. This is not a refinement of
+/// the arm gate but a condition of the split existing at all: <see cref="ClocksIn"/> resolves one
+/// clock per session, so a retried test's attempts share an arm, a local hour, a day group and an
+/// offset. Counted separately they were never separate observations of anything these axes ask
+/// about — an arm of five could be two sessions with retries, and its failure rate was correlated
+/// for the same reason its denominator was inflated. Aggregating first is what makes the arm counts
+/// and the rate refer to the same units.
 /// </para>
 /// <para>
 /// The kind is capped at <see cref="Severity.Medium"/>. A test that fails more at one time of day
@@ -141,7 +154,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <summary>Hours in each local bin of the time-of-day axis.</summary>
     /// <remarks>
     /// Six, giving four bins. Twenty-four hourly bins over a default window of twenty sessions would
-    /// leave under one execution in each, and seven weekday bins little better — a split has to leave
+    /// leave under one run in each, and seven weekday bins little better — a split has to leave
     /// enough mass either side for a rate to mean anything, and coarse bins that occasionally fire
     /// are worth more than fine ones that never can.
     /// </remarks>
@@ -221,7 +234,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
 
         // Two arms' worth is the least that can be split at all, and checking here saves the axis
         // work for the overwhelming majority of tests.
-        if (considered.Count < LocalAnalysisConstants.TimeSensitiveMinArmExecutions * 2)
+        if (considered.Count < LocalAnalysisConstants.TimeSensitiveMinArmSessions * 2)
             return null;
 
         // One zone for the whole comparison. A machine that moved between zones has two populations
@@ -264,7 +277,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 Contrast(best.Other)),
 
             // The least gap the two arms support, as the concurrency provider does and for the same
-            // reason: five executions a side is the smallest split allowed and produces the largest
+            // reason: five sessions a side is the smallest split allowed and produces the largest
             // observed deltas, so ranking on the observation put the thinnest evidence at the top.
             // The condition still thresholds the observed delta, so which tests are reported has not
             // changed — though which axis is reported about them can, because Beats now selects on
@@ -277,7 +290,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             // winner on, so the published axis and the rank cannot disagree.
             Unreliability: best.Support,
 
-            // Dated by the failures that drove it rather than by the test's last execution. A test
+            // Dated by the failures that drove it rather than by the test's last run. A test
             // that failed overnight a fortnight ago and has run cleanly since should decay, and
             // dating it by its newest passing run would hold it at full recency forever.
             //
@@ -299,7 +312,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <remarks>
     /// <para>
     /// The better supported gap wins, not the wider one. This is what <see cref="TimeOfDaySplits"/>
-    /// describes when it says a quarter with a huge rate over four executions must lose to a quarter
+    /// describes when it says a quarter with a huge rate over four runs must lose to a quarter
     /// with a smaller one over twelve; comparing the observed gaps never implemented it. It also
     /// stops the axis search disagreeing with the score: the finding is ranked on the winner's
     /// supported gap, so choosing the winner on anything else would publish the thinnest split and
@@ -312,7 +325,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// </para>
     /// <para>
     /// The equality comparisons are exact on purpose. A tie here arises when two splits divided the
-    /// same executions the same way, so both quantities were computed from identical counts and the
+    /// same runs the same way, so both quantities were computed from identical counts and the
     /// doubles are bit-identical; a tolerance would only let genuinely different gaps tie.
     /// </para>
     /// </remarks>
@@ -328,14 +341,19 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Collects the executions this test can be placed on a clock, in a stable order.
+    /// Collects the runs this test can be placed on a clock, in a stable order.
     /// </summary>
+    /// <remarks>
+    /// One entry per session, the deciding attempt, so <c>Reference.Failed</c> reads as "the test
+    /// ended this session red" — the same verdict <see cref="SessionOutcomes"/> gives. A session
+    /// whose clock is unknown, or which was discounted as environmental, has no entry at all.
+    /// </remarks>
     private static List<Measured> Considered(
         AnalysisContext context, Dictionary<Guid, SessionClock> clocks, string fingerprint)
     {
         List<Measured> considered = [];
 
-        foreach (ExecutionRef reference in context.Tests.ExecutionsOf(fingerprint))
+        foreach (ExecutionRef reference in context.Tests.RunsOf(fingerprint))
         {
             if (clocks.TryGetValue(reference.Session.SessionId, out SessionClock? clock))
                 considered.Add(new Measured(reference, clock));
@@ -345,7 +363,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Gets the zone every considered execution agrees on, or <see langword="null"/> when they do not.
+    /// Gets the zone every considered run agrees on, or <see langword="null"/> when they do not.
     /// </summary>
     /// <remarks>
     /// An empty identifier counts as disagreement rather than as its own zone. It means the SDK
@@ -391,7 +409,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <remarks>
     /// Each quarter is offered separately rather than only the worst one, because "worst" is not
     /// known until the gap is computed and the arm gates have been applied — a quarter with a huge
-    /// rate over four executions must lose to a quarter with a smaller one over twelve.
+    /// rate over four runs must lose to a quarter with a smaller one over twelve.
     /// </remarks>
     private static IEnumerable<Split> TimeOfDaySplits(List<Measured> considered)
     {
@@ -413,7 +431,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Splits local weekend executions against local weekday ones.
+    /// Splits local weekend runs against local weekday ones.
     /// </summary>
     /// <remarks>
     /// Two groups rather than seven days. A fortnight holds at most two of any given weekday, so a
@@ -459,8 +477,8 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <summary>
     /// Applies every gate to one candidate split and orients it towards the failing side.
     /// </summary>
-    /// <param name="considered">The executions to divide.</param>
-    /// <param name="predicate">What puts an execution in the first arm.</param>
+    /// <param name="considered">The runs to divide.</param>
+    /// <param name="predicate">What puts a run in the first arm.</param>
     /// <param name="axis">The axis this split belongs to.</param>
     /// <param name="insideLabel">What the first arm is called.</param>
     /// <param name="outsideLabel">What the second arm is called.</param>
@@ -475,8 +493,8 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         List<Measured> inside = [.. considered.Where(predicate)];
         List<Measured> outside = [.. considered.Where(m => !predicate(m))];
 
-        if (inside.Count < LocalAnalysisConstants.TimeSensitiveMinArmExecutions ||
-            outside.Count < LocalAnalysisConstants.TimeSensitiveMinArmExecutions)
+        if (inside.Count < LocalAnalysisConstants.TimeSensitiveMinArmSessions ||
+            outside.Count < LocalAnalysisConstants.TimeSensitiveMinArmSessions)
         {
             return null;
         }
@@ -513,11 +531,11 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             delta >= 0);
     }
 
-    private static int DistinctDates(IEnumerable<Measured> executions)
+    private static int DistinctDates(IEnumerable<Measured> runs)
     {
         var dates = new HashSet<DateTime>();
 
-        foreach (Measured measured in executions)
+        foreach (Measured measured in runs)
             dates.Add(measured.Clock.LocalStartedAt.Date);
 
         return dates.Count;
@@ -537,23 +555,18 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         return failures;
     }
 
+    /// <remarks>
+    /// No session set is built here. <see cref="Considered"/> already emits one entry per session, so
+    /// <c>arm.Count</c> is the session count; deriving it a second way would only create somewhere
+    /// for the two to disagree.
+    /// </remarks>
     private static TimeArm Summarise(List<Measured> arm, string label)
     {
-        int failures = 0;
-        var sessions = new HashSet<Guid>();
-
-        foreach (Measured measured in arm)
-        {
-            if (measured.Reference.Failed)
-                failures++;
-
-            sessions.Add(measured.Reference.Session.SessionId);
-        }
+        int failures = FailureCount(arm);
 
         return new TimeArm(
             failures,
             arm.Count,
-            sessions.Count,
             FindingOrder.Round((double)failures / arm.Count),
             DistinctDates(arm.Where(m => m.Reference.Failed)),
             label);
@@ -566,12 +579,12 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         [.. Ordered(failures).Take(MaxExemplars).Select(ToExemplar)];
 
     /// <summary>
-    /// Picks one execution typical of the other arm.
+    /// Picks one run typical of the other arm.
     /// </summary>
     /// <remarks>
-    /// A passing execution where the arm has one, because the pair only makes the difference
+    /// A passing run where the arm has one, because the pair only makes the difference
     /// reasonable about if the other side shows the behaviour the finding claims is absent there.
-    /// Falls back to the newest execution rather than to nothing when the other arm also failed — it
+    /// Falls back to the newest run rather than to nothing when the other arm also failed — it
     /// failed less, which is the whole claim.
     /// </remarks>
     private static TimeExemplar? Contrast(List<Measured> other)
@@ -584,10 +597,14 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Orders executions newest first, breaking every tie totally.
+    /// Orders runs newest first, breaking every tie totally.
     /// </summary>
-    private static IOrderedEnumerable<Measured> Ordered(List<Measured> executions) =>
-        executions
+    /// <remarks>
+    /// One run per session makes SessionIndex alone a total order; the attempt and identifier
+    /// tie-breaks are kept because the ordering must stay total if that ever stops being true.
+    /// </remarks>
+    private static IOrderedEnumerable<Measured> Ordered(List<Measured> runs) =>
+        runs
             .OrderBy(m => m.Reference.SessionIndex)
             .ThenBy(m => m.Reference.Execution.Retry?.AttemptNumber ?? 1)
             .ThenBy(m => m.Reference.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
@@ -646,9 +663,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     private sealed record SessionClock(DateTime LocalStartedAt, TimeSpan UtcOffset, string TimeZoneId);
 
     /// <summary>
-    /// One execution together with the clock of the run it belongs to.
+    /// One run together with the clock it was read on.
     /// </summary>
-    /// <param name="Reference">The execution and the session it belongs to.</param>
+    /// <param name="Reference">The run's deciding attempt and the session it belongs to.</param>
     /// <param name="Clock">That session's local clock.</param>
     private sealed record Measured(ExecutionRef Reference, SessionClock Clock);
 

@@ -42,18 +42,73 @@ public sealed class TimeSensitiveProviderTests
     }
 
     [Fact]
+    public void RetriesWithinASessionDoNotFillAnArm()
+    {
+        // Three evening runs, each failing twice, are six evening executions and used to clear an
+        // arm gate of five. They are three occasions on one clock: every attempt of a run shares its
+        // session's local hour, so they were never separate observations of the evening at all.
+        Assert.Empty(Analyze(RetriedEvenings(eveningSessions: 3, attempts: 2)));
+    }
+
+    [Fact]
+    public void AnArmOfFiveMeansFiveDistinctSessions()
+    {
+        // The same shape with five evening runs qualifies, and the evidence publishes what the gate
+        // was applied to — five runs, not the ten executions they took.
+        TimeSensitiveEvidence evidence =
+            EvidenceFrom(RetriedEvenings(eveningSessions: 5, attempts: 2));
+
+        Assert.Equal(5, evidence.Worse.Sessions);
+        Assert.Equal(5, evidence.Worse.Failures);
+        Assert.Equal(1, evidence.Worse.FailureRate);
+        Assert.Equal(6, evidence.Other.Sessions);
+        Assert.Equal(0, evidence.Other.Failures);
+    }
+
+    [Fact]
+    public void ARunIsJudgedOnItsFinalAttemptRatherThanOnEveryAttempt()
+    {
+        // A run that failed twice and passed on the third did not fail. Counting attempts made it
+        // two failures in three, which inflated the arm's rate with the very behaviour that rescued
+        // it — the argument RetryProvider has always made about runs, applied here.
+        List<TestSession> sessions = [];
+
+        for (int i = 0; i < 6; i++)
+        {
+            sessions.Add(Session(
+                i,
+                Local(3 + i, 20),
+                [
+                    TestSessionFactory.Execution(
+                        Subject, TestOutcome.Failed, attempt: 1, maxRetries: 1, errorMessage: "boom",
+                        executionId: TestSessionFactory.ExecutionIdFor(Subject, i, TestOutcome.Failed)),
+                    TestSessionFactory.Execution(
+                        Subject, TestOutcome.Passed, attempt: 2, maxRetries: 1, passedOnRetry: true,
+                        executionId: TestSessionFactory.ExecutionIdFor(Subject, i, TestOutcome.Passed))
+                ],
+                Offset));
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            int ordinal = 6 + i;
+            sessions.Add(Session(ordinal, Local(3 + i, 9), [Execution(ordinal, failed: false)], Offset));
+        }
+
+        Assert.Empty(Analyze(sessions));
+    }
+
+    [Fact]
     public void TheEvidenceCarriesBothArmsWithTheirDenominators()
     {
         TimeSensitiveEvidence evidence =
             EvidenceFrom(TimeOfDay(eveningFailures: 5, morningFailures: 0));
 
         Assert.Equal(5, evidence.Worse.Failures);
-        Assert.Equal(6, evidence.Worse.Executions);
         Assert.Equal(6, evidence.Worse.Sessions);
         Assert.Equal(0.833, evidence.Worse.FailureRate);
 
         Assert.Equal(0, evidence.Other.Failures);
-        Assert.Equal(6, evidence.Other.Executions);
         Assert.Equal(6, evidence.Other.Sessions);
         Assert.Equal(0, evidence.Other.FailureRate);
     }
@@ -66,7 +121,7 @@ public sealed class TimeSensitiveProviderTests
         TimeSensitiveEvidence evidence =
             EvidenceFrom(TimeOfDay(eveningFailures: 3, morningFailures: 0));
 
-        Assert.Equal(6, evidence.Worse.Executions);
+        Assert.Equal(6, evidence.Worse.Sessions);
         Assert.Equal(3, evidence.Worse.DistinctFailureDates);
 
         // Nothing failed on the other side, so it spans no failure days at all.
@@ -592,6 +647,50 @@ public sealed class TimeSensitiveProviderTests
 
         for (int i = 0; i < 6; i++)
             sessions.Add(RunAt(6 + i, Local(3, 9).AddMinutes(i), failed: false));
+
+        return sessions;
+    }
+
+    /// <summary>
+    /// Builds a window whose evening runs all fail after exhausting their retries, and whose six
+    /// morning runs all pass first time.
+    /// </summary>
+    /// <param name="eveningSessions">How many evening runs to build, one per local day.</param>
+    /// <param name="attempts">Attempts each evening run takes before giving up.</param>
+    /// <returns>The sessions.</returns>
+    /// <remarks>
+    /// The evening arm holds <c>eveningSessions * attempts</c> executions but only
+    /// <c>eveningSessions</c> occasions, which is the whole point of the fixture: the two numbers
+    /// come apart and the gate has to be applied to the second.
+    /// </remarks>
+    private static List<TestSession> RetriedEvenings(int eveningSessions, int attempts)
+    {
+        List<TestSession> sessions = [];
+
+        for (int i = 0; i < eveningSessions; i++)
+        {
+            List<TestExecution> executions = [];
+
+            for (int attempt = 1; attempt <= attempts; attempt++)
+            {
+                executions.Add(TestSessionFactory.Execution(
+                    Subject,
+                    TestOutcome.Failed,
+                    attempt: attempt,
+                    maxRetries: attempts - 1,
+                    errorMessage: "boom",
+                    executionId: TestSessionFactory.ExecutionIdFor(
+                        Subject, (i * attempts) + attempt, TestOutcome.Failed)));
+            }
+
+            sessions.Add(Session(i, Local(3 + i, 20), executions, Offset));
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            int ordinal = eveningSessions + i;
+            sessions.Add(Session(ordinal, Local(3 + i, 9), [Execution(ordinal, failed: false)], Offset));
+        }
 
         return sessions;
     }

@@ -176,8 +176,8 @@ public sealed class ShareableOutputTests
             FindingKind.TimeSensitive =>
                 new TimeSensitiveEvidence(
                     "LocalTimeOfDay",
-                    new TimeArm(9, 10, 10, 0.9, 7, "18:00-24:00 local"),
-                    new TimeArm(0, 6, 6, 0, 0, "the rest of the day"),
+                    new TimeArm(9, 10, 0.9, 7, "18:00-24:00 local"),
+                    new TimeArm(0, 6, 0, 0, "the rest of the day"),
                     new TimeDelta(0.9, 90),
                     "Europe/Berlin",
                     [],

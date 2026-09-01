@@ -26,21 +26,30 @@ internal enum Severity
 }
 
 /// <summary>
-/// How much data a finding rests on, measured in executions of the subject within the window.
+/// How much data a finding rests on, measured in sessions the subject ran in within the window.
 /// </summary>
 /// <remarks>
-/// These bands are shared verbatim with Xping Cloud. Local windows are small, so most local
-/// findings will legitimately be <see cref="Low"/> or <see cref="Moderate"/> — that is correct, and
-/// must be surfaced rather than hidden.
+/// <para>
+/// Sessions, not executions: attempts of one test inside one session are correlated, so a test that
+/// retried its way to forty executions across six builds has six occasions' worth of evidence and
+/// must not be labelled as though it had forty.
+/// </para>
+/// <para>
+/// The unit matches Xping Cloud, which bands an effective sample size computed over runs collapsed
+/// to one row per test per session. The thresholds do not, and deliberately —
+/// <see cref="LocalAnalysisConstants.EvidenceModerateSessions"/> explains why. Local windows are
+/// small, so most local findings will legitimately be <see cref="Low"/> or <see cref="Moderate"/> —
+/// that is correct, and must be surfaced rather than hidden.
+/// </para>
 /// </remarks>
 internal enum EvidenceLevel
 {
-    /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceModerateExecutions"/> executions.</summary>
+    /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceModerateSessions"/> sessions.</summary>
     Low,
 
-    /// <summary>Between the moderate and high execution thresholds, inclusive.</summary>
+    /// <summary>Between the moderate and high session thresholds, inclusive.</summary>
     Moderate,
 
-    /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceHighExecutions"/> executions.</summary>
+    /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceHighSessions"/> sessions.</summary>
     High
 }

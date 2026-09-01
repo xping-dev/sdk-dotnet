@@ -381,12 +381,12 @@ internal static class EvidenceHeadline
         [
             new(
                 e.Worse.Label,
-                $"{e.Worse.Failures} of {e.Worse.Executions} executions ({Percent(e.Worse.FailureRate)})"),
+                $"{e.Worse.Failures} of {Runs(e.Worse.Sessions)} ({Percent(e.Worse.FailureRate)})"),
             new(
                 e.Other.Label,
-                $"{e.Other.Failures} of {e.Other.Executions} executions ({Percent(e.Other.FailureRate)})"),
+                $"{e.Other.Failures} of {Runs(e.Other.Sessions)} ({Percent(e.Other.FailureRate)})"),
             new("gap", Points(e.Delta.FailureRatePct)),
-            new("spread", $"failures on {Days(e.Worse.DistinctFailureDates)}, in {Runs(e.Worse.Sessions)}"),
+            new("spread", $"failures on {Days(e.Worse.DistinctFailureDates)}"),
             new("time zone", e.TimeZoneId)
         ]);
 

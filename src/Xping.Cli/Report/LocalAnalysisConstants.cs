@@ -32,13 +32,18 @@ internal static class LocalAnalysisConstants
     public const int MinimumSessionsToReport = 5;
 
     /// <summary>
-    /// Executions of the subject test a window must contain before a finding is emitted (5).
+    /// Sessions the subject test must have run in before a finding is emitted (5).
     /// </summary>
     /// <remarks>
     /// The per-test counterpart of <see cref="MinimumSessionsToReport"/>. A test added yesterday has
     /// history in the window but not history about itself.
+    /// <para>
+    /// Counted in sessions, not executions. A retried test records an execution per attempt, so one
+    /// session that retried five times cleared an execution-denominated floor of five on its own —
+    /// exactly the shape the floor exists to exclude, and worst for the tests that retry most.
+    /// </para>
     /// </remarks>
-    public const int MinimumExecutionsToReport = 5;
+    public const int MinimumSessionsPerTestToReport = 5;
 
     /// <summary>
     /// Sessions in the default window (20).
@@ -230,15 +235,22 @@ internal static class LocalAnalysisConstants
     public const double ParallelSensitivityDelta = 0.30;
 
     /// <summary>
-    /// Executions each concurrency arm needs before the two are compared (5).
+    /// Distinct sessions each concurrency arm needs before the two are compared (5).
     /// </summary>
     /// <remarks>
-    /// The test therefore needs ten executions in the window, twice the general reporting floor.
+    /// The test therefore needs ten sessions in the window, twice the general reporting floor.
     /// At five a side the weakest qualifying signal is around zero-of-five against two-of-five, which
     /// is already thin; below it a single unlucky execution clears
     /// <see cref="ParallelSensitivityDelta"/> on its own and the report starts ranking noise.
+    /// <para>
+    /// The gate is in sessions while the arms and their rate stay in executions, and the split is
+    /// deliberate: a retried test does not repeat one concurrency reading, it takes several, so the
+    /// within-session variation is the signal this finding is made of. The gate buys the breadth of
+    /// independent occasions the rate cannot supply for itself — two sessions of five attempts each
+    /// are one afternoon, not ten observations.
+    /// </para>
     /// </remarks>
-    public const int ParallelSensitiveMinArmExecutions = 5;
+    public const int ParallelSensitiveMinArmSessions = 5;
 
     /// <summary>
     /// Difference in failure rate across a test's temporal split that indicates sensitivity (0.30).
@@ -253,14 +265,20 @@ internal static class LocalAnalysisConstants
     public const double TimeSensitivityDelta = 0.30;
 
     /// <summary>
-    /// Executions each side of a temporal split needs before the two are compared (5).
+    /// Sessions each side of a temporal split needs before the two are compared (5).
     /// </summary>
     /// <remarks>
-    /// Matches <see cref="ParallelSensitiveMinArmExecutions"/> for the same reason it was chosen
-    /// there: below five a side, one unlucky execution clears
+    /// Matches <see cref="ParallelSensitiveMinArmSessions"/> for the same reason it was chosen
+    /// there: below five a side, one unlucky session clears
     /// <see cref="TimeSensitivityDelta"/> on its own.
+    /// <para>
+    /// Sessions here are the arms themselves, not merely the gate. A session is read on one clock, so
+    /// every attempt of a test within it lands in the same arm at the same local hour — an
+    /// execution-denominated arm of five could be two sessions with retries, and its failure rate
+    /// carried far less information than its denominator claimed.
+    /// </para>
     /// </remarks>
-    public const int TimeSensitiveMinArmExecutions = 5;
+    public const int TimeSensitiveMinArmSessions = 5;
 
     /// <summary>
     /// Distinct local dates the failing side of a temporal split must span (3).
@@ -318,18 +336,28 @@ internal static class LocalAnalysisConstants
     public const double SeverityMediumThreshold = 0.30;
 
     /// <summary>
-    /// Executions below which evidence is <c>Low</c> (15).
+    /// Sessions a test must have run in before its evidence is better than <c>Low</c> (8).
     /// </summary>
     /// <remarks>
-    /// These bands are shared verbatim with Xping Cloud. Divergence here produces a product
-    /// that contradicts itself in front of a customer.
+    /// <para>
+    /// Banded on sessions, which is the unit Xping Cloud already bands on: its
+    /// <c>EvidenceLevelThresholds</c> classifies an effective sample size computed over runs that
+    /// <c>RunCollapser</c> has reduced to one row per test per session. The unit agrees; the numbers
+    /// do not, and deliberately.
+    /// </para>
+    /// <para>
+    /// Cloud looks over a long lookback and can afford 15 and 40. <see cref="DefaultWindowSessions"/>
+    /// caps the local window at twenty, so those figures would put <c>High</c> out of reach entirely
+    /// and make <c>Moderate</c> mean "present in three quarters of every build the developer has
+    /// run". Eight and fifteen carry the same intent against the window the CLI actually has.
+    /// </para>
     /// </remarks>
-    public const int EvidenceModerateExecutions = 15;
+    public const int EvidenceModerateSessions = 8;
 
     /// <summary>
-    /// Executions above which evidence is <c>High</c> (40).
+    /// Sessions above which evidence is <c>High</c> (15).
     /// </summary>
-    public const int EvidenceHighExecutions = 40;
+    public const int EvidenceHighSessions = 15;
 
     /// <summary>
     /// Sessions over which the recency term halves (5).
