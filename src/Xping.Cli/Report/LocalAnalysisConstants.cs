@@ -100,10 +100,22 @@ internal static class LocalAnalysisConstants
     /// Share of a test's failures that must be timeouts before it is reported as timing out (0.50).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A test that usually fails an assertion but hung once is still a failing test, and moving it
     /// into the timeout bucket would point its reader at a deadlock that is not the main problem.
     /// A test whose failures are mostly hangs is the reverse: reporting it as an ordinary failure
     /// hands the reader an assertion message that was never written.
+    /// </para>
+    /// <para>
+    /// Compared against the share itself, unlike <see cref="RetryExhaustedShareMin"/>, which carries
+    /// the same figure and is compared against its lower bound. The difference is what each decides.
+    /// That one decides whether a finding is reported at all, where declining costs the reader a
+    /// line; this one decides which of two evidence shapes describes a test that is reported either
+    /// way, and the other shape groups failure signatures, which a killed run does not have. Being
+    /// cautious here would not say less, it would say the wrong thing — and bounding a threshold of
+    /// one half asks for nine kills in ten failures, or fifteen in twenty, at the window sizes this
+    /// tool actually sees.
+    /// </para>
     /// </remarks>
     public const double TimingOutShareMin = 0.50;
 
@@ -174,6 +186,13 @@ internal static class LocalAnalysisConstants
     /// Deliberately stricter than <c>RetryMasked</c>, which reports a single
     /// occurrence: a masked failure is invisible without the report, whereas an exhausted run
     /// already went red in the runner's own output.
+    /// <para>
+    /// No longer the binding gate. Exhausted runs are a subset of retried ones, so the share's lower
+    /// bound is largest when every retried run ran out, and four in four is the first shape that
+    /// clears <see cref="RetryExhaustedShareMin"/>. That threshold therefore already implies at
+    /// least four, and this one only states the floor the kind was designed around and declines the
+    /// common cases without computing an interval. It becomes binding again if the share ever moves.
+    /// </para>
     /// </remarks>
     public const int RetryExhaustedMinRuns = 2;
 
@@ -181,10 +200,22 @@ internal static class LocalAnalysisConstants
     /// Share of a test's retried runs that must have run out before exhaustion is reported (0.50).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Deliberately the same figure as <see cref="TimingOutShareMin"/> and applied the same way.
     /// Below half, the retries rescue the test more often than not and the attribute is earning its
     /// keep; reporting that as retries running out would point a reader at the mitigation when the
     /// problem is the test.
+    /// </para>
+    /// <para>
+    /// Applied the same way includes being compared against the 95% Wilson lower bound of the share
+    /// rather than the share itself, which is what supplies the denominator that
+    /// <see cref="RetryExhaustedMinRuns"/> cannot. The claim this kind makes is about a mechanism —
+    /// that retries are not rescuing this test — and two retried runs that both ran out is a point
+    /// estimate of 1.00 with nothing behind it. The bound rises towards the share as the runs
+    /// accumulate, so the shapes that clear it are four runs in four, seven in eight, ten in twelve
+    /// and fifteen in twenty — well above one half, and deliberately so while the denominator is
+    /// small. The published <c>ExhaustedRate</c> is unaffected.
+    /// </para>
     /// </remarks>
     public const double RetryExhaustedShareMin = 0.50;
 

@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Signatures;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -390,10 +391,11 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             // The cluster takes its worst member's unreliability rather than their average. One
             // member failing constantly makes the whole cluster worth opening, and an average would
-            // let a dozen occasional members hide it.
+            // let a dozen occasional members hide it. Worst is measured on the lower bound of each
+            // member's failure rate, so the member that wins is the one with the evidence behind it
+            // rather than whichever happened to run fewest times.
             int executions = context.Tests.ExecutionsOf(fingerprint).Count;
-            if (executions > 0)
-                unreliability = Math.Max(unreliability, (double)failures / executions);
+            unreliability = Math.Max(unreliability, WilsonInterval.LowerBound(failures, executions));
         }
 
         // Unchanged by the promotion below: the id identifies the claim's subject, and the subject is
@@ -561,6 +563,14 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> timeouts =
             [.. failures.Where(e => e.Execution.Outcome == TestOutcome.Timeout)];
 
+        // Thresholded on the share itself, not on its lower bound, and deliberately unlike the two
+        // gates that were moved onto one. This decides which of two evidence shapes the reader gets
+        // rather than whether anything is reported, and the branch below cannot describe a hang:
+        // it groups failure signatures, and a killed test leaves a stack frame from wherever the
+        // runner interrupted it and no assertion message, while TimingOutEvidence carries the
+        // duration against the declared budget. Being cautious therefore does not mean saying less,
+        // it means handing over the wrong page, so caution belongs on the other side of the line.
+        // Bounding this asked for 9 of 10 and 15 of 20 rather than the half it documents.
         if (timeouts.Count > 0 &&
             (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
         {
@@ -600,7 +610,13 @@ internal sealed class FailureModeProvider : IFindingProvider
                     FindingOrder.Round(modalShare),
                     exemplars,
                     contrast),
-                failureRate,
+
+                // The classification above is made on the rate itself; the ranking is made on its
+                // lower bound. The two differ deliberately. A test failing five of five is broken
+                // and the report should say so, but it should not outrank one failing forty of
+                // forty, and only the bound distinguishes them.
+                WilsonInterval.LowerBound(failures.Count, considered.Count),
+
                 sessionsSinceLast,
                 DrillDown.ForTest(FindingKind.AlwaysFailing, test));
         }
@@ -628,10 +644,46 @@ internal sealed class FailureModeProvider : IFindingProvider
             // itself so the term never scores a nearly-always-broken test below a milder one: the
             // tent alone put a test failing 19 runs in 20 at 0.10, which is 0.34 of impact lost for
             // being more broken, and it fell on exactly the tests that most need reading.
-            Math.Max(failureRate, 1 - Math.Abs((2 * failureRate) - 1)),
+            //
+            // Then discounted by how much of the observed rate the evidence supports, rather than
+            // evaluated at the bound directly. The shape has to be applied to the rate the test
+            // actually showed: the tent falls away above its peak, so feeding it a bound that climbs
+            // towards the rate as runs accumulate makes the score fall as the evidence grows. A test
+            // failing four of five scored 0.75 and the same test at thirty-two of forty scored 0.69,
+            // which is the inversion this change exists to remove, reintroduced one line further on.
+            //
+            // The discount is monotone in the run count at every rate, and leaves the term at the
+            // bound itself wherever the floor is what applies. An even split scores 0.47 over ten
+            // executions, 0.60 over twenty and 0.70 over forty, converging on 1.00 rather than
+            // claiming it.
+            FlakyUnreliability(failureRate, failures.Count, considered.Count),
 
             sessionsSinceLast,
             DrillDown.ForTest(FindingKind.Flaky, test));
+    }
+
+    /// <summary>
+    /// Scores flakiness: a tent peaking at one half, floored at the rate, discounted by evidence.
+    /// </summary>
+    /// <param name="rate">The observed failure rate.</param>
+    /// <param name="failures">Failures the rate was computed from.</param>
+    /// <param name="executions">Executions they were counted against.</param>
+    /// <returns>The unreliability term, in [0,1].</returns>
+    /// <remarks>
+    /// The discount is the share of the observed rate its lower bound supports, which is 0 when a
+    /// single failure could have been luck and approaches 1 as the runs accumulate. Applying it to
+    /// the shape rather than substituting it into the shape is what keeps the term rising with the
+    /// evidence: the tent is not monotone in the rate, by design, so it cannot be handed a moving
+    /// estimate of one.
+    /// </remarks>
+    private static double FlakyUnreliability(double rate, int failures, int executions)
+    {
+        if (rate <= 0)
+            return 0;
+
+        double shape = Math.Max(rate, 1 - Math.Abs((2 * rate) - 1));
+
+        return shape * (WilsonInterval.LowerBound(failures, executions) / rate);
     }
 
     /// <summary>
@@ -680,7 +732,14 @@ internal sealed class FailureModeProvider : IFindingProvider
                 [.. ordered.Select(t => (long)t.Execution.Duration.TotalMilliseconds)],
                 [.. ordered.Take(MaxExemplars).Select(t => ToExemplar(context, t))],
                 Contrast(considered)),
-            timeoutRate,
+
+            // The share of every run that ended in a kill, bounded below — not the share of failures
+            // that were kills, which is what the condition thresholds. The condition asks which
+            // diagnosis fits; this asks how unreliable the test is, which is what the report ranks
+            // on, and the bound is what keeps a test killed twice in five behind one killed twenty
+            // times in forty.
+            WilsonInterval.LowerBound(timeouts.Count, considered.Count),
+
             timeouts.Min(t => t.SessionIndex),
             DrillDown.ForTest(FindingKind.TimingOut, test));
     }

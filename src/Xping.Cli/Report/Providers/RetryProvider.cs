@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Report.Providers;
@@ -527,9 +528,16 @@ internal sealed class RetryProvider : IFindingProvider
         if (exhausted.Count < LocalAnalysisConstants.RetryExhaustedMinRuns)
             return null;
 
+        // Thresholded on the lower bound of the share rather than on the share itself. The claim is
+        // that retries are not rescuing this test, which is a statement about the mechanism, and two
+        // retried runs that both ran out is 1.00 of a denominator that cannot support it. The
+        // published rate below stays the point estimate: a reader wants "7 of 8", not "0.88".
         double exhaustedShare = (double)exhausted.Count / retried.Count;
-        if (exhaustedShare < LocalAnalysisConstants.RetryExhaustedShareMin)
+        if (WilsonInterval.LowerBound(exhausted.Count, retried.Count) <
+            LocalAnalysisConstants.RetryExhaustedShareMin)
+        {
             return null;
+        }
 
         RunAttempts newest = exhausted[0];
 
@@ -568,7 +576,11 @@ internal sealed class RetryProvider : IFindingProvider
             // not the share of retried runs, which is what the condition thresholds. The two answer
             // different questions: the condition asks whether the retry attribute is working, and
             // this asks how unreliable the test is, which is what the report ranks on.
-            Unreliability: Math.Min(1.0, (double)exhausted.Count / considered.Count),
+            //
+            // Bounded below rather than taken raw, so that this test ranks against the others by a
+            // figure that grows with the runs behind it. Two exhausted runs in two is the same 1.00
+            // as forty in forty, and ranking them alike put the least-evidenced findings on top.
+            Unreliability: WilsonInterval.LowerBound(exhausted.Count, considered.Count),
 
             // Dated by the exhaustions themselves rather than by the test's last execution, so a
             // test that ran out of retries a fortnight ago and has been clean since decays.
@@ -839,7 +851,11 @@ internal sealed class RetryProvider : IFindingProvider
             // The share of this test's runs that needed a retry to look green. A test masked on one
             // run in twenty is a different proposition from one masked on every run, and the ratio
             // says so without claiming to know why.
-            Unreliability: Math.Min(1.0, (double)masked.Count / executions.Count),
+            //
+            // Bounded below, because this kind emits on a single occurrence by design and a single
+            // occurrence is exactly what a point estimate cannot rank honestly: one masked run in
+            // one is 1.00. The bound puts it at 0.21 and leaves the well-evidenced cases above it.
+            Unreliability: WilsonInterval.LowerBound(masked.Count, executions.Count),
 
             SessionsSinceLastOccurrence: newest.SessionIndex,
 

@@ -85,12 +85,15 @@ public sealed class TimeSensitiveProviderTests
     }
 
     [Fact]
-    public void UnreliabilityIsTheGapTheConditionMeasured()
+    public void UnreliabilityIsTheLeastGapTheArmsSupport()
     {
-        // Six of six in the evening against one of six in the morning.
+        // Six of six in the evening against one of six in the morning: an observed gap of 0.83 that
+        // six executions a side support down to 0.28. The condition still thresholds the observed
+        // gap, so what is emitted has not changed; what changed is where it ranks against findings
+        // measured over a whole window.
         FindingCandidate candidate = Single(TimeOfDay(eveningFailures: 6, morningFailures: 1));
 
-        Assert.Equal(1.0 - (1.0 / 6.0), candidate.Unreliability, 10);
+        Assert.Equal(0.277, candidate.Unreliability, 3);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -137,8 +140,33 @@ public sealed class TimeSensitiveProviderTests
         FindingCandidate candidate = Assert.Single(candidates);
         var evidence = Assert.IsType<TimeSensitiveEvidence>(candidate.Evidence);
 
+        // Both axes support a gap here, and the time-of-day one supports the wider of the two, so
+        // it wins the selection as well as the ranking. The published delta is still the observed
+        // gap; only the term the report ranks on is the gap the winning split's arms support.
         Assert.Equal("LocalTimeOfDay", evidence.Axis);
-        Assert.Equal(0.9, candidate.Unreliability, 10);
+        Assert.Equal(0.9, evidence.Delta.FailureRate);
+        Assert.Equal(0.405, candidate.Unreliability, 3);
+    }
+
+    [Fact]
+    public void TheBetterEvidencedAxisWinsEvenWhenAnotherShowsAWiderGap()
+    {
+        // Five evening runs of which one failed, against thirty mornings split into fifteen weekend
+        // runs that all failed and fifteen weekday runs of which nine did. The time-of-day axis
+        // shows the wider gap - 0.60 against the day group's 0.50 - and five executions support
+        // almost none of it: 0.14, against 0.21 for the split measured over fifteen a side.
+        //
+        // Choosing on the observed gap published the thin axis and then ranked the finding on the
+        // thin axis's bound, throwing away the better evidenced split entirely. It also published
+        // "the rest of the day" as the failing side, which is exactly the label the tie-break above
+        // exists to avoid.
+        FindingCandidate candidate = Single(WiderButThinner());
+        var evidence = Assert.IsType<TimeSensitiveEvidence>(candidate.Evidence);
+
+        Assert.Equal("LocalDayGroup", evidence.Axis);
+        Assert.Equal("weekend", evidence.Worse.Label);
+        Assert.Equal(0.5, evidence.Delta.FailureRate);
+        Assert.Equal(0.214, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -570,6 +598,33 @@ public sealed class TimeSensitiveProviderTests
 
     private static AnalysisContext Context(List<TestSession> sessions) =>
         TestSessionFactory.Context([.. sessions]);
+
+    /// <summary>
+    /// Builds a window in which the time-of-day axis shows a wider gap than the day group over far
+    /// fewer executions, so the two axes disagree about which split the evidence supports.
+    /// </summary>
+    private static List<TestSession> WiderButThinner()
+    {
+        int[] weekendDays = [1, 2, 8, 9, 15, 16, 22, 23, 29, 30];
+        int[] weekdayDays = [3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21];
+
+        List<TestSession> sessions = [];
+        int ordinal = 0;
+
+        // Fifteen weekend mornings, every one of them red.
+        for (int i = 0; i < 15; i++)
+            sessions.Add(RunAt(ordinal++, Local(weekendDays[i % weekendDays.Length], 9), failed: true));
+
+        // Fifteen weekday mornings, nine of them red.
+        for (int i = 0; i < 15; i++)
+            sessions.Add(RunAt(ordinal++, Local(weekdayDays[i], 9), failed: i < 9));
+
+        // Five weekday evenings, one of them red.
+        for (int i = 0; i < 5; i++)
+            sessions.Add(RunAt(ordinal++, Local(weekdayDays[i], 20), failed: i == 0));
+
+        return sessions;
+    }
 
     private static IReadOnlyList<FindingCandidate> Analyze(List<TestSession> sessions) =>
         [.. new TimeSensitiveProvider().Analyze(Context(sessions))];

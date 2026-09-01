@@ -5,6 +5,7 @@
 
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Providers;
@@ -94,7 +95,12 @@ internal sealed class VanishedProvider : IFindingProvider
                 // A test that ran in every baseline session and then stopped is a starker change
                 // than one that ran in the minimum three, and the ratio says so without inventing a
                 // reason for the disappearance.
-                Unreliability: Math.Min(1.0, (double)appearances / slices.BaselineCount),
+                //
+                // Bounded below, because the ratio alone cannot tell three appearances in three
+                // from three in seventeen: the first is a habit that stopped, the second is a test
+                // that was mostly absent already and whose absence is the likeliest thing it could
+                // do next. The bound puts them at 0.44 and 0.06.
+                Unreliability: WilsonInterval.LowerBound(appearances, slices.BaselineCount),
 
                 // Measured from the current slice, which by definition is where it is absent.
                 SessionsSinceLastOccurrence: mostRecent.SessionIndex,
