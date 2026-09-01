@@ -107,11 +107,14 @@ internal static class LocalAnalysisConstants
     /// hands the reader an assertion message that was never written.
     /// </para>
     /// <para>
-    /// Compared against the 95% Wilson lower bound of the share, not the share itself. Three
-    /// failures of which three were kills is a point estimate of 1.00 on a denominator of three, and
-    /// which diagnosis the report hands its reader is not a decision three observations should make.
-    /// In practice the test now needs roughly four kills in four failures, or seven in eight. The
-    /// published <c>TimeoutShareOfFailures</c> stays the point estimate: the reader wants "6 of 9".
+    /// Compared against the share itself, unlike <see cref="RetryExhaustedShareMin"/>, which carries
+    /// the same figure and is compared against its lower bound. The difference is what each decides.
+    /// That one decides whether a finding is reported at all, where declining costs the reader a
+    /// line; this one decides which of two evidence shapes describes a test that is reported either
+    /// way, and the other shape groups failure signatures, which a killed run does not have. Being
+    /// cautious here would not say less, it would say the wrong thing — and bounding a threshold of
+    /// one half asks for nine kills in ten failures, or fifteen in twenty, at the window sizes this
+    /// tool actually sees.
     /// </para>
     /// </remarks>
     public const double TimingOutShareMin = 0.50;
@@ -208,8 +211,10 @@ internal static class LocalAnalysisConstants
     /// rather than the share itself, which is what supplies the denominator that
     /// <see cref="RetryExhaustedMinRuns"/> cannot. The claim this kind makes is about a mechanism —
     /// that retries are not rescuing this test — and two retried runs that both ran out is a point
-    /// estimate of 1.00 with nothing behind it. In practice the test now needs around four runs in
-    /// four, seven in eight or ten in twelve. The published <c>ExhaustedRate</c> is unaffected.
+    /// estimate of 1.00 with nothing behind it. The bound rises towards the share as the runs
+    /// accumulate, so the shapes that clear it are four runs in four, seven in eight, ten in twelve
+    /// and fifteen in twenty — well above one half, and deliberately so while the denominator is
+    /// small. The published <c>ExhaustedRate</c> is unaffected.
     /// </para>
     /// </remarks>
     public const double RetryExhaustedShareMin = 0.50;

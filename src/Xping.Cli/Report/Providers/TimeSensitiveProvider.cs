@@ -266,7 +266,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             // The least gap the two arms support, as the concurrency provider does and for the same
             // reason: five executions a side is the smallest split allowed and produces the largest
             // observed deltas, so ranking on the observation put the thinnest evidence at the top.
-            // The condition still thresholds the observed delta, so what is emitted has not changed.
+            // The condition still thresholds the observed delta, so which tests are reported has not
+            // changed — though which axis is reported about them can, because Beats now selects on
+            // this quantity too rather than leaving the choice and the score to disagree.
             //
             // Compounded here by the axis search: the best of up to six splits is kept, and the
             // largest of six noisy gaps is larger still. The bound is not a multiplicity correction

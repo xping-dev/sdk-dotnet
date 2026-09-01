@@ -73,16 +73,24 @@ internal static class WilsonInterval
     /// <param name="successes">Observations of the behaviour.</param>
     /// <param name="trials">Opportunities to observe it.</param>
     /// <param name="z">Standard normal deviate; defaults to a two-sided 95% interval.</param>
-    /// <returns>The bound, in [0,1]; 0 when there were no trials.</returns>
+    /// <returns>The bound, in [0,1]; 1 when there were no trials.</returns>
     /// <remarks>
+    /// <para>
     /// Exists to feed <see cref="DifferenceBoundNearestZero"/>. Nothing thresholds on it: an upper
     /// bound is the most the data could support, and a report that ranked on it would promote the
     /// findings with the least evidence.
+    /// </para>
+    /// <para>
+    /// The empty case is 1 rather than 0, which is the opposite of <see cref="LowerBound"/> and the
+    /// only value that is not a claim. Having observed nothing, the least the proportion can be is
+    /// zero and the most it can be is one; returning 0 here would assert that a behaviour never
+    /// observed also cannot happen.
+    /// </para>
     /// </remarks>
     public static double UpperBound(int successes, int trials, double z = ConfidenceZ)
     {
         if (trials <= 0)
-            return 0;
+            return 1;
 
         double p = Proportion(successes, trials);
         double z2 = z * z;

@@ -140,8 +140,9 @@ public sealed class TimeSensitiveProviderTests
         FindingCandidate candidate = Assert.Single(candidates);
         var evidence = Assert.IsType<TimeSensitiveEvidence>(candidate.Evidence);
 
-        // The axis is still chosen on the observed gaps; the term the report ranks on is the gap
-        // the winning split's arms support.
+        // Both axes support a gap here, and the time-of-day one supports the wider of the two, so
+        // it wins the selection as well as the ranking. The published delta is still the observed
+        // gap; only the term the report ranks on is the gap the winning split's arms support.
         Assert.Equal("LocalTimeOfDay", evidence.Axis);
         Assert.Equal(0.9, evidence.Delta.FailureRate);
         Assert.Equal(0.405, candidate.Unreliability, 3);

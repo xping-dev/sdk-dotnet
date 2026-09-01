@@ -24,19 +24,24 @@ public sealed class WilsonIntervalTests
     }
 
     [Fact]
-    public void NoTrialsBoundToZeroRatherThanToNaN()
+    public void NoTrialsBoundToTheWholeRangeRatherThanToNaN()
     {
+        // Having observed nothing, the proportion is somewhere in [0,1] and the interval says so.
+        // An upper bound of 0 would assert that a behaviour never observed also cannot happen.
         Assert.Equal(0, WilsonInterval.LowerBound(0, 0));
-        Assert.Equal(0, WilsonInterval.UpperBound(0, 0));
+        Assert.Equal(1, WilsonInterval.UpperBound(0, 0));
+
+        // The difference bound guards its arms itself: with one arm empty there is no comparison to
+        // make, and no difference is the only honest answer.
         Assert.Equal(0, WilsonInterval.DifferenceBoundNearestZero(0, 0, 3, 10));
         Assert.Equal(0, WilsonInterval.DifferenceBoundNearestZero(3, 10, 0, 0));
     }
 
     [Fact]
-    public void NegativeTrialsBoundToZeroRatherThanThrowing()
+    public void NegativeTrialsBoundTheSameWayAsNoneRatherThanThrowing()
     {
         Assert.Equal(0, WilsonInterval.LowerBound(0, -1));
-        Assert.Equal(0, WilsonInterval.UpperBound(0, -1));
+        Assert.Equal(1, WilsonInterval.UpperBound(0, -1));
     }
 
     [Fact]

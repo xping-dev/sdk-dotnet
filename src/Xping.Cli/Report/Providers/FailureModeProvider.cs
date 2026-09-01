@@ -563,13 +563,16 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> timeouts =
             [.. failures.Where(e => e.Execution.Outcome == TestOutcome.Timeout)];
 
-        // Thresholded on the lower bound of that share. Three failures of which three were kills is
-        // 1.00 on a denominator of three, and moving a test into a bucket whose whole point is to
-        // hand the reader a different diagnosis is not a decision three observations should make.
-        // The published share stays the point estimate.
+        // Thresholded on the share itself, not on its lower bound, and deliberately unlike the two
+        // gates that were moved onto one. This decides which of two evidence shapes the reader gets
+        // rather than whether anything is reported, and the branch below cannot describe a hang:
+        // it groups failure signatures, and a killed test leaves a stack frame from wherever the
+        // runner interrupted it and no assertion message, while TimingOutEvidence carries the
+        // duration against the declared budget. Being cautious therefore does not mean saying less,
+        // it means handing over the wrong page, so caution belongs on the other side of the line.
+        // Bounding this asked for 9 of 10 and 15 of 20 rather than the half it documents.
         if (timeouts.Count > 0 &&
-            WilsonInterval.LowerBound(timeouts.Count, failures.Count) >=
-                LocalAnalysisConstants.TimingOutShareMin)
+            (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
         {
             return TimingOut(context, test, considered, failures, timeouts, discounted);
         }
