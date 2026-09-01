@@ -253,7 +253,13 @@ internal static class LocalAnalysisConstants
     /// within-session variation is the signal this finding is made of. The gate buys the breadth of
     /// independent occasions the rate cannot supply for itself — two sessions of five attempts each
     /// are one afternoon, not ten observations. The interval the finding is ranked on is deflated to
-    /// the same session count, so no part of the statistic still treats attempts as independent.
+    /// the same session count, so the confidence behind a gap no longer grows with retries.
+    /// </para>
+    /// <para>
+    /// The gap itself is still an attempt-weighted mean, and this gate cannot see past that: it
+    /// counts the sessions an arm draws on, not how unevenly they contribute, so one heavily retried
+    /// session can supply an arm's failures while five quiet ones supply its breadth. That is #180
+    /// and it is not fixed here.
     /// </para>
     /// </remarks>
     public const int ParallelSensitiveMinArmSessions = 5;
@@ -383,8 +389,18 @@ internal static class LocalAnalysisConstants
     /// Sessions a fingerprint must appear in, in the baseline slice, before its absence counts (3).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A test seen once and never again was probably never really there — a mistyped filter, a
     /// parameterized case whose arguments changed. Three appearances make the absence a change.
+    /// </para>
+    /// <para>
+    /// Not the binding gate. A vanished test is by definition absent from the current slice, so the
+    /// sessions it ran in are exactly its baseline appearances, and
+    /// <see cref="MinimumSessionsPerTestToReport"/> raises the effective bar to five. This stays as
+    /// the provider's own guard — it should not be left depending on a floor applied elsewhere — and
+    /// it is left at three rather than raised to match, because a constant here is a line the report
+    /// was specified to draw and moving one to tidy up an overlap would be inventing a threshold.
+    /// </para>
     /// </remarks>
     public const int VanishedMinBaselineSessions = 3;
 }

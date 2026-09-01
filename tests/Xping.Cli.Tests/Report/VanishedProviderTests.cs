@@ -138,6 +138,28 @@ public sealed class VanishedProviderTests
         Assert.True(finding.Impact > LocalAnalysisConstants.SeverityMediumThreshold);
     }
 
+    [Theory]
+    [InlineData(3, false)]
+    [InlineData(4, false)]
+    [InlineData(5, true)]
+    public void ThePerTestSessionFloorDominatesTheProvidersOwnBaselineGate(int presentIn, bool reported)
+    {
+        // VanishedMinBaselineSessions is 3, but a vanished test is absent from the current slice by
+        // definition, so the sessions it ran in are exactly its baseline appearances and the
+        // coordinator's floor of five decides. The provider still gates at three — it must not
+        // depend on a floor applied elsewhere — and this pins which of the two actually binds, so
+        // the constant's remark cannot quietly stop being true.
+        var coordinator = new FindingCoordinator([new VanishedProvider()]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(total: 10, presentIn), null, warnings);
+
+        Assert.Equal(reported ? 1 : 0, result.Findings.Count);
+
+        // The provider offered the candidate in every case; the floor is what removed it.
+        Assert.Single(Analyze(Context(total: 10, presentIn)));
+    }
+
     [Fact]
     public void TheProviderReachesTheReportEndToEnd()
     {
