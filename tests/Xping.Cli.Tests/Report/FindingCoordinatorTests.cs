@@ -98,25 +98,25 @@ public sealed class FindingCoordinatorTests
     }
 
     [Fact]
-    public void EvidenceLevelFollowsTheExecutionCount()
+    public void EvidenceLevelFollowsTheSubjectsSessionCount()
     {
         var coordinator = new FindingCoordinator(
             [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
 
         using var warnings = new StringWriter();
 
-        // One execution per session, so the session count is the execution count.
+        // The subject runs once in every session, so its session count is the window's.
         Assert.Equal(
             EvidenceLevel.Low,
-            coordinator.Run(Context(sessionCount: 10), null, warnings).Findings[0].EvidenceLevel);
+            coordinator.Run(Context(sessionCount: 7), null, warnings).Findings[0].EvidenceLevel);
 
         Assert.Equal(
             EvidenceLevel.Moderate,
-            coordinator.Run(Context(sessionCount: 20), null, warnings).Findings[0].EvidenceLevel);
+            coordinator.Run(Context(sessionCount: 8), null, warnings).Findings[0].EvidenceLevel);
 
         Assert.Equal(
             EvidenceLevel.High,
-            coordinator.Run(Context(sessionCount: 41), null, warnings).Findings[0].EvidenceLevel);
+            coordinator.Run(Context(sessionCount: 16), null, warnings).Findings[0].EvidenceLevel);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public sealed class FindingCoordinatorTests
     }
 
     [Fact]
-    public void AFindingRestingOnFiveExecutionsNeverOutranksTheSameFindingOnForty()
+    public void AFindingRestingOnFiveRunsNeverOutranksTheSameFindingOnForty()
     {
         // The invariant the whole ranking rests on. Both tests fail three runs in five; one has been
         // watched five times and the other forty. Every other term the scorer reads is identical -
@@ -198,7 +198,7 @@ public sealed class FindingCoordinatorTests
         // Published as well as ranked. The evidence level said this all along; until now it never
         // reached the sort.
         Assert.Equal(EvidenceLevel.Low, thin.EvidenceLevel);
-        Assert.Equal(EvidenceLevel.Moderate, evidenced.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.High, evidenced.EvidenceLevel);
     }
 
     /// <summary>

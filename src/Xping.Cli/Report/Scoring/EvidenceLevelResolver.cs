@@ -19,34 +19,41 @@ namespace Xping.Cli.Report.Scoring;
 internal static class EvidenceLevelResolver
 {
     /// <summary>
-    /// Bands executions into an evidence level.
+    /// Bands a subject's session count into an evidence level.
     /// </summary>
-    /// <param name="executions">Executions of the subject within the window.</param>
+    /// <param name="sessions">Distinct sessions the subject ran in, within the window.</param>
     /// <returns>The level.</returns>
-    public static EvidenceLevel Resolve(int executions) => executions switch
+    public static EvidenceLevel Resolve(int sessions) => sessions switch
     {
-        > LocalAnalysisConstants.EvidenceHighExecutions => EvidenceLevel.High,
-        >= LocalAnalysisConstants.EvidenceModerateExecutions => EvidenceLevel.Moderate,
+        > LocalAnalysisConstants.EvidenceHighSessions => EvidenceLevel.High,
+        >= LocalAnalysisConstants.EvidenceModerateSessions => EvidenceLevel.Moderate,
         _ => EvidenceLevel.Low
     };
 
     /// <summary>
-    /// Counts the executions a finding rests on.
+    /// Counts the sessions a finding rests on.
     /// </summary>
     /// <param name="subject">The test or group the finding is about.</param>
     /// <param name="index">The shared index.</param>
-    /// <returns>The execution count.</returns>
+    /// <returns>The distinct session count.</returns>
     /// <remarks>
+    /// <para>
     /// A group is measured by its best-evidenced member, matching how it is scored: the cluster is
     /// worth reporting if any one member is well enough evidenced to stand behind.
+    /// </para>
+    /// <para>
+    /// Sessions rather than executions, because that is the unit of independence. Attempts of one
+    /// test inside one session are correlated — an assertion that fails at 14:02 usually fails again
+    /// five seconds later — so counting them separately claims a sample size the data has not got.
+    /// </para>
     /// </remarks>
-    public static int CountExecutions(FindingSubject subject, TestIndex index)
+    public static int CountSessions(FindingSubject subject, TestIndex index)
     {
         int best = 0;
 
         foreach (TestReference test in subject.Tests)
         {
-            int count = index.ExecutionsOf(test.TestFingerprint).Count;
+            int count = index.SessionsRunIn(test.TestFingerprint);
             if (count > best)
                 best = count;
         }
@@ -57,15 +64,16 @@ internal static class EvidenceLevelResolver
     /// <summary>
     /// Returns whether a finding has enough behind it to be emitted.
     /// </summary>
-    /// <param name="executions">Executions of the subject within the window.</param>
-    /// <param name="sessionCount">Sessions in the window.</param>
+    /// <param name="subjectSessions">Sessions the subject ran in, within the window.</param>
+    /// <param name="windowSessions">Sessions in the window.</param>
     /// <returns><see langword="true"/> when the finding may be reported.</returns>
     /// <remarks>
-    /// Both bounds matter. Enough sessions stops one unlucky run from defining a rate; enough
-    /// executions of the subject stops a test added yesterday from being judged on the history of
-    /// the tests around it.
+    /// Both bounds matter. Enough sessions in the window stops one unlucky run from defining a rate;
+    /// enough sessions of the subject stops a test added yesterday from being judged on the history
+    /// of the tests around it. Counting the second bound in executions never achieved that — a test
+    /// that retried five times in a single session cleared it without having any history at all.
     /// </remarks>
-    public static bool MeetsReportingFloor(int executions, int sessionCount) =>
-        sessionCount >= LocalAnalysisConstants.MinimumSessionsToReport &&
-        executions >= LocalAnalysisConstants.MinimumExecutionsToReport;
+    public static bool MeetsReportingFloor(int subjectSessions, int windowSessions) =>
+        windowSessions >= LocalAnalysisConstants.MinimumSessionsToReport &&
+        subjectSessions >= LocalAnalysisConstants.MinimumSessionsPerTestToReport;
 }

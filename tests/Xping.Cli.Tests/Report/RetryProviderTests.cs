@@ -417,25 +417,32 @@ public sealed class RetryProviderTests
     [InlineData(4, false)]
     [InlineData(5, true)]
     [InlineData(6, true)]
-    public void TheSessionFloorDecidesWhetherAFindingSurvives(int sessions, bool reported)
+    public void TheWindowSessionFloorDecidesWhetherAFindingSurvives(int sessions, bool reported)
     {
-        // Three masked sessions gives six executions throughout, so only the session count moves.
-        AnalysisResult result = Run(Context(sessions, maskedSessions: 3));
+        // The subject runs in every session, so it clears the per-test floor wherever the window
+        // does and only the window's own session count moves.
+        AnalysisResult result = Run(Context(sessions, maskedSessions: 3, padding: sessions - 3));
 
         Assert.Equal(reported ? 1 : 0, result.Findings.Count);
         Assert.Equal(reported ? 0 : 1, result.ExcludedLowEvidence);
     }
 
     [Theory]
-    [InlineData(2, 0, 4, false)]
-    [InlineData(2, 1, 5, true)]
-    [InlineData(3, 0, 6, true)]
-    public void TheExecutionFloorDecidesWhetherAFindingSurvives(
-        int maskedSessions, int padding, int expectedExecutions, bool reported)
+    [InlineData(2, 0, 2, 4, false)]
+    [InlineData(2, 1, 3, 5, false)]
+    [InlineData(4, 0, 4, 8, false)]
+    [InlineData(4, 1, 5, 9, true)]
+    [InlineData(5, 0, 5, 10, true)]
+    public void ThePerTestFloorCountsSessionsRatherThanAttempts(
+        int maskedSessions, int padding, int expectedSessions, int expectedExecutions, bool reported)
     {
-        AnalysisContext context = Context(sessions: 6, maskedSessions, padding);
+        // A masked session contributes two executions of the subject and a padded one contributes
+        // one, so the two denominators come apart. Five executions from two masked sessions and a
+        // pad used to clear a floor of five; it is one retried afternoon, and it no longer does.
+        AnalysisContext context = Context(sessions: 8, maskedSessions, padding);
 
         Assert.Equal(expectedExecutions, EvidenceFrom(context).Executions);
+        Assert.Equal(expectedSessions, context.Tests.SessionsRunIn($"fp-{Subject}"));
 
         AnalysisResult result = Run(context);
 
@@ -444,17 +451,20 @@ public sealed class RetryProviderTests
     }
 
     [Theory]
-    [InlineData(7, 0, 14, "Low")]
-    [InlineData(7, 1, 15, "Moderate")]
-    [InlineData(8, 0, 16, "Moderate")]
-    [InlineData(20, 0, 40, "Moderate")]
-    [InlineData(20, 1, 41, "High")]
-    public void EvidenceIsBandedByExecutionsOfTheSubject(
-        int maskedSessions, int padding, int expectedExecutions, string expected)
+    [InlineData(7, 0, 7, "Low")]
+    [InlineData(7, 1, 8, "Moderate")]
+    [InlineData(8, 0, 8, "Moderate")]
+    [InlineData(15, 0, 15, "Moderate")]
+    [InlineData(15, 1, 16, "High")]
+    public void EvidenceIsBandedBySessionsOfTheSubject(
+        int maskedSessions, int padding, int expectedSessions, string expected)
     {
+        // Sessions, not executions: seven masked sessions are fourteen executions, and banding those
+        // would call one week of a twice-retrying test better evidenced than a fortnight of a clean
+        // one.
         AnalysisContext context = Context(sessions: 24, maskedSessions, padding);
 
-        Assert.Equal(expectedExecutions, EvidenceFrom(context).Executions);
+        Assert.Equal(expectedSessions, context.Tests.SessionsRunIn($"fp-{Subject}"));
         Assert.Equal(expected, Assert.Single(Run(context).Findings).EvidenceLevel.ToString());
     }
 

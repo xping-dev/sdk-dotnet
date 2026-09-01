@@ -18,7 +18,7 @@ public sealed class ParallelSensitiveProviderTests
     private const string Subject = "Subject";
 
     // Ten sessions, five a side of the median, is the smallest window the finding can fire in:
-    // ParallelSensitiveMinArmExecutions is 5 and both arms have to clear it.
+    // ParallelSensitiveMinArmSessions is 5 and both arms have to clear it.
     private const int Sessions = 10;
 
     // ---------------------------------------------------------------------------------------
@@ -32,6 +32,51 @@ public sealed class ParallelSensitiveProviderTests
 
         Assert.Equal(FindingKind.ParallelSensitive, candidate.Kind);
         Assert.Equal(Subject, Named(candidate));
+    }
+
+    [Fact]
+    public void AnArmFilledByRetriesWithinTooFewSessionsIsDeclined()
+    {
+        // Four sessions of four attempts put eight executions either side of the median, which used
+        // to be well clear of the gate. They are four occasions, and the gate now counts those.
+        Assert.Empty(Analyze(RetriedWithin(sessions: 4, attemptsPerSession: 4)));
+    }
+
+    [Fact]
+    public void TheSameShapeOverFiveSessionsQualifiesAndKeepsItsExecutionDenominators()
+    {
+        // The concurrency readings are real and distinct, so the rate stays over executions once the
+        // arms rest on enough separate occasions. The evidence publishes both numbers.
+        ParallelSensitiveEvidence evidence = EvidenceFrom(RetriedWithin(sessions: 5, attemptsPerSession: 4));
+
+        Assert.Equal(10, evidence.High.Executions);
+        Assert.Equal(5, evidence.High.Sessions);
+        Assert.Equal(10, evidence.Low.Executions);
+        Assert.Equal(5, evidence.Low.Sessions);
+    }
+
+    [Fact]
+    public void RetryingMoreWithinTheSameSessionsDoesNotBuyConfidence()
+    {
+        // The rank must not move on attempts. Both windows are five sessions with the same failure
+        // rate either side of the median; the second simply retries twice as hard. An interval taken
+        // over the raw execution counts would call the second twice as well evidenced, and would put
+        // a test that retries above one measured over as many separate builds.
+        double four = Single(RetriedWithin(sessions: 5, attemptsPerSession: 4)).Unreliability;
+        double eight = Single(RetriedWithin(sessions: 5, attemptsPerSession: 8)).Unreliability;
+
+        Assert.Equal(four, eight, 6);
+    }
+
+    [Fact]
+    public void MoreSessionsStillBuyConfidence()
+    {
+        // The other half of the invariant: deflating to sessions must not flatten the bound
+        // altogether. Ten occasions support a wider gap than five of the same shape do.
+        double five = Single(RetriedWithin(sessions: 5, attemptsPerSession: 4)).Unreliability;
+        double ten = Single(RetriedWithin(sessions: 10, attemptsPerSession: 4)).Unreliability;
+
+        Assert.True(ten > five, $"{ten} > {five}");
     }
 
     [Fact]
@@ -291,6 +336,56 @@ public sealed class ParallelSensitiveProviderTests
     // ---------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a window in which the subject retries within each session, taking a fresh concurrency
+    /// reading on every attempt: quiet on the earlier attempts and crowded on the later ones.
+    /// </summary>
+    /// <param name="sessions">How many sessions to build.</param>
+    /// <param name="attemptsPerSession">Attempts each session takes, all but the last failing.</param>
+    /// <returns>The sessions.</returns>
+    /// <remarks>
+    /// The concurrency genuinely differs between attempts, so the arms are real; what they are not
+    /// is independent occasions. Four sessions of four attempts fill both arms with eight executions
+    /// apiece and used to clear a gate of five a side on four afternoons' worth of evidence.
+    /// </remarks>
+    private static List<TestSession> RetriedWithin(int sessions, int attemptsPerSession)
+    {
+        List<TestSession> built = [];
+
+        for (int ordinal = 0; ordinal < sessions; ordinal++)
+        {
+            List<TestExecution> executions = [];
+
+            for (int attempt = 1; attempt <= attemptsPerSession; attempt++)
+            {
+                // The suite empties out as the run goes on, so the earlier attempts are the crowded
+                // arm and the later ones the quiet arm.
+                bool crowded = attempt <= attemptsPerSession / 2;
+
+                // Crowded attempts always fail and the quiet half fails every other one, so both
+                // arms hold the same failure rate however many attempts a session takes. Only the
+                // sample size moves with `attemptsPerSession`, which is what lets a test vary that
+                // alone and watch what the bound does.
+                bool failed = crowded || (attempt - (attemptsPerSession / 2)) % 2 == 1;
+
+                executions.Add(TestSessionFactory.Execution(
+                    Subject,
+                    failed ? TestOutcome.Failed : TestOutcome.Passed,
+                    attempt: attempt,
+                    maxRetries: attemptsPerSession - 1,
+                    passedOnRetry: !failed && attempt > 1,
+                    errorMessage: failed ? "boom" : null,
+                    executionId: TestSessionFactory.ExecutionIdFor(
+                        Subject, (ordinal * attemptsPerSession) + attempt, TestOutcome.Failed),
+                    concurrency: crowded ? 8 : 2));
+            }
+
+            built.Add(TestSessionFactory.Session(ordinal, executions));
+        }
+
+        return built;
+    }
 
     /// <summary>
     /// Builds a window where the subject runs once per session, quiet in the older half and crowded

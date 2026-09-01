@@ -108,4 +108,91 @@ public sealed class TestIndexTests
 
         Assert.Equal(0, TestIndex.Build(empty).RunFrequencyOf(SubjectFingerprint));
     }
+
+    // ---------------------------------------------------------------------------------------
+    // Runs and the per-test session count
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void SessionsRunInCountsSessionsRatherThanAttempts()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 20, presentIn: 10, attempts: 3));
+
+        Assert.Equal(30, index.ExecutionsOf(SubjectFingerprint).Count);
+        Assert.Equal(10, index.SessionsRunIn(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void SessionsRunInIsZeroForAFingerprintTheWindowNeverSaw()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 20, presentIn: 10, attempts: 1));
+
+        Assert.Equal(0, index.SessionsRunIn("fp-NeverRan"));
+    }
+
+    [Fact]
+    public void RunsOfCollapsesEverySessionToOneEntry()
+    {
+        // The distinction the arm gates and the evidence floor now rest on: thirty executions are
+        // ten occasions, and a gate handed the first number is claiming a sample it has not got.
+        TestIndex index = TestIndex.Build(Window(total: 20, presentIn: 10, attempts: 3));
+
+        IReadOnlyList<ExecutionRef> runs = index.RunsOf(SubjectFingerprint);
+
+        Assert.Equal(10, runs.Count);
+        Assert.Equal(10, runs.Select(r => r.SessionIndex).Distinct().Count());
+    }
+
+    [Fact]
+    public void ARunIsRepresentedByItsDecidingAttempt()
+    {
+        // The fixture fails twice and passes on the third, so the run passed. Reading any earlier
+        // attempt would make every retried run look like a failure and invert the whole report.
+        TestIndex index = TestIndex.Build(Window(total: 6, presentIn: 6, attempts: 3));
+
+        foreach (ExecutionRef run in index.RunsOf(SubjectFingerprint))
+        {
+            Assert.Equal(3, run.Execution.Retry?.AttemptNumber);
+            Assert.Equal(TestOutcome.Passed, run.Execution.Outcome);
+            Assert.False(run.Failed);
+        }
+    }
+
+    [Fact]
+    public void ARunAgreesWithSessionOutcomesWhenAttemptsArriveOutOfOrder()
+    {
+        // Attempt order within a session is not guaranteed. The two must not disagree, or the report
+        // would call a session green while flagging a test inside it as having blocked the build.
+        TestSession session = TestSessionFactory.Session(
+            0,
+            [
+                TestSessionFactory.Execution(
+                    Subject, TestOutcome.Failed, attempt: 2, maxRetries: 1, errorMessage: "boom"),
+                TestSessionFactory.Execution(Subject, TestOutcome.Passed, attempt: 1)
+            ]);
+
+        ExecutionRef run = Assert.Single(
+            TestIndex.Build(TestSessionFactory.Window(session)).RunsOf(SubjectFingerprint));
+
+        Assert.True(run.Failed);
+        Assert.True(SessionOutcomes.HasFinalFailure(session));
+    }
+
+    [Fact]
+    public void RunsOfIsEmptyForAFingerprintTheWindowNeverSaw()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 20, presentIn: 10, attempts: 1));
+
+        Assert.Empty(index.RunsOf("fp-NeverRan"));
+    }
+
+    [Fact]
+    public void RunsAreOrderedNewestSessionFirstLikeExecutions()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 8, presentIn: 8, attempts: 2));
+
+        IReadOnlyList<ExecutionRef> runs = index.RunsOf(SubjectFingerprint);
+
+        Assert.Equal(Enumerable.Range(0, 8), runs.Select(r => r.SessionIndex));
+    }
 }

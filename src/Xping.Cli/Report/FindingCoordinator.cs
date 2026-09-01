@@ -76,9 +76,9 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 if (kinds != null && !kinds.Contains(candidate.Kind))
                     continue;
 
-                int executions = EvidenceLevelResolver.CountExecutions(candidate.Subject, context.Tests);
+                int sessions = EvidenceLevelResolver.CountSessions(candidate.Subject, context.Tests);
 
-                if (!EvidenceLevelResolver.MeetsReportingFloor(executions, context.Window.SessionCount))
+                if (!EvidenceLevelResolver.MeetsReportingFloor(sessions, context.Window.SessionCount))
                 {
                     excluded++;
                     continue;
@@ -90,7 +90,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                     FindingId.Compute(candidate.Kind, candidate.Subject.SortKey),
                     candidate.Kind,
                     candidate.Cap(ImpactScorer.Band(impact)),
-                    EvidenceLevelResolver.Resolve(executions),
+                    EvidenceLevelResolver.Resolve(sessions),
                     candidate.Subject,
                     candidate.Evidence,
                     candidate.DrillDownCommand,
