@@ -58,7 +58,7 @@ internal static class WilsonInterval
         if (trials <= 0)
             return 0;
 
-        double p = (double)successes / trials;
+        double p = Proportion(successes, trials);
         double z2 = z * z;
         double centre = p + (z2 / (2.0 * trials));
         double margin = z * Math.Sqrt((p * (1 - p) / trials) + (z2 / (4.0 * trials * trials)));
@@ -84,7 +84,7 @@ internal static class WilsonInterval
         if (trials <= 0)
             return 0;
 
-        double p = (double)successes / trials;
+        double p = Proportion(successes, trials);
         double z2 = z * z;
         double centre = p + (z2 / (2.0 * trials));
         double margin = z * Math.Sqrt((p * (1 - p) / trials) + (z2 / (4.0 * trials * trials)));
@@ -127,8 +127,8 @@ internal static class WilsonInterval
         if (trials <= 0 || otherTrials <= 0)
             return 0;
 
-        double p1 = (double)successes / trials;
-        double p2 = (double)otherSuccesses / otherTrials;
+        double p1 = Proportion(successes, trials);
+        double p2 = Proportion(otherSuccesses, otherTrials);
 
         double l1 = LowerBound(successes, trials);
         double u1 = UpperBound(successes, trials);
@@ -144,6 +144,20 @@ internal static class WilsonInterval
 
         return Math.Min(Math.Abs(lower), Math.Abs(upper));
     }
+
+    /// <summary>
+    /// Divides one count by another, keeping the result a proportion.
+    /// </summary>
+    /// <remarks>
+    /// The clamp is a guard, not an expectation: every caller today counts a subset of its own
+    /// denominator. Without it a count that exceeded its denominator would make <c>p * (1 - p)</c>
+    /// negative and the square root NaN, and NaN survives <see cref="Math.Clamp(double, double,
+    /// double)"/> and every comparison in <see cref="ImpactScorer"/>, so the finding would silently
+    /// score zero rather than fail. A statistic that cannot be computed should be visibly wrong or
+    /// safely bounded, and bounded is the cheaper of the two here.
+    /// </remarks>
+    private static double Proportion(int successes, int trials) =>
+        Math.Clamp((double)successes / trials, 0.0, 1.0);
 
     private static double Square(double value) => value * value;
 }

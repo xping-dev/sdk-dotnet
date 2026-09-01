@@ -271,10 +271,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             // Compounded here by the axis search: the best of up to six splits is kept, and the
             // largest of six noisy gaps is larger still. The bound is not a multiplicity correction
             // and does not pretend to be one, but it does stop the winner of that search from
-            // outranking a finding measured once.
-            Unreliability: WilsonInterval.DifferenceBoundNearestZero(
-                FailureCount(best.Worse), best.Worse.Count,
-                FailureCount(best.Other), best.Other.Count),
+            // outranking a finding measured once — and it is the quantity that search now picks the
+            // winner on, so the published axis and the rank cannot disagree.
+            Unreliability: best.Support,
 
             // Dated by the failures that drove it rather than by the test's last execution. A test
             // that failed overnight a fortnight ago and has run cleanly since should decay, and
@@ -297,26 +296,33 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The wider gap wins. Ties are broken towards the split that can <i>name</i> its failing side,
-    /// and that is not a cosmetic preference: when failures fall in one quarter and passes in
-    /// another, two quarters produce the same two arms from opposite sides, and only one of them
-    /// describes the failures as a time of day. The other calls them "the rest of the day", which is
-    /// true and tells the reader nothing about when to look.
+    /// The better supported gap wins, not the wider one. This is what <see cref="TimeOfDaySplits"/>
+    /// describes when it says a quarter with a huge rate over four executions must lose to a quarter
+    /// with a smaller one over twelve; comparing the observed gaps never implemented it. It also
+    /// stops the axis search disagreeing with the score: the finding is ranked on the winner's
+    /// supported gap, so choosing the winner on anything else would publish the thinnest split and
+    /// then rank it at nearly zero, discarding a better evidenced axis that was available.
     /// </para>
     /// <para>
-    /// The equality comparison is exact on purpose. A tie here arises when two splits divided the
-    /// same executions the same way, so the two rates were computed from identical counts and the
+    /// The observed gap breaks ties, and only then does naming. Several thin splits can support
+    /// nothing at all and tie at zero, and between two splits neither of which the evidence
+    /// separates, the wider observation is the more useful thing to show.
+    /// </para>
+    /// <para>
+    /// The equality comparisons are exact on purpose. A tie here arises when two splits divided the
+    /// same executions the same way, so both quantities were computed from identical counts and the
     /// doubles are bit-identical; a tolerance would only let genuinely different gaps tie.
     /// </para>
     /// </remarks>
     private static bool Beats(Split candidate, Split incumbent)
     {
-        if (candidate.Delta > incumbent.Delta)
-            return true;
+        if (candidate.Support != incumbent.Support)
+            return candidate.Support > incumbent.Support;
 
-        return candidate.Delta == incumbent.Delta &&
-               candidate.WorseIsNamed &&
-               !incumbent.WorseIsNamed;
+        if (candidate.Delta != incumbent.Delta)
+            return candidate.Delta > incumbent.Delta;
+
+        return candidate.WorseIsNamed && !incumbent.WorseIsNamed;
     }
 
     /// <summary>
@@ -493,7 +499,16 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             return null;
         }
 
-        return new Split(axis, worse, worseLabel, other, otherLabel, Math.Abs(delta), delta >= 0);
+        return new Split(
+            axis,
+            worse,
+            worseLabel,
+            other,
+            otherLabel,
+            Math.Abs(delta),
+            WilsonInterval.DifferenceBoundNearestZero(
+                FailureCount(worse), worse.Count, FailureCount(other), other.Count),
+            delta >= 0);
     }
 
     private static int DistinctDates(IEnumerable<Measured> executions)
@@ -644,6 +659,10 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <param name="Other">Everything else.</param>
     /// <param name="OtherLabel">What that arm is called.</param>
     /// <param name="Delta">The absolute gap in failure rate between them.</param>
+    /// <param name="Support">
+    /// The least gap the two arms support — the Newcombe bound of the same difference, 0 when the
+    /// interval still admits no difference at all. What the split is chosen and ranked on.
+    /// </param>
     /// <param name="WorseIsNamed">
     /// Whether <paramref name="Worse"/> is the side the predicate selected rather than its
     /// complement. Only a named side carries a time a reader can act on.
@@ -655,5 +674,6 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         List<Measured> Other,
         string OtherLabel,
         double Delta,
+        double Support,
         bool WorseIsNamed);
 }

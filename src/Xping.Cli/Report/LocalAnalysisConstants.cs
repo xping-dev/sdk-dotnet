@@ -184,9 +184,11 @@ internal static class LocalAnalysisConstants
     /// occurrence: a masked failure is invisible without the report, whereas an exhausted run
     /// already went red in the runner's own output.
     /// <para>
-    /// This bounds the count of events; <see cref="RetryExhaustedShareMin"/> bounds the share, and
-    /// only that one constrains the share's denominator. Two of two cleared both gates until the
-    /// share was moved onto its lower bound.
+    /// No longer the binding gate. Exhausted runs are a subset of retried ones, so the share's lower
+    /// bound is largest when every retried run ran out, and four in four is the first shape that
+    /// clears <see cref="RetryExhaustedShareMin"/>. That threshold therefore already implies at
+    /// least four, and this one only states the floor the kind was designed around and declines the
+    /// common cases without computing an interval. It becomes binding again if the share ever moves.
     /// </para>
     /// </remarks>
     public const int RetryExhaustedMinRuns = 2;

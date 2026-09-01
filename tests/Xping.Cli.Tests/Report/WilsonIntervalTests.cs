@@ -40,6 +40,16 @@ public sealed class WilsonIntervalTests
     }
 
     [Fact]
+    public void MoreSuccessesThanTrialsBoundsRatherThanReturningNaN()
+    {
+        // NaN survives Math.Clamp and every comparison the impact scorer makes, so a statistic that
+        // could not be computed would rank the finding at zero without saying anything.
+        Assert.Equal(1.0, WilsonInterval.UpperBound(7, 5));
+        Assert.False(double.IsNaN(WilsonInterval.LowerBound(7, 5)));
+        Assert.False(double.IsNaN(WilsonInterval.DifferenceBoundNearestZero(7, 5, 1, 5)));
+    }
+
+    [Fact]
     public void ABehaviourNeverObservedBoundsToZero()
     {
         Assert.Equal(0, WilsonInterval.LowerBound(0, 40));

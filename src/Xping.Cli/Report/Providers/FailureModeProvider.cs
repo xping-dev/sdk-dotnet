@@ -642,23 +642,46 @@ internal sealed class FailureModeProvider : IFindingProvider
             // tent alone put a test failing 19 runs in 20 at 0.10, which is 0.34 of impact lost for
             // being more broken, and it fell on exactly the tests that most need reading.
             //
-            // Evaluated at the lower bound of the rate rather than at the rate, so the peak is
-            // reached by evidence rather than by arithmetic: an even split over twenty executions
-            // scores 0.60 and the same split over forty scores 0.70, converging on 1.00 as the runs
-            // accumulate. One failure in five no longer scores what five hundred in a thousand does.
-            FlakyUnreliability(WilsonInterval.LowerBound(failures.Count, considered.Count)),
+            // Then discounted by how much of the observed rate the evidence supports, rather than
+            // evaluated at the bound directly. The shape has to be applied to the rate the test
+            // actually showed: the tent falls away above its peak, so feeding it a bound that climbs
+            // towards the rate as runs accumulate makes the score fall as the evidence grows. A test
+            // failing four of five scored 0.75 and the same test at thirty-two of forty scored 0.69,
+            // which is the inversion this change exists to remove, reintroduced one line further on.
+            //
+            // The discount is monotone in the run count at every rate, and leaves the term at the
+            // bound itself wherever the floor is what applies. An even split scores 0.47 over ten
+            // executions, 0.60 over twenty and 0.70 over forty, converging on 1.00 rather than
+            // claiming it.
+            FlakyUnreliability(failureRate, failures.Count, considered.Count),
 
             sessionsSinceLast,
             DrillDown.ForTest(FindingKind.Flaky, test));
     }
 
     /// <summary>
-    /// Scores flakiness from a failure rate: a tent peaking at one half, floored at the rate itself.
+    /// Scores flakiness: a tent peaking at one half, floored at the rate, discounted by evidence.
     /// </summary>
-    /// <param name="rate">The failure rate, or a lower bound on it.</param>
+    /// <param name="rate">The observed failure rate.</param>
+    /// <param name="failures">Failures the rate was computed from.</param>
+    /// <param name="executions">Executions they were counted against.</param>
     /// <returns>The unreliability term, in [0,1].</returns>
-    private static double FlakyUnreliability(double rate) =>
-        Math.Max(rate, 1 - Math.Abs((2 * rate) - 1));
+    /// <remarks>
+    /// The discount is the share of the observed rate its lower bound supports, which is 0 when a
+    /// single failure could have been luck and approaches 1 as the runs accumulate. Applying it to
+    /// the shape rather than substituting it into the shape is what keeps the term rising with the
+    /// evidence: the tent is not monotone in the rate, by design, so it cannot be handed a moving
+    /// estimate of one.
+    /// </remarks>
+    private static double FlakyUnreliability(double rate, int failures, int executions)
+    {
+        if (rate <= 0)
+            return 0;
+
+        double shape = Math.Max(rate, 1 - Math.Abs((2 * rate) - 1));
+
+        return shape * (WilsonInterval.LowerBound(failures, executions) / rate);
+    }
 
     /// <summary>
     /// Builds the finding for a test whose failures are mostly the framework killing it.

@@ -320,6 +320,40 @@ public sealed class FailureModeProviderTests
             Assert.True(scores[i] > scores[i - 1], $"{scores[i]} > {scores[i - 1]}");
     }
 
+    [Fact]
+    public void UnreliabilityRisesWithTheRunsBehindARateAboveTheTentsPeak()
+    {
+        // Above the peak the tent falls away, so a term evaluated at the bound rather than
+        // discounted by it goes *down* as the evidence accumulates: four of five scored 0.75 and
+        // thirty-two of forty scored 0.69. Eight in ten was the worst of it at 0.98, above every
+        // one of them. Four failure modes keep this test flaky at a rate that would otherwise
+        // classify as broken.
+        double[] scores =
+        [
+            Single(Analyze(FailingFourWaysIn(total: 5, failing: 4)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 10, failing: 8)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 20, failing: 16)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 40, failing: 32)), FindingKind.Flaky).Unreliability
+        ];
+
+        for (int i = 1; i < scores.Length; i++)
+            Assert.True(scores[i] > scores[i - 1], $"{scores[i]} > {scores[i - 1]}");
+    }
+
+    /// <summary>
+    /// Builds a window where the subject fails at four in five, cycling through four failure modes
+    /// so that no single mode dominates and the test stays flaky rather than becoming broken.
+    /// </summary>
+    private static TestSession[] FailingFourWaysIn(int total, int failing) =>
+        [.. Enumerable.Range(0, total).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    ordinal >= total - failing
+                        ? Failure("Subject", $"unexpected {(char)('a' + (ordinal % 4))}")
+                        : Passing("Subject")
+                ]))];
+
     /// <summary>Repeats one assertion message, so several failures share one signature.</summary>
     private static string[] Said(int times, string message) =>
         [.. Enumerable.Repeat(message, times)];
