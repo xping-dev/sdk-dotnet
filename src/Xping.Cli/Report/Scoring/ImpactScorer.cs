@@ -20,7 +20,11 @@ namespace Xping.Cli.Report.Scoring;
 /// </para>
 /// <para>
 /// This is deliberately not a confidence score. It ranks findings against each other inside one
-/// report; it does not claim how likely the finding is to be real.
+/// report; it does not claim how likely the finding is to be real. The unreliability term is a
+/// confidence bound — <see cref="WilsonInterval"/> — but only so that the ranking accounts for the
+/// data behind each finding. A finding on five runs sorts below the same finding on forty; neither
+/// score says what the odds are that either is a genuine defect, and nothing here corrects for the
+/// number of tests the providers compared to produce them.
 /// </para>
 /// </remarks>
 internal static class ImpactScorer

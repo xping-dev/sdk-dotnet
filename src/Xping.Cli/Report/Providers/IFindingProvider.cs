@@ -21,6 +21,10 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="Evidence">The kind-specific observations behind the claim.</param>
 /// <param name="Unreliability">
 /// How unreliable the subject is, in [0,1], defined per kind. The dominant term in the impact score.
+/// Wherever the kind's measure is a proportion, this is a lower confidence bound on it rather than
+/// the ratio itself — see <see cref="Scoring.WilsonInterval"/> — so that a finding grows with the
+/// runs behind it instead of ranking <c>2 of 2</c> alongside <c>50 of 50</c>. Evidence records still
+/// publish the point estimate, because a reader wants "4 of 20" and not "0.31".
 /// </param>
 /// <param name="SessionsSinceLastOccurrence">
 /// How many sessions back the behaviour was last seen; 0 means the newest session.

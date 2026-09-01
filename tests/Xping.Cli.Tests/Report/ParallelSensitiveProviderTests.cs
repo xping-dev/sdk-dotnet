@@ -68,12 +68,26 @@ public sealed class ParallelSensitiveProviderTests
     }
 
     [Fact]
-    public void UnreliabilityIsTheGapTheConditionMeasured()
+    public void UnreliabilityIsTheLeastGapTheArmsSupport()
     {
+        // 0.8 in the crowded arm against 0.2 in the quiet one, on the smallest split the condition
+        // allows. The observed gap is 0.60 and the finding is still emitted on it, but five a side
+        // supports no difference at all, so it ranks at the bottom rather than at the top. Ranking
+        // on the observation put exactly these thin splits above every well-evidenced finding.
         FindingCandidate candidate = Single(Split(highFailures: 4, lowFailures: 1));
 
-        // 0.8 in the crowded arm against 0.2 in the quiet one.
-        Assert.Equal(0.6, candidate.Unreliability, 10);
+        Assert.Equal(0, candidate.Unreliability);
+    }
+
+    [Fact]
+    public void UnreliabilityRisesWithTheExecutionsBehindTheSameGap()
+    {
+        // The same two rates over four times the executions. The gap the arms support is no longer
+        // zero, and the finding sorts ahead of the five-a-side one above.
+        FindingCandidate candidate =
+            Single(Split(highFailures: 16, lowFailures: 4, highSessions: 20, lowSessions: 20));
+
+        Assert.Equal(0.294, candidate.Unreliability, 3);
     }
 
     // ---------------------------------------------------------------------------------------

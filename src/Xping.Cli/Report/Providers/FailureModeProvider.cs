@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Signatures;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -390,10 +391,11 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             // The cluster takes its worst member's unreliability rather than their average. One
             // member failing constantly makes the whole cluster worth opening, and an average would
-            // let a dozen occasional members hide it.
+            // let a dozen occasional members hide it. Worst is measured on the lower bound of each
+            // member's failure rate, so the member that wins is the one with the evidence behind it
+            // rather than whichever happened to run fewest times.
             int executions = context.Tests.ExecutionsOf(fingerprint).Count;
-            if (executions > 0)
-                unreliability = Math.Max(unreliability, (double)failures / executions);
+            unreliability = Math.Max(unreliability, WilsonInterval.LowerBound(failures, executions));
         }
 
         // Unchanged by the promotion below: the id identifies the claim's subject, and the subject is
@@ -561,8 +563,13 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> timeouts =
             [.. failures.Where(e => e.Execution.Outcome == TestOutcome.Timeout)];
 
+        // Thresholded on the lower bound of that share. Three failures of which three were kills is
+        // 1.00 on a denominator of three, and moving a test into a bucket whose whole point is to
+        // hand the reader a different diagnosis is not a decision three observations should make.
+        // The published share stays the point estimate.
         if (timeouts.Count > 0 &&
-            (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
+            WilsonInterval.LowerBound(timeouts.Count, failures.Count) >=
+                LocalAnalysisConstants.TimingOutShareMin)
         {
             return TimingOut(context, test, considered, failures, timeouts, discounted);
         }
@@ -600,7 +607,13 @@ internal sealed class FailureModeProvider : IFindingProvider
                     FindingOrder.Round(modalShare),
                     exemplars,
                     contrast),
-                failureRate,
+
+                // The classification above is made on the rate itself; the ranking is made on its
+                // lower bound. The two differ deliberately. A test failing five of five is broken
+                // and the report should say so, but it should not outrank one failing forty of
+                // forty, and only the bound distinguishes them.
+                WilsonInterval.LowerBound(failures.Count, considered.Count),
+
                 sessionsSinceLast,
                 DrillDown.ForTest(FindingKind.AlwaysFailing, test));
         }
@@ -628,11 +641,24 @@ internal sealed class FailureModeProvider : IFindingProvider
             // itself so the term never scores a nearly-always-broken test below a milder one: the
             // tent alone put a test failing 19 runs in 20 at 0.10, which is 0.34 of impact lost for
             // being more broken, and it fell on exactly the tests that most need reading.
-            Math.Max(failureRate, 1 - Math.Abs((2 * failureRate) - 1)),
+            //
+            // Evaluated at the lower bound of the rate rather than at the rate, so the peak is
+            // reached by evidence rather than by arithmetic: an even split over twenty executions
+            // scores 0.60 and the same split over forty scores 0.70, converging on 1.00 as the runs
+            // accumulate. One failure in five no longer scores what five hundred in a thousand does.
+            FlakyUnreliability(WilsonInterval.LowerBound(failures.Count, considered.Count)),
 
             sessionsSinceLast,
             DrillDown.ForTest(FindingKind.Flaky, test));
     }
+
+    /// <summary>
+    /// Scores flakiness from a failure rate: a tent peaking at one half, floored at the rate itself.
+    /// </summary>
+    /// <param name="rate">The failure rate, or a lower bound on it.</param>
+    /// <returns>The unreliability term, in [0,1].</returns>
+    private static double FlakyUnreliability(double rate) =>
+        Math.Max(rate, 1 - Math.Abs((2 * rate) - 1));
 
     /// <summary>
     /// Builds the finding for a test whose failures are mostly the framework killing it.
@@ -680,7 +706,14 @@ internal sealed class FailureModeProvider : IFindingProvider
                 [.. ordered.Select(t => (long)t.Execution.Duration.TotalMilliseconds)],
                 [.. ordered.Take(MaxExemplars).Select(t => ToExemplar(context, t))],
                 Contrast(considered)),
-            timeoutRate,
+
+            // The share of every run that ended in a kill, bounded below — not the share of failures
+            // that were kills, which is what the condition thresholds. The condition asks which
+            // diagnosis fits; this asks how unreliable the test is, which is what the report ranks
+            // on, and the bound is what keeps a test killed twice in five behind one killed twenty
+            // times in forty.
+            WilsonInterval.LowerBound(timeouts.Count, considered.Count),
+
             timeouts.Min(t => t.SessionIndex),
             DrillDown.ForTest(FindingKind.TimingOut, test));
     }

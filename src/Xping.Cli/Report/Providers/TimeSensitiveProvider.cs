@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Providers;
@@ -262,10 +263,18 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 Exemplars(failures),
                 Contrast(best.Other)),
 
-            // The gap itself, as the concurrency provider does. It is already in [0,1] — two rates in
-            // [0,1] cannot differ by more — and it is the quantity the condition thresholds, so the
-            // two can never disagree about how strong a finding is.
-            Unreliability: Math.Abs(best.Delta),
+            // The least gap the two arms support, as the concurrency provider does and for the same
+            // reason: five executions a side is the smallest split allowed and produces the largest
+            // observed deltas, so ranking on the observation put the thinnest evidence at the top.
+            // The condition still thresholds the observed delta, so what is emitted has not changed.
+            //
+            // Compounded here by the axis search: the best of up to six splits is kept, and the
+            // largest of six noisy gaps is larger still. The bound is not a multiplicity correction
+            // and does not pretend to be one, but it does stop the winner of that search from
+            // outranking a finding measured once.
+            Unreliability: WilsonInterval.DifferenceBoundNearestZero(
+                FailureCount(best.Worse), best.Worse.Count,
+                FailureCount(best.Other), best.Other.Count),
 
             // Dated by the failures that drove it rather than by the test's last execution. A test
             // that failed overnight a fortnight ago and has run cleanly since should decay, and
@@ -497,7 +506,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         return dates.Count;
     }
 
-    private static double FailureRate(List<Measured> arm)
+    private static double FailureRate(List<Measured> arm) => (double)FailureCount(arm) / arm.Count;
+
+    private static int FailureCount(List<Measured> arm)
     {
         int failures = 0;
         foreach (Measured measured in arm)
@@ -506,7 +517,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 failures++;
         }
 
-        return (double)failures / arm.Count;
+        return failures;
     }
 
     private static TimeArm Summarise(List<Measured> arm, string label)

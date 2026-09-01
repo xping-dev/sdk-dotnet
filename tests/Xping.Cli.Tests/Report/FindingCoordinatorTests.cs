@@ -7,6 +7,7 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -180,6 +181,47 @@ public sealed class FindingCoordinatorTests
         AnalysisResult result = coordinator.Run(Context(testsPerSession: 2), null, warnings);
 
         Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void AFindingRestingOnFiveExecutionsNeverOutranksTheSameFindingOnForty()
+    {
+        // The invariant the whole ranking rests on. Both tests fail three runs in five; one has been
+        // watched five times and the other forty. Every other term the scorer reads is identical -
+        // the test ran in every session of its own window, every failure broke a build, and the
+        // newest session is one of the failures - so the ordering here is the sample size and
+        // nothing else. Before findings ranked on a bound, the two scored the same.
+        Finding thin = OnlyFinding(FailingHalfOf(sessions: 5));
+        Finding evidenced = OnlyFinding(FailingHalfOf(sessions: 40));
+
+        Assert.True(evidenced.Impact > thin.Impact, $"{evidenced.Impact} > {thin.Impact}");
+        // Published as well as ranked. The evidence level said this all along; until now it never
+        // reached the sort.
+        Assert.Equal(EvidenceLevel.Low, thin.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Moderate, evidenced.EvidenceLevel);
+    }
+
+    /// <summary>
+    /// Builds a window in which one test fails three runs in every five, ending on a failure.
+    /// </summary>
+    private static AnalysisContext FailingHalfOf(int sessions) =>
+        TestSessionFactory.Context(
+            [.. Enumerable.Range(0, sessions).Select(ordinal =>
+                TestSessionFactory.Session(
+                    ordinal,
+                    [
+                        TestSessionFactory.Execution(
+                            "Subject",
+                            ordinal % 5 >= 2 ? TestOutcome.Failed : TestOutcome.Passed,
+                            errorMessage: ordinal % 5 >= 2 ? "boom" : null)
+                    ]))]);
+
+    private static Finding OnlyFinding(AnalysisContext context)
+    {
+        using var warnings = new StringWriter();
+
+        return Assert.Single(
+            new FindingCoordinator([new FailureModeProvider()]).Run(context, null, warnings).Findings);
     }
 
     /// <summary>

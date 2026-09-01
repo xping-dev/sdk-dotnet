@@ -362,11 +362,14 @@ public sealed class RetryProviderTests
     // ---------------------------------------------------------------------------------------
 
     [Fact]
-    public void UnreliabilityIsTheShareOfRunsThatNeededARetry()
+    public void UnreliabilityIsTheBoundedShareOfRunsThatNeededARetry()
     {
+        // Three masked of six executions is a share of one half; the term is the lower bound of
+        // that share, because this kind reports on a single occurrence and a single occurrence
+        // would otherwise rank as a certainty.
         FindingCandidate candidate = Assert.Single(Analyze(Context(sessions: 6, maskedSessions: 3)));
 
-        Assert.Equal(0.5, candidate.Unreliability);
+        Assert.Equal(0.188, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -633,14 +636,19 @@ public sealed class RetryProviderTests
 
     [Theory]
     [InlineData(0, 3, nameof(FindingKind.RetryMasked))]
-    [InlineData(3, 3, nameof(FindingKind.RetryExhausted))]
     [InlineData(2, 4, null)]
+    [InlineData(3, 3, null)]
+    [InlineData(4, 0, nameof(FindingKind.RetryExhausted))]
+    [InlineData(7, 1, nameof(FindingKind.RetryExhausted))]
     public void TheShareOfRetriedRunsThatGaveUpDecidesTheKind(
         int exhausted, int rescued, string? kind)
     {
-        // Two of six retried runs is 0.33 and falls short of the half the condition asks for; three
-        // of six is exactly the bar and clears it. Below it the retries rescue the test more often
-        // than not, and the test is neither masked - it failed builds - nor out of retries.
+        // The half the condition asks for is asked of the share's lower bound, so the denominator
+        // decides as much as the ratio does. Two of six is 0.33 and falls short on the ratio alone;
+        // three of six is exactly the bar and still falls short, because six runs cannot carry it.
+        // Four of four and seven of eight are the two smallest shapes that can. Below the bar the
+        // retries rescue the test more often than not, and the test is neither masked - it failed
+        // builds - nor out of retries.
         //
         // Named as a string because FindingKind is internal: a public theory parameter may not be
         // less accessible than the method carrying it.
@@ -661,9 +669,19 @@ public sealed class RetryProviderTests
     }
 
     [Fact]
-    public void TwoExhaustedRunsAreEnoughToReport()
+    public void TwoExhaustedRunsInTwoAreNotEnoughToReport()
     {
-        FindingCandidate candidate = Assert.Single(Analyze(Retrying(sessions: 8, exhausted: 2)));
+        // Both gates the count knows about are cleared - two exhausted runs, a share of 1.00 - and
+        // the finding is still declined, because a denominator of two cannot carry a claim about
+        // whether retries rescue this test. The Wilson lower bound of two in two is 0.34.
+        Assert.Empty(Analyze(Retrying(sessions: 8, exhausted: 2)));
+    }
+
+    [Fact]
+    public void FourExhaustedRunsInFourAreTheSmallestReportableShape()
+    {
+        // Bound 0.51, the first configuration to clear the half the threshold asks for.
+        FindingCandidate candidate = Assert.Single(Analyze(Retrying(sessions: 8, exhausted: 4)));
 
         Assert.Equal(FindingKind.RetryExhausted, candidate.Kind);
     }
@@ -705,13 +723,13 @@ public sealed class RetryProviderTests
     [Fact]
     public void ExhaustionEvidenceCarriesTheDenominatorsBehindTheRate()
     {
-        RetryExhaustedEvidence evidence = ExhaustedFrom(Retrying(sessions: 10, exhausted: 4, rescued: 2));
+        RetryExhaustedEvidence evidence = ExhaustedFrom(Retrying(sessions: 12, exhausted: 7, rescued: 1));
 
-        Assert.Equal(4, evidence.ExhaustedRuns);
-        Assert.Equal(6, evidence.RetriedRuns);
-        Assert.Equal(2, evidence.RescuedRuns);
-        Assert.Equal(10, evidence.RunsConsidered);
-        Assert.Equal(10, evidence.Sessions);
+        Assert.Equal(7, evidence.ExhaustedRuns);
+        Assert.Equal(8, evidence.RetriedRuns);
+        Assert.Equal(1, evidence.RescuedRuns);
+        Assert.Equal(12, evidence.RunsConsidered);
+        Assert.Equal(12, evidence.Sessions);
     }
 
     [Fact]
@@ -732,12 +750,12 @@ public sealed class RetryProviderTests
     [Fact]
     public void TheExhaustionRateIsRoundedToThePublishedPrecision()
     {
-        // Five exhausted of seven retried is 0.7142..., which must not reach the output at full
+        // Eight exhausted of nine retried is 0.8888..., which must not reach the output at full
         // width - the report publishes rates to three decimals.
         RetryExhaustedEvidence evidence =
-            ExhaustedFrom(Retrying(sessions: 10, exhausted: 5, rescued: 2));
+            ExhaustedFrom(Retrying(sessions: 12, exhausted: 8, rescued: 1));
 
-        Assert.Equal(0.714, evidence.ExhaustedRate);
+        Assert.Equal(0.889, evidence.ExhaustedRate);
     }
 
     [Fact]
@@ -746,7 +764,7 @@ public sealed class RetryProviderTests
         // Five attempts observed against a declared limit of two. Both are published and neither is
         // derived from the other, because they were written down by different parties.
         RetryExhaustedEvidence evidence = ExhaustedFrom(
-            Retrying(sessions: 8, exhausted: 3, attempts: 5, maxRetries: 2));
+            Retrying(sessions: 8, exhausted: 4, attempts: 5, maxRetries: 2));
 
         Assert.Equal(5, evidence.MaxAttemptObserved);
         Assert.Equal(2, evidence.Configuration.MaxRetriesAsDeclared);
@@ -755,12 +773,12 @@ public sealed class RetryProviderTests
     [Fact]
     public void RetryWallClockCountsOnlyAttemptsAfterTheFirstOfTheExhaustedRuns()
     {
-        // Three attempts of 100ms in each of three exhausted runs. The first attempt of each is the
-        // failure, not the retry, so six attempts are counted rather than nine.
+        // Three attempts of 100ms in each of four exhausted runs. The first attempt of each is the
+        // failure, not the retry, so eight attempts are counted rather than twelve.
         RetryExhaustedEvidence evidence =
-            ExhaustedFrom(Retrying(sessions: 8, exhausted: 3, attempts: 3));
+            ExhaustedFrom(Retrying(sessions: 8, exhausted: 4, attempts: 3));
 
-        Assert.Equal(600, evidence.RetryWallClockMs);
+        Assert.Equal(800, evidence.RetryWallClockMs);
     }
 
     [Fact]
@@ -770,17 +788,17 @@ public sealed class RetryProviderTests
         // scaled by the attempts it applied to and published on its own line. Summing the two would
         // present a figure nothing measured.
         RetryExhaustedEvidence evidence = ExhaustedFrom(
-            Retrying(sessions: 8, exhausted: 3, attempts: 3, retryDelayMs: 250));
+            Retrying(sessions: 8, exhausted: 4, attempts: 3, retryDelayMs: 250));
 
-        Assert.Equal(600, evidence.RetryWallClockMs);
-        Assert.Equal(1500, evidence.ConfiguredDelayTotalMs);
+        Assert.Equal(800, evidence.RetryWallClockMs);
+        Assert.Equal(2000, evidence.ConfiguredDelayTotalMs);
     }
 
     [Fact]
     public void ARetryReasonIsPublishedVerbatim()
     {
         RetryExhaustedEvidence evidence = ExhaustedFrom(
-            Retrying(sessions: 8, exhausted: 3, retryReason: "NetworkError"));
+            Retrying(sessions: 8, exhausted: 4, retryReason: "NetworkError"));
 
         Assert.Equal("NetworkError", evidence.Configuration.Reason);
     }
@@ -791,7 +809,7 @@ public sealed class RetryProviderTests
         // What the MSTest adapter writes where the other two leave null. A blank reason is not a
         // reason, and publishing it would put an empty pair in front of a reader.
         RetryExhaustedEvidence evidence = ExhaustedFrom(
-            Retrying(sessions: 8, exhausted: 3, retryReason: string.Empty));
+            Retrying(sessions: 8, exhausted: 4, retryReason: string.Empty));
 
         Assert.Null(evidence.Configuration.Reason);
     }
@@ -799,7 +817,7 @@ public sealed class RetryProviderTests
     [Fact]
     public void ExhaustionIsDatedFromTheMostRecentOccurrence()
     {
-        AnalysisContext context = Retrying(sessions: 8, exhausted: 3, sha: "a3f9c2e");
+        AnalysisContext context = Retrying(sessions: 8, exhausted: 4, sha: "a3f9c2e");
 
         RetryExhaustedEvidence evidence = ExhaustedFrom(context);
 
@@ -812,7 +830,7 @@ public sealed class RetryProviderTests
     public void TheContrastIsARetriedRunThatDidSettleGreen()
     {
         RetryExhaustedEvidence evidence =
-            ExhaustedFrom(Retrying(sessions: 10, exhausted: 4, rescued: 2));
+            ExhaustedFrom(Retrying(sessions: 12, exhausted: 7, rescued: 1));
 
         Assert.NotNull(evidence.Contrast);
         Assert.Equal(nameof(TestOutcome.Passed), evidence.Contrast.Outcome);
@@ -848,7 +866,7 @@ public sealed class RetryProviderTests
     public void AnExhaustedExemplarCarriesWhatTheAttemptBeforeTheLastSaid()
     {
         RetryExhaustedEvidence evidence =
-            ExhaustedFrom(Retrying(sessions: 8, exhausted: 3, attempts: 3));
+            ExhaustedFrom(Retrying(sessions: 8, exhausted: 4, attempts: 3));
 
         RetryAttemptExemplar exemplar = evidence.Exemplars[0];
 
@@ -865,21 +883,22 @@ public sealed class RetryProviderTests
     [Fact]
     public void ExhaustionUnreliabilityIsMeasuredAgainstEveryRunOfTheTest()
     {
-        // Four exhausted runs of ten. The condition thresholds the share of *retried* runs, which is
-        // a question about the retry attribute; this ranks the test, which is a different question.
+        // Four exhausted runs of ten, a share of 0.40 bounded at 0.17. The condition thresholds the
+        // share of *retried* runs, which is a question about the retry attribute; this ranks the
+        // test, which is a different question and keeps its own denominator.
         FindingCandidate candidate = Assert.Single(Analyze(Retrying(sessions: 10, exhausted: 4)));
 
-        Assert.Equal(0.4, candidate.Unreliability);
+        Assert.Equal(0.168, candidate.Unreliability, 3);
     }
 
     [Fact]
     public void ExhaustionRecencyIsMeasuredFromTheNewestOccurrence()
     {
-        // Exhausted in the three oldest of ten sessions, so the last occurrence is seven back.
+        // Exhausted in the four oldest of ten sessions, so the last occurrence is six back.
         var built = new List<TestSession>();
         for (int ordinal = 0; ordinal < 10; ordinal++)
         {
-            built.Add(ordinal < 3
+            built.Add(ordinal < 4
                 ? TestSessionFactory.Session(ordinal, [.. AttemptSequence(2, TestOutcome.Failed)])
                 : TestSessionFactory.Session(ordinal, [TestSessionFactory.Execution(Subject)]));
         }
@@ -887,7 +906,7 @@ public sealed class RetryProviderTests
         FindingCandidate candidate = Assert.Single(Analyze(TestSessionFactory.Context([.. built])));
 
         Assert.Equal(FindingKind.RetryExhausted, candidate.Kind);
-        Assert.Equal(7, candidate.SessionsSinceLastOccurrence);
+        Assert.Equal(6, candidate.SessionsSinceLastOccurrence);
     }
 
     [Fact]
@@ -925,7 +944,7 @@ public sealed class RetryProviderTests
 
         for (int ordinal = 1; ordinal < 9; ordinal++)
         {
-            built.Add(ordinal <= 3
+            built.Add(ordinal <= 4
                 ? TestSessionFactory.Session(ordinal, [.. AttemptSequence(2, TestOutcome.Failed)])
                 : TestSessionFactory.Session(ordinal, [TestSessionFactory.Execution(Subject)]));
         }
@@ -933,7 +952,7 @@ public sealed class RetryProviderTests
         RetryExhaustedEvidence evidence = ExhaustedFrom(TestSessionFactory.Context([.. built]));
 
         Assert.Equal(1, evidence.DiscountedRuns);
-        Assert.Equal(3, evidence.ExhaustedRuns);
+        Assert.Equal(4, evidence.ExhaustedRuns);
         Assert.Equal(8, evidence.RunsConsidered);
     }
 
@@ -1217,7 +1236,7 @@ public sealed class RetryProviderTests
     {
         // Disjoint by construction rather than by ordering: masking excludes any test that ended a
         // run red, and every exhausted run did.
-        AnalysisContext context = Retrying(sessions: 10, exhausted: 4, rescued: 3);
+        AnalysisContext context = Retrying(sessions: 10, exhausted: 7, rescued: 1);
 
         FindingCandidate candidate = Assert.Single(Analyze(context));
 
@@ -1248,8 +1267,8 @@ public sealed class RetryProviderTests
     public void AWindowOfEveryRetryKindSerializesIdenticallyTwice()
     {
         Assert.Equal(
-            Serialize(Retrying(sessions: 10, exhausted: 4, rescued: 2, sha: "a3f9c2e")),
-            Serialize(Retrying(sessions: 10, exhausted: 4, rescued: 2, sha: "a3f9c2e")));
+            Serialize(Retrying(sessions: 12, exhausted: 7, rescued: 1, sha: "a3f9c2e")),
+            Serialize(Retrying(sessions: 12, exhausted: 7, rescued: 1, sha: "a3f9c2e")));
 
         Assert.Equal(
             Serialize(Depths(sessions: 12, baselineAttempts: 1, currentAttempts: 3, sha: "a3f9c2e")),

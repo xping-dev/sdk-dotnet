@@ -85,12 +85,15 @@ public sealed class TimeSensitiveProviderTests
     }
 
     [Fact]
-    public void UnreliabilityIsTheGapTheConditionMeasured()
+    public void UnreliabilityIsTheLeastGapTheArmsSupport()
     {
-        // Six of six in the evening against one of six in the morning.
+        // Six of six in the evening against one of six in the morning: an observed gap of 0.83 that
+        // six executions a side support down to 0.28. The condition still thresholds the observed
+        // gap, so what is emitted has not changed; what changed is where it ranks against findings
+        // measured over a whole window.
         FindingCandidate candidate = Single(TimeOfDay(eveningFailures: 6, morningFailures: 1));
 
-        Assert.Equal(1.0 - (1.0 / 6.0), candidate.Unreliability, 10);
+        Assert.Equal(0.277, candidate.Unreliability, 3);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -137,8 +140,11 @@ public sealed class TimeSensitiveProviderTests
         FindingCandidate candidate = Assert.Single(candidates);
         var evidence = Assert.IsType<TimeSensitiveEvidence>(candidate.Evidence);
 
+        // The axis is still chosen on the observed gaps; the term the report ranks on is the gap
+        // the winning split's arms support.
         Assert.Equal("LocalTimeOfDay", evidence.Axis);
-        Assert.Equal(0.9, candidate.Unreliability, 10);
+        Assert.Equal(0.9, evidence.Delta.FailureRate);
+        Assert.Equal(0.405, candidate.Unreliability, 3);
     }
 
     [Fact]

@@ -96,7 +96,9 @@ public sealed class VanishedProviderTests
         FindingCandidate everySession = Assert.Single(Analyze(Context(total: 8, presentIn: 5)));
         FindingCandidate someSessions = Assert.Single(Analyze(Context(total: 10, presentIn: 4)));
 
-        Assert.Equal(1.0, everySession.Unreliability);
+        // Bounded rather than taken raw, so five of five is 0.57 and not the certainty a ratio of
+        // one would claim. The comparison the finding rests on is unaffected.
+        Assert.Equal(0.566, everySession.Unreliability, 3);
         Assert.True(someSessions.Unreliability < everySession.Unreliability);
     }
 

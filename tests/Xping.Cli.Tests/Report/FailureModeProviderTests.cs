@@ -190,13 +190,14 @@ public sealed class FailureModeProviderTests
     [Fact]
     public void TheTimingOutMetricsStateTheSplitWhenTheTestAlsoFailsOtherWays()
     {
-        // 6 timeouts and 3 assertion failures: over the 50% share, but not all of them.
+        // 8 timeouts and 1 assertion failure: over the share the condition asks of the bound, but
+        // not all of them.
         TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
             TestSessionFactory.Session(
                 ordinal,
                 [ordinal switch
                 {
-                    >= 4 => TimedOut("Subject"),
+                    >= 2 => TimedOut("Subject"),
                     >= 1 => Failure("Subject"),
                     _ => Passing("Subject"),
                 }]))];
@@ -204,12 +205,12 @@ public sealed class FailureModeProviderTests
         FindingCandidate candidate = Single(Analyze(sessions), FindingKind.TimingOut);
         var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
 
-        Assert.Equal(6, evidence.Timeouts);
+        Assert.Equal(8, evidence.Timeouts);
         Assert.Equal(9, evidence.Failures);
 
         (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
 
-        Assert.Contains(metrics, m => m.Label == "share of failures" && m.Value == "6 of 9 (66.7%)");
+        Assert.Contains(metrics, m => m.Label == "share of failures" && m.Value == "8 of 9 (88.9%)");
     }
 
     [Fact]
@@ -239,8 +240,11 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(9, evidence.Failures);
         Assert.Equal(10, evidence.Executions);
+
+        // The published rate is the point estimate; the ranking term is its lower bound. Nine of
+        // ten is 0.90 either way to a reader, and 0.60 against the other findings in the report.
         Assert.Equal(0.9, evidence.FailureRate);
-        Assert.Equal(0.9, candidate.Unreliability);
+        Assert.Equal(0.596, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -288,9 +292,32 @@ public sealed class FailureModeProviderTests
     [Fact]
     public void UnreliabilityPeaksAtAnEvenSplit()
     {
-        var evidence = Single(Analyze(Runs(total: 10, failing: 5)), FindingKind.Flaky);
+        // The tent is evaluated at the lower bound of the failure rate, so the peak is approached
+        // rather than reached: an even split over ten runs is worth less than the same split over
+        // forty, and neither claims the certainty the raw ratio used to hand both of them.
+        double ten = Single(Analyze(Runs(total: 10, failing: 5)), FindingKind.Flaky).Unreliability;
+        double forty = Single(Analyze(Runs(total: 40, failing: 20)), FindingKind.Flaky).Unreliability;
+        double lopsided = Single(Analyze(Runs(total: 40, failing: 8)), FindingKind.Flaky).Unreliability;
 
-        Assert.Equal(1.0, evidence.Unreliability);
+        Assert.Equal(0.473, ten, 3);
+        Assert.Equal(0.704, forty, 3);
+        Assert.True(forty > lopsided, $"{forty} > {lopsided}");
+    }
+
+    [Fact]
+    public void UnreliabilityRisesWithTheRunsBehindTheSameRate()
+    {
+        // The property the whole ranking rests on: two tests failing half their runs are not the
+        // same finding when one of them ran five times and the other forty.
+        double[] scores =
+        [
+            Single(Analyze(Runs(total: 10, failing: 5)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(Runs(total: 20, failing: 10)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(Runs(total: 40, failing: 20)), FindingKind.Flaky).Unreliability
+        ];
+
+        for (int i = 1; i < scores.Length; i++)
+            Assert.True(scores[i] > scores[i - 1], $"{scores[i]} > {scores[i - 1]}");
     }
 
     /// <summary>Repeats one assertion message, so several failures share one signature.</summary>
@@ -329,7 +356,7 @@ public sealed class FailureModeProviderTests
         Assert.Equal(0.95, evidence.FailureRate);
         Assert.Equal(0.895, evidence.ModalSignatureShare);
         Assert.Equal(17, evidence.Signature.Occurrences);
-        Assert.Equal(0.95, candidate.Unreliability);
+        Assert.Equal(0.764, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -399,7 +426,10 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(0.95, evidence.FailureRate);
         Assert.Equal(10, evidence.DistinctSignatureCount);
-        Assert.Equal(0.95, candidate.Unreliability);
+
+        // The floor still holds, now against the bounded rate: the tent alone would put the lower
+        // bound of 19 of 20 at 0.47, and the floor keeps the term at the bound itself.
+        Assert.Equal(0.764, candidate.Unreliability, 3);
     }
 
     [Fact]

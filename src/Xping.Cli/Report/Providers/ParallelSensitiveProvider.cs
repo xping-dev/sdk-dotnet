@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Report.Providers;
@@ -201,10 +202,15 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
                 Exemplars(failures),
                 Contrast(quieter)),
 
-            // The gap itself. It is already in [0,1] — two rates in [0,1] cannot differ by more —
-            // and it is the quantity the condition thresholds, so the two never disagree about how
-            // strong a finding is.
-            Unreliability: Math.Abs(delta),
+            // The least gap the two arms support, rather than the gap they happened to show. The
+            // condition still thresholds the observed delta, so what is emitted has not changed;
+            // what changed is where it ranks. Five executions a side is the smallest split allowed
+            // and produces the largest observed deltas in the report, so ranking on the observation
+            // put the thinnest evidence at the top. A five-a-side split whose interval still admits
+            // no difference at all scores zero here and falls to the bottom of the list, where the
+            // reader can still find it.
+            Unreliability: WilsonInterval.DifferenceBoundNearestZero(
+                FailureCount(high), high.Count, FailureCount(low), low.Count),
 
             // Dated by the failures that drove it rather than by the test's last execution. A test
             // that failed under load a fortnight ago and has run cleanly since should decay, and
@@ -271,7 +277,9 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         return levels[Math.Clamp(rank, 0, levels.Count - 1)];
     }
 
-    private static double FailureRate(List<Measured> arm)
+    private static double FailureRate(List<Measured> arm) => (double)FailureCount(arm) / arm.Count;
+
+    private static int FailureCount(List<Measured> arm)
     {
         int failures = 0;
         foreach (Measured measured in arm)
@@ -280,7 +288,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
                 failures++;
         }
 
-        return (double)failures / arm.Count;
+        return failures;
     }
 
     private static ConcurrencyArm Summarise(List<Measured> arm, double rate)
