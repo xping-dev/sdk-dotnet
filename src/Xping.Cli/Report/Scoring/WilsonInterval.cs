@@ -53,7 +53,24 @@ internal static class WilsonInterval
     /// The quantity to threshold and to rank on. <c>2/2</c> bounds at 0.34 and <c>19/20</c> at 0.76,
     /// so the second outranks the first despite the first's higher point estimate.
     /// </remarks>
-    public static double LowerBound(int successes, int trials, double z = ConfidenceZ)
+    public static double LowerBound(int successes, int trials, double z = ConfidenceZ) =>
+        LowerBound((double)successes, trials, z);
+
+    /// <summary>
+    /// Lower bound of the Wilson score interval on an effective sample size.
+    /// </summary>
+    /// <param name="successes">Observations of the behaviour, deflated for clustering.</param>
+    /// <param name="trials">Opportunities to observe it, deflated for clustering.</param>
+    /// <param name="z">Standard normal deviate; defaults to a two-sided 95% interval.</param>
+    /// <returns>The bound, in [0,1]; 0 when there were no trials.</returns>
+    /// <remarks>
+    /// Fractional rather than whole counts, because a caller whose observations are correlated has to
+    /// divide both by a design effect and the result is not an integer. Rounding them back would put
+    /// an error of up to half an observation into a denominator that is often only five, which is
+    /// large enough to reorder findings and to do it non-monotonically. The formula never needed the
+    /// counts to be whole.
+    /// </remarks>
+    public static double LowerBound(double successes, double trials, double z = ConfidenceZ)
     {
         if (trials <= 0)
             return 0;
@@ -76,18 +93,28 @@ internal static class WilsonInterval
     /// <returns>The bound, in [0,1]; 1 when there were no trials.</returns>
     /// <remarks>
     /// <para>
-    /// Exists to feed <see cref="DifferenceBoundNearestZero"/>. Nothing thresholds on it: an upper
+    /// Exists to feed <see cref="DifferenceBoundNearestZero(int, int, int, int)"/>. Nothing thresholds on it: an upper
     /// bound is the most the data could support, and a report that ranked on it would promote the
     /// findings with the least evidence.
     /// </para>
     /// <para>
-    /// The empty case is 1 rather than 0, which is the opposite of <see cref="LowerBound"/> and the
+    /// The empty case is 1 rather than 0, which is the opposite of <see cref="LowerBound(int, int, double)"/> and the
     /// only value that is not a claim. Having observed nothing, the least the proportion can be is
     /// zero and the most it can be is one; returning 0 here would assert that a behaviour never
     /// observed also cannot happen.
     /// </para>
     /// </remarks>
-    public static double UpperBound(int successes, int trials, double z = ConfidenceZ)
+    public static double UpperBound(int successes, int trials, double z = ConfidenceZ) =>
+        UpperBound((double)successes, trials, z);
+
+    /// <summary>
+    /// Upper bound of the Wilson score interval on an effective sample size.
+    /// </summary>
+    /// <param name="successes">Observations of the behaviour, deflated for clustering.</param>
+    /// <param name="trials">Opportunities to observe it, deflated for clustering.</param>
+    /// <param name="z">Standard normal deviate; defaults to a two-sided 95% interval.</param>
+    /// <returns>The bound, in [0,1]; 1 when there were no trials.</returns>
+    public static double UpperBound(double successes, double trials, double z = ConfidenceZ)
     {
         if (trials <= 0)
             return 1;
@@ -114,7 +141,7 @@ internal static class WilsonInterval
     /// <remarks>
     /// <para>
     /// Newcombe's hybrid score interval, built from the two arms' Wilson intervals rather than from a
-    /// pooled normal approximation, for the same reason <see cref="LowerBound"/> is Wilson: the arms
+    /// pooled normal approximation, for the same reason <see cref="LowerBound(int, int, double)"/> is Wilson: the arms
     /// are small and their rates sit near the ends.
     /// </para>
     /// <para>
@@ -130,7 +157,25 @@ internal static class WilsonInterval
     /// </para>
     /// </remarks>
     public static double DifferenceBoundNearestZero(
-        int successes, int trials, int otherSuccesses, int otherTrials)
+        int successes, int trials, int otherSuccesses, int otherTrials) =>
+        DifferenceBoundNearestZero((double)successes, trials, otherSuccesses, otherTrials);
+
+    /// <summary>
+    /// How large a difference between two proportions the data supports, on effective sample sizes.
+    /// </summary>
+    /// <param name="successes">Observations in the first arm, deflated for clustering.</param>
+    /// <param name="trials">Effective size of the first arm.</param>
+    /// <param name="otherSuccesses">Observations in the second arm, deflated for clustering.</param>
+    /// <param name="otherTrials">Effective size of the second arm.</param>
+    /// <returns>The interval endpoint nearest zero, as a non-negative magnitude.</returns>
+    /// <remarks>
+    /// The overload a caller reaches for when its arms hold correlated observations. Deflating both
+    /// counts by the design effect leaves the point estimate exactly where it was and widens the
+    /// interval to what the number of independent units supports, which is the whole intent: the rate
+    /// stays as observed, the confidence stops outrunning the evidence.
+    /// </remarks>
+    public static double DifferenceBoundNearestZero(
+        double successes, double trials, double otherSuccesses, double otherTrials)
     {
         if (trials <= 0 || otherTrials <= 0)
             return 0;
@@ -164,8 +209,8 @@ internal static class WilsonInterval
     /// score zero rather than fail. A statistic that cannot be computed should be visibly wrong or
     /// safely bounded, and bounded is the cheaper of the two here.
     /// </remarks>
-    private static double Proportion(int successes, int trials) =>
-        Math.Clamp((double)successes / trials, 0.0, 1.0);
+    private static double Proportion(double successes, double trials) =>
+        Math.Clamp(successes / trials, 0.0, 1.0);
 
     private static double Square(double value) => value * value;
 }

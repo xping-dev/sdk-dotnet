@@ -197,6 +197,9 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
         List<Measured> failures = [.. worse.Where(m => m.Reference.Failed)];
 
+        EffectiveCounts highEffective = Deflate(high);
+        EffectiveCounts lowEffective = Deflate(low);
+
         return new FindingCandidate(
             FindingKind.ParallelSensitive,
             new FindingSubject.SingleTest(test),
@@ -213,13 +216,21 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
             // The least gap the two arms support, rather than the gap they happened to show. The
             // condition still thresholds the observed delta, so what is emitted has not changed;
-            // what changed is where it ranks. Five executions a side is the smallest split allowed
+            // what changed is where it ranks. Five sessions a side is the smallest split allowed
             // and produces the largest observed deltas in the report, so ranking on the observation
             // put the thinnest evidence at the top. A five-a-side split whose interval still admits
             // no difference at all scores zero here and falls to the bottom of the list, where the
             // reader can still find it.
+            //
+            // Computed on effective sample sizes rather than on the execution counts the rates come
+            // from. The arms hold attempts, and attempts within a session are correlated; handing
+            // their raw count to an interval that assumes independent trials would let a test buy
+            // confidence with retries. A test that retried its way to thirty executions across five
+            // sessions would have outranked one measured thirty times over thirty builds, and by the
+            // same margin for the same wrong reason the execution-denominated arm gate did.
             Unreliability: WilsonInterval.DifferenceBoundNearestZero(
-                FailureCount(high), high.Count, FailureCount(low), low.Count),
+                highEffective.Failures, highEffective.Sessions,
+                lowEffective.Failures, lowEffective.Sessions),
 
             // Dated by the failures that drove it rather than by the test's last execution. A test
             // that failed under load a fortnight ago and has run cleanly since should decay, and
@@ -315,6 +326,46 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             sessions.Add(measured.Reference.Session.SessionId);
 
         return sessions.Count;
+    }
+
+    /// <summary>
+    /// An arm's counts scaled down to the independent observations behind them.
+    /// </summary>
+    /// <param name="Failures">Failures, scaled to <paramref name="Sessions"/>.</param>
+    /// <param name="Sessions">Distinct sessions the arm's executions came from.</param>
+    private readonly record struct EffectiveCounts(double Failures, double Sessions);
+
+    /// <summary>
+    /// Deflates an arm to the sample size its correlated executions are actually worth.
+    /// </summary>
+    /// <param name="arm">The arm to deflate.</param>
+    /// <returns>The effective counts.</returns>
+    /// <remarks>
+    /// <para>
+    /// The design effect for a clustered sample is <c>1 + (m̄ - 1)ρ</c>, for a mean cluster size m̄
+    /// and an intra-cluster correlation ρ. This takes ρ = 1, which reduces it to m̄ and the effective
+    /// size to the session count. That is the conservative end of the range and it is chosen rather
+    /// than estimated: at five to twenty sessions an ICC estimate is noisier than the quantity it
+    /// would be correcting, and a bound that moves with the noise in its own correction is worse than
+    /// one that is merely cautious.
+    /// </para>
+    /// <para>
+    /// Both counts are scaled, not just the denominator, so the point estimate the interval is
+    /// centred on is exactly the observed rate. The arm keeps the concurrency readings its executions
+    /// supplied; what it loses is the claim that they were independent trials.
+    /// </para>
+    /// <para>
+    /// One correlation is left uncorrected and is worth naming: a single session can contribute
+    /// attempts to both arms, so the two are not independent samples either, and Newcombe's interval
+    /// assumes they are. That inflates confidence in the same direction, by less, and correcting it
+    /// needs a paired analysis this provider does not have.
+    /// </para>
+    /// </remarks>
+    private static EffectiveCounts Deflate(List<Measured> arm)
+    {
+        int sessions = DistinctSessions(arm);
+
+        return new EffectiveCounts(FailureRate(arm) * sessions, sessions);
     }
 
     private static ConcurrencyArm Summarise(List<Measured> arm, double rate)

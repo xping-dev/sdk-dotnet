@@ -238,16 +238,22 @@ internal static class LocalAnalysisConstants
     /// Distinct sessions each concurrency arm needs before the two are compared (5).
     /// </summary>
     /// <remarks>
-    /// The test therefore needs ten sessions in the window, twice the general reporting floor.
+    /// Applied to each arm separately, and the two arms can draw on the same sessions: a session that
+    /// ran the test at several concurrency levels contributes to both sides of the median, so five
+    /// sessions can satisfy both gates. What the pair requires is five separate occasions behind each
+    /// side, not ten sessions overall.
+    /// <para>
     /// At five a side the weakest qualifying signal is around zero-of-five against two-of-five, which
     /// is already thin; below it a single unlucky execution clears
     /// <see cref="ParallelSensitivityDelta"/> on its own and the report starts ranking noise.
+    /// </para>
     /// <para>
     /// The gate is in sessions while the arms and their rate stay in executions, and the split is
     /// deliberate: a retried test does not repeat one concurrency reading, it takes several, so the
     /// within-session variation is the signal this finding is made of. The gate buys the breadth of
     /// independent occasions the rate cannot supply for itself — two sessions of five attempts each
-    /// are one afternoon, not ten observations.
+    /// are one afternoon, not ten observations. The interval the finding is ranked on is deflated to
+    /// the same session count, so no part of the statistic still treats attempts as independent.
     /// </para>
     /// </remarks>
     public const int ParallelSensitiveMinArmSessions = 5;

@@ -56,6 +56,30 @@ public sealed class ParallelSensitiveProviderTests
     }
 
     [Fact]
+    public void RetryingMoreWithinTheSameSessionsDoesNotBuyConfidence()
+    {
+        // The rank must not move on attempts. Both windows are five sessions with the same failure
+        // rate either side of the median; the second simply retries twice as hard. An interval taken
+        // over the raw execution counts would call the second twice as well evidenced, and would put
+        // a test that retries above one measured over as many separate builds.
+        double four = Single(RetriedWithin(sessions: 5, attemptsPerSession: 4)).Unreliability;
+        double eight = Single(RetriedWithin(sessions: 5, attemptsPerSession: 8)).Unreliability;
+
+        Assert.Equal(four, eight, 6);
+    }
+
+    [Fact]
+    public void MoreSessionsStillBuyConfidence()
+    {
+        // The other half of the invariant: deflating to sessions must not flatten the bound
+        // altogether. Ten occasions support a wider gap than five of the same shape do.
+        double five = Single(RetriedWithin(sessions: 5, attemptsPerSession: 4)).Unreliability;
+        double ten = Single(RetriedWithin(sessions: 10, attemptsPerSession: 4)).Unreliability;
+
+        Assert.True(ten > five, $"{ten} > {five}");
+    }
+
+    [Fact]
     public void TheEvidenceCarriesBothArmsWithTheirDenominators()
     {
         ParallelSensitiveEvidence evidence = EvidenceFrom(Split(highFailures: 4, lowFailures: 0));
@@ -335,17 +359,23 @@ public sealed class ParallelSensitiveProviderTests
 
             for (int attempt = 1; attempt <= attemptsPerSession; attempt++)
             {
-                // The suite empties out as the run goes on, so the later attempts are the quiet arm
-                // and the earlier the crowded one. Every attempt fails but the last.
+                // The suite empties out as the run goes on, so the earlier attempts are the crowded
+                // arm and the later ones the quiet arm.
                 bool crowded = attempt <= attemptsPerSession / 2;
+
+                // Crowded attempts always fail and the quiet half fails every other one, so both
+                // arms hold the same failure rate however many attempts a session takes. Only the
+                // sample size moves with `attemptsPerSession`, which is what lets a test vary that
+                // alone and watch what the bound does.
+                bool failed = crowded || (attempt - (attemptsPerSession / 2)) % 2 == 1;
 
                 executions.Add(TestSessionFactory.Execution(
                     Subject,
-                    attempt == attemptsPerSession ? TestOutcome.Passed : TestOutcome.Failed,
+                    failed ? TestOutcome.Failed : TestOutcome.Passed,
                     attempt: attempt,
                     maxRetries: attemptsPerSession - 1,
-                    passedOnRetry: attempt == attemptsPerSession,
-                    errorMessage: attempt == attemptsPerSession ? null : "boom",
+                    passedOnRetry: !failed && attempt > 1,
+                    errorMessage: failed ? "boom" : null,
                     executionId: TestSessionFactory.ExecutionIdFor(
                         Subject, (ordinal * attemptsPerSession) + attempt, TestOutcome.Failed),
                     concurrency: crowded ? 8 : 2));
