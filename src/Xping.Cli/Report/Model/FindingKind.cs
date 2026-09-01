@@ -55,7 +55,7 @@ internal enum FindingKind
     /// <summary>The test both passes and fails, or fails in varying ways.</summary>
     Flaky,
 
-    /// <summary>The test fails almost always and in one consistent way. Broken, not flaky.</summary>
+    /// <summary>The test fails almost always and in one dominant way. Broken, not flaky.</summary>
     AlwaysFailing,
 
     /// <summary>The test is mostly killed for overrunning its timeout rather than failing outright.</summary>

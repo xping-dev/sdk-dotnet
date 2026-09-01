@@ -293,6 +293,132 @@ public sealed class FailureModeProviderTests
         Assert.Equal(1.0, evidence.Unreliability);
     }
 
+    /// <summary>Repeats one assertion message, so several failures share one signature.</summary>
+    private static string[] Said(int times, string message) =>
+        [.. Enumerable.Repeat(message, times)];
+
+    /// <summary>
+    /// Builds sessions in which one test passes <paramref name="passing"/> times and then fails
+    /// once per entry in <paramref name="messages"/>, newest last.
+    /// </summary>
+    private static TestSession[] RunsFailingWith(int passing, params string[] messages) =>
+    [
+        .. Enumerable.Range(0, passing)
+            .Select(ordinal => TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+        .. messages.Select((message, index) =>
+            TestSessionFactory.Session(passing + index, [Failure("Subject", message)]))
+    ];
+
+    [Fact]
+    public void ABrokenTestWhoseMessageNamesTheDataIsStillAlwaysFailing()
+    {
+        // The defect this pair of thresholds exists for. Signatures compare messages exactly, so an
+        // assertion that prints the value it saw produces one mode per value; requiring a single
+        // mode demoted a test failing 19 runs in 20 to flaky over a name in a string.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 1,
+            [
+                .. Said(17, "Expected: \"Alice\" but was: \"Bob\""),
+                .. Said(2, "Expected: \"Alice\" but was: \"Carol\"")
+            ]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.AlwaysFailing);
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(candidate.Evidence);
+
+        Assert.Equal(19, evidence.Failures);
+        Assert.Equal(0.95, evidence.FailureRate);
+        Assert.Equal(0.895, evidence.ModalSignatureShare);
+        Assert.Equal(17, evidence.Signature.Occurrences);
+        Assert.Equal(0.95, candidate.Unreliability);
+    }
+
+    [Fact]
+    public void ATestFailingHalfTheTimeInTenWaysIsStillFlaky()
+    {
+        // The other side of the same judgement. A dominant mode is what separates a broken test from
+        // a flaky one, and ten modes across ten failures is not one.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 10,
+            [.. Enumerable.Range(0, 10).Select(i => $"unexpected {(char)('a' + i)}")]);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(0.5, evidence.FailureRate);
+        Assert.Equal(10, evidence.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void AtTheDominantShareTheTestIsBrokenAndBelowItFlaky()
+    {
+        // The band is tested from both sides, as the rate is: 14 of 20 failures agreeing is the
+        // threshold itself, 13 is one short of it, and a comparison written the wrong way round
+        // would pass one of these and not the other.
+        TestSession[] atThreshold = RunsFailingWith(
+            passing: 0,
+            [.. Said(14, "the cart was not empty"), .. Said(6, "the cart held a stale item")]);
+
+        TestSession[] belowThreshold = RunsFailingWith(
+            passing: 0,
+            [.. Said(13, "the cart was not empty"), .. Said(7, "the cart held a stale item")]);
+
+        var broken = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(atThreshold), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(0.7, broken.ModalSignatureShare);
+
+        var flaky = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(belowThreshold), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(2, flaky.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void ATestThatFailsOneWayOnlyPublishesTheWholeShare()
+    {
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(Runs(total: 10, failing: 9)), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(1.0, evidence.ModalSignatureShare);
+    }
+
+    [Fact]
+    public void UnreliabilityNeverFallsBelowTheFailureRate()
+    {
+        // The tent alone scored a test failing 19 of 20 runs at 0.10 against a coin flip's 1.00,
+        // costing the most broken tests in a suite 0.34 of their impact for being more broken. Ten
+        // distinct modes keep this one flaky, which is exactly where the collapse used to happen.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 1,
+            [
+                .. Enumerable.Range(0, 10).Select(i => $"unexpected {(char)('a' + i)}"),
+                .. Said(9, "unexpected a")
+            ]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(candidate.Evidence);
+
+        Assert.Equal(0.95, evidence.FailureRate);
+        Assert.Equal(10, evidence.DistinctSignatureCount);
+        Assert.Equal(0.95, candidate.Unreliability);
+    }
+
+    [Fact]
+    public void TheDominantSignatureIsTheOneMostFailuresCarried()
+    {
+        // Ordered on the counts that survived discounting rather than the index's window-wide ones,
+        // because the head of this list is read as the mode the test meets most often — by the
+        // classification above it and by whoever opens the report.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 0,
+            [.. Said(3, "the cart held a stale item"), .. Said(17, "the cart was not empty")]);
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(17, evidence.Signature.Occurrences);
+        Assert.Equal("the cart was not empty", evidence.Signature.Message);
+    }
+
     [Fact]
     public void ATestThatNeverFailsProducesNothing() =>
         Assert.Empty(Analyze(Runs(total: 6, failing: 0)));

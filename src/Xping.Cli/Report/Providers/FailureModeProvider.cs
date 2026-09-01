@@ -133,7 +133,7 @@ internal sealed record FlakyEvidence(
     ContrastExecution? Contrast) : FindingEvidence;
 
 /// <summary>
-/// Evidence that a test fails almost every time, always the same way.
+/// Evidence that a test fails almost every time, and mostly in one way.
 /// </summary>
 /// <param name="Failures">Failures counted, after any discounting.</param>
 /// <param name="Executions">Executions they were counted against.</param>
@@ -141,7 +141,12 @@ internal sealed record FlakyEvidence(
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
 /// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
 /// <param name="DiscountedExecutions">Executions left out of the counts above.</param>
-/// <param name="Signature">The single way it fails.</param>
+/// <param name="Signature">The dominant way it fails.</param>
+/// <param name="ModalSignatureShare">
+/// The share of <paramref name="Failures"/> that failed the way <paramref name="Signature"/>
+/// describes. Published rather than implied: below 1.0 the failures were not identical, and a
+/// reader comparing two exemplars needs to know that before concluding the report misread them.
+/// </param>
 /// <param name="Exemplars">Up to three failures, raw.</param>
 /// <param name="Contrast">The execution that did not fail, when there was one.</param>
 internal sealed record AlwaysFailingEvidence(
@@ -152,6 +157,7 @@ internal sealed record AlwaysFailingEvidence(
     double FailureRate,
     int DiscountedExecutions,
     SignatureView Signature,
+    double ModalSignatureShare,
     IReadOnlyList<FailureExemplar> Exemplars,
     ContrastExecution? Contrast) : FindingEvidence;
 
@@ -561,11 +567,24 @@ internal sealed class FailureModeProvider : IFindingProvider
             return TimingOut(context, test, considered, failures, timeouts, discounted);
         }
 
-        // A single failure mode occurring on almost every run is a broken test, not a flaky one, and
-        // is reported apart because the remedy is entirely different — and because leaving it in the
-        // flaky bucket is how a real regression gets ignored. Both arms are classifications against
-        // the published threshold; neither says anything about why the test fails.
-        if (signatures.Count == 1 && failureRate >= LocalAnalysisConstants.AlwaysFailingRate)
+        // Modal rather than sole. Failure modes are compared by exact hash over the exception type,
+        // the normalised message and five frames, so one broken assertion counts as two modes as
+        // soon as its message names the data that differed. Demanding a single mode let a name in an
+        // error message decide the most severe classification the report makes.
+        //
+        // The denominator is every counted failure rather than the signatures' own total, so the
+        // share stays a share of what the test did over the window even if a failure ever reaches
+        // here unsigned.
+        SignatureView? modal = signatures.Count > 0 ? signatures[0] : null;
+        double modalShare = modal == null ? 0 : (double)modal.Occurrences / failures.Count;
+
+        // A dominant failure mode occurring on almost every run is a broken test, not a flaky one,
+        // and is reported apart because the remedy is entirely different — and because leaving it in
+        // the flaky bucket is how a real regression gets ignored. Both arms are classifications
+        // against the published thresholds; neither says anything about why the test fails.
+        if (modal != null &&
+            failureRate >= LocalAnalysisConstants.AlwaysFailingRate &&
+            modalShare >= LocalAnalysisConstants.AlwaysFailingModalShareMin)
         {
             return new FindingCandidate(
                 FindingKind.AlwaysFailing,
@@ -577,7 +596,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                     sessionsWithFailures,
                     FindingOrder.Round(failureRate),
                     discounted,
-                    signatures[0],
+                    modal,
+                    FindingOrder.Round(modalShare),
                     exemplars,
                     contrast),
                 failureRate,
@@ -604,8 +624,11 @@ internal sealed class FailureModeProvider : IFindingProvider
                 contrast),
 
             // Peaks at a failure rate of one half, which is the most disruptive thing a test can do:
-            // it neither passes nor fails, so nobody can act on either result.
-            1 - Math.Abs((2 * failureRate) - 1),
+            // it neither passes nor fails, so nobody can act on either result. Floored at the rate
+            // itself so the term never scores a nearly-always-broken test below a milder one: the
+            // tent alone put a test failing 19 runs in 20 at 0.10, which is 0.34 of impact lost for
+            // being more broken, and it fell on exactly the tests that most need reading.
+            Math.Max(failureRate, 1 - Math.Abs((2 * failureRate) - 1)),
 
             sessionsSinceLast,
             DrillDown.ForTest(FindingKind.Flaky, test));
@@ -723,7 +746,13 @@ internal sealed class FailureModeProvider : IFindingProvider
                 occurrence.FirstSeenSha));
         }
 
-        return views;
+        // Re-sorted on the counts above. The index orders a test's signatures by how often each was
+        // seen across the whole window, which is not the same order once environmental sessions and
+        // clustered failures have been taken out — and the head of this list is read as the failure
+        // mode this test meets most often, both by the reader and by the classification above it.
+        // OrderByDescending is stable, so signatures tied on count keep the index's own tie-break
+        // and the published evidence still does not shuffle between runs.
+        return [.. views.OrderByDescending(v => v.Occurrences)];
     }
 
     private static SignatureView ToView(

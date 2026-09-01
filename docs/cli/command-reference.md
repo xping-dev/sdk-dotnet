@@ -113,7 +113,7 @@ report prints it.
 | `RetryDeepening` | deeper retries | The test used to pass on fewer attempts than it now needs |
 | `RetryExhausted` | out of retries | The retries ran out and the test still failed the run |
 | `Flaky` | flaky | The test both passes and fails, or fails in varying ways |
-| `AlwaysFailing` | always failing | The test fails almost always, in one consistent way |
+| `AlwaysFailing` | always failing | The test fails almost always, in one dominant way |
 | `TimingOut` | timing out | The test is mostly killed for overrunning its timeout rather than failing |
 | `BrokenFixture` | broken fixture | Several tests fail alike because one shared lifecycle member is broken, and that member is named |
 | `SharedFailure` | shared failure | Several tests fail with one signature in one run — one cause, not many |
