@@ -291,7 +291,7 @@ public sealed class ShareableOutputTests
                 "MyApp.Tests.Checkout.Integration.VeryLongNamespace.PlacesAnOrderAndSettlesIt",
                 "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes, " +
                 "and a great deal more text besides so that wrapping has to happen"),
-            Finding("DurationUnstable", "low", "Short", "p50 820ms, cv 0.71")));
+            Finding("DurationUnstable", "low", "Short", "p50 820ms, dispersion 0.71")));
 
         foreach (string line in Fenced(report))
             Assert.True(line.Length <= FenceWidth, $"'{line}' is {line.Length} columns");

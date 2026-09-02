@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Scoring;
 
 namespace Xping.Cli.Report.Providers;
 
@@ -64,8 +65,8 @@ internal sealed record NormalisedDurationDelta(double P50Pct);
 /// <param name="Baseline">The runs before them.</param>
 /// <param name="Delta">The change in raw milliseconds.</param>
 /// <param name="NormalisedDelta">The change after normalisation, which the threshold was applied to.</param>
-/// <param name="BaselineCv">
-/// Dispersion of the baseline, as a coefficient of variation, computed on <b>normalised</b>
+/// <param name="BaselineDispersion">
+/// Spread of the baseline, per <see cref="RobustDispersion"/>, computed on <b>normalised</b>
 /// durations. The delta above it is measured on the normalised scale, and dispersion has to be
 /// measured in the same units as the quantity it gates: a baseline that looks steady in raw
 /// milliseconds can be swinging once machine speed is divided out, and gating on the raw figure
@@ -82,7 +83,7 @@ internal sealed record DurationRegressionEvidence(
     DurationProfile Baseline,
     DurationDelta Delta,
     NormalisedDurationDelta NormalisedDelta,
-    double BaselineCv,
+    double BaselineDispersion,
     string? FirstSeenAt,
     IReadOnlyList<DurationExemplar> Exemplars,
     DurationExemplar? Contrast) : FindingEvidence;
@@ -96,10 +97,11 @@ internal sealed record DurationRegressionEvidence(
 /// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
 /// <param name="MinMs">The fastest observed run, in milliseconds.</param>
 /// <param name="MaxMs">The slowest observed run, in milliseconds.</param>
-/// <param name="Cv">
-/// Dispersion as a coefficient of variation, computed on <b>normalised</b> durations — so this is a
+/// <param name="Dispersion">
+/// Spread per <see cref="RobustDispersion"/>, computed on <b>normalised</b> durations — so this is a
 /// claim about the test varying relative to the suite around it, not about the machine having had a
-/// bad afternoon, which is the only claim the data supports.
+/// bad afternoon, which is the only claim the data supports. Robust rather than a coefficient of
+/// variation, so it describes what the test does most runs rather than what it did on its worst one.
 /// </param>
 /// <param name="Exemplars">Up to three executions chosen to span the observed spread.</param>
 internal sealed record DurationUnstableEvidence(
@@ -109,7 +111,7 @@ internal sealed record DurationUnstableEvidence(
     long P95Ms,
     long MinMs,
     long MaxMs,
-    double Cv,
+    double Dispersion,
     IReadOnlyList<DurationExemplar> Exemplars) : FindingEvidence;
 
 /// <summary>
@@ -121,7 +123,14 @@ internal sealed record DurationUnstableEvidence(
 /// One provider owns both kinds because they are one judgement about one statistic. Whether a test
 /// has regressed cannot be decided without knowing how much its duration ordinarily moves, and a
 /// test whose duration moves too much for the question to be answerable is itself the finding.
-/// Splitting them would let both claim the same test on opposite sides of the same threshold.
+/// Splitting the provider would let both claim the same test off opposite readings of one number.
+/// </para>
+/// <para>
+/// The two thresholds they sit on are not the same number, and the gap between them is deliberate. A
+/// test steadier than <see cref="LocalAnalysisConstants.DurationStableDispersionMax"/> can be
+/// measured against; one wilder than <see cref="LocalAnalysisConstants.DurationUnstableDispersionMin"/>
+/// is reported for being wild; one in between gets neither finding, because the shift it would take
+/// to call it slower is inside its own noise and its noise is not remarkable enough to report.
 /// </para>
 /// <para>
 /// <b>Every comparison is normalised per session.</b> Each execution's duration is divided by the
@@ -198,10 +207,11 @@ internal sealed class DurationProvider : IFindingProvider
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
-            // A regression suppresses the instability finding for the same test. The two are nearly
-            // disjoint by construction — one needs a steady baseline, the other an unsteady window —
-            // but a large enough shift lifts the whole-window dispersion on its own, and reporting
-            // that as instability would state the regression a second time under another name.
+            // A regression suppresses the instability finding for the same test. The two cannot
+            // both be earned on one sample — one needs a steady baseline, the other an unsteady
+            // window, and the thresholds no longer touch — but a large enough shift lifts the
+            // whole-window dispersion on its own, and reporting that as instability would state the
+            // regression a second time under another name.
             FindingCandidate? candidate =
                 Regression(context, test, current, currentProfile, baselineProfile) ??
                 Unstable(context, test, all, whole, baselineProfile);
@@ -249,8 +259,8 @@ internal sealed class DurationProvider : IFindingProvider
         if (rawIncrease < LocalAnalysisConstants.DurationRegressionMinMs)
             return null;
 
-        double baselineCv = CoefficientOfVariation(baselineProfile.Normalised);
-        if (baselineCv > LocalAnalysisConstants.DurationStableCvMax)
+        double baselineDispersion = RobustDispersion.Of(baselineProfile.Normalised);
+        if (baselineDispersion > LocalAnalysisConstants.DurationStableDispersionMax)
             return null;
 
         return new FindingCandidate(
@@ -264,7 +274,7 @@ internal sealed class DurationProvider : IFindingProvider
                         baselineProfile.RawP50, currentProfile.RawP50)),
                     (long)rawIncrease),
                 new NormalisedDurationDelta(FindingOrder.RoundPercent(increase * 100)),
-                FindingOrder.Round(baselineCv),
+                FindingOrder.Round(baselineDispersion),
                 FirstSeenAt(current),
                 Recent(current),
                 Contrast(baselineProfile)),
@@ -294,8 +304,8 @@ internal sealed class DurationProvider : IFindingProvider
         Profile whole,
         Profile baselineProfile)
     {
-        double cv = CoefficientOfVariation(whole.Normalised);
-        if (cv < LocalAnalysisConstants.DurationUnstableCvMin)
+        double dispersion = RobustDispersion.Of(whole.Normalised);
+        if (dispersion < LocalAnalysisConstants.DurationUnstableDispersionMin)
             return null;
 
         // The test's own prior behaviour where it has any, and the window where it does not. A test
@@ -303,8 +313,7 @@ internal sealed class DurationProvider : IFindingProvider
         // instability invisible for as long as the window takes to fill.
         double floor = baselineProfile.Executions > 0 ? baselineProfile.RawP50 : whole.RawP50;
 
-        // Below a few tens of milliseconds the coefficient of variation is measuring the scheduler,
-        // not the test.
+        // Below a few tens of milliseconds the dispersion is measuring the scheduler, not the test.
         if (floor < LocalAnalysisConstants.DurationTrivialMs)
             return null;
 
@@ -318,12 +327,13 @@ internal sealed class DurationProvider : IFindingProvider
                 (long)whole.RawP95,
                 (long)whole.RawMin,
                 (long)whole.RawMax,
-                FindingOrder.Round(cv),
+                FindingOrder.Round(dispersion),
                 Spanning(all, whole.RawP50)),
 
-            // The dispersion itself, capped. A test whose duration varies by more than its own mean
-            // is as unpredictable as the measure can express.
-            Unreliability: Math.Min(1.0, cv),
+            // The dispersion itself, capped. A test whose typical run sits two thirds of its own
+            // median away from it is as unpredictable as this measure can express, and everything
+            // past that is the same finding with a larger number on it.
+            Unreliability: Math.Min(1.0, dispersion),
 
             SessionsSinceLastOccurrence: all.Min(e => e.SessionIndex),
 
@@ -509,37 +519,6 @@ internal sealed class DurationProvider : IFindingProvider
         int rank = (int)Math.Ceiling(percentile * sorted.Count) - 1;
 
         return sorted[Math.Clamp(rank, 0, sorted.Count - 1)];
-    }
-
-    /// <summary>
-    /// Measures dispersion as standard deviation over mean.
-    /// </summary>
-    /// <returns>
-    /// The coefficient, or zero when it cannot be computed. Zero is the conservative answer in both
-    /// directions: it passes the stability gate a regression needs and fails the instability gate,
-    /// so absent data never produces a finding on its own.
-    /// </returns>
-    private static double CoefficientOfVariation(List<double> values)
-    {
-        if (values.Count < 2)
-            return 0;
-
-        double total = 0;
-        foreach (double value in values)
-            total += value;
-
-        double mean = total / values.Count;
-        if (mean <= 0)
-            return 0;
-
-        double squares = 0;
-        foreach (double value in values)
-        {
-            double deviation = value - mean;
-            squares += deviation * deviation;
-        }
-
-        return Math.Sqrt(squares / values.Count) / mean;
     }
 
     /// <summary>
