@@ -852,6 +852,41 @@ public sealed class DurationProviderTests
         Assert.InRange((double)reported / NullDraws, 0, 0.012);
     }
 
+    [Theory]
+    [InlineData(0.8, 0.2, 0.0, 0.005)]      // the baseline is the wilder arm: far under the level
+    [InlineData(0.2, 0.8, 0.04, 0.09)]      // the recent slice is: above it
+    public void AWiderRecentSliceIsWhereTheOneInAHundredStops(
+        double baselineSigma, double currentSigma, double low, double high)
+    {
+        // The same limit as BrunnerMunzelTests measures on the statistic, carried through every gate
+        // the provider ships so the number is the one a developer would actually meet. Both arms are
+        // centred on 200ms and differ only in spread, so nothing has slowed.
+        //
+        // Where the recent three runs are the wilder arm the rate is several times the level, and
+        // the finding a reader gets says "slower" about a test whose typical duration has not moved.
+        // It is not nothing — the test's variability really did change — but `DurationUnstable` is
+        // the kind that claim belongs to, and a regression suppresses it. #187 owns the gap; this
+        // pins its size.
+        ulong state = 20260902UL + (ulong)(baselineSigma * 100) + (ulong)(currentSigma * 1000);
+
+        int reported = 0;
+
+        for (int draw = 0; draw < NullDraws; draw++)
+        {
+            int[] durations = new int[20];
+            for (int session = 0; session < durations.Length; session++)
+            {
+                double sigma = session >= 17 ? currentSigma : baselineSigma;
+                durations[session] = (int)Math.Round(200 * Math.Exp(sigma * Gaussian(ref state)));
+            }
+
+            if (Regressions(Build(sessions: 20, subjectMs: o => durations[o])).Count > 0)
+                reported++;
+        }
+
+        Assert.InRange((double)reported / NullDraws, low, high);
+    }
+
     [Fact]
     public void APlantedDoublingOnASteadyTestIsStillReported()
     {

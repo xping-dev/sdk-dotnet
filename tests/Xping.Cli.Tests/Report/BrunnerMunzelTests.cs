@@ -172,7 +172,7 @@ public sealed class BrunnerMunzelTests
     [InlineData(0.35)]
     [InlineData(0.50)]
     [InlineData(0.70)]
-    public void TheRejectionRateStaysUnderFivePercentAtEveryDispersion(double coefficient)
+    public void TheRejectionRateIsTheLevelItIsReadAtWhenTheArmsAreEquallyDispersed(double coefficient)
     {
         // Seventeen baseline runs against three, drawn from one lognormal distribution with no
         // shift planted in it, at the dispersions test durations actually take. An exact test's
@@ -198,6 +198,45 @@ public sealed class BrunnerMunzelTests
         }
 
         Assert.InRange((double)rejected / Draws, 0.04, 0.06);
+    }
+
+    [Theory]
+    [InlineData(0.8, 0.2, 0.0000, 0.0010)]      // baseline four times the wilder arm
+    [InlineData(0.4, 0.2, 0.0000, 0.0050)]      // twice
+    [InlineData(0.2, 0.4, 0.0250, 0.0500)]      // recent arm twice the wilder
+    [InlineData(0.2, 0.8, 0.0550, 0.0900)]      // four times
+    public void AWiderRecentSliceIsWhereTheCalibrationStops(
+        double baselineSigma, double currentSigma, double low, double high)
+    {
+        // The limit of what relabelling the pooled readings can promise, measured rather than
+        // asserted away. Both arms are centred so that stochastic superiority is exactly one half —
+        // no shift of any kind, which is the null Brunner–Munzel is named for — and they differ
+        // only in spread, which that null permits.
+        //
+        // Relabelling is exact under exchangeability, and these arms are not exchangeable.
+        // Studentising is what carries the calibration to the weaker null and it does so
+        // asymptotically; three readings are not asymptotic. So the level is a ceiling in one
+        // direction and not the other: far under it where the baseline is the wilder arm, and above
+        // it where the recent slice is.
+        //
+        // This is #187, which states what can be done about it — the short answer being that the
+        // nonparametric Behrens–Fisher problem has no exact finite-sample solution. It is pinned
+        // here so that the number is a measurement in the suite rather than a claim in a comment,
+        // and so that a later attempt at it has something to move.
+        ulong state = 20260902UL + (ulong)(baselineSigma * 100) + (ulong)(currentSigma * 1000);
+
+        int rejected = 0;
+
+        for (int draw = 0; draw < Draws; draw++)
+        {
+            double[] baseline = Lognormal(ref state, 17, baselineSigma);
+            double[] current = Lognormal(ref state, 3, currentSigma);
+
+            if (BrunnerMunzel.OneSidedPValue(baseline, current) <= 0.01)
+                rejected++;
+        }
+
+        Assert.InRange((double)rejected / Draws, low, high);
     }
 
     [Fact]

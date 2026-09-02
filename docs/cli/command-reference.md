@@ -238,7 +238,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.5",
+  "schemaVersion": "1.6",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

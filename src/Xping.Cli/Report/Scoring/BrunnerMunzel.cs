@@ -35,6 +35,21 @@ namespace Xping.Cli.Report.Scoring;
 /// one is always among them.
 /// </para>
 /// <para>
+/// <b>What that calibration is exact for, and what it is not.</b> Relabelling the pooled readings is
+/// exact under <i>exchangeability</i> — the two arms drawn from one distribution — which is the null
+/// most windows sit under and the one the level is quoted at. The null this statistic is named for
+/// is weaker: it asks only that neither arm be stochastically larger and permits the two to differ
+/// in spread, which is the reason it was chosen over Mann–Whitney. Studentising is what makes a
+/// permutation calibration valid under that weaker null, and it is valid there asymptotically;
+/// three readings are not asymptotic. Measured with both arms centred so superiority is exactly one
+/// half, seventeen readings against three, read at 0.01: the rejection rate is 0.0002 where the
+/// baseline is four times the more variable arm and 0.0386 and 0.0729 where the recent arm is twice
+/// and four times the more variable. The conservative direction is the common one — a fortnight of
+/// history spreads wider than three runs — but the liberal one is real. The nonparametric
+/// Behrens–Fisher problem has no exact finite-sample solution, so this is a residual to bound rather
+/// than a bug to fix, and #187 owns it.
+/// </para>
+/// <para>
 /// <b>Ranks, so the scale does not matter.</b> Every conclusion here is invariant under any strictly
 /// increasing transform of the readings, which is why the caller may hand over durations, ratios or
 /// logarithms of either and read the same p-value. What the caller must not do is hand over readings
@@ -102,7 +117,8 @@ internal static class BrunnerMunzel
     /// <returns>
     /// The one-sided p-value, in (0,1]; 1 when either arm is empty or nothing tells the two apart.
     /// Never zero — the observed arrangement is always counted, so the smallest value attainable is
-    /// the reciprocal of the number of arrangements.
+    /// the reciprocal of the number of arrangements. Exact under exchangeability; see the remarks on
+    /// this class for where it is not.
     /// </returns>
     /// <remarks>
     /// <para>

@@ -187,6 +187,8 @@ internal sealed record DurationUnstableEvidence(
 /// and the runs before them are compared by <see cref="BrunnerMunzel"/>, which asks whether the
 /// recent slice is drawn from a slower distribution or is doing what the test always did, and the
 /// size of the change is <see cref="HodgesLehmann"/>'s ratio with the interval it was measured to.
+/// Its level holds where the two arms are equally dispersed and is exceeded where the recent slice
+/// is the wilder one, which #187 measures and owns.
 /// Both are required: a statistically solid three percent is not worth a developer's morning, and a
 /// twofold gap over three runs that the test's own history contains is not a finding. There is no
 /// longer a dispersion gate on the baseline, because the only job it had was to stand in for the
@@ -261,11 +263,16 @@ internal sealed class DurationProvider : IFindingProvider
     //
     // Not the conventional 0.05, because this comparison is not made once. Every fingerprint in the
     // window is tested, and #168 asks for a per-test false-positive rate under one in a hundred at
-    // every dispersion test durations take -- which an exact test delivers by construction, since
-    // it cannot report more often than the level it is read at. Measured end to end over the whole
-    // gate chain, forty thousand windows per cell: 0.0004 at a true dispersion of 0.20 and 0.0096
-    // at 0.70, against 0.05 and 0.047 at the conventional level. The practical floor beside it only
-    // ever lowers this.
+    // every dispersion test durations take. Measured end to end over the whole gate chain, forty
+    // thousand windows per cell: 0.0004 at a true dispersion of 0.20 and 0.0096 at 0.70, against
+    // 0.05 and 0.047 at the conventional level.
+    //
+    // That is the rate where the two arms are equally dispersed, which is what the permutation
+    // calibration behind it is exact for. Where the recent slice is the more variable arm the level
+    // is not a ceiling and the rate rises above it -- 0.02 at twice the baseline's spread and 0.065
+    // at four times, with no slowdown present. #187 states the measurement and what can be done
+    // about it; the honest summary is that three recent readings cannot calibrate against an
+    // arbitrary difference in spread, and nothing available does.
     //
     // What it costs is the shape that needs the most evidence anyway. A true doubling on a steady
     // test is still reported 97% of the time against seventeen baseline runs and 89% against seven.

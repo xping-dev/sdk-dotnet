@@ -89,17 +89,20 @@ public sealed class HodgesLehmannTests
     [InlineData(7, 3, 2)]       // 96.7%
     [InlineData(8, 3, 3)]       // 95.2%
     [InlineData(10, 3, 4)]      // 95.1%
-    [InlineData(17, 3, 8)]
+    [InlineData(17, 3, 7)]      // 95.9%
     public void TheIntervalIsTheExactRankSumOrderStatisticCountedFromEachEnd(
         int baselineCount, int currentCount, int rank)
     {
-        // Distinct powers of two on both sides, so every pairwise ratio is distinct and its
-        // position in the sorted list is unambiguous. The bound then has to be the rank-th ratio
-        // from each end, and this reads it back out.
-        double[] baseline = Powers(1, baselineCount);
-        double[] current = Powers(1024, currentCount);
+        // Powers of two on one side and powers of three on the other, so that every pairwise ratio
+        // is 1000 x 3^j / 2^i and no two of them can coincide — unique factorisation guarantees it.
+        // Powers of one base on both sides would not: 1024/1 and 2048/2 are the same number, and
+        // adjacent order statistics that are equal let an off-by-one rank pass this test.
+        double[] baseline = Powers(1, 2, baselineCount);
+        double[] current = Powers(1000, 3, currentCount);
 
         double[] pairs = Pairs(baseline, current);
+        Assert.Equal(pairs.Length, pairs.Distinct().Count());
+
         RatioEstimate estimate = HodgesLehmann.Of(baseline, current);
 
         Assert.Equal(pairs[rank - 1], estimate.Low);
@@ -107,19 +110,19 @@ public sealed class HodgesLehmannTests
     }
 
     [Fact]
-    public void ThinnestArmsTheProviderGatesAtStillProduceAnInterval()
+    public void ArmsTooThinForTheApproximationStillProduceAnInterval()
     {
-        // Five baseline runs against three. The normal approximation asks for an order statistic
-        // below the first here and yields no interval at all; the exact rule gives the extremes of
-        // the pairwise ratios, at 96.4% coverage. An interval that spans everything observed is a
-        // weak statement, which is the point — it is the true one at these sizes.
+        // Five baseline readings against three. The normal approximation asks for an order
+        // statistic below the first here and yields no interval at all; the exact rule gives the
+        // extremes of the pairwise ratios, at 96.4% coverage. An interval that spans everything
+        // observed is a weak statement, which is the point — it is the true one at these sizes.
         double[] baseline = [1, 2, 4, 8, 16];
-        double[] current = [1024, 2048, 4096];
+        double[] current = [1000, 3000, 9000];
 
         RatioEstimate estimate = HodgesLehmann.Of(baseline, current);
 
-        Assert.Equal(1024.0 / 16, estimate.Low);
-        Assert.Equal(4096.0 / 1, estimate.High);
+        Assert.Equal(1000.0 / 16, estimate.Low);
+        Assert.Equal(9000.0 / 1, estimate.High);
     }
 
     [Fact]
@@ -214,11 +217,11 @@ public sealed class HodgesLehmannTests
     // Fixtures
     // ---------------------------------------------------------------------------------------
 
-    private static double[] Powers(double start, int count)
+    private static double[] Powers(double start, double factor, int count)
     {
         double[] values = new double[count];
         for (int i = 0; i < count; i++)
-            values[i] = start * Math.Pow(2, i);
+            values[i] = start * Math.Pow(factor, i);
 
         return values;
     }

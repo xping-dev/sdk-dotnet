@@ -469,18 +469,19 @@ internal static class EvidenceHeadline
         ratio.ToString("0.##", CultureInfo.InvariantCulture) + "x";
 
     /// <summary>
-    /// Formats a probability small enough to be worth reporting.
+    /// Formats a probability at the precision it was published with.
     /// </summary>
     /// <remarks>
-    /// Three decimals, which is the precision the provider publishes and enough to separate the
-    /// floors these p-values sit on — 1/1140 is 0.001 and 1/56 is 0.018. Anything below the last
-    /// decimal is reported as a bound rather than as a zero, which would claim an impossible
-    /// certainty.
+    /// Three decimals down to 0.001 and six below it, which is where these p-values live: they are
+    /// floored by one over the number of ways the runs could have been dealt, so a long baseline
+    /// puts them well under a thousandth — forty runs against three floors them at 0.000081. A
+    /// blanket "&lt;0.001" would collapse every one of those onto each other and throw away the
+    /// difference between a claim resting on ten runs and one resting on forty-three. Six decimals
+    /// is what the provider rounds to and the floor is always above the last of them, so this never
+    /// renders a zero.
     /// </remarks>
     private static string Probability(double value) =>
-        value < 0.001
-            ? "<0.001"
-            : value.ToString("0.###", CultureInfo.InvariantCulture);
+        value.ToString(value < 0.001 ? "0.000000" : "0.###", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Formats an already-signed change, keeping the plus that a bare number would drop.
