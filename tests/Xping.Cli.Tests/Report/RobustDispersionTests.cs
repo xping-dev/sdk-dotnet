@@ -14,21 +14,61 @@ public sealed class RobustDispersionTests
     private const int Draws = 40_000;
 
     [Theory]
-    [InlineData(new[] { 1.0, 3.0 }, 1.048)]
-    [InlineData(new[] { 1.0, 2.0, 3.0 }, 1.388)]
-    [InlineData(new[] { 1.0, 1.0, 3.0, 3.0 }, 1.104)]
-    [InlineData(new[] { 1.0, 1.0, 2.0, 3.0, 3.0 }, 0.993)]
-    [InlineData(new[] { 1.0, 1.0, 1.0, 3.0, 3.0, 3.0 }, 0.936)]
-    [InlineData(new[] { 1.0, 1.0, 1.0, 2.0, 3.0, 3.0, 3.0 }, 0.895)]
-    [InlineData(new[] { 1.0, 1.0, 1.0, 1.0, 3.0, 3.0, 3.0, 3.0 }, 0.873)]
-    public void TheSameSpreadReadsDifferentlyAtDifferentSampleSizes(double[] values, double expected)
+    [InlineData(2, 1.048)]
+    [InlineData(3, 1.388)]
+    [InlineData(4, 1.104)]
+    [InlineData(5, 0.993)]
+    [InlineData(6, 0.936)]
+    [InlineData(7, 0.895)]
+    [InlineData(8, 0.873)]
+    [InlineData(9, 0.853)]
+    [InlineData(10, 0.841)]
+    [InlineData(11, 0.828)]
+    [InlineData(12, 0.820)]
+    [InlineData(13, 0.813)]
+    [InlineData(14, 0.808)]
+    [InlineData(15, 0.801)]
+    [InlineData(16, 0.798)]
+    [InlineData(17, 0.793)]
+    [InlineData(18, 0.791)]
+    [InlineData(19, 0.787)]
+    [InlineData(20, 0.786)]
+    [InlineData(21, 0.784)]
+    [InlineData(30, 0.771)]
+    [InlineData(50, 0.759)]
+    public void TheSameSpreadReadsDifferentlyAtEverySampleSize(int count, double expected)
     {
         // Every sample here has a median of 2 and a median deviation of 1, so the only thing that
-        // moves between the rows is the finite-sample correction — 1.4826 x 0.5 is 0.741, and each
-        // expected value is that times the factor for its count. Three carries the largest of them
-        // because at an odd count the deviation set contains the middle reading's distance from
-        // itself, and at three that zero is one of only two values below the median deviation.
-        Assert.Equal(expected, RobustDispersion.Of(values), 3);
+        // moves between the rows is the finite-sample correction: 1.4826 x 0.5 is 0.7413, and each
+        // expected value is that times the factor for its count. Every entry in the table gets a
+        // row, and the last three exercise the closed form past it. No two expected values collide
+        // at three decimal places, so a transposed digit anywhere in the table fails exactly one
+        // row and names the count it is in.
+        //
+        // Three carries the largest factor, which looks wrong and is not: at an odd count the
+        // deviation set contains the middle reading's distance from itself, and at three that zero
+        // is one of only two values below the median deviation.
+        Assert.Equal(expected, RobustDispersion.Of(SpreadOfOneAroundTwo(count)), 3);
+    }
+
+    /// <summary>
+    /// Builds <paramref name="count"/> readings with a median of exactly 2 and a median absolute
+    /// deviation of exactly 1, so the answer is the correction factor and nothing else.
+    /// </summary>
+    private static double[] SpreadOfOneAroundTwo(int count)
+    {
+        var values = new List<double>(count);
+
+        for (int i = 0; i < count / 2; i++)
+            values.Add(1);
+
+        if (count % 2 == 1)
+            values.Add(2);
+
+        for (int i = 0; i < count / 2; i++)
+            values.Add(3);
+
+        return [.. values];
     }
 
     [Fact]
@@ -126,10 +166,20 @@ public sealed class RobustDispersionTests
     [InlineData(3)]
     [InlineData(4)]
     [InlineData(5)]
+    [InlineData(6)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
     [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    [InlineData(13)]
     [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
     [InlineData(17)]
+    [InlineData(18)]
+    [InlineData(19)]
     [InlineData(20)]
     [InlineData(30)]
     [InlineData(50)]
@@ -157,7 +207,12 @@ public sealed class RobustDispersionTests
 
         estimates.Sort();
 
-        Assert.Equal(1.0, estimates[Draws / 2], 1);
+        // A one percent band. Over two independent seeds at every count above, the widest deviation
+        // from one is 0.0054, so this is about twice the simulation's own noise and no wider: a
+        // correction factor wrong by more than a percent fails, and a correct one does not fail
+        // intermittently. Tightening it to half a percent would put the assertion inside the noise
+        // and make the test a coin toss.
+        Assert.InRange(estimates[Draws / 2], 0.99, 1.01);
     }
 
     /// <summary>
