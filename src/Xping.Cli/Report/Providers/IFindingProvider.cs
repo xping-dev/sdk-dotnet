@@ -30,6 +30,14 @@ namespace Xping.Cli.Report.Providers;
 /// How many sessions back the behaviour was last seen; 0 means the newest session.
 /// </param>
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
+/// <param name="PValue">
+/// How probable an observation this extreme would be if the kind's claim were false, or
+/// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": kinds like
+/// <c>RetryMasked</c> and <c>SharedFailure</c> count things that demonstrably happened, and a
+/// probability of their happening by chance is not a question. The coordinator carries this so that
+/// a multiplicity correction can be applied once, across every fingerprint a kind was tested on —
+/// which a provider cannot do, because by contract it cannot see the others.
+/// </param>
 /// <param name="SeverityCeiling">
 /// The most severe band this kind may reach, or <see langword="null"/> for no cap.
 /// </param>
@@ -40,6 +48,7 @@ internal sealed record FindingCandidate(
     double Unreliability,
     int SessionsSinceLastOccurrence,
     string DrillDownCommand,
+    double? PValue = null,
     Severity? SeverityCeiling = null)
 {
     /// <summary>

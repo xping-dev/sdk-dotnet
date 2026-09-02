@@ -25,6 +25,11 @@ public sealed class DurationProviderTests
     private const int Companions = 3;
     private const int CompanionMs = 100;
 
+    // Windows drawn per cell in the simulations. Each one builds twenty sessions and runs the whole
+    // provider over them, so this is the point where the rate is measured to a tenth of a percent
+    // and the suite still finishes.
+    private const int NullDraws = 4_000;
+
     // ---------------------------------------------------------------------------------------
     // The condition
     // ---------------------------------------------------------------------------------------
@@ -47,30 +52,51 @@ public sealed class DurationProviderTests
         Assert.Equal(800, evidence.Current.P95Ms);
         Assert.Equal(3, evidence.Current.Executions);
         Assert.Equal(3, evidence.Current.Sessions);
-        Assert.Equal(3, evidence.Current.NormalisedExecutions);
-        Assert.Equal(3, evidence.Current.NormalisedSessions);
+        Assert.Equal(3, evidence.Current.ComparedSessions);
 
         Assert.Equal(200, evidence.Baseline.P50Ms);
         Assert.Equal(200, evidence.Baseline.P95Ms);
         Assert.Equal(7, evidence.Baseline.Executions);
         Assert.Equal(7, evidence.Baseline.Sessions);
-        Assert.Equal(7, evidence.Baseline.NormalisedExecutions);
-        Assert.Equal(7, evidence.Baseline.NormalisedSessions);
+        Assert.Equal(7, evidence.Baseline.ComparedSessions);
     }
 
     [Fact]
-    public void TheDeltaIsPublishedInBothRawAndNormalisedTerms()
+    public void TheChangeIsPublishedBothOnTheClockAndAsAMeasuredRatio()
     {
         DurationRegressionEvidence evidence = RegressionFrom(Regressing());
 
         // 200ms to 800ms against an unchanged suite: the same change either way of measuring it.
-        // The normalised millisecond figure is the increase in units of the run median — six —
-        // multiplied by the window's reference speed, which every fixture here holds at 100ms.
+        // Every one of the twenty-one pairs a recent run makes with a baseline run is 8 over 2, so
+        // the ratio is exactly four and the interval around it is a point — which is honest, not a
+        // rounding artefact: with no spread on either side there is nothing for an interval to
+        // express. The millisecond figure is that ratio applied to the baseline's normalised level
+        // of two run medians, at the reference speed every fixture here holds at 100ms.
         Assert.Equal(300.0, evidence.Delta.P50Pct);
         Assert.Equal(600, evidence.Delta.P50Ms);
-        Assert.Equal(300.0, evidence.NormalisedDelta.P50Pct);
-        Assert.Equal(600, evidence.NormalisedDelta.P50Ms);
-        Assert.Equal(0.0, evidence.BaselineDispersion);
+
+        Assert.Equal(4.0, evidence.Shift.Ratio);
+        Assert.Equal(4.0, evidence.Shift.RatioLow);
+        Assert.Equal(4.0, evidence.Shift.RatioHigh);
+        Assert.Equal(300.0, evidence.Shift.Pct);
+        Assert.Equal(600, evidence.Shift.Ms);
+    }
+
+    [Fact]
+    public void ARegressionPublishesThePValueThatAdmittedIt()
+    {
+        FindingCandidate candidate = Single(Regressing());
+        DurationRegressionEvidence evidence = RegressionFrom(Regressing());
+
+        // Seven baseline runs and three recent ones can be dealt C(10,3) = 120 ways, and exactly
+        // one of them puts all three slow runs in the recent arm. That is the whole of what three
+        // runs can establish, and it is the floor no size of slowdown gets below.
+        Assert.Equal(0.008333, evidence.Shift.PValue);
+
+        // The same number reaches the coordinator, which is the only place a correction for the
+        // number of tests compared can be applied.
+        Assert.NotNull(candidate.PValue);
+        Assert.Equal(1.0 / 120, candidate.PValue.Value, 12);
     }
 
     [Fact]
@@ -97,9 +123,10 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
-    public void UnreliabilityIsHalfTheNormalisedIncreaseCappedAtOne()
+    public void UnreliabilityIsHalfTheIncreaseTheIntervalSupportsCappedAtOne()
     {
-        // Baseline 400, current 600: a normalised increase of 0.5, so half of it is 0.25.
+        // Baseline 400, current 600, with no spread on either side: the interval collapses onto the
+        // estimate, an increase of 0.5, so half of it is 0.25.
         FindingCandidate candidate = Single(Regressing(baselineMs: 400, currentMs: 600));
 
         Assert.Equal(0.25, candidate.Unreliability);
@@ -107,6 +134,42 @@ public sealed class DurationProviderTests
         // Beyond a doubling the measure saturates rather than letting one arithmetic accident
         // crowd out every other kind in the ranking.
         Assert.Equal(1.0, Single(Regressing()).Unreliability);
+    }
+
+    [Fact]
+    public void UnreliabilityFollowsTheIntervalRatherThanTheEstimate()
+    {
+        // Two windows whose estimated slowdown is the same number and whose evidence for it is not.
+        // Both step to 400ms; one had held at 150ms and the other had alternated between 150ms and
+        // 250ms. The median pairwise ratio is 2.667 either way, so ranking on the estimate would
+        // call these one finding — but a third of the second window's pairs say 1.6, and its
+        // interval reaches down to say so.
+        DurationRegressionEvidence steady = RegressionFrom(
+            Regressing(baselineMs: 150, currentMs: 400));
+
+        DurationRegressionEvidence spread = RegressionFrom(Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 400 : o % 2 == 0 ? 150 : 250));
+
+        Assert.Equal(2.667, steady.Shift.Ratio);
+        Assert.Equal(2.667, spread.Shift.Ratio);
+
+        Assert.Equal(2.667, steady.Shift.RatioLow);
+        Assert.Equal(1.6, spread.Shift.RatioLow);
+
+        // And the ranking follows the bound, so the finding resting on the weaker evidence sorts
+        // below the one resting on the stronger.
+        Assert.Equal(
+            0.833,
+            Math.Round(Single(Regressing(baselineMs: 150, currentMs: 400)).Unreliability, 3));
+
+        Assert.Equal(
+            0.3,
+            Math.Round(
+                Single(Build(
+                    sessions: 10,
+                    subjectMs: o => o >= 7 ? 400 : o % 2 == 0 ? 150 : 250)).Unreliability,
+                3));
     }
 
     [Fact]
@@ -215,8 +278,9 @@ public sealed class DurationProviderTests
 
         // Seven run medians above the reference speed and three below leaves the reference at
         // 100ms, so seven run medians of increase is 700ms at that speed.
-        Assert.Equal(350.0, evidence.NormalisedDelta.P50Pct);
-        Assert.Equal(700, evidence.NormalisedDelta.P50Ms);
+        Assert.Equal(4.5, evidence.Shift.Ratio);
+        Assert.Equal(350.0, evidence.Shift.Pct);
+        Assert.Equal(700, evidence.Shift.Ms);
     }
 
     [Theory]
@@ -264,16 +328,16 @@ public sealed class DurationProviderTests
     [Fact]
     public void RunsTheTestNeverAppearedInDoNotSetTheScaleItIsMeasuredOn()
     {
-        // Eight `--filter`ed runs of three fast tests, then eight full ones the subject ran in.
-        // A window-wide anchor is the median of all sixteen run medians, which the filtered
-        // majority puts at 2ms, and every millisecond gate would then be read fifty times too
-        // small: the subject's doubling would clear the relative gate and be declined as a 12ms
-        // change. The runs the subject was actually measured in all had a median of 100ms.
+        // Ten `--filter`ed runs of three fast tests, then ten full ones the subject ran in. A
+        // window-wide anchor is the median of all twenty run medians, which the filtered half puts
+        // at 2ms, and every millisecond gate would then be read fifty times too small: the
+        // subject's doubling would clear the relative gate and be declined as a 12ms change. The
+        // runs the subject was actually measured in all had a median of 100ms.
         AnalysisContext context = Build(
-            sessions: 16,
-            subjectMs: o => o < 13 ? 600 : 1200,
-            companionMs: o => o < 8 ? 2 : CompanionMs,
-            subjectRuns: o => o >= 8);
+            sessions: 20,
+            subjectMs: o => o < 17 ? 600 : 1200,
+            companionMs: o => o < 10 ? 2 : CompanionMs,
+            subjectRuns: o => o >= 10);
 
         Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
     }
@@ -313,27 +377,56 @@ public sealed class DurationProviderTests
         Assert.Equal(reported, candidates.Count == 1);
     }
 
-    [Theory]
-    [InlineData(58, false)]     // a baseline dispersion of 0.483
-    [InlineData(57, true)]      // 0.474, just inside
-    [InlineData(55, true)]      // 0.457
-    public void AnUnsteadyBaselineIsNotSomethingARegressionCanBeClaimedAgainst(
-        int spread, bool reported)
+    [Fact]
+    public void ASlowdownTheTestSOwnHistoryAlreadyContainsIsNotARegression()
     {
-        // A test that has always swung between fast and slow has not "regressed" when it happens
-        // to run slow; it has done what it always does.
-        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+        // Eight baseline runs alternating between 200ms and 900ms, and three recent runs at 900ms.
+        // Half the pairwise ratios are 4.5 and half are 1.0, so the estimated slowdown is 2.1 times
+        // and clears the practical gate comfortably — and it is not a finding, because the recent
+        // runs did nothing this test has not done in four of its last eleven. Thirty-five of the
+        // hundred and sixty-five ways the runs could have been dealt put three 900ms runs in the
+        // recent arm, which is a p-value of 0.21.
+        //
+        // This is the case the deleted baseline-dispersion gate was a stand-in for, decided now on
+        // both arms rather than on the shape of one.
+        AnalysisContext context = Build(
             sessions: 11,
-            subjectMs: o => o >= 8 ? 900 : o % 2 == 0 ? 200 - spread : 200 + spread));
+            subjectMs: o => o >= 8 ? 900 : o % 2 == 0 ? 200 : 900);
 
-        Assert.Equal(reported, candidates.Count == 1);
+        Assert.Empty(Regressions(context));
+    }
+
+    [Fact]
+    public void AStepBeyondEverythingATestEverDidIsARegressionHoweverWideItsBaseline()
+    {
+        // The other half of the pair, and a deliberate change of behaviour. A baseline of four runs
+        // at 200ms and three at 600ms used to disqualify itself for being unsteady, whatever the
+        // recent runs did; a step to 2s is outside everything this test has ever done and there is
+        // now a test that can say so — separation over ten runs, a p-value of 1/120.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 2000 : o < 4 ? 200 : 600);
+
+        var evidence = Assert.IsType<DurationRegressionEvidence>(Single(Analyze(context)).Evidence);
+
+        Assert.Equal(10.0, evidence.Shift.Ratio);
+
+        // The interval is what carries the honesty here: the estimate rests on a baseline holding
+        // two speeds, and the bound says so rather than leaving the reader with a bare "10x".
+        Assert.Equal(3.333, evidence.Shift.RatioLow);
+        Assert.Equal(10.0, evidence.Shift.RatioHigh);
     }
 
     [Theory]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
-    public void ABaselineTooThinToHaveAMedianProducesNoRegression(int baselineRuns, bool reported)
+    [InlineData(6, false)]
+    [InlineData(7, true)]
+    public void ABaselineTooThinForAnyArrangementToClearTheBarProducesNoRegression(
+        int baselineRuns, bool reported)
     {
+        // Six baseline runs against three can be dealt eighty-four ways, so the best a perfect
+        // separation can say is 0.012 — above the bar, whatever the durations were. Seven can be
+        // dealt a hundred and twenty ways and reaches 0.008. The floor is that arithmetic and not
+        // a taste about how much history is enough.
         IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
             sessions: 10,
             subjectMs: o => o < 7 ? 200 : 800,
@@ -345,19 +438,19 @@ public sealed class DurationProviderTests
     }
 
     [Theory]
-    [InlineData(3, false)]
-    [InlineData(2, true)]
+    [InlineData(4, false)]
+    [InlineData(3, true)]
     public void ABaselineWhoseRunsCannotBeNormalisedProducesNoRegression(
         int unusableRuns, bool reported)
     {
         // The gate counts the runs the comparison can use, not the runs that happened. A run whose
-        // own median was zero cannot divide anything, so it contributes to neither median being
-        // compared nor to the dispersion between them — and counting it would hold the claim to a
-        // bar its evidence never reached. Seven baseline runs either way; three unusable leaves
-        // four, which is under the floor, and two leaves five, which is not.
+        // own median was zero cannot divide anything, so it contributes no reading to either arm —
+        // and counting it would hold the claim to a bar its evidence never reached. Ten baseline
+        // runs either way; four unusable leaves six, which is under the floor, and three leaves
+        // seven, which is not.
         IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
-            sessions: 10,
-            subjectMs: o => o < 7 ? 200 : 800,
+            sessions: 13,
+            subjectMs: o => o < 10 ? 200 : 800,
             companionMs: o => o < unusableRuns ? 0 : CompanionMs));
 
         Assert.Equal(reported, candidates.Count == 1);
@@ -366,24 +459,26 @@ public sealed class DurationProviderTests
     [Fact]
     public void RetryingWithinOneRunIsOneOccasionOfEvidenceRatherThanThree()
     {
-        // Six baseline executions from two afternoons. Attempts of one test within a run are
+        // Eight baseline executions from two afternoons. Attempts of one test within a run are
         // correlated — same machine, same state, same minute — so counting them as six independent
-        // observations buys a regression claim evidence it does not have.
+        // observations buys a regression claim evidence it does not have. They are collapsed to one
+        // reading per run before anything is computed, which leaves two occasions of evidence and
+        // not six; the two-sample test the comparison now rests on assumes its readings are
+        // independent, and three attempts of one test in one minute are not.
         AnalysisContext retried = Build(
             sessions: 10,
             subjectMs: o => o < 7 ? 200 : 800,
             subjectRuns: o => o >= 7 || o == 5 || o == 6,
-            subjectAttempts: o => o < 7 ? 3 : 1);
+            subjectAttempts: o => o < 7 ? 4 : 1);
 
         Assert.Empty(Regressions(retried));
 
-        // The same slowdown seen once in each of the five separate runs the floor asks for, to
-        // show it is the count of runs that declined the case above and not the shape of the
-        // fixture or the size of the step.
+        // A comparable number of baseline executions, seen once in each of the seven separate runs
+        // the floor asks for, to show it is the count of runs that declined the case above and not
+        // the shape of the fixture or the size of the step.
         AnalysisContext spread = Build(
             sessions: 10,
-            subjectMs: o => o < 7 ? 200 : 800,
-            subjectRuns: o => o >= 7 || o >= 2);
+            subjectMs: o => o < 7 ? 200 : 800);
 
         Assert.Equal(FindingKind.DurationRegression, Single(Analyze(spread)).Kind);
     }
@@ -434,9 +529,9 @@ public sealed class DurationProviderTests
     [Fact]
     public void ARegressingTestIsNotAlsoReportedAsUnstable()
     {
-        // A baseline already swinging between 100ms and 250ms — dispersion 0.412, inside the
-        // stability gate — that then steps to 800ms. The step lifts the whole window above the
-        // instability threshold while the baseline stays measurable, so both kinds are earned and
+        // A baseline already swinging between 100ms and 250ms that then steps to 800ms, clear of
+        // everything before it. The step lifts the whole window above the instability threshold
+        // while the recent runs separate cleanly from the baseline, so both kinds are earned and
         // reporting both would state one observation twice under two names.
         AnalysisContext context = Build(
             sessions: 10,
@@ -446,25 +541,6 @@ public sealed class DurationProviderTests
             WholeWindowDispersion(context) >= LocalAnalysisConstants.DurationUnstableDispersionMin);
 
         Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
-    }
-
-    [Fact]
-    public void ATestTooUnsteadyToMeasureButNotUnsteadyEnoughToReportProducesNothing()
-    {
-        // The gap between the two thresholds. This test swings enough that the shift it would take
-        // to call it slower sits inside its own noise, and not enough for the noise itself to be
-        // worth a developer's morning. Silence is the answer; one number for both gates could not
-        // express it.
-        AnalysisContext context = Varying(high: 270, low: 130);
-
-        double dispersion = WholeWindowDispersion(context);
-
-        Assert.InRange(
-            dispersion,
-            LocalAnalysisConstants.DurationStableDispersionMax,
-            LocalAnalysisConstants.DurationUnstableDispersionMin);
-
-        Assert.Empty(Analyze(context));
     }
 
     [Fact]
@@ -485,20 +561,6 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
-    public void ATestWithTwoSpeedsIsNotABaselineARegressionCanBeClaimedAgainst()
-    {
-        // The same blind spot on the other gate, where it costs more. A baseline of four runs at
-        // 200ms and three at 600ms reads a median absolute deviation of exactly zero, so a
-        // dispersion built on that alone would call it perfectly steady and let the step to 2s
-        // through as a regression — against a test that was already swinging threefold.
-        AnalysisContext context = Build(
-            sessions: 10,
-            subjectMs: o => o >= 7 ? 2000 : o < 4 ? 200 : 600);
-
-        Assert.Empty(Regressions(context));
-    }
-
-    [Fact]
     public void OneOutlyingRunDoesNotMakeATestUnstable()
     {
         // Nineteen runs at 200ms and one at 1000ms. A coefficient of variation reads 0.73 on that
@@ -512,16 +574,13 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
-    public void ATestWithNoSpreadAtAllIsNeitherUnstableNorProtectedFromARegression()
+    public void ATestWithNoSpreadAtAllIsNotUnstable()
     {
         // Zero is what the measure returns when there is nothing to measure, and it has to fall on
-        // the reporting side of both gates: it clears the stability gate, so a regression against a
-        // perfectly steady baseline is still claimable, and it fails the instability gate, so a
-        // window with no spread never produces a finding of its own.
+        // the quiet side of the gate: a window with no spread never produces a finding of its own.
         Assert.Equal(0.0, WholeWindowDispersion(Build(sessions: 10, subjectMs: _ => 200)));
 
         Assert.Empty(Analyze(Build(sessions: 10, subjectMs: _ => 200)));
-        Assert.Equal(0.0, RegressionFrom(Regressing()).BaselineDispersion);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -613,10 +672,15 @@ public sealed class DurationProviderTests
     {
         // Its own duration is its session's median, so its normalised value is exactly one. The
         // interesting part is that nothing divides by zero on the way there.
+        //
+        // Placed in the baseline rather than the recent slice, where its reading of exactly one
+        // would land below the six baseline readings of two and leave the recent arm holding
+        // {8, 8, 1}. Fifty of the hundred and twenty arrangements are at least that favourable, so
+        // the finding would be declined and this test would be measuring the wrong thing.
         AnalysisContext context = Build(
             sessions: 10,
             subjectMs: o => o < 7 ? 200 : 800,
-            companions: o => o == 9 ? 0 : Companions);
+            companions: o => o == 0 ? 0 : Companions);
 
         Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
     }
@@ -627,24 +691,28 @@ public sealed class DurationProviderTests
         // The xUnit adapter reports a zero duration for failures raised outside the timed
         // invocation. A run made mostly of those has a zero median, which cannot be a divisor.
         AnalysisContext context = Build(
-            sessions: 10,
-            subjectMs: o => o < 7 ? 200 : 800,
+            sessions: 11,
+            subjectMs: o => o < 8 ? 200 : 800,
             companionMs: o => o == 3 ? 0 : CompanionMs);
 
         FindingCandidate candidate = Single(Analyze(context));
         var evidence = Assert.IsType<DurationRegressionEvidence>(candidate.Evidence);
 
-        // The unusable run still contributes its raw milliseconds — seven baseline executions, all
-        // of them counted — while contributing nothing to the normalised comparison. Both counts
-        // are published, because the percentiles rest on one and the normalised median, the
-        // dispersion and every gate rest on the other.
-        Assert.Equal(7, evidence.Baseline.Executions);
-        Assert.Equal(7, evidence.Baseline.Sessions);
-        Assert.Equal(6, evidence.Baseline.NormalisedExecutions);
-        Assert.Equal(6, evidence.Baseline.NormalisedSessions);
+        // The unusable run still contributes its raw milliseconds — eight baseline executions, all
+        // of them counted — while contributing nothing to the comparison. Both counts are
+        // published, because the percentiles rest on one and every gate rests on the other.
+        Assert.Equal(8, evidence.Baseline.Executions);
+        Assert.Equal(8, evidence.Baseline.Sessions);
+        Assert.Equal(7, evidence.Baseline.ComparedSessions);
 
-        Assert.False(double.IsNaN(evidence.NormalisedDelta.P50Pct));
-        Assert.False(double.IsInfinity(evidence.NormalisedDelta.P50Pct));
+        Assert.False(double.IsNaN(evidence.Shift.Ratio));
+        Assert.False(double.IsInfinity(evidence.Shift.Ratio));
+
+        // Seven baseline runs against three deal C(10,3) = 120 ways rather than the 165 the eighth
+        // would have given, so the strongest claim the evidence can make is weaker than it would be
+        // with the run intact — and it says so rather than quietly reporting the number it would
+        // have had.
+        Assert.Equal(0.008333, evidence.Shift.PValue);
     }
 
     [Fact]
@@ -652,8 +720,8 @@ public sealed class DurationProviderTests
     {
         // Every run is mostly zero-duration executions, so no run has a divisor and nothing in the
         // window can be normalised. Both kinds are decided on normalised durations, so both
-        // decline — the regression for having no runs it can count, the instability for having no
-        // spread it can measure. Neither invents an answer from the raw milliseconds.
+        // decline — the regression for having no readings it can compare, the instability for
+        // having no spread it can measure. Neither invents an answer from the raw milliseconds.
         AnalysisContext context = Build(
             sessions: 10,
             subjectMs: o => o < 7 ? 200 : 800,
@@ -672,6 +740,198 @@ public sealed class DurationProviderTests
             subjectMs: o => o < 7 ? 0 : 800);
 
         Assert.Empty(Regressions(context));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // What three recent runs can establish, and what they cost
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AtTheArmFloorOneOverlappingBaselineRunIsTheDifferenceBetweenAClaimAndSilence()
+    {
+        // Seven baseline runs and three recent ones can be dealt a hundred and twenty ways, so
+        // nothing short of every recent run being slower than every run before it reaches the bar.
+        // Here one baseline run at 900ms sits above the recent slice, four arrangements are at
+        // least this favourable, and the answer is 0.033 — three times the bar, and silence.
+        //
+        // The estimated slowdown is still fourfold and the millisecond floor is cleared six times
+        // over, so this case is declined by the test and by nothing else. That is the honest cost
+        // of a three-run slice rather than a defect: the finding it would have made rests on seven
+        // readings, one of which could as easily have fallen the other way.
+        Assert.Empty(Regressions(Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 800 : o == 6 ? 900 : 200)));
+    }
+
+    [Fact]
+    public void AFindingAtTheArmFloorPublishesHowLittleItsRunsPinDown()
+    {
+        // The same shape without the overlap, which is reported — and the issue's question of what
+        // a three-run finding should look like, answered by publishing rather than by suppressing.
+        // The estimate is a fourfold slowdown and the interval reaches down to 2.7, which is the
+        // whole of what ten runs can settle. A reader who wants to know how much of this to believe
+        // can see it in the number rather than having to know the arm sizes.
+        DurationRegressionEvidence evidence = RegressionFrom(Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 800 : o >= 4 ? 300 : 200));
+
+        Assert.Equal(7, evidence.Baseline.ComparedSessions);
+        Assert.Equal(3, evidence.Current.ComparedSessions);
+
+        Assert.Equal(4.0, evidence.Shift.Ratio);
+        Assert.Equal(2.667, evidence.Shift.RatioLow);
+        Assert.Equal(4.0, evidence.Shift.RatioHigh);
+
+        // One arrangement in a hundred and twenty, which is the smallest p-value these arm sizes
+        // admit of and the reason seven is the floor.
+        Assert.Equal(0.008333, evidence.Shift.PValue);
+    }
+
+    [Fact]
+    public void AVeryLongBaselineIsReadFromItsMostRecentRunsAndSaysSo()
+    {
+        // Forty-three baseline runs, of which the comparison reads the forty most recent. The cap
+        // exists because the exact test enumerates every way the pooled runs could have been split,
+        // which is C(n + 3, 3) and grows as a cube, and `--runs` has no upper bound. What it costs
+        // is the difference between the fortieth-oldest run and the forty-third as evidence, which
+        // is nothing next to the three runs on the other side.
+        //
+        // The published count is the one the comparison read, not the one that happened, so a
+        // reader is never told the claim rests on more history than it does.
+        DurationRegressionEvidence evidence = RegressionFrom(Build(
+            sessions: 46,
+            subjectMs: o => o < 43 ? 200 : 800));
+
+        Assert.Equal(43, evidence.Baseline.Sessions);
+        Assert.Equal(43, evidence.Baseline.Executions);
+        Assert.Equal(40, evidence.Baseline.ComparedSessions);
+
+        // One arrangement in C(43,3) = 12341. Three decimals would publish that as zero, which is
+        // a certainty this measurement never has.
+        Assert.Equal(0.000081, evidence.Shift.PValue);
+    }
+
+    [Fact]
+    public void TheEnumerationTheExactTestPerformsStaysBounded()
+    {
+        // The provider truncates either arm to its forty most recent runs so that the exact test's
+        // enumeration stays affordable. That safety property is not a property of forty: the count
+        // is C(40 + k, k) for a recent slice of k, and it grows as k rises — 12,341 at the shipped
+        // slice of three, 1.2 million at five, and past anything a report could finish at ten.
+        //
+        // So the two constants have to move together, and this is the test that says so. Raising
+        // CurrentSliceSize without lowering the truncation turns `xping report` into a hang, which
+        // is the kind of thing that should fail here rather than on a developer's machine.
+        long arrangements = 1;
+        for (int i = 0; i < LocalAnalysisConstants.CurrentSliceSize; i++)
+            arrangements = arrangements * (40 + LocalAnalysisConstants.CurrentSliceSize - i) / (i + 1);
+
+        Assert.InRange(arrangements, 1, 20_000);
+    }
+
+    [Theory]
+    [InlineData(0.20, 200)]
+    [InlineData(0.35, 200)]
+    [InlineData(0.50, 200)]
+    [InlineData(0.70, 200)]
+    [InlineData(0.50, 1000)]
+    [InlineData(0.70, 1000)]
+    public void NoTrueShiftIsReportedAsARegressionMoreThanOnceInAHundred(
+        double coefficient, int median)
+    {
+        // The issue's own measurement, re-run against this branch. Twenty runs of lognormal
+        // durations with nothing planted in them, seventeen baseline against three recent, through
+        // every gate the provider ships. What is being asked is not whether the test is exact —
+        // BrunnerMunzelTests asks that — but what the exact test plus the practical floor beside it
+        // amount to end to end, because that product is what a developer sees.
+        //
+        // Shipped, this reaches 6.3%, which #160 would then multiply by the number of tests in the
+        // suite. Here the ceiling is the level the test is read at and nothing can lift it above
+        // that; the practical floor beside it only pushes the rate further down. Over forty
+        // thousand windows per cell the measured rates are 0.0004, 0.0062, 0.0089 and 0.0096 as the
+        // dispersion climbs, and the same again at the larger median. The band below allows two
+        // standard errors of Monte-Carlo noise at the four thousand a test suite can afford, which
+        // is what separates 0.0096 from 0.01 — the claim is the ceiling, and this is its check.
+        ulong state = 20260902UL + (ulong)(coefficient * 100) + (ulong)median;
+
+        double sigma = Math.Sqrt(Math.Log(1 + (coefficient * coefficient)));
+        int reported = 0;
+
+        for (int draw = 0; draw < NullDraws; draw++)
+        {
+            int[] durations = new int[20];
+            for (int session = 0; session < durations.Length; session++)
+                durations[session] = (int)Math.Round(median * Math.Exp(sigma * Gaussian(ref state)));
+
+            if (Regressions(Build(sessions: 20, subjectMs: o => durations[o])).Count > 0)
+                reported++;
+        }
+
+        Assert.InRange((double)reported / NullDraws, 0, 0.012);
+    }
+
+    [Theory]
+    [InlineData(0.8, 0.2, 0.0, 0.005)]      // the baseline is the wilder arm: far under the level
+    [InlineData(0.2, 0.8, 0.04, 0.09)]      // the recent slice is: above it
+    public void AWiderRecentSliceIsWhereTheOneInAHundredStops(
+        double baselineSigma, double currentSigma, double low, double high)
+    {
+        // The same limit as BrunnerMunzelTests measures on the statistic, carried through every gate
+        // the provider ships so the number is the one a developer would actually meet. Both arms are
+        // centred on 200ms and differ only in spread, so nothing has slowed.
+        //
+        // Where the recent three runs are the wilder arm the rate is several times the level, and
+        // the finding a reader gets says "slower" about a test whose typical duration has not moved.
+        // It is not nothing — the test's variability really did change — but `DurationUnstable` is
+        // the kind that claim belongs to, and a regression suppresses it. #187 owns the gap; this
+        // pins its size.
+        ulong state = 20260902UL + (ulong)(baselineSigma * 100) + (ulong)(currentSigma * 1000);
+
+        int reported = 0;
+
+        for (int draw = 0; draw < NullDraws; draw++)
+        {
+            int[] durations = new int[20];
+            for (int session = 0; session < durations.Length; session++)
+            {
+                double sigma = session >= 17 ? currentSigma : baselineSigma;
+                durations[session] = (int)Math.Round(200 * Math.Exp(sigma * Gaussian(ref state)));
+            }
+
+            if (Regressions(Build(sessions: 20, subjectMs: o => durations[o])).Count > 0)
+                reported++;
+        }
+
+        Assert.InRange((double)reported / NullDraws, low, high);
+    }
+
+    [Fact]
+    public void APlantedDoublingOnASteadyTestIsStillReported()
+    {
+        // The other side of the bargain, and the issue's second acceptance criterion. The criterion
+        // asks for five recent executions and the window cannot supply them — AnalysisWindow fixes
+        // the recent slice at three runs — so this is the same claim at the size the report
+        // actually works with, which is the harder case.
+        ulong state = 20260902UL;
+
+        double sigma = Math.Sqrt(Math.Log(1 + (0.20 * 0.20)));
+        int reported = 0;
+
+        for (int draw = 0; draw < NullDraws; draw++)
+        {
+            int[] durations = new int[20];
+            for (int session = 0; session < durations.Length; session++)
+            {
+                double factor = session >= 17 ? 2 : 1;
+                durations[session] =
+                    (int)Math.Round(200 * factor * Math.Exp(sigma * Gaussian(ref state)));
+            }
+
+            if (Regressions(Build(sessions: 20, subjectMs: o => durations[o])).Count > 0)
+                reported++;
+        }
+
+        Assert.InRange((double)reported / NullDraws, 0.90, 1.0);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -915,5 +1175,32 @@ public sealed class DurationProviderTests
             context, result, incompleteSessions: 0, unreadableSessions: 0, top: null);
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
+    }
+
+    /// <summary>
+    /// Draws one standard normal value by the Box–Muller transform.
+    /// </summary>
+    /// <remarks>
+    /// Hand-written rather than <see cref="Random"/> for the reason <c>RobustDispersionTests</c>
+    /// gives: a seeded <see cref="Random"/> sequence is not guaranteed stable across runtime
+    /// versions, and a simulation whose answer moves with the runtime is not an assertion.
+    /// </remarks>
+    private static double Gaussian(ref ulong state) =>
+        Math.Sqrt(-2 * Math.Log(1 - Uniform(ref state))) *
+        Math.Cos(2 * Math.PI * Uniform(ref state));
+
+    /// <summary>
+    /// Draws one value in [0,1) from a splitmix64 generator.
+    /// </summary>
+    private static double Uniform(ref ulong state)
+    {
+        state += 0x9E3779B97F4A7C15UL;
+
+        ulong z = state;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+        z ^= z >> 31;
+
+        return (z >> 11) * (1.0 / 9007199254740992.0);
     }
 }

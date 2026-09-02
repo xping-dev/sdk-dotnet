@@ -328,20 +328,33 @@ internal static class EvidenceHeadline
     private static (string, IReadOnlyList<MetricDto>) DurationRegression(
         DurationRegressionEvidence e) =>
     (
-        // Leads with the normalised figures because they are the claim: the raw pair can fall
-        // while the test slows, when the recent runs happened on a faster machine, and a finding
-        // labelled "slower" whose sentence opens by saying the test got faster reads as a bug.
-        $"p50 {Signed(e.NormalisedDelta.P50Pct)} normalised " +
-        $"({Signed(e.NormalisedDelta.P50Ms)}ms), {Duration(e.Baseline.P50Ms)} -> " +
-        $"{Duration(e.Current.P50Ms)} on the clock",
+        // Leads with the normalised figure because it is the claim: the raw pair can fall while the
+        // test slows, when the recent runs happened on a faster machine, and a finding labelled
+        // "slower" whose sentence opens by saying the test got faster reads as a bug.
+        //
+        // And leads with the interval rather than with the estimate alone. "1.8x slower" invites
+        // the reader to treat the number as settled; "1.8x slower (95% CI 1.1-3.4x)" tells them how
+        // much of it the runs behind it actually establish, which on three recent runs is the more
+        // useful half of the sentence.
+        $"{Multiple(e.Shift.Ratio)} slower " +
+        $"(95% CI {Rate(e.Shift.RatioLow)}-{Multiple(e.Shift.RatioHigh)}), " +
+        $"{Duration(e.Baseline.P50Ms)} -> {Duration(e.Current.P50Ms)} on the clock",
         [
             new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.Executions} executions"),
             new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.Executions} executions"),
             new("change", $"{Signed(e.Delta.P50Pct)} ({Signed(e.Delta.P50Ms)}ms)"),
             new(
-                "normalised change",
-                $"{Signed(e.NormalisedDelta.P50Pct)} " +
-                $"({Signed(e.NormalisedDelta.P50Ms)}ms at reference speed)")
+                "slowdown",
+                $"{Multiple(e.Shift.Ratio)} (95% CI {Rate(e.Shift.RatioLow)}-" +
+                $"{Multiple(e.Shift.RatioHigh)}), {Signed(e.Shift.Ms)}ms at reference speed"),
+
+            // The run counts belong to the p-value, not to the percentiles above: they are what the
+            // comparison read, one reading each, and they are what bounds how small the p-value
+            // could possibly have been.
+            new(
+                "significance",
+                $"p {Probability(e.Shift.PValue)} one-sided, " +
+                $"{e.Current.ComparedSessions} recent runs against {e.Baseline.ComparedSessions}")
         ]);
 
     private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>
@@ -443,6 +456,32 @@ internal static class EvidenceHeadline
 
     private static string Rate(double value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Formats a multiplier, keeping the "x" that says it is one.
+    /// </summary>
+    /// <remarks>
+    /// An "x" and not a multiplication sign: the shareable output is asserted to be printable ASCII,
+    /// so that a finding pasted into a terminal, a commit message or a chat window arrives as it
+    /// left.
+    /// </remarks>
+    private static string Multiple(double ratio) =>
+        ratio.ToString("0.##", CultureInfo.InvariantCulture) + "x";
+
+    /// <summary>
+    /// Formats a probability at the precision it was published with.
+    /// </summary>
+    /// <remarks>
+    /// Three decimals down to 0.001 and six below it, which is where these p-values live: they are
+    /// floored by one over the number of ways the runs could have been dealt, so a long baseline
+    /// puts them well under a thousandth — forty runs against three floors them at 0.000081. A
+    /// blanket "&lt;0.001" would collapse every one of those onto each other and throw away the
+    /// difference between a claim resting on ten runs and one resting on forty-three. Six decimals
+    /// is what the provider rounds to and the floor is always above the last of them, so this never
+    /// renders a zero.
+    /// </remarks>
+    private static string Probability(double value) =>
+        value.ToString(value < 0.001 ? "0.000000" : "0.###", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Formats an already-signed change, keeping the plus that a bare number would drop.

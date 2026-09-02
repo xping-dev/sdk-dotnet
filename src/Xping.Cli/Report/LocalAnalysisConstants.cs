@@ -135,69 +135,74 @@ internal static class LocalAnalysisConstants
 
 
     /// <summary>
-    /// Relative p50 duration increase required to report a regression (0.50).
+    /// Relative increase in typical duration required to report a regression (0.50).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Practical significance, applied beside a test of statistical significance rather than in
+    /// place of one. The quantity is the Hodges–Lehmann ratio minus one — the median of every
+    /// pairwise ratio between a recent run and a baseline run, which is the estimator consistent
+    /// with the ordering <see cref="Scoring.BrunnerMunzel"/> tests — and not a quotient of two
+    /// medians, which rested on one reading from each side.
+    /// </para>
+    /// <para>
+    /// Both are required and neither implies the other. A statistically solid three percent is a
+    /// true finding nobody wants reported; a twofold gap over three runs that the test's own history
+    /// already contains is a finding that is not true.
+    /// </para>
+    /// </remarks>
     public const double DurationRegressionPct = 0.50;
 
     /// <summary>
-    /// Absolute p50 duration increase required to report a regression, in milliseconds (100).
+    /// Absolute increase in typical duration required to report a regression, in milliseconds (100).
     /// </summary>
     /// <remarks>
     /// Guards the relative test: 2 ms becoming 4 ms is a 100% regression and means nothing.
     /// <para>
-    /// Milliseconds at the window's reference speed rather than off the clock — the normalised
-    /// increase multiplied by the median of the window's run medians. The relative test beside it
-    /// is decided on normalised durations, and two gates on one decision have to be on one scale;
-    /// read raw, this one goes negative exactly when the recent runs were the faster ones. The
-    /// value is unchanged and so is what it means, because the anchor is a real machine speed.
+    /// Milliseconds at the test's reference speed rather than off the clock — the estimated ratio
+    /// applied to the baseline's normalised level, multiplied back by the median of the medians of
+    /// the runs the test appeared in. The relative test beside it is decided on normalised
+    /// durations, and two gates on one decision have to be on one scale; read raw, this one goes
+    /// negative exactly when the recent runs were the faster ones. The value is unchanged and so is
+    /// what it means, because the anchor is a real machine speed.
     /// </para>
     /// </remarks>
     public const double DurationRegressionMinMs = 100;
-
-    /// <summary>
-    /// Highest baseline dispersion a regression may be claimed against (0.48).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A test with historically huge variance has not "regressed" when it happens to run slow; it
-    /// has done what it always does.
-    /// </para>
-    /// <para>
-    /// Measured by <see cref="Scoring.RobustDispersion"/>, which is not on the same scale as the
-    /// coefficient of variation this threshold used to be applied to: durations are right-skewed,
-    /// and 0.48 is what a lognormal sample with a true coefficient of variation of 0.50 reads. The
-    /// intent the old number expressed is therefore unchanged and only the number moved.
-    /// </para>
-    /// </remarks>
-    public const double DurationStableDispersionMax = 0.48;
 
     /// <summary>
     /// Dispersion at or above which a test's duration is called unstable (0.65).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Deliberately above <see cref="DurationStableDispersionMax"/> rather than equal to it. The two
-    /// were one number, so every test was either steady enough to measure a regression against or
-    /// unstable, with nothing in between. A test between the two is neither: the gap it would have
-    /// to move by to be called slower is inside its own noise, and its noise is not remarkable
-    /// enough to be worth a developer's morning. Reporting nothing is the honest answer there, and
-    /// merging these back into one constant would take it away.
+    /// The only dispersion threshold the duration provider has. There used to be a second and lower
+    /// one, the highest spread a baseline could have and still be measured against, and it was a
+    /// stand-in for the question "is this shift bigger than the noise" at a time when nothing asked
+    /// that question directly. <see cref="Scoring.BrunnerMunzel"/> now asks it, on both arms rather
+    /// than on the baseline alone, so the stand-in is gone and a test that is wild <i>and</i> has
+    /// stepped cleanly beyond anything it ever did is reported as slower rather than silenced for
+    /// being wild.
     /// </para>
     /// <para>
-    /// 0.65 is what a lognormal sample with a true coefficient of variation of 0.70 reads. Against
-    /// the store this repository records it clears the two sample suites' deliberate flakes and
-    /// leaves the timeout tests alone.
+    /// What is left is a claim in its own right: a test whose timing moves this much is one nobody
+    /// can predict the cost of, and that is worth saying whether or not it has also changed.
+    /// </para>
+    /// <para>
+    /// Measured by <see cref="Scoring.RobustDispersion"/>, which is not on the same scale as the
+    /// coefficient of variation this threshold used to be applied to: durations are right-skewed,
+    /// and 0.65 is what a lognormal sample with a true coefficient of variation of 0.70 reads.
+    /// Against the store this repository records it clears the two sample suites' deliberate flakes
+    /// and leaves the timeout tests alone.
     /// </para>
     /// </remarks>
     public const double DurationUnstableDispersionMin = 0.65;
 
     /// <summary>
-    /// Baseline p50 below which duration findings are suppressed, in milliseconds (50).
+    /// Baseline p50 below which an instability finding is suppressed, in milliseconds (50).
     /// </summary>
     /// <remarks>
-    /// Below this, dispersion measures scheduler noise rather than the test. At the window's
-    /// reference speed, for the reason given on <see cref="DurationRegressionMinMs"/>: the
-    /// dispersion this qualifies is measured on normalised durations, so the floor has to be too.
+    /// Below this, dispersion measures scheduler noise rather than the test. At the test's reference
+    /// speed, for the reason given on <see cref="DurationRegressionMinMs"/>: the dispersion this
+    /// qualifies is measured on normalised durations, so the floor has to be too.
     /// </remarks>
     public const double DurationTrivialMs = 50;
 

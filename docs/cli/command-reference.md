@@ -89,7 +89,7 @@ HIGH  flaky            GenerateMonthlySummary
       evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 
 MED   slower           CheckoutFlow_Completes
-      p50 +251.2% normalised (+854ms), 340ms -> 1.2s on the clock
+      3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
       evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
 
 LOW   stopped running  LegacyImport.Roundtrip
@@ -117,8 +117,8 @@ report prints it.
 | `TimingOut` | timing out | The test is mostly killed for overrunning its timeout rather than failing |
 | `BrokenFixture` | broken fixture | Several tests fail alike because one shared lifecycle member is broken, and that member is named |
 | `SharedFailure` | shared failure | Several tests fail with one signature in one run — one cause, not many |
-| `DurationRegression` | slower | The test's median duration has increased against its own baseline |
-| `DurationUnstable` | unstable timing | The test's duration varies too much for a regression to be measurable |
+| `DurationRegression` | slower | The test's recent runs are slower than its earlier ones by more than the variation it already had |
+| `DurationUnstable` | unstable timing | The test's duration varies too much for anyone to predict what it will cost |
 | `ParallelSensitive` | concurrency | The test's failure rate moves with how many tests ran alongside it |
 | `TimeSensitive` | time sensitive | The test's failures cluster at one local time of day, day group, or UTC offset |
 | `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
@@ -238,7 +238,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.5",
+  "schemaVersion": "1.6",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

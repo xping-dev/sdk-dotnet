@@ -89,7 +89,7 @@ HIGH  flaky            GenerateMonthlySummary
       evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 
 MED   slower           CheckoutFlow_Completes
-      p50 +251.2% normalised (+854ms), 340ms -> 1.2s on the clock
+      3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
       evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
 
 LOW   stopped running  LegacyImport.Roundtrip
@@ -130,7 +130,7 @@ The report distinguishes sixteen finding kinds. The ones you meet first:
 | flaky | `Flaky` | The test both passes and fails, or fails in varying ways. |
 | always failing | `AlwaysFailing` | The test fails almost always, in one dominant way — a likely real bug, not flake. |
 | timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
-| slower | `DurationRegression` | The test's median duration has regressed against its own baseline. |
+| slower | `DurationRegression` | The test's recent runs are slower than its earlier ones by more than the variation it already had. The headline states the factor and the interval around it. |
 | stopped running | `Vanished` | The test appeared throughout the baseline and has stopped running. |
 
 The rest — order dependence, concurrency sensitivity, broken fixtures, shared failures, time-of-day

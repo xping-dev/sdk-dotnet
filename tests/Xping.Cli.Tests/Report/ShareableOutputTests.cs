@@ -151,11 +151,10 @@ public sealed class ShareableOutputTests
 
             FindingKind.DurationRegression =>
                 new DurationRegressionEvidence(
-                    new DurationProfile(1240, 1890, 4, 3, 4, 3),
-                    new DurationProfile(340, 410, 10, 10, 10, 10),
+                    new DurationProfile(1240, 1890, 4, 3, 3),
+                    new DurationProfile(340, 410, 10, 10, 10),
                     new DurationDelta(264.7, 900),
-                    new NormalisedDurationDelta(251.2, 880),
-                    0.11,
+                    new DurationShift(3.512, 1.94, 5.87, 251.2, 880, 0.004),
                     "a3f9c2e",
                     [],
                     null),
@@ -211,6 +210,22 @@ public sealed class ShareableOutputTests
             Assert.NotEmpty(m.Label);
             Assert.NotEmpty(m.Value);
         });
+    }
+
+    [Fact]
+    public void ASlowerHeadlineLeadsWithTheFactorAndItsInterval()
+    {
+        var (headline, metrics) = EvidenceHeadline.For(
+            FindingKind.DurationRegression, EvidenceFor(FindingKind.DurationRegression));
+
+        // The sentence a developer reads first. It leads with the normalised claim rather than the
+        // clock, because the raw pair can fall while the test slows, and it carries the interval,
+        // because "3.51x slower" alone invites the reader to treat three runs as settled.
+        Assert.Equal(
+            "3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock", headline);
+
+        Assert.Contains(metrics, m => m.Value == "3.51x (95% CI 1.94-5.87x), +880ms at reference speed");
+        Assert.Contains(metrics, m => m.Value == "p 0.004 one-sided, 3 recent runs against 10");
     }
 
     [Fact]
