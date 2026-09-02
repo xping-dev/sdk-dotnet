@@ -215,7 +215,7 @@ public sealed class TimeSensitiveProviderTests
         // group's raw 0.034 becomes 0.067 and no longer does — so the search charge does not merely
         // reorder the two axes here, it removes one of them.
         Assert.Equal(2, evidence.Significance.ComparisonsTried);
-        Assert.Equal(0.001748, evidence.Significance.PValue, 6);
+        Assert.Equal(0.00175, evidence.Significance.PValue);
     }
 
     [Fact]
@@ -367,13 +367,66 @@ public sealed class TimeSensitiveProviderTests
         // Twelve runs split six and six can deal six failures 924 ways, and exactly one of them puts
         // all six in the evening. Its mirror image is equally probable and equally extreme, so the
         // two-sided answer is 2/924 — and one comparison was charged for, so that is also the
-        // published figure.
-        Assert.Equal(2.0 / 924, evidence.Significance.PValue, 6);
+        // published figure, to the three digits it is written down with.
+        Assert.Equal(0.00216, evidence.Significance.PValue);
 
         // The same number reaches the coordinator, unrounded, which is the only place a correction
         // for the number of tests compared can be applied.
         Assert.NotNull(candidate.PValue);
         Assert.Equal(2.0 / 924, candidate.PValue.Value, 12);
+    }
+
+    [Fact]
+    public void TheSameGapSurvivesOneComparisonAndNotTwo()
+    {
+        // Five red evenings of ten against ten clean mornings, twice over. The 2x2 table is
+        // identical in both windows and so is its own p-value, 0.0325. All that differs is how many
+        // ways the runs could be divided: in the first the weekend is too thin to be an arm, in the
+        // second the same runs are dealt so that it is not.
+        //
+        // One comparison reports it. Two charge it 0.065 and it falls silent — which is the whole of
+        // what "a wider search is expensive" means, and why the docs cannot say five failures is
+        // enough without saying how wide the search was.
+        TimeSensitiveEvidence narrow =
+            EvidenceFrom(TimeOfDay(eveningFailures: 5, morningFailures: 0, evenings: 10, mornings: 10));
+
+        Assert.Equal(1, narrow.Significance.ComparisonsTried);
+        Assert.Equal(0.0325, narrow.Significance.PValue, 4);
+
+        Assert.Empty(Analyze(WeekendEvenings(eveningFailures: 5)));
+
+        // And silent for that reason and no other: one more red evening is 0.0108, which survives
+        // being charged twice, and the same window then reports — so what the assertion above sees
+        // is the correction and not some earlier gate quietly declining the fixture.
+        TimeSensitiveEvidence wide = EvidenceFrom(WeekendEvenings(eveningFailures: 6));
+
+        Assert.Equal(2, wide.Significance.ComparisonsTried);
+        Assert.Equal(0.0217, wide.Significance.PValue, 4);
+    }
+
+    [Fact]
+    public void ALongWindowPublishesASmallProbabilityRatherThanACertainOne()
+    {
+        // Thirteen red evenings against thirteen clean mornings. Twenty-six runs is an ordinary
+        // window, and a perfect split of it is 2/C(26,13) = 1.9e-07 — which the six decimal places
+        // the duration provider publishes with would have written down as zero.
+        //
+        // Six decimals are safe there and not here. A duration regression compares a fixed three
+        // recent runs against at most forty, so its p-value cannot fall below 1/12341 however long
+        // the history; this one is the probability of the observed table and falls away as the
+        // window grows. A published zero is a claim of certainty, and this measurement never makes
+        // one.
+        TimeSensitiveEvidence evidence =
+            EvidenceFrom(TimeOfDay(eveningFailures: 13, morningFailures: 0, evenings: 13, mornings: 13));
+
+        // Two divisions qualify on a window this long — the weekend has runs enough of its own — so
+        // the charged figure is twice the split's own 1.9e-07.
+        Assert.Equal(2, evidence.Significance.ComparisonsTried);
+        Assert.Equal(3.85e-7, evidence.Significance.PValue, 9);
+
+        // Written down as a probability rather than as a zero, which is the whole of the claim.
+        var (_, metrics) = EvidenceHeadline.For(FindingKind.TimeSensitive, evidence);
+        Assert.Contains(metrics, m => m.Value == "p 3.85e-07 two-sided, 2 splits compared");
     }
 
     [Fact]
@@ -405,7 +458,7 @@ public sealed class TimeSensitiveProviderTests
 
         // The winner is the perfect five-against-fifteen split, which survives the charge easily.
         Assert.Equal("18:00-24:00 local", evidence.Worse.Label);
-        Assert.Equal(4.0 / 15504, evidence.Significance.PValue, 6);
+        Assert.Equal(0.000258, evidence.Significance.PValue);
     }
 
     [Fact]
@@ -842,6 +895,37 @@ public sealed class TimeSensitiveProviderTests
             sessions.Add(RunAt(ordinal++, Local(weekdayEvenings[i], 20), failed: i < 4));
 
         foreach (int day in weekdayMornings)
+            sessions.Add(RunAt(ordinal++, Local(day, 9), failed: false));
+
+        return sessions;
+    }
+
+    /// <summary>
+    /// Builds the same evening-against-morning split as <c>TimeOfDay</c>, dealt so the weekend is an
+    /// arm of its own.
+    /// </summary>
+    /// <remarks>
+    /// Ten evenings against ten clean mornings — at five failures, the identical 2x2 table to
+    /// <c>TimeOfDay(5, 0, evenings: 10, mornings: 10)</c> and the identical p-value. Only the dates
+    /// differ: enough runs fall at a weekend for the day group to clear the arm gate, so the window
+    /// divides two ways rather than one and is charged twice for the same observation.
+    /// </remarks>
+    /// <param name="eveningFailures">How many of the ten evening runs failed.</param>
+    /// <returns>The sessions.</returns>
+    private static List<TestSession> WeekendEvenings(int eveningFailures)
+    {
+        // Six weekend days in August 2026 and four weekdays, so the weekend holds ten of the twenty
+        // runs. The five red evenings are spread over five separate dates, as the day gate needs.
+        int[] eveningDays = [1, 2, 8, 9, 15, 3, 4, 5, 6, 7];
+        int[] morningDays = [16, 22, 23, 29, 30, 10, 11, 12, 13, 14];
+
+        List<TestSession> sessions = [];
+        int ordinal = 0;
+
+        for (int i = 0; i < eveningDays.Length; i++)
+            sessions.Add(RunAt(ordinal++, Local(eveningDays[i], 20), failed: i < eveningFailures));
+
+        foreach (int day in morningDays)
             sessions.Add(RunAt(ordinal++, Local(day, 9), failed: false));
 
         return sessions;

@@ -483,16 +483,25 @@ internal static class EvidenceHeadline
     /// Formats a probability at the precision it was published with.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Three decimals down to 0.001 and six below it, which is where these p-values live: they are
     /// floored by one over the number of ways the runs could have been dealt, so a long baseline
     /// puts them well under a thousandth — forty runs against three floors them at 0.000081. A
     /// blanket "&lt;0.001" would collapse every one of those onto each other and throw away the
-    /// difference between a claim resting on ten runs and one resting on forty-three. Six decimals
-    /// is what the provider rounds to and the floor is always above the last of them, so this never
-    /// renders a zero.
+    /// difference between a claim resting on ten runs and one resting on forty-three.
+    /// </para>
+    /// <para>
+    /// And below a millionth, scientific notation, because six decimals stop being enough there.
+    /// A duration regression cannot reach that — its floor is fixed by a slice of three recent runs
+    /// — but a temporal split can and ordinarily does: thirteen runs against thirteen, perfectly
+    /// separated, is 1.9e-07, and the reason to write it that way rather than as 0.000000 is that
+    /// the second is a claim of certainty and no finite window makes one.
+    /// </para>
     /// </remarks>
     private static string Probability(double value) =>
-        value.ToString(value < 0.001 ? "0.000000" : "0.###", CultureInfo.InvariantCulture);
+        value.ToString(
+            value < 0.000001 ? "0.##e+00" : value < 0.001 ? "0.000000" : "0.###",
+            CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Formats an already-signed change, keeping the plus that a bare number would drop.

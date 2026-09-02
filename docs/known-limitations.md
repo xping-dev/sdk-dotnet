@@ -237,19 +237,20 @@ is not reported as an evening pattern. A finer bin would fire more often and mea
 
 **Impact**: a gap that would be reported in a window whose runs all start at one of two times of day
 may not be reported in a window whose runs are spread across the clock, even though the second window
-holds more evidence. On a fortnight of runs, a test needs five failures on the failing side against a
-clean other side before anything is reported at all.
+holds more evidence. On a fortnight of runs, a test needs at least five failures on the failing side
+against a clean other side before anything is reported at all — and six or seven where the window
+divides several different ways.
 
 **Reason**: up to six splits are tried and the best is kept, which is a search, and the best of six
 noisy splits is systematically wider than any one of them measured alone. Each split is therefore
 tested exactly and its result multiplied by the number of distinct divisions the window admitted. A
 window whose runs fall in two quarters of the day performed one comparison and pays nothing for it; a
 window spread across the whole clock and both day groups performed four or more and needs a
-correspondingly wider gap to clear the same bar. That is the correct price — a search over six
-divisions turns up a wide gap in pure noise roughly a seventh of the time — but it does mean the
-finding is quieter on a window whose runs are spread thin, and quieter everywhere than it was before
-the charge existed. The probability the finding survived on and the number of divisions charged for
-are both published with it.
+correspondingly wider gap to clear the same bar. That is the correct price — before the charge
+existed, a test with no time dependency at all produced a finding in 28% of twenty-run windows — but
+it does mean the finding is quieter on a window whose runs are spread thin, and quieter everywhere
+than it was before the charge existed. The probability the finding survived on and the number of
+divisions charged for are both published with it.
 
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 

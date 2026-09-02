@@ -147,8 +147,9 @@ number of **distinct** ways the window was divided — two quarters that separat
 one division, not two. The split with the least probable result wins, and it is reported only if it
 survives that multiplication. The finding publishes the probability it survived on and the number of
 divisions charged for, so how wide a search found it is visible rather than implied. The practical
-effect on a fortnight of runs: against a side with no failures at all, five failures is what it
-takes.
+effect on a fortnight of runs: against a side with no failures at all, five failures is the least
+this can report, and a window divided several different ways needs six or seven — the wider the
+search, the more it costs to survive it.
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded

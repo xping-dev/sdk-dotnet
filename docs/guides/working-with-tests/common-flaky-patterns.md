@@ -160,8 +160,9 @@ days**, which is what stops one bad evening being reported as an evening pattern
 be one chance would not readily produce — each split is tested exactly, and because several were
 tried and the best kept, the result is charged for the number of genuinely different ways the window
 was divided. On a fortnight of runs that comes to roughly this: against a side with no failures at
-all, five failures is what it takes. The finding publishes both the probability and the number of
-divisions charged for, so you can see how wide a search found it.
+all, five failures is the least that can be reported, and six or seven where the window divides
+several different ways — a wider search costs more to survive. The finding publishes both the
+probability and the number of divisions charged for, so you can see how wide a search found it.
 
 ### Example
 

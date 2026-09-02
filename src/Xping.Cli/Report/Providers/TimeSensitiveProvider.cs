@@ -165,12 +165,17 @@ internal sealed record TimeSensitiveEvidence(
 /// </para>
 /// <para>
 /// <b>What the bar amounts to.</b> Take the clearest shape there is — an arm that failed every time
-/// against one that never did. Five failures is what it takes, at one comparison, at every arm size
-/// from seven runs to twenty; six a side admits five failures of six and refuses four. On that shape
-/// the p-value is the stricter of the two bars up to about sixteen runs a side, beyond which five
-/// failures no longer reach a gap of 0.30 and the delta takes over. This kind is consequently quiet
-/// on a short history, which is the honest answer: four red evenings out of six against a clean
-/// morning is among the commonest things chance produces, and it used to be reported as a pattern.
+/// against one that never did — and count the failures needed to report it. Against a single
+/// comparison it is five, from six runs a side to sixteen; from seventeen up it is six, because five
+/// no longer reaches a gap of 0.30 and the delta takes over from the p-value as the binding bar.
+/// Against two comparisons it is six almost throughout, and against four, six to seven. Five
+/// failures is therefore the floor of what this kind asks and not a promise: how many it actually
+/// asks for depends on how wide the search that found the split was.
+/// </para>
+/// <para>
+/// This kind is consequently quiet on a short history, which is the honest answer: four red evenings
+/// out of six against a clean morning is among the commonest things chance produces, and it used to
+/// be reported as a pattern.
 /// </para>
 /// <para>
 /// <b>Every arm is one observation per session.</b> A test contributes the verdict of its deciding
@@ -742,17 +747,38 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Rounds a p-value for publication.
+    /// Rounds a p-value for publication, to three significant digits.
     /// </summary>
     /// <remarks>
-    /// Six decimals rather than the three <see cref="FindingOrder.Round"/> gives every other
-    /// published figure, for the reason the duration provider gives about its own: these are floored
-    /// by the probability of the observed table, and a window of any length puts that well under a
-    /// thousandth. Three decimals would publish it as zero, and a probability of zero is a claim of
-    /// certainty this measurement never makes.
+    /// <para>
+    /// Significant digits rather than the decimal places <see cref="FindingOrder.Round"/> gives
+    /// every other published figure, and rather than the six decimals the duration provider gives
+    /// its own. That figure is safe there because the comparison behind it is a fixed three recent
+    /// runs against at most forty, which floors its p-value at 1/12341 and cannot go lower however
+    /// long the history is. Nothing floors this one: it is the probability of the observed table,
+    /// and that falls off a cliff as the window grows — a perfectly separated split of thirteen runs
+    /// against thirteen is 1.9e-7, which six decimals publish as zero. Twenty-six runs is an
+    /// ordinary window, and a probability of zero is a claim of certainty this measurement never
+    /// makes.
+    /// </para>
+    /// <para>
+    /// Three digits because that is the precision the figure has to a reader deciding whether to
+    /// believe a finding. The unrounded value is what reaches the coordinator; this is only what
+    /// gets written down.
+    /// </para>
     /// </remarks>
-    private static double Probability(double value) =>
-        Math.Round(value, 6, MidpointRounding.AwayFromZero);
+    private static double Probability(double value)
+    {
+        if (value <= 0)
+            return value;
+
+        // Where to round is a property of the value's magnitude, and `Math.Round` refuses more than
+        // fifteen places — which only a p-value below 1e-13 asks for, and which is past the point
+        // where a digit more or less could mean anything.
+        int places = Math.Clamp(2 - (int)Math.Floor(Math.Log10(value)), 0, 15);
+
+        return Math.Round(value, places, MidpointRounding.AwayFromZero);
+    }
 
     private static int DistinctDates(IEnumerable<Measured> runs)
     {
