@@ -127,9 +127,12 @@ internal static class BrunnerMunzel
     /// direction nobody asked about.
     /// </para>
     /// <para>
-    /// That floor of <c>1 / C(n, k)</c> is the honest statement of how little three readings can
-    /// establish: against five baseline runs the best attainable p-value is 1/56, and it is reached
-    /// only when every recent run was slower than every run before it.
+    /// That floor of <c>1 / C(n, k)</c> is the honest statement of how little a handful of readings
+    /// can establish: three recent runs against seven baseline ones can reach 1/120 and no lower,
+    /// and only when every recent run was slower than every run before it. It is why a caller with
+    /// a short baseline has to decide what level it will read this at before deciding how much
+    /// history to require — below seven, three recent runs cannot reach 0.01 however extreme the
+    /// durations are.
     /// </para>
     /// </remarks>
     public static double OneSidedPValue(

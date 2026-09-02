@@ -811,6 +811,24 @@ public sealed class DurationProviderTests
         Assert.Equal(0.000081, evidence.Shift.PValue);
     }
 
+    [Fact]
+    public void TheEnumerationTheExactTestPerformsStaysBounded()
+    {
+        // The provider truncates either arm to its forty most recent runs so that the exact test's
+        // enumeration stays affordable. That safety property is not a property of forty: the count
+        // is C(40 + k, k) for a recent slice of k, and it grows as k rises — 12,341 at the shipped
+        // slice of three, 1.2 million at five, and past anything a report could finish at ten.
+        //
+        // So the two constants have to move together, and this is the test that says so. Raising
+        // CurrentSliceSize without lowering the truncation turns `xping report` into a hang, which
+        // is the kind of thing that should fail here rather than on a developer's machine.
+        long arrangements = 1;
+        for (int i = 0; i < LocalAnalysisConstants.CurrentSliceSize; i++)
+            arrangements = arrangements * (40 + LocalAnalysisConstants.CurrentSliceSize - i) / (i + 1);
+
+        Assert.InRange(arrangements, 1, 20_000);
+    }
+
     [Theory]
     [InlineData(0.20, 200)]
     [InlineData(0.35, 200)]

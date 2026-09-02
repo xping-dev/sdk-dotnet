@@ -283,15 +283,22 @@ internal sealed class DurationProvider : IFindingProvider
     // defensible in the meantime, and that pass will supersede it.
     private const double RegressionAlpha = 0.01;
 
-    // Baseline runs the comparison reads, most recent first. The exact test enumerates every way
-    // the pooled runs could have been split, which is C(n + 3, 3) and grows as a cube; `--runs` is
-    // unbounded, so something has to stop it. Forty holds the enumeration under twelve and a half
-    // thousand arrangements and never binds on a default twenty-run window. What it costs is the
-    // difference between the fortieth-oldest run and the hundredth as evidence about a test's
-    // baseline, which is nothing: the comparison's power is capped by the three runs on the other
-    // side. The published `Baseline.P50Ms` still covers the whole baseline, and `ComparedSessions`
-    // states the truncation where it happened.
-    private const int MaxComparedBaselineSessions = 40;
+    // Runs either arm's sample is truncated to, most recent first. The exact test enumerates every
+    // way the pooled runs could have been split, which is C(n + k, k) for a recent arm of k, and
+    // `--runs` is unbounded -- so something has to stop it.
+    //
+    // This bound is not a property of forty alone. It is C(40 + `CurrentSliceSize`,
+    // `CurrentSliceSize`), which at the shipped slice of three is 12,341 arrangements and at a
+    // slice of five would be 1.2 million; the two constants have to move together, and
+    // TheEnumerationTheExactTestPerformsStaysBounded is the test that says so out loud rather than
+    // leaving the next reader to discover it as a hung report.
+    //
+    // At three it never binds on a default twenty-run window. What it costs is the difference
+    // between the fortieth-oldest run and the hundredth as evidence about a test's baseline, which
+    // is nothing: the comparison's power is capped by the runs on the other side. The published
+    // `Baseline.P50Ms` still covers the whole baseline, and `ComparedSessions` states the
+    // truncation where it happened.
+    private const int MaxComparedSessions = 40;
 
     /// <inheritdoc/>
     public string Name => "duration";
@@ -344,7 +351,11 @@ internal sealed class DurationProvider : IFindingProvider
             // put every millisecond gate a factor of fifty out for tests that never ran in them.
             double referenceMs = ReferenceMedian(all, medians);
 
-            Profile whole = Build(all, medians);
+            // The whole window is only ever asked for its raw percentiles and its dispersion, so
+            // it is not asked to collapse itself to one reading per run: that is the comparison's
+            // sample, and building it for a slice nothing compares would be a sort and a dictionary
+            // per test for nobody.
+            Profile whole = Build(all, medians, comparable: false);
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
@@ -393,13 +404,14 @@ internal sealed class DurationProvider : IFindingProvider
             return null;
         }
 
-        // The cheap, exact gates first. Both are decided from a sorted list of pairwise ratios,
-        // where the test below enumerates every way the runs could have been split between the two
-        // arms — so ordering them this way keeps that enumeration off every test that could not
-        // qualify anyway, which in a real window is nearly all of them.
-        RatioEstimate shift = HodgesLehmann.Of(baselineProfile.Compared, currentProfile.Compared);
+        // The cheap gates first, and the two expensive things last. Asking how much slower is a
+        // sorted list of at most a few hundred ratios; asking whether that is real enumerates every
+        // way the runs could have been split, and placing an interval around it builds the exact
+        // null distribution behind those arrangements. Ordering them this way keeps both off every
+        // test that could not qualify anyway, which in a real window is nearly all of them.
+        double ratio = HodgesLehmann.Ratio(baselineProfile.Compared, currentProfile.Compared);
 
-        if (shift.Ratio - 1 < LocalAnalysisConstants.DurationRegressionPct)
+        if (ratio - 1 < LocalAnalysisConstants.DurationRegressionPct)
             return null;
 
         // Guards the relative test on the scale a developer actually experiences: two milliseconds
@@ -410,7 +422,7 @@ internal sealed class DurationProvider : IFindingProvider
         // faster machine can raise the normalised level while lowering the raw one, and a negative
         // raw increase declines every real regression measured that way.
         double baselineLevel = Percentile(baselineProfile.Compared, 0.50);
-        double increaseMs = (shift.Ratio - 1) * baselineLevel * referenceMs;
+        double increaseMs = (ratio - 1) * baselineLevel * referenceMs;
 
         if (increaseMs < LocalAnalysisConstants.DurationRegressionMinMs)
             return null;
@@ -423,6 +435,9 @@ internal sealed class DurationProvider : IFindingProvider
 
         if (pValue > RegressionAlpha)
             return null;
+
+        // Only now, for the handful of tests that survived all three.
+        RatioEstimate shift = HodgesLehmann.Of(baselineProfile.Compared, currentProfile.Compared);
 
         return new FindingCandidate(
             FindingKind.DurationRegression,
@@ -731,8 +746,19 @@ internal sealed class DurationProvider : IFindingProvider
         return Percentile(values, 0.50);
     }
 
+    /// <summary>
+    /// Reduces a set of executions to the statistics both kinds are decided on.
+    /// </summary>
+    /// <param name="executions">The executions.</param>
+    /// <param name="medians">Median duration of every run in the window.</param>
+    /// <param name="comparable">
+    /// Whether to collapse the runs to the one-reading-each sample the two-sample comparison reads.
+    /// False for a slice that is only asked for percentiles and dispersion.
+    /// </param>
     private static Profile Build(
-        IReadOnlyList<ExecutionRef> executions, Dictionary<Guid, double> medians)
+        IReadOnlyList<ExecutionRef> executions,
+        Dictionary<Guid, double> medians,
+        bool comparable = true)
     {
         var raw = new List<double>(executions.Count);
         var normalised = new List<double>(executions.Count);
@@ -750,6 +776,9 @@ internal sealed class DurationProvider : IFindingProvider
 
             if (medians.TryGetValue(reference.Session.SessionId, out double median))
                 normalised.Add(Milliseconds(reference) / median);
+
+            if (!comparable)
+                continue;
 
             if (!positions.TryGetValue(reference.Session.SessionId, out int position))
             {
@@ -789,6 +818,10 @@ internal sealed class DurationProvider : IFindingProvider
     /// every other percentile here uses, so it is a duration the test was actually observed to take.
     /// </para>
     /// <para>
+    /// Truncated to <see cref="MaxComparedSessions"/>, which is why the runs are ordered before
+    /// they are read: a capped arm keeps its most recent runs and not an arbitrary forty.
+    /// </para>
+    /// <para>
     /// Readings that are not strictly positive are left out. They cannot carry a ratio — a test that
     /// took no measurable time has no factor by which it later became slower — and the xUnit adapter
     /// records exactly that for a failure raised outside the timed invocation. Dropping them here
@@ -812,7 +845,7 @@ internal sealed class DurationProvider : IFindingProvider
 
         foreach ((_, Guid session, List<double> attempts) in perSession)
         {
-            if (compared.Count == MaxComparedBaselineSessions)
+            if (compared.Count == MaxComparedSessions)
                 break;
 
             if (!medians.TryGetValue(session, out double median))

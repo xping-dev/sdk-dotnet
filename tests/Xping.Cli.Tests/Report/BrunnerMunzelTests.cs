@@ -57,16 +57,18 @@ public sealed class BrunnerMunzelTests
     // ---------------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(5, 3, 56)]      // the arm floors the duration provider gates at
-    [InlineData(7, 3, 120)]
+    [InlineData(5, 3, 56)]      // 0.018, which is why seven and not five is the provider's floor
+    [InlineData(7, 3, 120)]     // 0.008, the shortest baseline that reaches the level it reads at
     [InlineData(17, 3, 1140)]
     [InlineData(10, 5, 3003)]
     public void CompleteSeparationIsWorthExactlyOneArrangementInAll(
         int baselineCount, int currentCount, int arrangements)
     {
         // The strongest statement this test can ever make, and it is not a small p-value: with
-        // three recent runs against five, every one of them slower than everything before it is
-        // one arrangement in fifty-six. Reporting anything smaller would be inventing evidence.
+        // three recent runs against seven, every one of them slower than everything before it is
+        // one arrangement in a hundred and twenty. Reporting anything smaller would be inventing
+        // evidence — and the floor is what makes the duration provider's shortest usable baseline
+        // an arithmetic fact rather than a taste.
         double[] baseline = Ascending(1, baselineCount);
         double[] current = Ascending(1000, currentCount);
 
@@ -103,11 +105,11 @@ public sealed class BrunnerMunzelTests
     [Fact]
     public void OneBaselineRunSlowerThanOneRecentRunIsAlreadyTooMuchAtTheArmFloor()
     {
-        // Five baseline runs against three is the thinnest comparison the duration provider will
-        // make, and it has fifty-six arrangements. Let one baseline run be slower than all three
-        // recent ones and four arrangements are at least this favourable, so 0.071 and no finding.
-        // A single overlapping run is the difference between a claim and silence at these sizes,
-        // which is the honest cost of three recent runs rather than a defect in the test.
+        // Five baseline readings against three has fifty-six arrangements. Let one baseline reading
+        // be above all three recent ones and four of them are at least this favourable, so 0.071 and
+        // nothing to report. A single overlapping run is the difference between a claim and silence
+        // at these sizes, which is the honest cost of three recent readings rather than a defect in
+        // the test.
         Assert.Equal(4.0 / 56, BrunnerMunzel.OneSidedPValue([1, 1, 1, 1, 9], [8, 8, 8]), 12);
     }
 
@@ -244,8 +246,9 @@ public sealed class BrunnerMunzelTests
     {
         // The companion to the rate above: a test that only ever declines is not a test. A true
         // doubling on a steady test separates cleanly enough to be found 99.7% of the time at
-        // seventeen baseline runs — and 97.8% at the five the provider gates at, which is the
-        // number that matters for the thinnest window it will report from.
+        // seventeen baseline runs, and 99.3% at the seven the duration provider gates at — read
+        // here at 0.05, where the provider reads it at 0.01 and gets 0.97 and 0.89 through its
+        // whole gate chain.
         ulong state = 20260902UL;
 
         double sigma = Math.Sqrt(Math.Log(1 + (0.20 * 0.20)));

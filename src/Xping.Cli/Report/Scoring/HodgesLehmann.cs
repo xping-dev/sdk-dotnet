@@ -43,10 +43,11 @@ internal readonly record struct RatioEstimate(double Ratio, double Low, double H
 /// </para>
 /// <para>
 /// <b>The interval is the Moses interval</b>, the order statistics of the same pairwise list at the
-/// exact Wilcoxon rank-sum critical value. Exact rather than normal-approximated because the arms
-/// here are five and three: the approximation asks for an order statistic below the first at those
-/// sizes and yields no interval at all, where the exact rule gives the full spread of the pairwise
-/// ratios at 96.4% coverage. It assumes the two arms differ only in location, which is more than
+/// exact Wilcoxon rank-sum critical value. Exact rather than normal-approximated because these arms
+/// are small: at five readings against three the approximation asks for an order statistic below the
+/// first and yields no interval at all, where the exact rule gives the full spread of the pairwise
+/// ratios at 96.4% coverage; at seven against three the two still disagree by a whole rank, the
+/// approximation reaching one where the exact value is two. It assumes the two arms differ only in location, which is more than
 /// Brunner–Munzel beside it assumes — the interval is therefore the weaker of the two statements,
 /// and it is the one published because a reader needs a magnitude.
 /// </para>
@@ -69,7 +70,32 @@ internal static class HodgesLehmann
 
     /// <summary>
     /// Estimates how many times larger <paramref name="current"/> is than
-    /// <paramref name="baseline"/>.
+    /// <paramref name="baseline"/>, without the interval around it.
+    /// </summary>
+    /// <param name="baseline">The readings to compare against; all strictly positive.</param>
+    /// <param name="current">The readings under suspicion.</param>
+    /// <returns>The ratio, or 1 when either arm is empty — the answer that claims nothing.</returns>
+    /// <remarks>
+    /// Separate from <see cref="Of"/> because the estimate costs a sorted list of at most a few
+    /// hundred ratios and the interval costs the exact Mann–Whitney null distribution behind it. A
+    /// caller gating on the estimate — deciding whether a slowdown is large enough to be worth a
+    /// developer's morning before deciding whether it is real — asks this question of every test in
+    /// the window and the other one only of the few that get past it.
+    /// </remarks>
+    public static double Ratio(IReadOnlyList<double> baseline, IReadOnlyList<double> current)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(current);
+
+        if (baseline.Count == 0 || current.Count == 0)
+            return 1;
+
+        return Median(Pairs(baseline, current));
+    }
+
+    /// <summary>
+    /// Estimates how many times larger <paramref name="current"/> is than
+    /// <paramref name="baseline"/>, with the interval that says how well it is pinned down.
     /// </summary>
     /// <param name="baseline">The readings to compare against; all strictly positive.</param>
     /// <param name="current">The readings under suspicion.</param>
@@ -80,6 +106,11 @@ internal static class HodgesLehmann
     /// <remarks>
     /// A baseline reading that is not positive would make its pairwise ratios infinite and is the
     /// caller's to exclude: nothing can be measured against a test that took no measurable time.
+    /// <para>
+    /// <see cref="Ratio"/> is the same number without the interval, and is what a caller wanting
+    /// only the size of the change should ask for; this one builds a distribution to place the
+    /// bounds.
+    /// </para>
     /// </remarks>
     public static RatioEstimate Of(IReadOnlyList<double> baseline, IReadOnlyList<double> current)
     {
@@ -89,6 +120,18 @@ internal static class HodgesLehmann
         if (baseline.Count == 0 || current.Count == 0)
             return new RatioEstimate(1, 1, 1);
 
+        double[] pairs = Pairs(baseline, current);
+        int rank = CriticalRank(baseline.Count, current.Count);
+
+        return new RatioEstimate(
+            Median(pairs), pairs[rank - 1], pairs[pairs.Length - rank]);
+    }
+
+    /// <summary>
+    /// Every ratio a recent reading makes with a baseline one, ascending.
+    /// </summary>
+    private static double[] Pairs(IReadOnlyList<double> baseline, IReadOnlyList<double> current)
+    {
         double[] pairs = new double[baseline.Count * current.Count];
 
         int next = 0;
@@ -100,10 +143,7 @@ internal static class HodgesLehmann
 
         Array.Sort(pairs);
 
-        int rank = CriticalRank(baseline.Count, current.Count);
-
-        return new RatioEstimate(
-            Median(pairs), pairs[rank - 1], pairs[pairs.Length - rank]);
+        return pairs;
     }
 
     /// <summary>
@@ -127,13 +167,15 @@ internal static class HodgesLehmann
     /// <returns>A rank of at least 1, where 1 means the extreme pairwise ratios themselves.</returns>
     /// <remarks>
     /// The largest <c>k</c> whose tail <c>P(U ≤ k − 1)</c> stays within
-    /// <see cref="TailMass"/> under the exact Mann–Whitney null. At the arm sizes the duration
-    /// provider gates at, this is 1 at five baseline runs against three recent (96.4% achieved
-    /// coverage), 2 at seven (96.7%), 3 at eight (95.2%) and 4 at ten (95.1%).
+    /// <see cref="TailMass"/> under the exact Mann–Whitney null. Against three recent readings it is
+    /// 1 at five baseline ones (96.4% achieved coverage), 2 at seven (96.7%), 3 at eight (95.2%),
+    /// 4 at ten (95.1%) and 7 at seventeen (95.9%) — seven being the shortest baseline the duration
+    /// provider will make a claim from.
     /// <para>
-    /// Clamped at 1 rather than reporting no interval, which only binds below those gates: fewer
-    /// than forty arrangements cannot put 2.5% in a tail at all, and there the returned bounds are
-    /// the extremes of the pairwise ratios at whatever coverage the sample can carry.
+    /// Clamped at 1 rather than reporting no interval. That only binds on arms shorter than any
+    /// caller here supplies: fewer than forty arrangements cannot put 2.5% in a tail at all, and
+    /// there the returned bounds are the extremes of the pairwise ratios at whatever coverage the
+    /// sample can carry.
     /// </para>
     /// </remarks>
     private static int CriticalRank(int baselineCount, int currentCount)
