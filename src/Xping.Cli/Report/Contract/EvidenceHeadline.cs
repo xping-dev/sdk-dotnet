@@ -328,8 +328,12 @@ internal static class EvidenceHeadline
     private static (string, IReadOnlyList<MetricDto>) DurationRegression(
         DurationRegressionEvidence e) =>
     (
-        $"p50 {Duration(e.Baseline.P50Ms)} -> {Duration(e.Current.P50Ms)} " +
-        $"({Signed(e.Delta.P50Pct)}), normalised {Signed(e.NormalisedDelta.P50Pct)}",
+        // Leads with the normalised figures because they are the claim: the raw pair can fall
+        // while the test slows, when the recent runs happened on a faster machine, and a finding
+        // labelled "slower" whose sentence opens by saying the test got faster reads as a bug.
+        $"p50 {Signed(e.NormalisedDelta.P50Pct)} normalised " +
+        $"({Signed(e.NormalisedDelta.P50Ms)}ms), {Duration(e.Baseline.P50Ms)} -> " +
+        $"{Duration(e.Current.P50Ms)} on the clock",
         [
             new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.Executions} executions"),
             new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.Executions} executions"),
@@ -342,8 +346,11 @@ internal static class EvidenceHeadline
 
     private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>
     (
-        $"p50 {Duration(e.P50Ms)}, ranging {Duration(e.MinMs)} to {Duration(e.MaxMs)} " +
-        $"over {e.Executions} executions, dispersion {Rate(e.Dispersion)}",
+        // The count belongs to the dispersion, which is what it was computed over. Attached to
+        // the range, as it used to be, a reader carries it across to the dispersion beside it and
+        // reads a spread over more executions than it was measured on.
+        $"p50 {Duration(e.P50Ms)}, ranging {Duration(e.MinMs)} to {Duration(e.MaxMs)}, " +
+        $"dispersion {Rate(e.Dispersion)} over {e.NormalisedExecutions} executions",
         [
             new("p50", Duration(e.P50Ms)),
             new("p95", Duration(e.P95Ms)),

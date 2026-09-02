@@ -123,10 +123,12 @@ public sealed class DurationProviderTests
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
 
-        // What the dispersion beside them was actually computed over, and the median expressed at
-        // the window's reference speed — the two figures the gates read.
+        // What the dispersion beside them was actually computed over, and the median the
+        // trivial-duration floor read. The second is the baseline's — 300ms, where the window's
+        // is 100ms — because that is the figure the gate was applied to, and a published number
+        // that is not the one the decision used cannot be checked against the decision.
         Assert.Equal(10, evidence.NormalisedExecutions);
-        Assert.Equal(100, evidence.NormalisedP50Ms);
+        Assert.Equal(300, evidence.NormalisedP50Ms);
         Assert.Equal(0.799, evidence.Dispersion);
         Assert.Equal(0.799, candidate.Unreliability, 3);
     }
@@ -239,38 +241,41 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
-    public void ATestOnlyEverRunOnAFastMachineIsNotTooTrivialToCallUnstable()
+    public void ARawMedianDraggedUnderTheFloorByFastRunsDoesNotSilenceTheFinding()
     {
-        // Its runs took 6ms and 60ms, which a raw floor reads as scheduler noise. They happened on
-        // a machine ten times faster than the window's reference, where the same work is 60ms and
-        // 600ms — a test worth a developer's morning, and one the raw floor never shows them.
+        // A test that costs a whole run median in six of its runs and a tenth of one in the other
+        // four. Three of the six happened on a machine ten times faster, so the clock reads 10ms
+        // for those as well as for the cheap four, and the raw median lands on 10ms — under the
+        // floor, and silent. What the test does in a typical run is a whole run median, which at
+        // the speed its own runs typically went at is 100ms.
         AnalysisContext context = Build(
             sessions: 10,
-            subjectMs: o => o == 9 ? 60 : 6,
-            companionMs: o => o < 7 ? CompanionMs * 2 : CompanionMs / 5,
-            subjectRuns: o => o >= 7);
+            subjectMs: o => o < 3 ? CompanionMs / 10 : o < 6 ? CompanionMs : CompanionMs / 10,
+            companionMs: o => o < 3 ? CompanionMs / 10 : CompanionMs);
 
         FindingCandidate candidate = Single(Analyze(context));
         var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
 
         Assert.Equal(FindingKind.DurationUnstable, candidate.Kind);
-        Assert.Equal(6, evidence.P50Ms);
-        Assert.Equal(60, evidence.NormalisedP50Ms);
+        Assert.Equal(10, evidence.P50Ms);
+        Assert.Equal(100, evidence.NormalisedP50Ms);
     }
 
     [Fact]
-    public void ATestOnlyEverRunOnASlowMachineIsStillTooTrivialToCallUnstable()
+    public void RunsTheTestNeverAppearedInDoNotSetTheScaleItIsMeasuredOn()
     {
-        // The same shape the other way up, where the raw floor lets a triviality through instead.
-        // 150ms and 1.5s look substantial until you notice the runs they happened in were 25
-        // times slower than the window's reference, where the test takes 6ms.
+        // Eight `--filter`ed runs of three fast tests, then eight full ones the subject ran in.
+        // A window-wide anchor is the median of all sixteen run medians, which the filtered
+        // majority puts at 2ms, and every millisecond gate would then be read fifty times too
+        // small: the subject's doubling would clear the relative gate and be declined as a 12ms
+        // change. The runs the subject was actually measured in all had a median of 100ms.
         AnalysisContext context = Build(
-            sessions: 10,
-            subjectMs: o => o == 9 ? 1500 : 150,
-            companionMs: o => o < 7 ? CompanionMs / 5 : CompanionMs * 5,
-            subjectRuns: o => o >= 7);
+            sessions: 16,
+            subjectMs: o => o < 13 ? 600 : 1200,
+            companionMs: o => o < 8 ? 2 : CompanionMs,
+            subjectRuns: o => o >= 8);
 
-        Assert.Empty(Analyze(context));
+        Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
     }
 
     // ---------------------------------------------------------------------------------------

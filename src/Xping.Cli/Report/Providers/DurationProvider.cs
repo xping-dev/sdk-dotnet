@@ -129,11 +129,12 @@ internal sealed record DurationRegressionEvidence(
 /// which is not always what the four raw figures above were.
 /// </param>
 /// <param name="NormalisedP50Ms">
-/// The median at the window's reference speed, in milliseconds: what the test would take on the
-/// window's typical machine. The scale the trivial-duration floor is applied on, so a test the
-/// clock says is fast because its runs happened on a fast machine is still measured. Over the
-/// whole window, as <paramref name="P50Ms"/> beside it is; the floor reads the same figure over
-/// the baseline alone where the test has one.
+/// The median the trivial-duration floor read, in milliseconds at the test's reference speed:
+/// what it would take on the machine its own runs typically ran on. Not always over the same
+/// executions as <paramref name="P50Ms"/> beside it — the floor reads the baseline where the test
+/// has one and the window where it does not, so that a test cannot be measured against a size the
+/// slowdown being reported gave it — but always the figure the decision was made on, so this
+/// number and that decision cannot disagree.
 /// </param>
 /// <param name="Dispersion">
 /// Spread per <see cref="RobustDispersion"/>, computed on <b>normalised</b> durations — so this is a
@@ -229,7 +230,6 @@ internal sealed class DurationProvider : IFindingProvider
         // Computed once for the whole window and shared by every test in a run, which is what makes
         // the normalisation a property of the run rather than something each test re-derives.
         Dictionary<Guid, double> medians = SessionMedians(context);
-        double referenceMs = ReferenceMedian(medians);
 
         var currentSessions = new HashSet<Guid>(
             context.Window.CurrentSlice.Select(s => s.SessionId));
@@ -258,6 +258,13 @@ internal sealed class DurationProvider : IFindingProvider
             // report one disappearance twice under two names.
             if (current.Count == 0)
                 continue;
+
+            // The scale this test's own figures are expressed in. Per test rather than per window,
+            // because a run median is only a machine-speed reading among runs that ran the same
+            // tests: a window holding eight `--filter`ed runs of three fast tests and eight full
+            // ones has a window median of the filtered runs' speed, and multiplying by that would
+            // put every millisecond gate a factor of fifty out for tests that never ran in them.
+            double referenceMs = ReferenceMedian(all, medians);
 
             Profile whole = Build(all, medians);
             Profile currentProfile = Build(current, medians);
@@ -413,7 +420,7 @@ internal sealed class DurationProvider : IFindingProvider
                 (long)whole.RawMin,
                 (long)whole.RawMax,
                 whole.NormalisedExecutions,
-                (long)(whole.NormalisedP50 * referenceMs),
+                (long)floor,
                 FindingOrder.Round(dispersion),
                 Spanning(all, whole.RawP50)),
 
@@ -562,24 +569,51 @@ internal sealed class DurationProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Reads the window's reference speed: the median of its runs' medians, in milliseconds.
+    /// Reads the reference speed for one test: the median of the medians of the runs it appeared
+    /// in, in milliseconds.
     /// </summary>
     /// <remarks>
-    /// The anchor a normalised figure is multiplied by to become milliseconds again. One value for
-    /// the whole window rather than one per slice, which is what makes the two sides of a
-    /// comparison expressible in the same units — anchoring each slice to its own machine would
-    /// reintroduce the difference the normalisation just removed. A median rather than a mean, so
-    /// that one run of an unusual test set moves it as little as it moves anything else here, and
-    /// zero when no run had a usable median, which declines every millisecond gate.
+    /// <para>
+    /// The anchor a normalised figure is multiplied by to become milliseconds again — the same
+    /// divisors that produced the ratios, reduced to one number, so the product reconstructs
+    /// milliseconds on a machine speed the test was actually measured at.
+    /// </para>
+    /// <para>
+    /// One value across both slices rather than one each, which is what makes the two sides of a
+    /// comparison expressible in the same units: anchoring each slice to its own machine would
+    /// reintroduce the difference the normalisation just removed.
+    /// </para>
+    /// <para>
+    /// Over the runs the test appeared in rather than the whole window, because a run median is a
+    /// machine-speed reading only among runs that ran the same tests. Runs under a
+    /// <c>--filter</c> are ordinary in a local store and hold a handful of fast tests, so a window
+    /// with more of them than full runs has a window-wide median of their speed — a number about
+    /// the store rather than about any machine, and one that would put every millisecond gate
+    /// orders out for every test absent from them.
+    /// </para>
+    /// <para>
+    /// A median rather than a mean, so one unusual run moves it as little as it moves anything
+    /// else here, and zero when no run the test appeared in had a usable median, which declines
+    /// every millisecond gate.
+    /// </para>
     /// </remarks>
-    private static double ReferenceMedian(Dictionary<Guid, double> medians)
+    private static double ReferenceMedian(
+        IReadOnlyList<ExecutionRef> executions, Dictionary<Guid, double> medians)
     {
-        var values = new List<double>(medians.Count);
-        foreach (double median in medians.Values)
-            values.Add(median);
+        var seen = new HashSet<Guid>();
+        var values = new List<double>();
 
-        // Sorted for the percentile, which also puts dictionary enumeration order out of reach of
-        // the result.
+        // One reading per run, not per execution: a run that retried three times describes one
+        // machine once.
+        foreach (ExecutionRef reference in executions)
+        {
+            if (seen.Add(reference.Session.SessionId) &&
+                medians.TryGetValue(reference.Session.SessionId, out double median))
+            {
+                values.Add(median);
+            }
+        }
+
         values.Sort();
 
         return Percentile(values, 0.50);
