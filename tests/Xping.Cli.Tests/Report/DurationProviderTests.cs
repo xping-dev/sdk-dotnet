@@ -63,7 +63,7 @@ public sealed class DurationProviderTests
         Assert.Equal(300.0, evidence.Delta.P50Pct);
         Assert.Equal(600, evidence.Delta.P50Ms);
         Assert.Equal(300.0, evidence.NormalisedDelta.P50Pct);
-        Assert.Equal(0.0, evidence.BaselineCv);
+        Assert.Equal(0.0, evidence.BaselineDispersion);
     }
 
     [Fact]
@@ -115,8 +115,8 @@ public sealed class DurationProviderTests
         Assert.Equal(10, evidence.Sessions);
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
-        Assert.Equal(0.5, evidence.Cv);
-        Assert.Equal(0.5, candidate.Unreliability);
+        Assert.Equal(0.799, evidence.Dispersion);
+        Assert.Equal(0.799, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -209,9 +209,9 @@ public sealed class DurationProviderTests
     }
 
     [Theory]
-    [InlineData(102, false)]    // a baseline coefficient of variation of 0.51
-    [InlineData(100, true)]     // exactly 0.50
-    [InlineData(98, true)]      // 0.49
+    [InlineData(58, false)]     // a baseline dispersion of 0.483
+    [InlineData(57, true)]      // 0.474, just inside
+    [InlineData(55, true)]      // 0.457
     public void AnUnsteadyBaselineIsNotSomethingARegressionCanBeClaimedAgainst(
         int spread, bool reported)
     {
@@ -253,10 +253,10 @@ public sealed class DurationProviderTests
     }
 
     [Theory]
-    [InlineData(298, 102, false)]   // a coefficient of variation of 0.49
-    [InlineData(300, 100, true)]    // exactly 0.50
-    [InlineData(302, 98, true)]     // 0.51
-    public void TheCoefficientOfVariationDecidesWhetherATestIsUnstable(
+    [InlineData(281, 119, false)]   // a dispersion of 0.647
+    [InlineData(282, 118, true)]    // 0.655, just over
+    [InlineData(300, 100, true)]    // 0.799
+    public void TheDispersionDecidesWhetherATestIsUnstable(
         int high, int low, bool reported)
     {
         IReadOnlyList<FindingCandidate> candidates = Unstables(Varying(high, low));
@@ -270,9 +270,9 @@ public sealed class DurationProviderTests
     [InlineData(52, 17, true)]
     public void ATrivallyFastTestIsNotReportedAsUnstable(int high, int low, bool reported)
     {
-        // Below a few tens of milliseconds the coefficient of variation measures the scheduler
-        // rather than the test, so it is not evidence of anything. Every case here is above the
-        // instability threshold; only the duration floor changes the answer.
+        // Below a few tens of milliseconds the dispersion measures the scheduler rather than the
+        // test, so it is not evidence of anything. Every case here is above the instability
+        // threshold; only the duration floor changes the answer.
         IReadOnlyList<FindingCandidate> candidates = Unstables(Varying(high, low));
 
         Assert.Equal(reported, candidates.Count == 1);
@@ -285,12 +285,94 @@ public sealed class DurationProviderTests
     [Fact]
     public void ARegressingTestIsNotAlsoReportedAsUnstable()
     {
-        // The step from 200ms to 800ms lifts the whole window's dispersion above the instability
-        // threshold on its own. Reporting both would state one observation twice under two names.
-        AnalysisContext context = Regressing();
+        // A baseline already swinging between 100ms and 250ms — dispersion 0.412, inside the
+        // stability gate — that then steps to 800ms. The step lifts the whole window above the
+        // instability threshold while the baseline stays measurable, so both kinds are earned and
+        // reporting both would state one observation twice under two names.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 800 : o == 6 ? 250 : o % 2 == 0 ? 100 : 200);
 
-        Assert.True(WholeWindowCoefficientOfVariation(context) >= 0.5);
+        Assert.True(
+            WholeWindowDispersion(context) >= LocalAnalysisConstants.DurationUnstableDispersionMin);
+
         Assert.Equal(FindingKind.DurationRegression, Single(Analyze(context)).Kind);
+    }
+
+    [Fact]
+    public void ATestTooUnsteadyToMeasureButNotUnsteadyEnoughToReportProducesNothing()
+    {
+        // The gap between the two thresholds. This test swings enough that the shift it would take
+        // to call it slower sits inside its own noise, and not enough for the noise itself to be
+        // worth a developer's morning. Silence is the answer; one number for both gates could not
+        // express it.
+        AnalysisContext context = Varying(high: 270, low: 130);
+
+        double dispersion = WholeWindowDispersion(context);
+
+        Assert.InRange(
+            dispersion,
+            LocalAnalysisConstants.DurationStableDispersionMax,
+            LocalAnalysisConstants.DurationUnstableDispersionMin);
+
+        Assert.Empty(Analyze(context));
+    }
+
+    [Fact]
+    public void ATestWithTwoSpeedsIsReportedRatherThanReadAsSteady()
+    {
+        // Six runs at 300ms and four at 50ms. The median absolute deviation alone reads exactly
+        // zero on this — the commoner mode is the median, so the typical run sits on top of it —
+        // and the test would be silently steady. The quartile estimate reads the gap between the
+        // two speeds, which is what a developer would call the test's timing.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 6 ? 300 : 50);
+
+        FindingCandidate candidate = Single(Analyze(context));
+
+        Assert.Equal(FindingKind.DurationUnstable, candidate.Kind);
+        Assert.Equal(0.666, Assert.IsType<DurationUnstableEvidence>(candidate.Evidence).Dispersion);
+    }
+
+    [Fact]
+    public void ATestWithTwoSpeedsIsNotABaselineARegressionCanBeClaimedAgainst()
+    {
+        // The same blind spot on the other gate, where it costs more. A baseline of four runs at
+        // 200ms and three at 600ms reads a median absolute deviation of exactly zero, so a
+        // dispersion built on that alone would call it perfectly steady and let the step to 2s
+        // through as a regression — against a test that was already swinging threefold.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 2000 : o < 4 ? 200 : 600);
+
+        Assert.Empty(Regressions(context));
+    }
+
+    [Fact]
+    public void OneOutlyingRunDoesNotMakeATestUnstable()
+    {
+        // Nineteen runs at 200ms and one at 1000ms. A coefficient of variation reads 0.73 on that
+        // and calls the test unstable; what the test actually does, in nineteen runs out of twenty,
+        // is take 200ms. A dispersion half the sample has to move before it does says so.
+        AnalysisContext context = Build(
+            sessions: 20,
+            subjectMs: o => o == 4 ? 1000 : 200);
+
+        Assert.Empty(Analyze(context));
+    }
+
+    [Fact]
+    public void ATestWithNoSpreadAtAllIsNeitherUnstableNorProtectedFromARegression()
+    {
+        // Zero is what the measure returns when there is nothing to measure, and it has to fall on
+        // the reporting side of both gates: it clears the stability gate, so a regression against a
+        // perfectly steady baseline is still claimable, and it fails the instability gate, so a
+        // window with no spread never produces a finding of its own.
+        Assert.Equal(0.0, WholeWindowDispersion(Build(sessions: 10, subjectMs: _ => 200)));
+
+        Assert.Empty(Analyze(Build(sessions: 10, subjectMs: _ => 200)));
+        Assert.Equal(0.0, RegressionFrom(Regressing()).BaselineDispersion);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -345,7 +427,7 @@ public sealed class DurationProviderTests
         // no history of its own, and calling that a regression would flag every new test.
         AnalysisContext context = Build(
             sessions: 10,
-            subjectMs: o => o == 8 ? 500 : 100,
+            subjectMs: o => o == 7 ? 300 : o == 8 ? 900 : 100,
             subjectRuns: o => o >= 7);
 
         Assert.Empty(Regressions(context));
@@ -358,7 +440,7 @@ public sealed class DurationProviderTests
         // the executions there are, not a change between two halves of them.
         AnalysisContext context = Build(
             sessions: 10,
-            subjectMs: o => o == 8 ? 500 : 100,
+            subjectMs: o => o == 7 ? 300 : o == 8 ? 900 : 100,
             subjectRuns: o => o >= 7);
 
         Assert.Equal(FindingKind.DurationUnstable, Single(Analyze(context)).Kind);
@@ -574,10 +656,14 @@ public sealed class DurationProviderTests
         Assert.IsType<FindingSubject.SingleTest>(candidate.Subject).Test.DisplayName;
 
     /// <summary>
-    /// Recomputes the window's dispersion for the subject, to show a suppression really suppressed
-    /// something rather than the threshold never having been met.
+    /// Recomputes the window's dispersion for the subject, to show a gate really decided something
+    /// rather than the threshold never having been reached.
     /// </summary>
-    private static double WholeWindowCoefficientOfVariation(AnalysisContext context)
+    /// <remarks>
+    /// Deliberately a second implementation rather than a call to <c>RobustDispersion</c>: a test
+    /// that asks the code under test what the answer is cannot show that the answer was needed.
+    /// </remarks>
+    private static double WholeWindowDispersion(AnalysisContext context)
     {
         List<double> normalised = [];
 
@@ -593,10 +679,47 @@ public sealed class DurationProviderTests
                 .Select(e => e.Duration.TotalMilliseconds / median));
         }
 
-        double mean = normalised.Average();
-        double variance = normalised.Sum(v => (v - mean) * (v - mean)) / normalised.Count;
+        normalised.Sort();
 
-        return Math.Sqrt(variance) / mean;
+        double centre = Middle(normalised);
+        List<double> deviations = [.. normalised.Select(v => Math.Abs(v - centre))];
+        deviations.Sort();
+
+        // The same median-unbiasing factors the helper carries, spelled out for the counts these
+        // fixtures build so a change to that table cannot silently agree with itself.
+        double correction = normalised.Count switch
+        {
+            3 => 1.4136,
+            10 => 1.0778,
+            20 => 1.0262,
+            _ => throw new InvalidOperationException($"no factor for {normalised.Count} executions")
+        };
+
+        double spread = Math.Max(
+            1.4826 * Middle(deviations),
+            (Quartile(normalised, 0.75) - Quartile(normalised, 0.25)) / 1.349);
+
+        return correction * spread / centre;
+    }
+
+    /// <summary>
+    /// Reads the median of a sorted list, averaging the two central values at an even count.
+    /// </summary>
+    private static double Middle(List<double> sorted) =>
+        sorted.Count % 2 == 1
+            ? sorted[sorted.Count / 2]
+            : (sorted[(sorted.Count / 2) - 1] + sorted[sorted.Count / 2]) / 2;
+
+    /// <summary>
+    /// Reads a quantile of a sorted list by linear interpolation between the two nearest readings.
+    /// </summary>
+    private static double Quartile(List<double> sorted, double quantile)
+    {
+        double position = (sorted.Count - 1) * quantile;
+        int lower = (int)Math.Floor(position);
+        int upper = Math.Min(lower + 1, sorted.Count - 1);
+
+        return sorted[lower] + ((position - lower) * (sorted[upper] - sorted[lower]));
     }
 
     private static string Serialize(AnalysisContext context)

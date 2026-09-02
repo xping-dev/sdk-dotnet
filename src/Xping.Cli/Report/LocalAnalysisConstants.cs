@@ -148,24 +148,47 @@ internal static class LocalAnalysisConstants
     public const double DurationRegressionMinMs = 100;
 
     /// <summary>
-    /// Highest baseline coefficient of variation a regression may be claimed against (0.50).
+    /// Highest baseline dispersion a regression may be claimed against (0.48).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A test with historically huge variance has not "regressed" when it happens to run slow; it
     /// has done what it always does.
+    /// </para>
+    /// <para>
+    /// Measured by <see cref="Scoring.RobustDispersion"/>, which is not on the same scale as the
+    /// coefficient of variation this threshold used to be applied to: durations are right-skewed,
+    /// and 0.48 is what a lognormal sample with a true coefficient of variation of 0.50 reads. The
+    /// intent the old number expressed is therefore unchanged and only the number moved.
+    /// </para>
     /// </remarks>
-    public const double DurationStableCvMax = 0.50;
+    public const double DurationStableDispersionMax = 0.48;
 
     /// <summary>
-    /// Coefficient of variation at or above which a test's duration is called unstable (0.50).
+    /// Dispersion at or above which a test's duration is called unstable (0.65).
     /// </summary>
-    public const double DurationUnstableCvMin = 0.50;
+    /// <remarks>
+    /// <para>
+    /// Deliberately above <see cref="DurationStableDispersionMax"/> rather than equal to it. The two
+    /// were one number, so every test was either steady enough to measure a regression against or
+    /// unstable, with nothing in between. A test between the two is neither: the gap it would have
+    /// to move by to be called slower is inside its own noise, and its noise is not remarkable
+    /// enough to be worth a developer's morning. Reporting nothing is the honest answer there, and
+    /// merging these back into one constant would take it away.
+    /// </para>
+    /// <para>
+    /// 0.65 is what a lognormal sample with a true coefficient of variation of 0.70 reads. Against
+    /// the store this repository records it clears the two sample suites' deliberate flakes and
+    /// leaves the timeout tests alone.
+    /// </para>
+    /// </remarks>
+    public const double DurationUnstableDispersionMin = 0.65;
 
     /// <summary>
     /// Baseline p50 below which duration findings are suppressed, in milliseconds (50).
     /// </summary>
     /// <remarks>
-    /// Below this, the coefficient of variation measures scheduler noise rather than the test.
+    /// Below this, dispersion measures scheduler noise rather than the test.
     /// </remarks>
     public const double DurationTrivialMs = 50;
 

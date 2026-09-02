@@ -340,12 +340,12 @@ internal static class EvidenceHeadline
     private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>
     (
         $"p50 {Duration(e.P50Ms)}, ranging {Duration(e.MinMs)} to {Duration(e.MaxMs)} " +
-        $"over {e.Executions} executions, cv {Rate(e.Cv)}",
+        $"over {e.Executions} executions, dispersion {Rate(e.Dispersion)}",
         [
             new("p50", Duration(e.P50Ms)),
             new("p95", Duration(e.P95Ms)),
             new("range", $"{Duration(e.MinMs)} to {Duration(e.MaxMs)}"),
-            new("cv", $"{Rate(e.Cv)} over {e.Executions} executions")
+            new("dispersion", $"{Rate(e.Dispersion)} over {e.Executions} executions")
         ]);
 
     private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(
