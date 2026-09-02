@@ -334,7 +334,10 @@ internal static class EvidenceHeadline
             new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.Executions} executions"),
             new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.Executions} executions"),
             new("change", $"{Signed(e.Delta.P50Pct)} ({Signed(e.Delta.P50Ms)}ms)"),
-            new("normalised change", Signed(e.NormalisedDelta.P50Pct))
+            new(
+                "normalised change",
+                $"{Signed(e.NormalisedDelta.P50Pct)} " +
+                $"({Signed(e.NormalisedDelta.P50Ms)}ms at reference speed)")
         ]);
 
     private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>
@@ -345,7 +348,9 @@ internal static class EvidenceHeadline
             new("p50", Duration(e.P50Ms)),
             new("p95", Duration(e.P95Ms)),
             new("range", $"{Duration(e.MinMs)} to {Duration(e.MaxMs)}"),
-            new("dispersion", $"{Rate(e.Dispersion)} over {e.Executions} executions")
+            new(
+                "dispersion",
+                $"{Rate(e.Dispersion)} over {e.NormalisedExecutions} executions")
         ]);
 
     private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(

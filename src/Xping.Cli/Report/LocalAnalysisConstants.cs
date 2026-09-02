@@ -144,6 +144,13 @@ internal static class LocalAnalysisConstants
     /// </summary>
     /// <remarks>
     /// Guards the relative test: 2 ms becoming 4 ms is a 100% regression and means nothing.
+    /// <para>
+    /// Milliseconds at the window's reference speed rather than off the clock — the normalised
+    /// increase multiplied by the median of the window's run medians. The relative test beside it
+    /// is decided on normalised durations, and two gates on one decision have to be on one scale;
+    /// read raw, this one goes negative exactly when the recent runs were the faster ones. The
+    /// value is unchanged and so is what it means, because the anchor is a real machine speed.
+    /// </para>
     /// </remarks>
     public const double DurationRegressionMinMs = 100;
 
@@ -188,7 +195,9 @@ internal static class LocalAnalysisConstants
     /// Baseline p50 below which duration findings are suppressed, in milliseconds (50).
     /// </summary>
     /// <remarks>
-    /// Below this, dispersion measures scheduler noise rather than the test.
+    /// Below this, dispersion measures scheduler noise rather than the test. At the window's
+    /// reference speed, for the reason given on <see cref="DurationRegressionMinMs"/>: the
+    /// dispersion this qualifies is measured on normalised durations, so the floor has to be too.
     /// </remarks>
     public const double DurationTrivialMs = 50;
 

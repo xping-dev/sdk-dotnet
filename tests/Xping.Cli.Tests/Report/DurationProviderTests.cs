@@ -47,11 +47,15 @@ public sealed class DurationProviderTests
         Assert.Equal(800, evidence.Current.P95Ms);
         Assert.Equal(3, evidence.Current.Executions);
         Assert.Equal(3, evidence.Current.Sessions);
+        Assert.Equal(3, evidence.Current.NormalisedExecutions);
+        Assert.Equal(3, evidence.Current.NormalisedSessions);
 
         Assert.Equal(200, evidence.Baseline.P50Ms);
         Assert.Equal(200, evidence.Baseline.P95Ms);
         Assert.Equal(7, evidence.Baseline.Executions);
         Assert.Equal(7, evidence.Baseline.Sessions);
+        Assert.Equal(7, evidence.Baseline.NormalisedExecutions);
+        Assert.Equal(7, evidence.Baseline.NormalisedSessions);
     }
 
     [Fact]
@@ -60,9 +64,12 @@ public sealed class DurationProviderTests
         DurationRegressionEvidence evidence = RegressionFrom(Regressing());
 
         // 200ms to 800ms against an unchanged suite: the same change either way of measuring it.
+        // The normalised millisecond figure is the increase in units of the run median — six —
+        // multiplied by the window's reference speed, which every fixture here holds at 100ms.
         Assert.Equal(300.0, evidence.Delta.P50Pct);
         Assert.Equal(600, evidence.Delta.P50Ms);
         Assert.Equal(300.0, evidence.NormalisedDelta.P50Pct);
+        Assert.Equal(600, evidence.NormalisedDelta.P50Ms);
         Assert.Equal(0.0, evidence.BaselineDispersion);
     }
 
@@ -115,6 +122,11 @@ public sealed class DurationProviderTests
         Assert.Equal(10, evidence.Sessions);
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
+
+        // What the dispersion beside them was actually computed over, and the median expressed at
+        // the window's reference speed — the two figures the gates read.
+        Assert.Equal(10, evidence.NormalisedExecutions);
+        Assert.Equal(100, evidence.NormalisedP50Ms);
         Assert.Equal(0.799, evidence.Dispersion);
         Assert.Equal(0.799, candidate.Unreliability, 3);
     }
@@ -176,6 +188,92 @@ public sealed class DurationProviderTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // Machine speed, where the two scales disagree
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void ASlowdownVisibleOnlyOnceMachineSpeedIsDividedOutIsStillReported()
+    {
+        // The mirror of AWholeSuiteRunningSlowerIsNotARegressionInAnyTest, and the case a floor
+        // read off the clock silently drops. The recent runs happened on a machine five times
+        // faster, so the subject's raw median *fell* from 200ms to 180ms while what it costs
+        // relative to the suite around it went from twice the run median to nine times.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 180,
+            companionMs: o => o < 7 ? CompanionMs : CompanionMs / 5);
+
+        var evidence = Assert.IsType<DurationRegressionEvidence>(Single(Analyze(context)).Evidence);
+
+        // Both figures are published and they point in opposite directions, which is the whole
+        // reason the report carries two of them. A raw millisecond floor compares the first
+        // against a positive threshold and declines every regression measured the second way.
+        Assert.Equal(-10.0, evidence.Delta.P50Pct);
+        Assert.Equal(-20, evidence.Delta.P50Ms);
+
+        // Seven run medians above the reference speed and three below leaves the reference at
+        // 100ms, so seven run medians of increase is 700ms at that speed.
+        Assert.Equal(350.0, evidence.NormalisedDelta.P50Pct);
+        Assert.Equal(700, evidence.NormalisedDelta.P50Ms);
+    }
+
+    [Theory]
+    [InlineData(31, false)]     // 95ms at the reference speed
+    [InlineData(32, true)]      // exactly 100ms
+    [InlineData(33, true)]      // 105ms
+    public void TheAbsoluteFloorIsReadAtTheReferenceSpeedRatherThanOffTheClock(
+        int currentMs, bool reported)
+    {
+        // The floor still bites once it is on the right scale — this is not a gate being dropped.
+        // A 60ms subject on 100ms runs is 0.6 of its run; the recent runs are five times faster,
+        // so 32ms there is 1.6 of its run, and the increase of one run median is 100ms at the
+        // window's reference speed of 100ms. Every case is a large relative increase, so the
+        // relative gate is satisfied throughout, and every case is a raw *decrease*, so all three
+        // are declined by a floor that reads a stopwatch.
+        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 60 : currentMs,
+            companionMs: o => o < 7 ? CompanionMs : CompanionMs / 5));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Fact]
+    public void ATestOnlyEverRunOnAFastMachineIsNotTooTrivialToCallUnstable()
+    {
+        // Its runs took 6ms and 60ms, which a raw floor reads as scheduler noise. They happened on
+        // a machine ten times faster than the window's reference, where the same work is 60ms and
+        // 600ms — a test worth a developer's morning, and one the raw floor never shows them.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o == 9 ? 60 : 6,
+            companionMs: o => o < 7 ? CompanionMs * 2 : CompanionMs / 5,
+            subjectRuns: o => o >= 7);
+
+        FindingCandidate candidate = Single(Analyze(context));
+        var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
+
+        Assert.Equal(FindingKind.DurationUnstable, candidate.Kind);
+        Assert.Equal(6, evidence.P50Ms);
+        Assert.Equal(60, evidence.NormalisedP50Ms);
+    }
+
+    [Fact]
+    public void ATestOnlyEverRunOnASlowMachineIsStillTooTrivialToCallUnstable()
+    {
+        // The same shape the other way up, where the raw floor lets a triviality through instead.
+        // 150ms and 1.5s look substantial until you notice the runs they happened in were 25
+        // times slower than the window's reference, where the test takes 6ms.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o == 9 ? 1500 : 150,
+            companionMs: o => o < 7 ? CompanionMs / 5 : CompanionMs * 5,
+            subjectRuns: o => o >= 7);
+
+        Assert.Empty(Analyze(context));
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Thresholds, at and either side of the boundary
     // ---------------------------------------------------------------------------------------
 
@@ -201,7 +299,9 @@ public sealed class DurationProviderTests
         int currentMs, bool reported)
     {
         // From a 60ms baseline every case here is a large relative increase, so the relative gate
-        // is satisfied throughout and the millisecond floor is what decides.
+        // is satisfied throughout and the millisecond floor is what decides. Every session here
+        // runs at the same speed as the window's reference, so the corrected milliseconds the
+        // floor reads and the raw ones a stopwatch would read are the same number.
         IReadOnlyList<FindingCandidate> candidates =
             Regressions(Regressing(baselineMs: 60, currentMs: currentMs));
 
@@ -237,6 +337,50 @@ public sealed class DurationProviderTests
             subjectRuns: o => o >= 7 || o >= 7 - baselineRuns));
 
         Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(3, false)]
+    [InlineData(2, true)]
+    public void ABaselineWhoseRunsCannotBeNormalisedProducesNoRegression(
+        int unusableRuns, bool reported)
+    {
+        // The gate counts the runs the comparison can use, not the runs that happened. A run whose
+        // own median was zero cannot divide anything, so it contributes to neither median being
+        // compared nor to the dispersion between them — and counting it would hold the claim to a
+        // bar its evidence never reached. Seven baseline runs either way; three unusable leaves
+        // four, which is under the floor, and two leaves five, which is not.
+        IReadOnlyList<FindingCandidate> candidates = Regressions(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            companionMs: o => o < unusableRuns ? 0 : CompanionMs));
+
+        Assert.Equal(reported, candidates.Count == 1);
+    }
+
+    [Fact]
+    public void RetryingWithinOneRunIsOneOccasionOfEvidenceRatherThanThree()
+    {
+        // Six baseline executions from two afternoons. Attempts of one test within a run are
+        // correlated — same machine, same state, same minute — so counting them as six independent
+        // observations buys a regression claim evidence it does not have.
+        AnalysisContext retried = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            subjectRuns: o => o >= 7 || o == 5 || o == 6,
+            subjectAttempts: o => o < 7 ? 3 : 1);
+
+        Assert.Empty(Regressions(retried));
+
+        // The same slowdown seen once in each of the five separate runs the floor asks for, to
+        // show it is the count of runs that declined the case above and not the shape of the
+        // fixture or the size of the step.
+        AnalysisContext spread = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            subjectRuns: o => o >= 7 || o >= 2);
+
+        Assert.Equal(FindingKind.DurationRegression, Single(Analyze(spread)).Kind);
     }
 
     [Theory]
@@ -486,10 +630,31 @@ public sealed class DurationProviderTests
         var evidence = Assert.IsType<DurationRegressionEvidence>(candidate.Evidence);
 
         // The unusable run still contributes its raw milliseconds — seven baseline executions, all
-        // of them counted — while contributing nothing to the normalised comparison.
+        // of them counted — while contributing nothing to the normalised comparison. Both counts
+        // are published, because the percentiles rest on one and the normalised median, the
+        // dispersion and every gate rest on the other.
         Assert.Equal(7, evidence.Baseline.Executions);
+        Assert.Equal(7, evidence.Baseline.Sessions);
+        Assert.Equal(6, evidence.Baseline.NormalisedExecutions);
+        Assert.Equal(6, evidence.Baseline.NormalisedSessions);
+
         Assert.False(double.IsNaN(evidence.NormalisedDelta.P50Pct));
         Assert.False(double.IsInfinity(evidence.NormalisedDelta.P50Pct));
+    }
+
+    [Fact]
+    public void AWindowWithNoUsableRunMedianProducesNoDurationFindingOfEitherKind()
+    {
+        // Every run is mostly zero-duration executions, so no run has a divisor and nothing in the
+        // window can be normalised. Both kinds are decided on normalised durations, so both
+        // decline — the regression for having no runs it can count, the instability for having no
+        // spread it can measure. Neither invents an answer from the raw milliseconds.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            companionMs: _ => 0);
+
+        Assert.Empty(Analyze(context));
     }
 
     [Fact]
@@ -583,6 +748,7 @@ public sealed class DurationProviderTests
     /// <param name="companionMs">What each companion took, given the session ordinal.</param>
     /// <param name="companions">How many companions ran, given the session ordinal.</param>
     /// <param name="subjectRuns">Whether the subject ran at all, given the session ordinal.</param>
+    /// <param name="subjectAttempts">How many attempts the subject took, given the ordinal.</param>
     /// <param name="sha">The commit the session ran at, given its ordinal.</param>
     private static AnalysisContext Build(
         int sessions,
@@ -590,6 +756,7 @@ public sealed class DurationProviderTests
         Func<int, int>? companionMs = null,
         Func<int, int>? companions = null,
         Func<int, bool>? subjectRuns = null,
+        Func<int, int>? subjectAttempts = null,
         Func<int, string?>? sha = null)
     {
         var built = new List<TestSession>(sessions);
@@ -599,7 +766,12 @@ public sealed class DurationProviderTests
             var executions = new List<TestExecution>();
 
             if (subjectRuns?.Invoke(ordinal) ?? true)
-                executions.Add(Execution(Subject, ordinal, subjectMs(ordinal)));
+            {
+                int attempts = subjectAttempts?.Invoke(ordinal) ?? 1;
+
+                for (int attempt = 1; attempt <= attempts; attempt++)
+                    executions.Add(Execution(Subject, ordinal, subjectMs(ordinal), attempt));
+            }
 
             for (int companion = 0; companion < (companions?.Invoke(ordinal) ?? Companions); companion++)
             {
@@ -621,12 +793,17 @@ public sealed class DurationProviderTests
     /// test passing in ten sessions would carry one id ten times — and exemplar selection, which
     /// deduplicates and breaks ties on that id, would be testing a fiction.
     /// </remarks>
-    private static TestExecution Execution(string name, int ordinal, int durationMs) =>
+    private static TestExecution Execution(string name, int ordinal, int durationMs, int attempt = 1) =>
         TestSessionFactory.Execution(
             name,
             durationMs: durationMs,
-            executionId: TestSessionFactory.ExecutionIdFor(name, ordinal, TestOutcome.Passed),
-            retry: false);
+            attempt: attempt,
+
+            // Attempts past the first are folded into the name the id is derived from rather than
+            // into the ordinal, which would collide with the first attempt of a later session.
+            executionId: TestSessionFactory.ExecutionIdFor(
+                attempt == 1 ? name : $"{name}#{attempt}", ordinal, TestOutcome.Passed),
+            retry: attempt > 1);
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
         [.. new DurationProvider().Analyze(context)];
