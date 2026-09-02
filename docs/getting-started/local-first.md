@@ -89,7 +89,7 @@ HIGH  flaky            GenerateMonthlySummary
       evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 
 MED   slower           CheckoutFlow_Completes
-      p50 340ms -> 1.2s (+264.7%), normalised +251.2%
+      p50 +251.2% normalised (+854ms), 340ms -> 1.2s on the clock
       evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
 
 LOW   stopped running  LegacyImport.Roundtrip

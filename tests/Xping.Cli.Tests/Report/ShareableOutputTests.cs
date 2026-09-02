@@ -151,17 +151,17 @@ public sealed class ShareableOutputTests
 
             FindingKind.DurationRegression =>
                 new DurationRegressionEvidence(
-                    new DurationProfile(1240, 1890, 4, 3),
-                    new DurationProfile(340, 410, 10, 10),
+                    new DurationProfile(1240, 1890, 4, 3, 4, 3),
+                    new DurationProfile(340, 410, 10, 10, 10, 10),
                     new DurationDelta(264.7, 900),
-                    new NormalisedDurationDelta(251.2),
+                    new NormalisedDurationDelta(251.2, 880),
                     0.11,
                     "a3f9c2e",
                     [],
                     null),
 
             FindingKind.DurationUnstable =>
-                new DurationUnstableEvidence(18, 20, 820, 3100, 210, 4100, 0.71, []),
+                new DurationUnstableEvidence(18, 20, 820, 3100, 210, 4100, 18, 900, 0.71, []),
 
             FindingKind.ParallelSensitive =>
                 new ParallelSensitiveEvidence(
