@@ -429,6 +429,35 @@ public sealed class TimeSensitiveProviderTests
         Assert.Contains(metrics, m => m.Value == "p 3.85e-07 two-sided, 2 splits compared");
     }
 
+    [Theory]
+    [InlineData(13, "3.85e-07")]
+    [InlineData(20, "2.9e-11")]
+    [InlineData(28, "5.23e-16")]
+    public void NoWindowLengthRoundsAProbabilityDownToCertainty(int arm, string expected)
+    {
+        // The rounding step has to survive every window the arithmetic behind it survives, and it is
+        // its own opportunity to publish a zero. Deriving a count of decimal places from the
+        // magnitude and handing it to `Math.Round` does not: that count is capped at fifteen, which
+        // twenty-eight runs a side already exceeds, so 2.6e-16 came back as 0 from a function whose
+        // input was not zero and whose own remarks promise it never says certain.
+        //
+        // `FisherExactTests` guards the test itself to five hundred runs a side. This guards the
+        // publication of what it returns, which is the half that was wrong. It stops at
+        // twenty-eight because these fixtures deal one run per local day and August has thirty-one
+        // of them -- and twenty-eight a side is already four places past what the cap allowed.
+        TimeSensitiveEvidence evidence = EvidenceFrom(
+            TimeOfDay(eveningFailures: arm, morningFailures: 0, evenings: arm, mornings: arm));
+
+        // Asserted as it is written down rather than as a double. A tolerance here would have to be
+        // expressed in decimal places, which is the very thing that cannot describe these
+        // magnitudes, and what the defect produced was a published figure rather than an arithmetic
+        // one.
+        Assert.True(evidence.Significance.PValue > 0);
+
+        var (_, metrics) = EvidenceHeadline.For(FindingKind.TimeSensitive, evidence);
+        Assert.Contains(metrics, m => m.Value.StartsWith($"p {expected} ", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void TwoQuartersOfTheDayAreOneComparisonRatherThanTwo()
     {

@@ -766,19 +766,21 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// believe a finding. The unrounded value is what reaches the coordinator; this is only what
     /// gets written down.
     /// </para>
+    /// <para>
+    /// Through a round-trip rather than <see cref="Math.Round(double, int)"/>, which takes a count of
+    /// decimal places and refuses more than fifteen. Deriving that count from the magnitude
+    /// reintroduces the defect this method exists to avoid, one window size further out: a perfectly
+    /// separated split of twenty-eight runs against twenty-eight is 2.6e-16, needs eighteen places,
+    /// and is clamped to fifteen — which rounds it to zero. Scaling by a power of ten instead fails
+    /// at the other end, where the scale factor itself overflows to infinity. A significant-digit
+    /// format has neither limit and is what "three significant digits" actually means.
+    /// </para>
     /// </remarks>
-    private static double Probability(double value)
-    {
-        if (value <= 0)
-            return value;
-
-        // Where to round is a property of the value's magnitude, and `Math.Round` refuses more than
-        // fifteen places — which only a p-value below 1e-13 asks for, and which is past the point
-        // where a digit more or less could mean anything.
-        int places = Math.Clamp(2 - (int)Math.Floor(Math.Log10(value)), 0, 15);
-
-        return Math.Round(value, places, MidpointRounding.AwayFromZero);
-    }
+    private static double Probability(double value) =>
+        value > 0
+            ? double.Parse(
+                value.ToString("G3", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)
+            : value;
 
     private static int DistinctDates(IEnumerable<Measured> runs)
     {

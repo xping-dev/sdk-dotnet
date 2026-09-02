@@ -237,9 +237,9 @@ is not reported as an evening pattern. A finer bin would fire more often and mea
 
 **Impact**: a gap that would be reported in a window whose runs all start at one of two times of day
 may not be reported in a window whose runs are spread across the clock, even though the second window
-holds more evidence. On a fortnight of runs, a test needs at least five failures on the failing side
-against a clean other side before anything is reported at all — and six or seven where the window
-divides several different ways.
+holds more evidence. On an even split of a fortnight of runs against a clean other side, five
+failures of six are reported and four are not; a window that divided four ways needs one more than
+that.
 
 **Reason**: up to six splits are tried and the best is kept, which is a search, and the best of six
 noisy splits is systematically wider than any one of them measured alone. Each split is therefore

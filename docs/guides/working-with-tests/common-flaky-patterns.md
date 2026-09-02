@@ -159,10 +159,10 @@ retried evening cannot fill a side on its own. **Failures spanning at least thre
 days**, which is what stops one bad evening being reported as an evening pattern. And the gap has to
 be one chance would not readily produce — each split is tested exactly, and because several were
 tried and the best kept, the result is charged for the number of genuinely different ways the window
-was divided. On a fortnight of runs that comes to roughly this: against a side with no failures at
-all, five failures is the least that can be reported, and six or seven where the window divides
-several different ways — a wider search costs more to survive. The finding publishes both the
-probability and the number of divisions charged for, so you can see how wide a search found it.
+was divided. On an even split of a fortnight of runs against a clean other side, that comes to five
+failures of six being reported and four not. It is not a single number to remember: the bar falls as
+the clean side grows and rises with the width of the search, which is why the finding publishes both
+the probability and the number of divisions charged for.
 
 ### Example
 

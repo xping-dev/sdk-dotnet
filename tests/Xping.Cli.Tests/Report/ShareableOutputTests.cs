@@ -245,7 +245,7 @@ public sealed class ShareableOutputTests
         // The probability is the one the search has already been charged for, and the count beside
         // it says how wide that search was — which is the difference between a gap someone went
         // looking for and one that was there to begin with.
-        Assert.Contains(metrics, m => m.Value == "p 0.002 two-sided, 2 splits compared");
+        Assert.Contains(metrics, m => m.Value == "p 0.00175 two-sided, 2 splits compared");
     }
 
     [Fact]
