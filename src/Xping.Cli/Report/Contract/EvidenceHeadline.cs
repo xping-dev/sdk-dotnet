@@ -412,6 +412,14 @@ internal static class EvidenceHeadline
                 $"{e.Other.Failures} of {Runs(e.Other.Sessions)} ({Percent(e.Other.FailureRate)})"),
             new("gap", Points(e.Delta.FailureRatePct)),
             new("spread", $"failures on {Days(e.Worse.DistinctFailureDates)}"),
+
+            // The count of comparisons belongs to the p-value: it is what that figure has already
+            // been multiplied by, and a reader cannot check the correction without it.
+            new(
+                "significance",
+                $"p {Probability(e.Significance.PValue)} two-sided, " +
+                $"{Splits(e.Significance.ComparisonsTried)} compared"),
+
             new("time zone", e.TimeZoneId)
         ]);
 
@@ -433,6 +441,9 @@ internal static class EvidenceHeadline
 
     private static string Days(int count) =>
         count == 1 ? "1 day" : $"{count.ToString(CultureInfo.InvariantCulture)} days";
+
+    private static string Splits(int count) =>
+        count == 1 ? "1 split" : $"{count.ToString(CultureInfo.InvariantCulture)} splits";
 
     private static string Attempts(int count) =>
         count == 1 ? "1 attempt" : $"{count.ToString(CultureInfo.InvariantCulture)} attempts";

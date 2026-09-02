@@ -143,8 +143,7 @@ public class UserServiceTests
 
 `xping report` emits a **`TimeSensitive`** finding when a test's failure rate depends on when
 it ran. It takes one observation per run — a retried test is judged on its final attempt, because
-every attempt within a run shares that run's clock — and splits those three ways, reporting the
-widest gap:
+every attempt within a run shares that run's clock — and splits those three ways:
 
 - **Local time of day** — the worst six-hour quarter of the local day against the rest of it. Six
   hours rather than one, because a fortnight of runs cannot fill twenty-four hourly bins.
@@ -155,10 +154,14 @@ widest gap:
   saving change looks like, the two sides are compared. This is how DST is detected without a
   timezone database.
 
-Two things gate every finding: at least five **runs** on each side, and **failures spanning at
-least three separate local days**. The second is what stops one bad evening being reported as an
-evening pattern; the first is counted in runs so that one retried evening cannot fill a side on its
-own.
+Three things gate every finding. At least five **runs** on each side, counted in runs so that one
+retried evening cannot fill a side on its own. **Failures spanning at least three separate local
+days**, which is what stops one bad evening being reported as an evening pattern. And the gap has to
+be one chance would not readily produce — each split is tested exactly, and because several were
+tried and the best kept, the result is charged for the number of genuinely different ways the window
+was divided. On a fortnight of runs that comes to roughly this: against a side with no failures at
+all, five failures is what it takes. The finding publishes both the probability and the number of
+divisions charged for, so you can see how wide a search found it.
 
 ### Example
 

@@ -233,6 +233,24 @@ quarter of the local day, weekend against weekday, and one UTC offset against an
 finding additionally requires failures spanning three separate local days, so a single bad evening
 is not reported as an evening pattern. A finer bin would fire more often and mean less.
 
+### `TimeSensitive` Charges For Its Own Search, And A Wide Search Is Expensive
+
+**Impact**: a gap that would be reported in a window whose runs all start at one of two times of day
+may not be reported in a window whose runs are spread across the clock, even though the second window
+holds more evidence. On a fortnight of runs, a test needs five failures on the failing side against a
+clean other side before anything is reported at all.
+
+**Reason**: up to six splits are tried and the best is kept, which is a search, and the best of six
+noisy splits is systematically wider than any one of them measured alone. Each split is therefore
+tested exactly and its result multiplied by the number of distinct divisions the window admitted. A
+window whose runs fall in two quarters of the day performed one comparison and pays nothing for it; a
+window spread across the whole clock and both day groups performed four or more and needs a
+correspondingly wider gap to clear the same bar. That is the correct price — a search over six
+divisions turns up a wide gap in pure noise roughly a seventh of the time — but it does mean the
+finding is quieter on a window whose runs are spread thin, and quieter everywhere than it was before
+the charge existed. The probability the finding survived on and the number of divisions charged for
+are both published with it.
+
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 
 **Impact**: a test whose retry attribute allows three retries but which only ever recorded two
@@ -402,3 +420,4 @@ When reporting, please include:
 | 1.4.0   | Documented the binning limits of `TimeSensitive` |
 | 1.5.0   | Documented how the retry findings read attempt numbers, and why the declared retry limit is never interpreted |
 | 1.6.0   | Documented where source location comes from, and what it cannot answer |
+| 1.7.0   | Documented what `TimeSensitive` now charges for searching three axes, and what that costs |

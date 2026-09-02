@@ -39,11 +39,11 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.6 is where
-    /// <c>DurationRegressionEvidence</c> lost its normalised delta and its baseline dispersion and
-    /// gained the measured shift beside them.
+    /// leaving the number still would tell it nothing had moved. 1.7 is where
+    /// <c>TimeSensitiveEvidence</c> gained the significance of its split and the number of splits
+    /// that were compared to find it.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.6";
+    public const string CurrentSchemaVersion = "1.7";
 }
 
 /// <summary>

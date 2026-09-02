@@ -135,12 +135,20 @@ earlier ones and needs five earlier passing runs to compare against, so it stays
 history. A test can still be reported as both out of retries and flaky: those are different claims
 about the same red run, and they carry different ids.
 
-`TimeSensitive` reads three axes and reports the widest gap: the local six-hour quarter of the day,
-weekend against weekday, and — when the window contains two UTC offsets for one time zone, which is
-what a daylight-saving change looks like — one side of the change against the other. Each side is
-counted in runs rather than attempts, since every attempt of a run is read on the same clock. The
-failing side must span at least three separate local days, so a bad afternoon is not reported as an
-afternoon pattern.
+`TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
+and — when the window contains two UTC offsets for one time zone, which is what a daylight-saving
+change looks like — one side of the change against the other. Each side is counted in runs rather
+than attempts, since every attempt of a run is read on the same clock. The failing side must span at
+least three separate local days, so a bad afternoon is not reported as an afternoon pattern.
+
+Trying several splits and keeping the best of them is a search, and the report is charged for it.
+Every split with runs enough on both sides is tested exactly, and its result is multiplied by the
+number of **distinct** ways the window was divided — two quarters that separate the same runs are
+one division, not two. The split with the least probable result wins, and it is reported only if it
+survives that multiplication. The finding publishes the probability it survived on and the number of
+divisions charged for, so how wide a search found it is visible rather than implied. The practical
+effect on a fortnight of runs: against a side with no failures at all, five failures is what it
+takes.
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
@@ -238,7 +246,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.6",
+  "schemaVersion": "1.7",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
