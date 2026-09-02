@@ -719,10 +719,22 @@ internal sealed class RetryProvider : IFindingProvider
     /// Reads the attempt count a typical run needed, by nearest rank.
     /// </summary>
     /// <remarks>
-    /// The definition the duration provider reads a percentile with, and for the same reason: it
+    /// <para>
+    /// Nearest rank rather than the interpolating definition the duration provider reads a
+    /// percentile with, because an attempt count is discrete where a duration is continuous: it
     /// returns a whole attempt some run actually needed, rather than the one-and-a-half attempts no
-    /// run can produce and no reader can act on. Median rather than maximum, because one unlucky
-    /// earlier run would mask a real deepening and one unlucky recent run would manufacture one.
+    /// run can produce and no reader can act on. <see cref="LocalAnalysisConstants.RetryDeepeningMinAttempts"/>
+    /// is stated in whole attempts on the strength of it.
+    /// </para>
+    /// <para>
+    /// Its preference for the lower of two central readings is relied on rather than tolerated: from
+    /// two runs, <c>[1, 3]</c> reads as 1, so a single deep run cannot produce this finding on its
+    /// own. Lower is the conservative direction for a claim that a test has become more expensive.
+    /// </para>
+    /// <para>
+    /// Median rather than maximum, because one unlucky earlier run would mask a real deepening and
+    /// one unlucky recent run would manufacture one.
+    /// </para>
     /// </remarks>
     private static int TypicalAttempts(List<RunAttempts> settled)
     {
@@ -732,9 +744,7 @@ internal sealed class RetryProvider : IFindingProvider
 
         attempts.Sort();
 
-        int rank = (int)Math.Ceiling(0.50 * attempts.Count) - 1;
-
-        return attempts[Math.Clamp(rank, 0, attempts.Count - 1)];
+        return Quantile.NearestRank(attempts, 0.50);
     }
 
     private static RetryDepthProfile Profile(

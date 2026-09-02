@@ -141,9 +141,13 @@ internal static class RobustDispersion
 
         Array.Sort(deviations);
 
+        // Interpolated quartiles, and here it matters more than it does for the median: a quartile
+        // read by nearest rank jumps a whole reading as the count crosses a multiple of four, which
+        // put a four-long cycle into the correction factors and left them not converging on one.
         double spread = Math.Max(
             DeviationConsistency * Median(deviations),
-            (Quantile(sorted, 0.75) - Quantile(sorted, 0.25)) / QuartileConsistency);
+            (Quantile.Interpolated(sorted, 0.75) - Quantile.Interpolated(sorted, 0.25)) /
+                QuartileConsistency);
 
         return Correction(sorted.Length) * spread / median;
     }
@@ -152,32 +156,11 @@ internal static class RobustDispersion
     /// Reads the median of a sorted sample, averaging the two central values at an even count.
     /// </summary>
     /// <remarks>
-    /// Interpolating, unlike the nearest-rank percentile the duration provider publishes. That one
-    /// returns an observed value on purpose; this one is never shown to anybody, and reading a
-    /// single observed value here would make <see cref="Corrections"/> swing between odd and even
+    /// Interpolating, in common with every other reading of a continuous quantity here. Reading a
+    /// single observed value instead would make <see cref="Corrections"/> swing between odd and even
     /// counts — 2.5 at four readings against 1.3 at five, and a statistic identically zero at two.
     /// </remarks>
-    private static double Median(double[] sorted) =>
-        sorted.Length % 2 == 1
-            ? sorted[sorted.Length / 2]
-            : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2;
-
-    /// <summary>
-    /// Reads a quantile of a sorted sample by linear interpolation between the two nearest readings.
-    /// </summary>
-    /// <remarks>
-    /// Interpolating for the same reason as <see cref="Median"/>, and here it matters more: a
-    /// quartile read by nearest rank jumps a whole reading as the count crosses a multiple of four,
-    /// which put a four-long cycle into the correction factors and left them not converging on one.
-    /// </remarks>
-    private static double Quantile(double[] sorted, double quantile)
-    {
-        double position = (sorted.Length - 1) * quantile;
-        int lower = (int)Math.Floor(position);
-        int upper = Math.Min(lower + 1, sorted.Length - 1);
-
-        return sorted[lower] + ((position - lower) * (sorted[upper] - sorted[lower]));
-    }
+    private static double Median(double[] sorted) => Quantile.Interpolated(sorted, 0.50);
 
     /// <summary>
     /// Reads the median-unbiasing factor for a sample of <paramref name="count"/> readings.

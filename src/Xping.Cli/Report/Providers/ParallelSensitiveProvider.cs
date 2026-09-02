@@ -280,9 +280,10 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// Reads the median concurrency by nearest rank.
     /// </summary>
     /// <remarks>
-    /// Nearest rank rather than an interpolating variant, matching how the duration provider reads a
-    /// percentile: it returns a level the test was actually observed at, so the published split point
-    /// is a real number of concurrent tests rather than a fractional one no run could have produced.
+    /// Nearest rank rather than the interpolating definition the duration provider reads a percentile
+    /// with, because a concurrency level is discrete where a duration is continuous: it returns a
+    /// level the test was actually observed at, so the published split point is a real number of
+    /// concurrent tests rather than a fractional one no scheduler could have produced.
     /// </remarks>
     private static int MedianConcurrency(List<Measured> considered)
     {
@@ -292,9 +293,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
         levels.Sort();
 
-        int rank = (int)Math.Ceiling(0.50 * levels.Count) - 1;
-
-        return levels[Math.Clamp(rank, 0, levels.Count - 1)];
+        return Quantile.NearestRank(levels, 0.50);
     }
 
     private static double FailureRate(List<Measured> arm) => (double)FailureCount(arm) / arm.Count;

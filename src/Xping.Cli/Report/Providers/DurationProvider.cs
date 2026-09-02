@@ -421,7 +421,7 @@ internal sealed class DurationProvider : IFindingProvider
         // the one above it precisely when the normalisation was doing its job: a recent slice on a
         // faster machine can raise the normalised level while lowering the raw one, and a negative
         // raw increase declines every real regression measured that way.
-        double baselineLevel = Percentile(baselineProfile.Compared, 0.50);
+        double baselineLevel = Quantile.Interpolated(baselineProfile.Compared, 0.50);
         double increaseMs = (ratio - 1) * baselineLevel * referenceMs;
 
         if (increaseMs < LocalAnalysisConstants.DurationRegressionMinMs)
@@ -687,7 +687,7 @@ internal sealed class DurationProvider : IFindingProvider
 
             durations.Sort();
 
-            double median = Percentile(durations, 0.50);
+            double median = Quantile.Interpolated(durations, 0.50);
             if (median > 0)
                 medians[session.SessionId] = median;
         }
@@ -743,7 +743,7 @@ internal sealed class DurationProvider : IFindingProvider
 
         values.Sort();
 
-        return Percentile(values, 0.50);
+        return Quantile.Interpolated(values, 0.50);
     }
 
     /// <summary>
@@ -790,8 +790,8 @@ internal sealed class DurationProvider : IFindingProvider
             perSession[position].Attempts.Add(Milliseconds(reference));
         }
 
-        // Sorted before anything is computed from them, so every percentile reads the same index and
-        // every sum accumulates in the same order on every run.
+        // Sorted before anything is computed from them, so every percentile brackets the same pair of
+        // readings and every sum accumulates in the same order on every run.
         raw.Sort();
         normalised.Sort();
 
@@ -814,8 +814,10 @@ internal sealed class DurationProvider : IFindingProvider
     /// the unit #179 put on every arm gate, carried into the sample the gates are computed from.
     /// </para>
     /// <para>
-    /// The run's own reading is the nearest-rank median of its attempts, by the same definition
-    /// every other percentile here uses, so it is a duration the test was actually observed to take.
+    /// The run's own reading is the median of its attempts, by the same interpolating definition
+    /// every other percentile here uses. What this feeds is a two-sample test, and a test wants the
+    /// middle of the attempts rather than one of them: a run that made two attempts has no central
+    /// one, and taking the faster of the two would report every such run as quicker than it was.
     /// </para>
     /// <para>
     /// Truncated to <see cref="MaxComparedSessions"/>, which is why the runs are ordered before
@@ -853,7 +855,7 @@ internal sealed class DurationProvider : IFindingProvider
 
             attempts.Sort();
 
-            double reading = Percentile(attempts, 0.50) / median;
+            double reading = Quantile.Interpolated(attempts, 0.50) / median;
             if (reading > 0)
                 compared.Add(reading);
         }
@@ -861,29 +863,6 @@ internal sealed class DurationProvider : IFindingProvider
         compared.Sort();
 
         return compared;
-    }
-
-    /// <summary>
-    /// Reads a percentile by nearest rank.
-    /// </summary>
-    /// <param name="sorted">Values in ascending order.</param>
-    /// <param name="percentile">The percentile to read, in [0,1].</param>
-    /// <returns>The value at that rank, or zero when there are none.</returns>
-    /// <remarks>
-    /// One definition, used for the run median and for every published percentile alike. Nearest
-    /// rank rather than an interpolating variant because it returns an observed value and involves
-    /// no arithmetic that could reorder two runs in the last decimal place — and on the handful of
-    /// executions a local window holds, an interpolated percentile invents a precision the data
-    /// does not have.
-    /// </remarks>
-    private static double Percentile(List<double> sorted, double percentile)
-    {
-        if (sorted.Count == 0)
-            return 0;
-
-        int rank = (int)Math.Ceiling(percentile * sorted.Count) - 1;
-
-        return sorted[Math.Clamp(rank, 0, sorted.Count - 1)];
     }
 
     /// <summary>
@@ -919,15 +898,15 @@ internal sealed class DurationProvider : IFindingProvider
 
         public int NormalisedExecutions => Normalised.Count;
 
-        public double RawP50 => Percentile(Raw, 0.50);
+        public double RawP50 => Quantile.Interpolated(Raw, 0.50);
 
-        public double RawP95 => Percentile(Raw, 0.95);
+        public double RawP95 => Quantile.Interpolated(Raw, 0.95);
 
         public double RawMin => Raw.Count == 0 ? 0 : Raw[0];
 
         public double RawMax => Raw.Count == 0 ? 0 : Raw[^1];
 
-        public double NormalisedP50 => Percentile(Normalised, 0.50);
+        public double NormalisedP50 => Quantile.Interpolated(Normalised, 0.50);
 
         public DurationProfile ToPublished() =>
             new(

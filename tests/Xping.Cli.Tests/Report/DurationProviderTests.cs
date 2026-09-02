@@ -83,6 +83,25 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
+    public void AMedianOverAnEvenNumberOfReadingsSitsBetweenTheTwoMiddleOnes()
+    {
+        // Eight baseline runs, four at 200ms and four at 300ms, against three recent ones at 900ms.
+        // The baseline median is 250 — between the two central readings — where a nearest-rank
+        // median would answer 200, the lower of them, and overstate the change by ninety points.
+        DurationRegressionEvidence evidence = RegressionFrom(
+            Build(sessions: 11, subjectMs: o => o < 8 ? (o < 4 ? 200 : 300) : 900));
+
+        Assert.Equal(250, evidence.Baseline.P50Ms);
+        Assert.Equal(8, evidence.Baseline.ComparedSessions);
+
+        Assert.Equal(900, evidence.Current.P50Ms);
+
+        // 900 against 250, not 900 against 200.
+        Assert.Equal(260.0, evidence.Delta.P50Pct);
+        Assert.Equal(650, evidence.Delta.P50Ms);
+    }
+
+    [Fact]
     public void ARegressionPublishesThePValueThatAdmittedIt()
     {
         FindingCandidate candidate = Single(Regressing());
