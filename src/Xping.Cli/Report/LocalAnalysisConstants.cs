@@ -148,7 +148,7 @@ internal static class LocalAnalysisConstants
     public const double DurationRegressionMinMs = 100;
 
     /// <summary>
-    /// Highest baseline dispersion a regression may be claimed against (0.46).
+    /// Highest baseline dispersion a regression may be claimed against (0.48).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -158,14 +158,14 @@ internal static class LocalAnalysisConstants
     /// <para>
     /// Measured by <see cref="Scoring.RobustDispersion"/>, which is not on the same scale as the
     /// coefficient of variation this threshold used to be applied to: durations are right-skewed,
-    /// and 0.46 is what a lognormal sample with a true coefficient of variation of 0.50 reads. The
+    /// and 0.48 is what a lognormal sample with a true coefficient of variation of 0.50 reads. The
     /// intent the old number expressed is therefore unchanged and only the number moved.
     /// </para>
     /// </remarks>
-    public const double DurationStableDispersionMax = 0.46;
+    public const double DurationStableDispersionMax = 0.48;
 
     /// <summary>
-    /// Dispersion at or above which a test's duration is called unstable (0.60).
+    /// Dispersion at or above which a test's duration is called unstable (0.65).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -177,12 +177,12 @@ internal static class LocalAnalysisConstants
     /// merging these back into one constant would take it away.
     /// </para>
     /// <para>
-    /// 0.60 is what a lognormal sample with a true coefficient of variation of 0.70 reads. Against
+    /// 0.65 is what a lognormal sample with a true coefficient of variation of 0.70 reads. Against
     /// the store this repository records it clears the two sample suites' deliberate flakes and
     /// leaves the timeout tests alone.
     /// </para>
     /// </remarks>
-    public const double DurationUnstableDispersionMin = 0.60;
+    public const double DurationUnstableDispersionMin = 0.65;
 
     /// <summary>
     /// Baseline p50 below which duration findings are suppressed, in milliseconds (50).

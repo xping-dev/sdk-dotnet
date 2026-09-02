@@ -207,11 +207,14 @@ internal sealed class DurationProvider : IFindingProvider
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
-            // A regression suppresses the instability finding for the same test. The two cannot
-            // both be earned on one sample — one needs a steady baseline, the other an unsteady
-            // window, and the thresholds no longer touch — but a large enough shift lifts the
-            // whole-window dispersion on its own, and reporting that as instability would state the
-            // regression a second time under another name.
+            // A regression suppresses the instability finding for the same test. The two are
+            // nearly disjoint by construction — one needs a steady baseline, the other an unsteady
+            // window, and with the thresholds no longer touching there is a band that earns
+            // neither. Nearly, not entirely: a baseline just inside the stability gate that then
+            // steps can lift the whole window past the instability gate, and reporting that as
+            // instability would state the regression a second time under another name. This
+            // ordering is what stops it, and ARegressingTestIsNotAlsoReportedAsUnstable builds the
+            // sample that needs it.
             FindingCandidate? candidate =
                 Regression(context, test, current, currentProfile, baselineProfile) ??
                 Unstable(context, test, all, whole, baselineProfile);

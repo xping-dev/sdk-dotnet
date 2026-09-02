@@ -115,8 +115,8 @@ public sealed class DurationProviderTests
         Assert.Equal(10, evidence.Sessions);
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
-        Assert.Equal(0.841, evidence.Dispersion);
-        Assert.Equal(0.841, candidate.Unreliability, 3);
+        Assert.Equal(0.799, evidence.Dispersion);
+        Assert.Equal(0.799, candidate.Unreliability, 3);
     }
 
     [Fact]
@@ -209,9 +209,9 @@ public sealed class DurationProviderTests
     }
 
     [Theory]
-    [InlineData(53, false)]     // a baseline dispersion of 0.463
-    [InlineData(52, true)]      // 0.454, just inside
-    [InlineData(50, true)]      // 0.436
+    [InlineData(58, false)]     // a baseline dispersion of 0.483
+    [InlineData(57, true)]      // 0.474, just inside
+    [InlineData(55, true)]      // 0.457
     public void AnUnsteadyBaselineIsNotSomethingARegressionCanBeClaimedAgainst(
         int spread, bool reported)
     {
@@ -253,9 +253,9 @@ public sealed class DurationProviderTests
     }
 
     [Theory]
-    [InlineData(271, 129, false)]   // a dispersion of 0.597
-    [InlineData(272, 128, true)]    // 0.606, just over
-    [InlineData(300, 100, true)]    // 0.841
+    [InlineData(281, 119, false)]   // a dispersion of 0.647
+    [InlineData(282, 118, true)]    // 0.655, just over
+    [InlineData(300, 100, true)]    // 0.799
     public void TheDispersionDecidesWhetherATestIsUnstable(
         int high, int low, bool reported)
     {
@@ -285,7 +285,7 @@ public sealed class DurationProviderTests
     [Fact]
     public void ARegressingTestIsNotAlsoReportedAsUnstable()
     {
-        // A baseline already swinging between 100ms and 250ms — dispersion 0.447, just inside the
+        // A baseline already swinging between 100ms and 250ms — dispersion 0.412, inside the
         // stability gate — that then steps to 800ms. The step lifts the whole window above the
         // instability threshold while the baseline stays measurable, so both kinds are earned and
         // reporting both would state one observation twice under two names.
@@ -306,7 +306,7 @@ public sealed class DurationProviderTests
         // to call it slower sits inside its own noise, and not enough for the noise itself to be
         // worth a developer's morning. Silence is the answer; one number for both gates could not
         // express it.
-        AnalysisContext context = Varying(high: 260, low: 140);
+        AnalysisContext context = Varying(high: 270, low: 130);
 
         double dispersion = WholeWindowDispersion(context);
 
@@ -316,6 +316,37 @@ public sealed class DurationProviderTests
             LocalAnalysisConstants.DurationUnstableDispersionMin);
 
         Assert.Empty(Analyze(context));
+    }
+
+    [Fact]
+    public void ATestWithTwoSpeedsIsReportedRatherThanReadAsSteady()
+    {
+        // Six runs at 300ms and four at 50ms. The median absolute deviation alone reads exactly
+        // zero on this — the commoner mode is the median, so the typical run sits on top of it —
+        // and the test would be silently steady. The quartile estimate reads the gap between the
+        // two speeds, which is what a developer would call the test's timing.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 6 ? 300 : 50);
+
+        FindingCandidate candidate = Single(Analyze(context));
+
+        Assert.Equal(FindingKind.DurationUnstable, candidate.Kind);
+        Assert.Equal(0.666, Assert.IsType<DurationUnstableEvidence>(candidate.Evidence).Dispersion);
+    }
+
+    [Fact]
+    public void ATestWithTwoSpeedsIsNotABaselineARegressionCanBeClaimedAgainst()
+    {
+        // The same blind spot on the other gate, where it costs more. A baseline of four runs at
+        // 200ms and three at 600ms reads a median absolute deviation of exactly zero, so a
+        // dispersion built on that alone would call it perfectly steady and let the step to 2s
+        // through as a regression — against a test that was already swinging threefold.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o >= 7 ? 2000 : o < 4 ? 200 : 600);
+
+        Assert.Empty(Regressions(context));
     }
 
     [Fact]
@@ -658,13 +689,17 @@ public sealed class DurationProviderTests
         // fixtures build so a change to that table cannot silently agree with itself.
         double correction = normalised.Count switch
         {
-            3 => 1.8722,
-            10 => 1.1350,
-            20 => 1.0602,
+            3 => 1.4136,
+            10 => 1.0778,
+            20 => 1.0262,
             _ => throw new InvalidOperationException($"no factor for {normalised.Count} executions")
         };
 
-        return correction * 1.4826 * Middle(deviations) / centre;
+        double spread = Math.Max(
+            1.4826 * Middle(deviations),
+            (Quartile(normalised, 0.75) - Quartile(normalised, 0.25)) / 1.349);
+
+        return correction * spread / centre;
     }
 
     /// <summary>
@@ -674,6 +709,18 @@ public sealed class DurationProviderTests
         sorted.Count % 2 == 1
             ? sorted[sorted.Count / 2]
             : (sorted[(sorted.Count / 2) - 1] + sorted[sorted.Count / 2]) / 2;
+
+    /// <summary>
+    /// Reads a quantile of a sorted list by linear interpolation between the two nearest readings.
+    /// </summary>
+    private static double Quartile(List<double> sorted, double quantile)
+    {
+        double position = (sorted.Count - 1) * quantile;
+        int lower = (int)Math.Floor(position);
+        int upper = Math.Min(lower + 1, sorted.Count - 1);
+
+        return sorted[lower] + ((position - lower) * (sorted[upper] - sorted[lower]));
+    }
 
     private static string Serialize(AnalysisContext context)
     {
