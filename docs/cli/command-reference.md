@@ -121,7 +121,7 @@ report prints it.
 | `DurationUnstable` | unstable timing | The test's duration varies too much for anyone to predict what it will cost |
 | `ParallelSensitive` | concurrency | The test's failure rate moves with how many tests ran alongside it |
 | `TimeSensitive` | time sensitive | The test's failures cluster at one local time of day, day group, or UTC offset |
-| `Vanished` | stopped running | The test appeared throughout the baseline and has stopped running |
+| `Vanished` | stopped running | The test ran habitually through the baseline and has stopped |
 
 The three retry kinds are one judgement about one mechanism, and a test gets at most one of them:
 `RetryExhausted` first, then `RetryDeepening`, then `RetryMasked` — red beats worsening beats
@@ -181,6 +181,16 @@ neighbours by construction — which is in [known limitations](../known-limitati
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
 in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixture constructor — and
 stays a shared failure otherwise. Which failures an adapter can place, and which it cannot, is in
+[known limitations](../known-limitations.md).
+
+`Vanished` is decided on a run rate, not on a count of appearances. A test that ran in three of
+seventeen earlier runs is *expected* to miss the next three — it does so 56% of the time with nothing
+having changed — so the report asks how likely the absence was before calling it a change. The
+finding is emitted only where that probability is at or below 0.05, and publishes both it and the
+baseline run rate, so the strength of the claim is visible rather than implied. On the default
+three-run current slice the bar works out at a baseline run rate of roughly 0.7: twelve of seventeen
+earlier runs carries, eight does not. On a window shorter than eight runs the current slice narrows
+to a single run and one run's absence never reaches the bar, so the kind is silent there — see
 [known limitations](../known-limitations.md).
 
 ### Finding ids
@@ -273,7 +283,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.8",
+  "schemaVersion": "1.9",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

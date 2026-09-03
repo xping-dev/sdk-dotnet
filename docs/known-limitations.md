@@ -291,6 +291,27 @@ same rise measured across 1 to 14, and only the evidence shows the difference.
 
 ---
 
+### `Vanished` Needs A Habit, And Cannot See One In Fewer Than Eight Runs
+
+**Impact**: a test that ran occasionally and then genuinely was deleted is not reported as having
+stopped running. Neither is any deleted test, of any history, on a store holding fewer than eight
+runs.
+
+**Reason**: absence is only evidence against a habit, and a count of appearances cannot establish
+one. Three appearances out of three earlier runs is a habit that stopped; three out of seventeen is a
+test that was mostly absent already, and on a default window it misses the next three runs 56% of the
+time with nothing having changed. The report therefore asks for the probability of the absence —
+Fisher's exact test on the earlier and current runs against present and absent, one-sided because the
+kind only ever looks at a test already known to be missing — and reports it only at 0.05 or below.
+Against the default three-run current slice that means a baseline run rate of roughly 0.7, tightening
+towards 0.67 as the history lengthens: twelve of seventeen earlier runs carries, eight does not.
+Below eight runs in the window the current slice narrows to a single run, where even perfect
+attendance across six earlier runs is one deal in seven, so nothing of this kind is reportable at
+all. That is the intended answer rather than an oversight — one run's absence is not evidence that
+anything stopped — but it does mean a fresh store says nothing about deleted tests until it has
+eight runs in it. The run rate and the probability are published with every finding that does clear
+the bar.
+
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 
 **Impact**: a test whose retry attribute allows three retries but which only ever recorded two
@@ -462,3 +483,4 @@ When reporting, please include:
 | 1.6.0   | Documented where source location comes from, and what it cannot answer |
 | 1.7.0   | Documented what `TimeSensitive` now charges for searching three axes, and what that costs |
 | 1.8.0   | Documented what `ParallelSensitive` now measures, and the duration confound it cannot correct |
+| 1.9.0   | Documented the run rate `Vanished` now requires, and the window size below which it is silent |

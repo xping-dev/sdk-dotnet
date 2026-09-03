@@ -32,10 +32,13 @@ namespace Xping.Cli.Report.Scoring;
 /// meant to trust.
 /// </para>
 /// <para>
-/// <b>Two-sided.</b> Every caller discovers the direction from the data rather than pre-registering
-/// it — a test that fails only at night and one that fails only when it does not are each a finding
-/// — and a one-sided p taken after looking at which arm was worse is half the p the comparison
-/// earned.
+/// <b>Two-sided unless the direction was fixed before the table was.</b> Most callers discover the
+/// direction from the data rather than pre-registering it — a test that fails only at night and one
+/// that fails only when it does not are each a finding — and a one-sided p taken after looking at
+/// which arm was worse is half the p the comparison earned. <c>Vanished</c> is the exception and
+/// never has to look: it forms a table only for fingerprints already known to be absent from the
+/// current slice, and no finding exists for a test that started running, so the alternative is
+/// one-sided before a single count is made.
 /// </para>
 /// <para>
 /// This says whether the two differ. It says nothing about by how much, and a caller wanting that
@@ -131,6 +134,64 @@ internal static class FisherExact
             if (weight <= observed * (1 + TieTolerance))
                 extreme += weight;
         }
+
+        return Math.Clamp(extreme / totalWeight, 0.0, 1.0);
+    }
+
+    /// <summary>
+    /// Probability that the first arm would hold at least as many occurrences as it did.
+    /// </summary>
+    /// <param name="successes">Observations of the behaviour in the first arm.</param>
+    /// <param name="trials">Size of the first arm.</param>
+    /// <param name="otherSuccesses">Observations of the behaviour in the second arm.</param>
+    /// <param name="otherTrials">Size of the second arm.</param>
+    /// <returns>
+    /// The one-sided p-value, in (0,1]; 1 on the same degenerate tables as
+    /// <see cref="TwoSidedPValue(int, int, int, int)"/>. The observed table is always counted, so
+    /// this is at least its own probability.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Only for a caller whose direction was decided before the counts were: this returns the upper
+    /// tail on the first arm, and choosing which arm to name first after seeing which one was
+    /// heavier halves a p-value the comparison did not earn. Everything the class remark says about
+    /// exactness, conditioning and the coarseness of the attainable ladder applies here unchanged.
+    /// </para>
+    /// <para>
+    /// The arms are not reordered, unlike in the two-sided test, where the swap exists to make two
+    /// namings of one table agree in their last bits. Here the naming is the hypothesis, so a swap
+    /// would answer a different question.
+    /// </para>
+    /// </remarks>
+    public static double OneSidedPValue(
+        int successes, int trials, int otherSuccesses, int otherTrials)
+    {
+        if (trials <= 0 || otherTrials <= 0)
+            return 1.0;
+
+        successes = Math.Clamp(successes, 0, trials);
+        otherSuccesses = Math.Clamp(otherSuccesses, 0, otherTrials);
+
+        int occurrences = successes + otherSuccesses;
+        int total = trials + otherTrials;
+
+        // Both margins are held at what was observed, so a table with none of the behaviour or all
+        // of it has one arrangement and the observed one is it.
+        if (occurrences == 0 || occurrences == total)
+            return 1.0;
+
+        int lowest = Math.Max(0, occurrences - otherTrials);
+        int highest = Math.Min(trials, occurrences);
+
+        double[] weights = Weights(lowest, highest, trials, otherTrials, occurrences);
+
+        double totalWeight = 0;
+        foreach (double weight in weights)
+            totalWeight += weight;
+
+        double extreme = 0;
+        for (int k = successes - lowest; k < weights.Length; k++)
+            extreme += weights[k];
 
         return Math.Clamp(extreme / totalWeight, 0.0, 1.0);
     }

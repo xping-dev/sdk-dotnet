@@ -61,6 +61,62 @@ public sealed class VanishedProviderTests
     }
 
     [Fact]
+    public void EvidenceCarriesTheRunRateAndTheChanceTheAbsenceWasNothing()
+    {
+        // Both, and not just the counts. "ran in 12 of 17 earlier runs" is the same sentence whether
+        // the test was a habit or an occasional visitor, and the probability is what tells them
+        // apart. Five baseline sessions of five, missing three: one deal in fifty-six.
+        var evidence = Assert.IsType<VanishedEvidence>(
+            Assert.Single(Analyze(Context(total: 8, presentIn: 5))).Evidence);
+
+        Assert.Equal(1.0, evidence.BaselineRunRate);
+        Assert.Equal(0.0179, evidence.ChanceOfAbsence);
+
+        // Twelve of seventeen on a default window, which is where the bar actually sits.
+        var wider = Assert.IsType<VanishedEvidence>(
+            Assert.Single(Analyze(Context(total: 20, presentIn: 12))).Evidence);
+
+        Assert.Equal(0.706, wider.BaselineRunRate);
+        Assert.Equal(0.0491, wider.ChanceOfAbsence);
+    }
+
+    [Theory]
+    [InlineData(3, false)]      // 3 of 17: more likely than not to miss the last three anyway
+    [InlineData(8, false)]      // 8 of 17: p 0.19, still the sort of thing that happens
+    [InlineData(12, true)]      // 12 of 17: p 0.049, the first table on this window that carries
+    [InlineData(17, true)]      // ran in every one of them and then stopped
+    public void AbsenceIsReportedOnlyWhereItWasNotTheLikelyThingToHappen(int presentIn, bool reported)
+    {
+        // The defect this gate replaced was a count: three appearances qualified whether they were
+        // three sessions out of three or three out of seventeen. On a default twenty-session window
+        // the second is absent from the current slice 56% of the time with nothing having changed.
+        IReadOnlyList<FindingCandidate> candidates = Analyze(Context(total: 20, presentIn));
+
+        Assert.Equal(reported ? 1 : 0, candidates.Count);
+    }
+
+    [Fact]
+    public void TheCandidateHandsTheChanceOfAbsenceToTheCoordinatorUnrounded()
+    {
+        // The number #160's Benjamini-Hochberg pass sorts on. The evidence publishes a copy rounded
+        // to three significant digits; this one must not be it.
+        FindingCandidate candidate = Assert.Single(Analyze(Context(total: 20, presentIn: 12)));
+
+        Assert.NotNull(candidate.PValue);
+        Assert.Equal(0.0491228, candidate.PValue!.Value, 7);
+    }
+
+    [Fact]
+    public void AWindowTooShortForAThreeSessionSliceReportsNothingOfThisKind()
+    {
+        // Below SmallWindowSessionCount the current slice narrows to one session, and one session's
+        // absence is not evidence that anything stopped: six baseline appearances of six missing a
+        // single run is one deal in seven. Deliberate, and the reason the kind is silent on a short
+        // history rather than loud on it.
+        Assert.Empty(Analyze(Context(total: 7, presentIn: 6)));
+    }
+
+    [Fact]
     public void ATestStillRunningIsNotReported()
     {
         IReadOnlyList<FindingCandidate> candidates = Analyze(Context(total: 8, presentIn: 8));
@@ -72,7 +128,9 @@ public sealed class VanishedProviderTests
     public void ATestSeenTooFewTimesToHaveBeenEstablishedIsNotReported()
     {
         // Two baseline appearances is below the minimum: a test seen once or twice and never again
-        // was probably never really there, and calling that a change would be noise.
+        // was probably never really there, and calling that a change would be noise. The chance gate
+        // refuses it as well — two of five missing three runs is one time in three — which is why
+        // the minimum is a guard rather than a decision.
         IReadOnlyList<FindingCandidate> candidates = Analyze(Context(total: 8, presentIn: 2));
 
         Assert.Empty(candidates);
@@ -91,15 +149,15 @@ public sealed class VanishedProviderTests
     [Fact]
     public void UnreliabilityRisesWithHowEstablishedTheTestWas()
     {
-        // Ran in every baseline session, then stopped — a starker change than one that ran in only
-        // some of them.
+        // Ran in every baseline session, then stopped — a starker change than one that missed a run
+        // here and there before it went. Both clear the gate; this is only the ranking between them.
         FindingCandidate everySession = Assert.Single(Analyze(Context(total: 8, presentIn: 5)));
-        FindingCandidate someSessions = Assert.Single(Analyze(Context(total: 10, presentIn: 4)));
+        FindingCandidate someSessions = Assert.Single(Analyze(Context(total: 10, presentIn: 6)));
 
         // Bounded rather than taken raw, so five of five is 0.57 and not the certainty a ratio of
         // one would claim. The comparison the finding rests on is unaffected.
         Assert.Equal(0.566, everySession.Unreliability, 3);
-        Assert.True(someSessions.Unreliability < everySession.Unreliability);
+        Assert.Equal(0.487, someSessions.Unreliability, 3);
     }
 
     [Fact]
@@ -139,16 +197,16 @@ public sealed class VanishedProviderTests
     }
 
     [Theory]
-    [InlineData(3, false)]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
-    public void ThePerTestSessionFloorDominatesTheProvidersOwnBaselineGate(int presentIn, bool reported)
+    [InlineData(5, false)]      // p 0.083 — declined here, though the coordinator would have taken it
+    [InlineData(6, true)]       // p 0.033
+    public void TheChanceOfAbsenceBindsBeforeEitherSessionFloor(int presentIn, bool reported)
     {
-        // VanishedMinBaselineSessions is 3, but a vanished test is absent from the current slice by
-        // definition, so the sessions it ran in are exactly its baseline appearances and the
-        // coordinator's floor of five decides. The provider still gates at three — it must not
-        // depend on a floor applied elsewhere — and this pins which of the two actually binds, so
-        // the constant's remark cannot quietly stop being true.
+        // Which of the three gates actually decides, pinned so that the constants' remarks cannot
+        // quietly stop being true. Five baseline appearances of seven is exactly
+        // MinimumSessionsPerTestToReport and comfortably above VanishedMinBaselineSessions, so both
+        // floors would admit it; the provider declines it anyway, because a test that skipped two of
+        // seven runs misses three more often than one time in twenty. No appearance count below five
+        // clears the chance gate at any baseline size, so neither floor can ever be the binding one.
         var coordinator = new FindingCoordinator([new VanishedProvider()]);
 
         using var warnings = new StringWriter();
@@ -156,8 +214,8 @@ public sealed class VanishedProviderTests
 
         Assert.Equal(reported ? 1 : 0, result.Findings.Count);
 
-        // The provider offered the candidate in every case; the floor is what removed it.
-        Assert.Single(Analyze(Context(total: 10, presentIn)));
+        // And it is the provider that decided, not the floor applied after it.
+        Assert.Equal(reported ? 1 : 0, Analyze(Context(total: 10, presentIn)).Count);
     }
 
     [Fact]

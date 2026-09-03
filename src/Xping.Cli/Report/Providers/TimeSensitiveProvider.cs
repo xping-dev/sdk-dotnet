@@ -352,7 +352,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 new TimeDelta(
                     FindingOrder.Round(best.Delta),
                     FindingOrder.RoundPercent(best.Delta * 100)),
-                new TimeSignificance(Probability(best.PAdjusted), comparisons),
+                new TimeSignificance(FindingOrder.RoundProbability(best.PAdjusted), comparisons),
                 zone,
                 Exemplars(failures),
                 Contrast(best.Other)),
@@ -745,42 +745,6 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             delta >= 0,
             adjusted);
     }
-
-    /// <summary>
-    /// Rounds a p-value for publication, to three significant digits.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Significant digits rather than the decimal places <see cref="FindingOrder.Round"/> gives
-    /// every other published figure, and rather than the six decimals the duration provider gives
-    /// its own. That figure is safe there because the comparison behind it is a fixed three recent
-    /// runs against at most forty, which floors its p-value at 1/12341 and cannot go lower however
-    /// long the history is. Nothing floors this one: it is the probability of the observed table,
-    /// and that falls off a cliff as the window grows — a perfectly separated split of thirteen runs
-    /// against thirteen is 1.9e-7, which six decimals publish as zero. Twenty-six runs is an
-    /// ordinary window, and a probability of zero is a claim of certainty this measurement never
-    /// makes.
-    /// </para>
-    /// <para>
-    /// Three digits because that is the precision the figure has to a reader deciding whether to
-    /// believe a finding. The unrounded value is what reaches the coordinator; this is only what
-    /// gets written down.
-    /// </para>
-    /// <para>
-    /// Through a round-trip rather than <see cref="Math.Round(double, int)"/>, which takes a count of
-    /// decimal places and refuses more than fifteen. Deriving that count from the magnitude
-    /// reintroduces the defect this method exists to avoid, one window size further out: a perfectly
-    /// separated split of twenty-eight runs against twenty-eight is 2.6e-16, needs eighteen places,
-    /// and is clamped to fifteen — which rounds it to zero. Scaling by a power of ten instead fails
-    /// at the other end, where the scale factor itself overflows to infinity. A significant-digit
-    /// format has neither limit and is what "three significant digits" actually means.
-    /// </para>
-    /// </remarks>
-    private static double Probability(double value) =>
-        value > 0
-            ? double.Parse(
-                value.ToString("G3", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)
-            : value;
 
     private static int DistinctDates(IEnumerable<Measured> runs)
     {

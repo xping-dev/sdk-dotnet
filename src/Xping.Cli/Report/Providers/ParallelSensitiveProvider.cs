@@ -310,7 +310,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             new ParallelSensitiveEvidence(
                 new ConcurrencyTrend(
                     FindingOrder.Round(statistic.Z),
-                    Probability(statistic.PValue),
+                    FindingOrder.RoundProbability(statistic.PValue),
                     FindingOrder.Round(tau),
                     DistinctSessions(considered),
                     direction.ToString()),
@@ -602,32 +602,6 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         Math.Abs(z) <= WilsonInterval.ConfidenceZ
             ? 0
             : Math.Clamp(Math.Abs(tau) * (1 - (WilsonInterval.ConfidenceZ / Math.Abs(z))), 0, 1);
-
-    /// <summary>
-    /// Rounds a p-value for publication, to three significant digits.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Significant digits rather than the decimal places <see cref="FindingOrder.Round"/> gives every
-    /// other published figure. Nothing floors this probability: it is a normal tail, and it falls off
-    /// a cliff as the window grows — a perfectly separated window of sixteen runs is already 7.0e-4
-    /// and forty runs of a clean dose-response reaches 1e-5, so a fixed count of decimals would
-    /// eventually publish one as zero. A probability of zero is a claim of certainty, and
-    /// <see cref="NormalTail"/> is built precisely so that this measurement never makes one.
-    /// </para>
-    /// <para>
-    /// Through a round-trip rather than <see cref="Math.Round(double, int)"/>, which takes a count of
-    /// decimal places and refuses more than fifteen. A significant-digit format has neither that
-    /// limit nor the overflow that scaling by a power of ten runs into, and is what "three
-    /// significant digits" actually means. The unrounded value is what reaches the coordinator; this
-    /// is only what gets written down.
-    /// </para>
-    /// </remarks>
-    private static double Probability(double value) =>
-        value > 0
-            ? double.Parse(
-                value.ToString("G3", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)
-            : value;
 
     /// <summary>
     /// One execution together with the concurrency it ran at.

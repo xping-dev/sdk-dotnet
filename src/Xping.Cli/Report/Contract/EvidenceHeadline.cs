@@ -518,14 +518,32 @@ internal static class EvidenceHeadline
             new("time zone", e.TimeZoneId)
         ]);
 
+    /// <summary>
+    /// Describes a test that stopped running.
+    /// </summary>
+    /// <param name="e">The evidence.</param>
+    /// <returns>The headline and its metrics.</returns>
+    /// <remarks>
+    /// The headline carries the denominator and not the probability, because here the denominator is
+    /// the discriminating figure: "3 of 17" and "17 of 17" are visibly different claims to a reader
+    /// skimming the fence, where the two arms of a split are not. The probability is a metric, for
+    /// the reader who opens the finding to check how much belief the sentence earned.
+    /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e) =>
     (
         $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier runs, " +
         $"absent from the last {e.CurrentSessionCount}",
         [
-            new("ran in", $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier runs"),
+            new(
+                "ran in",
+                $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier runs " +
+                $"({Percent(e.BaselineRunRate)})"),
             new("absent from", $"the last {e.CurrentSessionCount} runs"),
-            new("executions", e.Executions.ToString(CultureInfo.InvariantCulture))
+            new("executions", e.Executions.ToString(CultureInfo.InvariantCulture)),
+
+            // One-sided, and legitimately so: the kind only ever forms a table for a test already
+            // absent, so the direction was fixed before the counts were.
+            new("chance of absence", $"p {Probability(e.ChanceOfAbsence)} one-sided")
         ]);
 
     private static string Times(int count) =>

@@ -131,7 +131,7 @@ The report distinguishes sixteen finding kinds. The ones you meet first:
 | always failing | `AlwaysFailing` | The test fails almost always, in one dominant way — a likely real bug, not flake. |
 | timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
 | slower | `DurationRegression` | The test's recent runs are slower than its earlier ones by more than the variation it already had. The headline states the factor and the interval around it. |
-| stopped running | `Vanished` | The test appeared throughout the baseline and has stopped running. |
+| stopped running | `Vanished` | The test ran habitually through the baseline and has stopped. |
 
 The rest — order dependence, concurrency sensitivity, broken fixtures, shared failures, time-of-day
 and network clustering — are in the [CLI reference](../cli/command-reference.md#finding-kinds).

@@ -428,13 +428,46 @@ internal static class LocalAnalysisConstants
     /// parameterized case whose arguments changed. Three appearances make the absence a change.
     /// </para>
     /// <para>
-    /// Not the binding gate. A vanished test is by definition absent from the current slice, so the
-    /// sessions it ran in are exactly its baseline appearances, and
-    /// <see cref="MinimumSessionsPerTestToReport"/> raises the effective bar to five. This stays as
-    /// the provider's own guard — it should not be left depending on a floor applied elsewhere — and
-    /// it is left at three rather than raised to match, because a constant here is a line the report
+    /// Never the binding gate, and no longer even close to it.
+    /// <see cref="VanishedMaxChanceOfAbsence"/> cannot be cleared by fewer than five appearances at
+    /// any baseline size, so neither this nor
+    /// <see cref="MinimumSessionsPerTestToReport"/> decides a single finding. It stays as the
+    /// provider's own guard — it should not be left depending on a bar computed beside it — and it
+    /// is left at three rather than raised to match, because a constant here is a line the report
     /// was specified to draw and moving one to tidy up an overlap would be inventing a threshold.
     /// </para>
     /// </remarks>
     public const int VanishedMinBaselineSessions = 3;
+
+    /// <summary>
+    /// Chance of a test being absent from the current slice anyway, above which its absence is not
+    /// reported (0.05).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Absence is only meaningful against a habit, and a count of appearances cannot tell a habit
+    /// from an occasional visitor. Three appearances in three baseline sessions is a habit that
+    /// stopped; three in seventeen is a test that was mostly absent already, and on a default window
+    /// it has a 56% chance of missing the next three sessions with nothing whatever having changed.
+    /// The gate is therefore that probability, computed by
+    /// <see cref="Scoring.FisherExact.OneSidedPValue(int, int, int, int)"/> on the table of baseline
+    /// and current sessions against present and absent, and the conventional 0.05 rather than a
+    /// number chosen to reproduce the counts it replaces.
+    /// </para>
+    /// <para>
+    /// What it costs, stated rather than discovered. Against a three-session current slice the bar
+    /// is a baseline run rate of roughly 0.7 to 0.9 — five appearances of five, six of seven, eight
+    /// of ten, twelve of seventeen, fourteen of twenty — tightening towards 0.67 as the baseline
+    /// grows. Against a one-session slice it needs nineteen baseline sessions even at perfect
+    /// attendance, and <see cref="SmallWindowSessionCount"/> narrows the slice to one only on
+    /// windows too short to supply them, so a window under eight sessions reports nothing of this
+    /// kind at all. That is the intended answer and not an oversight: one session's absence is not
+    /// evidence that anything stopped.
+    /// </para>
+    /// <para>
+    /// A pre-filter, not the final word. #160 applies a Benjamini-Hochberg pass across every
+    /// fingerprint each kind was tested on, and that pass will supersede this one.
+    /// </para>
+    /// </remarks>
+    public const double VanishedMaxChanceOfAbsence = 0.05;
 }

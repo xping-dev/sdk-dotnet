@@ -16,6 +16,13 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="BaselineSessions">Sessions in the baseline slice the test appeared in.</param>
 /// <param name="BaselineSessionCount">Sessions in the baseline slice.</param>
 /// <param name="CurrentSessionCount">Sessions in the current slice it is absent from.</param>
+/// <param name="BaselineRunRate">Share of the baseline sessions it appeared in.</param>
+/// <param name="ChanceOfAbsence">
+/// How often a test with that habit would miss the current slice anyway. It is what separates a
+/// habit that stopped from a test that was mostly absent already, and a reader cannot weigh the
+/// claim without it: "ran in 3 of 17 earlier runs" and "ran in 17 of 17" are the same sentence
+/// until this number is beside them.
+/// </param>
 /// <param name="Executions">Executions of the test across the whole window.</param>
 /// <param name="LastSeenAt">When the test last ran.</param>
 /// <param name="LastSeenSha">The commit it last ran at, when known.</param>
@@ -23,6 +30,8 @@ internal sealed record VanishedEvidence(
     int BaselineSessions,
     int BaselineSessionCount,
     int CurrentSessionCount,
+    double BaselineRunRate,
+    double ChanceOfAbsence,
     int Executions,
     DateTime LastSeenAt,
     string? LastSeenSha) : FindingEvidence;
@@ -38,9 +47,12 @@ internal sealed record VanishedEvidence(
 /// so its fingerprint moved. In every one of those the suite goes green by running less.
 /// </para>
 /// <para>
-/// Absence is only meaningful against a habit. A test seen once and never again was probably never
-/// really established, so a minimum number of baseline appearances is required before its
-/// disappearance counts as a change.
+/// Absence is only meaningful against a habit, and a count of appearances cannot establish one. A
+/// test that ran in three of seventeen baseline sessions is more likely than not to miss the next
+/// three whatever anyone does to it, so the gate is the probability of that: Fisher's exact test on
+/// the baseline and current sessions against present and absent, one-sided because the direction is
+/// fixed before any table is formed — this kind only ever looks at a test already known to be
+/// absent, and there is no finding for one that started running.
 /// </para>
 /// </remarks>
 internal sealed class VanishedProvider : IFindingProvider
@@ -72,6 +84,15 @@ internal sealed class VanishedProvider : IFindingProvider
                 continue;
             }
 
+            // How often a test that ran this share of the baseline would miss the current slice with
+            // nothing having changed. The current arm holds no appearances by construction — that is
+            // what put the fingerprint here — so the table is the test's habit against its absence.
+            double chanceOfAbsence = FisherExact.OneSidedPValue(
+                appearances, slices.BaselineCount, 0, slices.CurrentCount);
+
+            if (chanceOfAbsence > LocalAnalysisConstants.VanishedMaxChanceOfAbsence)
+                continue;
+
             TestReference? reference = context.Tests.ReferenceFor(fingerprint);
             if (reference == null)
                 continue;
@@ -88,24 +109,30 @@ internal sealed class VanishedProvider : IFindingProvider
                     appearances,
                     slices.BaselineCount,
                     slices.CurrentCount,
+                    FindingOrder.Round((double)appearances / slices.BaselineCount),
+                    FindingOrder.RoundProbability(chanceOfAbsence),
                     executions.Count,
                     mostRecent.Session.StartedAt,
                     RevisionContext.ReadSha(mostRecent.Session)),
 
                 // A test that ran in every baseline session and then stopped is a starker change
-                // than one that ran in the minimum three, and the ratio says so without inventing a
-                // reason for the disappearance.
+                // than one that ran in three quarters of them, and the ratio says so without
+                // inventing a reason for the disappearance.
                 //
-                // Bounded below, because the ratio alone cannot tell three appearances in three
-                // from three in seventeen: the first is a habit that stopped, the second is a test
-                // that was mostly absent already and whose absence is the likeliest thing it could
-                // do next. The bound puts them at 0.44 and 0.06.
+                // Whether the absence means anything at all is settled by the gate above, before
+                // this is read, so the bound is left to do the one job it is good at: saying how
+                // established the habit was, on a scale that grows with the runs behind it rather
+                // than ranking five of five alongside fifty of fifty.
                 Unreliability: WilsonInterval.LowerBound(appearances, slices.BaselineCount),
 
                 // Measured from the current slice, which by definition is where it is absent.
                 SessionsSinceLastOccurrence: mostRecent.SessionIndex,
 
                 DrillDownCommand: DrillDown.ForTest(FindingKind.Vanished, reference),
+
+                // Unrounded: this is the number #160's Benjamini-Hochberg pass sorts on, and the
+                // rounded copy in the evidence is only what gets written down.
+                PValue: chanceOfAbsence,
 
                 // Reported quietly by default. A test that silently stopped running is worth
                 // knowing about, but it is usually a deliberate deletion, and ranking it alongside

@@ -139,6 +139,68 @@ public sealed class FisherExactTests
             Assert.True(FisherExact.TwoSidedPValue(arm, arm, 0, arm) > 0);
     }
 
+    // ---------------------------------------------------------------------------------------
+    // The one-sided tail
+    // ---------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(3, 17, 0, 3, 0.596491)]     // ran in 3 of 17 and missed the last 3: the likeliest thing it could do
+    [InlineData(8, 17, 0, 3, 0.192982)]
+    [InlineData(12, 17, 0, 3, 0.049123)]    // the first table on a default window that clears 0.05
+    [InlineData(17, 17, 0, 3, 0.000877)]    // ran in every one of them: one deal in 1140
+    [InlineData(5, 5, 0, 3, 0.017857)]      // the shortest window that can produce this kind at all
+    [InlineData(6, 6, 0, 1, 0.142857)]      // a one-session slice, and the floor it cannot get under
+    [InlineData(5, 6, 1, 6, 0.040043)]      // a tail of more than one table, to exercise the sum
+    public void TheUpperTailIsTheOneTheHypergeometricDistributionGives(
+        int successes, int trials, int otherSuccesses, int otherTrials, double expected)
+    {
+        Assert.Equal(
+            expected,
+            FisherExact.OneSidedPValue(successes, trials, otherSuccesses, otherTrials),
+            6);
+    }
+
+    [Fact]
+    public void TheTailIsNeverLargerThanTheTwoSidedAnswer()
+    {
+        // One tail of the same table against both of them. The two-sided answer counts the observed
+        // table and everything at least as improbable in either direction, so it can only be larger —
+        // and where the opposite tail holds nothing, equal.
+        Assert.True(
+            FisherExact.OneSidedPValue(5, 6, 0, 6) <= FisherExact.TwoSidedPValue(5, 6, 0, 6));
+        Assert.True(
+            FisherExact.OneSidedPValue(15, 15, 10, 20) <= FisherExact.TwoSidedPValue(15, 15, 10, 20));
+    }
+
+    [Fact]
+    public void SwappingTheArmsAnswersTheOppositeQuestion()
+    {
+        // Deliberately not the symmetry the two-sided test has. Naming an arm first is the hypothesis
+        // here, so a caller that swapped them would be asking whether the arm that held almost none
+        // of the behaviour held surprisingly many — which is a different question with a different
+        // answer, and on this table a near-certainty rather than a finding.
+        Assert.Equal(0.000187, FisherExact.OneSidedPValue(9, 10, 1, 12), 6);
+        Assert.Equal(0.999998, FisherExact.OneSidedPValue(1, 12, 9, 10), 6);
+    }
+
+    [Fact]
+    public void TheTailClaimsNothingOnTheSameDegenerateTables()
+    {
+        Assert.Equal(1.0, FisherExact.OneSidedPValue(0, 0, 3, 10));
+        Assert.Equal(1.0, FisherExact.OneSidedPValue(3, 10, 0, 0));
+        Assert.Equal(1.0, FisherExact.OneSidedPValue(0, 8, 0, 12));
+        Assert.Equal(1.0, FisherExact.OneSidedPValue(8, 8, 12, 12));
+    }
+
+    [Fact]
+    public void TheTailSurvivesALongWindowToo()
+    {
+        // Same arithmetic as the two-sided test and the same reason it has to hold: no coefficient is
+        // ever formed, so a thousand runs a side is a probability rather than an infinity.
+        Assert.InRange(FisherExact.OneSidedPValue(500, 1000, 500, 1000), 0.4, 0.6);
+        Assert.True(FisherExact.OneSidedPValue(1000, 1000, 0, 1000) >= 0);
+    }
+
     [Fact]
     public void AThousandRunsASideIsWhereTheArithmeticStops()
     {

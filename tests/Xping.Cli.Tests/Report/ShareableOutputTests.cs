@@ -189,7 +189,8 @@ public sealed class ShareableOutputTests
 
             FindingKind.Vanished =>
                 new VanishedEvidence(
-                    12, 17, 3, 40, new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e"),
+                    12, 17, 3, 0.706, 0.0491, 40,
+                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e"),
 
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
