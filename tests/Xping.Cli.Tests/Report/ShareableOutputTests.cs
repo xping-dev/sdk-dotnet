@@ -735,6 +735,58 @@ public sealed class ShareableOutputTests
     private static OutputCapabilities Capabilities(bool redirected) =>
         OutputCapabilities.Resolve(forceAscii: true, noColor: false, redirected, _ => null);
 
+    // ---------------------------------------------------------------------
+    // What the report did not print
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Both reasons a candidate went unprinted are counted, and side by side.
+    /// </summary>
+    /// <remarks>
+    /// A reader comparing two reports needs "needs more runs" and "did not clear its bar" in the
+    /// same place, because the two move in opposite directions as a store grows: the first empties
+    /// as runs accumulate, and the second tightens as the suite does. Above the fence rather than in
+    /// it, with the rest of the counts — what the report did not print is not one of the findings.
+    /// </remarks>
+    [Fact]
+    public void TheSummaryCountsWhatWasDroppedForEvidenceAndWhatWasDroppedForSignificance()
+    {
+        string report = Render(Envelope(
+            [Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20")],
+            shown: 1,
+            total: 1,
+            lowEvidence: 41,
+            notSignificant: 6));
+
+        string counts = Lines(report).Single(l => l.Contains("healthy", StringComparison.Ordinal));
+
+        Assert.Contains("41 awaiting more runs", counts, StringComparison.Ordinal);
+        Assert.Contains("6 not significant", counts, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An empty report says which kind of empty it is.
+    /// </summary>
+    /// <remarks>
+    /// Three different pieces of news share one shape. A suite with nothing wrong with it, a suite
+    /// too young to say, and a suite whose candidates were all indistinguishable from chance are not
+    /// the same result, and printing "no findings" for the last two teaches a reader that the report
+    /// has looked when it has only declined to answer.
+    /// </remarks>
+    [Theory]
+    [InlineData(0, 0, "No findings.")]
+    [InlineData(41, 0, "Nothing reportable yet: 41 need more runs.")]
+    [InlineData(0, 6, "Nothing reportable yet: 6 could be chance.")]
+    [InlineData(41, 6, "Nothing reportable yet: 41 need more runs, 6 could be chance.")]
+    public void AnEmptyReportSaysWhyItIsEmpty(int lowEvidence, int notSignificant, string expected)
+    {
+        string report = Render(Envelope([], 0, 0, lowEvidence, notSignificant));
+
+        Assert.Contains(
+            Fenced(report),
+            line => line.EndsWith(expected, StringComparison.Ordinal));
+    }
+
     private static string Render(ReportEnvelope envelope, OutputCapabilities? capabilities = null)
     {
         using var writer = new StringWriter();
@@ -822,7 +874,11 @@ public sealed class ShareableOutputTests
     private static ReportEnvelope Envelope(params FindingDto[] findings) =>
         Envelope(findings, findings.Length, findings.Length);
 
-    private static ReportEnvelope Envelope(FindingDto[] findings, int shown, int total)
+    private static ReportEnvelope Envelope(FindingDto[] findings, int shown, int total) =>
+        Envelope(findings, shown, total, lowEvidence: 0, notSignificant: 0);
+
+    private static ReportEnvelope Envelope(
+        FindingDto[] findings, int shown, int total, int lowEvidence, int notSignificant)
     {
         int high = findings.Count(f => f.Severity == "high");
         int medium = findings.Count(f => f.Severity == "medium");
@@ -845,7 +901,8 @@ public sealed class ShareableOutputTests
                 produced,
                 new SeverityCountsDto(high, medium, low),
                 412 - findings.Length,
-                0,
+                lowEvidence,
+                notSignificant,
                 0,
                 0,
                 0,

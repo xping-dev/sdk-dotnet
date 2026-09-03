@@ -324,7 +324,19 @@ internal sealed class RetryProvider : IFindingProvider
         [FindingKind.RetryMasked, FindingKind.RetryDeepening, FindingKind.RetryExhausted];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    /// <remarks>
+    /// Every kind here is a count of attempts that happened, so no family is reported and nothing
+    /// downstream corrects them for multiplicity.
+    /// </remarks>
+    public ProviderReport Analyze(AnalysisContext context) =>
+        ProviderReport.Observations([.. Observed(context)]);
+
+    /// <summary>
+    /// Walks the window, yielding what it observed.
+    /// </summary>
+    /// <param name="context">The window, sessions and shared indexes.</param>
+    /// <returns>Candidate findings, in any order.</returns>
+    private static IEnumerable<FindingCandidate> Observed(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 

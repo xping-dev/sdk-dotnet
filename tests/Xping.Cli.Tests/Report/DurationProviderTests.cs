@@ -1090,7 +1090,7 @@ public sealed class DurationProviderTests
             retry: attempt > 1);
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
-        [.. new DurationProvider().Analyze(context)];
+        new DurationProvider().Analyze(context).Candidates;
 
     private static IReadOnlyList<FindingCandidate> Regressions(AnalysisContext context) =>
         [.. Analyze(context).Where(c => c.Kind == FindingKind.DurationRegression)];

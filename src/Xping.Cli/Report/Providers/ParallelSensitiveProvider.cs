@@ -212,10 +212,16 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     // at a rate of 0.30. Ten-run windows top out at 0.017 and six-run windows at 0.003. The delta
     // gate this replaces measured 0.296 on the comparable shape.
     //
-    // A pre-filter, not the final word. This charges one test for one comparison; it cannot charge a
-    // suite for the three hundred tests it made that comparison on, because a provider by contract
-    // cannot see the others. #160 applies a Benjamini-Hochberg pass across every fingerprint each
-    // kind was tested on and will supersede this bar.
+    // A pre-filter, and no longer the final word. This charges one test for one comparison; it
+    // cannot charge a suite for the three hundred tests it made that comparison on, because a
+    // provider by contract cannot see the others. The coordinator now does, applying a
+    // Benjamini-Hochberg pass at `LocalAnalysisConstants.FalseDiscoveryRate` across every
+    // fingerprint reported in `ProviderReport.HypothesesTested`.
+    //
+    // Kept rather than removed, deliberately. It is cheap, it keeps the effect size and the evidence
+    // record off tests that were never going to qualify, and it cannot change what the pass decides:
+    // the pass's own bar reaches 0.05 only where half the family are discoveries. A suite in that
+    // state is not one a threshold is deciding anything for.
     private const double Alpha = 0.05;
 
     /// <inheritdoc/>
@@ -225,23 +231,33 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     public IReadOnlyList<FindingKind> Kinds => [FindingKind.ParallelSensitive];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
 
         // Fingerprints are ordinal-sorted by the index, so findings come out in the same sequence on
         // every run whatever order the sessions were read in.
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            FindingCandidate? candidate = Examine(context, fingerprint);
+            Examination examination = Examine(context, fingerprint);
 
-            if (candidate != null)
-                yield return candidate;
+            if (examination.Tested)
+                tested++;
+
+            if (examination.Candidate is { } candidate)
+                candidates.Add(candidate);
         }
+
+        return new ProviderReport(
+            candidates,
+            new Dictionary<FindingKind, int> { [FindingKind.ParallelSensitive] = tested });
     }
 
     /// <summary>
-    /// Examines one test, returning <see langword="null"/> when any gate declines it.
+    /// Examines one test, saying both whether the trend test was run on it and what survived.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -259,23 +275,26 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// rejected by counting distinct levels, before any statistic is computed.
     /// </para>
     /// </remarks>
-    private static FindingCandidate? Examine(AnalysisContext context, string fingerprint)
+    private static Examination Examine(AnalysisContext context, string fingerprint)
     {
         List<Measured> considered = Considered(context, fingerprint);
         ConcurrencyRange range = Range(considered);
 
-        // A test whose concurrency never varied. That is the common case and it is not a finding:
-        // the question was asked and the data answered it.
+        // A test whose concurrency never varied. There is no trend to test for and so nothing to
+        // charge the correction with: a fingerprint that never ran at two levels is not a
+        // comparison this provider made and lost, it is one it could not make.
         if (range.DistinctLevels < 2)
-            return null;
+            return Examination.NotPosed;
 
         List<TrendPoint> points = [.. considered.Select(m =>
             new TrendPoint(m.Concurrency, m.Reference.Failed, m.Reference.SessionIndex))];
 
+        // From here the fingerprint has been tested, whatever the gates below say. Every return
+        // past this line counts towards the family the coordinator corrects against.
         TrendStatistic statistic = CochranArmitage.Of(points);
 
         if (statistic.PValue > Alpha)
-            return null;
+            return Examination.Of(null);
 
         double tau = KendallTau.TauB(points);
 
@@ -284,14 +303,14 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         // the other goes down. Publishing a direction that the published effect size contradicts is
         // not defensible, and declining costs one comparison.
         if (Math.Sign(statistic.Z) != Math.Sign(tau))
-            return null;
+            return Examination.Of(null);
 
         if (Math.Abs(tau) < LocalAnalysisConstants.ParallelSensitivityTau)
-            return null;
+            return Examination.Of(null);
 
         TestReference? test = context.Tests.ReferenceFor(fingerprint);
         if (test == null)
-            return null;
+            return Examination.Of(null);
 
         ConcurrencyDirection direction = tau >= 0
             ? ConcurrencyDirection.WithConcurrency
@@ -304,7 +323,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
         List<Measured> driving = Driving(considered, direction);
 
-        return new FindingCandidate(
+        return Examination.Of(new FindingCandidate(
             FindingKind.ParallelSensitive,
             new FindingSubject.SingleTest(test),
             new ParallelSensitiveEvidence(
@@ -336,7 +355,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
 
-            PValue: statistic.PValue);
+            PValue: statistic.PValue));
     }
 
     /// <summary>
@@ -595,7 +614,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// lower than comparable findings of other kinds at the same strength of evidence.
     /// <see cref="Scoring.ImpactScorer"/> weights every kind's figure alike, so the effect is real
     /// rather than notional, and it is the price of ranking a rank correlation on the same [0,1]
-    /// axis as a rate. #160's pass across every fingerprint of a kind is where it can be revisited.
+    /// axis as a rate.
     /// </para>
     /// </remarks>
     private static double Support(double tau, double z) =>

@@ -469,9 +469,46 @@ internal static class LocalAnalysisConstants
     /// session's absence is not evidence that anything stopped.
     /// </para>
     /// <para>
-    /// A pre-filter, not the final word. #160 applies a Benjamini-Hochberg pass across every
-    /// fingerprint each kind was tested on, and that pass will supersede this one.
+    /// A pre-filter, and no longer the final word. <see cref="FalseDiscoveryRate"/> is applied
+    /// across every fingerprint this kind was tested on, and that bar is the one an absence has to
+    /// clear. This one is kept because it is free and because it cannot change the outcome: the
+    /// pass's own bar reaches 0.05 only where half the family are discoveries.
     /// </para>
     /// </remarks>
     public const double VanishedAlpha = 0.05;
+
+    /// <summary>
+    /// Share of the reported findings of a tested kind allowed to be false (0.10).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The level <see cref="Scoring.BenjaminiHochberg"/> holds, applied once per kind across every
+    /// fingerprint that kind formed a hypothesis test on. Each provider's own level asks whether one
+    /// comparison is surprising; this asks whether a list of them is, and nothing else in the report
+    /// does. A suite of three hundred tests runs three hundred comparisons per kind, and a bar that
+    /// is right once is wrong three hundred times: at a per-comparison 0.05 a suite with no
+    /// concurrency effect and no time effect anywhere in it still produces a fistful of both.
+    /// </para>
+    /// <para>
+    /// Ten percent rather than the conventional five, because of what the number bounds. It is not
+    /// the chance of being wrong about a finding; it is the expected share of the reported list that
+    /// is noise, and one entry in ten is a rate a developer reading a ranked list from the top
+    /// absorbs without being trained to distrust it. Five percent would halve every threshold and
+    /// buy a cleanliness the input cannot support — the difference between the two, on the windows a
+    /// local store holds, is entirely in findings that are real and thinly evidenced.
+    /// </para>
+    /// <para>
+    /// What it costs, stated rather than discovered. The bar the most significant finding of a kind
+    /// has to clear is <c>0.10 / m</c>, where <c>m</c> is the number of fingerprints that kind was
+    /// tested on, so it tightens with the size of the suite and not with the length of the window.
+    /// On three hundred tested fingerprints that is 3.3e-4, which over a twenty-session window
+    /// <see cref="Scoring.FisherExact"/> reaches only on a near-perfect separation — six failing
+    /// evenings against fourteen clean mornings, and no fewer. On the thirty to eighty fingerprints
+    /// a suite tests in practice it is 1.2e-3 to 3.3e-3, which ordinary evidence reaches. A large
+    /// suite reporting nothing of a kind is therefore the intended answer and not a fault: three
+    /// hundred tests over twenty runs cannot tell a clock effect from noise, and the count of
+    /// candidates the pass silenced is published so that the silence is visible.
+    /// </para>
+    /// </remarks>
+    public const double FalseDiscoveryRate = 0.10;
 }

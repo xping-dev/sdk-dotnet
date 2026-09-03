@@ -72,14 +72,17 @@ internal sealed class VanishedProvider : IFindingProvider
     public IReadOnlyList<FindingKind> Kinds => [FindingKind.Vanished];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
+
         AnalysisWindowSlices slices = AnalysisWindowSlices.From(context);
 
         // Nothing to compare against: with no baseline every test looks new, and with no current
         // slice every test looks vanished.
         if (slices.BaselineCount == 0 || slices.CurrentCount == 0)
-            yield break;
+            return Report(candidates, tested);
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
@@ -91,6 +94,11 @@ internal sealed class VanishedProvider : IFindingProvider
             {
                 continue;
             }
+
+            // Counted here rather than after the gate below: the question is asked of every
+            // fingerprint that reaches this line, and the family the coordinator corrects against is
+            // every asking, not the few that answered yes.
+            tested++;
 
             // How lopsided the split of this test's appearances is, against the null that appearing
             // had nothing to do with which slice a session fell in. The current arm holds none of
@@ -111,7 +119,7 @@ internal sealed class VanishedProvider : IFindingProvider
             // Executions arrive newest-session-first, so the head is the last time it ran.
             ExecutionRef mostRecent = executions[0];
 
-            yield return new FindingCandidate(
+            candidates.Add(new FindingCandidate(
                 FindingKind.Vanished,
                 new FindingSubject.SingleTest(reference),
                 new VanishedEvidence(
@@ -139,16 +147,27 @@ internal sealed class VanishedProvider : IFindingProvider
 
                 DrillDownCommand: DrillDown.ForTest(FindingKind.Vanished, reference),
 
-                // Unrounded: this is the number #160's Benjamini-Hochberg pass sorts on, and the
-                // rounded copy in the evidence is only what gets written down.
+                // Unrounded: this is the number the coordinator's Benjamini-Hochberg pass sorts on,
+                // and the rounded copy in the evidence is only what gets written down.
                 PValue: pValue,
 
                 // Reported quietly by default. A test that silently stopped running is worth
                 // knowing about, but it is usually a deliberate deletion, and ranking it alongside
                 // a failing test would train people to ignore the top of the report.
-                SeverityCeiling: Severity.Low);
+                SeverityCeiling: Severity.Low));
         }
+
+        return Report(candidates, tested);
     }
+
+    /// <summary>
+    /// Pairs the candidates with the size of the family they were drawn from.
+    /// </summary>
+    /// <param name="candidates">Absences the gate let through.</param>
+    /// <param name="tested">Fingerprints the absence was measured on.</param>
+    /// <returns>The provider's report.</returns>
+    private static ProviderReport Report(IReadOnlyList<FindingCandidate> candidates, int tested) =>
+        new(candidates, new Dictionary<FindingKind, int> { [FindingKind.Vanished] = tested });
 }
 
 /// <summary>

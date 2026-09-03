@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
 using Xping.Cli.Report.Model;
 
 namespace Xping.Cli.Report.Providers;
@@ -102,6 +103,77 @@ internal interface IFindingProvider
     /// Examines the window and returns what it observed.
     /// </summary>
     /// <param name="context">The window, sessions and shared indexes.</param>
-    /// <returns>Candidate findings, in any order.</returns>
-    IEnumerable<FindingCandidate> Analyze(AnalysisContext context);
+    /// <returns>Candidate findings, in any order, and the size of every family behind them.</returns>
+    ProviderReport Analyze(AnalysisContext context);
+}
+
+/// <summary>
+/// What one provider observed in a window, and how many questions it asked to observe it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The second half is the reason this is a record rather than a list. A p-value on its own cannot
+/// be judged: the same 0.02 is strong evidence from one comparison and the commonest thing three
+/// hundred comparisons produce. The coordinator applies
+/// <see cref="Scoring.BenjaminiHochberg"/> once per kind and needs the denominator, and only the
+/// provider knows it — the count includes every fingerprint whose answer never became a candidate,
+/// which by definition is not in <see cref="Candidates"/>.
+/// </para>
+/// <para>
+/// Eager rather than an iterator, unlike the shape this replaced. A family size is not known until
+/// the last fingerprint has been examined, so a provider that streamed its candidates would have to
+/// publish the count before it had it. Nothing is lost: the coordinator materialised every
+/// provider's output before reading any of it in any case, because a provider that throws must cost
+/// its own findings and no one else's.
+/// </para>
+/// </remarks>
+/// <param name="Candidates">What the provider is claiming, in any order.</param>
+/// <param name="HypothesesTested">
+/// Per kind, the number of fingerprints on which that kind's hypothesis test was well posed —
+/// counted where the last precondition on the shape of the data is met, and before any gate that
+/// reads the data's direction or magnitude. Absent for a kind that tests no hypothesis. Counting it
+/// after the gates instead would report a family in which every member is a discovery, and correct
+/// for nothing.
+/// </param>
+internal sealed record ProviderReport(
+    IReadOnlyList<FindingCandidate> Candidates,
+    IReadOnlyDictionary<FindingKind, int> HypothesesTested)
+{
+    /// <summary>
+    /// A report from a provider that counted things rather than testing anything.
+    /// </summary>
+    /// <param name="candidates">What it counted.</param>
+    /// <returns>A report claiming no family.</returns>
+    /// <remarks>
+    /// <c>RetryMasked</c>, <c>SharedFailure</c> and <c>BrokenFixture</c> are observations of things
+    /// that demonstrably happened. There is no null hypothesis to reject and so nothing to correct
+    /// for, and the empty family is what carries them past the multiplicity pass untouched.
+    /// </remarks>
+    public static ProviderReport Observations(IReadOnlyList<FindingCandidate> candidates) =>
+        new(candidates, ReadOnlyDictionary<FindingKind, int>.Empty);
+}
+
+/// <summary>
+/// What examining one fingerprint produced.
+/// </summary>
+/// <remarks>
+/// The distinction the pair exists to draw is between a fingerprint the question could not be asked
+/// of and one it was asked of and answered no. Both yield no candidate, and only the second is a
+/// hypothesis test that the multiplicity correction has to be charged for. A provider returning a
+/// bare <c>FindingCandidate?</c> conflates them, and undercounting the family is the direction that
+/// invents findings.
+/// </remarks>
+/// <param name="Tested">Whether the kind's hypothesis test was computed on this fingerprint.</param>
+/// <param name="Candidate">What survived the gates after it, if anything did.</param>
+internal readonly record struct Examination(bool Tested, FindingCandidate? Candidate)
+{
+    /// <summary>Gets the result for a fingerprint the question could not be asked of.</summary>
+    public static Examination NotPosed { get; }
+
+    /// <summary>
+    /// The result for a fingerprint the test was computed on, whatever the gates then said.
+    /// </summary>
+    /// <param name="candidate">The candidate, or <see langword="null"/> if a gate declined it.</param>
+    /// <returns>An examination that counts towards the family.</returns>
+    public static Examination Of(FindingCandidate? candidate) => new(true, candidate);
 }

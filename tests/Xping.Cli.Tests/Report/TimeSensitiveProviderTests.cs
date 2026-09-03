@@ -538,7 +538,7 @@ public sealed class TimeSensitiveProviderTests
         Assert.Equal(6, context.EnvironmentalSessionCount);
 
         Assert.DoesNotContain(
-            new TimeSensitiveProvider().Analyze(context),
+            new TimeSensitiveProvider().Analyze(context).Candidates,
             c => Named(c) == Subject);
     }
 
@@ -1094,7 +1094,7 @@ public sealed class TimeSensitiveProviderTests
     }
 
     private static IReadOnlyList<FindingCandidate> Analyze(List<TestSession> sessions) =>
-        [.. new TimeSensitiveProvider().Analyze(Context(sessions))];
+        new TimeSensitiveProvider().Analyze(Context(sessions)).Candidates;
 
     private static FindingCandidate Single(List<TestSession> sessions) =>
         Assert.Single(Analyze(sessions));

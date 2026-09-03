@@ -221,10 +221,17 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     // window can actually show: six failing evenings against one failing morning is p = 0.0152, and
     // a fortnight of runs rarely offers better.
     //
-    // A pre-filter, not the final word. This charges one test for the axes it searched; it cannot
-    // charge a suite for the three hundred tests it searched them on, because a provider by contract
-    // cannot see the others. #160 applies a Benjamini-Hochberg pass across every fingerprint each
-    // kind was tested on and will supersede this bar.
+    // A pre-filter, and no longer the final word. This charges one test for the axes it searched; it
+    // cannot charge a suite for the three hundred tests it searched them on, because a provider by
+    // contract cannot see the others. The coordinator now does, applying a Benjamini-Hochberg pass
+    // at `LocalAnalysisConstants.FalseDiscoveryRate` across every fingerprint reported in
+    // `ProviderReport.HypothesesTested`. The two multiplicities compose: this one corrects a p-value
+    // for the six ways one test's runs were divided, and that one corrects the corrected figure for
+    // the three hundred tests it was computed on.
+    //
+    // Kept rather than removed, deliberately. It is cheap, it keeps the exemplars and the contrast
+    // off tests no axis separated, and it cannot change what the pass decides: the pass's own bar
+    // reaches 0.05 only where half the family are discoveries.
     private const double Alpha = 0.05;
 
     /// <inheritdoc/>
@@ -234,9 +241,12 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     public IReadOnlyList<FindingKind> Kinds => [FindingKind.TimeSensitive];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
 
         // Built once for the window rather than once per test: every test in a session shares its
         // clock reading, and resolving it per fingerprint would repeat the same arithmetic for each
@@ -244,18 +254,32 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         Dictionary<Guid, SessionClock> clocks = ClocksIn(context);
 
         if (clocks.Count == 0)
-            yield break;
+            return Report(candidates, tested);
 
         // Fingerprints are ordinal-sorted by the index, so findings come out in the same sequence on
         // every run whatever order the sessions were read in.
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            FindingCandidate? candidate = Examine(context, clocks, fingerprint);
+            Examination examination = Examine(context, clocks, fingerprint);
 
-            if (candidate != null)
-                yield return candidate;
+            if (examination.Tested)
+                tested++;
+
+            if (examination.Candidate is { } candidate)
+                candidates.Add(candidate);
         }
+
+        return Report(candidates, tested);
     }
+
+    /// <summary>
+    /// Pairs the candidates with the size of the family they were drawn from.
+    /// </summary>
+    /// <param name="candidates">Tests some axis separated.</param>
+    /// <param name="tested">Tests at least one axis could be judged on.</param>
+    /// <returns>The provider's report.</returns>
+    private static ProviderReport Report(IReadOnlyList<FindingCandidate> candidates, int tested) =>
+        new(candidates, new Dictionary<FindingKind, int> { [FindingKind.TimeSensitive] = tested });
 
     /// <summary>
     /// Reads the local clock of every session that recorded one.
@@ -292,9 +316,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Examines one test, returning <see langword="null"/> when every axis declines it.
+    /// Examines one test, saying both whether any axis could be judged and what survived.
     /// </summary>
-    private static FindingCandidate? Examine(
+    private static Examination Examine(
         AnalysisContext context, Dictionary<Guid, SessionClock> clocks, string fingerprint)
     {
         List<Measured> considered = Considered(context, clocks, fingerprint);
@@ -302,26 +326,28 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         // Two arms' worth is the least that can be split at all, and checking here saves the axis
         // work for the overwhelming majority of tests.
         if (considered.Count < LocalAnalysisConstants.TimeSensitiveMinArmSessions * 2)
-            return null;
+            return Examination.NotPosed;
 
         // One zone for the whole comparison. A machine that moved between zones has two populations
         // in it, and a local hour drawn from both describes neither; the offset axis in particular
         // would read the move as a daylight-saving shift.
         string? zone = SingleZone(considered);
         if (zone == null)
-            return null;
+            return Examination.NotPosed;
 
         TestReference? test = context.Tests.ReferenceFor(fingerprint);
         if (test == null)
-            return null;
+            return Examination.NotPosed;
 
         // Every division this test's runs admit, before any of them is judged. The multiplicity the
         // search has to be charged for has to be known before the first p-value is computed, which
-        // is why the arm gate is separated from every gate after it.
+        // is why the arm gate is separated from every gate after it. Past this point the fingerprint
+        // has been tested, and counts towards the family the coordinator corrects against — the
+        // second multiplicity, one test per fingerprint rather than one per axis.
         List<Partition> partitions = [.. Offered(considered)];
 
         if (partitions.Count == 0)
-            return null;
+            return Examination.NotPosed;
 
         int comparisons = Comparisons(partitions);
 
@@ -338,11 +364,11 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         }
 
         if (best == null)
-            return null;
+            return Examination.Of(null);
 
         List<Measured> failures = [.. best.Worse.Where(m => m.Reference.Failed)];
 
-        return new FindingCandidate(
+        return Examination.Of(new FindingCandidate(
             FindingKind.TimeSensitive,
             new FindingSubject.SingleTest(test),
             new TimeSensitiveEvidence(
@@ -379,15 +405,15 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.TimeSensitive, test),
 
-            // Unrounded, unlike the copy in the evidence. This is the number #160 sorts on, and
-            // rounding two neighbouring p-values onto each other would reorder the ranked list a
-            // Benjamini-Hochberg pass walks down.
+            // Unrounded, unlike the copy in the evidence. This is the number the coordinator's
+            // Benjamini-Hochberg pass sorts on, and rounding two neighbouring p-values onto each
+            // other would reorder the ranked list that pass walks down.
             PValue: best.PAdjusted,
 
             // A clock reading locates a problem; it never names one. Left uncapped, the generic
             // impact formula would rank a frequently-run test that fails more in the evening above a
             // test that fails outright, on evidence that is a correlation over three screened axes.
-            SeverityCeiling: Severity.Medium);
+            SeverityCeiling: Severity.Medium));
     }
 
     /// <summary>

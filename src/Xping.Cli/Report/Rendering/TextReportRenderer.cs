@@ -105,6 +105,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (summary.ExcludedLowEvidence > 0)
             counts.Add($"{summary.ExcludedLowEvidence} awaiting more runs");
 
+        // Beside the evidence count rather than among the caveats, because the two say the same sort
+        // of thing — a candidate the report saw and did not print — and a reader comparing two runs
+        // needs them in the same place. A caveat is something that went wrong; a candidate that did
+        // not clear its kind's bar is the report working.
+        if (summary.ExcludedNotSignificant > 0)
+            counts.Add($"{summary.ExcludedNotSignificant} not significant");
+
         builder.AppendLine(string.Join(separator, counts));
 
         WriteCaveats(builder, envelope, separator);
@@ -147,10 +154,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         {
             // Still fenced. A clean report and a full one should paste as the same shape, or a
             // reader learns to read the presence of a block as bad news.
-            builder.AppendLine(envelope.Summary.ExcludedLowEvidence > 0
-                ? $"{capabilities.Glyphs.Pending} Nothing reportable yet. " +
-                  $"{envelope.Summary.ExcludedLowEvidence} candidate(s) need more runs."
-                : $"{capabilities.Glyphs.Pass} No findings.");
+            builder.AppendLine(EmptyReport(envelope.Summary));
 
             return;
         }
@@ -164,6 +168,33 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
             WriteFinding(builder, envelope.Findings[index]);
         }
+    }
+
+    /// <summary>
+    /// Says why a report found nothing, which is three different things.
+    /// </summary>
+    /// <param name="summary">Counts describing the run as a whole.</param>
+    /// <returns>The one line an empty report prints.</returns>
+    /// <remarks>
+    /// A suite with nothing wrong with it, a suite too young to say, and a suite whose candidates
+    /// were all indistinguishable from chance are three different pieces of news, and printing "no
+    /// findings" for the second and third teaches a reader that the report has looked when it has
+    /// only declined to answer.
+    /// </remarks>
+    private string EmptyReport(SummaryDto summary)
+    {
+        var reasons = new List<string>();
+
+        if (summary.ExcludedLowEvidence > 0)
+            reasons.Add($"{summary.ExcludedLowEvidence} need more runs");
+
+        if (summary.ExcludedNotSignificant > 0)
+            reasons.Add($"{summary.ExcludedNotSignificant} could be chance");
+
+        return reasons.Count == 0
+            ? $"{capabilities.Glyphs.Pass} No findings."
+            : $"{capabilities.Glyphs.Pending} Nothing reportable yet: " +
+              $"{string.Join(", ", reasons)}.";
     }
 
     private void WriteFinding(StringBuilder builder, FindingDto finding)

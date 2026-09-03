@@ -32,7 +32,7 @@ public sealed class VanishedProviderTests
     }
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
-        [.. new VanishedProvider().Analyze(context)];
+        new VanishedProvider().Analyze(context).Candidates;
 
     [Fact]
     public void ATestThatStopsRunningIsReported()

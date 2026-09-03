@@ -57,7 +57,7 @@ public sealed class FailureModeProviderTests
             stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
 
     private static List<FindingCandidate> Analyze(params TestSession[] sessions) =>
-        [.. new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions))];
+        [.. new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions)).Candidates];
 
     private static FindingCandidate Single(List<FindingCandidate> candidates, FindingKind kind) =>
         Assert.Single(candidates, c => c.Kind == kind);
@@ -817,7 +817,7 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(1, context.EnvironmentalSessionCount);
         Assert.True(context.SessionViews[0].IsLikelyEnvironmental);
-        Assert.Empty(new FailureModeProvider().Analyze(context));
+        Assert.Empty(new FailureModeProvider().Analyze(context).Candidates);
     }
 
     [Fact]
