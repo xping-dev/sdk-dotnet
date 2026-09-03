@@ -987,6 +987,102 @@ public sealed class DurationProviderTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // The family a regression is judged against
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Every test the comparison could be made on is one the comparison was made on.
+    /// </summary>
+    /// <remarks>
+    /// The companions are flat and are declined by the effect-size gate, and they are the point of
+    /// the assertion: a family counted after that gate would hold only the one test that regressed,
+    /// which is a family in which every member is a discovery and corrects for nothing. The gates
+    /// that decline them read the size of the very effect the p-value measures, so counting after
+    /// them would select the family on the outcome.
+    /// </remarks>
+    [Fact]
+    public void TheFamilyHoldsEveryTestTheComparisonWasPosedOnAndNotOnlyTheSlowOnes()
+    {
+        AnalysisContext context = Regressing();
+
+        Assert.Single(Regressions(context));
+        Assert.Equal(1 + Companions, Family(context, FindingKind.DurationRegression));
+    }
+
+    /// <summary>
+    /// A test with no baseline of its own was never asked whether it had slowed.
+    /// </summary>
+    /// <remarks>
+    /// The other side of the boundary. The arm sizes are a fact about the shape of the data rather
+    /// than about the answer, so a subject that only started running recently leaves the family
+    /// rather than failing within it — padding the family with questions the data cannot answer
+    /// would tighten every bar for nothing.
+    /// </remarks>
+    [Fact]
+    public void ATestWithoutEnoughOfABaselineIsNotInTheFamily()
+    {
+        // The subject runs only in the four newest sessions, which is under the seven baseline runs
+        // the comparison needs. The companions run throughout.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: _ => 800,
+            subjectRuns: ordinal => ordinal >= 6);
+
+        Assert.Empty(Regressions(context));
+        Assert.Equal(Companions, Family(context, FindingKind.DurationRegression));
+    }
+
+    /// <summary>
+    /// A regression the multiplicity pass silences gives the instability finding back.
+    /// </summary>
+    /// <remarks>
+    /// The suppression of an instability finding by a regression is only right while the regression
+    /// is reported, and on a suite-sized family it often is not. Held as the candidate's
+    /// alternative, the instability finding is what the coordinator falls back to, so the test is
+    /// still mentioned rather than vanishing behind a finding that never appeared.
+    /// </remarks>
+    [Fact]
+    public void ARegressionSilencedByMultiplicityGivesBackTheInstabilityFinding()
+    {
+        // The sample that earns both: a baseline that already swings, and recent runs that step
+        // clear of all of it.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: ordinal => ordinal < 7 ? (ordinal % 2 == 0 ? 100 : 400) : 2000);
+
+        FindingCandidate regression = Single(Regressions(context));
+        Assert.Empty(Unstables(context));
+
+        FindingCandidate instead = Assert.IsType<FindingCandidate>(regression.Instead);
+        Assert.Equal(FindingKind.DurationUnstable, instead.Kind);
+
+        // Same subject, so the reporting floor already applied to the regression applies to it
+        // unchanged; and no p-value, because it was never in a family to be charged against one.
+        Assert.Equal(regression.Subject.SortKey, instead.Subject.SortKey);
+        Assert.Null(instead.PValue);
+    }
+
+    /// <summary>
+    /// Instability is measured, not tested, and so is charged for nothing.
+    /// </summary>
+    /// <remarks>
+    /// A statement about how widely a test's own durations fall, decided on a dispersion and a
+    /// floor. There is no null hypothesis, no p-value on the candidate, and nothing for the
+    /// coordinator's multiplicity pass to act on.
+    /// </remarks>
+    [Fact]
+    public void InstabilityReportsNoFamilyOfItsOwn()
+    {
+        AnalysisContext context = Varying(high: 400, low: 40);
+
+        Assert.NotEmpty(Unstables(context));
+
+        Assert.DoesNotContain(
+            FindingKind.DurationUnstable,
+            new DurationProvider().Analyze(context).HypothesesTested.Keys);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------
 
@@ -1090,13 +1186,16 @@ public sealed class DurationProviderTests
             retry: attempt > 1);
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
-        [.. new DurationProvider().Analyze(context)];
+        new DurationProvider().Analyze(context).Candidates;
 
     private static IReadOnlyList<FindingCandidate> Regressions(AnalysisContext context) =>
         [.. Analyze(context).Where(c => c.Kind == FindingKind.DurationRegression)];
 
     private static IReadOnlyList<FindingCandidate> Unstables(AnalysisContext context) =>
         [.. Analyze(context).Where(c => c.Kind == FindingKind.DurationUnstable)];
+
+    private static int Family(AnalysisContext context, FindingKind kind) =>
+        new DurationProvider().Analyze(context).HypothesesTested.GetValueOrDefault(kind);
 
     /// <summary>
     /// Asserts that exactly one candidate was produced, and returns it.

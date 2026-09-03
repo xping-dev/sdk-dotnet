@@ -285,7 +285,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.9",
+  "schemaVersion": "1.10",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -293,7 +293,8 @@ Every finding carries a `headline` — the same sentence the rendered report pri
     "findings": 3,
     "counts": { "high": 1, "medium": 2, "low": 0 },
     "healthy": 409,
-    "excludedLowEvidence": 41
+    "excludedLowEvidence": 41,
+    "excludedNotSignificant": 6
   },
   "findings": [
     {

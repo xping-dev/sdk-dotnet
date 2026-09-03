@@ -81,6 +81,192 @@ public sealed class FindingCoordinatorTests
         Assert.Equal(0, result.ExcludedLowEvidence);
     }
 
+    // -------------------------------------------------------------------------------------------
+    // Multiplicity
+    // -------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A finding that tested nothing is corrected for nothing, however large the suite.
+    /// </summary>
+    /// <remarks>
+    /// The bypass `RetryMasked`, `SharedFailure` and `BrokenFixture` rest on. They count things that
+    /// demonstrably happened; there is no null hypothesis under which a retry that masked a failure
+    /// did not happen, and a false discovery rate over observations is not a question.
+    /// </remarks>
+    [Fact]
+    public void ACandidateThatCarriesNoPValueIsNeverSilencedByMultiplicity()
+    {
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.RetryMasked, "Test0", hypothesesTested: 300)]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Single(result.Findings);
+        Assert.Equal(0, result.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// The same p-value is a finding out of one comparison and noise out of three hundred.
+    /// </summary>
+    /// <remarks>
+    /// The whole of the issue in one pair of assertions. A p of 0.04 is the conventional level twice
+    /// over on its own, and it is also what one comparison in twenty-five produces with nothing at
+    /// all going on — so a suite that ran the comparison three hundred times has seen about twelve
+    /// of them and has learnt nothing from any.
+    /// </remarks>
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(300, false)]
+    public void APValueIsJudgedAgainstTheNumberOfFingerprintsItsKindWasTestedOn(
+        int tested, bool reported)
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new StubProvider(
+                "stub", FindingKind.TimeSensitive, "Test0", pValue: 0.04, hypothesesTested: tested)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(reported ? 1 : 0, result.Findings.Count);
+        Assert.Equal(reported ? 0 : 1, result.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// A candidate is charged to one reason for not being reported, not to both.
+    /// </summary>
+    /// <remarks>
+    /// The floor runs first, so a candidate resting on four runs is one that needs more runs — which
+    /// is what a reader can act on — rather than one that failed a significance bar it was never
+    /// really measured against.
+    /// </remarks>
+    [Fact]
+    public void ACandidateBelowTheEvidenceFloorIsCountedThereAndNowhereElse()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new StubProvider(
+                "stub", FindingKind.TimeSensitive, "Test0", pValue: 0.04, hypothesesTested: 300)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(sessionCount: 4), null, warnings);
+
+        Assert.Empty(result.Findings);
+        Assert.Equal(1, result.ExcludedLowEvidence);
+        Assert.Equal(0, result.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// Asking for one kind must not change what that kind reports.
+    /// </summary>
+    /// <remarks>
+    /// The correction is within a kind, and `--kind` narrows a family and its members together, so a
+    /// finding cannot appear or vanish according to what else was asked for in the same run. A
+    /// correction pooled across kinds would fail this: dropping the concurrency comparisons would
+    /// shorten the list the clock findings were ranked in and loosen their bar.
+    /// </remarks>
+    [Fact]
+    public void RestrictingTheReportToOneKindDoesNotChangeWhatThatKindReports()
+    {
+        StubProvider[] Providers() =>
+        [
+            new("time", FindingKind.TimeSensitive, "Test0", pValue: 0.001, hypothesesTested: 50),
+            new("concurrency", FindingKind.ParallelSensitive, "Test0",
+                pValue: 0.0001, hypothesesTested: 50)
+        ];
+
+        using var warnings = new StringWriter();
+
+        AnalysisResult everything = new FindingCoordinator(Providers()).Run(Context(), null, warnings);
+
+        AnalysisResult narrowed = new FindingCoordinator(Providers()).Run(
+            Context(), new HashSet<FindingKind> { FindingKind.TimeSensitive }, warnings);
+
+        Assert.Contains(everything.Findings, f => f.Kind == FindingKind.TimeSensitive);
+        Assert.Contains(narrowed.Findings, f => f.Kind == FindingKind.TimeSensitive);
+        Assert.Equal(0, narrowed.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// A claim the pass silences hands over to the weaker one its provider was holding back.
+    /// </summary>
+    /// <remarks>
+    /// The case a provider cannot decide for itself. `DurationProvider` suppresses the instability
+    /// finding for a test it is already calling a regression, because the step that made the
+    /// regression is what widened the spread and reporting both states one thing twice. That
+    /// suppression is only right while the regression is reported, and whether it is turns on this
+    /// pass — so a provider resolving it alone would leave a slow, wildly varying test unmentioned
+    /// on the strength of a finding that never appeared.
+    /// </remarks>
+    [Fact]
+    public void ASilencedCandidateHandsOverToTheAlternativeItsProviderOffered()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new SupersedingProvider(
+                FindingKind.DurationRegression,
+                FindingKind.DurationUnstable,
+                pValue: 0.04,
+                hypothesesTested: 300)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(FindingKind.DurationUnstable, Assert.Single(result.Findings).Kind);
+
+        // The handover is a substitution, not a reprieve: nothing was excluded, because something
+        // is reported about the subject.
+        Assert.Equal(0, result.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// A claim that clears its bar keeps its provider's suppression.
+    /// </summary>
+    [Fact]
+    public void ASurvivingCandidateKeepsTheAlternativeSuppressed()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new SupersedingProvider(
+                FindingKind.DurationRegression,
+                FindingKind.DurationUnstable,
+                pValue: 0.0001,
+                hypothesesTested: 300)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(FindingKind.DurationRegression, Assert.Single(result.Findings).Kind);
+    }
+
+    /// <summary>
+    /// A kind whose provider never reported a family is corrected against the results themselves.
+    /// </summary>
+    /// <remarks>
+    /// A provider miscounting its own family must not make the correction weaker than the evidence.
+    /// Falling back on the number of results is the least the family can honestly be, and it is what
+    /// keeps a bug in one provider from quietly turning the pass off for its kind.
+    /// </remarks>
+    [Fact]
+    public void AKindThatReportedNoFamilyIsStillCorrectedAgainstItsOwnResults()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new StubProvider("stub", FindingKind.TimeSensitive, "Test0", pValue: 0.4)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Empty(result.Findings);
+        Assert.Equal(1, result.ExcludedNotSignificant);
+    }
+
     [Fact]
     public void TheKindFilterSkipsProvidersThatCannotContribute()
     {
@@ -227,7 +413,19 @@ public sealed class FindingCoordinatorTests
     /// <summary>
     /// Emits one finding about a named test, with a fixed unreliability.
     /// </summary>
-    private sealed class StubProvider(string name, FindingKind kind, string test, double unreliability = 0.5)
+    /// <remarks>
+    /// <paramref name="pValue"/> and <paramref name="hypothesesTested"/> are what the multiplicity
+    /// pass reads. Left at their defaults the stub is an observation of something that happened,
+    /// which is the shape <c>RetryMasked</c> and <c>SharedFailure</c> have and the shape every test
+    /// written before that pass existed assumed.
+    /// </remarks>
+    private sealed class StubProvider(
+        string name,
+        FindingKind kind,
+        string test,
+        double unreliability = 0.5,
+        double? pValue = null,
+        int hypothesesTested = 0)
         : IFindingProvider
     {
         public string Name { get; } = name;
@@ -236,21 +434,74 @@ public sealed class FindingCoordinatorTests
 
         public bool WasRun { get; private set; }
 
-        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+        public ProviderReport Analyze(AnalysisContext context)
         {
             WasRun = true;
 
+            var family = new Dictionary<FindingKind, int>();
+
+            if (hypothesesTested > 0)
+                family[kind] = hypothesesTested;
+
             TestReference? reference = context.Tests.ReferenceFor($"fp-{test}");
             if (reference == null)
-                yield break;
+                return new ProviderReport([], family);
 
-            yield return new FindingCandidate(
-                kind,
-                new FindingSubject.SingleTest(reference),
-                new StubEvidence(1),
-                unreliability,
-                SessionsSinceLastOccurrence: 0,
-                DrillDownCommand: "xping report");
+            return new ProviderReport(
+                [
+                    new FindingCandidate(
+                        kind,
+                        new FindingSubject.SingleTest(reference),
+                        new StubEvidence(1),
+                        unreliability,
+                        SessionsSinceLastOccurrence: 0,
+                        DrillDownCommand: "xping report",
+                        PValue: pValue)
+                ],
+                family);
+        }
+    }
+
+    /// <summary>
+    /// Emits one tested claim about a test, holding a second, untested one behind it.
+    /// </summary>
+    private sealed class SupersedingProvider(
+        FindingKind kind, FindingKind alternative, double pValue, int hypothesesTested)
+        : IFindingProvider
+    {
+        public string Name => "superseding";
+
+        public IReadOnlyList<FindingKind> Kinds { get; } = [kind, alternative];
+
+        public ProviderReport Analyze(AnalysisContext context)
+        {
+            var family = new Dictionary<FindingKind, int> { [kind] = hypothesesTested };
+
+            TestReference? reference = context.Tests.ReferenceFor("fp-Test0");
+            if (reference == null)
+                return new ProviderReport([], family);
+
+            var subject = new FindingSubject.SingleTest(reference);
+
+            return new ProviderReport(
+                [
+                    new FindingCandidate(
+                        kind,
+                        subject,
+                        new StubEvidence(1),
+                        0.5,
+                        SessionsSinceLastOccurrence: 0,
+                        DrillDownCommand: "xping report",
+                        PValue: pValue,
+                        Instead: new FindingCandidate(
+                            alternative,
+                            subject,
+                            new StubEvidence(2),
+                            0.4,
+                            SessionsSinceLastOccurrence: 0,
+                            DrillDownCommand: "xping report"))
+                ],
+                family);
         }
     }
 
@@ -260,7 +511,7 @@ public sealed class FindingCoordinatorTests
 
         public IReadOnlyList<FindingKind> Kinds => [FindingKind.DurationRegression];
 
-        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context) =>
+        public ProviderReport Analyze(AnalysisContext context) =>
             throw new InvalidOperationException("metric exploded");
     }
 
@@ -270,7 +521,10 @@ public sealed class FindingCoordinatorTests
 
         public IReadOnlyList<FindingKind> Kinds => [FindingKind.ParallelSensitive];
 
-        public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+        public ProviderReport Analyze(AnalysisContext context) =>
+            ProviderReport.Observations([.. Candidates()]);
+
+        private static IEnumerable<FindingCandidate> Candidates()
         {
             yield return Explode();
         }

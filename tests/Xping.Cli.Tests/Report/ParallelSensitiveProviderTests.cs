@@ -375,7 +375,7 @@ public sealed class ParallelSensitiveProviderTests
         Assert.Equal(5, context.EnvironmentalSessionCount);
 
         Assert.DoesNotContain(
-            new ParallelSensitiveProvider().Analyze(context),
+            new ParallelSensitiveProvider().Analyze(context).Candidates,
             c => Named(c) == Subject);
     }
 
@@ -632,7 +632,7 @@ public sealed class ParallelSensitiveProviderTests
     }
 
     private static IReadOnlyList<FindingCandidate> Analyze(List<TestSession> sessions) =>
-        [.. new ParallelSensitiveProvider().Analyze(TestSessionFactory.Context([.. sessions]))];
+        new ParallelSensitiveProvider().Analyze(TestSessionFactory.Context([.. sessions])).Candidates;
 
     private static FindingCandidate Single(List<TestSession> sessions) =>
         Assert.Single(Analyze(sessions));

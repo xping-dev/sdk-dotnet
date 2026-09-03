@@ -32,7 +32,64 @@ public sealed class VanishedProviderTests
     }
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
-        [.. new VanishedProvider().Analyze(context)];
+        new VanishedProvider().Analyze(context).Candidates;
+
+    private static int Family(AnalysisContext context) =>
+        new VanishedProvider().Analyze(context).HypothesesTested
+            .GetValueOrDefault(FindingKind.Vanished);
+
+    /// <summary>
+    /// A test that is still running is an asking that answered no, not an asking that never happened.
+    /// </summary>
+    /// <remarks>
+    /// The multiplicity this kind has to be charged for is every established test in the window, and
+    /// counting only the absent ones would describe a family in which every member is a discovery:
+    /// a suite of three hundred stable tests holding one absence would report a family of one and
+    /// pass that absence through the coordinator uncorrected. `Stable` runs throughout and `Removed`
+    /// stops, so the family is two.
+    /// </remarks>
+    [Fact]
+    public void TheFamilyIsEveryEstablishedTestAndNotOnlyTheAbsentOnes()
+    {
+        AnalysisContext context = Context(total: 8, presentIn: 5);
+
+        Assert.Single(Analyze(context));
+        Assert.Equal(2, Family(context));
+    }
+
+    /// <summary>
+    /// A test with no habit behind it is a question that could not be asked.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the boundary: the family is what the data could answer, so a fingerprint
+    /// the baseline barely saw is outside it whichever slice it is in now. Padding the family with
+    /// those would tighten every bar for nothing.
+    /// </remarks>
+    [Fact]
+    public void ATestWithoutABaselineHabitIsNotInTheFamily()
+    {
+        var sessions = new List<TestSession>();
+
+        for (int i = 0; i < 8; i++)
+        {
+            // `Stable` throughout, `Occasional` in two baseline sessions only — one short of the
+            // habit this kind needs before an absence could mean anything.
+            sessions.Add(i < 2
+                ? TestSessionFactory.Session(i, "Stable", "Occasional")
+                : TestSessionFactory.Session(i, "Stable"));
+        }
+
+        Assert.Equal(1, Family(TestSessionFactory.Context([.. sessions])));
+    }
+
+    /// <summary>
+    /// A window with no baseline or no current slice asked nothing of anyone.
+    /// </summary>
+    [Fact]
+    public void AWindowWithNothingToCompareReportsNoFamily()
+    {
+        Assert.Equal(0, Family(TestSessionFactory.Context(TestSessionFactory.Session(0, "Stable"))));
+    }
 
     [Fact]
     public void ATestThatStopsRunningIsReported()

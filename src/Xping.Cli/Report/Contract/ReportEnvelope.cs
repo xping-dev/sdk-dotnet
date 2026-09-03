@@ -39,11 +39,10 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.9 is where
-    /// <c>VanishedEvidence</c> gained the baseline run rate and the p-value of the absence, the two
-    /// figures the finding is now decided on.
+    /// leaving the number still would tell it nothing had moved. 1.10 is where the summary gained
+    /// <c>excludedNotSignificant</c>, the candidates a kind's multiplicity correction silenced.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.9";
+    public const string CurrentSchemaVersion = "1.10";
 }
 
 /// <summary>
@@ -86,6 +85,11 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="Counts">Those findings broken down by severity.</param>
 /// <param name="Healthy">Tests no finding was raised about.</param>
 /// <param name="ExcludedLowEvidence">Candidates dropped for resting on too little data.</param>
+/// <param name="ExcludedNotSignificant">
+/// Candidates dropped because their kind's comparison, charged for every fingerprint it ran on,
+/// no longer said anything. A large suite over a short window silences most of what it tests, and a
+/// reader given only an empty block cannot tell that from a suite with nothing to report.
+/// </param>
 /// <param name="EnvironmentalSessions">Sessions discounted as environment failures.</param>
 /// <param name="IncompleteSessions">Sessions found but not finalised.</param>
 /// <param name="UnreadableSessions">Session files that could not be read.</param>
@@ -96,6 +100,7 @@ internal sealed record SummaryDto(
     SeverityCountsDto Counts,
     int Healthy,
     int ExcludedLowEvidence,
+    int ExcludedNotSignificant,
     int EnvironmentalSessions,
     int IncompleteSessions,
     int UnreadableSessions,

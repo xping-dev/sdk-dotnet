@@ -89,7 +89,7 @@ public sealed class RetryProviderTests
     }
 
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
-        [.. new RetryProvider().Analyze(context)];
+        new RetryProvider().Analyze(context).Candidates;
 
     private static RetryMaskedEvidence EvidenceFrom(AnalysisContext context) =>
         Assert.IsType<RetryMaskedEvidence>(Assert.Single(Analyze(context)).Evidence);

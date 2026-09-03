@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
 using Xping.Cli.Report.Model;
 
 namespace Xping.Cli.Report.Providers;
@@ -32,14 +33,33 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
 /// <param name="PValue">
 /// How probable an observation this extreme would be if the kind's claim were false, or
-/// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": kinds like
-/// <c>RetryMasked</c> and <c>SharedFailure</c> count things that demonstrably happened, and a
-/// probability of their happening by chance is not a question. The coordinator carries this so that
+/// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": most kinds
+/// count things that demonstrably happened — every kind the retry and failure-mode providers emit,
+/// and <c>DurationUnstable</c> besides — and a probability of their happening by chance is not a
+/// question. Only <c>TimeSensitive</c>, <c>ParallelSensitive</c>, <c>DurationRegression</c> and
+/// <c>Vanished</c> carry one. The coordinator carries this so that
 /// a multiplicity correction can be applied once, across every fingerprint a kind was tested on —
 /// which a provider cannot do, because by contract it cannot see the others.
 /// </param>
 /// <param name="SeverityCeiling">
 /// The most severe band this kind may reach, or <see langword="null"/> for no cap.
+/// </param>
+/// <param name="Instead">
+/// What to claim about the same subject if this candidate does not clear its kind's bar, or
+/// <see langword="null"/> where there is nothing else to say.
+/// <para>
+/// For the case where two kinds describe one observation and the weaker of them is only worth
+/// printing when the stronger is not. A provider cannot resolve that itself any more: whether the
+/// stronger claim holds is settled by the multiplicity pass, after every provider has run, so a
+/// provider that picked between them would be picking before the answer existed — and a test whose
+/// stronger claim was then silenced would go unreported altogether, having had its weaker one
+/// discarded on the strength of a finding that never appeared.
+/// </para>
+/// <para>
+/// The subject must be the same, so that the reporting floor already applied to this candidate
+/// applies unchanged to its replacement. The replacement should carry no <paramref name="PValue"/>:
+/// it was not in any family, so there is no multiplicity for it to be charged with.
+/// </para>
 /// </param>
 internal sealed record FindingCandidate(
     FindingKind Kind,
@@ -49,7 +69,8 @@ internal sealed record FindingCandidate(
     int SessionsSinceLastOccurrence,
     string DrillDownCommand,
     double? PValue = null,
-    Severity? SeverityCeiling = null)
+    Severity? SeverityCeiling = null,
+    FindingCandidate? Instead = null)
 {
     /// <summary>
     /// Applies this candidate's ceiling to a banded severity.
@@ -102,6 +123,78 @@ internal interface IFindingProvider
     /// Examines the window and returns what it observed.
     /// </summary>
     /// <param name="context">The window, sessions and shared indexes.</param>
-    /// <returns>Candidate findings, in any order.</returns>
-    IEnumerable<FindingCandidate> Analyze(AnalysisContext context);
+    /// <returns>Candidate findings, in any order, and the size of every family behind them.</returns>
+    ProviderReport Analyze(AnalysisContext context);
+}
+
+/// <summary>
+/// What one provider observed in a window, and how many questions it asked to observe it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The second half is the reason this is a record rather than a list. A p-value on its own cannot
+/// be judged: the same 0.02 is strong evidence from one comparison and the commonest thing three
+/// hundred comparisons produce. The coordinator applies
+/// <see cref="Scoring.BenjaminiHochberg"/> once per kind and needs the denominator, and only the
+/// provider knows it — the count includes every fingerprint whose answer never became a candidate,
+/// which by definition is not in <see cref="Candidates"/>.
+/// </para>
+/// <para>
+/// Eager rather than an iterator, unlike the shape this replaced. A family size is not known until
+/// the last fingerprint has been examined, so a provider that streamed its candidates would have to
+/// publish the count before it had it. Nothing is lost: the coordinator materialised every
+/// provider's output before reading any of it in any case, because a provider that throws must cost
+/// its own findings and no one else's.
+/// </para>
+/// </remarks>
+/// <param name="Candidates">What the provider is claiming, in any order.</param>
+/// <param name="HypothesesTested">
+/// Per kind, the number of fingerprints on which that kind's hypothesis test was well posed —
+/// counted where the last precondition on the shape of the data is met, and before any gate that
+/// reads the data's direction or magnitude. Absent for a kind that tests no hypothesis. Counting it
+/// after the gates instead would report a family in which every member is a discovery, and correct
+/// for nothing.
+/// </param>
+internal sealed record ProviderReport(
+    IReadOnlyList<FindingCandidate> Candidates,
+    IReadOnlyDictionary<FindingKind, int> HypothesesTested)
+{
+    /// <summary>
+    /// A report from a provider that counted things rather than testing anything.
+    /// </summary>
+    /// <param name="candidates">What it counted.</param>
+    /// <returns>A report claiming no family.</returns>
+    /// <remarks>
+    /// Every kind the retry and failure-mode providers emit is an observation of something that
+    /// demonstrably happened — a retry that masked a failure, a signature that knocked over four
+    /// tests at once. There is no null hypothesis to reject and so nothing to correct for, and the
+    /// empty family is what carries all eight of them past the multiplicity pass untouched.
+    /// </remarks>
+    public static ProviderReport Observations(IReadOnlyList<FindingCandidate> candidates) =>
+        new(candidates, ReadOnlyDictionary<FindingKind, int>.Empty);
+}
+
+/// <summary>
+/// What examining one fingerprint produced.
+/// </summary>
+/// <remarks>
+/// The distinction the pair exists to draw is between a fingerprint the question could not be asked
+/// of and one it was asked of and answered no. Both yield no candidate, and only the second is a
+/// hypothesis test that the multiplicity correction has to be charged for. A provider returning a
+/// bare <c>FindingCandidate?</c> conflates them, and undercounting the family is the direction that
+/// invents findings.
+/// </remarks>
+/// <param name="Tested">Whether the kind's hypothesis test was computed on this fingerprint.</param>
+/// <param name="Candidate">What survived the gates after it, if anything did.</param>
+internal readonly record struct Examination(bool Tested, FindingCandidate? Candidate)
+{
+    /// <summary>Gets the result for a fingerprint the question could not be asked of.</summary>
+    public static Examination NotPosed { get; }
+
+    /// <summary>
+    /// The result for a fingerprint the test was computed on, whatever the gates then said.
+    /// </summary>
+    /// <param name="candidate">The candidate, or <see langword="null"/> if a gate declined it.</param>
+    /// <returns>An examination that counts towards the family.</returns>
+    public static Examination Of(FindingCandidate? candidate) => new(true, candidate);
 }

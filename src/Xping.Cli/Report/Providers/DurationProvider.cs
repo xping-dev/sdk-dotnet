@@ -277,10 +277,14 @@ internal sealed class DurationProvider : IFindingProvider
     // What it costs is the shape that needs the most evidence anyway. A true doubling on a steady
     // test is still reported 97% of the time against seventeen baseline runs and 89% against seven.
     //
-    // A pre-filter, not the final word. #160 applies a Benjamini-Hochberg pass across every
-    // fingerprint each kind was tested on, which is the only place the multiplicity can properly be
-    // charged for -- a provider cannot see the other tests. This holds the rate to something
-    // defensible in the meantime, and that pass will supersede it.
+    // A pre-filter, and no longer the final word: the coordinator now applies a Benjamini-Hochberg
+    // pass at `LocalAnalysisConstants.FalseDiscoveryRate` across every fingerprint this kind was
+    // tested on, and that bar is the one a finding has to clear. This one stays, deliberately. It is
+    // free where the pass is not -- the two expensive things below it never run on a test it
+    // declines -- and it cannot change the pass's answer, because the pass's own bar exceeds 0.01
+    // only where more than a tenth of the family are discoveries, at which point the report has
+    // larger news than a threshold. Removing it would buy nothing and cost the Hodges-Lehmann
+    // interval on every fingerprint in the suite.
     private const double RegressionAlpha = 0.01;
 
     // Runs either arm's sample is truncated to, most recent first. The exact test enumerates every
@@ -308,9 +312,12 @@ internal sealed class DurationProvider : IFindingProvider
         [FindingKind.DurationRegression, FindingKind.DurationUnstable];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
 
         // Computed once for the whole window and shared by every test in a run, which is what makes
         // the normalisation a property of the run rather than something each test re-derives.
@@ -359,31 +366,54 @@ internal sealed class DurationProvider : IFindingProvider
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
+            Examination regression =
+                Regression(test, current, currentProfile, baselineProfile, referenceMs);
+
+            if (regression.Tested)
+                tested++;
+
+            FindingCandidate? unstable =
+                Unstable(context, test, all, whole, baselineProfile, referenceMs);
+
             // A regression suppresses the instability finding for the same test, and the two now
             // overlap more than they used to: a test whose baseline swings and whose recent runs
             // then step clear of all of it earns both, where the retired stability gate used to
             // decline the first. The step is what lifted the whole window past the instability
             // threshold, so reporting that as instability would state the regression a second time
-            // under another name. This ordering is what stops it, and
-            // ARegressingTestIsNotAlsoReportedAsUnstable builds the sample that needs it.
-            FindingCandidate? candidate =
-                Regression(test, current, currentProfile, baselineProfile, referenceMs) ??
-                Unstable(context, test, all, whole, baselineProfile, referenceMs);
+            // under another name. ARegressingTestIsNotAlsoReportedAsUnstable builds the sample that
+            // needs it.
+            //
+            // Offered to the coordinator as the alternative rather than dropped here, because the
+            // suppression is only right while the regression is reported. Whether it is turns on the
+            // multiplicity pass, which runs after every provider and which this one cannot see: a
+            // regression silenced there would otherwise take the instability finding down with it
+            // and leave a slow, wildly varying test entirely unmentioned.
+            FindingCandidate? candidate = regression.Candidate is { } slower
+                ? slower with { Instead = unstable }
+                : unstable;
 
             if (candidate != null)
-                yield return candidate;
+                candidates.Add(candidate);
         }
+
+        // `DurationUnstable` reports no family. It is a statement about how widely a test's own
+        // durations fall, decided on a dispersion and a floor rather than on a null hypothesis, so
+        // there is no p-value for a multiplicity correction to act on and no family to correct it
+        // against.
+        return new ProviderReport(
+            candidates,
+            new Dictionary<FindingKind, int> { [FindingKind.DurationRegression] = tested });
     }
 
     /// <summary>
-    /// Attempts the regression finding, returning <see langword="null"/> when any gate declines it.
+    /// Attempts the regression finding, saying both whether it was tested for and what survived.
     /// </summary>
     /// <param name="test">The test under consideration.</param>
     /// <param name="current">Its executions in the recent slice.</param>
     /// <param name="currentProfile">Those executions reduced to statistics.</param>
     /// <param name="baselineProfile">The same for everything before them.</param>
     /// <param name="referenceMs">The test's reference speed, in milliseconds.</param>
-    private static FindingCandidate? Regression(
+    private static Examination Regression(
         TestReference test,
         List<ExecutionRef> current,
         Profile currentProfile,
@@ -401,8 +431,16 @@ internal sealed class DurationProvider : IFindingProvider
         if (baselineProfile.Compared.Count < MinimumBaselineSessions ||
             currentProfile.Compared.Count < MinimumCurrentSessions)
         {
-            return null;
+            return Examination.NotPosed;
         }
+
+        // Everything past this line is a test the provider ran on this fingerprint, and counts
+        // towards the family the coordinator corrects against — including the two gates below,
+        // which decline before a p-value is computed. Counting after them instead would describe a
+        // family selected on the size of the very effect the p-value measures, which is the one
+        // filter a multiplicity correction cannot be given: the p-values that were never computed
+        // are not absent from the family, only from the list, and omitting them costs power rather
+        // than validity.
 
         // The cheap gates first, and the two expensive things last. Asking how much slower is a
         // sorted list of at most a few hundred ratios; asking whether that is real enumerates every
@@ -412,7 +450,7 @@ internal sealed class DurationProvider : IFindingProvider
         double ratio = HodgesLehmann.Ratio(baselineProfile.Compared, currentProfile.Compared);
 
         if (ratio - 1 < LocalAnalysisConstants.DurationRegressionPct)
-            return null;
+            return Examination.Of(null);
 
         // Guards the relative test on the scale a developer actually experiences: two milliseconds
         // becoming four is a hundred-percent regression and is not worth anyone's morning. Measured
@@ -425,7 +463,7 @@ internal sealed class DurationProvider : IFindingProvider
         double increaseMs = (ratio - 1) * baselineLevel * referenceMs;
 
         if (increaseMs < LocalAnalysisConstants.DurationRegressionMinMs)
-            return null;
+            return Examination.Of(null);
 
         // And then the question itself: is the recent slice drawn from a slower distribution, or is
         // this the variation the test already had? Nothing above asks it — a ratio of two medians
@@ -434,12 +472,12 @@ internal sealed class DurationProvider : IFindingProvider
             baselineProfile.Compared, currentProfile.Compared);
 
         if (pValue > RegressionAlpha)
-            return null;
+            return Examination.Of(null);
 
         // Only now, for the handful of tests that survived all three.
         RatioEstimate shift = HodgesLehmann.Of(baselineProfile.Compared, currentProfile.Compared);
 
-        return new FindingCandidate(
+        return Examination.Of(new FindingCandidate(
             FindingKind.DurationRegression,
             new FindingSubject.SingleTest(test),
             new DurationRegressionEvidence(
@@ -472,7 +510,7 @@ internal sealed class DurationProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.DurationRegression, test),
 
-            PValue: pValue);
+            PValue: pValue));
     }
 
     /// <summary>

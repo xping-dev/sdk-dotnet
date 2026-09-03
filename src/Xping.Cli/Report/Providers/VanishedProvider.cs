@@ -72,25 +72,39 @@ internal sealed class VanishedProvider : IFindingProvider
     public IReadOnlyList<FindingKind> Kinds => [FindingKind.Vanished];
 
     /// <inheritdoc/>
-    public IEnumerable<FindingCandidate> Analyze(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
+
         AnalysisWindowSlices slices = AnalysisWindowSlices.From(context);
 
         // Nothing to compare against: with no baseline every test looks new, and with no current
         // slice every test looks vanished.
         if (slices.BaselineCount == 0 || slices.CurrentCount == 0)
-            yield break;
+            return Report(candidates, tested);
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            if (slices.Current.Contains(fingerprint))
-                continue;
-
+            // The habit the absence would be a change from. A test the baseline barely saw is one
+            // this question cannot be asked of at all, whichever slice it is in now.
             if (!slices.BaselineAppearances.TryGetValue(fingerprint, out int appearances) ||
                 appearances < LocalAnalysisConstants.VanishedMinBaselineSessions)
             {
                 continue;
             }
+
+            // Counted before the presence check below and not after it, which is the whole
+            // difference between a family and a shortlist. Being absent from the current slice is
+            // this kind's finding, not its precondition: every established test in the window is a
+            // test asked whether it stopped running, and the ones still running are the askings that
+            // answered no. Counting only the absences would describe a family in which every member
+            // is a discovery and correct for nothing — a suite of three hundred stable tests holding
+            // one absence would report m = 1 and pass it through untouched.
+            tested++;
+
+            if (slices.Current.Contains(fingerprint))
+                continue;
 
             // How lopsided the split of this test's appearances is, against the null that appearing
             // had nothing to do with which slice a session fell in. The current arm holds none of
@@ -111,7 +125,7 @@ internal sealed class VanishedProvider : IFindingProvider
             // Executions arrive newest-session-first, so the head is the last time it ran.
             ExecutionRef mostRecent = executions[0];
 
-            yield return new FindingCandidate(
+            candidates.Add(new FindingCandidate(
                 FindingKind.Vanished,
                 new FindingSubject.SingleTest(reference),
                 new VanishedEvidence(
@@ -139,16 +153,27 @@ internal sealed class VanishedProvider : IFindingProvider
 
                 DrillDownCommand: DrillDown.ForTest(FindingKind.Vanished, reference),
 
-                // Unrounded: this is the number #160's Benjamini-Hochberg pass sorts on, and the
-                // rounded copy in the evidence is only what gets written down.
+                // Unrounded: this is the number the coordinator's Benjamini-Hochberg pass sorts on,
+                // and the rounded copy in the evidence is only what gets written down.
                 PValue: pValue,
 
                 // Reported quietly by default. A test that silently stopped running is worth
                 // knowing about, but it is usually a deliberate deletion, and ranking it alongside
                 // a failing test would train people to ignore the top of the report.
-                SeverityCeiling: Severity.Low);
+                SeverityCeiling: Severity.Low));
         }
+
+        return Report(candidates, tested);
     }
+
+    /// <summary>
+    /// Pairs the candidates with the size of the family they were drawn from.
+    /// </summary>
+    /// <param name="candidates">Absences the gate let through.</param>
+    /// <param name="tested">Fingerprints the absence was measured on.</param>
+    /// <returns>The provider's report.</returns>
+    private static ProviderReport Report(IReadOnlyList<FindingCandidate> candidates, int tested) =>
+        new(candidates, new Dictionary<FindingKind, int> { [FindingKind.Vanished] = tested });
 }
 
 /// <summary>

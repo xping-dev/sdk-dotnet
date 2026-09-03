@@ -103,7 +103,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.9", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.10", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -115,8 +115,8 @@ public sealed class ReportEnvelopeTests : IDisposable
         JsonElement summary = root.GetProperty("summary");
         foreach (string key in (string[])
         [
-            "tests", "findings", "healthy", "excludedLowEvidence", "environmentalSessions",
-            "incompleteSessions", "unreadableSessions", "failedProviders"
+            "tests", "findings", "healthy", "excludedLowEvidence", "excludedNotSignificant",
+            "environmentalSessions", "incompleteSessions", "unreadableSessions", "failedProviders"
         ])
         {
             Assert.True(summary.TryGetProperty(key, out _), $"summary.{key} missing");
@@ -265,7 +265,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.9", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.10", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

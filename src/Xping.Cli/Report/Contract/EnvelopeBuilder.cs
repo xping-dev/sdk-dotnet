@@ -81,6 +81,7 @@ internal static class EnvelopeBuilder
                 new SeverityCountsDto(high, medium, low),
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
+                result.ExcludedNotSignificant,
 
                 context.EnvironmentalSessionCount,
                 incompleteSessions,
