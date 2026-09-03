@@ -161,15 +161,25 @@ public sealed class FisherExactTests
     }
 
     [Fact]
-    public void TheTailIsNeverLargerThanTheTwoSidedAnswer()
+    public void TheTailIsNoLargerThanTheTwoSidedAnswerOnAnExtremeTable()
     {
-        // One tail of the same table against both of them. The two-sided answer counts the observed
-        // table and everything at least as improbable in either direction, so it can only be larger —
-        // and where the opposite tail holds nothing, equal.
+        // One tail of the same table against both of them, and only above the mode. There the tail
+        // holds the observed table and rarer ones still, all of which the two-sided sum also counts,
+        // so it can only be smaller — equal where the opposite tail holds nothing.
         Assert.True(
             FisherExact.OneSidedPValue(5, 6, 0, 6) <= FisherExact.TwoSidedPValue(5, 6, 0, 6));
         Assert.True(
             FisherExact.OneSidedPValue(15, 15, 10, 20) <= FisherExact.TwoSidedPValue(15, 15, 10, 20));
+    }
+
+    [Fact]
+    public void BelowTheModeTheTailIsLargerThanTheTwoSidedAnswerInstead()
+    {
+        // Not a general bound, and the next test over is the counterexample. An upper tail taken from
+        // below the mode sweeps up the mode itself, which is the commonest table there is and exactly
+        // what a two-sided sum leaves out. Pinned so that nobody derives one of these from the other.
+        Assert.True(
+            FisherExact.OneSidedPValue(1, 12, 9, 10) > FisherExact.TwoSidedPValue(1, 12, 9, 10));
     }
 
     [Fact]
@@ -216,7 +226,13 @@ public sealed class FisherExactTests
         // Same arithmetic as the two-sided test and the same reason it has to hold: no coefficient is
         // ever formed, so a thousand runs a side is a probability rather than an infinity.
         Assert.InRange(FisherExact.OneSidedPValue(500, 1000, 500, 1000), 0.4, 0.6);
-        Assert.True(FisherExact.OneSidedPValue(1000, 1000, 0, 1000) >= 0);
+
+        for (int arm = 5; arm <= 500; arm++)
+            Assert.True(FisherExact.OneSidedPValue(arm, arm, 0, arm) > 0);
+
+        // And it stops in the same place, for the same reason. Pinned rather than hidden behind a
+        // `>= 0` that the clamp makes true whatever the arithmetic did.
+        Assert.Equal(0, FisherExact.OneSidedPValue(1000, 1000, 0, 1000));
     }
 
     [Fact]

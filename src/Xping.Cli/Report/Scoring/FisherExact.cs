@@ -146,9 +146,15 @@ internal static class FisherExact
     /// <param name="otherSuccesses">Observations of the behaviour in the second arm.</param>
     /// <param name="otherTrials">Size of the second arm.</param>
     /// <returns>
-    /// The one-sided p-value, in (0,1]; 1 on the same degenerate tables as
+    /// The one-sided p-value, in [0,1]; 1 on the same degenerate tables as
     /// <see cref="TwoSidedPValue(int, int, int, int)"/>. The observed table is always counted, so
-    /// this is at least its own probability.
+    /// the answer is its own probability at the least, and it reaches zero on the same terms the
+    /// two-sided test does — where that probability falls below the smallest positive double, which
+    /// a perfectly separated table needs about a thousand runs a side to reach. No window a store
+    /// holds comes near it, and <c>Vanished</c> cannot reach it at all: an absent arm holds none of
+    /// the occurrences, so its tail is the one table, and against a three-session slice at perfect
+    /// attendance that is <c>6 / ((n+1)(n+2)(n+3))</c> — a window of some 10^108 runs before it
+    /// underflows.
     /// </returns>
     /// <remarks>
     /// <para>
