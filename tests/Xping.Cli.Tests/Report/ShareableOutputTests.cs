@@ -164,11 +164,15 @@ public sealed class ShareableOutputTests
 
             FindingKind.ParallelSensitive =>
                 new ParallelSensitiveEvidence(
-                    new ConcurrencyArm(6, 10, 8, 0.6, 9, 14),
-                    new ConcurrencyArm(1, 10, 9, 0.1, 1, 8),
-                    new ConcurrencyDelta(0.5, 50),
-                    8,
-                    new ConcurrencyRange(1, 14, 9),
+                    new ConcurrencyTrend(
+                        2.874, 0.00405, 0.612, 18, nameof(ConcurrencyDirection.WithConcurrency)),
+                    new ConcurrencyRange(1, 14, 4),
+                    [
+                        new ConcurrencyLevel(1, 6, 6, 0, 0),
+                        new ConcurrencyLevel(4, 5, 5, 1, 0.2),
+                        new ConcurrencyLevel(9, 5, 5, 3, 0.6),
+                        new ConcurrencyLevel(14, 4, 4, 3, 0.75)
+                    ],
                     [],
                     null),
 
@@ -246,6 +250,106 @@ public sealed class ShareableOutputTests
         // it says how wide that search was — which is the difference between a gap someone went
         // looking for and one that was there to begin with.
         Assert.Contains(metrics, m => m.Value == "p 0.00175 two-sided, 2 splits compared");
+    }
+
+    [Fact]
+    public void AConcurrencyFindingShowsItsDoseResponse()
+    {
+        var (headline, metrics) = EvidenceHeadline.For(
+            FindingKind.ParallelSensitive, EvidenceFor(FindingKind.ParallelSensitive));
+
+        // The pair that supplied the most of the correlation — here the two ends, since both are
+        // well populated — always with the milder level first, the direction carried by a word, and
+        // the level count, which is what separates a dose-response from two points that happened to
+        // differ.
+        Assert.Equal(
+            "failed 0% at concurrency 1 and 75% at 14, rising with concurrency across 4 levels " +
+            "in 18 runs",
+            headline);
+
+        // The probability was computed over runs, not over attempts, so the run count travels with
+        // it: a trend over eight runs and one over forty read alike without it.
+        Assert.Contains(metrics, m => m.Value == "p 0.00405 two-sided, Z 2.87 over 18 runs");
+    }
+
+    [Fact]
+    public void AConcurrencyHeadlineNeverQuotesAPairThatContradictsItsOwnTrend()
+    {
+        // A rising trend established by two well-populated levels in the middle, with a single
+        // execution at each end of the range running the other way. Quoting the ends of the range —
+        // the obvious choice — would print "failed 100% at concurrency 1 and 0% at 14, rising with
+        // concurrency". The widest rising step in the table is the pair that actually shows it.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                2.51, 0.0121, 0.402, 22, nameof(ConcurrencyDirection.WithConcurrency)),
+            new ConcurrencyRange(1, 14, 4),
+            [
+                new ConcurrencyLevel(1, 1, 1, 1, 1.0),
+                new ConcurrencyLevel(4, 10, 10, 0, 0),
+                new ConcurrencyLevel(9, 10, 10, 6, 0.6),
+                new ConcurrencyLevel(14, 1, 1, 0, 0)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 0% at concurrency 4 and 60% at 9, rising with concurrency across 4 levels " +
+            "in 22 runs",
+            headline);
+    }
+
+    [Fact]
+    public void AConcurrencyHeadlineIsNotHandedToTheThinnestRowInTheTable()
+    {
+        // A level seen once has a failure rate of exactly 0 or 1, so ranking the pairs on the size of
+        // the step alone would quote it every time: the 1 -> 4 step here climbs a full 100 points and
+        // rests on a single execution. Weighting each step by the executions behind both of its ends
+        // — which is what tau_b itself sums — quotes the step the finding actually rests on.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                3.02, 0.0025, 0.514, 31, nameof(ConcurrencyDirection.WithConcurrency)),
+            new ConcurrencyRange(1, 14, 4),
+            [
+                new ConcurrencyLevel(1, 10, 10, 0, 0),
+                new ConcurrencyLevel(4, 1, 1, 1, 1.0),
+                new ConcurrencyLevel(9, 10, 10, 6, 0.6),
+                new ConcurrencyLevel(14, 10, 10, 8, 0.8)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 0% at concurrency 1 and 80% at 14, rising with concurrency across 4 levels " +
+            "in 31 runs",
+            headline);
+    }
+
+    [Fact]
+    public void AFallingConcurrencyHeadlineQuotesItsPairTheSameWayRound()
+    {
+        // The milder level is named first whichever way the trend runs, so the sentence always reads
+        // along the same axis and the direction is carried by the word rather than by the order.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                -2.51, 0.0121, -0.402, 22, nameof(ConcurrencyDirection.AgainstConcurrency)),
+            new ConcurrencyRange(1, 9, 2),
+            [
+                new ConcurrencyLevel(1, 10, 10, 7, 0.7),
+                new ConcurrencyLevel(9, 10, 10, 1, 0.1)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 10% at concurrency 9 and 70% at 1, falling with concurrency across 2 levels " +
+            "in 22 runs",
+            headline);
     }
 
     [Fact]

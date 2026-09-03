@@ -12,7 +12,7 @@ using Xping.Sdk.Core.Models.Executions;
 namespace Xping.Cli.Report.Providers;
 
 /// <summary>
-/// One execution, published so the arm it landed in can be checked.
+/// One execution, published so the level it was counted at can be checked.
 /// </summary>
 /// <param name="SessionId">The run it happened in.</param>
 /// <param name="StartedAt">When that run started.</param>
@@ -27,41 +27,76 @@ internal sealed record ConcurrencyExemplar(
     int Concurrency);
 
 /// <summary>
-/// One side of the split, always carrying the counts its rate was computed from.
+/// Which way a trend points, named so that neither the evidence nor a renderer has to read a sign.
 /// </summary>
-/// <param name="Failures">Executions in this arm that failed.</param>
-/// <param name="Executions">Executions in this arm.</param>
+internal enum ConcurrencyDirection
+{
+    /// <summary>The test fails more as the suite gets busier.</summary>
+    WithConcurrency,
+
+    /// <summary>The test fails more as the suite empties out.</summary>
+    AgainstConcurrency
+}
+
+/// <summary>
+/// One concurrency level, with everything the rate at it was computed from.
+/// </summary>
+/// <remarks>
+/// Both denominators are published because they answer different questions and this finding needs
+/// both. <paramref name="Executions"/> is what the rate is over — concurrency varies between attempts
+/// within a run, so every attempt is a real, distinct reading. <paramref name="Sessions"/> is how many
+/// independent occasions those readings came from, and it is the number that says whether a rate over
+/// twelve executions is twelve builds or one afternoon of retries.
+/// </remarks>
+/// <param name="Concurrency">Tests in flight, itself included.</param>
+/// <param name="Executions">Executions observed at this level.</param>
 /// <param name="Sessions">Distinct runs those executions came from.</param>
+/// <param name="Failures">How many of them failed.</param>
 /// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
-/// <param name="MinConcurrency">Lowest concurrency observed in this arm.</param>
-/// <param name="MaxConcurrency">Highest concurrency observed in this arm.</param>
-internal sealed record ConcurrencyArm(
-    int Failures,
+internal sealed record ConcurrencyLevel(
+    int Concurrency,
     int Executions,
     int Sessions,
-    double FailureRate,
-    int MinConcurrency,
-    int MaxConcurrency);
+    int Failures,
+    double FailureRate);
 
 /// <summary>
-/// The gap between the two arms, signed so the direction is read rather than derived.
+/// What the trend test found, and what it was computed over.
 /// </summary>
 /// <remarks>
-/// Positive means the test failed more in the crowded arm, negative more in the quiet one. Both
-/// qualify: a test that only fails when it runs nearly alone is as real a defect as one that only
-/// fails under contention, and it would otherwise be reported by nothing.
+/// <para>
+/// Two numbers rather than one, because they answer questions a reader asks separately.
+/// <paramref name="Tau"/> is how strongly the failures track the concurrency; <paramref name="Z"/>
+/// and <paramref name="PValue"/> are whether that tracking is more than the failures would have done
+/// on their own. A test can move a long way on very little and a small way on a great deal, and
+/// neither figure implies the other.
+/// </para>
+/// <para>
+/// <paramref name="Sessions"/> is the divisor of the correction rather than a count of readings: the
+/// probability was computed over occasions, not over attempts, so it is the number that bounds how
+/// small the probability could have been.
+/// </para>
 /// </remarks>
-/// <param name="FailureRate">High-arm rate minus low-arm rate.</param>
-/// <param name="FailureRatePct">The same difference in percentage points.</param>
-internal sealed record ConcurrencyDelta(double FailureRate, double FailureRatePct);
+/// <param name="Z">The standardised trend, signed towards higher concurrency.</param>
+/// <param name="PValue">Two-sided probability of a trend this strong with no trend present.</param>
+/// <param name="Tau">Kendall's τ_b between the concurrency level and failure, signed the same way.</param>
+/// <param name="Sessions">Distinct runs the trend was measured over.</param>
+/// <param name="Direction">Which way it points, named rather than left to the sign.</param>
+internal sealed record ConcurrencyTrend(
+    double Z,
+    double PValue,
+    double Tau,
+    int Sessions,
+    string Direction);
 
 /// <summary>
-/// The concurrency the test was actually observed at, across both arms.
+/// The concurrency the test was actually observed at.
 /// </summary>
 /// <remarks>
-/// Published so a reader can see how much room the split had. Two arms either side of a median of 12
-/// on levels spanning 11 to 13 is a far weaker statement than the same split on levels spanning 1 to
-/// 14, and nothing else in the evidence would show the difference.
+/// Published so a reader can see how much room the trend had. A rise measured across levels 11 to 13
+/// is a far weaker statement than the same rise measured across 1 to 14, and nothing else in the
+/// evidence would show the difference — least of all τ_b, which discounts by exactly this and so
+/// cannot also report it.
 /// </remarks>
 /// <param name="Min">Lowest concurrency observed.</param>
 /// <param name="Max">Highest concurrency observed.</param>
@@ -71,31 +106,49 @@ internal sealed record ConcurrencyRange(int Min, int Max, int DistinctLevels);
 /// <summary>
 /// Evidence that a test's failure rate moves with how many tests ran alongside it.
 /// </summary>
-/// <param name="High">Executions above the test's own median concurrency.</param>
-/// <param name="Low">Executions at or below it.</param>
-/// <param name="Delta">The signed difference in failure rate, which the threshold was applied to.</param>
-/// <param name="SplitAtConcurrency">The median the arms were formed at.</param>
-/// <param name="Observed">The concurrency range the split was made within.</param>
-/// <param name="Exemplars">Up to three executions from the worse arm, newest first.</param>
-/// <param name="Contrast">One execution typical of the other arm.</param>
+/// <param name="Trend">What the trend test found.</param>
+/// <param name="Observed">The concurrency range it was found across.</param>
+/// <param name="Levels">
+/// Every level observed, ascending. Ascending is a contract rather than an incidental ordering: the
+/// dose-response is the finding, and a reader — or a renderer picking out the two ends — has to be
+/// able to read it off in order.
+/// </param>
+/// <param name="Exemplars">
+/// Up to three of the failures that drove the trend — those above the mean concurrency where it
+/// rises, below it where it falls — furthest along the trend first. Not simply the newest three
+/// failures, and not the failures at the extreme level: a failure on the other side of the mean is
+/// the observation the statistic subtracted rather than added, and showing it as an exemplar would
+/// illustrate the finding with the run that argues against it.
+/// </param>
+/// <param name="Contrast">One execution typical of the far end of the observed range.</param>
 internal sealed record ParallelSensitiveEvidence(
-    ConcurrencyArm High,
-    ConcurrencyArm Low,
-    ConcurrencyDelta Delta,
-    int SplitAtConcurrency,
+    ConcurrencyTrend Trend,
     ConcurrencyRange Observed,
+    IReadOnlyList<ConcurrencyLevel> Levels,
     IReadOnlyList<ConcurrencyExemplar> Exemplars,
     ConcurrencyExemplar? Contrast) : FindingEvidence;
 
 /// <summary>
-/// Reports tests whose failure rate depends on how many other tests were running at the time.
+/// Reports tests whose failure rate moves with how many other tests were running at the time.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each test is split at <b>its own median</b> observed concurrency and the two halves' failure rates
-/// compared. A per-test median rather than a fixed boundary is what makes this a property of the test
-/// instead of a property of the suite it happens to live in: a class that always runs in a crowded
-/// collection and one that always runs in a quiet corner are each measured against their own normal.
+/// Every distinct concurrency level the test was observed at is one point on a dose-response curve,
+/// and <see cref="CochranArmitage"/> asks whether the failures track it. There is no split point and
+/// no boundary to choose, which is what makes the finding reachable at all on the commonest .NET
+/// configuration: a suite pinned at a fixed <c>maxParallelThreads</c> puts almost every execution on
+/// one level, and any dichotomy of that distribution starves one of its two halves. Splitting at the
+/// test's own median used to, and reported nothing for such a suite however concurrency-sensitive its
+/// tests really were.
+/// </para>
+/// <para>
+/// <b>Reading the ordering is the point, not a side benefit.</b> A two-arm comparison cannot tell
+/// concurrency 2 from concurrency 14 once both are "high", so the monotone rise a genuinely
+/// contention-sensitive test produces is the shape it is worst at seeing. Scoring the levels by value
+/// rather than by rank additionally reads how far apart they sit relative to each other: across
+/// levels of 1, 2 and 14 the jump to 14 counts for twelve times the step to 2. It does not read the
+/// absolute width of the range — two levels are two levels however far apart — and
+/// <see cref="ConcurrencyRange"/> is published so that a reader can see what the statistic could not.
 /// </para>
 /// <para>
 /// <b>The boolean is deliberately unused.</b> <see cref="TestOrchestrationRecord.WasParallelized"/>
@@ -104,12 +157,33 @@ internal sealed record ParallelSensitiveEvidence(
 /// among values that are all greater than one. Verified against a parallel assembly over three runs:
 /// 360 of 770 tests ran at more than one concurrency level, with spreads as wide as eight to
 /// fourteen, and yet not one test was ever on both sides of the flag — 646 were parallel every run
-/// and 123 serial every run. Splitting on the flag would have nothing to compare.
+/// and 123 serial every run. Splitting on the flag would have nothing to compare. The trend subsumes
+/// the parallel-versus-serial comparison rather than replacing it: a suite whose parallelisation
+/// setting changed inside the window contributes its concurrency-one executions as one level and its
+/// concurrency-<i>n</i> executions as another, with no special case.
 /// </para>
 /// <para>
-/// The median split subsumes the parallel-versus-serial comparison rather than replacing it. A suite
-/// whose parallelisation setting changed inside the window puts its concurrency-one executions and
-/// its concurrency-<i>n</i> executions either side of the median on its own, with no special case.
+/// <b>Two-sided, so both directions qualify.</b> A test that fails only when it runs nearly alone is
+/// as real a defect as one that fails only under contention, and it would otherwise be reported by
+/// nothing.
+/// </para>
+/// <para>
+/// <b>Known limitation: concurrency is observed, not randomised.</b> A slow test overlaps more
+/// neighbours than a fast one by construction, and a test's position in the run determines how
+/// crowded the suite was around it. A rising trend is therefore confounded with the test's own
+/// duration and with where it was scheduled: a test that got slower, and so came to run alongside
+/// more tests, reads exactly like one that fails under contention. Stratifying by duration decile is
+/// the correction, and it needs more data than a twenty-session window holds. Nothing here corrects
+/// it. <see cref="ConcurrencyRange"/> and the per-level table are published so that a reader can at
+/// least see how much room the trend had and judge it for themselves.
+/// </para>
+/// <para>
+/// <b>Known limitation: τ_b is attempt-weighted.</b> The clustered variance behind the p-value
+/// charges a heavily retried run for the repetition, and the rank the finding is given is that same
+/// charge applied to the effect size — so neither the decision to report nor the position in the
+/// report can be bought with retries. The published effect size still
+/// weighs attempts rather than occasions, and a reader comparing two τ_b values across tests that
+/// retry differently is not comparing like with like.
 /// </para>
 /// <para>
 /// This kind overlaps <see cref="FindingKind.Flaky"/> by design. A concurrency-sensitive test both
@@ -123,6 +197,26 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     // threshold, for the same reason the duration provider keeps its own: the specification's
     // constant table does not list it, and adding an entry would be a threshold this session invented.
     private const int MaxExemplars = 3;
+
+    // The p-value a trend has to clear. Local rather than shared, for the reason the duration and
+    // temporal providers give about their own: the specification's constant table does not name it,
+    // and adding an entry there would be a threshold this session invented.
+    //
+    // The conventional level, and it is affordable because two things ahead of it already spend most
+    // of the budget. The variance is taken over runs rather than over attempts, and the statistic is
+    // continuity-corrected against the lattice its own levels put it on -- which on a pinned suite,
+    // where the gap between levels is the whole distance from 1 to 8, is a large correction. Measured
+    // end to end through the whole gate chain, forty thousand windows a cell, with failures drawn
+    // independently of the level: the worst cell of twenty distributions is 0.029, at a uniform 1..14
+    // exposure over twenty runs with a true failure rate of one half, and the same shape reads 0.024
+    // at a rate of 0.30. Ten-run windows top out at 0.017 and six-run windows at 0.003. The delta
+    // gate this replaces measured 0.296 on the comparable shape.
+    //
+    // A pre-filter, not the final word. This charges one test for one comparison; it cannot charge a
+    // suite for the three hundred tests it made that comparison on, because a provider by contract
+    // cannot see the others. #160 applies a Benjamini-Hochberg pass across every fingerprint each
+    // kind was tested on and will supersede this bar.
+    private const double Alpha = 0.05;
 
     /// <inheritdoc/>
     public string Name => "concurrency";
@@ -149,98 +243,100 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// <summary>
     /// Examines one test, returning <see langword="null"/> when any gate declines it.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There is no gate on how many runs the test appeared in, and that is deliberate rather than an
+    /// omission. The gate the median split needed — five sessions a side — existed because a rate
+    /// difference says nothing about how many observations are behind it, and something had to. The
+    /// statistic now says it directly: measured over perfectly separated windows, four runs a side is
+    /// the smallest that reaches the bar at all, and a single quiet run against any number of crowded
+    /// ones never does, because the clustered variance charges that lone run for carrying the whole
+    /// statistic. A separate session floor would only duplicate that, less well and with a number
+    /// nobody could derive. The coordinator's own reporting floor still applies.
+    /// </para>
+    /// <para>
+    /// The gates run cheapest first: most tests in a window never vary their concurrency and are
+    /// rejected by counting distinct levels, before any statistic is computed.
+    /// </para>
+    /// </remarks>
     private static FindingCandidate? Examine(AnalysisContext context, string fingerprint)
     {
         List<Measured> considered = Considered(context, fingerprint);
+        ConcurrencyRange range = Range(considered);
 
-        // Fewer than two arms' worth cannot be split at all, and checking here saves sorting the
-        // overwhelming majority of tests, which never vary their concurrency. An execution count is a
-        // conservative stand-in for the session gate below — a test cannot have run in more sessions
-        // than it has executions — so this rejects only tests that gate would reject anyway.
-        if (considered.Count < LocalAnalysisConstants.ParallelSensitiveMinArmSessions * 2)
+        // A test whose concurrency never varied. That is the common case and it is not a finding:
+        // the question was asked and the data answered it.
+        if (range.DistinctLevels < 2)
             return null;
 
-        int median = MedianConcurrency(considered);
+        List<TrendPoint> points = [.. considered.Select(m =>
+            new TrendPoint(m.Concurrency, m.Reference.Failed, m.Reference.SessionIndex))];
 
-        List<Measured> low = [.. considered.Where(m => m.Concurrency <= median)];
-        List<Measured> high = [.. considered.Where(m => m.Concurrency > median)];
+        TrendStatistic statistic = CochranArmitage.Of(points);
 
-        // An empty high arm is a test whose concurrency never varied. That is the common case and it
-        // is not a finding: the question was asked and the data answered it.
-        //
-        // Gated on distinct sessions rather than on executions, while the rates below stay over
-        // executions. The asymmetry is deliberate and is what separates this provider from the
-        // temporal one: concurrency genuinely differs between attempts within a session, so those
-        // executions are real, distinct readings and collapsing them would discard the signal. What
-        // they are not is independent occasions — ten attempts across two sessions are one afternoon,
-        // and a gate counting them would let it pass for ten.
-        if (DistinctSessions(low) < LocalAnalysisConstants.ParallelSensitiveMinArmSessions ||
-            DistinctSessions(high) < LocalAnalysisConstants.ParallelSensitiveMinArmSessions)
-        {
+        if (statistic.PValue > Alpha)
             return null;
-        }
 
-        double highRate = FailureRate(high);
-        double lowRate = FailureRate(low);
-        double delta = highRate - lowRate;
+        double tau = KendallTau.TauB(points);
 
-        if (Math.Abs(delta) < LocalAnalysisConstants.ParallelSensitivityDelta)
+        // The two disagree only where a level value is an outlier — the statistic scores levels by
+        // value and τ_b by rank, so failures at 2 among levels of 1, 2 and 100 can pull one up while
+        // the other goes down. Publishing a direction that the published effect size contradicts is
+        // not defensible, and declining costs one comparison.
+        if (Math.Sign(statistic.Z) != Math.Sign(tau))
+            return null;
+
+        if (Math.Abs(tau) < LocalAnalysisConstants.ParallelSensitivityTau)
             return null;
 
         TestReference? test = context.Tests.ReferenceFor(fingerprint);
         if (test == null)
             return null;
 
-        // The arm holding the failures, whichever side of the median it fell on. The threshold above
-        // is absolute, so this is the only place the direction is resolved.
-        (List<Measured> worse, List<Measured> quieter) = delta >= 0 ? (high, low) : (low, high);
+        ConcurrencyDirection direction = tau >= 0
+            ? ConcurrencyDirection.WithConcurrency
+            : ConcurrencyDirection.AgainstConcurrency;
 
-        List<Measured> failures = [.. worse.Where(m => m.Reference.Failed)];
+        // The end of the range the trend points at, and the end it points away from. The threshold
+        // above is absolute, so this is the only place the direction is resolved.
+        int loud = direction == ConcurrencyDirection.WithConcurrency ? range.Max : range.Min;
+        int quiet = direction == ConcurrencyDirection.WithConcurrency ? range.Min : range.Max;
 
-        EffectiveCounts highEffective = Deflate(high);
-        EffectiveCounts lowEffective = Deflate(low);
+        List<Measured> driving = Driving(considered, direction);
 
         return new FindingCandidate(
             FindingKind.ParallelSensitive,
             new FindingSubject.SingleTest(test),
             new ParallelSensitiveEvidence(
-                Summarise(high, highRate),
-                Summarise(low, lowRate),
-                new ConcurrencyDelta(
-                    FindingOrder.Round(delta),
-                    FindingOrder.RoundPercent(delta * 100)),
-                median,
-                Range(considered),
-                Exemplars(failures),
-                Contrast(quieter)),
+                new ConcurrencyTrend(
+                    FindingOrder.Round(statistic.Z),
+                    Probability(statistic.PValue),
+                    FindingOrder.Round(tau),
+                    DistinctSessions(considered),
+                    direction.ToString()),
+                range,
+                Levels(considered),
+                Exemplars(driving, direction),
+                Contrast(considered, quiet)),
 
-            // The least gap the two arms support, rather than the gap they happened to show. The
-            // condition still thresholds the observed delta, so what is emitted has not changed;
-            // what changed is where it ranks. Five sessions a side is the smallest split allowed
-            // and produces the largest observed deltas in the report, so ranking on the observation
-            // put the thinnest evidence at the top. A five-a-side split whose interval still admits
-            // no difference at all scores zero here and falls to the bottom of the list, where the
-            // reader can still find it.
-            //
-            // Computed on effective sample sizes rather than on the execution counts the rates come
-            // from. The arms hold attempts, and attempts within a session are correlated; handing
-            // their raw count to an interval that assumes independent trials would let a test buy
-            // confidence with retries. A test that retried its way to thirty executions across five
-            // sessions would have outranked one measured thirty times over thirty builds, and by the
-            // same margin for the same wrong reason the execution-denominated arm gate did.
-            Unreliability: WilsonInterval.DifferenceBoundNearestZero(
-                highEffective.Failures, highEffective.Sessions,
-                lowEffective.Failures, lowEffective.Sessions),
+            // The correlation discounted by how precisely it was measured, rather than the
+            // correlation itself. The emission decision is made on the estimate above, so what is
+            // reported has not changed; what this changes is where it ranks. A perfectly separated
+            // window of four runs a side and one of twenty a side both read τ_b 1.00, and ranking on
+            // that would put the thinnest evidence at the top of the report — which is what #159
+            // exists to prevent. It is a rank and not a confidence bound; `Support` says why.
+            Unreliability: Support(tau, statistic.Z),
 
-            // Dated by the failures that drove it rather than by the test's last execution. A test
-            // that failed under load a fortnight ago and has run cleanly since should decay, and
-            // dating it by its newest passing run would hold it at full recency forever.
-            //
-            // The worse arm always holds at least one failure: its rate exceeds the other arm's by
-            // the threshold, so it cannot be zero.
-            SessionsSinceLastOccurrence: failures.Min(m => m.Reference.SessionIndex),
+            // Dated by the failures that drove the trend rather than by the test's last execution, or
+            // by its last failure of any kind. A test that failed under load a fortnight ago and has
+            // run cleanly since should decay; dating it by its newest passing run would hold it at
+            // full recency forever, and dating it by a recent failure at the quiet end of the range
+            // would hold it there on the strength of a counterexample.
+            SessionsSinceLastOccurrence: driving.Min(m => m.Reference.SessionIndex),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test));
+            DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
+
+            PValue: statistic.PValue);
     }
 
     /// <summary>
@@ -248,10 +344,10 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// </summary>
     /// <remarks>
     /// Two exclusions, both of which drop the execution entirely rather than substituting a value.
-    /// An execution whose adapter recorded no orchestration data cannot be placed in an arm, and
+    /// An execution whose adapter recorded no orchestration data cannot be placed at a level, and
     /// defaulting it to "ran alone" would invent the very measurement the finding is about.
-    /// Environmental sessions go for the reason §6 gives: an outage lands in whichever arm its
-    /// sessions occupy and manufactures a delta out of a bad afternoon.
+    /// Environmental sessions go for the reason §6 gives: an outage lands at whichever levels its
+    /// sessions occupy and manufactures a trend out of a bad afternoon.
     /// </remarks>
     private static List<Measured> Considered(AnalysisContext context, string fingerprint)
     {
@@ -277,117 +373,102 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Reads the median concurrency by nearest rank.
+    /// The failures that produced the trend, as opposed to the ones that argued against it.
     /// </summary>
+    /// <param name="considered">Every execution the test can be measured on.</param>
+    /// <param name="direction">Which way the trend was found to point.</param>
+    /// <returns>The failures on the trend's side of the mean level; never empty.</returns>
     /// <remarks>
-    /// Nearest rank rather than the interpolating definition the duration provider reads a percentile
-    /// with, because a concurrency level is discrete where a duration is continuous: it returns a
-    /// level the test was actually observed at, so the published split point is a real number of
-    /// concurrent tests rather than a fractional one no scheduler could have produced.
+    /// <para>
+    /// The statistic reduces exactly to the sum, over the failures alone, of how far each one sat
+    /// from the mean level — every passing execution's contribution cancels against the failures'
+    /// once the two are written out. So a failure counts towards a rising trend if and only if it
+    /// happened above the mean, and against it otherwise, and this is the set the statistic was
+    /// actually built from rather than an approximation of it.
+    /// </para>
+    /// <para>
+    /// It cannot come back empty. A positive statistic <i>is</i> a positive sum over these failures,
+    /// so at least one of them must sit on that side, and a statistic of zero was declined long
+    /// before this is reached.
+    /// </para>
+    /// <para>
+    /// Both the exemplars and the finding's date are drawn from here, and they have to agree: a
+    /// finding whose three exemplars are crowded failures but whose recency comes from last night's
+    /// solitary failure at concurrency 1 would sit at the top of the report on the strength of the
+    /// one observation that contradicts it.
+    /// </para>
     /// </remarks>
-    private static int MedianConcurrency(List<Measured> considered)
+    private static List<Measured> Driving(List<Measured> considered, ConcurrencyDirection direction)
     {
-        var levels = new List<int>(considered.Count);
+        double mean = 0;
         foreach (Measured measured in considered)
-            levels.Add(measured.Concurrency);
+            mean += measured.Concurrency;
 
-        levels.Sort();
+        mean /= considered.Count;
 
-        return Quantile.NearestRank(levels, 0.50);
-    }
-
-    private static double FailureRate(List<Measured> arm) => (double)FailureCount(arm) / arm.Count;
-
-    private static int FailureCount(List<Measured> arm)
-    {
-        int failures = 0;
-        foreach (Measured measured in arm)
-        {
-            if (measured.Reference.Failed)
-                failures++;
-        }
-
-        return failures;
+        return
+        [
+            .. considered.Where(m => m.Reference.Failed && (direction == ConcurrencyDirection.WithConcurrency
+                ? m.Concurrency > mean
+                : m.Concurrency < mean))
+        ];
     }
 
     /// <summary>
-    /// Counts the distinct sessions an arm's executions came from.
+    /// Counts the distinct sessions a set of executions came from.
     /// </summary>
-    /// <remarks>
-    /// The arm gate's denominator, and the figure the evidence publishes beside the execution count,
-    /// so a reader can see how many independent occasions a rate over twelve executions rests on.
-    /// </remarks>
-    private static int DistinctSessions(List<Measured> arm)
+    private static int DistinctSessions(IEnumerable<Measured> executions)
     {
         var sessions = new HashSet<Guid>();
 
-        foreach (Measured measured in arm)
+        foreach (Measured measured in executions)
             sessions.Add(measured.Reference.Session.SessionId);
 
         return sessions.Count;
     }
 
     /// <summary>
-    /// An arm's counts scaled down to the independent observations behind them.
+    /// Summarises every level observed, ascending.
     /// </summary>
-    /// <param name="Failures">Failures, scaled to <paramref name="Sessions"/>.</param>
-    /// <param name="Sessions">Distinct sessions the arm's executions came from.</param>
-    private readonly record struct EffectiveCounts(double Failures, double Sessions);
-
-    /// <summary>
-    /// Deflates an arm to the sample size its correlated executions are actually worth.
-    /// </summary>
-    /// <param name="arm">The arm to deflate.</param>
-    /// <returns>The effective counts.</returns>
     /// <remarks>
-    /// <para>
-    /// The design effect for a clustered sample is <c>1 + (m̄ - 1)ρ</c>, for a mean cluster size m̄
-    /// and an intra-cluster correlation ρ. This takes ρ = 1, which reduces it to m̄ and the effective
-    /// size to the session count. That is the conservative end of the range and it is chosen rather
-    /// than estimated: at five to twenty sessions an ICC estimate is noisier than the quantity it
-    /// would be correcting, and a bound that moves with the noise in its own correction is worse than
-    /// one that is merely cautious.
-    /// </para>
-    /// <para>
-    /// Both counts are scaled, not just the denominator, so the point estimate the interval is
-    /// centred on is exactly the observed rate. The arm keeps the concurrency readings its executions
-    /// supplied; what it loses is the claim that they were independent trials.
-    /// </para>
-    /// <para>
-    /// One correlation is left uncorrected and is worth naming: a single session can contribute
-    /// attempts to both arms, so the two are not independent samples either, and Newcombe's interval
-    /// assumes they are. That inflates confidence in the same direction, by less, and correcting it
-    /// needs a paired analysis this provider does not have.
-    /// </para>
+    /// The whole table rather than the two ends. The dose-response is the claim this finding makes,
+    /// and a reader who can only see the endpoints cannot tell a monotone rise across six levels from
+    /// two extremes with noise between them.
     /// </remarks>
-    private static EffectiveCounts Deflate(List<Measured> arm)
+    private static List<ConcurrencyLevel> Levels(List<Measured> considered)
     {
-        int sessions = DistinctSessions(arm);
+        var grouped = new SortedDictionary<int, List<Measured>>();
 
-        return new EffectiveCounts(FailureRate(arm) * sessions, sessions);
-    }
-
-    private static ConcurrencyArm Summarise(List<Measured> arm, double rate)
-    {
-        int failures = 0;
-        int min = int.MaxValue;
-        int max = int.MinValue;
-
-        foreach (Measured measured in arm)
+        foreach (Measured measured in considered)
         {
-            if (measured.Reference.Failed)
-                failures++;
+            if (!grouped.TryGetValue(measured.Concurrency, out List<Measured>? level))
+                grouped[measured.Concurrency] = level = [];
 
-            min = Math.Min(min, measured.Concurrency);
-            max = Math.Max(max, measured.Concurrency);
+            level.Add(measured);
         }
 
-        return new ConcurrencyArm(
-            failures, arm.Count, DistinctSessions(arm), FindingOrder.Round(rate), min, max);
+        var levels = new List<ConcurrencyLevel>(grouped.Count);
+
+        foreach ((int concurrency, List<Measured> level) in grouped)
+        {
+            int failures = level.Count(m => m.Reference.Failed);
+
+            levels.Add(new ConcurrencyLevel(
+                concurrency,
+                level.Count,
+                DistinctSessions(level),
+                failures,
+                FindingOrder.Round((double)failures / level.Count)));
+        }
+
+        return levels;
     }
 
     private static ConcurrencyRange Range(List<Measured> considered)
     {
+        if (considered.Count == 0)
+            return new ConcurrencyRange(0, 0, 0);
+
         int min = int.MaxValue;
         int max = int.MinValue;
         var levels = new HashSet<int>();
@@ -403,26 +484,37 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Picks up to three of the failures that drove the finding, newest first.
+    /// Picks up to three of the failures that drove the trend.
     /// </summary>
-    private static List<ConcurrencyExemplar> Exemplars(List<Measured> failures) =>
-        [.. Ordered(failures).Take(MaxExemplars).Select(ToExemplar)];
+    /// <param name="driving">The failures on the trend's side of the mean level.</param>
+    /// <param name="direction">Which way the trend points.</param>
+    /// <remarks>
+    /// Ordered by concurrency towards the trend's direction before anything else, which is a
+    /// departure from the newest-first rule the rest of the report follows and is deliberate: inside
+    /// a rising trend a failure at concurrency 2 is a counterexample, not an exemplar, and showing
+    /// the reader the newest three failures would as often as not show them the ones that argue
+    /// against the finding. Recency still breaks the ties, so the choice stays stable between runs.
+    /// </remarks>
+    private static List<ConcurrencyExemplar> Exemplars(
+        List<Measured> driving, ConcurrencyDirection direction) =>
+        [.. Ordered(driving, direction).Take(MaxExemplars).Select(ToExemplar)];
 
     /// <summary>
-    /// Picks one execution typical of the other arm.
+    /// Picks one execution typical of the other end of the range.
     /// </summary>
     /// <remarks>
-    /// A passing execution where the arm has one, because the pair only makes the difference
-    /// reasonable about if the other side shows the behaviour the finding claims is absent there.
-    /// Falls back to the newest execution rather than to nothing when the quieter arm also failed —
-    /// it failed less, which is the whole claim, and showing it is more honest than showing an empty
-    /// field a reader cannot tell from analysis that never looked.
+    /// A passing execution where that end has one, because the pair only makes the trend reasonable
+    /// about if the other end shows the behaviour the finding claims is absent there. Falls back to
+    /// the newest execution at that level rather than to nothing when it also failed — it failed
+    /// less, which is the whole claim, and showing it is more honest than showing an empty field a
+    /// reader cannot tell from analysis that never looked.
     /// </remarks>
-    private static ConcurrencyExemplar? Contrast(List<Measured> quieter)
+    private static ConcurrencyExemplar? Contrast(List<Measured> considered, int level)
     {
-        List<Measured> passing = [.. quieter.Where(m => !m.Reference.Failed)];
+        List<Measured> quiet = [.. considered.Where(m => m.Concurrency == level)];
+        List<Measured> passing = [.. quiet.Where(m => !m.Reference.Failed)];
 
-        Measured? typical = Ordered(passing.Count > 0 ? passing : quieter).FirstOrDefault();
+        Measured? typical = Ordered(passing.Count > 0 ? passing : quiet, null).FirstOrDefault();
 
         return typical == null ? null : ToExemplar(typical);
     }
@@ -430,9 +522,21 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// <summary>
     /// Orders executions newest first, breaking every tie totally.
     /// </summary>
-    private static IOrderedEnumerable<Measured> Ordered(List<Measured> executions) =>
+    /// <param name="executions">The executions to order.</param>
+    /// <param name="towards">
+    /// The direction to sort concurrency in first, or <see langword="null"/> to order by recency
+    /// alone.
+    /// </param>
+    private static IOrderedEnumerable<Measured> Ordered(
+        List<Measured> executions, ConcurrencyDirection? towards) =>
         executions
-            .OrderBy(m => m.Reference.SessionIndex)
+            .OrderBy(m => towards switch
+            {
+                ConcurrencyDirection.WithConcurrency => -m.Concurrency,
+                ConcurrencyDirection.AgainstConcurrency => m.Concurrency,
+                _ => 0
+            })
+            .ThenBy(m => m.Reference.SessionIndex)
             .ThenBy(m => m.Reference.Execution.Retry?.AttemptNumber ?? 1)
             .ThenBy(m => m.Reference.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
                 StringComparer.Ordinal);
@@ -444,6 +548,86 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             RevisionContext.ReadSha(measured.Reference.Session),
             measured.Reference.Execution.Outcome.ToString(),
             measured.Concurrency);
+
+    /// <summary>
+    /// The correlation, discounted by how precisely the runs behind it measured a trend.
+    /// </summary>
+    /// <param name="tau">The estimated correlation.</param>
+    /// <param name="z">The standardised trend the same observations produced.</param>
+    /// <returns>A rank in [0,1]; 0 wherever the trend barely cleared its own threshold.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>Not a confidence bound, and the difference matters.</b> Every other kind's
+    /// <c>Unreliability</c> is a genuine interval endpoint on the quantity the kind measures — see
+    /// <see cref="WilsonInterval"/>. This one is not, because neither way of putting an interval
+    /// round a rank correlation survives contact with this data: τ_b's asymptotic variance assumes
+    /// the executions are independent, which retries make false, and a delete-one-run jackknife
+    /// returns a standard error of exactly zero whenever the runs agree with each other, which would
+    /// rank five identical runs alongside fifty.
+    /// </para>
+    /// <para>
+    /// What it is instead is the effect size scaled by <c>1 − z₉₅ / |Z|</c>, the share of the trend
+    /// statistic that is in excess of the threshold it had to clear. That is the shape a Wald bound
+    /// takes when a standard error is recovered from a statistic, and it is deliberately not called
+    /// one: <see cref="CochranArmitage"/> scores the levels by value while
+    /// <see cref="KendallTau"/> scores them by rank, so the two are measuring the same association
+    /// with different functionals and a monotone remapping of the levels moves this without moving
+    /// τ_b at all.
+    /// </para>
+    /// <para>
+    /// What it does do is the job #159 asks of a rank, which is that a claim resting on more runs
+    /// outranks the same claim resting on fewer. The statistic grows with the runs behind a trend
+    /// and the effect size does not, so a perfect dose-response over four runs a side scores 0.01
+    /// and the same one over twenty scores 0.67. A trend that barely cleared its threshold falls to
+    /// the bottom of the report, where a reader can still find it.
+    /// </para>
+    /// <para>
+    /// Conservative on two further counts, both deliberate: the statistic it divides by has already
+    /// been shrunk by the continuity correction, and the correction is largest exactly where the
+    /// evidence is thinnest. Both push the rank down, which is the direction to err in for a number
+    /// whose only job is to decide what a reader is shown first.
+    /// </para>
+    /// <para>
+    /// <b>The scale is not the other kinds' scale, and that is worth knowing before this is compared
+    /// across kinds.</b> The statistic grows about as fast as the square root of the runs behind it,
+    /// so this is capped near <c>1 − z₉₅/√(G−1)</c> — about 0.53 on a default twenty-run window,
+    /// where a Wilson bound on a proportion can approach 1.00. Concurrency findings therefore band
+    /// lower than comparable findings of other kinds at the same strength of evidence.
+    /// <see cref="Scoring.ImpactScorer"/> weights every kind's figure alike, so the effect is real
+    /// rather than notional, and it is the price of ranking a rank correlation on the same [0,1]
+    /// axis as a rate. #160's pass across every fingerprint of a kind is where it can be revisited.
+    /// </para>
+    /// </remarks>
+    private static double Support(double tau, double z) =>
+        Math.Abs(z) <= WilsonInterval.ConfidenceZ
+            ? 0
+            : Math.Clamp(Math.Abs(tau) * (1 - (WilsonInterval.ConfidenceZ / Math.Abs(z))), 0, 1);
+
+    /// <summary>
+    /// Rounds a p-value for publication, to three significant digits.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Significant digits rather than the decimal places <see cref="FindingOrder.Round"/> gives every
+    /// other published figure. Nothing floors this probability: it is a normal tail, and it falls off
+    /// a cliff as the window grows — a perfectly separated window of sixteen runs is already 7.0e-4
+    /// and forty runs of a clean dose-response reaches 1e-5, so a fixed count of decimals would
+    /// eventually publish one as zero. A probability of zero is a claim of certainty, and
+    /// <see cref="NormalTail"/> is built precisely so that this measurement never makes one.
+    /// </para>
+    /// <para>
+    /// Through a round-trip rather than <see cref="Math.Round(double, int)"/>, which takes a count of
+    /// decimal places and refuses more than fifteen. A significant-digit format has neither that
+    /// limit nor the overflow that scaling by a power of ten runs into, and is what "three
+    /// significant digits" actually means. The unrounded value is what reaches the coordinator; this
+    /// is only what gets written down.
+    /// </para>
+    /// </remarks>
+    private static double Probability(double value) =>
+        value > 0
+            ? double.Parse(
+                value.ToString("G3", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)
+            : value;
 
     /// <summary>
     /// One execution together with the concurrency it ran at.

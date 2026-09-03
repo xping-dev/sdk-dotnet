@@ -262,54 +262,50 @@ internal static class LocalAnalysisConstants
     public const double RetryExhaustedShareMin = 0.50;
 
     /// <summary>
-    /// Difference in failure rate across a test's concurrency split that indicates sensitivity (0.30).
+    /// Rank correlation between a test's concurrency and its failures that indicates sensitivity
+    /// (0.30).
     /// </summary>
     /// <remarks>
-    /// Applied across the median split described in §5.8, not to a parallel-versus-serial boolean.
-    /// The comparison is absolute, so it catches a test that fails more when it runs nearly alone as
-    /// well as one that fails more when the suite is crowded.
-    /// </remarks>
-    public const double ParallelSensitivityDelta = 0.30;
-
-    /// <summary>
-    /// Distinct sessions each concurrency arm needs before the two are compared (5).
-    /// </summary>
-    /// <remarks>
-    /// Applied to each arm separately, and the two arms can draw on the same sessions: a session that
-    /// ran the test at several concurrency levels contributes to both sides of the median, so five
-    /// sessions can satisfy both gates. What the pair requires is five separate occasions behind each
-    /// side, not ten sessions overall.
     /// <para>
-    /// At five a side the weakest qualifying signal is around zero-of-five against two-of-five, which
-    /// is already thin; below it a single unlucky execution clears
-    /// <see cref="ParallelSensitivityDelta"/> on its own and the report starts ranking noise.
+    /// Practical significance, applied beside a test of statistical significance rather than in place
+    /// of one. The quantity is Kendall's τ_b between the concurrency level an execution ran at and
+    /// whether it failed — see <see cref="Scoring.KendallTau"/> — and not a difference between two
+    /// rates, which needed a split point the commonest .NET configuration cannot supply.
     /// </para>
     /// <para>
-    /// The gate is in sessions while the arms and their rate stay in executions, and the split is
-    /// deliberate: a retried test does not repeat one concurrency reading, it takes several, so the
-    /// within-session variation is the signal this finding is made of. The gate buys the breadth of
-    /// independent occasions the rate cannot supply for itself — two sessions of five attempts each
-    /// are one afternoon, not ten observations. The interval the finding is ranked on is deflated to
-    /// the same session count, so the confidence behind a gap no longer grows with retries.
+    /// Both are required and neither implies the other. A statistically solid τ_b of 0.05 is what two
+    /// hundred runs of a barely-there drift produce, and nobody wants it reported; a τ_b of 0.9 over
+    /// two levels seen five times each is a finding that is not true.
     /// </para>
     /// <para>
-    /// The gap itself is still an attempt-weighted mean, and this gate cannot see past that: it
-    /// counts the sessions an arm draws on, not how unevenly they contribute, so one heavily retried
-    /// session can supply an arm's failures while five quiet ones supply its breadth. That is #180
-    /// and it is not fixed here.
+    /// The same figure as the rate difference it replaces, and deliberately not for the same reason:
+    /// this is a rank correlation on a different scale, and the coincidence is not a justification.
+    /// It was chosen by measurement. Against a true correlation of 0.45 or more it costs nothing at
+    /// all; at 0.30 it removes about a third of the emissions, which is the band it exists to
+    /// arbitrate; at 0.35 it starts costing real findings — a genuine trend on a jittering suite over
+    /// forty runs drops from 0.34 to 0.23. On the other side it is what silences a long window with a
+    /// trivial drift in it: two hundred executions rising from a tenth to a sixth across levels 1 to
+    /// 14 clears every statistical bar and reads τ_b 0.05.
+    /// </para>
+    /// <para>
+    /// Not comparable between suites, and the finding says so. τ_b's tie correction discounts by how
+    /// tied the exposure is, so a pinned suite reads about 1.15 times its underlying association and
+    /// an evenly spread one about 0.72 times the same association. This is a threshold on an
+    /// association discounted by how much room the exposure had, which is a defensible thing to
+    /// threshold on and is not the same thing as the association.
     /// </para>
     /// </remarks>
-    public const int ParallelSensitiveMinArmSessions = 5;
+    public const double ParallelSensitivityTau = 0.30;
 
     /// <summary>
     /// Difference in failure rate across a test's temporal split that indicates sensitivity (0.30).
     /// </summary>
     /// <remarks>
-    /// Deliberately the same figure as <see cref="ParallelSensitivityDelta"/>, and applied the same
-    /// way: two arms, an absolute comparison, either direction qualifying. The two findings ask the
-    /// same question of different axes, and giving them different bars would mean a gap that counts
-    /// as concurrency sensitivity does not count as time sensitivity, for no reason a reader could
-    /// discover.
+    /// Two arms, an absolute comparison, either direction qualifying. It once carried the same figure
+    /// as the concurrency provider's practical-significance bar so that the two axes were judged
+    /// alike; that bar is now a rank correlation rather than a rate difference, because concurrency
+    /// has no split point a pinned suite can supply, and the two numbers are no longer on one scale.
+    /// A temporal split still divides a test's runs in two, so this one stays as it was.
     /// </remarks>
     public const double TimeSensitivityDelta = 0.30;
 
@@ -317,9 +313,10 @@ internal static class LocalAnalysisConstants
     /// Sessions each side of a temporal split needs before the two are compared (5).
     /// </summary>
     /// <remarks>
-    /// Matches <see cref="ParallelSensitiveMinArmSessions"/> for the same reason it was chosen
-    /// there: below five a side, one unlucky session clears
-    /// <see cref="TimeSensitivityDelta"/> on its own.
+    /// Below five a side, one unlucky session clears <see cref="TimeSensitivityDelta"/> on its own.
+    /// The concurrency provider once carried the same gate for the same reason and no longer needs
+    /// one: its statistic reads the runs behind a trend directly, where a difference of two rates
+    /// cannot.
     /// <para>
     /// Sessions here are the arms themselves, not merely the gate. A session is read on one clock, so
     /// every attempt of a test within it lands in the same arm at the same local hour — an

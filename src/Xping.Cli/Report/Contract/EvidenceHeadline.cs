@@ -29,8 +29,9 @@ namespace Xping.Cli.Report.Contract;
 /// </para>
 /// <para>
 /// Observations only, per the output contract's evidence rules: a headline states what was counted
-/// and never why it happened. No arithmetic happens here either — every figure was rounded by its
-/// provider to the precision the report publishes, and this only formats it.
+/// and never why it happened. No figure is computed here either — every one of them was rounded by
+/// its provider to the precision the report publishes, and this chooses which to show and formats
+/// them.
 /// </para>
 /// </remarks>
 internal static class EvidenceHeadline
@@ -373,21 +374,115 @@ internal static class EvidenceHeadline
                 $"{Rate(e.Dispersion)} over {e.NormalisedExecutions} executions")
         ]);
 
-    private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(
-        ParallelSensitiveEvidence e) =>
-    (
-        $"failed {Percent(e.High.FailureRate)} above concurrency {e.SplitAtConcurrency} " +
-        $"and {Percent(e.Low.FailureRate)} at or below, gap {Points(e.Delta.FailureRatePct)}",
-        [
-            new(
-                $"above {e.SplitAtConcurrency}",
-                $"{e.High.Failures} of {e.High.Executions} executions ({Percent(e.High.FailureRate)})"),
-            new(
-                $"at or below {e.SplitAtConcurrency}",
-                $"{e.Low.Failures} of {e.Low.Executions} executions ({Percent(e.Low.FailureRate)})"),
-            new("gap", Points(e.Delta.FailureRatePct)),
-            new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}")
-        ]);
+    /// <summary>
+    /// Phrases a test whose failures track how crowded the suite was.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The pair of levels quoted is the one that <b>contributed most to the correlation</b>, not the
+    /// two ends of the observed range. The ends are the obvious choice and they are wrong twice over:
+    /// a level seen once, at either extreme, can run against a trend that a dozen well-populated
+    /// levels in the middle established — producing the sentence "failed 100% at concurrency 1 and 0%
+    /// at 14, rising with concurrency" — and a level seen once has a rate of exactly 0 or 1, so
+    /// ranking the pairs on the size of the step alone would hand the sentence to the thinnest row in
+    /// the table every time.
+    /// </para>
+    /// <para>
+    /// Both are answered by one rule, and it is not an invention: Kendall's excess of concordant over
+    /// discordant pairs is exactly <c>Σ nᵢ nⱼ (rateⱼ − rateᵢ)</c> over the level pairs, so each pair's
+    /// term in that sum is the share of the published correlation it supplied. Quoting the largest
+    /// term quotes the pair the finding actually rests on, weighted by the executions behind both
+    /// ends. It also cannot contradict the direction: every term is positive exactly where the step
+    /// runs the right way, so a table with no such step is a table whose correlation is not positive
+    /// and no finding was made from it.
+    /// </para>
+    /// <para>
+    /// The level count is in the headline for the reason the temporal finding puts its distinct-day
+    /// count there: it is what separates a dose-response from a coincidence between two points, and a
+    /// reader skimming a fence will not open the evidence to look for it. The run count is there
+    /// because the probability beside it was computed over runs, and a trend over eight runs and one
+    /// over forty read identically without it. The observed range is a metric rather than part of the
+    /// sentence, so that a reader can see it was not the pair being quoted.
+    /// </para>
+    /// <para>
+    /// Only the quoted pair reaches the metrics. The whole table is in the evidence for a reader who
+    /// wants the curve; five rows is what the neighbouring kinds carry, and a suite spread over
+    /// fourteen levels would otherwise print fourteen.
+    /// </para>
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(ParallelSensitiveEvidence e)
+    {
+        bool rising = e.Trend.Direction == nameof(ConcurrencyDirection.WithConcurrency);
+        string direction = rising ? "rising with concurrency" : "falling with concurrency";
+
+        (ConcurrencyLevel milder, ConcurrencyLevel worse) = LargestContribution(e.Levels, rising);
+
+        return
+        (
+            $"failed {Percent(milder.FailureRate)} at concurrency {milder.Concurrency} and " +
+            $"{Percent(worse.FailureRate)} at {worse.Concurrency}, {direction} across " +
+            $"{Levels(e.Observed.DistinctLevels)} in {Runs(e.Trend.Sessions)}",
+            [
+                new(
+                    $"at concurrency {milder.Concurrency}",
+                    $"{milder.Failures} of {milder.Executions} executions " +
+                    $"({Percent(milder.FailureRate)}) in {Runs(milder.Sessions)}"),
+                new(
+                    $"at concurrency {worse.Concurrency}",
+                    $"{worse.Failures} of {worse.Executions} executions " +
+                    $"({Percent(worse.FailureRate)}) in {Runs(worse.Sessions)}"),
+                new("trend", $"{direction}, tau {Rate(e.Trend.Tau)}"),
+                new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}"),
+                new(
+                    "significance",
+                    $"p {Probability(e.Trend.PValue)} two-sided, Z {Rate(e.Trend.Z)} " +
+                    $"over {Runs(e.Trend.Sessions)}")
+            ]);
+    }
+
+    /// <summary>
+    /// Finds the two levels that supplied the most of the rank correlation.
+    /// </summary>
+    /// <param name="levels">Every level observed, ascending by concurrency.</param>
+    /// <param name="rising">Whether the trend points towards higher concurrency.</param>
+    /// <returns>The milder level and the worse one, in that order.</returns>
+    /// <remarks>
+    /// Each pair's contribution is its step in failure rate weighted by the executions behind both
+    /// ends, which is that pair's own term in the sum τ_b is built from. Quadratic in the number of
+    /// levels, which a scheduler bounds at its thread count. Ties are broken towards the widest span
+    /// in concurrency and then towards the lower level, so the choice is the same on every run over
+    /// one window.
+    /// </remarks>
+    private static (ConcurrencyLevel Milder, ConcurrencyLevel Worse) LargestContribution(
+        IReadOnlyList<ConcurrencyLevel> levels, bool rising)
+    {
+        ConcurrencyLevel milder = levels[0];
+        ConcurrencyLevel worse = levels[^1];
+        double best = double.NegativeInfinity;
+        int span = 0;
+
+        for (int lower = 0; lower < levels.Count - 1; lower++)
+        {
+            for (int upper = lower + 1; upper < levels.Count; upper++)
+            {
+                ConcurrencyLevel candidateMilder = rising ? levels[lower] : levels[upper];
+                ConcurrencyLevel candidateWorse = rising ? levels[upper] : levels[lower];
+
+                double contribution =
+                    (candidateWorse.FailureRate - candidateMilder.FailureRate) *
+                    levels[lower].Executions * levels[upper].Executions;
+
+                int width = levels[upper].Concurrency - levels[lower].Concurrency;
+
+                if (contribution < best || (contribution == best && width <= span))
+                    continue;
+
+                (milder, worse, best, span) = (candidateMilder, candidateWorse, contribution, width);
+            }
+        }
+
+        return (milder, worse);
+    }
 
     /// <summary>
     /// Phrases a split of a test's executions by when they ran.
@@ -444,6 +539,9 @@ internal static class EvidenceHeadline
 
     private static string Splits(int count) =>
         count == 1 ? "1 split" : $"{count.ToString(CultureInfo.InvariantCulture)} splits";
+
+    private static string Levels(int count) =>
+        count == 1 ? "1 level" : $"{count.ToString(CultureInfo.InvariantCulture)} levels";
 
     private static string Attempts(int count) =>
         count == 1 ? "1 attempt" : $"{count.ToString(CultureInfo.InvariantCulture)} attempts";
