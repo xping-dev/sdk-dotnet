@@ -299,18 +299,25 @@ runs.
 
 **Reason**: absence is only evidence against a habit, and a count of appearances cannot establish
 one. Three appearances out of three earlier runs is a habit that stopped; three out of seventeen is a
-test that was mostly absent already, and on a default window it misses the next three runs 56% of the
-time with nothing having changed. The report therefore asks for the probability of the absence —
-Fisher's exact test on the earlier and current runs against present and absent, one-sided because the
-kind only ever looks at a test already known to be missing — and reports it only at 0.05 or below.
-Against the default three-run current slice that means a baseline run rate of roughly 0.7, tightening
-towards 0.67 as the history lengthens: twelve of seventeen earlier runs carries, eight does not.
+test that was mostly absent already, and one that runs about a fifth of the time misses three runs in
+a row more often than not. So the finding is decided by a test rather than a count — Fisher's exact
+test on the earlier and current runs against present and absent, asking how often every one of a
+test's appearances would fall among the earlier runs and none among the current ones if appearing had
+nothing to do with when the run happened. It is one-sided, legitimately, because the kind only ever
+looks at a test already known to be missing, and it reports only at p ≤ 0.05.
+
+Against the default three-run current slice that means a baseline run rate of about 0.71 — twelve of
+seventeen earlier runs carries, eight does not. The requirement **eases** as the history lengthens
+rather than tightening, towards the 1 − 0.05^(1/3) ≈ 0.632 the conditioning drops away to: fourteen
+of twenty, twenty-seven of forty, sixty-five of a hundred, six hundred and thirty-three of a
+thousand. Short histories are the expensive ones.
+
 Below eight runs in the window the current slice narrows to a single run, where even perfect
 attendance across six earlier runs is one deal in seven, so nothing of this kind is reportable at
 all. That is the intended answer rather than an oversight — one run's absence is not evidence that
 anything stopped — but it does mean a fresh store says nothing about deleted tests until it has
-eight runs in it. The run rate and the probability are published with every finding that does clear
-the bar.
+eight runs in it. The run rate and the p-value are published with every finding that does clear the
+bar.
 
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 

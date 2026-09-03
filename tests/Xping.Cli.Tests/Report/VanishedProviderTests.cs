@@ -61,23 +61,23 @@ public sealed class VanishedProviderTests
     }
 
     [Fact]
-    public void EvidenceCarriesTheRunRateAndTheChanceTheAbsenceWasNothing()
+    public void EvidenceCarriesTheRunRateAndThePValueBehindTheClaim()
     {
         // Both, and not just the counts. "ran in 12 of 17 earlier runs" is the same sentence whether
-        // the test was a habit or an occasional visitor, and the probability is what tells them
-        // apart. Five baseline sessions of five, missing three: one deal in fifty-six.
+        // the test was a habit or an occasional visitor, and the p-value is what tells them apart.
+        // Five baseline appearances of five, none in the current three: one deal in fifty-six.
         var evidence = Assert.IsType<VanishedEvidence>(
             Assert.Single(Analyze(Context(total: 8, presentIn: 5))).Evidence);
 
         Assert.Equal(1.0, evidence.BaselineRunRate);
-        Assert.Equal(0.0179, evidence.ChanceOfAbsence);
+        Assert.Equal(0.0179, evidence.PValue);
 
         // Twelve of seventeen on a default window, which is where the bar actually sits.
         var wider = Assert.IsType<VanishedEvidence>(
             Assert.Single(Analyze(Context(total: 20, presentIn: 12))).Evidence);
 
         Assert.Equal(0.706, wider.BaselineRunRate);
-        Assert.Equal(0.0491, wider.ChanceOfAbsence);
+        Assert.Equal(0.0491, wider.PValue);
     }
 
     [Theory]
@@ -96,7 +96,7 @@ public sealed class VanishedProviderTests
     }
 
     [Fact]
-    public void TheCandidateHandsTheChanceOfAbsenceToTheCoordinatorUnrounded()
+    public void TheCandidateHandsThePValueToTheCoordinatorUnrounded()
     {
         // The number #160's Benjamini-Hochberg pass sorts on. The evidence publishes a copy rounded
         // to three significant digits; this one must not be it.
@@ -128,9 +128,9 @@ public sealed class VanishedProviderTests
     public void ATestSeenTooFewTimesToHaveBeenEstablishedIsNotReported()
     {
         // Two baseline appearances is below the minimum: a test seen once or twice and never again
-        // was probably never really there, and calling that a change would be noise. The chance gate
-        // refuses it as well — two of five missing three runs is one time in three — which is why
-        // the minimum is a guard rather than a decision.
+        // was probably never really there, and calling that a change would be noise. The p-value gate
+        // refuses it as well — two appearances split that way is better than one deal in three —
+        // which is why the minimum is a guard rather than a decision.
         IReadOnlyList<FindingCandidate> candidates = Analyze(Context(total: 8, presentIn: 2));
 
         Assert.Empty(candidates);
@@ -199,14 +199,15 @@ public sealed class VanishedProviderTests
     [Theory]
     [InlineData(5, false)]      // p 0.083 — declined here, though the coordinator would have taken it
     [InlineData(6, true)]       // p 0.033
-    public void TheChanceOfAbsenceBindsBeforeEitherSessionFloor(int presentIn, bool reported)
+    public void ThePValueGateBindsBeforeEitherSessionFloor(int presentIn, bool reported)
     {
         // Which of the three gates actually decides, pinned so that the constants' remarks cannot
         // quietly stop being true. Five baseline appearances of seven is exactly
         // MinimumSessionsPerTestToReport and comfortably above VanishedMinBaselineSessions, so both
-        // floors would admit it; the provider declines it anyway, because a test that skipped two of
-        // seven runs misses three more often than one time in twenty. No appearance count below five
-        // clears the chance gate at any baseline size, so neither floor can ever be the binding one.
+        // floors would admit it; the provider declines it anyway, because five appearances landing in
+        // seven baseline runs and none in the current three is one deal in twelve. No appearance
+        // count below five clears the p-value gate at any baseline size, so neither floor can ever
+        // be the binding one.
         var coordinator = new FindingCoordinator([new VanishedProvider()]);
 
         using var warnings = new StringWriter();

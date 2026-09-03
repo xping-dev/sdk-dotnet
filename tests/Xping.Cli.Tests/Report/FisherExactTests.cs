@@ -183,6 +183,24 @@ public sealed class FisherExactTests
         Assert.Equal(0.999998, FisherExact.OneSidedPValue(1, 12, 9, 10), 6);
     }
 
+    [Theory]
+    [InlineData(17, 12)]
+    [InlineData(20, 14)]
+    [InlineData(40, 27)]
+    [InlineData(100, 65)]
+    [InlineData(1000, 633)]
+    public void TheRunRateAThreeSessionSliceDemandsEasesTowardsAFixedLimit(int baseline, int first)
+    {
+        // What `Vanished` costs, pinned where it is computed rather than left in a doc comment.
+        // C(n,x)/C(n+3,x) tends to (1-r)^3, so the level of 0.05 falls away to 1 - 0.05^(1/3) =
+        // 0.632 — the requirement gets *cheaper* as the history lengthens, not dearer, and 0.71 on
+        // a default window is the expensive end of the range rather than the asymptote.
+        Assert.True(FisherExact.OneSidedPValue(first, baseline, 0, 3) <= 0.05);
+        Assert.True(FisherExact.OneSidedPValue(first - 1, baseline, 0, 3) > 0.05);
+
+        Assert.InRange((double)first / baseline, 0.632, 0.71);
+    }
+
     [Fact]
     public void TheTailClaimsNothingOnTheSameDegenerateTables()
     {

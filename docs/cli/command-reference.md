@@ -183,15 +183,17 @@ in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixt
 stays a shared failure otherwise. Which failures an adapter can place, and which it cannot, is in
 [known limitations](../known-limitations.md).
 
-`Vanished` is decided on a run rate, not on a count of appearances. A test that ran in three of
-seventeen earlier runs is *expected* to miss the next three — it does so 56% of the time with nothing
-having changed — so the report asks how likely the absence was before calling it a change. The
-finding is emitted only where that probability is at or below 0.05, and publishes both it and the
-baseline run rate, so the strength of the claim is visible rather than implied. On the default
-three-run current slice the bar works out at a baseline run rate of roughly 0.7: twelve of seventeen
-earlier runs carries, eight does not. On a window shorter than eight runs the current slice narrows
-to a single run and one run's absence never reaches the bar, so the kind is silent there — see
-[known limitations](../known-limitations.md).
+`Vanished` is decided by a test, not by a count of appearances. A test that ran in three of seventeen
+earlier runs is *expected* to miss the next three, so before calling an absence a change the report
+asks how often every one of a test's appearances would fall among the earlier runs and none among the
+current ones if appearing had nothing to do with when the run happened — Fisher's exact test,
+one-sided, since the kind only ever looks at a test already known to be missing. The finding is
+emitted only at p ≤ 0.05, and publishes that p-value alongside the baseline run rate, so the strength
+of the claim is visible rather than implied. On the default three-run current slice the bar works out
+at a baseline run rate of about 0.71 — twelve of seventeen earlier runs carries, eight does not — and
+it eases towards 0.632 as the history lengthens. On a window shorter than eight runs the current
+slice narrows to a single run and one run's absence never reaches the bar, so the kind is silent
+there — see [known limitations](../known-limitations.md).
 
 ### Finding ids
 
