@@ -474,6 +474,17 @@ internal static class LocalAnalysisConstants
     /// clear. This one is kept because it is free and because it cannot change the outcome: the
     /// pass's own bar reaches 0.05 only where half the family are discoveries.
     /// </para>
+    /// <para>
+    /// That family is every established test in the window and not only the absent ones — being
+    /// absent is this kind's finding rather than its precondition — so the bar tightens with the
+    /// size of the suite, and this kind feels it more than the others because its smallest
+    /// attainable p-value is fixed by the window alone. A test that ran in every one of seventeen
+    /// baseline sessions and then missed all three current ones scores 8.8e-4, which is the best any
+    /// twenty-run window can do; so twenty runs report an absence on a suite of up to about a
+    /// hundred tests, three hundred tests need about thirty runs, and nine hundred need forty. Under
+    /// that, the answer is that a fortnight of runs cannot tell one deletion from a suite's ordinary
+    /// churn, which is true.
+    /// </para>
     /// </remarks>
     public const double VanishedAlpha = 0.05;
 

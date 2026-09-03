@@ -186,7 +186,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         var reasons = new List<string>();
 
         if (summary.ExcludedLowEvidence > 0)
-            reasons.Add($"{summary.ExcludedLowEvidence} need more runs");
+            reasons.Add($"{summary.ExcludedLowEvidence} {NeedWord(summary.ExcludedLowEvidence)} more runs");
 
         if (summary.ExcludedNotSignificant > 0)
             reasons.Add($"{summary.ExcludedNotSignificant} could be chance");
@@ -305,6 +305,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     private static string Runs(int count) => count == 1 ? "1 run" : $"{count} runs";
 
     private static string RunWord(int count) => count == 1 ? "run" : "runs";
+
+    private static string NeedWord(int count) => count == 1 ? "needs" : "need";
 
     private static string Format(DateTime value, string format) =>
         value.ToString(format, CultureInfo.InvariantCulture);

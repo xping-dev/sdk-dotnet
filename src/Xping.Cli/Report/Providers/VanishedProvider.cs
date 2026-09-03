@@ -86,19 +86,25 @@ internal sealed class VanishedProvider : IFindingProvider
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            if (slices.Current.Contains(fingerprint))
-                continue;
-
+            // The habit the absence would be a change from. A test the baseline barely saw is one
+            // this question cannot be asked of at all, whichever slice it is in now.
             if (!slices.BaselineAppearances.TryGetValue(fingerprint, out int appearances) ||
                 appearances < LocalAnalysisConstants.VanishedMinBaselineSessions)
             {
                 continue;
             }
 
-            // Counted here rather than after the gate below: the question is asked of every
-            // fingerprint that reaches this line, and the family the coordinator corrects against is
-            // every asking, not the few that answered yes.
+            // Counted before the presence check below and not after it, which is the whole
+            // difference between a family and a shortlist. Being absent from the current slice is
+            // this kind's finding, not its precondition: every established test in the window is a
+            // test asked whether it stopped running, and the ones still running are the askings that
+            // answered no. Counting only the absences would describe a family in which every member
+            // is a discovery and correct for nothing — a suite of three hundred stable tests holding
+            // one absence would report m = 1 and pass it through untouched.
             tested++;
+
+            if (slices.Current.Contains(fingerprint))
+                continue;
 
             // How lopsided the split of this test's appearances is, against the null that appearing
             // had nothing to do with which slice a session fell in. The current arm holds none of

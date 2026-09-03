@@ -776,7 +776,9 @@ public sealed class ShareableOutputTests
     [Theory]
     [InlineData(0, 0, "No findings.")]
     [InlineData(41, 0, "Nothing reportable yet: 41 need more runs.")]
+    [InlineData(1, 0, "Nothing reportable yet: 1 needs more runs.")]
     [InlineData(0, 6, "Nothing reportable yet: 6 could be chance.")]
+    [InlineData(0, 1, "Nothing reportable yet: 1 could be chance.")]
     [InlineData(41, 6, "Nothing reportable yet: 41 need more runs, 6 could be chance.")]
     public void AnEmptyReportSaysWhyItIsEmpty(int lowEvidence, int notSignificant, string expected)
     {
