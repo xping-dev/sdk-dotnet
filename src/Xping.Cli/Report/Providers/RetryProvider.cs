@@ -711,11 +711,21 @@ internal sealed class RetryProvider : IFindingProvider
                 [.. currentGreen.Take(MaxExemplars).Select(ToExemplar)],
                 Contrast(baselineGreen, baselineTypical)),
 
-            // Doubling is as unreliable as this measure gets, as it is for a duration regression.
-            // Beyond that the test is simply retry-dependent, and ranking one that went from a single
-            // attempt to four above one that went from one to two would crowd out every other kind on
-            // the strength of one arithmetic accident.
-            Unreliability: Math.Min(1.0, relative),
+            // The log of the ratio, halved, so that a doubling reads 0.5 and a quadrupling saturates.
+            // The doubling is deliberately the 0.5 a duration regression reads there; the two scales
+            // agree at that point and nowhere else, since DurationProvider is linear in the ratio and
+            // stops at threefold. The raw ratio, #170: it is already 1.00 at one attempt becoming
+            // two, which is the modal deepening — the floor is a single extra attempt and both arms
+            // are medians of integers, so a baseline of one is what this kind mostly sees. Every test
+            // that began needing a second attempt therefore scored the maximum on the term that
+            // dominates the ranking, and one that went from one attempt to four scored no higher.
+            //
+            // A quadrupling is where the measure stops reading. Past it the test is simply
+            // retry-dependent, and eight attempts for one is the same finding as four with a larger
+            // number on it; ranking it higher still would crowd out every other kind on the strength
+            // of one arithmetic accident. Below it the ratio is ranked in full, so a quadrupling does
+            // outrank a doubling — that is the ordering the raw ratio flattened away.
+            Unreliability: Math.Min(1.0, Math.Log2((double)currentTypical / baselineTypical) / 2.0),
 
             SessionsSinceLastOccurrence: currentGreen.Min(r => r.SessionIndex),
 
