@@ -39,11 +39,11 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.8 is where
-    /// <c>ParallelSensitiveEvidence</c> stopped describing two arms either side of a split point and
-    /// started describing a trend across every concurrency level the test was observed at.
+    /// leaving the number still would tell it nothing had moved. 1.9 is where
+    /// <c>VanishedEvidence</c> gained the baseline run rate and the p-value of the absence, the two
+    /// figures the finding is now decided on.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.8";
+    public const string CurrentSchemaVersion = "1.9";
 }
 
 /// <summary>

@@ -291,6 +291,34 @@ same rise measured across 1 to 14, and only the evidence shows the difference.
 
 ---
 
+### `Vanished` Needs A Habit, And Cannot See One In Fewer Than Eight Runs
+
+**Impact**: a test that ran occasionally and then genuinely was deleted is not reported as having
+stopped running. Neither is any deleted test, of any history, on a store holding fewer than eight
+runs.
+
+**Reason**: absence is only evidence against a habit, and a count of appearances cannot establish
+one. Three appearances out of three earlier runs is a habit that stopped; three out of seventeen is a
+test that was mostly absent already, and one that runs about a fifth of the time misses three runs in
+a row more often than not. So the finding is decided by a test rather than a count — Fisher's exact
+test on the earlier and current runs against present and absent, asking how often every one of a
+test's appearances would fall among the earlier runs and none among the current ones if appearing had
+nothing to do with when the run happened. It is one-sided, legitimately, because the kind only ever
+looks at a test already known to be missing, and it reports only at p ≤ 0.05.
+
+Against the default three-run current slice that means a baseline run rate of about 0.71 — twelve of
+seventeen earlier runs carries, eight does not. The requirement **eases** as the history lengthens
+rather than tightening, towards the 1 − 0.05^(1/3) ≈ 0.632 the conditioning drops away to: fourteen
+of twenty, twenty-seven of forty, sixty-five of a hundred, six hundred and thirty-three of a
+thousand. Short histories are the expensive ones.
+
+Below eight runs in the window the current slice narrows to a single run, where even perfect
+attendance across six earlier runs is one deal in seven, so nothing of this kind is reportable at
+all. That is the intended answer rather than an oversight — one run's absence is not evidence that
+anything stopped — but it does mean a fresh store says nothing about deleted tests until it has
+eight runs in it. The run rate and the p-value are published with every finding that does clear the
+bar.
+
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 
 **Impact**: a test whose retry attribute allows three retries but which only ever recorded two
@@ -462,3 +490,4 @@ When reporting, please include:
 | 1.6.0   | Documented where source location comes from, and what it cannot answer |
 | 1.7.0   | Documented what `TimeSensitive` now charges for searching three axes, and what that costs |
 | 1.8.0   | Documented what `ParallelSensitive` now measures, and the duration confound it cannot correct |
+| 1.9.0   | Documented the run rate `Vanished` now requires, and the window size below which it is silent |
