@@ -178,6 +178,7 @@ public sealed class ShareableOutputTests
                     new TimeArm(9, 10, 0.9, 7, "18:00-24:00 local"),
                     new TimeArm(0, 6, 0, 0, "the rest of the day"),
                     new TimeDelta(0.9, 90),
+                    new TimeSignificance(0.001748, 2),
                     "Europe/Berlin",
                     [],
                     null),
@@ -226,6 +227,25 @@ public sealed class ShareableOutputTests
 
         Assert.Contains(metrics, m => m.Value == "3.51x (95% CI 1.94-5.87x), +880ms at reference speed");
         Assert.Contains(metrics, m => m.Value == "p 0.004 one-sided, 3 recent runs against 10");
+    }
+
+    [Fact]
+    public void ATimeSensitiveFindingShowsHowWideASearchFoundIt()
+    {
+        var (headline, metrics) = EvidenceHeadline.For(
+            FindingKind.TimeSensitive, EvidenceFor(FindingKind.TimeSensitive));
+
+        // The headline is unchanged by the search charge: what a reader needs first is when the test
+        // fails and over how many days, and a probability answers neither question.
+        Assert.Equal(
+            "failed 90% in 18:00-24:00 local against 0% in the rest of the day, gap 90 pts " +
+            "across 7 days",
+            headline);
+
+        // The probability is the one the search has already been charged for, and the count beside
+        // it says how wide that search was — which is the difference between a gap someone went
+        // looking for and one that was there to begin with.
+        Assert.Contains(metrics, m => m.Value == "p 0.00175 two-sided, 2 splits compared");
     }
 
     [Fact]
