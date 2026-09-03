@@ -39,9 +39,9 @@ internal static class WilsonInterval
     /// compared against, and this is the confidence the comparison is made at. 95% is the convention
     /// a reader will assume when the report says a rate is "at least" something.
     /// <para>
-    /// Shared rather than private because the concurrency provider bounds a rank correlation at the
-    /// same confidence and by the same argument, and two different 95%s in one report would be a
-    /// difference a reader could not discover.
+    /// Shared rather than private because the concurrency provider, which has no interval to place
+    /// and ranks on an effect discounted by its own trend statistic, discounts against this same
+    /// deviate. Two different 95%s in one report would be a difference a reader could not discover.
     /// </para>
     /// </remarks>
     public const double ConfidenceZ = 1.96;

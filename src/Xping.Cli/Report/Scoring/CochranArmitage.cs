@@ -28,12 +28,17 @@ internal readonly record struct TrendStatistic(double Z, double PValue);
 /// across a dozen levels is the strongest thing it can see rather than the weakest.
 /// </para>
 /// <para>
-/// <b>Levels are scored by value, not by rank.</b> The statistic is a covariance between the level
-/// and the outcome, so a suite that ran a test at 1 and at 8 gets credit for the width of that gap
-/// where one that ran it at 7 and 8 does not. That is the right reading for a concurrency axis, where
-/// the numbers are counts of things and the distance between them means something. It is also what
-/// separates this from <see cref="KendallTau"/>, which is deliberately rank-only and is reported
-/// beside it as the effect size.
+/// <b>Levels are scored by value, not by rank — which buys their relative spacing, and nothing
+/// else.</b> The statistic is a covariance between the level and the outcome, so where a test ran at
+/// 1, 2 and 14, the jump to 14 counts for twelve times the step to 2 rather than for one more rank.
+/// That is the right reading for a concurrency axis, where the numbers are counts of things and the
+/// distances between them mean something, and it is what separates this from
+/// <see cref="KendallTau"/>, which is deliberately rank-only and is reported beside it as the effect
+/// size. What value-scoring does <i>not</i> buy is credit for how wide the range is in absolute
+/// terms: multiplying every level by a constant scales the statistic, its standard error and the
+/// continuity correction alike, so levels of 1 and 8 are read exactly as levels of 7 and 8 are.
+/// Two levels are two levels however far apart they sit, and reporting otherwise would make the
+/// finding a property of the units the scheduler happened to count in.
 /// </para>
 /// <para>
 /// <b>The variance is taken over clusters, and never below the model's.</b> Observations sharing a
@@ -89,10 +94,10 @@ internal static class CochranArmitage
     /// happened every time or never. None of those are errors; they are the data answering.
     /// </returns>
     /// <remarks>
-    /// Deterministic in the face of any input order. Both sums that carry rounding — the statistic
-    /// itself and the sandwich variance — are accumulated over clusters in ascending cluster order
-    /// rather than in the order the observations arrived, so two runs over one window agree bit for
-    /// bit.
+    /// Deterministic in the face of any input order. Every sum that carries rounding — the level
+    /// spread, each cluster's contribution, and the sandwich variance over them — is accumulated in a
+    /// canonical order rather than in the order the observations arrived, so two runs over one window
+    /// agree bit for bit.
     /// </remarks>
     public static TrendStatistic Of(IReadOnlyList<TrendPoint> points)
     {
@@ -133,7 +138,13 @@ internal static class CochranArmitage
 
         var clusters = new SortedDictionary<int, double>();
 
-        foreach (TrendPoint point in points)
+        // Accumulated in a canonical order rather than in the order the observations arrived. Within
+        // one cluster these are floating-point additions, and floating-point addition is not
+        // associative: two callers holding the same observations in different orders would otherwise
+        // get standard errors differing in the last bit, which on a statistic sitting against its
+        // threshold is a different finding.
+        foreach (TrendPoint point in points.OrderBy(p => p.Cluster).ThenBy(p => p.Level)
+            .ThenBy(p => p.Occurred))
         {
             double contribution = (point.Level - mean) * ((point.Occurred ? 1.0 : 0.0) - rate);
             clusters[point.Cluster] = clusters.GetValueOrDefault(point.Cluster) + contribution;

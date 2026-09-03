@@ -29,8 +29,9 @@ namespace Xping.Cli.Report.Contract;
 /// </para>
 /// <para>
 /// Observations only, per the output contract's evidence rules: a headline states what was counted
-/// and never why it happened. No arithmetic happens here either — every figure was rounded by its
-/// provider to the precision the report publishes, and this only formats it.
+/// and never why it happened. No figure is computed here either — every one of them was rounded by
+/// its provider to the precision the report publishes, and this chooses which to show and formats
+/// them.
 /// </para>
 /// </remarks>
 internal static class EvidenceHeadline
@@ -378,47 +379,49 @@ internal static class EvidenceHeadline
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The two ends of the range, always lowest level first, with the direction carried by a word
-    /// rather than by which end is named first. Naming them in the trend's order would make the
-    /// sentence read along an ascending concurrency axis half the time and a descending one the
-    /// other half, and a reader skimming a list of findings would have to work out which each time.
+    /// The pair of levels quoted is the widest step the dose-response actually makes in the trend's
+    /// direction, not the two ends of the observed range. The ends are the obvious choice and they
+    /// are wrong: a level seen once, at either extreme, can perfectly well run against a trend that
+    /// a dozen well-populated levels in the middle established, and quoting it would produce the
+    /// sentence "failed 100% at concurrency 1 and 0% at 14, rising with concurrency". Searching the
+    /// table for the widest step cannot do that — a table with no rising step in it anywhere is a
+    /// table whose rank correlation is not positive, and the finding would not have been made.
     /// </para>
     /// <para>
     /// The level count is in the headline for the reason the temporal finding puts its distinct-day
     /// count there: it is what separates a dose-response from a coincidence between two points, and a
     /// reader skimming a fence will not open the evidence to look for it. The run count is there
     /// because the probability beside it was computed over runs, and a trend over eight runs and one
-    /// over forty read identically without it.
+    /// over forty read identically without it. The observed range is a metric rather than part of the
+    /// sentence, so that a reader can see it was not the pair being quoted.
     /// </para>
     /// <para>
-    /// Only the two ends reach the metrics. The whole table is in the evidence for a reader who wants
-    /// the curve; five rows is what the neighbouring kinds carry, and a suite spread over fourteen
-    /// levels would otherwise print fourteen.
+    /// Only the quoted pair reaches the metrics. The whole table is in the evidence for a reader who
+    /// wants the curve; five rows is what the neighbouring kinds carry, and a suite spread over
+    /// fourteen levels would otherwise print fourteen.
     /// </para>
     /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(ParallelSensitiveEvidence e)
     {
-        ConcurrencyLevel lowest = e.Levels[0];
-        ConcurrencyLevel highest = e.Levels[^1];
+        bool rising = e.Trend.Direction == nameof(ConcurrencyDirection.WithConcurrency);
+        string direction = rising ? "rising with concurrency" : "falling with concurrency";
 
-        string direction = e.Trend.Direction == nameof(ConcurrencyDirection.WithConcurrency)
-            ? "rising with concurrency"
-            : "falling with concurrency";
+        (ConcurrencyLevel milder, ConcurrencyLevel worse) = WidestStep(e.Levels, rising);
 
         return
         (
-            $"failed {Percent(lowest.FailureRate)} at concurrency {lowest.Concurrency} and " +
-            $"{Percent(highest.FailureRate)} at {highest.Concurrency}, {direction} across " +
+            $"failed {Percent(milder.FailureRate)} at concurrency {milder.Concurrency} and " +
+            $"{Percent(worse.FailureRate)} at {worse.Concurrency}, {direction} across " +
             $"{Levels(e.Observed.DistinctLevels)} in {Runs(e.Trend.Sessions)}",
             [
                 new(
-                    $"at concurrency {lowest.Concurrency}",
-                    $"{lowest.Failures} of {lowest.Executions} executions " +
-                    $"({Percent(lowest.FailureRate)}) in {Runs(lowest.Sessions)}"),
+                    $"at concurrency {milder.Concurrency}",
+                    $"{milder.Failures} of {milder.Executions} executions " +
+                    $"({Percent(milder.FailureRate)}) in {Runs(milder.Sessions)}"),
                 new(
-                    $"at concurrency {highest.Concurrency}",
-                    $"{highest.Failures} of {highest.Executions} executions " +
-                    $"({Percent(highest.FailureRate)}) in {Runs(highest.Sessions)}"),
+                    $"at concurrency {worse.Concurrency}",
+                    $"{worse.Failures} of {worse.Executions} executions " +
+                    $"({Percent(worse.FailureRate)}) in {Runs(worse.Sessions)}"),
                 new("trend", $"{direction}, tau {Rate(e.Trend.Tau)}"),
                 new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}"),
                 new(
@@ -426,6 +429,45 @@ internal static class EvidenceHeadline
                     $"p {Probability(e.Trend.PValue)} two-sided, Z {Rate(e.Trend.Z)} " +
                     $"over {Runs(e.Trend.Sessions)}")
             ]);
+    }
+
+    /// <summary>
+    /// Finds the two levels between which the failure rate steps furthest in the trend's direction.
+    /// </summary>
+    /// <param name="levels">Every level observed, ascending by concurrency.</param>
+    /// <param name="rising">Whether the trend points towards higher concurrency.</param>
+    /// <returns>The milder level and the worse one, in that order.</returns>
+    /// <remarks>
+    /// Quadratic in the number of levels, which a scheduler bounds at its thread count. Ties are
+    /// broken towards the widest span in concurrency and then towards the lower level, so the choice
+    /// is the same on every run over one window.
+    /// </remarks>
+    private static (ConcurrencyLevel Milder, ConcurrencyLevel Worse) WidestStep(
+        IReadOnlyList<ConcurrencyLevel> levels, bool rising)
+    {
+        ConcurrencyLevel milder = levels[0];
+        ConcurrencyLevel worse = levels[^1];
+        double step = double.NegativeInfinity;
+        int span = 0;
+
+        for (int lower = 0; lower < levels.Count - 1; lower++)
+        {
+            for (int upper = lower + 1; upper < levels.Count; upper++)
+            {
+                ConcurrencyLevel candidateMilder = rising ? levels[lower] : levels[upper];
+                ConcurrencyLevel candidateWorse = rising ? levels[upper] : levels[lower];
+
+                double climb = candidateWorse.FailureRate - candidateMilder.FailureRate;
+                int width = levels[upper].Concurrency - levels[lower].Concurrency;
+
+                if (climb < step || (climb == step && width <= span))
+                    continue;
+
+                (milder, worse, step, span) = (candidateMilder, candidateWorse, climb, width);
+            }
+        }
+
+        return (milder, worse);
     }
 
     /// <summary>

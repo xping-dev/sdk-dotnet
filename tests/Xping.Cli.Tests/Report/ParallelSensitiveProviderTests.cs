@@ -139,12 +139,13 @@ public sealed class ParallelSensitiveProviderTests
     }
 
     [Fact]
-    public void UnreliabilityIsTheLeastCorrelationTheRunsSupport()
+    public void UnreliabilityDiscountsTheCorrelationByHowPreciselyItWasMeasured()
     {
         // Five clean runs at 2 against five failing runs at 8 is τ_b 1.00 — the strongest correlation
         // there is — and it is the smallest window that comfortably clears the bar. Ranking on the
-        // estimate would put it above every well-evidenced finding in the report; ranking on what ten
-        // runs support puts it near the bottom, where a reader can still find it.
+        // estimate would put it above every well-evidenced finding in the report; discounting it by
+        // the trend statistic's margin over its own threshold puts it near the bottom, where a
+        // reader can still find it.
         FindingCandidate candidate = Single(Split(highFailures: 5, lowFailures: 0));
         ParallelSensitiveEvidence evidence =
             Assert.IsType<ParallelSensitiveEvidence>(candidate.Evidence);
@@ -242,6 +243,34 @@ public sealed class ParallelSensitiveProviderTests
         ParallelSensitiveEvidence alone = EvidenceFrom(Split(highFailures: 0, lowFailures: 5));
         Assert.Equal(nameof(ConcurrencyDirection.AgainstConcurrency), alone.Trend.Direction);
         Assert.Equal(-1.0, alone.Trend.Tau);
+    }
+
+    [Fact]
+    public void AFailureThatArguesAgainstTheTrendDoesNotKeepTheFindingFresh()
+    {
+        // A rising trend whose crowded failures are all old, plus one failure last night at the
+        // quiet end of the range. That failure is a counterexample: it is the observation the
+        // statistic subtracted rather than added. Dating the finding by it would hold a stale
+        // concurrency problem at the top of the report on the strength of the one run that argues
+        // against it.
+        List<IReadOnlyList<(int, bool)>> schedule = [];
+
+        for (int ordinal = 0; ordinal < 20; ordinal++)
+            schedule.Add([(8, ordinal < 15)]);
+
+        for (int ordinal = 0; ordinal < 8; ordinal++)
+            schedule.Add([(1, false)]);
+
+        schedule.Add([(1, true)]);
+
+        FindingCandidate candidate = Single(Window(schedule));
+        ParallelSensitiveEvidence evidence =
+            Assert.IsType<ParallelSensitiveEvidence>(candidate.Evidence);
+
+        // Twenty-nine runs, the newest of them the counterexample; the newest crowded failure is
+        // fourteen runs back.
+        Assert.Equal(14, candidate.SessionsSinceLastOccurrence);
+        Assert.All(evidence.Exemplars, e => Assert.Equal(8, e.Concurrency));
     }
 
     [Fact]

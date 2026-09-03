@@ -7,6 +7,7 @@ using Xping.Cli.Report.Scoring;
 
 namespace Xping.Cli.Tests.Report;
 
+#pragma warning disable CA5394
 public sealed class CochranArmitageTests
 {
     // ---------------------------------------------------------------------------------------
@@ -193,10 +194,30 @@ public sealed class CochranArmitageTests
     [Fact]
     public void TheOrderObservationsArriveInDoesNotChangeTheAnswer()
     {
-        List<TrendPoint> points = Separated(7);
-        List<TrendPoint> shuffled = [.. points.OrderBy(p => p.Level).ThenByDescending(p => p.Cluster)];
+        // Bit-identical, not merely close. A cluster holding several observations sums them in
+        // floating point, and floating-point addition is not associative, so a permutation could
+        // otherwise move the statistic and its standard error in their last bits — which on a
+        // statistic sitting against its threshold is a different finding. This cluster's ten
+        // contributions span two orders of magnitude, which is what it takes for the low bits to be
+        // lost in a different place depending on the order they arrive in: summed unsorted, it takes
+        // five distinct values across the permutations below.
+        int[] levels = [13, 64, 1, 8, 8, 1, 64, 13, 1, 3];
+        List<TrendPoint> points = [.. levels.Select(l => new TrendPoint(l, l == 64, 0))];
 
-        Assert.Equal(CochranArmitage.Of(points).Z, CochranArmitage.Of(shuffled).Z);
+        points.Add(new TrendPoint(1, false, 1));
+        points.Add(new TrendPoint(64, true, 1));
+
+        var random = new Random(20260903);
+        TrendStatistic expected = CochranArmitage.Of(points);
+
+        for (int shuffle = 0; shuffle < 200; shuffle++)
+        {
+            List<TrendPoint> permuted = [.. points.OrderBy(_ => random.Next())];
+            TrendStatistic actual = CochranArmitage.Of(permuted);
+
+            Assert.Equal(expected.Z, actual.Z);
+            Assert.Equal(expected.PValue, actual.PValue);
+        }
     }
 
     [Fact]

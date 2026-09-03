@@ -272,6 +272,58 @@ public sealed class ShareableOutputTests
     }
 
     [Fact]
+    public void AConcurrencyHeadlineNeverQuotesAPairThatContradictsItsOwnTrend()
+    {
+        // A rising trend established by two well-populated levels in the middle, with a single
+        // execution at each end of the range running the other way. Quoting the ends of the range —
+        // the obvious choice — would print "failed 100% at concurrency 1 and 0% at 14, rising with
+        // concurrency". The widest rising step in the table is the pair that actually shows it.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                2.51, 0.0121, 0.402, 22, nameof(ConcurrencyDirection.WithConcurrency)),
+            new ConcurrencyRange(1, 14, 4),
+            [
+                new ConcurrencyLevel(1, 1, 1, 1, 1.0),
+                new ConcurrencyLevel(4, 10, 10, 0, 0),
+                new ConcurrencyLevel(9, 10, 10, 6, 0.6),
+                new ConcurrencyLevel(14, 1, 1, 0, 0)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 0% at concurrency 4 and 60% at 9, rising with concurrency across 4 levels " +
+            "in 22 runs",
+            headline);
+    }
+
+    [Fact]
+    public void AFallingConcurrencyHeadlineQuotesItsPairTheSameWayRound()
+    {
+        // The milder level is named first whichever way the trend runs, so the sentence always reads
+        // along the same axis and the direction is carried by the word rather than by the order.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                -2.51, 0.0121, -0.402, 22, nameof(ConcurrencyDirection.AgainstConcurrency)),
+            new ConcurrencyRange(1, 9, 2),
+            [
+                new ConcurrencyLevel(1, 10, 10, 7, 0.7),
+                new ConcurrencyLevel(9, 10, 10, 1, 0.1)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 10% at concurrency 9 and 70% at 1, falling with concurrency across 2 levels " +
+            "in 22 runs",
+            headline);
+    }
+
+    [Fact]
     public void AHeadlineNamesTheFailureTypeOnlyWhenTheAdapterRecordedOne()
     {
         SignatureView unnamed = new(

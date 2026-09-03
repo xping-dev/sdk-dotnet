@@ -139,8 +139,10 @@ internal sealed record ParallelSensitiveEvidence(
 /// <b>Reading the ordering is the point, not a side benefit.</b> A two-arm comparison cannot tell
 /// concurrency 2 from concurrency 14 once both are "high", so the monotone rise a genuinely
 /// contention-sensitive test produces is the shape it is worst at seeing. Scoring the levels by value
-/// also means a suite that ran a test at 1 and at 8 gets credit for the width of that gap where one
-/// that ran it at 7 and 8 does not.
+/// rather than by rank additionally reads how far apart they sit relative to each other: across
+/// levels of 1, 2 and 14 the jump to 14 counts for twelve times the step to 2. It does not read the
+/// absolute width of the range — two levels are two levels however far apart — and
+/// <see cref="ConcurrencyRange"/> is published so that a reader can see what the statistic could not.
 /// </para>
 /// <para>
 /// <b>The boolean is deliberately unused.</b> <see cref="TestOrchestrationRecord.WasParallelized"/>
@@ -171,9 +173,9 @@ internal sealed record ParallelSensitiveEvidence(
 /// </para>
 /// <para>
 /// <b>Known limitation: τ_b is attempt-weighted.</b> The clustered variance behind the p-value
-/// charges a heavily retried run for the repetition, and the jackknife bound the finding is ranked on
-/// reads zero when one occasion supplied the whole correlation — so neither the decision to report
-/// nor the position in the report can be bought with retries. The published effect size still
+/// charges a heavily retried run for the repetition, and the rank the finding is given is that same
+/// charge applied to the effect size — so neither the decision to report nor the position in the
+/// report can be bought with retries. The published effect size still
 /// weighs attempts rather than occasions, and a reader comparing two τ_b values across tests that
 /// retry differently is not comparing like with like.
 /// </para>
@@ -294,7 +296,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         int loud = direction == ConcurrencyDirection.WithConcurrency ? range.Max : range.Min;
         int quiet = direction == ConcurrencyDirection.WithConcurrency ? range.Min : range.Max;
 
-        List<Measured> failures = [.. considered.Where(m => m.Reference.Failed)];
+        List<Measured> driving = Driving(considered, direction);
 
         return new FindingCandidate(
             FindingKind.ParallelSensitive,
@@ -308,23 +310,23 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
                     direction.ToString()),
                 range,
                 Levels(considered),
-                Exemplars(failures, direction),
+                Exemplars(driving, direction),
                 Contrast(considered, quiet)),
 
-            // The least correlation the evidence supports, rather than the one it happened to show.
-            // The emission decision is made on the estimate above, so what is reported has not
-            // changed; what this changes is where it ranks. A perfectly separated window of four runs
-            // a side and one of twenty a side both read τ_b 1.00, and ranking on that would put the
-            // thinnest evidence at the top of the report — which is what #159 exists to prevent.
+            // The correlation discounted by how precisely it was measured, rather than the
+            // correlation itself. The emission decision is made on the estimate above, so what is
+            // reported has not changed; what this changes is where it ranks. A perfectly separated
+            // window of four runs a side and one of twenty a side both read τ_b 1.00, and ranking on
+            // that would put the thinnest evidence at the top of the report — which is what #159
+            // exists to prevent. It is a rank and not a confidence bound; `Support` says why.
             Unreliability: Support(tau, statistic.Z),
 
-            // Dated by the failures that drove it rather than by the test's last execution. A test
-            // that failed under load a fortnight ago and has run cleanly since should decay, and
-            // dating it by its newest passing run would hold it at full recency forever.
-            //
-            // There is always at least one failure and at least one pass: a test that failed every
-            // time, or never, has no covariance with anything and was declined by the statistic.
-            SessionsSinceLastOccurrence: failures.Min(m => m.Reference.SessionIndex),
+            // Dated by the failures that drove the trend rather than by the test's last execution, or
+            // by its last failure of any kind. A test that failed under load a fortnight ago and has
+            // run cleanly since should decay; dating it by its newest passing run would hold it at
+            // full recency forever, and dating it by a recent failure at the quiet end of the range
+            // would hold it there on the strength of a counterexample.
+            SessionsSinceLastOccurrence: driving.Min(m => m.Reference.SessionIndex),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
 
@@ -362,6 +364,48 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         }
 
         return considered;
+    }
+
+    /// <summary>
+    /// The failures that produced the trend, as opposed to the ones that argued against it.
+    /// </summary>
+    /// <param name="considered">Every execution the test can be measured on.</param>
+    /// <param name="direction">Which way the trend was found to point.</param>
+    /// <returns>The failures on the trend's side of the mean level; never empty.</returns>
+    /// <remarks>
+    /// <para>
+    /// The statistic reduces exactly to the sum, over the failures alone, of how far each one sat
+    /// from the mean level — every passing execution's contribution cancels against the failures'
+    /// once the two are written out. So a failure counts towards a rising trend if and only if it
+    /// happened above the mean, and against it otherwise, and this is the set the statistic was
+    /// actually built from rather than an approximation of it.
+    /// </para>
+    /// <para>
+    /// It cannot come back empty. A positive statistic <i>is</i> a positive sum over these failures,
+    /// so at least one of them must sit on that side, and a statistic of zero was declined long
+    /// before this is reached.
+    /// </para>
+    /// <para>
+    /// Both the exemplars and the finding's date are drawn from here, and they have to agree: a
+    /// finding whose three exemplars are crowded failures but whose recency comes from last night's
+    /// solitary failure at concurrency 1 would sit at the top of the report on the strength of the
+    /// one observation that contradicts it.
+    /// </para>
+    /// </remarks>
+    private static List<Measured> Driving(List<Measured> considered, ConcurrencyDirection direction)
+    {
+        double mean = 0;
+        foreach (Measured measured in considered)
+            mean += measured.Concurrency;
+
+        mean /= considered.Count;
+
+        return
+        [
+            .. considered.Where(m => m.Reference.Failed && (direction == ConcurrencyDirection.WithConcurrency
+                ? m.Concurrency > mean
+                : m.Concurrency < mean))
+        ];
     }
 
     /// <summary>
@@ -434,8 +478,10 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Picks up to three of the failures the trend points at.
+    /// Picks up to three of the failures that drove the trend.
     /// </summary>
+    /// <param name="driving">The failures on the trend's side of the mean level.</param>
+    /// <param name="direction">Which way the trend points.</param>
     /// <remarks>
     /// Ordered by concurrency towards the trend's direction before anything else, which is a
     /// departure from the newest-first rule the rest of the report follows and is deliberate: inside
@@ -444,8 +490,8 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// against the finding. Recency still breaks the ties, so the choice stays stable between runs.
     /// </remarks>
     private static List<ConcurrencyExemplar> Exemplars(
-        List<Measured> failures, ConcurrencyDirection direction) =>
-        [.. Ordered(failures, direction).Take(MaxExemplars).Select(ToExemplar)];
+        List<Measured> driving, ConcurrencyDirection direction) =>
+        [.. Ordered(driving, direction).Take(MaxExemplars).Select(ToExemplar)];
 
     /// <summary>
     /// Picks one execution typical of the other end of the range.
@@ -498,37 +544,42 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             measured.Concurrency);
 
     /// <summary>
-    /// How much of the correlation the runs behind it support.
+    /// The correlation, discounted by how precisely the runs behind it measured a trend.
     /// </summary>
     /// <param name="tau">The estimated correlation.</param>
     /// <param name="z">The standardised trend the same observations produced.</param>
-    /// <returns>The bound nearest zero, in [0,1].</returns>
+    /// <returns>A rank in [0,1]; 0 wherever the trend barely cleared its own threshold.</returns>
     /// <remarks>
     /// <para>
-    /// A lower confidence bound on the magnitude of τ_b, in the sense every other kind's
-    /// <c>Unreliability</c> is one — see <see cref="WilsonInterval"/>, which does the same job for
-    /// the kinds whose measure is a proportion. What is bounded here is a rank correlation, and
-    /// neither of the obvious ways to put an interval round one survives contact with this data:
-    /// τ_b's asymptotic variance assumes the executions are independent, which retries make false,
-    /// and a delete-one-run jackknife returns a standard error of exactly zero whenever the runs
-    /// agree with each other, which would rank five identical runs alongside fifty.
+    /// <b>Not a confidence bound, and the difference matters.</b> Every other kind's
+    /// <c>Unreliability</c> is a genuine interval endpoint on the quantity the kind measures — see
+    /// <see cref="WilsonInterval"/>. This one is not, because neither way of putting an interval
+    /// round a rank correlation survives contact with this data: τ_b's asymptotic variance assumes
+    /// the executions are independent, which retries make false, and a delete-one-run jackknife
+    /// returns a standard error of exactly zero whenever the runs agree with each other, which would
+    /// rank five identical runs alongside fifty.
     /// </para>
     /// <para>
-    /// So the standard error is recovered from the test instead: <see cref="CochranArmitage"/> has
-    /// already measured the same association with a variance that counts runs rather than attempts,
-    /// and an estimate divided by its own standardised statistic is that estimate's standard error.
-    /// That is the ordinary way a standard error is recovered when a study publishes an effect and a
-    /// test of it and nothing else, and it makes the bound <c>|τ| × (1 − z_{95} / |Z|)</c> — the
-    /// effect discounted by how precisely it was measured. A trend that barely clears the bar scores
-    /// near zero and falls to the bottom of the report, where a reader can still find it; the same
-    /// trend over four times the runs has four times the statistic and keeps most of its effect.
+    /// What it is instead is the effect size scaled by <c>1 − z₉₅ / |Z|</c>, the share of the trend
+    /// statistic that is in excess of the threshold it had to clear. That is the shape a Wald bound
+    /// takes when a standard error is recovered from a statistic, and it is deliberately not called
+    /// one: <see cref="CochranArmitage"/> scores the levels by value while
+    /// <see cref="KendallTau"/> scores them by rank, so the two are measuring the same association
+    /// with different functionals and a monotone remapping of the levels moves this without moving
+    /// τ_b at all.
     /// </para>
     /// <para>
-    /// Conservative on two counts, both deliberate. The recovery treats the trend statistic as
-    /// measuring τ_b, where it in fact scores the levels by value rather than by rank, and the
-    /// statistic it divides by has already been shrunk by the continuity correction. Both push the
-    /// bound down, which is the direction to err in for a number whose only job is to decide what a
-    /// reader is shown first.
+    /// What it does do is the job #159 asks of a rank, which is that a claim resting on more runs
+    /// outranks the same claim resting on fewer. The statistic grows with the runs behind a trend
+    /// and the effect size does not, so a perfect dose-response over four runs a side scores 0.01
+    /// and the same one over twenty scores 0.67. A trend that barely cleared its threshold falls to
+    /// the bottom of the report, where a reader can still find it.
+    /// </para>
+    /// <para>
+    /// Conservative on two further counts, both deliberate: the statistic it divides by has already
+    /// been shrunk by the continuity correction, and the correction is largest exactly where the
+    /// evidence is thinnest. Both push the rank down, which is the direction to err in for a number
+    /// whose only job is to decide what a reader is shown first.
     /// </para>
     /// </remarks>
     private static double Support(double tau, double z) =>
