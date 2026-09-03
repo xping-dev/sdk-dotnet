@@ -171,8 +171,10 @@ between suites with different parallelism settings — the level table and the o
 published beside it so the dose-response can be read directly rather than inferred from one number.
 
 The direction is two-sided: a test that fails more when it runs *nearly alone* is as real a defect as
-one that fails under contention, and each is reported against the end of the range holding its
-failures. What the report cannot do is separate concurrency from duration — a slow test overlaps more
+one that fails under contention. Whichever way it runs, the finding is illustrated by the failures
+that drove it — the ones on the trend's side of the test's mean concurrency, rather than its newest
+failures — and the headline quotes the pair of levels that supplied the most of the correlation,
+rather than the two ends of the observed range. What the report cannot do is separate concurrency from duration — a slow test overlaps more
 neighbours by construction — which is in [known limitations](../known-limitations.md).
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said

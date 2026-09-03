@@ -113,8 +113,14 @@ internal sealed record ConcurrencyRange(int Min, int Max, int DistinctLevels);
 /// dose-response is the finding, and a reader — or a renderer picking out the two ends — has to be
 /// able to read it off in order.
 /// </param>
-/// <param name="Exemplars">Up to three failures from the end of the range the trend points at.</param>
-/// <param name="Contrast">One execution typical of the other end.</param>
+/// <param name="Exemplars">
+/// Up to three of the failures that drove the trend — those above the mean concurrency where it
+/// rises, below it where it falls — furthest along the trend first. Not simply the newest three
+/// failures, and not the failures at the extreme level: a failure on the other side of the mean is
+/// the observation the statistic subtracted rather than added, and showing it as an exemplar would
+/// illustrate the finding with the run that argues against it.
+/// </param>
+/// <param name="Contrast">One execution typical of the far end of the observed range.</param>
 internal sealed record ParallelSensitiveEvidence(
     ConcurrencyTrend Trend,
     ConcurrencyRange Observed,
@@ -580,6 +586,16 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// been shrunk by the continuity correction, and the correction is largest exactly where the
     /// evidence is thinnest. Both push the rank down, which is the direction to err in for a number
     /// whose only job is to decide what a reader is shown first.
+    /// </para>
+    /// <para>
+    /// <b>The scale is not the other kinds' scale, and that is worth knowing before this is compared
+    /// across kinds.</b> The statistic grows about as fast as the square root of the runs behind it,
+    /// so this is capped near <c>1 − z₉₅/√(G−1)</c> — about 0.53 on a default twenty-run window,
+    /// where a Wilson bound on a proportion can approach 1.00. Concurrency findings therefore band
+    /// lower than comparable findings of other kinds at the same strength of evidence.
+    /// <see cref="Scoring.ImpactScorer"/> weights every kind's figure alike, so the effect is real
+    /// rather than notional, and it is the price of ranking a rank correlation on the same [0,1]
+    /// axis as a rate. #160's pass across every fingerprint of a kind is where it can be revisited.
     /// </para>
     /// </remarks>
     private static double Support(double tau, double z) =>

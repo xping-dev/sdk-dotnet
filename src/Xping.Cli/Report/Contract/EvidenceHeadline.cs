@@ -379,13 +379,22 @@ internal static class EvidenceHeadline
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The pair of levels quoted is the widest step the dose-response actually makes in the trend's
-    /// direction, not the two ends of the observed range. The ends are the obvious choice and they
-    /// are wrong: a level seen once, at either extreme, can perfectly well run against a trend that
-    /// a dozen well-populated levels in the middle established, and quoting it would produce the
-    /// sentence "failed 100% at concurrency 1 and 0% at 14, rising with concurrency". Searching the
-    /// table for the widest step cannot do that — a table with no rising step in it anywhere is a
-    /// table whose rank correlation is not positive, and the finding would not have been made.
+    /// The pair of levels quoted is the one that <b>contributed most to the correlation</b>, not the
+    /// two ends of the observed range. The ends are the obvious choice and they are wrong twice over:
+    /// a level seen once, at either extreme, can run against a trend that a dozen well-populated
+    /// levels in the middle established — producing the sentence "failed 100% at concurrency 1 and 0%
+    /// at 14, rising with concurrency" — and a level seen once has a rate of exactly 0 or 1, so
+    /// ranking the pairs on the size of the step alone would hand the sentence to the thinnest row in
+    /// the table every time.
+    /// </para>
+    /// <para>
+    /// Both are answered by one rule, and it is not an invention: Kendall's excess of concordant over
+    /// discordant pairs is exactly <c>Σ nᵢ nⱼ (rateⱼ − rateᵢ)</c> over the level pairs, so each pair's
+    /// term in that sum is the share of the published correlation it supplied. Quoting the largest
+    /// term quotes the pair the finding actually rests on, weighted by the executions behind both
+    /// ends. It also cannot contradict the direction: every term is positive exactly where the step
+    /// runs the right way, so a table with no such step is a table whose correlation is not positive
+    /// and no finding was made from it.
     /// </para>
     /// <para>
     /// The level count is in the headline for the reason the temporal finding puts its distinct-day
@@ -406,7 +415,7 @@ internal static class EvidenceHeadline
         bool rising = e.Trend.Direction == nameof(ConcurrencyDirection.WithConcurrency);
         string direction = rising ? "rising with concurrency" : "falling with concurrency";
 
-        (ConcurrencyLevel milder, ConcurrencyLevel worse) = WidestStep(e.Levels, rising);
+        (ConcurrencyLevel milder, ConcurrencyLevel worse) = LargestContribution(e.Levels, rising);
 
         return
         (
@@ -432,22 +441,24 @@ internal static class EvidenceHeadline
     }
 
     /// <summary>
-    /// Finds the two levels between which the failure rate steps furthest in the trend's direction.
+    /// Finds the two levels that supplied the most of the rank correlation.
     /// </summary>
     /// <param name="levels">Every level observed, ascending by concurrency.</param>
     /// <param name="rising">Whether the trend points towards higher concurrency.</param>
     /// <returns>The milder level and the worse one, in that order.</returns>
     /// <remarks>
-    /// Quadratic in the number of levels, which a scheduler bounds at its thread count. Ties are
-    /// broken towards the widest span in concurrency and then towards the lower level, so the choice
-    /// is the same on every run over one window.
+    /// Each pair's contribution is its step in failure rate weighted by the executions behind both
+    /// ends, which is that pair's own term in the sum τ_b is built from. Quadratic in the number of
+    /// levels, which a scheduler bounds at its thread count. Ties are broken towards the widest span
+    /// in concurrency and then towards the lower level, so the choice is the same on every run over
+    /// one window.
     /// </remarks>
-    private static (ConcurrencyLevel Milder, ConcurrencyLevel Worse) WidestStep(
+    private static (ConcurrencyLevel Milder, ConcurrencyLevel Worse) LargestContribution(
         IReadOnlyList<ConcurrencyLevel> levels, bool rising)
     {
         ConcurrencyLevel milder = levels[0];
         ConcurrencyLevel worse = levels[^1];
-        double step = double.NegativeInfinity;
+        double best = double.NegativeInfinity;
         int span = 0;
 
         for (int lower = 0; lower < levels.Count - 1; lower++)
@@ -457,13 +468,16 @@ internal static class EvidenceHeadline
                 ConcurrencyLevel candidateMilder = rising ? levels[lower] : levels[upper];
                 ConcurrencyLevel candidateWorse = rising ? levels[upper] : levels[lower];
 
-                double climb = candidateWorse.FailureRate - candidateMilder.FailureRate;
+                double contribution =
+                    (candidateWorse.FailureRate - candidateMilder.FailureRate) *
+                    levels[lower].Executions * levels[upper].Executions;
+
                 int width = levels[upper].Concurrency - levels[lower].Concurrency;
 
-                if (climb < step || (climb == step && width <= span))
+                if (contribution < best || (contribution == best && width <= span))
                     continue;
 
-                (milder, worse, step, span) = (candidateMilder, candidateWorse, climb, width);
+                (milder, worse, best, span) = (candidateMilder, candidateWorse, contribution, width);
             }
         }
 

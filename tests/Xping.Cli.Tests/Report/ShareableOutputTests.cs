@@ -258,9 +258,10 @@ public sealed class ShareableOutputTests
         var (headline, metrics) = EvidenceHeadline.For(
             FindingKind.ParallelSensitive, EvidenceFor(FindingKind.ParallelSensitive));
 
-        // Both ends of the range, always lowest concurrency first, with the direction carried by a
-        // word — and the level count, which is what separates a dose-response from two points that
-        // happened to differ.
+        // The pair that supplied the most of the correlation — here the two ends, since both are
+        // well populated — always with the milder level first, the direction carried by a word, and
+        // the level count, which is what separates a dose-response from two points that happened to
+        // differ.
         Assert.Equal(
             "failed 0% at concurrency 1 and 75% at 14, rising with concurrency across 4 levels " +
             "in 18 runs",
@@ -296,6 +297,34 @@ public sealed class ShareableOutputTests
         Assert.Equal(
             "failed 0% at concurrency 4 and 60% at 9, rising with concurrency across 4 levels " +
             "in 22 runs",
+            headline);
+    }
+
+    [Fact]
+    public void AConcurrencyHeadlineIsNotHandedToTheThinnestRowInTheTable()
+    {
+        // A level seen once has a failure rate of exactly 0 or 1, so ranking the pairs on the size of
+        // the step alone would quote it every time: the 1 -> 4 step here climbs a full 100 points and
+        // rests on a single execution. Weighting each step by the executions behind both of its ends
+        // — which is what tau_b itself sums — quotes the step the finding actually rests on.
+        var evidence = new ParallelSensitiveEvidence(
+            new ConcurrencyTrend(
+                3.02, 0.0025, 0.514, 31, nameof(ConcurrencyDirection.WithConcurrency)),
+            new ConcurrencyRange(1, 14, 4),
+            [
+                new ConcurrencyLevel(1, 10, 10, 0, 0),
+                new ConcurrencyLevel(4, 1, 1, 1, 1.0),
+                new ConcurrencyLevel(9, 10, 10, 6, 0.6),
+                new ConcurrencyLevel(14, 10, 10, 8, 0.8)
+            ],
+            [],
+            null);
+
+        var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
+
+        Assert.Equal(
+            "failed 0% at concurrency 1 and 80% at 14, rising with concurrency across 4 levels " +
+            "in 31 runs",
             headline);
     }
 
