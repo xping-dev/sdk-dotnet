@@ -124,9 +124,11 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
         var findings = new List<Finding>();
         int notSignificant = 0;
 
-        foreach ((FindingCandidate candidate, int sessions) in surviving)
+        foreach ((FindingCandidate collected, int sessions) in surviving)
         {
-            if (!Survives(candidate, cutoffs))
+            FindingCandidate? candidate = Reported(collected, cutoffs);
+
+            if (candidate == null)
             {
                 notSignificant++;
                 continue;
@@ -201,6 +203,31 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
     }
 
     /// <summary>
+    /// Resolves what to report about one subject, or nothing where the pass silenced it.
+    /// </summary>
+    /// <param name="collected">The candidate a provider offered.</param>
+    /// <param name="cutoffs">The cutoff resolved for each tested kind.</param>
+    /// <returns>The candidate to report, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// A candidate that does not clear its bar hands over to its alternative where it named one.
+    /// The alternative is a weaker claim about the same subject that the provider suppressed only
+    /// because the stronger one held, and it is resolved here rather than there because whether the
+    /// stronger one holds is not known until this pass has run. Without the handover a provider's
+    /// suppression would outlive the finding that justified it.
+    /// </remarks>
+    private static FindingCandidate? Reported(
+        FindingCandidate collected, Dictionary<FindingKind, double?> cutoffs)
+    {
+        if (Survives(collected, cutoffs))
+            return collected;
+
+        // One step and no chain. An alternative is what to say when a claim is silenced, not a
+        // ladder to climb until something sticks, and a provider that wanted two of them would be
+        // describing a ranking rather than a substitution.
+        return collected.Instead is { } instead && Survives(instead, cutoffs) ? instead : null;
+    }
+
+    /// <summary>
     /// Decides whether one candidate clears its kind's cutoff.
     /// </summary>
     /// <param name="candidate">The candidate.</param>
@@ -208,10 +235,14 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
     /// <returns><see langword="true"/> where the candidate may be reported.</returns>
     /// <remarks>
     /// A candidate carrying no p-value passes untouched, and that is the whole of the rule for
-    /// <c>RetryMasked</c>, <c>SharedFailure</c> and <c>BrokenFixture</c>. They count things that
-    /// demonstrably happened; there is no null hypothesis under which a retry that masked a failure
-    /// did not happen, and correcting a count for multiplicity would be answering a question nobody
-    /// asked.
+    /// every kind the retry and failure-mode providers emit — <c>RetryMasked</c>,
+    /// <c>RetryDeepening</c>, <c>RetryExhausted</c>, <c>Flaky</c>, <c>AlwaysFailing</c>,
+    /// <c>TimingOut</c>, <c>BrokenFixture</c> and <c>SharedFailure</c> — and for
+    /// <c>DurationUnstable</c>. They count things that demonstrably happened; there is no null
+    /// hypothesis under which a retry that masked a failure did not happen, and correcting a count
+    /// for multiplicity would be answering a question nobody asked. Nine of the thirteen kinds
+    /// bypass this pass entirely, which is why a suite of three hundred flaky tests still reports
+    /// three hundred findings.
     /// </remarks>
     private static bool Survives(
         FindingCandidate candidate, Dictionary<FindingKind, double?> cutoffs)

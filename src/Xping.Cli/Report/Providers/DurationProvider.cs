@@ -366,21 +366,31 @@ internal sealed class DurationProvider : IFindingProvider
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
-            // A regression suppresses the instability finding for the same test, and the two now
-            // overlap more than they used to: a test whose baseline swings and whose recent runs
-            // then step clear of all of it earns both, where the retired stability gate used to
-            // decline the first. The step is what lifted the whole window past the instability
-            // threshold, so reporting that as instability would state the regression a second time
-            // under another name. This ordering is what stops it, and
-            // ARegressingTestIsNotAlsoReportedAsUnstable builds the sample that needs it.
             Examination regression =
                 Regression(test, current, currentProfile, baselineProfile, referenceMs);
 
             if (regression.Tested)
                 tested++;
 
-            FindingCandidate? candidate = regression.Candidate ??
+            FindingCandidate? unstable =
                 Unstable(context, test, all, whole, baselineProfile, referenceMs);
+
+            // A regression suppresses the instability finding for the same test, and the two now
+            // overlap more than they used to: a test whose baseline swings and whose recent runs
+            // then step clear of all of it earns both, where the retired stability gate used to
+            // decline the first. The step is what lifted the whole window past the instability
+            // threshold, so reporting that as instability would state the regression a second time
+            // under another name. ARegressingTestIsNotAlsoReportedAsUnstable builds the sample that
+            // needs it.
+            //
+            // Offered to the coordinator as the alternative rather than dropped here, because the
+            // suppression is only right while the regression is reported. Whether it is turns on the
+            // multiplicity pass, which runs after every provider and which this one cannot see: a
+            // regression silenced there would otherwise take the instability finding down with it
+            // and leave a slow, wildly varying test entirely unmentioned.
+            FindingCandidate? candidate = regression.Candidate is { } slower
+                ? slower with { Instead = unstable }
+                : unstable;
 
             if (candidate != null)
                 candidates.Add(candidate);

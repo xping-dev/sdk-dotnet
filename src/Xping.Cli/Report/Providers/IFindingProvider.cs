@@ -33,14 +33,33 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
 /// <param name="PValue">
 /// How probable an observation this extreme would be if the kind's claim were false, or
-/// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": kinds like
-/// <c>RetryMasked</c> and <c>SharedFailure</c> count things that demonstrably happened, and a
-/// probability of their happening by chance is not a question. The coordinator carries this so that
+/// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": most kinds
+/// count things that demonstrably happened — every kind the retry and failure-mode providers emit,
+/// and <c>DurationUnstable</c> besides — and a probability of their happening by chance is not a
+/// question. Only <c>TimeSensitive</c>, <c>ParallelSensitive</c>, <c>DurationRegression</c> and
+/// <c>Vanished</c> carry one. The coordinator carries this so that
 /// a multiplicity correction can be applied once, across every fingerprint a kind was tested on —
 /// which a provider cannot do, because by contract it cannot see the others.
 /// </param>
 /// <param name="SeverityCeiling">
 /// The most severe band this kind may reach, or <see langword="null"/> for no cap.
+/// </param>
+/// <param name="Instead">
+/// What to claim about the same subject if this candidate does not clear its kind's bar, or
+/// <see langword="null"/> where there is nothing else to say.
+/// <para>
+/// For the case where two kinds describe one observation and the weaker of them is only worth
+/// printing when the stronger is not. A provider cannot resolve that itself any more: whether the
+/// stronger claim holds is settled by the multiplicity pass, after every provider has run, so a
+/// provider that picked between them would be picking before the answer existed — and a test whose
+/// stronger claim was then silenced would go unreported altogether, having had its weaker one
+/// discarded on the strength of a finding that never appeared.
+/// </para>
+/// <para>
+/// The subject must be the same, so that the reporting floor already applied to this candidate
+/// applies unchanged to its replacement. The replacement should carry no <paramref name="PValue"/>:
+/// it was not in any family, so there is no multiplicity for it to be charged with.
+/// </para>
 /// </param>
 internal sealed record FindingCandidate(
     FindingKind Kind,
@@ -50,7 +69,8 @@ internal sealed record FindingCandidate(
     int SessionsSinceLastOccurrence,
     string DrillDownCommand,
     double? PValue = null,
-    Severity? SeverityCeiling = null)
+    Severity? SeverityCeiling = null,
+    FindingCandidate? Instead = null)
 {
     /// <summary>
     /// Applies this candidate's ceiling to a banded severity.
@@ -145,9 +165,10 @@ internal sealed record ProviderReport(
     /// <param name="candidates">What it counted.</param>
     /// <returns>A report claiming no family.</returns>
     /// <remarks>
-    /// <c>RetryMasked</c>, <c>SharedFailure</c> and <c>BrokenFixture</c> are observations of things
-    /// that demonstrably happened. There is no null hypothesis to reject and so nothing to correct
-    /// for, and the empty family is what carries them past the multiplicity pass untouched.
+    /// Every kind the retry and failure-mode providers emit is an observation of something that
+    /// demonstrably happened — a retry that masked a failure, a signature that knocked over four
+    /// tests at once. There is no null hypothesis to reject and so nothing to correct for, and the
+    /// empty family is what carries all eight of them past the multiplicity pass untouched.
     /// </remarks>
     public static ProviderReport Observations(IReadOnlyList<FindingCandidate> candidates) =>
         new(candidates, ReadOnlyDictionary<FindingKind, int>.Empty);

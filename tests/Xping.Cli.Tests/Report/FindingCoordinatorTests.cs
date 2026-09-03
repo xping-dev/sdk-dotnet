@@ -191,6 +191,60 @@ public sealed class FindingCoordinatorTests
     }
 
     /// <summary>
+    /// A claim the pass silences hands over to the weaker one its provider was holding back.
+    /// </summary>
+    /// <remarks>
+    /// The case a provider cannot decide for itself. `DurationProvider` suppresses the instability
+    /// finding for a test it is already calling a regression, because the step that made the
+    /// regression is what widened the spread and reporting both states one thing twice. That
+    /// suppression is only right while the regression is reported, and whether it is turns on this
+    /// pass — so a provider resolving it alone would leave a slow, wildly varying test unmentioned
+    /// on the strength of a finding that never appeared.
+    /// </remarks>
+    [Fact]
+    public void ASilencedCandidateHandsOverToTheAlternativeItsProviderOffered()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new SupersedingProvider(
+                FindingKind.DurationRegression,
+                FindingKind.DurationUnstable,
+                pValue: 0.04,
+                hypothesesTested: 300)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(FindingKind.DurationUnstable, Assert.Single(result.Findings).Kind);
+
+        // The handover is a substitution, not a reprieve: nothing was excluded, because something
+        // is reported about the subject.
+        Assert.Equal(0, result.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// A claim that clears its bar keeps its provider's suppression.
+    /// </summary>
+    [Fact]
+    public void ASurvivingCandidateKeepsTheAlternativeSuppressed()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new SupersedingProvider(
+                FindingKind.DurationRegression,
+                FindingKind.DurationUnstable,
+                pValue: 0.0001,
+                hypothesesTested: 300)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(FindingKind.DurationRegression, Assert.Single(result.Findings).Kind);
+    }
+
+    /// <summary>
     /// A kind whose provider never reported a family is corrected against the results themselves.
     /// </summary>
     /// <remarks>
@@ -403,6 +457,49 @@ public sealed class FindingCoordinatorTests
                         SessionsSinceLastOccurrence: 0,
                         DrillDownCommand: "xping report",
                         PValue: pValue)
+                ],
+                family);
+        }
+    }
+
+    /// <summary>
+    /// Emits one tested claim about a test, holding a second, untested one behind it.
+    /// </summary>
+    private sealed class SupersedingProvider(
+        FindingKind kind, FindingKind alternative, double pValue, int hypothesesTested)
+        : IFindingProvider
+    {
+        public string Name => "superseding";
+
+        public IReadOnlyList<FindingKind> Kinds { get; } = [kind, alternative];
+
+        public ProviderReport Analyze(AnalysisContext context)
+        {
+            var family = new Dictionary<FindingKind, int> { [kind] = hypothesesTested };
+
+            TestReference? reference = context.Tests.ReferenceFor("fp-Test0");
+            if (reference == null)
+                return new ProviderReport([], family);
+
+            var subject = new FindingSubject.SingleTest(reference);
+
+            return new ProviderReport(
+                [
+                    new FindingCandidate(
+                        kind,
+                        subject,
+                        new StubEvidence(1),
+                        0.5,
+                        SessionsSinceLastOccurrence: 0,
+                        DrillDownCommand: "xping report",
+                        PValue: pValue,
+                        Instead: new FindingCandidate(
+                            alternative,
+                            subject,
+                            new StubEvidence(2),
+                            0.4,
+                            SessionsSinceLastOccurrence: 0,
+                            DrillDownCommand: "xping report"))
                 ],
                 family);
         }

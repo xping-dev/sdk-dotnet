@@ -1033,6 +1033,36 @@ public sealed class DurationProviderTests
     }
 
     /// <summary>
+    /// A regression the multiplicity pass silences gives the instability finding back.
+    /// </summary>
+    /// <remarks>
+    /// The suppression of an instability finding by a regression is only right while the regression
+    /// is reported, and on a suite-sized family it often is not. Held as the candidate's
+    /// alternative, the instability finding is what the coordinator falls back to, so the test is
+    /// still mentioned rather than vanishing behind a finding that never appeared.
+    /// </remarks>
+    [Fact]
+    public void ARegressionSilencedByMultiplicityGivesBackTheInstabilityFinding()
+    {
+        // The sample that earns both: a baseline that already swings, and recent runs that step
+        // clear of all of it.
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: ordinal => ordinal < 7 ? (ordinal % 2 == 0 ? 100 : 400) : 2000);
+
+        FindingCandidate regression = Single(Regressions(context));
+        Assert.Empty(Unstables(context));
+
+        FindingCandidate instead = Assert.IsType<FindingCandidate>(regression.Instead);
+        Assert.Equal(FindingKind.DurationUnstable, instead.Kind);
+
+        // Same subject, so the reporting floor already applied to the regression applies to it
+        // unchanged; and no p-value, because it was never in a family to be charged against one.
+        Assert.Equal(regression.Subject.SortKey, instead.Subject.SortKey);
+        Assert.Null(instead.PValue);
+    }
+
+    /// <summary>
     /// Instability is measured, not tested, and so is charged for nothing.
     /// </summary>
     /// <remarks>

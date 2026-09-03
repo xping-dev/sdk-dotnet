@@ -69,9 +69,11 @@ public sealed class FalseDiscoveryRateTests
     /// </para>
     /// <para>
     /// The measured figures, recorded so that a later change to any threshold shows up as a number
-    /// rather than as a mood: the two providers between them offer 28 candidates across the twenty
-    /// stores — between one and two per report, on suites with nothing whatever in them — and the
-    /// pass reports none of them, in any of the twenty. That is the whole issue, stated as a test.
+    /// rather than as a mood: the two providers between them offer 17 candidates across the twenty
+    /// stores — about one per report, on suites with nothing whatever in them — and the pass reports
+    /// none of them, in any of the twenty. Under one a report is what the sibling corrections left
+    /// of the eight and five the issue measured; it is also a rate that puts a wrong finding at the
+    /// top of about every other report, which is where a reader looks first.
     /// </para>
     /// <para>
     /// The candidate count is asserted rather than assumed. A pass that silenced everything by
@@ -134,9 +136,10 @@ public sealed class FalseDiscoveryRateTests
     /// Kinds that count rather than test are untouched by any of this.
     /// </summary>
     /// <remarks>
-    /// The bypass, asserted where it matters rather than only on a stub. `Flaky` is a statement about
-    /// how often a test failed, not a hypothesis about why, so three hundred flaky tests in a store
-    /// are three hundred findings and the multiplicity pass has no opinion about them.
+    /// The bypass, asserted where it matters rather than only on a stub, and on the kind it matters
+    /// most for. `Flaky` is a statement about how often a test failed, not a hypothesis about why,
+    /// so a store of flaky tests is a report of flaky tests and the multiplicity pass has no opinion
+    /// about any of them. It is one of nine kinds of thirteen that carry no p-value at all.
     /// </remarks>
     [Fact]
     public void CountedKindsSurviveASuiteSizedStoreUncorrected()
@@ -241,7 +244,8 @@ public sealed class FalseDiscoveryRateTests
     /// has to be one particular sample of it and the same one everywhere. <see cref="Random"/> is
     /// seedable but its sequence is explicitly not guaranteed stable across runtimes, so a store
     /// built from it can change under a framework upgrade and take the assertions with it. This is
-    /// Numerical Recipes' 64-bit linear congruential generator, which is nine lines and fixed.
+    /// Numerical Recipes' 64-bit linear congruential generator, which is a dozen lines and fixed.
+    /// Every draw comes off the high bits; see <see cref="Below"/> for why that is load-bearing.
     /// </remarks>
     /// <param name="seed">Fixes the stream.</param>
     private sealed class Sequence(int seed)
@@ -251,7 +255,15 @@ public sealed class FalseDiscoveryRateTests
         /// <summary>Draws a value in [0, bound).</summary>
         /// <param name="bound">One past the largest value drawn.</param>
         /// <returns>The value.</returns>
-        public int Below(int bound) => (int)(Next() % (ulong)bound);
+        /// <remarks>
+        /// From the high bits, which for a power-of-two-modulus generator is not a refinement. The
+        /// low bit of an LCG taken modulo 2^64 has period two and the low two bits have period four,
+        /// so <c>Next() % 4</c> returns a strict cycle rather than a draw: the concurrency level
+        /// would be a function of the session's position, and the run hour's parity would alternate.
+        /// A store built that way is one configuration dressed as a sample, and a false discovery
+        /// rate measured on it would be measuring the configuration.
+        /// </remarks>
+        public int Below(int bound) => (int)((Next() >> 33) % (ulong)bound);
 
         /// <summary>Draws a value in [0, 1).</summary>
         /// <returns>The value.</returns>
