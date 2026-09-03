@@ -252,6 +252,45 @@ it does mean the finding is quieter on a window whose runs are spread thin, and 
 than it was before the charge existed. The probability the finding survived on and the number of
 divisions charged for are both published with it.
 
+### `ParallelSensitive` Reads A Trend, Not A Split
+
+**Impact**: a suite pinned at a fixed `maxParallelThreads` can now produce a concurrency finding,
+where before it structurally could not. In exchange the finding is quieter on very short histories,
+and it no longer reports a difference between two halves of a window.
+
+**Reason**: the finding used to divide a test's executions at its own median concurrency and compare
+the two halves. On a pinned suite the median *is* the pinned value, every tied execution fell into
+the low half, and the high half starved — measured over twenty-run windows, no such suite could
+produce a finding at all, however concurrency-sensitive its tests really were. A suite jittering by
+one around eight managed it in 38% of windows, and a suite spread evenly over fourteen levels in all
+of them, so which tests were reportable depended on the parallelism setting rather than on the tests.
+
+It now reads every level as one point on a dose-response curve and tests the trend across them. Any
+variation at all makes a window analysable: the same four distributions read 94%, 100%, 100% and 100%
+at twenty runs. What it costs is that the probability behind the finding is computed over runs rather
+than over attempts — so a heavily retried afternoon can no longer buy significance with repetition —
+and referred to a continuity-corrected normal, which together make short windows quiet. Eight runs,
+four of them perfectly separated from the other four, is the smallest window that can produce a
+finding at all, and a single quiet run against any number of crowded ones never produces one.
+
+### `ParallelSensitive` Cannot Separate Concurrency From Duration
+
+**Impact**: a test that got slower may be reported as concurrency-sensitive when nothing about
+contention is wrong with it.
+
+**Reason**: `ConcurrentTestCount` is observed, not assigned. A slow test overlaps more of its
+neighbours than a fast one does, by construction, and where a test is scheduled in a run determines
+how crowded the suite was around it. So the concurrency a test ran at is confounded with the test's
+own duration and with its position in the run, and a test whose duration crept up — and which
+therefore came to run alongside more tests — produces the same rising trend as one that genuinely
+fails under contention. The correction is to stratify by duration, and a twenty-run window does not
+hold enough executions to estimate a trend inside each stratum. Nothing in the report attempts it.
+The observed concurrency range and the per-level table are published so that the dose-response can be
+read directly and judged; a rise measured across levels 11 to 13 is a far weaker statement than the
+same rise measured across 1 to 14, and only the evidence shows the difference.
+
+---
+
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 
 **Impact**: a test whose retry attribute allows three retries but which only ever recorded two
@@ -422,3 +461,4 @@ When reporting, please include:
 | 1.5.0   | Documented how the retry findings read attempt numbers, and why the declared retry limit is never interpreted |
 | 1.6.0   | Documented where source location comes from, and what it cannot answer |
 | 1.7.0   | Documented what `TimeSensitive` now charges for searching three axes, and what that costs |
+| 1.8.0   | Documented what `ParallelSensitive` now measures, and the duration confound it cannot correct |

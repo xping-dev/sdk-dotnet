@@ -373,21 +373,60 @@ internal static class EvidenceHeadline
                 $"{Rate(e.Dispersion)} over {e.NormalisedExecutions} executions")
         ]);
 
-    private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(
-        ParallelSensitiveEvidence e) =>
-    (
-        $"failed {Percent(e.High.FailureRate)} above concurrency {e.SplitAtConcurrency} " +
-        $"and {Percent(e.Low.FailureRate)} at or below, gap {Points(e.Delta.FailureRatePct)}",
-        [
-            new(
-                $"above {e.SplitAtConcurrency}",
-                $"{e.High.Failures} of {e.High.Executions} executions ({Percent(e.High.FailureRate)})"),
-            new(
-                $"at or below {e.SplitAtConcurrency}",
-                $"{e.Low.Failures} of {e.Low.Executions} executions ({Percent(e.Low.FailureRate)})"),
-            new("gap", Points(e.Delta.FailureRatePct)),
-            new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}")
-        ]);
+    /// <summary>
+    /// Phrases a test whose failures track how crowded the suite was.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two ends of the range, always lowest level first, with the direction carried by a word
+    /// rather than by which end is named first. Naming them in the trend's order would make the
+    /// sentence read along an ascending concurrency axis half the time and a descending one the
+    /// other half, and a reader skimming a list of findings would have to work out which each time.
+    /// </para>
+    /// <para>
+    /// The level count is in the headline for the reason the temporal finding puts its distinct-day
+    /// count there: it is what separates a dose-response from a coincidence between two points, and a
+    /// reader skimming a fence will not open the evidence to look for it. The run count is there
+    /// because the probability beside it was computed over runs, and a trend over eight runs and one
+    /// over forty read identically without it.
+    /// </para>
+    /// <para>
+    /// Only the two ends reach the metrics. The whole table is in the evidence for a reader who wants
+    /// the curve; five rows is what the neighbouring kinds carry, and a suite spread over fourteen
+    /// levels would otherwise print fourteen.
+    /// </para>
+    /// </remarks>
+    private static (string, IReadOnlyList<MetricDto>) ParallelSensitive(ParallelSensitiveEvidence e)
+    {
+        ConcurrencyLevel lowest = e.Levels[0];
+        ConcurrencyLevel highest = e.Levels[^1];
+
+        string direction = e.Trend.Direction == nameof(ConcurrencyDirection.WithConcurrency)
+            ? "rising with concurrency"
+            : "falling with concurrency";
+
+        return
+        (
+            $"failed {Percent(lowest.FailureRate)} at concurrency {lowest.Concurrency} and " +
+            $"{Percent(highest.FailureRate)} at {highest.Concurrency}, {direction} across " +
+            $"{Levels(e.Observed.DistinctLevels)} in {Runs(e.Trend.Sessions)}",
+            [
+                new(
+                    $"at concurrency {lowest.Concurrency}",
+                    $"{lowest.Failures} of {lowest.Executions} executions " +
+                    $"({Percent(lowest.FailureRate)}) in {Runs(lowest.Sessions)}"),
+                new(
+                    $"at concurrency {highest.Concurrency}",
+                    $"{highest.Failures} of {highest.Executions} executions " +
+                    $"({Percent(highest.FailureRate)}) in {Runs(highest.Sessions)}"),
+                new("trend", $"{direction}, tau {Rate(e.Trend.Tau)}"),
+                new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}"),
+                new(
+                    "significance",
+                    $"p {Probability(e.Trend.PValue)} two-sided, Z {Rate(e.Trend.Z)} " +
+                    $"over {Runs(e.Trend.Sessions)}")
+            ]);
+    }
 
     /// <summary>
     /// Phrases a split of a test's executions by when they ran.
@@ -444,6 +483,9 @@ internal static class EvidenceHeadline
 
     private static string Splits(int count) =>
         count == 1 ? "1 split" : $"{count.ToString(CultureInfo.InvariantCulture)} splits";
+
+    private static string Levels(int count) =>
+        count == 1 ? "1 level" : $"{count.ToString(CultureInfo.InvariantCulture)} levels";
 
     private static string Attempts(int count) =>
         count == 1 ? "1 attempt" : $"{count.ToString(CultureInfo.InvariantCulture)} attempts";

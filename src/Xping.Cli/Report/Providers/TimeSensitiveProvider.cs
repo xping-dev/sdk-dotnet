@@ -131,7 +131,7 @@ internal sealed record TimeSensitiveEvidence(
 /// </summary>
 /// <remarks>
 /// <para>
-/// Three axes are tried, each a two-arm split of the same shape the concurrency provider uses:
+/// Three axes are tried, each a two-arm split of the test's runs:
 /// the local six-hour quarter of the day, weekend against weekday, and the UTC offset the machine
 /// was on. The last is what makes a daylight-saving shift visible without a time zone database — a
 /// window that straddles a transition simply contains two offsets for one zone, and those are the
@@ -190,7 +190,7 @@ internal sealed record TimeSensitiveEvidence(
 /// <para>
 /// The kind is capped at <see cref="Severity.Medium"/>. A test that fails more at one time of day
 /// has told you where to look and nothing about what to fix, and after three screened axes it has
-/// told you that with less confidence than a concurrency split does.
+/// told you that on whichever of them happened to divide its failures best.
 /// </para>
 /// </remarks>
 internal sealed class TimeSensitiveProvider : IFindingProvider
@@ -357,9 +357,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 Exemplars(failures),
                 Contrast(best.Other)),
 
-            // The least gap the two arms support, as the concurrency provider does and for the same
-            // reason: five sessions a side is the smallest split allowed and produces the largest
-            // observed deltas, so ranking on the observation put the thinnest evidence at the top.
+            // The least gap the two arms support, rather than the gap they happened to show: five
+            // sessions a side is the smallest split allowed and produces the largest observed
+            // deltas, so ranking on the observation put the thinnest evidence at the top.
             //
             // Whether a gap is real is now settled before this is read, so the bound is left to do
             // the one job it is good at: saying how large the gap is, on a scale that grows with the

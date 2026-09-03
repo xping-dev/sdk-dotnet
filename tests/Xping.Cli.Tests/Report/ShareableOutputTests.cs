@@ -164,11 +164,15 @@ public sealed class ShareableOutputTests
 
             FindingKind.ParallelSensitive =>
                 new ParallelSensitiveEvidence(
-                    new ConcurrencyArm(6, 10, 8, 0.6, 9, 14),
-                    new ConcurrencyArm(1, 10, 9, 0.1, 1, 8),
-                    new ConcurrencyDelta(0.5, 50),
-                    8,
-                    new ConcurrencyRange(1, 14, 9),
+                    new ConcurrencyTrend(
+                        2.874, 0.00405, 0.612, 18, nameof(ConcurrencyDirection.WithConcurrency)),
+                    new ConcurrencyRange(1, 14, 4),
+                    [
+                        new ConcurrencyLevel(1, 6, 6, 0, 0),
+                        new ConcurrencyLevel(4, 5, 5, 1, 0.2),
+                        new ConcurrencyLevel(9, 5, 5, 3, 0.6),
+                        new ConcurrencyLevel(14, 4, 4, 3, 0.75)
+                    ],
                     [],
                     null),
 
@@ -246,6 +250,25 @@ public sealed class ShareableOutputTests
         // it says how wide that search was — which is the difference between a gap someone went
         // looking for and one that was there to begin with.
         Assert.Contains(metrics, m => m.Value == "p 0.00175 two-sided, 2 splits compared");
+    }
+
+    [Fact]
+    public void AConcurrencyFindingShowsItsDoseResponse()
+    {
+        var (headline, metrics) = EvidenceHeadline.For(
+            FindingKind.ParallelSensitive, EvidenceFor(FindingKind.ParallelSensitive));
+
+        // Both ends of the range, always lowest concurrency first, with the direction carried by a
+        // word — and the level count, which is what separates a dose-response from two points that
+        // happened to differ.
+        Assert.Equal(
+            "failed 0% at concurrency 1 and 75% at 14, rising with concurrency across 4 levels " +
+            "in 18 runs",
+            headline);
+
+        // The probability was computed over runs, not over attempts, so the run count travels with
+        // it: a trend over eight runs and one over forty read alike without it.
+        Assert.Contains(metrics, m => m.Value == "p 0.00405 two-sided, Z 2.87 over 18 runs");
     }
 
     [Fact]

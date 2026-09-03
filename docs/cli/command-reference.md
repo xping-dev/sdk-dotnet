@@ -152,6 +152,29 @@ reported and four are not. How much it takes is not one number — it falls as t
 and rises with the width of the search — so the finding publishes both figures rather than asking
 you to remember a rule.
 
+`ParallelSensitive` reads the concurrency an execution ran at as an ordered dose and asks whether the
+test's failures track it, across **every** level it was observed at. There is no split point, which is
+what makes the finding reachable on the commonest .NET configuration: a suite pinned at a fixed
+`maxParallelThreads` puts almost every execution on one level, and dividing that distribution in two
+leaves one half empty. The report needs only that the concurrency varied at all.
+
+Concurrency genuinely differs between attempts within a run, so every attempt is a real reading and
+the per-level rates are over executions. What the probability behind the finding is computed over is
+runs: a run's attempts are correlated, and a heavily retried afternoon would otherwise buy
+significance with repetition. The finding publishes both denominators at every level, so a rate over
+twelve executions can be read against how many separate occasions supplied them.
+
+Two figures are published and neither implies the other. The probability says whether the failures
+track concurrency more than they would have anyway; **tau**, a rank correlation, says how strongly.
+Both must clear their bar. Tau is discounted by how tied the exposure is, so it is not comparable
+between suites with different parallelism settings — the level table and the observed range are
+published beside it so the dose-response can be read directly rather than inferred from one number.
+
+The direction is two-sided: a test that fails more when it runs *nearly alone* is as real a defect as
+one that fails under contention, and each is reported against the end of the range holding its
+failures. What the report cannot do is separate concurrency from duration — a slow test overlaps more
+neighbours by construction — which is in [known limitations](../known-limitations.md).
+
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
 in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixture constructor — and
@@ -248,7 +271,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.7",
+  "schemaVersion": "1.8",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

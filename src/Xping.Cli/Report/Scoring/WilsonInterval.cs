@@ -38,8 +38,13 @@ internal static class WilsonInterval
     /// Not in <see cref="LocalAnalysisConstants"/>: that class holds the lines measurements are
     /// compared against, and this is the confidence the comparison is made at. 95% is the convention
     /// a reader will assume when the report says a rate is "at least" something.
+    /// <para>
+    /// Shared rather than private because the concurrency provider bounds a rank correlation at the
+    /// same confidence and by the same argument, and two different 95%s in one report would be a
+    /// difference a reader could not discover.
+    /// </para>
     /// </remarks>
-    private const double ConfidenceZ = 1.96;
+    public const double ConfidenceZ = 1.96;
 
     /// <summary>
     /// Lower bound of the Wilson score interval for <paramref name="successes"/> in
@@ -151,7 +156,7 @@ internal static class WilsonInterval
     /// split that happened to break unevenly deserves.
     /// </para>
     /// <para>
-    /// Returned as a magnitude. Both callers threshold and rank on an absolute gap and have already
+    /// Returned as a magnitude. The caller thresholds and ranks on an absolute gap and has already
     /// resolved which arm is the worse one; a signed bound would only be re-absolved at the call
     /// site.
     /// </para>
