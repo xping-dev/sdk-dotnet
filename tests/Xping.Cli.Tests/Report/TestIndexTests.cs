@@ -344,14 +344,16 @@ public sealed class TestIndexTests
     }
 
     [Fact]
-    public void ASessionTheWindowNeverSawDoesNotDecayUpwards()
+    public void AnOccurrenceThatCanBePlacedNeitherWayScoresTheLeastRecency()
     {
-        // PositionOf answers -1 for a stranger, which unclamped is a negative exponent and a score
-        // above 1.0 — better than the newest run in the window. The scorer's Clamp would hide it.
+        // PositionOf answers -1 for a stranger. Unclamped that is a negative exponent and a score
+        // above 1.0; clamped up to zero it is 1.00, which is worse — the scorer's Clamp would hide
+        // the first and publish the second, ranking a finding nothing can date at the very top of
+        // the one term that claims to say how fresh it is.
         double actual = TestIndex.Recency(
             default, TestSessionFactory.Epoch, sessionsSinceLastOccurrence: -1);
 
-        Assert.Equal(1.0, actual);
+        Assert.Equal(0, actual);
     }
 
     [Fact]

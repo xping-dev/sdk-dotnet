@@ -237,7 +237,10 @@ internal sealed class TestIndex
     /// <param name="sessionsSinceLastOccurrence">
     /// Sessions elapsed since the last occurrence, for the fallback below.
     /// </param>
-    /// <returns>A value in (0,1], halving every <see cref="LocalAnalysisConstants.RecencyHalfLifeDays"/>.</returns>
+    /// <returns>
+    /// A value in [0,1], halving every <see cref="LocalAnalysisConstants.RecencyHalfLifeDays"/>.
+    /// Zero only where the occurrence can be placed neither in time nor in the window.
+    /// </returns>
     /// <remarks>
     /// <para>
     /// Decays rather than cuts off, so a test that misbehaved a week ago still registers — quietly —
@@ -285,12 +288,17 @@ internal sealed class TestIndex
                 0.5,
                 (windowEnd - lastOccurrenceAt).TotalDays / LocalAnalysisConstants.RecencyHalfLifeDays);
 
-        // Clamped because a session outside the window has no position, and a negative exponent
-        // would answer above one — a value the scorer would silently clamp away rather than treat
-        // as the contradiction it is.
-        int sessions = Math.Max(0, sessionsSinceLastOccurrence);
+        // A session the index never saw answers -1, and an occurrence that can be placed neither in
+        // time nor in the window is one nothing here can date. The answer is the least recency and
+        // not the most: clamping the position up to zero would read the unknown as the newest
+        // session and score it 1.00, ranking a finding nothing can place above this morning's
+        // failure on the one term that is supposed to say how fresh it is.
+        if (sessionsSinceLastOccurrence < 0)
+            return 0;
 
-        return Math.Pow(0.5, sessions / LocalAnalysisConstants.RecencyHalfLifeSessions);
+        return Math.Pow(
+            0.5,
+            sessionsSinceLastOccurrence / LocalAnalysisConstants.RecencyHalfLifeSessions);
     }
 
     /// <summary>
