@@ -1110,17 +1110,42 @@ public sealed class RetryProviderTests
     // ---------------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(1, 2, 1.0)]
-    [InlineData(2, 3, 0.5)]
-    [InlineData(2, 4, 1.0)]
-    [InlineData(3, 4, 0.333)]
-    public void DeepeningUnreliabilityIsTheRelativeIncreaseCappedAtADoubling(
+    [InlineData(1, 2, 0.5)]
+    [InlineData(1, 3, 0.792)]
+    [InlineData(1, 4, 1.0)]
+    [InlineData(2, 3, 0.292)]
+    [InlineData(2, 4, 0.5)]
+    [InlineData(3, 4, 0.208)]
+    public void DeepeningUnreliabilityIsTheLogRatioSaturatingAtAQuadrupling(
         int baselineAttempts, int currentAttempts, double expected)
     {
+        // The three baselines of one are the point of the log: on the raw ratio they scored 1.00
+        // alike, and a baseline of one is the deepening this kind mostly reports. The two doublings
+        // — one attempt becoming two, two becoming four — do still coincide, and should: each one
+        // doubles what every run of its test costs, which is the quantity being ranked.
         FindingCandidate candidate = Assert.Single(
             Analyze(Depths(sessions: 12, baselineAttempts, currentAttempts)));
 
         Assert.Equal(expected, Math.Round(candidate.Unreliability, 3));
+    }
+
+    [Fact]
+    public void DeepeningsOfEqualDepthButUnequalRatioDoNotScoreAlike()
+    {
+        // One attempt becoming two doubles what every run of the test costs; three becoming four
+        // adds a third. Both are one extra attempt, and they are not the same finding: this term
+        // ranks proportional worsening, which is what the kind claims. How often that worsening is
+        // paid for is the impact formula's separate business — ImpactScorer weights the share of
+        // sessions the test runs in. The wall clock a deepening actually adds is published as
+        // evidence rather than ranked on, since scoring a share of suite time would make one test's
+        // rank depend on how long unrelated tests take.
+        double doubled = Assert.Single(
+            Analyze(Depths(sessions: 12, baselineAttempts: 1, currentAttempts: 2))).Unreliability;
+
+        double deepened = Assert.Single(
+            Analyze(Depths(sessions: 12, baselineAttempts: 3, currentAttempts: 4))).Unreliability;
+
+        Assert.True(doubled > deepened, $"{doubled} should outrank {deepened}");
     }
 
     [Fact]
