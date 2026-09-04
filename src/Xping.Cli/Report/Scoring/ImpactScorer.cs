@@ -6,6 +6,8 @@
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Windowing;
+using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Scoring;
 
@@ -46,7 +48,13 @@ internal static class ImpactScorer
     /// </remarks>
     public static double Score(FindingCandidateInputs candidate, TestIndex index)
     {
-        double recency = TestIndex.Recency(candidate.SessionsSinceLastOccurrence);
+        AnalysisWindow window = index.Window;
+
+        double recency = TestIndex.Recency(
+            window.To - candidate.LastOccurrenceIn.StartedAt,
+            window.To - window.From,
+            index.PositionOf(candidate.LastOccurrenceIn.SessionId));
+
         double best = 0;
 
         foreach (string fingerprint in candidate.Fingerprints)
@@ -84,11 +92,11 @@ internal static class ImpactScorer
 /// </summary>
 /// <param name="Fingerprints">The tests the finding covers.</param>
 /// <param name="Unreliability">The kind-specific unreliability term, in [0,1].</param>
-/// <param name="SessionsSinceLastOccurrence">Sessions back the behaviour was last seen.</param>
+/// <param name="LastOccurrenceIn">The session the behaviour was last seen in.</param>
 internal sealed record FindingCandidateInputs(
     IReadOnlyList<string> Fingerprints,
     double Unreliability,
-    int SessionsSinceLastOccurrence)
+    TestSession LastOccurrenceIn)
 {
     /// <summary>
     /// Extracts the scorer's inputs from a candidate.
@@ -99,5 +107,5 @@ internal sealed record FindingCandidateInputs(
         new(
             [.. candidate.Subject.Tests.Select(t => t.TestFingerprint)],
             candidate.Unreliability,
-            candidate.SessionsSinceLastOccurrence);
+            candidate.LastOccurrenceIn);
 }

@@ -8,6 +8,7 @@ using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Signatures;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Report.Providers;
@@ -428,7 +429,11 @@ internal sealed class FailureModeProvider : IFindingProvider
             new FindingSubject.Group(groupId, references),
             evidence,
             unreliability,
-            cluster.NewestSessionIndex,
+
+            // The same run the evidence above dates itself by. `Failures` is ordered newest first,
+            // so the head is the last time this cluster was seen.
+            LastOccurrenceIn: cluster.Failures[0].Session,
+
             DrillDown.ForGroup(kind, assembly));
     }
 
@@ -565,7 +570,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             .Select(e => ToExemplar(context, e))];
 
         ContrastExecution? contrast = Contrast(considered);
-        int sessionsSinceLast = failures.Min(f => f.SessionIndex);
+        TestSession lastFailureIn = TestIndex.NewestSession(failures);
 
         // Timeouts first, because a hang is a different defect from a disagreement and the branches
         // below cannot describe it. Their evidence is built from failure signatures, and a killed
@@ -629,7 +634,7 @@ internal sealed class FailureModeProvider : IFindingProvider
                 // forty, and only the bound distinguishes them.
                 WilsonInterval.LowerBound(failures.Count, considered.Count),
 
-                sessionsSinceLast,
+                LastOccurrenceIn: lastFailureIn,
                 DrillDown.ForTest(FindingKind.AlwaysFailing, test));
         }
 
@@ -670,7 +675,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             // claiming it.
             FlakyUnreliability(failureRate, failures.Count, considered.Count),
 
-            sessionsSinceLast,
+            LastOccurrenceIn: lastFailureIn,
             DrillDown.ForTest(FindingKind.Flaky, test));
     }
 
@@ -752,7 +757,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             // times in forty.
             WilsonInterval.LowerBound(timeouts.Count, considered.Count),
 
-            timeouts.Min(t => t.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(timeouts),
             DrillDown.ForTest(FindingKind.TimingOut, test));
     }
 

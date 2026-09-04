@@ -5,6 +5,7 @@
 
 using System.Collections.ObjectModel;
 using Xping.Cli.Report.Model;
+using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Providers;
 
@@ -27,8 +28,11 @@ namespace Xping.Cli.Report.Providers;
 /// runs behind it instead of ranking <c>2 of 2</c> alongside <c>50 of 50</c>. Evidence records still
 /// publish the point estimate, because a reader wants "4 of 20" and not "0.31".
 /// </param>
-/// <param name="SessionsSinceLastOccurrence">
-/// How many sessions back the behaviour was last seen; 0 means the newest session.
+/// <param name="LastOccurrenceIn">
+/// The session the behaviour was last seen in. Carried as the session rather than as an instant
+/// because the recency term needs both when it was and where in the window it sits — see
+/// <see cref="Indexes.TestIndex.Recency(TimeSpan, TimeSpan, int)"/> — and a provider handing over
+/// the two separately could hand over two that disagree.
 /// </param>
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
 /// <param name="PValue">
@@ -66,7 +70,7 @@ internal sealed record FindingCandidate(
     FindingSubject Subject,
     FindingEvidence Evidence,
     double Unreliability,
-    int SessionsSinceLastOccurrence,
+    TestSession LastOccurrenceIn,
     string DrillDownCommand,
     double? PValue = null,
     Severity? SeverityCeiling = null,

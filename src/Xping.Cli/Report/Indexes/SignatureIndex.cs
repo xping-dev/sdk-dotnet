@@ -39,7 +39,6 @@ internal sealed record SignatureOccurrence(
 /// threshold is applied to.
 /// </param>
 /// <param name="SessionCount">Distinct sessions it appeared in.</param>
-/// <param name="NewestSessionIndex">Newest session it appeared in; 0 is the newest in the window.</param>
 /// <param name="OldestSessionIndex">Oldest session it appeared in.</param>
 /// <param name="FirstSeenAt">Start of the oldest session it appeared in.</param>
 /// <param name="FirstSeenSha">Commit that session ran at, when one was recorded.</param>
@@ -49,7 +48,6 @@ internal sealed record SignatureGroup(
     IReadOnlyList<ExecutionRef> Failures,
     int MaxTestsInOneSession,
     int SessionCount,
-    int NewestSessionIndex,
     int OldestSessionIndex,
     DateTime FirstSeenAt,
     string? FirstSeenSha);
@@ -281,7 +279,6 @@ internal sealed class SignatureIndex
                 failures,
                 maxTestsInOneSession,
                 sessionCount,
-                failures.Min(f => f.SessionIndex),
                 failures.Max(f => f.SessionIndex),
                 Oldest(failures).Session.StartedAt,
                 RevisionContext.ReadSha(Oldest(failures).Session));

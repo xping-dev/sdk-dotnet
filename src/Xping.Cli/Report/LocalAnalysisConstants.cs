@@ -406,11 +406,32 @@ internal static class LocalAnalysisConstants
     public const int EvidenceHighSessions = 15;
 
     /// <summary>
-    /// Sessions over which the recency term halves (5).
+    /// Days over which the recency term halves (3).
     /// </summary>
     /// <remarks>
-    /// Used as <c>0.5 ^ (sessionsSinceLastOccurrence / RecencyHalfLifeSessions)</c>, so a test that
-    /// last misbehaved five sessions ago counts half as much as one that misbehaved in the newest.
+    /// <para>
+    /// Used as <c>0.5 ^ (daysSinceLastOccurrence / RecencyHalfLifeDays)</c>, so a test that last
+    /// misbehaved yesterday counts 0.79 and one that last misbehaved a fortnight ago counts 0.04.
+    /// </para>
+    /// <para>
+    /// Days rather than sessions, because sessions are not equally spaced and so cannot express a
+    /// duration. Twenty sessions of <c>dotnet watch test</c> land inside one afternoon while twenty
+    /// CI runs span three weeks, and a term counted in sessions decays both alike. Three days is
+    /// what five sessions meant on the CI cadence the session figure was chosen against, and it
+    /// leaves a fortnight — the whole of <see cref="DefaultWindowDays"/> — decayed to near nothing
+    /// while yesterday is barely touched at all.
+    /// </para>
+    /// </remarks>
+    public const double RecencyHalfLifeDays = 3.0;
+
+    /// <summary>
+    /// Sessions over which the recency term halves when it cannot be counted in days (5).
+    /// </summary>
+    /// <remarks>
+    /// The fallback for a store whose timestamps the window cannot vouch for, and nothing else.
+    /// <see cref="RecencyHalfLifeDays"/> is the term; this applies only where the elapsed time is
+    /// not a number the window's own boundaries admit — see
+    /// <see cref="Indexes.TestIndex.Recency(TimeSpan, TimeSpan, int)"/>.
     /// </remarks>
     public const double RecencyHalfLifeSessions = 5.0;
 

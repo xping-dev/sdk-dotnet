@@ -552,7 +552,7 @@ public sealed class TimeSensitiveProviderTests
         // The newest run in the fixture is an evening one, and evenings are where the failures are.
         FindingCandidate candidate = Single(TimeOfDay(eveningFailures: 6, morningFailures: 0));
 
-        Assert.Equal(0, candidate.SessionsSinceLastOccurrence);
+        Assert.Equal(TestSessionFactory.SessionIdFor(5), candidate.LastOccurrenceIn.SessionId);
     }
 
     [Fact]

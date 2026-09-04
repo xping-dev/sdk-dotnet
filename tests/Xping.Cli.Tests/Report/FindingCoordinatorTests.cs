@@ -387,6 +387,43 @@ public sealed class FindingCoordinatorTests
         Assert.Equal(EvidenceLevel.High, evidenced.EvidenceLevel);
     }
 
+    [Fact]
+    public void TheSameFindingRanksLowerWhereTheWindowIsWeeksRatherThanMinutes()
+    {
+        // Two windows of twenty sessions, failing in the same ten and clean in the same ten. Every
+        // term the scorer reads is identical, the session index of the last failure included: only
+        // the wall clock separates them. One is an afternoon of `dotnet watch test`, where the last
+        // failure is ten minutes old and nothing has gone cold; the other is three weeks of CI,
+        // where the same failure is a fortnight old and genuinely has. Counted in sessions the two
+        // scored alike, which is #172 in one assertion.
+        Finding dense = OnlyFinding(FailingInTheOlderHalf(TimeSpan.FromMinutes(1)));
+        Finding sparse = OnlyFinding(FailingInTheOlderHalf(TimeSpan.FromDays(1.5)));
+
+        Assert.True(dense.Impact > sparse.Impact, $"{dense.Impact} > {sparse.Impact}");
+    }
+
+    /// <summary>
+    /// Builds a window in which one test fails in the older half and runs clean in the newer.
+    /// </summary>
+    /// <param name="apart">The gap between one session's start and the next.</param>
+    /// <returns>The context.</returns>
+    /// <remarks>
+    /// The spacing is the only thing a caller varies. Failing in the older half is what puts the
+    /// last occurrence far enough back for the two spacings to disagree about how stale it is.
+    /// </remarks>
+    private static AnalysisContext FailingInTheOlderHalf(TimeSpan apart) =>
+        TestSessionFactory.Context(
+            [.. Enumerable.Range(0, 20).Select(ordinal =>
+                TestSessionFactory.Session(
+                    ordinal,
+                    [
+                        TestSessionFactory.Execution(
+                            "Subject",
+                            ordinal < 10 ? TestOutcome.Failed : TestOutcome.Passed,
+                            errorMessage: ordinal < 10 ? "boom" : null)
+                    ],
+                    startedAt: TestSessionFactory.Epoch + (apart * ordinal)))]);
+
     /// <summary>
     /// Builds a window in which one test fails three runs in every five, ending on a failure.
     /// </summary>
@@ -454,7 +491,7 @@ public sealed class FindingCoordinatorTests
                         new FindingSubject.SingleTest(reference),
                         new StubEvidence(1),
                         unreliability,
-                        SessionsSinceLastOccurrence: 0,
+                        LastOccurrenceIn: context.Window.Sessions[0],
                         DrillDownCommand: "xping report",
                         PValue: pValue)
                 ],
@@ -490,7 +527,7 @@ public sealed class FindingCoordinatorTests
                         subject,
                         new StubEvidence(1),
                         0.5,
-                        SessionsSinceLastOccurrence: 0,
+                        LastOccurrenceIn: context.Window.Sessions[0],
                         DrillDownCommand: "xping report",
                         PValue: pValue,
                         Instead: new FindingCandidate(
@@ -498,7 +535,7 @@ public sealed class FindingCoordinatorTests
                             subject,
                             new StubEvidence(2),
                             0.4,
-                            SessionsSinceLastOccurrence: 0,
+                            LastOccurrenceIn: context.Window.Sessions[0],
                             DrillDownCommand: "xping report"))
                 ],
                 family);
