@@ -401,7 +401,7 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             //
             // The worse arm always holds at least one failure: its rate exceeds the other arm's by
             // the threshold, so it cannot be zero.
-            SessionsSinceLastOccurrence: failures.Min(m => m.Reference.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(failures.Select(m => m.Reference)),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.TimeSensitive, test),
 

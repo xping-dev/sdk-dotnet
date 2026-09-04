@@ -351,7 +351,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             // run cleanly since should decay; dating it by its newest passing run would hold it at
             // full recency forever, and dating it by a recent failure at the quiet end of the range
             // would hold it there on the strength of a counterexample.
-            SessionsSinceLastOccurrence: driving.Min(m => m.Reference.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(driving.Select(m => m.Reference)),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
 

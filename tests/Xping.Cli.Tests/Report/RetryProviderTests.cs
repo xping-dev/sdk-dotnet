@@ -375,7 +375,7 @@ public sealed class RetryProviderTests
     [Fact]
     public void RecencyIsMeasuredFromTheNewestMasking()
     {
-        // Masked in the three oldest of eight sessions, so the last occurrence is five sessions back.
+        // Masked in the three oldest of eight sessions, so the last occurrence is the third-oldest.
         var built = new List<TestSession>();
         for (int ordinal = 0; ordinal < 8; ordinal++)
         {
@@ -386,7 +386,7 @@ public sealed class RetryProviderTests
 
         FindingCandidate candidate = Assert.Single(Analyze(TestSessionFactory.Context([.. built])));
 
-        Assert.Equal(5, candidate.SessionsSinceLastOccurrence);
+        Assert.Equal(TestSessionFactory.SessionIdFor(2), candidate.LastOccurrenceIn.SessionId);
     }
 
     [Fact]
@@ -904,7 +904,7 @@ public sealed class RetryProviderTests
     [Fact]
     public void ExhaustionRecencyIsMeasuredFromTheNewestOccurrence()
     {
-        // Exhausted in the four oldest of ten sessions, so the last occurrence is six back.
+        // Exhausted in the four oldest of ten sessions, so the last occurrence is the fourth-oldest.
         var built = new List<TestSession>();
         for (int ordinal = 0; ordinal < 10; ordinal++)
         {
@@ -916,7 +916,7 @@ public sealed class RetryProviderTests
         FindingCandidate candidate = Assert.Single(Analyze(TestSessionFactory.Context([.. built])));
 
         Assert.Equal(FindingKind.RetryExhausted, candidate.Kind);
-        Assert.Equal(6, candidate.SessionsSinceLastOccurrence);
+        Assert.Equal(TestSessionFactory.SessionIdFor(3), candidate.LastOccurrenceIn.SessionId);
     }
 
     [Fact]

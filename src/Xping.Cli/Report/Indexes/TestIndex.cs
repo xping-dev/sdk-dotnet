@@ -150,6 +150,32 @@ internal sealed class TestIndex
             .ToList();
 
     /// <summary>
+    /// Gets the session of the newest execution in a set.
+    /// </summary>
+    /// <param name="references">The executions to reduce; must not be empty.</param>
+    /// <returns>The session the newest of them ran in.</returns>
+    /// <remarks>
+    /// Sessions are ordered newest first, so the newest execution is the one carrying the lowest
+    /// index. Chosen on index rather than on <see cref="TestSession.StartedAt"/> so that the pick
+    /// stays the one every provider made before the recency term was counted in days, and stays
+    /// deterministic on a store whose clock disagrees with its own ordering.
+    /// </remarks>
+    public static TestSession NewestSession(IEnumerable<ExecutionRef> references)
+    {
+        ExecutionRef? newest = null;
+
+        foreach (ExecutionRef reference in references)
+        {
+            if (newest == null || reference.SessionIndex < newest.SessionIndex)
+                newest = reference;
+        }
+
+        return newest == null
+            ? throw new ArgumentException("No executions to date a finding by.", nameof(references))
+            : newest.Session;
+    }
+
+    /// <summary>
     /// Gets how often a test ran relative to how many sessions it could have run in.
     /// </summary>
     /// <param name="fingerprint">The test to measure.</param>
@@ -204,15 +230,76 @@ internal sealed class TestIndex
     /// <summary>
     /// Gets how recently a test last did the thing a provider cares about.
     /// </summary>
-    /// <param name="sessionsSinceLastOccurrence">Sessions elapsed since the last occurrence.</param>
-    /// <returns>A value in (0,1], halving every few sessions.</returns>
+    /// <param name="lastOccurrenceAt">When the session holding the last occurrence started.</param>
+    /// <param name="windowEnd">
+    /// When the newest session in the window started — <see cref="AnalysisWindow.To"/>.
+    /// </param>
+    /// <param name="sessionsSinceLastOccurrence">
+    /// Sessions elapsed since the last occurrence, for the fallback below.
+    /// </param>
+    /// <returns>
+    /// A value in [0,1], halving every <see cref="LocalAnalysisConstants.RecencyHalfLifeDays"/>.
+    /// Zero only where the occurrence can be placed neither in time nor in the window.
+    /// </returns>
     /// <remarks>
-    /// Decays rather than cuts off, so a test that misbehaved eight sessions ago still registers —
-    /// quietly — instead of vanishing from the report the moment it drops out of an arbitrary
-    /// recent slice.
+    /// <para>
+    /// Decays rather than cuts off, so a test that misbehaved a week ago still registers — quietly —
+    /// instead of vanishing from the report the moment it drops out of an arbitrary recent slice.
+    /// </para>
+    /// <para>
+    /// Measured in wall-clock time and not in session index, because sessions are not equally spaced
+    /// and an index is therefore not a duration. Twenty sessions of <c>dotnet watch test</c> fit in
+    /// one afternoon and twenty CI runs can span three weeks; counting index decayed a finding from
+    /// forty minutes ago exactly as hard as one from ten days ago, in the one term whose whole job
+    /// is to tell them apart.
+    /// </para>
+    /// <para>
+    /// Elapsed time is measured against the window's newest session and never against a clock. The
+    /// window carries its boundaries as data precisely so that nothing downstream reads one, and a
+    /// <c>UtcNow</c> here would make two runs over an unchanged store disagree — which is the
+    /// determinism <see cref="FindingOrder"/> and every fixture rest on.
+    /// </para>
+    /// <para>
+    /// The session form survives as a fallback for a stamp that is not a time at all — one left at
+    /// <see langword="default"/>, or one that postdates the newest session in the window it belongs
+    /// to. The test for that is deliberately absolute and not a comparison against the window's own
+    /// span: <see cref="AnalysisWindow.From"/> is the oldest selected session's stamp, so a session
+    /// whose start was never populated <em>becomes</em> that boundary, and bounding against the span
+    /// would let the one stamp that needs catching decide what counts as plausible. It would read as
+    /// exactly as old as the window and decay to nothing, which is the opposite of falling back.
+    /// </para>
+    /// <para>
+    /// A fallback and deliberately not a <c>Math.Max</c> floor over both forms: the floor would hold
+    /// a finding eight days back at index five to 0.50 rather than 0.16, reinstating in the
+    /// sparse-CI direction exactly the over-weighting this measure exists to remove.
+    /// </para>
     /// </remarks>
-    public static double Recency(int sessionsSinceLastOccurrence) =>
-        Math.Pow(0.5, sessionsSinceLastOccurrence / LocalAnalysisConstants.RecencyHalfLifeSessions);
+    public static double Recency(
+        DateTime lastOccurrenceAt,
+        DateTime windowEnd,
+        int sessionsSinceLastOccurrence)
+    {
+        // Nothing this report can read predates Unix time, so a stamp below it was never written
+        // rather than being very old. Compared on ticks, like the subtraction below: consulting the
+        // machine's zone here would make the score depend on where the report ran, which is the
+        // same class of mistake as reading a clock.
+        if (lastOccurrenceAt >= DateTime.UnixEpoch && lastOccurrenceAt <= windowEnd)
+            return Math.Pow(
+                0.5,
+                (windowEnd - lastOccurrenceAt).TotalDays / LocalAnalysisConstants.RecencyHalfLifeDays);
+
+        // A session the index never saw answers -1, and an occurrence that can be placed neither in
+        // time nor in the window is one nothing here can date. The answer is the least recency and
+        // not the most: clamping the position up to zero would read the unknown as the newest
+        // session and score it 1.00, ranking a finding nothing can place above this morning's
+        // failure on the one term that is supposed to say how fresh it is.
+        if (sessionsSinceLastOccurrence < 0)
+            return 0;
+
+        return Math.Pow(
+            0.5,
+            sessionsSinceLastOccurrence / LocalAnalysisConstants.RecencyHalfLifeSessions);
+    }
 
     /// <summary>
     /// Builds the index for a window.

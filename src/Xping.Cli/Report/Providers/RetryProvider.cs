@@ -596,7 +596,7 @@ internal sealed class RetryProvider : IFindingProvider
 
             // Dated by the exhaustions themselves rather than by the test's last execution, so a
             // test that ran out of retries a fortnight ago and has been clean since decays.
-            SessionsSinceLastOccurrence: exhausted.Min(r => r.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(exhausted.Select(r => r.Final)),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.RetryExhausted, test));
     }
@@ -727,7 +727,7 @@ internal sealed class RetryProvider : IFindingProvider
             // outrank a doubling — that is the ordering the raw ratio flattened away.
             Unreliability: Math.Min(1.0, Math.Log2((double)currentTypical / baselineTypical) / 2.0),
 
-            SessionsSinceLastOccurrence: currentGreen.Min(r => r.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(currentGreen.Select(r => r.Final)),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.RetryDeepening, test),
 
@@ -889,7 +889,7 @@ internal sealed class RetryProvider : IFindingProvider
             // one is 1.00. The bound puts it at 0.21 and leaves the well-evidenced cases above it.
             Unreliability: WilsonInterval.LowerBound(masked.Count, executions.Count),
 
-            SessionsSinceLastOccurrence: newest.SessionIndex,
+            LastOccurrenceIn: newest.Session,
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.RetryMasked, test));
     }

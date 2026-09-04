@@ -268,8 +268,8 @@ public sealed class ParallelSensitiveProviderTests
             Assert.IsType<ParallelSensitiveEvidence>(candidate.Evidence);
 
         // Twenty-nine runs, the newest of them the counterexample; the newest crowded failure is
-        // fourteen runs back.
-        Assert.Equal(14, candidate.SessionsSinceLastOccurrence);
+        // the fifteenth-oldest, fourteen runs back.
+        Assert.Equal(TestSessionFactory.SessionIdFor(14), candidate.LastOccurrenceIn.SessionId);
         Assert.All(evidence.Exemplars, e => Assert.Equal(8, e.Concurrency));
     }
 

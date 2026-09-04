@@ -195,4 +195,186 @@ public sealed class TestIndexTests
 
         Assert.Equal(Enumerable.Range(0, 8), runs.Select(r => r.SessionIndex));
     }
+
+    // ---------------------------------------------------------------------------------------
+    // Recency
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a window of <paramref name="total"/> sessions spaced <paramref name="apart"/> apart.
+    /// </summary>
+    /// <param name="total">How many sessions to build.</param>
+    /// <param name="apart">The gap between one session's start and the next.</param>
+    /// <returns>The sessions, for a caller to window and index.</returns>
+    private static List<TestSession> Spaced(int total, TimeSpan apart)
+    {
+        var sessions = new List<TestSession>();
+
+        for (int ordinal = 0; ordinal < total; ordinal++)
+        {
+            sessions.Add(TestSessionFactory.Session(
+                ordinal,
+                [TestSessionFactory.Execution(Subject)],
+                startedAt: TestSessionFactory.Epoch + (apart * ordinal)));
+        }
+
+        return sessions;
+    }
+
+    [Theory]
+    [InlineData(0, 1.0)]
+    [InlineData(1, 0.794)]
+    [InlineData(3, 0.5)]
+    [InlineData(7, 0.198)]
+    [InlineData(14, 0.039)]
+    public void RecencyHalvesEveryThreeDays(int days, double expected)
+    {
+        double actual = TestIndex.Recency(
+            TestSessionFactory.Epoch,
+            TestSessionFactory.Epoch.AddDays(days),
+            sessionsSinceLastOccurrence: 0);
+
+        Assert.Equal(expected, actual, 3);
+    }
+
+    [Fact]
+    public void TwentySessionsInsideOneAfternoonAreAllFresh()
+    {
+        // The tight inner loop: `dotnet watch test` fills a window before the afternoon is out.
+        // Nothing in it is stale, so the term should barely separate the ends of it — where the
+        // session index separated them by 0.93, scoring the oldest of these at 0.07 as though the
+        // morning had been a fortnight ago.
+        TestIndex index = TestIndex.Build(
+            TestSessionFactory.Window([.. Spaced(20, TimeSpan.FromMinutes(20))]));
+
+        IReadOnlyList<TestSession> sessions = index.Window.Sessions;
+
+        Assert.Equal(1.0, Recency(index, sessions[0]), 3);
+        Assert.Equal(0.941, Recency(index, sessions[^1]), 3);
+
+        foreach (TestSession session in sessions)
+            Assert.True(Recency(index, session) > 0.93, $"{session.StartedAt:o}");
+    }
+
+    [Fact]
+    public void TwentySessionsAcrossThreeWeeksDecayTheOldestToNearlyNothing()
+    {
+        // The same twenty sessions, on a CI cadence. Identical indices, and the oldest of them is
+        // three weeks old rather than six hours.
+        TestIndex index = TestIndex.Build(
+            TestSessionFactory.Window([.. Spaced(20, TimeSpan.FromDays(1.1))]));
+
+        IReadOnlyList<TestSession> sessions = index.Window.Sessions;
+
+        Assert.Equal(1.0, Recency(index, sessions[0]), 3);
+        Assert.True(Recency(index, sessions[^1]) < 0.01);
+    }
+
+    [Fact]
+    public void AnOccurrenceEightDaysBackDecaysPastWhatItsSessionIndexWouldRead()
+    {
+        // The regression test for the floor this deliberately does not apply. Session index five
+        // reads 0.50; eight days reads 0.16. Taking the greater of the two — the belt-and-braces
+        // #172 floated — would reinstate the over-weighting in the sparse direction that the whole
+        // change exists to remove, so the time reading has to stand alone.
+        TestIndex index = TestIndex.Build(
+            TestSessionFactory.Window([.. Spaced(20, TimeSpan.FromDays(1.6))]));
+
+        double actual = Recency(index, index.Window.Sessions[5]);
+
+        Assert.Equal(0.157, actual, 3);
+        Assert.True(actual < 0.5, $"{actual} is not below the session-index reading");
+    }
+
+    [Fact]
+    public void AStampThatIsNotATimeFallsBackToTheSessionIndex()
+    {
+        // Never written. Read as a time it is two thousand years old, which is not what the store
+        // is saying: it is saying nothing.
+        double actual = TestIndex.Recency(
+            default, TestSessionFactory.Epoch, sessionsSinceLastOccurrence: 5);
+
+        Assert.Equal(0.5, actual, 3);
+    }
+
+    [Fact]
+    public void AStampNewerThanTheWindowItBelongsToFallsBackToTheSessionIndex()
+    {
+        // A clock that ran backwards, leaving an occurrence dated after the newest session that
+        // could hold it. Negative elapsed time decays upwards, so it cannot be read either.
+        double actual = TestIndex.Recency(
+            TestSessionFactory.Epoch.AddDays(1),
+            TestSessionFactory.Epoch,
+            sessionsSinceLastOccurrence: 5);
+
+        Assert.Equal(0.5, actual, 3);
+    }
+
+    [Fact]
+    public void ASessionWhoseStartWasNeverWrittenFallsBackWithoutSkewingTheRest()
+    {
+        // The case a bound against the window's own span cannot catch, through a real window rather
+        // than through the primitives. `From` is the oldest selected session's stamp, so the
+        // unwritten one becomes the boundary: measured against the span it reads as exactly as old
+        // as the window and decays to zero, which is the opposite of falling back. Its neighbours
+        // must be unaffected — their elapsed times are measured from `To`, which is still sound.
+        var sessions = new List<TestSession>();
+
+        for (int ordinal = 1; ordinal < 6; ordinal++)
+        {
+            sessions.Add(TestSessionFactory.Session(
+                ordinal,
+                [TestSessionFactory.Execution(Subject)],
+                startedAt: TestSessionFactory.Epoch.AddDays(ordinal)));
+        }
+
+        sessions.Add(TestSessionFactory.Session(
+            0, [TestSessionFactory.Execution(Subject)], startedAt: default(DateTime)));
+
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window([.. sessions]));
+        IReadOnlyList<TestSession> ordered = index.Window.Sessions;
+
+        // Five sessions back, so the fallback reads one half — not the zero its unwritten stamp
+        // would decay to.
+        Assert.Equal(default, ordered[^1].StartedAt);
+        Assert.Equal(0.5, Recency(index, ordered[^1]), 3);
+
+        // Its neighbour is a day older than the newest and still dated in days.
+        Assert.Equal(0.794, Recency(index, ordered[1]), 3);
+    }
+
+    [Fact]
+    public void AnOccurrenceThatCanBePlacedNeitherWayScoresTheLeastRecency()
+    {
+        // PositionOf answers -1 for a stranger. Unclamped that is a negative exponent and a score
+        // above 1.0; clamped up to zero it is 1.00, which is worse — the scorer's Clamp would hide
+        // the first and publish the second, ranking a finding nothing can date at the very top of
+        // the one term that claims to say how fresh it is.
+        double actual = TestIndex.Recency(
+            default, TestSessionFactory.Epoch, sessionsSinceLastOccurrence: -1);
+
+        Assert.Equal(0, actual);
+    }
+
+    [Fact]
+    public void RecencyIsDatedAgainstTheWindowAndNeverAgainstTheClock()
+    {
+        // The fixture epoch is a fixed instant, so it recedes further into the past with every day
+        // that passes. Read against a clock the newest session here would decay to nothing; read
+        // against the window it is what "now" means, and two runs over an unchanged store agree.
+        TestIndex index = TestIndex.Build(
+            TestSessionFactory.Window([.. Spaced(5, TimeSpan.FromDays(1))]));
+
+        Assert.Equal(1.0, Recency(index, index.Window.Sessions[0]));
+    }
+
+    /// <summary>
+    /// Scores one session the way <c>ImpactScorer</c> does.
+    /// </summary>
+    /// <param name="index">The index the session belongs to.</param>
+    /// <param name="session">The session a finding was last seen in.</param>
+    /// <returns>Its recency.</returns>
+    private static double Recency(TestIndex index, TestSession session) =>
+        TestIndex.Recency(
+            session.StartedAt, index.Window.To, index.PositionOf(session.SessionId));
 }

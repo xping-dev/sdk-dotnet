@@ -506,7 +506,7 @@ internal sealed class DurationProvider : IFindingProvider
             // twofold one would crowd out every other kind on one arithmetic accident.
             Unreliability: Math.Clamp((shift.Low - 1) / 2, 0, 1.0),
 
-            SessionsSinceLastOccurrence: current.Min(e => e.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(current),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.DurationRegression, test),
 
@@ -594,7 +594,7 @@ internal sealed class DurationProvider : IFindingProvider
             // past that is the same finding with a larger number on it.
             Unreliability: Math.Min(1.0, dispersion),
 
-            SessionsSinceLastOccurrence: all.Min(e => e.SessionIndex),
+            LastOccurrenceIn: TestIndex.NewestSession(all),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.DurationUnstable, test));
     }

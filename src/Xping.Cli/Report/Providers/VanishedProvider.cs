@@ -149,7 +149,7 @@ internal sealed class VanishedProvider : IFindingProvider
                 Unreliability: WilsonInterval.LowerBound(appearances, slices.BaselineCount),
 
                 // Measured from the current slice, which by definition is where it is absent.
-                SessionsSinceLastOccurrence: mostRecent.SessionIndex,
+                LastOccurrenceIn: mostRecent.Session,
 
                 DrillDownCommand: DrillDown.ForTest(FindingKind.Vanished, reference),
 
