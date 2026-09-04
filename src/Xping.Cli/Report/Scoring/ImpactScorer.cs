@@ -6,7 +6,6 @@
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Scoring;
@@ -48,11 +47,9 @@ internal static class ImpactScorer
     /// </remarks>
     public static double Score(FindingCandidateInputs candidate, TestIndex index)
     {
-        AnalysisWindow window = index.Window;
-
         double recency = TestIndex.Recency(
-            window.To - candidate.LastOccurrenceIn.StartedAt,
-            window.To - window.From,
+            candidate.LastOccurrenceIn.StartedAt,
+            index.Window.To,
             index.PositionOf(candidate.LastOccurrenceIn.SessionId));
 
         double best = 0;

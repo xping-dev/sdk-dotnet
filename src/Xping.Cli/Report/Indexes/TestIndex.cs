@@ -230,11 +230,9 @@ internal sealed class TestIndex
     /// <summary>
     /// Gets how recently a test last did the thing a provider cares about.
     /// </summary>
-    /// <param name="sinceLastOccurrence">
-    /// Time from the last occurrence to the start of the newest session in the window.
-    /// </param>
-    /// <param name="windowSpan">
-    /// Time the window itself covers — its newest session's start less its oldest one's.
+    /// <param name="lastOccurrenceAt">When the session holding the last occurrence started.</param>
+    /// <param name="windowEnd">
+    /// When the newest session in the window started — <see cref="AnalysisWindow.To"/>.
     /// </param>
     /// <param name="sessionsSinceLastOccurrence">
     /// Sessions elapsed since the last occurrence, for the fallback below.
@@ -259,25 +257,33 @@ internal sealed class TestIndex
     /// determinism <see cref="FindingOrder"/> and every fixture rest on.
     /// </para>
     /// <para>
-    /// The session form survives as a fallback for a store whose timestamps the window cannot vouch
-    /// for: every session in the window satisfies <c>From &lt;= StartedAt &lt;= To</c> by
-    /// construction, so an elapsed time outside <c>[0, windowSpan]</c> is one the window itself
-    /// contradicts — a clock that ran backwards, or a session left at <c>default(DateTime)</c> — and
-    /// index is then the only ordering left. Deliberately a fallback and not a
-    /// <c>Math.Max</c> floor over both forms: the floor would hold a finding eight days back at
-    /// index five to 0.50 rather than 0.16, reinstating in the sparse-CI direction exactly the
-    /// over-weighting this measure exists to remove.
+    /// The session form survives as a fallback for a stamp that is not a time at all — one left at
+    /// <see langword="default"/>, or one that postdates the newest session in the window it belongs
+    /// to. The test for that is deliberately absolute and not a comparison against the window's own
+    /// span: <see cref="AnalysisWindow.From"/> is the oldest selected session's stamp, so a session
+    /// whose start was never populated <em>becomes</em> that boundary, and bounding against the span
+    /// would let the one stamp that needs catching decide what counts as plausible. It would read as
+    /// exactly as old as the window and decay to nothing, which is the opposite of falling back.
+    /// </para>
+    /// <para>
+    /// A fallback and deliberately not a <c>Math.Max</c> floor over both forms: the floor would hold
+    /// a finding eight days back at index five to 0.50 rather than 0.16, reinstating in the
+    /// sparse-CI direction exactly the over-weighting this measure exists to remove.
     /// </para>
     /// </remarks>
     public static double Recency(
-        TimeSpan sinceLastOccurrence,
-        TimeSpan windowSpan,
+        DateTime lastOccurrenceAt,
+        DateTime windowEnd,
         int sessionsSinceLastOccurrence)
     {
-        double elapsedDays = sinceLastOccurrence.TotalDays;
-
-        if (elapsedDays >= 0 && elapsedDays <= windowSpan.TotalDays)
-            return Math.Pow(0.5, elapsedDays / LocalAnalysisConstants.RecencyHalfLifeDays);
+        // Nothing this report can read predates Unix time, so a stamp below it was never written
+        // rather than being very old. Compared on ticks, like the subtraction below: consulting the
+        // machine's zone here would make the score depend on where the report ran, which is the
+        // same class of mistake as reading a clock.
+        if (lastOccurrenceAt >= DateTime.UnixEpoch && lastOccurrenceAt <= windowEnd)
+            return Math.Pow(
+                0.5,
+                (windowEnd - lastOccurrenceAt).TotalDays / LocalAnalysisConstants.RecencyHalfLifeDays);
 
         // Clamped because a session outside the window has no position, and a negative exponent
         // would answer above one — a value the scorer would silently clamp away rather than treat

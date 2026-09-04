@@ -428,10 +428,10 @@ internal static class LocalAnalysisConstants
     /// Sessions over which the recency term halves when it cannot be counted in days (5).
     /// </summary>
     /// <remarks>
-    /// The fallback for a store whose timestamps the window cannot vouch for, and nothing else.
-    /// <see cref="RecencyHalfLifeDays"/> is the term; this applies only where the elapsed time is
-    /// not a number the window's own boundaries admit — see
-    /// <see cref="Indexes.TestIndex.Recency(TimeSpan, TimeSpan, int)"/>.
+    /// The fallback for a session whose recorded start is not a time at all, and nothing else.
+    /// <see cref="RecencyHalfLifeDays"/> is the term; this applies only where the stamp was never
+    /// written, or postdates the newest session in its own window — see
+    /// <see cref="Indexes.TestIndex.Recency(DateTime, DateTime, int)"/>.
     /// </remarks>
     public const double RecencyHalfLifeSessions = 5.0;
 

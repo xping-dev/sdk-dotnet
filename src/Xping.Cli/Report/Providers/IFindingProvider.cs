@@ -31,7 +31,7 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="LastOccurrenceIn">
 /// The session the behaviour was last seen in. Carried as the session rather than as an instant
 /// because the recency term needs both when it was and where in the window it sits — see
-/// <see cref="Indexes.TestIndex.Recency(TimeSpan, TimeSpan, int)"/> — and a provider handing over
+/// <see cref="Indexes.TestIndex.Recency(DateTime, DateTime, int)"/> — and a provider handing over
 /// the two separately could hand over two that disagree.
 /// </param>
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>

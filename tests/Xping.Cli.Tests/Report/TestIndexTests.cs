@@ -230,7 +230,9 @@ public sealed class TestIndexTests
     public void RecencyHalvesEveryThreeDays(int days, double expected)
     {
         double actual = TestIndex.Recency(
-            TimeSpan.FromDays(days), TimeSpan.FromDays(30), sessionsSinceLastOccurrence: 0);
+            TestSessionFactory.Epoch,
+            TestSessionFactory.Epoch.AddDays(days),
+            sessionsSinceLastOccurrence: 0);
 
         Assert.Equal(expected, actual, 3);
     }
@@ -284,17 +286,61 @@ public sealed class TestIndexTests
         Assert.True(actual < 0.5, $"{actual} is not below the session-index reading");
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(30)]
-    public void AStampTheWindowContradictsFallsBackToTheSessionIndex(int elapsedDays)
+    [Fact]
+    public void AStampThatIsNotATimeFallsBackToTheSessionIndex()
     {
-        // Negative, or older than the window that contains it. Either way the store's clock has
-        // said something the window's own boundaries deny, and index is the only reading left.
+        // Never written. Read as a time it is two thousand years old, which is not what the store
+        // is saying: it is saying nothing.
         double actual = TestIndex.Recency(
-            TimeSpan.FromDays(elapsedDays), TimeSpan.FromDays(14), sessionsSinceLastOccurrence: 5);
+            default, TestSessionFactory.Epoch, sessionsSinceLastOccurrence: 5);
 
         Assert.Equal(0.5, actual, 3);
+    }
+
+    [Fact]
+    public void AStampNewerThanTheWindowItBelongsToFallsBackToTheSessionIndex()
+    {
+        // A clock that ran backwards, leaving an occurrence dated after the newest session that
+        // could hold it. Negative elapsed time decays upwards, so it cannot be read either.
+        double actual = TestIndex.Recency(
+            TestSessionFactory.Epoch.AddDays(1),
+            TestSessionFactory.Epoch,
+            sessionsSinceLastOccurrence: 5);
+
+        Assert.Equal(0.5, actual, 3);
+    }
+
+    [Fact]
+    public void ASessionWhoseStartWasNeverWrittenFallsBackWithoutSkewingTheRest()
+    {
+        // The case a bound against the window's own span cannot catch, through a real window rather
+        // than through the primitives. `From` is the oldest selected session's stamp, so the
+        // unwritten one becomes the boundary: measured against the span it reads as exactly as old
+        // as the window and decays to zero, which is the opposite of falling back. Its neighbours
+        // must be unaffected — their elapsed times are measured from `To`, which is still sound.
+        var sessions = new List<TestSession>();
+
+        for (int ordinal = 1; ordinal < 6; ordinal++)
+        {
+            sessions.Add(TestSessionFactory.Session(
+                ordinal,
+                [TestSessionFactory.Execution(Subject)],
+                startedAt: TestSessionFactory.Epoch.AddDays(ordinal)));
+        }
+
+        sessions.Add(TestSessionFactory.Session(
+            0, [TestSessionFactory.Execution(Subject)], startedAt: default(DateTime)));
+
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window([.. sessions]));
+        IReadOnlyList<TestSession> ordered = index.Window.Sessions;
+
+        // Five sessions back, so the fallback reads one half — not the zero its unwritten stamp
+        // would decay to.
+        Assert.Equal(default, ordered[^1].StartedAt);
+        Assert.Equal(0.5, Recency(index, ordered[^1]), 3);
+
+        // Its neighbour is a day older than the newest and still dated in days.
+        Assert.Equal(0.794, Recency(index, ordered[1]), 3);
     }
 
     [Fact]
@@ -303,7 +349,7 @@ public sealed class TestIndexTests
         // PositionOf answers -1 for a stranger, which unclamped is a negative exponent and a score
         // above 1.0 — better than the newest run in the window. The scorer's Clamp would hide it.
         double actual = TestIndex.Recency(
-            TimeSpan.FromDays(-1), TimeSpan.FromDays(14), sessionsSinceLastOccurrence: -1);
+            default, TestSessionFactory.Epoch, sessionsSinceLastOccurrence: -1);
 
         Assert.Equal(1.0, actual);
     }
@@ -328,7 +374,5 @@ public sealed class TestIndexTests
     /// <returns>Its recency.</returns>
     private static double Recency(TestIndex index, TestSession session) =>
         TestIndex.Recency(
-            index.Window.To - session.StartedAt,
-            index.Window.To - index.Window.From,
-            index.PositionOf(session.SessionId));
+            session.StartedAt, index.Window.To, index.PositionOf(session.SessionId));
 }
