@@ -239,8 +239,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
                 spent += part.Length + SeparatorWidth;
 
             // spent counts one separator per segment already in the list, which is exactly the
-            // number string.Join adds once the location makes a third — two separators for three
-            // segments — so the joined line lands on the budget rather than three columns over it.
+            // number string.Join adds once the location joins them: three segments here — evidence,
+            // population, id — is three separators for the four the join sees. So the joined line
+            // lands on the budget rather than three columns over it, whatever the segment count.
             if (FitPath(location, budget - spent) is { } fitted)
                 trailer.Add(fitted);
         }

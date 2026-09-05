@@ -42,7 +42,11 @@ internal sealed record TimeExemplar(
 /// session and there is no second, execution-denominated count to publish alongside this one.
 /// </remarks>
 /// <param name="Failures">Runs in this arm that ended with the test failing.</param>
-/// <param name="Sessions">Runs in this arm, one per session.</param>
+/// <param name="Sessions">
+/// Runs in this arm, one per session — a count of the arm and never of the window. The arm is drawn
+/// from the runs this kind could be measured on, so the environmental and clockless ones counted
+/// beside the two arms are already gone from it.
+/// </param>
 /// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Sessions"/>.</param>
 /// <param name="DistinctFailureDates">
 /// Separate local calendar days this arm's <b>failures</b> fell on — the quantity the three-day gate

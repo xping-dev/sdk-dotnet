@@ -50,7 +50,11 @@ internal enum ConcurrencyDirection
 /// </remarks>
 /// <param name="Concurrency">Tests in flight, itself included.</param>
 /// <param name="ExecutionsConsidered">Executions observed at this level, after both exclusions.</param>
-/// <param name="Sessions">Distinct runs those executions came from.</param>
+/// <param name="Sessions">
+/// Distinct runs those executions came from — a count of the level and never of the window. Drawn
+/// from the same considered executions as <paramref name="ExecutionsConsidered"/>, so the two
+/// exclusions counted beside the levels are already gone from it.
+/// </param>
 /// <param name="Failures">How many of them failed.</param>
 /// <param name="FailureRate">
 /// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.

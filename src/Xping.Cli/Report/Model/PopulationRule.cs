@@ -76,9 +76,19 @@ internal static class PopulationRules
     /// shorten the history the absence is measured against.
     /// </para>
     /// <para>
-    /// Exhaustive rather than defaulted. A kind added to <see cref="FindingKind"/> without a
-    /// decision recorded here should fail to compile rather than quietly claim it counted
-    /// everything.
+    /// Exhaustive rather than defaulted, and the default arm throws. C# cannot make a switch over an
+    /// enum exhaustive — the type admits values no member declares — so a kind added to
+    /// <see cref="FindingKind"/> without a decision recorded here reaches the arm at the bottom and
+    /// takes the report down with it.
+    /// </para>
+    /// <para>
+    /// Deliberately harsher than its neighbours. <see cref="Rendering.ReportVocabulary.LabelFor"/>
+    /// and the headline resolver both degrade to something honest and useless for an unknown kind,
+    /// because they choose words. This chooses a claim: the only value it could fall back to is
+    /// <see cref="PopulationRule.AllExecutions"/>, and quietly publishing "nothing was set aside"
+    /// about a kind whose discounting nobody has decided is the exact failure this type exists to
+    /// prevent. <c>EveryKindRecordsWhichPopulationItsRatesAreTakenOver</c> turns it into a CI
+    /// failure rather than one a reader ever meets.
     /// </para>
     /// </remarks>
     public static PopulationRule For(FindingKind kind) => kind switch

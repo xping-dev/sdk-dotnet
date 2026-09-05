@@ -47,7 +47,11 @@ internal sealed record DurationExemplar(
 /// Executions the percentiles were computed over — not how many times the test ran in this slice.
 /// Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
 /// </param>
-/// <param name="Sessions">Distinct runs those executions came from.</param>
+/// <param name="Sessions">
+/// Distinct runs those executions came from — a count of this slice and never of the window. Drawn
+/// from the same considered executions as <paramref name="ExecutionsConsidered"/>, so the slice's
+/// <paramref name="DiscountedEnvironmental"/> runs are already gone from it.
+/// </param>
 /// <param name="DiscountedEnvironmental">
 /// Executions of this slice set aside because their run looked like a broken machine rather than a
 /// broken test.

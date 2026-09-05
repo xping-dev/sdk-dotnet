@@ -52,11 +52,22 @@ legend below the fence.
 | `SharedFailure`, `BrokenFixture` | `failures`, `sessionsAffected`, `sessions` | none — nothing is set aside |
 | `Vanished` | `baselineSessionCount`, `currentSessionCount` | none — nothing is set aside |
 
-`sessions` is the window's run count and appears only on the kinds that discount nothing.
-Everywhere else it is `sessionsConsidered`, the analysed runs less the environmental ones — which
-is what "in 5 of 18 runs" has to be counted out of, because the numerator beside it already is.
-Publishing a considered numerator over a window denominator understates the finding in exactly the
-way discounting only the numerator would.
+### `sessions` and `sessionsConsidered`
+
+At the **top level of an evidence record**, `sessions` is the window's run count, and it appears
+only on the kinds that discount nothing. Everywhere else the top-level field is
+`sessionsConsidered`: the analysed runs less the environmental ones, which is what "in 5 of 18 runs"
+has to be counted out of, because the numerator beside it already is. Publishing a considered
+numerator over a window denominator understates the finding in exactly the way discounting only the
+numerator would.
+
+**Nested `sessions` is a different quantity and keeps the plain name.** `worse.sessions`,
+`levels[].sessions` and `current.sessions` count the runs behind *that* arm, level or slice, not the
+window — and each is drawn from executions its kind already filtered, so the exclusions counted
+elsewhere in the same payload are gone from them too. They are not renamed to `sessionsConsidered`
+because they are not that figure: an arm's size and "the analysed runs less the discounted ones" are
+different numbers, and giving them one name would be the confusion this file exists to prevent. The
+path is what disambiguates them, so read `sessions` as scoped to whatever it hangs off.
 
 The counts reconcile. For `Flaky`, `AlwaysFailing` and `TimingOut`:
 
