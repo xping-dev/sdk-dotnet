@@ -86,17 +86,22 @@ Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
 ```
 HIGH  flaky            GenerateMonthlySummary
       failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+      evidence moderate | -env-cluster | f_2a91c0de | .../SummaryTests.cs:88
 
 MED   slower           CheckoutFlow_Completes
       3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-      evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+      evidence high | -env | f_8c04b71a | .../FlowTests.cs:214
 
 LOW   stopped running  LegacyImport.Roundtrip
       ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | f_1d77e3f5 | tests/Legacy/ImportTests.cs:41
+      evidence moderate | all runs | f_1d77e3f5 | .../ImportTests.cs:41
 ```
+
+rates: -env excludes environmental runs, -cluster excludes clustered
+failures. Rates over different populations are not comparable.
 ````
+
+**The marker between the evidence level and the finding id says which executions the rate was taken over.** Kinds do not all count the same population: `flaky` sets aside runs where a third of the suite fell over *and* failures already reported as a shared cause, `slower` sets aside only the first, and `stopped running` sets aside neither. Two rates in the list are comparable only where their markers agree — which is why every finding carries one, including the ones that discount nothing.
 
 Only the top ten findings are shown by default. When some are withheld, one line follows the fence — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the fence.
 
@@ -281,11 +286,11 @@ For scripts and agents. Emits a versioned envelope and nothing else — no rende
 xping report --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from:
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over:
 
 ```json
 {
-  "schemaVersion": "1.11",
+  "schemaVersion": "1.12",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -302,6 +307,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
       "kind": "Flaky",
       "severity": "high",
       "evidenceLevel": "moderate",
+      "population": "excludesEnvironmentalAndClustered",
       "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests",
                     "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },
       "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",

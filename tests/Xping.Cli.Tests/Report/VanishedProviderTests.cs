@@ -114,7 +114,7 @@ public sealed class VanishedProviderTests
         Assert.Equal(5, evidence.BaselineSessions);
         Assert.Equal(5, evidence.BaselineSessionCount);
         Assert.Equal(3, evidence.CurrentSessionCount);
-        Assert.Equal(5, evidence.Executions);
+        Assert.Equal(5, evidence.ExecutionsInWindow);
     }
 
     [Fact]

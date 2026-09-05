@@ -29,7 +29,11 @@ namespace Xping.Cli.Report.Providers;
 /// and a reader cannot weigh the claim without it: "ran in 3 of 17 earlier runs" and "ran in 17 of
 /// 17" are the same sentence until it is beside them.
 /// </param>
-/// <param name="Executions">Executions of the test across the whole window.</param>
+/// <param name="ExecutionsInWindow">
+/// Executions of the test across the whole window, with nothing set aside. This kind counts session
+/// appearances, and an environmental run is still a run the test either was or was not in;
+/// discounting one would shorten the very history the absence is measured against.
+/// </param>
 /// <param name="LastSeenAt">When the test last ran.</param>
 /// <param name="LastSeenSha">The commit it last ran at, when known.</param>
 internal sealed record VanishedEvidence(
@@ -38,7 +42,7 @@ internal sealed record VanishedEvidence(
     int CurrentSessionCount,
     double BaselineRunRate,
     double PValue,
-    int Executions,
+    int ExecutionsInWindow,
     DateTime LastSeenAt,
     string? LastSeenSha) : FindingEvidence;
 

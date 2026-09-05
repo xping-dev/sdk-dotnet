@@ -114,6 +114,7 @@ internal static class EnvelopeBuilder
             finding.Kind.ToString(),
             ToCamelCase(finding.Severity.ToString()),
             ToCamelCase(finding.EvidenceLevel.ToString()),
+            ToCamelCase(PopulationRules.For(finding.Kind).ToString()),
             BuildSubject(finding.Subject),
             headline,
             metrics,

@@ -170,12 +170,12 @@ public sealed class ParallelSensitiveProviderTests
         Assert.Equal([2, 8], evidence.Levels.Select(l => l.Concurrency));
 
         Assert.Equal(0, evidence.Levels[0].Failures);
-        Assert.Equal(5, evidence.Levels[0].Executions);
+        Assert.Equal(5, evidence.Levels[0].ExecutionsConsidered);
         Assert.Equal(5, evidence.Levels[0].Sessions);
         Assert.Equal(0, evidence.Levels[0].FailureRate);
 
         Assert.Equal(5, evidence.Levels[1].Failures);
-        Assert.Equal(5, evidence.Levels[1].Executions);
+        Assert.Equal(5, evidence.Levels[1].ExecutionsConsidered);
         Assert.Equal(5, evidence.Levels[1].Sessions);
         Assert.Equal(1.0, evidence.Levels[1].FailureRate);
     }
@@ -188,7 +188,7 @@ public sealed class ParallelSensitiveProviderTests
         ParallelSensitiveEvidence evidence = EvidenceFrom(RetriedWithin(sessions: 10, attemptsPerSession: 4));
 
         Assert.Equal([2, 8], evidence.Levels.Select(l => l.Concurrency));
-        Assert.All(evidence.Levels, l => Assert.Equal(20, l.Executions));
+        Assert.All(evidence.Levels, l => Assert.Equal(20, l.ExecutionsConsidered));
         Assert.All(evidence.Levels, l => Assert.Equal(10, l.Sessions));
     }
 

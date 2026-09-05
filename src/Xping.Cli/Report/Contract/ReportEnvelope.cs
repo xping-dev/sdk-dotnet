@@ -39,11 +39,13 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.11 is where
-    /// <c>RetryExhausted</c> evidence gained <c>exhaustedRateBound</c>, the Wilson lower bound its
-    /// emission gate is thresholded on, published beside the rate it prints.
+    /// leaving the number still would tell it nothing had moved. 1.12 is where every evidence
+    /// record renamed the field a rate is taken over — <c>executionsConsidered</c> where discounting
+    /// applied and <c>executionsInWindow</c> where it did not — split <c>discountedExecutions</c>
+    /// into its environmental and clustered halves, and where the finding gained
+    /// <c>population</c>, which says which of those two the numbers beside it describe.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.11";
+    public const string CurrentSchemaVersion = "1.12";
 }
 
 /// <summary>
@@ -114,6 +116,11 @@ internal sealed record SummaryDto(
 /// <param name="Kind">What the finding claims.</param>
 /// <param name="Severity">How much attention it deserves.</param>
 /// <param name="EvidenceLevel">How much data it rests on.</param>
+/// <param name="Population">
+/// Which executions the counts and rates below were taken over. The report ranks findings of
+/// different kinds against each other and the kinds do not all count the same population, so two
+/// rates on one screen are comparable only where this agrees.
+/// </param>
 /// <param name="Subject">The test or group it is about.</param>
 /// <param name="Headline">The observations in one already-resolved sentence.</param>
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
@@ -124,6 +131,7 @@ internal sealed record FindingDto(
     string Kind,
     string Severity,
     string EvidenceLevel,
+    string Population,
     SubjectDto Subject,
     string Headline,
     IReadOnlyList<MetricDto> Metrics,

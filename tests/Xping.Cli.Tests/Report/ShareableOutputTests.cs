@@ -100,7 +100,7 @@ public sealed class ShareableOutputTests
         {
             FindingKind.RetryMasked =>
                 new RetryMaskedEvidence(
-                    4, 20, 20, 3, 0.2, 3, configuration, 12_400, 750,
+                    4, 20, 20, 3, 0.2, 3, configuration, 12_400, 750, 2,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", []),
 
             FindingKind.RetryDeepening =>
@@ -123,16 +123,16 @@ public sealed class ShareableOutputTests
                     [attemptExemplar], attemptExemplar),
 
             FindingKind.Flaky =>
-                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 3, [signature], [exemplar], null),
+                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 1, 3, [signature], [exemplar], null),
 
             FindingKind.AlwaysFailing =>
                 new AlwaysFailingEvidence(
-                    19, 20, 20, 19, 0.95, 0, signature with { Occurrences = 19 }, 1.0,
+                    19, 20, 20, 19, 0.95, 0, 0, signature with { Occurrences = 19 }, 1.0,
                     [exemplar], null),
 
             FindingKind.TimingOut =>
                 new TimingOutEvidence(
-                    9, 10, 20, 20, 9, 0.45, 0.9, 0, 500, [512, 508, 503], [exemplar], null),
+                    9, 10, 20, 20, 9, 0.45, 0.9, 0, 0, 500, [512, 508, 503], [exemplar], null),
 
             FindingKind.BrokenFixture =>
                 new BrokenFixtureEvidence(
@@ -151,8 +151,8 @@ public sealed class ShareableOutputTests
 
             FindingKind.DurationRegression =>
                 new DurationRegressionEvidence(
-                    new DurationProfile(1240, 1890, 4, 3, 3),
-                    new DurationProfile(340, 410, 10, 10, 10),
+                    new DurationProfile(1240, 1890, 4, 3, 0, 3),
+                    new DurationProfile(340, 410, 10, 10, 0, 10),
                     new DurationDelta(264.7, 900),
                     new DurationShift(3.512, 1.94, 5.87, 251.2, 880, 0.004),
                     "a3f9c2e",
@@ -160,7 +160,7 @@ public sealed class ShareableOutputTests
                     null),
 
             FindingKind.DurationUnstable =>
-                new DurationUnstableEvidence(18, 20, 820, 3100, 210, 4100, 18, 900, 0.71, []),
+                new DurationUnstableEvidence(18, 20, 0, 820, 3100, 210, 4100, 18, 900, 0.71, []),
 
             FindingKind.ParallelSensitive =>
                 new ParallelSensitiveEvidence(
@@ -174,7 +174,9 @@ public sealed class ShareableOutputTests
                         new ConcurrencyLevel(14, 4, 4, 3, 0.75)
                     ],
                     [],
-                    null),
+                    null,
+                    0,
+                    0),
 
             FindingKind.TimeSensitive =>
                 new TimeSensitiveEvidence(
@@ -185,7 +187,9 @@ public sealed class ShareableOutputTests
                     new TimeSignificance(0.001748, 2),
                     "Europe/Berlin",
                     [],
-                    null),
+                    null,
+                    0,
+                    0),
 
             FindingKind.Vanished =>
                 new VanishedEvidence(
@@ -291,7 +295,9 @@ public sealed class ShareableOutputTests
                 new ConcurrencyLevel(14, 1, 1, 0, 0)
             ],
             [],
-            null);
+            null,
+            0,
+            0);
 
         var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
 
@@ -319,7 +325,9 @@ public sealed class ShareableOutputTests
                 new ConcurrencyLevel(14, 10, 10, 8, 0.8)
             ],
             [],
-            null);
+            null,
+            0,
+            0);
 
         var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
 
@@ -343,7 +351,9 @@ public sealed class ShareableOutputTests
                 new ConcurrencyLevel(9, 10, 10, 1, 0.1)
             ],
             [],
-            null);
+            null,
+            0,
+            0);
 
         var (headline, _) = EvidenceHeadline.For(FindingKind.ParallelSensitive, evidence);
 
@@ -362,7 +372,7 @@ public sealed class ShareableOutputTests
 
         var (headline, _) = EvidenceHeadline.For(
             FindingKind.AlwaysFailing,
-            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, unnamed, 1.0, [], null));
+            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, 0, unnamed, 1.0, [], null));
 
         // An adapter that captures no failure detail is not the same as a failure that had none.
         Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);
@@ -438,6 +448,69 @@ public sealed class ShareableOutputTests
     }
 
     [Fact]
+    public void EveryFindingSaysWhichPopulationItsRateWasTakenOver()
+    {
+        // The kinds are ranked against each other and they do not count the same executions, so two
+        // rates on one screen are comparable only where these agree. Marked on every finding rather
+        // than only where something was set aside: "counted everything" and "this build did not say"
+        // must not read alike.
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"),
+            Finding("RetryMasked", "medium", "Beta", "passed on retry 4 times"),
+            Finding("Vanished", "low", "Gamma", "ran in 12 of 17 earlier runs")));
+
+        string[] trailers = [.. Fenced(report).Where(l => l.Contains("evidence", StringComparison.Ordinal))];
+
+        Assert.Equal(3, trailers.Length);
+        Assert.Contains("-env-cluster", trailers[0], StringComparison.Ordinal);
+        Assert.Contains("-env", trailers[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("-cluster", trailers[1], StringComparison.Ordinal);
+        Assert.Contains("all runs", trailers[2], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLegendExplainsTheMarkersAndSitsOutsideTheFence()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)")));
+
+        foreach (string line in ReportVocabulary.PopulationLegend)
+        {
+            Assert.Contains(line, report, StringComparison.Ordinal);
+            Assert.DoesNotContain(line, Fenced(report));
+        }
+    }
+
+    [Fact]
+    public void AReportWithNothingInItPrintsNoLegend()
+    {
+        // Nothing printed a marker, so there is nothing to explain — and the empty report already
+        // says why it is empty. A legend under it would be the only other line there.
+        string clean = Render(Envelope());
+
+        foreach (string line in ReportVocabulary.PopulationLegend)
+            Assert.DoesNotContain(line, clean, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePopulationMarkerCostsLeadingDirectoriesAndNeverTheFileAndLine()
+    {
+        // The marker shares the trailer with the evidence level, the id and the path, and it is paid
+        // for out of the path's columns — a path that used to print whole now elides. That is the
+        // right half to spend: the leading directories vary with where the repository sits, while
+        // the file and line are what a reader opens, and the elision cuts at a directory boundary so
+        // what survives still reads as a path.
+        string trailer = Trailer(Render(Envelope(
+            FindingWith("moderate", "tests/Billing/SummaryTests.cs", 88))));
+
+        Assert.Contains("-env-cluster", trailer, StringComparison.Ordinal);
+        Assert.EndsWith(".../SummaryTests.cs:88", trailer, StringComparison.Ordinal);
+
+        // And the head is never what gets cut: "evidence …" is the first thing read.
+        Assert.StartsWith("evidence moderate | ", trailer.TrimStart(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheFenceOpensAndClosesOnceEvenWithNothingToReport()
     {
         string clean = Render(Envelope());
@@ -484,7 +557,13 @@ public sealed class ShareableOutputTests
         // And no offer at all when there is nothing more to show: the command would be the one the
         // reader just ran, and it names no format, so it cannot be offering a different view either.
         Assert.DoesNotContain("xping report --all", complete, StringComparison.Ordinal);
-        Assert.EndsWith(Fence + Environment.NewLine, complete, StringComparison.Ordinal);
+
+        // The legend is the last thing a complete report prints — it explains the markers inside the
+        // fence, so it belongs to every report that printed one, truncated or not.
+        Assert.EndsWith(
+            ReportVocabulary.PopulationLegend[^1] + Environment.NewLine,
+            complete,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -632,7 +711,8 @@ public sealed class ShareableOutputTests
 
         string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
 
-        Assert.Contains("evidence moderate | f_2a91 | ", trailer, StringComparison.Ordinal);
+        Assert.Contains(
+            "evidence moderate | -env-cluster | f_2a91 | ", trailer, StringComparison.Ordinal);
         Assert.EndsWith("CartTests.cs:1042", trailer.TrimEnd(), StringComparison.Ordinal);
         Assert.Contains("...", trailer, StringComparison.Ordinal);
     }
@@ -718,7 +798,11 @@ public sealed class ShareableOutputTests
     {
         FindingDto finding = FindingWith("moderate", "tests/Cart/CartTests.cs", 42) with
         {
-            Id = new string('f', FenceWidth - Indent - "evidence moderate | ".Length)
+            // Exactly the columns the head and the population marker leave, so the location is the
+            // only segment with nowhere to go.
+            Id = new string(
+                'f',
+                FenceWidth - Indent - "evidence moderate | ".Length - "-env-cluster | ".Length)
         };
 
         string trailer = Trailer(Render(Envelope(finding)));
@@ -861,12 +945,19 @@ public sealed class ShareableOutputTests
         };
     }
 
+    /// <summary>
+    /// Spells an enum name the way the envelope does, so the fixtures cannot drift from the builder.
+    /// </summary>
+    private static string ToCamelCase(string value) =>
+        char.ToLowerInvariant(value[0]) + value.Substring(1);
+
     private static FindingDto Finding(string kind, string severity, string name, string headline) =>
         new(
             "f_2a91",
             kind,
             severity,
             "moderate",
+            ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
             new SubjectDto("test", "fp", name, name, null, null, "MyApp.Tests", null, null, null),
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],

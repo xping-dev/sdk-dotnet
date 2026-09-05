@@ -50,13 +50,13 @@ public sealed class DurationProviderTests
 
         Assert.Equal(800, evidence.Current.P50Ms);
         Assert.Equal(800, evidence.Current.P95Ms);
-        Assert.Equal(3, evidence.Current.Executions);
+        Assert.Equal(3, evidence.Current.ExecutionsConsidered);
         Assert.Equal(3, evidence.Current.Sessions);
         Assert.Equal(3, evidence.Current.ComparedSessions);
 
         Assert.Equal(200, evidence.Baseline.P50Ms);
         Assert.Equal(200, evidence.Baseline.P95Ms);
-        Assert.Equal(7, evidence.Baseline.Executions);
+        Assert.Equal(7, evidence.Baseline.ExecutionsConsidered);
         Assert.Equal(7, evidence.Baseline.Sessions);
         Assert.Equal(7, evidence.Baseline.ComparedSessions);
     }
@@ -200,7 +200,7 @@ public sealed class DurationProviderTests
 
         var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
 
-        Assert.Equal(10, evidence.Executions);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
         Assert.Equal(10, evidence.Sessions);
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
@@ -720,7 +720,7 @@ public sealed class DurationProviderTests
         // The unusable run still contributes its raw milliseconds — eight baseline executions, all
         // of them counted — while contributing nothing to the comparison. Both counts are
         // published, because the percentiles rest on one and every gate rests on the other.
-        Assert.Equal(8, evidence.Baseline.Executions);
+        Assert.Equal(8, evidence.Baseline.ExecutionsConsidered);
         Assert.Equal(8, evidence.Baseline.Sessions);
         Assert.Equal(7, evidence.Baseline.ComparedSessions);
 
@@ -822,7 +822,7 @@ public sealed class DurationProviderTests
             subjectMs: o => o < 43 ? 200 : 800));
 
         Assert.Equal(43, evidence.Baseline.Sessions);
-        Assert.Equal(43, evidence.Baseline.Executions);
+        Assert.Equal(43, evidence.Baseline.ExecutionsConsidered);
         Assert.Equal(40, evidence.Baseline.ComparedSessions);
 
         // One arrangement in C(43,3) = 12341. Three decimals would publish that as zero, which is
@@ -1080,6 +1080,85 @@ public sealed class DurationProviderTests
         Assert.DoesNotContain(
             FindingKind.DurationUnstable,
             new DurationProvider().Analyze(context).HypothesesTested.Keys);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Environmental runs
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AnEnvironmentalRunIsLeftOutOfTheSliceItFellIn()
+    {
+        // Per-session normalisation removes a machine that was uniformly slow, because the run's own
+        // median moves with every test in it. It does not remove a run in which a third of the suite
+        // fell over: there the median was taken over whichever tests survived, and every survivor is
+        // measured against a scale the failures moved. So this provider discounts as well, and says
+        // what it discounted.
+        DurationRegressionEvidence evidence = RegressionFrom(
+            WithOutage(sessions: 11, baselineSessions: 8, environmental: 3));
+
+        Assert.Equal(7, evidence.Baseline.ExecutionsConsidered);
+        Assert.Equal(7, evidence.Baseline.Sessions);
+        Assert.Equal(1, evidence.Baseline.DiscountedEnvironmental);
+
+        Assert.Equal(3, evidence.Current.ExecutionsConsidered);
+        Assert.Equal(0, evidence.Current.DiscountedEnvironmental);
+    }
+
+    [Fact]
+    public void ARegressionRestingOnAnOutageInTheRecentSliceIsNoLongerReported()
+    {
+        // The recent slice is three runs and the comparison needs three, so one outage inside it
+        // takes the finding away entirely. That is the intended trade rather than a gap: a slowdown
+        // established on two clean runs and one afternoon the machine spent falling over is not a
+        // slowdown anyone should be paged about, and the arm counts published beside every surviving
+        // finding are what say how much is behind it.
+        Assert.Empty(Regressions(WithOutage(sessions: 11, baselineSessions: 8, environmental: 9)));
+    }
+
+    /// <summary>
+    /// Builds a regressing window in which exactly one session reads as an outage.
+    /// </summary>
+    /// <param name="sessions">Sessions to build; ordinal 0 is the oldest.</param>
+    /// <param name="baselineSessions">How many of the oldest run the subject at its old speed.</param>
+    /// <param name="environmental">The ordinal of the session a third of whose suite fails.</param>
+    /// <remarks>
+    /// Thirty companions rather than the usual three, because a session is only environmental once
+    /// ten of them fail and they are at least three in ten — both bounds are load-bearing, and a
+    /// three-companion window cannot reach either. The subject passes in every session, including
+    /// the outage: what is being tested is that its duration there is set aside, not that its
+    /// outcome is.
+    /// </remarks>
+    private static AnalysisContext WithOutage(int sessions, int baselineSessions, int environmental)
+    {
+        const int Suite = 30;
+        const int Failing = 12;
+
+        var built = new List<TestSession>(sessions);
+
+        for (int ordinal = 0; ordinal < sessions; ordinal++)
+        {
+            var executions = new List<TestExecution>
+            {
+                Execution(Subject, ordinal, ordinal < baselineSessions ? 200 : 800)
+            };
+
+            for (int companion = 0; companion < Suite; companion++)
+            {
+                executions.Add(TestSessionFactory.Execution(
+                    $"Companion{companion}",
+                    ordinal == environmental && companion < Failing
+                        ? TestOutcome.Failed
+                        : TestOutcome.Passed,
+                    durationMs: CompanionMs,
+                    executionId: TestSessionFactory.ExecutionIdFor(
+                        $"Companion{companion}", ordinal, TestOutcome.Passed)));
+            }
+
+            built.Add(TestSessionFactory.Session(ordinal, executions));
+        }
+
+        return TestSessionFactory.Context([.. built]);
     }
 
     // ---------------------------------------------------------------------------------------

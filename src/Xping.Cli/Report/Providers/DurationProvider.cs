@@ -43,8 +43,15 @@ internal sealed record DurationExemplar(
 /// </remarks>
 /// <param name="P50Ms">Median duration, in milliseconds.</param>
 /// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
-/// <param name="Executions">Executions the percentiles were computed over.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions the percentiles were computed over — not how many times the test ran in this slice.
+/// Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
+/// </param>
 /// <param name="Sessions">Distinct runs those executions came from.</param>
+/// <param name="DiscountedEnvironmental">
+/// Executions of this slice set aside because their run looked like a broken machine rather than a
+/// broken test.
+/// </param>
 /// <param name="ComparedSessions">
 /// Runs the two-sample comparison actually read, one reading each. Never larger than
 /// <paramref name="Sessions"/>, and the count both the arm floors and the test itself were applied
@@ -53,8 +60,9 @@ internal sealed record DurationExemplar(
 internal sealed record DurationProfile(
     long P50Ms,
     long P95Ms,
-    int Executions,
+    int ExecutionsConsidered,
     int Sessions,
+    int DiscountedEnvironmental,
     int ComparedSessions);
 
 /// <summary>
@@ -133,8 +141,14 @@ internal sealed record DurationRegressionEvidence(
 /// <summary>
 /// Evidence that a test's duration varies too much for a regression to be measurable.
 /// </summary>
-/// <param name="Executions">Executions across the whole window.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions across the whole window, after environmental runs were set aside — not how many times
+/// the test ran. Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
+/// </param>
 /// <param name="Sessions">Sessions in the window.</param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their run looked like a broken machine rather than a broken test.
+/// </param>
 /// <param name="P50Ms">Median duration, in milliseconds.</param>
 /// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
 /// <param name="MinMs">The fastest observed run, in milliseconds.</param>
@@ -159,8 +173,9 @@ internal sealed record DurationRegressionEvidence(
 /// </param>
 /// <param name="Exemplars">Up to three executions chosen to span the observed spread.</param>
 internal sealed record DurationUnstableEvidence(
-    int Executions,
+    int ExecutionsConsidered,
     int Sessions,
+    int DiscountedEnvironmental,
     long P50Ms,
     long P95Ms,
     long MinMs,
@@ -216,6 +231,18 @@ internal sealed record DurationUnstableEvidence(
 /// a CI runner under load — and it moves every test in a run together, which is exactly what
 /// dividing by the run's own median removes. Verified against the local store, where run medians for
 /// one assembly move by a factor of two to sixteen across a fortnight and reorder the findings.
+/// </para>
+/// <para>
+/// <b>And environmental runs are discounted anyway, which normalisation does not make redundant.</b>
+/// The two answer different questions. Normalisation removes a machine that was uniformly slow,
+/// because the run's median moves with every test in it. It does not remove a run in which a third
+/// of the suite fell over: there the median was computed over whichever tests survived, it is not
+/// the same population as any other run's median, and every surviving test is measured against a
+/// scale the failures moved. The recent slice is three runs, so one such run is a third of the
+/// evidence behind a regression — which is the case this discounting exists for, and the reason
+/// this provider no longer stands apart from every other rate-publishing kind. The cost is real and
+/// intended: a test whose recent slice is mostly environmental now falls under the arm floors and is
+/// silenced, and the arm counts published beside every finding are what say so.
 /// </para>
 /// <para>
 /// <b>Where a threshold is in milliseconds, they are milliseconds at the test's reference
@@ -332,14 +359,31 @@ internal sealed class DurationProvider : IFindingProvider
             if (test == null)
                 continue;
 
-            IReadOnlyList<ExecutionRef> all = context.Tests.ExecutionsOf(fingerprint);
+            IReadOnlyList<ExecutionRef> everything = context.Tests.ExecutionsOf(fingerprint);
 
+            List<ExecutionRef> all = [];
             List<ExecutionRef> current = [];
             List<ExecutionRef> baseline = [];
+            int currentDiscounted = 0;
+            int baselineDiscounted = 0;
 
-            foreach (ExecutionRef reference in all)
+            foreach (ExecutionRef reference in everything)
             {
-                if (currentSessions.Contains(reference.Session.SessionId))
+                bool inCurrent = currentSessions.Contains(reference.Session.SessionId);
+
+                if (context.SessionViewFor(reference.Session.SessionId)?.IsLikelyEnvironmental == true)
+                {
+                    if (inCurrent)
+                        currentDiscounted++;
+                    else
+                        baselineDiscounted++;
+
+                    continue;
+                }
+
+                all.Add(reference);
+
+                if (inCurrent)
                     current.Add(reference);
                 else
                     baseline.Add(reference);
@@ -366,14 +410,26 @@ internal sealed class DurationProvider : IFindingProvider
             Profile currentProfile = Build(current, medians);
             Profile baselineProfile = Build(baseline, medians);
 
-            Examination regression =
-                Regression(test, current, currentProfile, baselineProfile, referenceMs);
+            Examination regression = Regression(
+                test,
+                current,
+                currentProfile,
+                baselineProfile,
+                referenceMs,
+                currentDiscounted,
+                baselineDiscounted);
 
             if (regression.Tested)
                 tested++;
 
-            FindingCandidate? unstable =
-                Unstable(context, test, all, whole, baselineProfile, referenceMs);
+            FindingCandidate? unstable = Unstable(
+                context,
+                test,
+                all,
+                whole,
+                baselineProfile,
+                referenceMs,
+                currentDiscounted + baselineDiscounted);
 
             // A regression suppresses the instability finding for the same test, and the two now
             // overlap more than they used to: a test whose baseline swings and whose recent runs
@@ -413,12 +469,16 @@ internal sealed class DurationProvider : IFindingProvider
     /// <param name="currentProfile">Those executions reduced to statistics.</param>
     /// <param name="baselineProfile">The same for everything before them.</param>
     /// <param name="referenceMs">The test's reference speed, in milliseconds.</param>
+    /// <param name="currentDiscounted">Recent executions set aside as environmental.</param>
+    /// <param name="baselineDiscounted">Earlier executions set aside as environmental.</param>
     private static Examination Regression(
         TestReference test,
         List<ExecutionRef> current,
         Profile currentProfile,
         Profile baselineProfile,
-        double referenceMs)
+        double referenceMs,
+        int currentDiscounted,
+        int baselineDiscounted)
     {
         // Nothing to compare against is not a slowdown. A test added this week has history in the
         // window but no history of its own, and calling that a regression would report every new
@@ -481,8 +541,8 @@ internal sealed class DurationProvider : IFindingProvider
             FindingKind.DurationRegression,
             new FindingSubject.SingleTest(test),
             new DurationRegressionEvidence(
-                currentProfile.ToPublished(),
-                baselineProfile.ToPublished(),
+                currentProfile.ToPublished(currentDiscounted),
+                baselineProfile.ToPublished(baselineDiscounted),
                 new DurationDelta(
                     FindingOrder.RoundPercent(PercentIncrease(
                         baselineProfile.RawP50, currentProfile.RawP50)),
@@ -552,7 +612,8 @@ internal sealed class DurationProvider : IFindingProvider
         IReadOnlyList<ExecutionRef> all,
         Profile whole,
         Profile baselineProfile,
-        double referenceMs)
+        double referenceMs,
+        int discountedEnvironmental)
     {
         double dispersion = RobustDispersion.Of(whole.Normalised);
         if (dispersion < LocalAnalysisConstants.DurationUnstableDispersionMin)
@@ -580,6 +641,7 @@ internal sealed class DurationProvider : IFindingProvider
             new DurationUnstableEvidence(
                 whole.Executions,
                 context.Window.SessionCount,
+                discountedEnvironmental,
                 RoundMs(whole.RawP50),
                 RoundMs(whole.RawP95),
                 RoundMs(whole.RawMin),
@@ -794,7 +856,7 @@ internal sealed class DurationProvider : IFindingProvider
     /// False for a slice that is only asked for percentiles and dispersion.
     /// </param>
     private static Profile Build(
-        IReadOnlyList<ExecutionRef> executions,
+        List<ExecutionRef> executions,
         Dictionary<Guid, double> medians,
         bool comparable = true)
     {
@@ -946,12 +1008,13 @@ internal sealed class DurationProvider : IFindingProvider
 
         public double NormalisedP50 => Quantile.Interpolated(Normalised, 0.50);
 
-        public DurationProfile ToPublished() =>
+        public DurationProfile ToPublished(int discountedEnvironmental) =>
             new(
                 RoundMs(RawP50),
                 RoundMs(RawP95),
                 Executions,
                 Sessions,
+                discountedEnvironmental,
                 Compared.Count);
     }
 }

@@ -217,10 +217,61 @@ public sealed class RetryProviderTests
         RetryMaskedEvidence evidence = EvidenceFrom(Context(sessions: 6, maskedSessions: 3));
 
         Assert.Equal(3, evidence.MaskedOccurrences);
-        Assert.Equal(6, evidence.Executions);
+        Assert.Equal(6, evidence.ExecutionsConsidered);
         Assert.Equal(6, evidence.Sessions);
         Assert.Equal(3, evidence.SessionsWithMasking);
         Assert.Equal(0.5, evidence.MaskedRate);
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunIsLeftOutOfTheMaskedRate()
+    {
+        // Masking used to be the one rate-publishing kind that counted every run, defended on the
+        // grounds that it is a standing property of the window. So is exhaustion, and that kind
+        // discounts: "standing property" argues against slicing the window, not for keeping a bad
+        // afternoon in it. A retry that rescued this test while a third of the suite was falling
+        // over says nothing about the test.
+        IEnumerable<TestExecution> Filler(int failing) =>
+        [
+            .. Enumerable.Range(0, failing).Select(i =>
+                TestSessionFactory.Execution($"Fine{i}", TestOutcome.Failed)),
+            .. Enumerable.Range(failing, 30 - failing).Select(i =>
+                TestSessionFactory.Execution($"Fine{i}"))
+        ];
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 3).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [TestSessionFactory.Execution(Subject), .. Filler(failing: 0)])),
+
+            .. Enumerable.Range(3, 3).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [.. MaskedPair(), .. Filler(failing: 0)])),
+
+            // Twelve of thirty-one down, and the subject rescued by a retry in the middle of it.
+            TestSessionFactory.Session(6, [.. MaskedPair(), .. Filler(failing: 12)])
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        Assert.Equal(1, context.EnvironmentalSessionCount);
+
+        RetryMaskedEvidence evidence = Assert.IsType<RetryMaskedEvidence>(
+            Assert.Single(
+                Analyze(context),
+                c => c.Subject is FindingSubject.SingleTest test &&
+                     test.Test.TestFingerprint == $"fp-{Subject}")
+                .Evidence);
+
+        // Three plain passes and three masked pairs. The outage's pair is in neither count.
+        Assert.Equal(3, evidence.MaskedOccurrences);
+        Assert.Equal(9, evidence.ExecutionsConsidered);
+        Assert.Equal(2, evidence.DiscountedEnvironmental);
+        Assert.Equal(3, evidence.SessionsWithMasking);
+
+        // 3 of 9 rather than the 4 of 11 the undiscounted window would have published.
+        Assert.Equal(0.333, evidence.MaskedRate);
     }
 
     [Fact]
@@ -441,7 +492,7 @@ public sealed class RetryProviderTests
         // pad used to clear a floor of five; it is one retried afternoon, and it no longer does.
         AnalysisContext context = Context(sessions: 8, maskedSessions, padding);
 
-        Assert.Equal(expectedExecutions, EvidenceFrom(context).Executions);
+        Assert.Equal(expectedExecutions, EvidenceFrom(context).ExecutionsConsidered);
         Assert.Equal(expectedSessions, context.Tests.SessionsRunIn($"fp-{Subject}"));
 
         AnalysisResult result = Run(context);
@@ -524,7 +575,7 @@ public sealed class RetryProviderTests
         RetryMaskedEvidence evidence = EvidenceFrom(TestSessionFactory.Context([.. built]));
 
         Assert.Equal(3, evidence.MaskedOccurrences);
-        Assert.Equal(6, evidence.Executions);
+        Assert.Equal(6, evidence.ExecutionsConsidered);
         Assert.Equal(8, evidence.Sessions);
     }
 
@@ -551,7 +602,7 @@ public sealed class RetryProviderTests
         RetryMaskedEvidence evidence = EvidenceFrom(context);
 
         Assert.Equal(6, evidence.MaskedOccurrences);
-        Assert.Equal(18, evidence.Executions);
+        Assert.Equal(18, evidence.ExecutionsConsidered);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -992,7 +1043,7 @@ public sealed class RetryProviderTests
 
         RetryExhaustedEvidence evidence = ExhaustedFrom(TestSessionFactory.Context([.. built]));
 
-        Assert.Equal(1, evidence.DiscountedRuns);
+        Assert.Equal(1, evidence.DiscountedEnvironmentalRuns);
         Assert.Equal(4, evidence.ExhaustedRuns);
         Assert.Equal(8, evidence.RunsConsidered);
     }
@@ -1259,7 +1310,7 @@ public sealed class RetryProviderTests
 
         RetryDeepeningEvidence evidence = DeepeningFrom(context);
 
-        Assert.Equal(1, evidence.DiscountedRuns);
+        Assert.Equal(1, evidence.DiscountedEnvironmentalRuns);
         Assert.Equal(8, evidence.Baseline.Runs);
     }
 
