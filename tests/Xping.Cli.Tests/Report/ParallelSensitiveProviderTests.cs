@@ -170,14 +170,81 @@ public sealed class ParallelSensitiveProviderTests
         Assert.Equal([2, 8], evidence.Levels.Select(l => l.Concurrency));
 
         Assert.Equal(0, evidence.Levels[0].Failures);
-        Assert.Equal(5, evidence.Levels[0].Executions);
+        Assert.Equal(5, evidence.Levels[0].ExecutionsConsidered);
         Assert.Equal(5, evidence.Levels[0].Sessions);
         Assert.Equal(0, evidence.Levels[0].FailureRate);
 
         Assert.Equal(5, evidence.Levels[1].Failures);
-        Assert.Equal(5, evidence.Levels[1].Executions);
+        Assert.Equal(5, evidence.Levels[1].ExecutionsConsidered);
         Assert.Equal(5, evidence.Levels[1].Sessions);
         Assert.Equal(1.0, evidence.Levels[1].FailureRate);
+    }
+
+    [Fact]
+    public void TheLevelsAndBothExclusionCountsAccountForEveryExecution()
+    {
+        // Both exclusions drop an execution silently, and for different reasons: one is the report
+        // setting a run aside, the other is a reading the adapter never took. Without both counts
+        // the levels cannot be reconciled with how many times the test ran, and a curve built on ten
+        // of a test's twelve executions reads exactly like one built on all twelve.
+        List<TestSession> sessions = [];
+
+        for (int ordinal = 0; ordinal < Sessions; ordinal++)
+        {
+            bool crowded = ordinal >= 5;
+
+            sessions.Add(TestSessionFactory.Session(ordinal,
+            [
+                TestSessionFactory.Execution(
+                    Subject,
+                    crowded ? TestOutcome.Failed : TestOutcome.Passed,
+                    errorMessage: crowded ? "boom" : null,
+                    executionId: TestSessionFactory.ExecutionIdFor(Subject, ordinal, TestOutcome.Failed),
+                    concurrency: crowded ? 8 : 2)
+            ]));
+        }
+
+        // An adapter that never filled the orchestration record. The execution is real and cannot be
+        // placed at a level, which is not the same as the report declining to count it.
+        sessions.Add(TestSessionFactory.Session(Sessions,
+        [
+            TestSessionFactory.Execution(
+                Subject,
+                executionId: TestSessionFactory.ExecutionIdFor(Subject, Sessions, TestOutcome.Passed))
+        ]));
+
+        // Twelve of thirty-one down: an outage, at a level the trend would otherwise have counted.
+        sessions.Add(TestSessionFactory.Session(Sessions + 1,
+        [
+            TestSessionFactory.Execution(
+                Subject,
+                TestOutcome.Failed,
+                errorMessage: "boom",
+                executionId: TestSessionFactory.ExecutionIdFor(
+                    Subject, Sessions + 1, TestOutcome.Failed),
+                concurrency: 2),
+
+            .. Enumerable.Range(0, 12).Select(i =>
+                TestSessionFactory.Execution($"Fine{i}", TestOutcome.Failed, errorMessage: "down")),
+            .. Enumerable.Range(12, 18).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+        ]));
+
+        ParallelSensitiveEvidence evidence = EvidenceFrom(sessions);
+
+        Assert.Equal([2, 8], evidence.Levels.Select(l => l.Concurrency));
+        Assert.Equal(5, evidence.Levels[0].ExecutionsConsidered);
+        Assert.Equal(5, evidence.Levels[1].ExecutionsConsidered);
+
+        // The two are not interchangeable and are not both zero: the outage failed at the quiet
+        // level, so counting it would have argued against the very trend that was published.
+        Assert.Equal(1, evidence.DiscountedEnvironmental);
+        Assert.Equal(1, evidence.ExecutionsWithoutConcurrency);
+
+        Assert.Equal(
+            sessions.Count,
+            evidence.Levels.Sum(l => l.ExecutionsConsidered) +
+            evidence.DiscountedEnvironmental +
+            evidence.ExecutionsWithoutConcurrency);
     }
 
     [Fact]
@@ -188,7 +255,7 @@ public sealed class ParallelSensitiveProviderTests
         ParallelSensitiveEvidence evidence = EvidenceFrom(RetriedWithin(sessions: 10, attemptsPerSession: 4));
 
         Assert.Equal([2, 8], evidence.Levels.Select(l => l.Concurrency));
-        Assert.All(evidence.Levels, l => Assert.Equal(20, l.Executions));
+        Assert.All(evidence.Levels, l => Assert.Equal(20, l.ExecutionsConsidered));
         Assert.All(evidence.Levels, l => Assert.Equal(10, l.Sessions));
     }
 

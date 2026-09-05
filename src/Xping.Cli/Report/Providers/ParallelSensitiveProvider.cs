@@ -43,19 +43,25 @@ internal enum ConcurrencyDirection
 /// </summary>
 /// <remarks>
 /// Both denominators are published because they answer different questions and this finding needs
-/// both. <paramref name="Executions"/> is what the rate is over — concurrency varies between attempts
-/// within a run, so every attempt is a real, distinct reading. <paramref name="Sessions"/> is how many
+/// both. <paramref name="ExecutionsConsidered"/> is what the rate is over — concurrency varies between
+/// attempts within a run, so every attempt is a real, distinct reading. <paramref name="Sessions"/> is how many
 /// independent occasions those readings came from, and it is the number that says whether a rate over
 /// twelve executions is twelve builds or one afternoon of retries.
 /// </remarks>
 /// <param name="Concurrency">Tests in flight, itself included.</param>
-/// <param name="Executions">Executions observed at this level.</param>
-/// <param name="Sessions">Distinct runs those executions came from.</param>
+/// <param name="ExecutionsConsidered">Executions observed at this level, after both exclusions.</param>
+/// <param name="Sessions">
+/// Distinct runs those executions came from — a count of the level and never of the window. Drawn
+/// from the same considered executions as <paramref name="ExecutionsConsidered"/>, so the two
+/// exclusions counted beside the levels are already gone from it.
+/// </param>
 /// <param name="Failures">How many of them failed.</param>
-/// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
+/// <param name="FailureRate">
+/// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
+/// </param>
 internal sealed record ConcurrencyLevel(
     int Concurrency,
-    int Executions,
+    int ExecutionsConsidered,
     int Sessions,
     int Failures,
     double FailureRate);
@@ -121,12 +127,24 @@ internal sealed record ConcurrencyRange(int Min, int Max, int DistinctLevels);
 /// illustrate the finding with the run that argues against it.
 /// </param>
 /// <param name="Contrast">One execution typical of the far end of the observed range.</param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their run looked like a broken machine rather than a broken test.
+/// </param>
+/// <param name="ExecutionsWithoutConcurrency">
+/// Executions dropped because their adapter recorded no concurrency for them, so no level could be
+/// read. Not a discount and not a judgement about the run — a measurement that could not be taken —
+/// but published for the same reason: without it the levels below cannot be reconciled with the
+/// number of times the test ran, and a curve built on a third of a test's executions reads exactly
+/// like one built on all of them.
+/// </param>
 internal sealed record ParallelSensitiveEvidence(
     ConcurrencyTrend Trend,
     ConcurrencyRange Observed,
     IReadOnlyList<ConcurrencyLevel> Levels,
     IReadOnlyList<ConcurrencyExemplar> Exemplars,
-    ConcurrencyExemplar? Contrast) : FindingEvidence;
+    ConcurrencyExemplar? Contrast,
+    int DiscountedEnvironmental,
+    int ExecutionsWithoutConcurrency) : FindingEvidence;
 
 /// <summary>
 /// Reports tests whose failure rate moves with how many other tests were running at the time.
@@ -277,7 +295,8 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// </remarks>
     private static Examination Examine(AnalysisContext context, string fingerprint)
     {
-        List<Measured> considered = Considered(context, fingerprint);
+        Population population = Considered(context, fingerprint);
+        List<Measured> considered = population.Considered;
         ConcurrencyRange range = Range(considered);
 
         // A test whose concurrency never varied. There is no trend to test for and so nothing to
@@ -336,7 +355,9 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
                 range,
                 Levels(considered),
                 Exemplars(driving, direction),
-                Contrast(considered, quiet)),
+                Contrast(considered, quiet),
+                population.DiscountedEnvironmental,
+                population.ExecutionsWithoutConcurrency),
 
             // The correlation discounted by how precisely it was measured, rather than the
             // correlation itself. The emission decision is made on the estimate above, so what is
@@ -362,20 +383,28 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// Collects the executions this test can be measured on, in a stable order.
     /// </summary>
     /// <remarks>
-    /// Two exclusions, both of which drop the execution entirely rather than substituting a value.
+    /// Two exclusions, both of which drop the execution entirely rather than substituting a value,
+    /// and both counted rather than silently skipped — the per-level totals below are otherwise
+    /// impossible to reconcile with how many times the test ran.
     /// An execution whose adapter recorded no orchestration data cannot be placed at a level, and
     /// defaulting it to "ran alone" would invent the very measurement the finding is about.
-    /// Environmental sessions go for the reason §6 gives: an outage lands at whichever levels its
-    /// sessions occupy and manufactures a trend out of a bad afternoon.
+    /// Environmental sessions go for the reason <c>docs/internals/finding-populations.md</c> gives:
+    /// an outage lands at whichever levels its sessions occupy and manufactures a trend out of a bad
+    /// afternoon.
     /// </remarks>
-    private static List<Measured> Considered(AnalysisContext context, string fingerprint)
+    private static Population Considered(AnalysisContext context, string fingerprint)
     {
         List<Measured> considered = [];
+        int environmental = 0;
+        int unmeasured = 0;
 
         foreach (ExecutionRef reference in context.Tests.ExecutionsOf(fingerprint))
         {
             if (context.SessionViewFor(reference.Session.SessionId)?.IsLikelyEnvironmental == true)
+            {
+                environmental++;
                 continue;
+            }
 
             TestOrchestrationRecord? orchestration = reference.Execution.TestOrchestrationRecord;
 
@@ -383,12 +412,15 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             // field — or an adapter that never filled it — arrives here. One is the lowest count a
             // measurement can honestly report, since a running test always counts itself.
             if (orchestration is not { ConcurrentTestCount: >= 1 })
+            {
+                unmeasured++;
                 continue;
+            }
 
             considered.Add(new Measured(reference, orchestration.ConcurrentTestCount));
         }
 
-        return considered;
+        return new Population(considered, environmental, unmeasured);
     }
 
     /// <summary>
@@ -628,4 +660,15 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
     /// <param name="Reference">The execution and the session it belongs to.</param>
     /// <param name="Concurrency">Tests in flight alongside it, itself included.</param>
     private sealed record Measured(ExecutionRef Reference, int Concurrency);
+
+    /// <summary>
+    /// The executions a test can be measured on, with what was left out of them and why.
+    /// </summary>
+    /// <param name="Considered">Executions that could be placed at a level, in a stable order.</param>
+    /// <param name="DiscountedEnvironmental">Executions whose run looked like a broken machine.</param>
+    /// <param name="ExecutionsWithoutConcurrency">Executions whose adapter recorded no level.</param>
+    private sealed record Population(
+        List<Measured> Considered,
+        int DiscountedEnvironmental,
+        int ExecutionsWithoutConcurrency);
 }

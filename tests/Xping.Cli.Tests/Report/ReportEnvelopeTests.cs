@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using Xping.Cli.Commands;
+using Xping.Cli.Report.Model;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -103,7 +104,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.11", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.12", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -144,6 +145,10 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal("low", finding.GetProperty("severity").GetString());
         Assert.Equal("low", finding.GetProperty("evidenceLevel").GetString());
 
+        // Which executions the counts below were taken over. Vanished counts session appearances, so
+        // it discounts nothing — and says so rather than leaving the reader to infer it.
+        Assert.Equal("allExecutions", finding.GetProperty("population").GetString());
+
         JsonElement subject = finding.GetProperty("subject");
         Assert.Equal("test", subject.GetProperty("type").GetString());
         Assert.Equal("fp-Removed0", subject.GetProperty("fingerprint").GetString());
@@ -158,6 +163,23 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.NotEqual(
             JsonValueKind.Null, finding.GetProperty("evidence").ValueKind);
         Assert.False(string.IsNullOrEmpty(finding.GetProperty("drillDown").GetString()));
+    }
+
+    [Fact]
+    public void EveryKindRecordsWhichPopulationItsRatesAreTakenOver()
+    {
+        // The report ranks kinds against each other and they do not all count the same executions,
+        // so a kind with no rule recorded would publish a rate a reader cannot place. Exhaustive by
+        // construction: a kind added to the enum without a decision throws here rather than quietly
+        // claiming it counted everything.
+        foreach (FindingKind kind in Enum.GetValues<FindingKind>())
+            Assert.True(Enum.IsDefined(PopulationRules.For(kind)));
+
+        // And the three arms are all reachable, so the marker actually distinguishes findings rather
+        // than printing one word on every line.
+        Assert.Equal(
+            3,
+            Enum.GetValues<FindingKind>().Select(PopulationRules.For).Distinct().Count());
     }
 
     [Fact]
@@ -265,7 +287,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.11", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.12", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

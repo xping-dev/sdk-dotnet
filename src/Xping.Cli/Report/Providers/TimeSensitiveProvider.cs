@@ -42,7 +42,11 @@ internal sealed record TimeExemplar(
 /// session and there is no second, execution-denominated count to publish alongside this one.
 /// </remarks>
 /// <param name="Failures">Runs in this arm that ended with the test failing.</param>
-/// <param name="Sessions">Runs in this arm, one per session.</param>
+/// <param name="Sessions">
+/// Runs in this arm, one per session — a count of the arm and never of the window. The arm is drawn
+/// from the runs this kind could be measured on, so the environmental and clockless ones counted
+/// beside the two arms are already gone from it.
+/// </param>
 /// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Sessions"/>.</param>
 /// <param name="DistinctFailureDates">
 /// Separate local calendar days this arm's <b>failures</b> fell on — the quantity the three-day gate
@@ -116,6 +120,17 @@ internal sealed record TimeSignificance(double PValue, int ComparisonsTried);
 /// </param>
 /// <param name="Exemplars">Up to three runs from the worse arm, newest first.</param>
 /// <param name="Contrast">One run typical of the other arm.</param>
+/// <param name="DiscountedEnvironmentalRuns">
+/// Runs of this test set aside because the run looked like a broken machine rather than a broken
+/// test.
+/// </param>
+/// <param name="RunsWithoutClock">
+/// Runs of this test dropped because the session recorded no UTC offset, so no local time could be
+/// read. Not a discount and not a judgement about the run — a measurement that could not be taken —
+/// but published for the same reason: the two arms below otherwise cannot be reconciled with how
+/// many runs the test appeared in, and a split over half a test's history reads exactly like one
+/// over all of it.
+/// </param>
 internal sealed record TimeSensitiveEvidence(
     string Axis,
     TimeArm Worse,
@@ -124,7 +139,9 @@ internal sealed record TimeSensitiveEvidence(
     TimeSignificance Significance,
     string TimeZoneId,
     IReadOnlyList<TimeExemplar> Exemplars,
-    TimeExemplar? Contrast) : FindingEvidence;
+    TimeExemplar? Contrast,
+    int DiscountedEnvironmentalRuns,
+    int RunsWithoutClock) : FindingEvidence;
 
 /// <summary>
 /// Reports tests whose failure rate depends on when they ran.
@@ -285,9 +302,10 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// Reads the local clock of every session that recorded one.
     /// </summary>
     /// <remarks>
-    /// Environmental sessions are dropped here rather than per test, for the reason §6 gives: an
-    /// outage lands in whichever bin its sessions occupy and manufactures a gap out of a bad
-    /// afternoon. Dropping them once also keeps every axis measuring the same population.
+    /// Environmental sessions are dropped here rather than per test, for the reason
+    /// <c>docs/internals/finding-populations.md</c> gives: an outage lands in whichever bin its
+    /// sessions occupy and manufactures a gap out of a bad afternoon. Dropping them once also keeps
+    /// every axis measuring the same population.
     /// </remarks>
     private static Dictionary<Guid, SessionClock> ClocksIn(AnalysisContext context)
     {
@@ -321,7 +339,8 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     private static Examination Examine(
         AnalysisContext context, Dictionary<Guid, SessionClock> clocks, string fingerprint)
     {
-        List<Measured> considered = Considered(context, clocks, fingerprint);
+        Population population = Considered(context, clocks, fingerprint);
+        List<Measured> considered = population.Considered;
 
         // Two arms' worth is the least that can be split at all, and checking here saves the axis
         // work for the overwhelming majority of tests.
@@ -381,7 +400,9 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
                 new TimeSignificance(FindingOrder.RoundProbability(best.PAdjusted), comparisons),
                 zone,
                 Exemplars(failures),
-                Contrast(best.Other)),
+                Contrast(best.Other),
+                population.DiscountedEnvironmentalRuns,
+                population.RunsWithoutClock),
 
             // The least gap the two arms support, rather than the gap they happened to show: five
             // sessions a side is the smallest split allowed and produces the largest observed
@@ -466,21 +487,46 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// <remarks>
     /// One entry per session, the deciding attempt, so <c>Reference.Failed</c> reads as "the test
     /// ended this session red" — the same verdict <see cref="SessionOutcomes"/> gives. A session
-    /// whose clock is unknown, or which was discounted as environmental, has no entry at all.
+    /// whose clock is unknown, or which was discounted as environmental, has no entry at all, and
+    /// the two are counted apart: one is the report setting a run aside, the other is a reading the
+    /// session never carried, and a run missing from the arms below could be either.
     /// </remarks>
-    private static List<Measured> Considered(
+    private static Population Considered(
         AnalysisContext context, Dictionary<Guid, SessionClock> clocks, string fingerprint)
     {
         List<Measured> considered = [];
+        int environmental = 0;
+        int withoutClock = 0;
 
         foreach (ExecutionRef reference in context.Tests.RunsOf(fingerprint))
         {
             if (clocks.TryGetValue(reference.Session.SessionId, out SessionClock? clock))
+            {
                 considered.Add(new Measured(reference, clock));
+            }
+            else if (context.SessionViewFor(reference.Session.SessionId)?.IsLikelyEnvironmental == true)
+            {
+                environmental++;
+            }
+            else
+            {
+                withoutClock++;
+            }
         }
 
-        return considered;
+        return new Population(considered, environmental, withoutClock);
     }
+
+    /// <summary>
+    /// The runs a test can be placed on a clock, with what was left out of them and why.
+    /// </summary>
+    /// <param name="Considered">Runs that could be placed on a clock, in a stable order.</param>
+    /// <param name="DiscountedEnvironmentalRuns">Runs whose session looked like a broken machine.</param>
+    /// <param name="RunsWithoutClock">Runs whose session recorded no UTC offset.</param>
+    private sealed record Population(
+        List<Measured> Considered,
+        int DiscountedEnvironmentalRuns,
+        int RunsWithoutClock);
 
     /// <summary>
     /// Gets the zone every considered run agrees on, or <see langword="null"/> when they do not.

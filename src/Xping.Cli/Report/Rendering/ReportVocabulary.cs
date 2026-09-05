@@ -61,6 +61,50 @@ internal static class ReportVocabulary
     };
 
     /// <summary>
+    /// Gets the short marker for the population a finding's counts were taken over.
+    /// </summary>
+    /// <param name="population">The rule, as the envelope spells it.</param>
+    /// <returns>The marker.</returns>
+    /// <remarks>
+    /// <para>
+    /// Every finding carries one, including the ones that discount nothing. A marker printed only
+    /// where something was set aside would leave a reader unable to tell "counted everything" from
+    /// "this build did not say", and the whole point of the column is that the answer is always on
+    /// the page.
+    /// </para>
+    /// <para>
+    /// Terse because it shares a line with the evidence level, the finding id and the source path,
+    /// inside a fence that must survive a phone. <see cref="PopulationLegend"/> is what makes the
+    /// markers readable, and it is printed once for the report rather than once per finding.
+    /// </para>
+    /// </remarks>
+    public static string PopulationTokenFor(string population) => population switch
+    {
+        "allExecutions" => "all runs",
+        "excludesEnvironmental" => "-env",
+        "excludesEnvironmentalAndClustered" => "-env-cluster",
+
+        // A rule added to the enum without a marker. Printing what the envelope said is worse than
+        // a word and far better than a blank segment.
+        _ => population
+    };
+
+    /// <summary>
+    /// The lines that say what the population markers mean.
+    /// </summary>
+    /// <remarks>
+    /// Two short lines rather than one long one, so the whole legend survives the same paste the
+    /// fence above it was shaped for. The last sentence is the reason the markers exist at all: the
+    /// report ranks kinds against each other, and a reader who compares two rates taken over
+    /// different populations gets a wrong answer from two correct numbers.
+    /// </remarks>
+    public static IReadOnlyList<string> PopulationLegend { get; } =
+    [
+        "rates: -env excludes environmental runs, -cluster excludes clustered",
+        "failures. Rates over different populations are not comparable."
+    ];
+
+    /// <summary>
     /// Gets the fixed-width marker for severity.
     /// </summary>
     /// <param name="severity">The severity, as the envelope spells it.</param>

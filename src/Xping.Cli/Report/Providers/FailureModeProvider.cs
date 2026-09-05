@@ -110,13 +110,27 @@ internal sealed record ClusterMember(string Fingerprint, string FullyQualifiedNa
 /// Evidence that a test fails sometimes, or fails in more than one way.
 /// </summary>
 /// <param name="Failures">Failures counted, after any discounting.</param>
-/// <param name="Executions">Executions they were counted against.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions they were counted against — not how many times the test ran. Add
+/// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
+/// that figure.
+/// </param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithFailures"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
-/// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
-/// <param name="DiscountedExecutions">
-/// Executions left out of the counts above: those from environmental sessions, and those belonging
-/// to a shared-failure cluster reported separately.
+/// <param name="FailureRate">
+/// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
+/// </param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their session looked like a broken machine rather than a broken
+/// test.
+/// </param>
+/// <param name="DiscountedClustered">
+/// Failures set aside because they belong to a shared-failure cluster, reported once against the
+/// cluster instead.
 /// </param>
 /// <param name="DistinctSignatureCount">Distinct ways it failed.</param>
 /// <param name="DistinctSignatures">Those ways, most frequent first.</param>
@@ -124,11 +138,12 @@ internal sealed record ClusterMember(string Fingerprint, string FullyQualifiedNa
 /// <param name="Contrast">One execution that did not fail, or null when it never passed.</param>
 internal sealed record FlakyEvidence(
     int Failures,
-    int Executions,
-    int Sessions,
+    int ExecutionsConsidered,
+    int SessionsConsidered,
     int SessionsWithFailures,
     double FailureRate,
-    int DiscountedExecutions,
+    int DiscountedEnvironmental,
+    int DiscountedClustered,
     int DistinctSignatureCount,
     IReadOnlyList<SignatureView> DistinctSignatures,
     IReadOnlyList<FailureExemplar> Exemplars,
@@ -138,11 +153,28 @@ internal sealed record FlakyEvidence(
 /// Evidence that a test fails almost every time, and mostly in one way.
 /// </summary>
 /// <param name="Failures">Failures counted, after any discounting.</param>
-/// <param name="Executions">Executions they were counted against.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions they were counted against — not how many times the test ran. Add
+/// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
+/// that figure.
+/// </param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithFailures"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
-/// <param name="FailureRate"><paramref name="Failures"/> over <paramref name="Executions"/>.</param>
-/// <param name="DiscountedExecutions">Executions left out of the counts above.</param>
+/// <param name="FailureRate">
+/// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
+/// </param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their session looked like a broken machine rather than a broken
+/// test.
+/// </param>
+/// <param name="DiscountedClustered">
+/// Failures set aside because they belong to a shared-failure cluster, reported once against the
+/// cluster instead.
+/// </param>
 /// <param name="Signature">The dominant way it fails.</param>
 /// <param name="ModalSignatureShare">
 /// The share of <paramref name="Failures"/> that failed the way <paramref name="Signature"/>
@@ -153,11 +185,12 @@ internal sealed record FlakyEvidence(
 /// <param name="Contrast">The execution that did not fail, when there was one.</param>
 internal sealed record AlwaysFailingEvidence(
     int Failures,
-    int Executions,
-    int Sessions,
+    int ExecutionsConsidered,
+    int SessionsConsidered,
     int SessionsWithFailures,
     double FailureRate,
-    int DiscountedExecutions,
+    int DiscountedEnvironmental,
+    int DiscountedClustered,
     SignatureView Signature,
     double ModalSignatureShare,
     IReadOnlyList<FailureExemplar> Exemplars,
@@ -168,12 +201,29 @@ internal sealed record AlwaysFailingEvidence(
 /// </summary>
 /// <param name="Timeouts">Executions that timed out, after any discounting.</param>
 /// <param name="Failures">All failures counted, timeouts included.</param>
-/// <param name="Executions">Executions they were counted against.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions they were counted against — not how many times the test ran. Add
+/// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
+/// that figure.
+/// </param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithTimeouts"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithTimeouts">Sessions this test timed out in.</param>
-/// <param name="TimeoutRate"><paramref name="Timeouts"/> over <paramref name="Executions"/>.</param>
+/// <param name="TimeoutRate">
+/// <paramref name="Timeouts"/> over <paramref name="ExecutionsConsidered"/>.
+/// </param>
 /// <param name="TimeoutShareOfFailures"><paramref name="Timeouts"/> over <paramref name="Failures"/>.</param>
-/// <param name="DiscountedExecutions">Executions left out of the counts above.</param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their session looked like a broken machine rather than a broken
+/// test.
+/// </param>
+/// <param name="DiscountedClustered">
+/// Failures set aside because they belong to a shared-failure cluster, reported once against the
+/// cluster instead.
+/// </param>
 /// <param name="DeclaredBudgetMs">
 /// The timeout the test declared for itself, or null when it declared none — which means the limit
 /// it hit came from a suite-wide or runner-level setting this report cannot see.
@@ -188,12 +238,13 @@ internal sealed record AlwaysFailingEvidence(
 internal sealed record TimingOutEvidence(
     int Timeouts,
     int Failures,
-    int Executions,
-    int Sessions,
+    int ExecutionsConsidered,
+    int SessionsConsidered,
     int SessionsWithTimeouts,
     double TimeoutRate,
     double TimeoutShareOfFailures,
-    int DiscountedExecutions,
+    int DiscountedEnvironmental,
+    int DiscountedClustered,
     long? DeclaredBudgetMs,
     IReadOnlyList<long> ObservedDurationsMs,
     IReadOnlyList<FailureExemplar> Exemplars,
@@ -540,14 +591,23 @@ internal sealed class FailureModeProvider : IFindingProvider
         IReadOnlyList<ExecutionRef> all = context.Tests.ExecutionsOf(fingerprint);
 
         List<ExecutionRef> considered = [];
-        int discounted = 0;
+        int environmental = 0;
+        int clusteredOut = 0;
 
         foreach (ExecutionRef reference in all)
         {
-            if (IsDiscounted(context, reference, clustered))
-                discounted++;
-            else
-                considered.Add(reference);
+            switch (DiscountFor(context, reference, clustered))
+            {
+                case Discount.Environmental:
+                    environmental++;
+                    break;
+                case Discount.Clustered:
+                    clusteredOut++;
+                    break;
+                default:
+                    considered.Add(reference);
+                    break;
+            }
         }
 
         if (considered.Count == 0)
@@ -562,6 +622,15 @@ internal sealed class FailureModeProvider : IFindingProvider
             return null;
 
         double failureRate = (double)failures.Count / considered.Count;
+
+        // The runs the session counts below are taken out of. Environmental runs are gone from the
+        // numerator — every count here is over `considered` — so leaving them in the denominator
+        // would understate how much of the window this test spoiled, which is the same mistake
+        // discounting the numerator alone would make one line further up.
+        //
+        // Clustered failures do not shorten it. They remove a failure, not a run: the test still ran
+        // in that session and still did not fail on its own account there.
+        int sessionsConsidered = context.Window.SessionCount - context.EnvironmentalSessionCount;
 
         List<SignatureView> signatures = DistinctSignatures(context, fingerprint, failures);
 
@@ -591,7 +660,15 @@ internal sealed class FailureModeProvider : IFindingProvider
         if (timeouts.Count > 0 &&
             (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
         {
-            return TimingOut(context, test, considered, failures, timeouts, discounted);
+            return TimingOut(
+                context,
+                test,
+                considered,
+                failures,
+                timeouts,
+                sessionsConsidered,
+                environmental,
+                clusteredOut);
         }
 
         // Modal rather than sole. Failure modes are compared by exact hash over the exception type,
@@ -619,10 +696,11 @@ internal sealed class FailureModeProvider : IFindingProvider
                 new AlwaysFailingEvidence(
                     failures.Count,
                     considered.Count,
-                    context.Window.SessionCount,
+                    sessionsConsidered,
                     sessionsWithFailures,
                     FindingOrder.Round(failureRate),
-                    discounted,
+                    environmental,
+                    clusteredOut,
                     modal,
                     FindingOrder.Round(modalShare),
                     exemplars,
@@ -647,10 +725,11 @@ internal sealed class FailureModeProvider : IFindingProvider
             new FlakyEvidence(
                 failures.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                sessionsConsidered,
                 sessionsWithFailures,
                 FindingOrder.Round(failureRate),
-                discounted,
+                environmental,
+                clusteredOut,
                 signatures.Count,
                 signatures,
                 exemplars,
@@ -712,7 +791,9 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> considered,
         List<ExecutionRef> failures,
         List<ExecutionRef> timeouts,
-        int discounted)
+        int sessionsConsidered,
+        int environmental,
+        int clusteredOut)
     {
         double timeoutRate = (double)timeouts.Count / considered.Count;
 
@@ -740,11 +821,12 @@ internal sealed class FailureModeProvider : IFindingProvider
                 timeouts.Count,
                 failures.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                sessionsConsidered,
                 sessionsWithTimeouts,
                 FindingOrder.Round(timeoutRate),
                 FindingOrder.Round((double)timeouts.Count / failures.Count),
-                discounted,
+                environmental,
+                clusteredOut,
                 declaredBudgetMs,
                 [.. ordered.Select(t => (long)t.Execution.Duration.TotalMilliseconds)],
                 [.. ordered.Take(MaxExemplars).Select(t => ToExemplar(context, t))],
@@ -762,7 +844,29 @@ internal sealed class FailureModeProvider : IFindingProvider
     }
 
     /// <summary>
-    /// Returns whether an execution is left out of a test's own failure rate.
+    /// Why an execution is left out of a test's own failure rate, or that it is not.
+    /// </summary>
+    /// <remarks>
+    /// The two reasons are unrelated, and a reader chasing a surprising rate needs to know which one
+    /// narrowed it: an environmental discount says the machine was having a bad afternoon, and a
+    /// clustered one says the failure is already reported elsewhere under a cause of its own.
+    /// Summing them into one number, as this used to, makes the two indistinguishable at exactly the
+    /// moment the distinction matters.
+    /// </remarks>
+    private enum Discount
+    {
+        /// <summary>The execution is counted.</summary>
+        None,
+
+        /// <summary>Its session looked like a broken machine rather than a broken test.</summary>
+        Environmental,
+
+        /// <summary>It is a failure belonging to a cluster reported separately.</summary>
+        Clustered
+    }
+
+    /// <summary>
+    /// Returns why an execution is left out of a test's own failure rate, or that it is not.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -775,19 +879,27 @@ internal sealed class FailureModeProvider : IFindingProvider
     /// test. A failure belonging to a shared cluster is already reported once, against the cluster;
     /// counting it again here is what turns one cause into forty findings.
     /// </para>
+    /// <para>
+    /// The order is a precedence and not an accident: an execution can qualify for both, and it is
+    /// charged to the environment. Each execution is therefore counted exactly once, which is what
+    /// lets a reader add the two published discounts to the considered count and land on the number
+    /// of times the test actually ran — the arithmetic the evidence exists to make possible.
+    /// </para>
     /// </remarks>
-    private static bool IsDiscounted(
+    private static Discount DiscountFor(
         AnalysisContext context, ExecutionRef reference, HashSet<string> clustered)
     {
         if (context.SessionViewFor(reference.Session.SessionId)?.IsLikelyEnvironmental == true)
-            return true;
+            return Discount.Environmental;
 
         if (!reference.Failed)
-            return false;
+            return Discount.None;
 
         FailureSignature? signature = context.Signatures.Of(reference);
 
-        return signature != null && clustered.Contains(signature.Hash);
+        return signature != null && clustered.Contains(signature.Hash)
+            ? Discount.Clustered
+            : Discount.None;
     }
 
     private static List<SignatureView> DistinctSignatures(

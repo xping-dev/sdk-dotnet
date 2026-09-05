@@ -68,15 +68,16 @@ internal static class EvidenceHeadline
     {
         string headline =
             $"passed on retry {Times(e.MaskedOccurrences)} in " +
-            $"{e.SessionsWithMasking} of {Runs(e.Sessions)}, up to attempt {e.MaxAttemptObserved}";
+            $"{e.SessionsWithMasking} of {Runs(e.SessionsConsidered)}, up to attempt " +
+            $"{e.MaxAttemptObserved}";
 
         if (e.RetryWallClockMs > 0)
             headline += $", {Duration(e.RetryWallClockMs)} spent retrying";
 
         List<MetricDto> metrics =
         [
-            new("masked", $"{e.MaskedOccurrences} of {e.Executions} executions ({Percent(e.MaskedRate)})"),
-            new("runs affected", $"{e.SessionsWithMasking} of {e.Sessions}"),
+            new("masked", $"{e.MaskedOccurrences} of {e.ExecutionsConsidered} executions ({Percent(e.MaskedRate)})"),
+            new("runs affected", $"{e.SessionsWithMasking} of {e.SessionsConsidered}"),
             new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture)),
             new("time retrying", Duration(e.RetryWallClockMs))
         ];
@@ -207,11 +208,11 @@ internal static class EvidenceHeadline
             : $"{e.DistinctSignatureCount} failure modes";
 
         return (
-            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}) " +
-            $"in {e.SessionsWithFailures} of {Runs(e.Sessions)}, {modes}",
+            $"failed {e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)}) " +
+            $"in {e.SessionsWithFailures} of {Runs(e.SessionsConsidered)}, {modes}",
             [
-                new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
-                new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+                new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
+                new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
                 new("failure modes", e.DistinctSignatureCount.ToString(CultureInfo.InvariantCulture))
             ]);
     }
@@ -230,7 +231,7 @@ internal static class EvidenceHeadline
             : $"one dominant failure mode ({Percent(e.ModalSignatureShare)} of failures)";
 
         string headline =
-            $"failed {e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)}), {mode}";
+            $"failed {e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)}), {mode}";
 
         // Named only when the adapter recorded a type. An adapter that captures no failure detail is
         // not the same as a failure that had none, and inventing a name here would hide the gap.
@@ -239,8 +240,8 @@ internal static class EvidenceHeadline
 
         List<MetricDto> metrics =
         [
-            new("failed", $"{e.Failures} of {e.Executions} executions ({Percent(e.FailureRate)})"),
-            new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+            new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
+            new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
             new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
         ];
 
@@ -253,8 +254,8 @@ internal static class EvidenceHeadline
     private static (string, IReadOnlyList<MetricDto>) TimingOut(TimingOutEvidence e)
     {
         string headline =
-            $"timed out {e.Timeouts} of {e.Executions} executions ({Percent(e.TimeoutRate)}) " +
-            $"in {e.SessionsWithTimeouts} of {Runs(e.Sessions)}";
+            $"timed out {e.Timeouts} of {e.ExecutionsConsidered} executions ({Percent(e.TimeoutRate)}) " +
+            $"in {e.SessionsWithTimeouts} of {Runs(e.SessionsConsidered)}";
 
         // The budget beside the observed run is the whole reading. Stated only when the test declared
         // one: a limit that came from a suite-wide or runner-level setting is not in the session, and
@@ -266,8 +267,8 @@ internal static class EvidenceHeadline
 
         List<MetricDto> metrics =
         [
-            new("timed out", $"{e.Timeouts} of {e.Executions} executions ({Percent(e.TimeoutRate)})"),
-            new("runs affected", $"{e.SessionsWithTimeouts} of {e.Sessions}"),
+            new("timed out", $"{e.Timeouts} of {e.ExecutionsConsidered} executions ({Percent(e.TimeoutRate)})"),
+            new("runs affected", $"{e.SessionsWithTimeouts} of {e.SessionsConsidered}"),
             new("declared limit", e.DeclaredBudgetMs is { } ms ? Duration(ms) : "none declared by the test")
         ];
 
@@ -352,8 +353,8 @@ internal static class EvidenceHeadline
         $"(95% CI {Rate(e.Shift.RatioLow)}-{Multiple(e.Shift.RatioHigh)}), " +
         $"{Duration(e.Baseline.P50Ms)} -> {Duration(e.Current.P50Ms)} on the clock",
         [
-            new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.Executions} executions"),
-            new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.Executions} executions"),
+            new("baseline p50", $"{Duration(e.Baseline.P50Ms)} over {e.Baseline.ExecutionsConsidered} executions"),
+            new("current p50", $"{Duration(e.Current.P50Ms)} over {e.Current.ExecutionsConsidered} executions"),
             new("change", $"{Signed(e.Delta.P50Pct)} ({Signed(e.Delta.P50Ms)}ms)"),
             new(
                 "slowdown",
@@ -436,11 +437,11 @@ internal static class EvidenceHeadline
             [
                 new(
                     $"at concurrency {milder.Concurrency}",
-                    $"{milder.Failures} of {milder.Executions} executions " +
+                    $"{milder.Failures} of {milder.ExecutionsConsidered} executions " +
                     $"({Percent(milder.FailureRate)}) in {Runs(milder.Sessions)}"),
                 new(
                     $"at concurrency {worse.Concurrency}",
-                    $"{worse.Failures} of {worse.Executions} executions " +
+                    $"{worse.Failures} of {worse.ExecutionsConsidered} executions " +
                     $"({Percent(worse.FailureRate)}) in {Runs(worse.Sessions)}"),
                 new("trend", $"{direction}, tau {Rate(e.Trend.Tau)}"),
                 new("concurrency seen", $"{e.Observed.Min} to {e.Observed.Max}"),
@@ -481,7 +482,7 @@ internal static class EvidenceHeadline
 
                 double contribution =
                     (candidateWorse.FailureRate - candidateMilder.FailureRate) *
-                    levels[lower].Executions * levels[upper].Executions;
+                    levels[lower].ExecutionsConsidered * levels[upper].ExecutionsConsidered;
 
                 int width = levels[upper].Concurrency - levels[lower].Concurrency;
 
@@ -550,7 +551,7 @@ internal static class EvidenceHeadline
                 $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier runs " +
                 $"({Percent(e.BaselineRunRate)})"),
             new("absent from", $"the last {e.CurrentSessionCount} runs"),
-            new("executions", e.Executions.ToString(CultureInfo.InvariantCulture)),
+            new("executions", e.ExecutionsInWindow.ToString(CultureInfo.InvariantCulture)),
 
             // One-sided, and legitimately so: the kind only ever forms a table for a test already
             // absent, so the direction was fixed before the counts were.

@@ -101,7 +101,7 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(9, evidence.Timeouts);
         Assert.Equal(9, evidence.Failures);
-        Assert.Equal(10, evidence.Executions);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
         Assert.Equal(1.0, evidence.TimeoutShareOfFailures);
         Assert.Equal(500, evidence.DeclaredBudgetMs);
         Assert.Equal(9, evidence.ObservedDurationsMs.Count);
@@ -262,7 +262,7 @@ public sealed class FailureModeProviderTests
         var evidence = Assert.IsType<AlwaysFailingEvidence>(candidate.Evidence);
 
         Assert.Equal(9, evidence.Failures);
-        Assert.Equal(10, evidence.Executions);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
 
         // The published rate is the point estimate; the ranking term is its lower bound. Nine of
         // ten is 0.90 either way to a reader, and 0.60 against the other findings in the report.
@@ -750,8 +750,8 @@ public sealed class FailureModeProviderTests
 
         // One failure of its own, counted against the four runs that were not the cluster's.
         Assert.Equal(1, evidence.Failures);
-        Assert.Equal(4, evidence.Executions);
-        Assert.Equal(1, evidence.DiscountedExecutions);
+        Assert.Equal(4, evidence.ExecutionsConsidered);
+        Assert.Equal(1, evidence.DiscountedClustered);
         Assert.Equal(1, evidence.DistinctSignatureCount);
     }
 
@@ -848,6 +848,70 @@ public sealed class FailureModeProviderTests
             Single(candidates, FindingKind.SharedFailure).Evidence);
 
         Assert.Equal(12, evidence.MemberCount);
+    }
+
+    [Fact]
+    public void TheTwoDiscountsAreReportedApartAndAccountForEveryExecution()
+    {
+        // A test caught by both exclusions, which is the case that made one summed count useless:
+        // "3 discounted" says nothing about whether the rate was narrowed by a bad afternoon or by a
+        // cause already reported elsewhere, and a reader chasing a surprising rate has to know which.
+        //
+        // Six runs of a thirty-test suite. Alpha fails once on its own, once as part of a cluster,
+        // and once inside an outage. Only the first is Alpha's.
+        IEnumerable<TestExecution> Rest() =>
+            Enumerable.Range(0, 27).Select(i => Passing($"Fine{i}"));
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 3).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [Passing("Alpha"), Passing("Beta"), Passing("Gamma"), .. Rest()])),
+
+            TestSessionFactory.Session(
+                3,
+                [Failure("Alpha", "its own problem"), Passing("Beta"), Passing("Gamma"), .. Rest()]),
+
+            // Three of thirty: a cluster, and nowhere near wide enough to read as an outage.
+            TestSessionFactory.Session(
+                4,
+                [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma"), .. Rest()]),
+
+            // Twelve of thirty, each failing its own way: an outage, and not a cluster.
+            TestSessionFactory.Session(
+                5,
+                [
+                    Failure("Alpha"),
+                    Failure("Beta"),
+                    Failure("Gamma"),
+                    .. Enumerable.Range(0, 9).Select(i => Failure($"Fine{i}")),
+                    .. Enumerable.Range(9, 18).Select(i => Passing($"Fine{i}"))
+                ])
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        Assert.Equal(1, context.EnvironmentalSessionCount);
+
+        List<FindingCandidate> candidates =
+            [.. new FailureModeProvider().Analyze(context).Candidates];
+
+        var evidence = Assert.IsType<FlakyEvidence>(For(candidates, "Alpha").Evidence);
+
+        Assert.Equal(1, evidence.Failures);
+        Assert.Equal(4, evidence.ExecutionsConsidered);
+        Assert.Equal(1, evidence.DiscountedEnvironmental);
+        Assert.Equal(1, evidence.DiscountedClustered);
+
+        // The arithmetic the split exists to make possible: what the test actually ran, which is not
+        // the denominator the published rate is over.
+        Assert.Equal(
+            sessions.Length,
+            evidence.ExecutionsConsidered +
+            evidence.DiscountedEnvironmental +
+            evidence.DiscountedClustered);
+
+        Assert.Equal(0.25, evidence.FailureRate);
     }
 
     [Fact]
@@ -969,8 +1033,8 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(0.3, evidence.FailureRate);
         Assert.Equal(3, evidence.Failures);
-        Assert.Equal(10, evidence.Executions);
-        Assert.Equal(10, evidence.Sessions);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
+        Assert.Equal(10, evidence.SessionsConsidered);
         Assert.Equal(3, evidence.SessionsWithFailures);
     }
 

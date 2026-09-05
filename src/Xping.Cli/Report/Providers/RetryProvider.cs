@@ -100,11 +100,19 @@ internal sealed record RetryMaskedExemplar(
 /// Evidence that a test failed and passed on retry without ever failing a build.
 /// </summary>
 /// <param name="MaskedOccurrences">Executions that passed on an attempt after the first.</param>
-/// <param name="Executions">Executions of the test across the whole window.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions of the test in the window, after environmental runs were set aside — not how many
+/// times the test ran. Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
+/// </param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithMasking"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithMasking">Sessions in which masking happened.</param>
 /// <param name="MaskedRate">
-/// <paramref name="MaskedOccurrences"/> over <paramref name="Executions"/>, at published precision.
+/// <paramref name="MaskedOccurrences"/> over <paramref name="ExecutionsConsidered"/>, at published
+/// precision.
 /// </param>
 /// <param name="MaxAttemptObserved">The highest attempt number a masked pass arrived on.</param>
 /// <param name="Configuration">The retry configuration, as the attribute declared it.</param>
@@ -114,19 +122,23 @@ internal sealed record RetryMaskedExemplar(
 /// the first. A declared figure scaled by an observed count, not a measurement — the report cannot
 /// see whether the framework actually waited, and adding it to the wall clock would claim it could.
 /// </param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their run looked like a broken machine rather than a broken test.
+/// </param>
 /// <param name="LastMaskedAt">When masking last happened.</param>
 /// <param name="LastMaskedSha">The commit it last happened at, when known.</param>
 /// <param name="Exemplars">Up to three occurrences, newest first.</param>
 internal sealed record RetryMaskedEvidence(
     int MaskedOccurrences,
-    int Executions,
-    int Sessions,
+    int ExecutionsConsidered,
+    int SessionsConsidered,
     int SessionsWithMasking,
     double MaskedRate,
     int MaxAttemptObserved,
     RetryConfiguration Configuration,
     long RetryWallClockMs,
     long ConfiguredDelayTotalMs,
+    int DiscountedEnvironmental,
     DateTime LastMaskedAt,
     string? LastMaskedSha,
     IReadOnlyList<RetryMaskedExemplar> Exemplars) : FindingEvidence;
@@ -173,7 +185,7 @@ internal sealed record RetryDepthDelta(int Attempts, double AttemptsPct);
 /// Measured time the recent passing runs spent on attempts after the first.
 /// </param>
 /// <param name="ConfiguredDelayTotalMs">Declared waiting across the same attempts.</param>
-/// <param name="DiscountedRuns">Runs left out of both arms because the environment looked broken.</param>
+/// <param name="DiscountedEnvironmentalRuns">Runs left out of both arms because the environment looked broken.</param>
 /// <param name="FirstSeenAt">
 /// The commit of the oldest recent run this test passed in — where the change crosses from the
 /// baseline into "now". Null when that run recorded no commit, never fabricated.
@@ -187,7 +199,7 @@ internal sealed record RetryDeepeningEvidence(
     RetryConfiguration Configuration,
     long RetryWallClockMs,
     long ConfiguredDelayTotalMs,
-    int DiscountedRuns,
+    int DiscountedEnvironmentalRuns,
     string? FirstSeenAt,
     IReadOnlyList<RetryAttemptExemplar> Exemplars,
     RetryAttemptExemplar? Contrast) : FindingEvidence;
@@ -208,7 +220,10 @@ internal sealed record RetryDeepeningEvidence(
 /// Retried runs that settled green — the occasions the retry attribute earned its keep.
 /// </param>
 /// <param name="RunsConsidered">Runs of this test, after environmental runs were set aside.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside. Larger than
+/// <paramref name="RunsConsidered"/> by the runs this test did not appear in.
+/// </param>
 /// <param name="ExhaustedRate">
 /// <paramref name="ExhaustedRuns"/> over <paramref name="RetriedRuns"/>, at published precision —
 /// the share of the occasions retries were spent on which they did not help. It is the observed
@@ -242,7 +257,7 @@ internal sealed record RetryDeepeningEvidence(
 /// Measured time the exhausted runs spent on attempts after the first.
 /// </param>
 /// <param name="ConfiguredDelayTotalMs">Declared waiting across the same attempts.</param>
-/// <param name="DiscountedRuns">Runs left out because the environment looked broken.</param>
+/// <param name="DiscountedEnvironmentalRuns">Runs left out because the environment looked broken.</param>
 /// <param name="LastExhaustedAt">When the retries last ran out.</param>
 /// <param name="LastExhaustedSha">The commit that last happened at, when known.</param>
 /// <param name="Exemplars">Up to three exhausted runs, newest first.</param>
@@ -256,7 +271,7 @@ internal sealed record RetryExhaustedEvidence(
     int RetriedRuns,
     int RescuedRuns,
     int RunsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     double ExhaustedRate,
     double ExhaustedRateBound,
     int MaxAttemptObserved,
@@ -264,7 +279,7 @@ internal sealed record RetryExhaustedEvidence(
     RetryConfiguration Configuration,
     long RetryWallClockMs,
     long ConfiguredDelayTotalMs,
-    int DiscountedRuns,
+    int DiscountedEnvironmentalRuns,
     DateTime LastExhaustedAt,
     string? LastExhaustedSha,
     IReadOnlyList<RetryAttemptExemplar> Exemplars,
@@ -585,7 +600,7 @@ internal sealed class RetryProvider : IFindingProvider
                 retried.Count,
                 retried.Count - exhausted.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                context.Window.SessionCount - context.EnvironmentalSessionCount,
                 FindingOrder.Round(exhaustedShare),
                 FindingOrder.Round(exhaustedBound),
                 exhausted.Max(r => r.Attempts),
@@ -863,10 +878,13 @@ internal sealed class RetryProvider : IFindingProvider
     /// claim is that nobody has noticed.
     /// </para>
     /// <para>
-    /// Deliberately not sliced, and deliberately not discounted for environmental runs. Masking is a
-    /// standing property of the window rather than a change between two halves of it, and the
-    /// population is the one this kind shipped with — narrowing it here would move the numbers of an
-    /// already-published finding for a reason that belongs to the two kinds above it.
+    /// Deliberately not sliced: masking is a standing property of the window rather than a change
+    /// between two halves of it. Environmental runs are discounted all the same, for the reason
+    /// every other rate-publishing kind discounts them — a session where a third of the suite fell
+    /// over says something about the machine, and a retry that rescued a test on such an afternoon
+    /// is not evidence about the test. "Standing property" argues against slicing the window; it
+    /// argues nothing about which runs belong in it, which is why the two kinds this one is ordered
+    /// behind read the same property off the same discounted population.
     /// </para>
     /// </remarks>
     private static FindingCandidate? Masked(
@@ -875,17 +893,26 @@ internal sealed class RetryProvider : IFindingProvider
         IReadOnlyList<ExecutionRef> executions,
         List<RunAttempts> runs)
     {
-        List<ExecutionRef> masked = [.. executions.Where(IsMasked)];
-        if (masked.Count == 0)
-            return null;
-
         // Judged on the reduced runs, so this can never disagree with the shared index about whether
-        // a session ended red.
+        // a session ended red — and judged over every run, including the environmental ones the
+        // counts below set aside. The population decides what the rate is over; this decides whether
+        // the claim can be made at all, and the claim is that nobody has seen this test fail. A red
+        // build on a bad afternoon is still a red build somebody saw.
         foreach (RunAttempts run in runs)
         {
             if (run.FailedFinally)
                 return null;
         }
+
+        var discountedSessions = new HashSet<Guid>(
+            runs.Where(r => r.Discounted).Select(r => r.SessionId));
+
+        List<ExecutionRef> considered =
+            [.. executions.Where(e => !discountedSessions.Contains(e.Session.SessionId))];
+
+        List<ExecutionRef> masked = [.. considered.Where(IsMasked)];
+        if (masked.Count == 0)
+            return null;
 
         // Executions arrive newest-session-first, so the head is the most recent masking.
         ExecutionRef newest = masked[0];
@@ -893,7 +920,8 @@ internal sealed class RetryProvider : IFindingProvider
         return new FindingCandidate(
             FindingKind.RetryMasked,
             new FindingSubject.SingleTest(test),
-            MaskedEvidence(context, executions, masked, newest),
+            MaskedEvidence(
+                context, considered, masked, newest, executions.Count - considered.Count),
 
             // The share of this test's runs that needed a retry to look green. A test masked on one
             // run in twenty is a different proposition from one masked on every run, and the ratio
@@ -902,7 +930,7 @@ internal sealed class RetryProvider : IFindingProvider
             // Bounded below, because this kind emits on a single occurrence by design and a single
             // occurrence is exactly what a point estimate cannot rank honestly: one masked run in
             // one is 1.00. The bound puts it at 0.21 and leaves the well-evidenced cases above it.
-            Unreliability: WilsonInterval.LowerBound(masked.Count, executions.Count),
+            Unreliability: WilsonInterval.LowerBound(masked.Count, considered.Count),
 
             LastOccurrenceIn: newest.Session,
 
@@ -914,9 +942,10 @@ internal sealed class RetryProvider : IFindingProvider
 
     private static RetryMaskedEvidence MaskedEvidence(
         AnalysisContext context,
-        IReadOnlyList<ExecutionRef> executions,
+        List<ExecutionRef> executions,
         List<ExecutionRef> masked,
-        ExecutionRef newest)
+        ExecutionRef newest,
+        int discountedEnvironmental)
     {
         var maskedSessions = new HashSet<Guid>(masked.Select(m => m.Session.SessionId));
 
@@ -938,13 +967,14 @@ internal sealed class RetryProvider : IFindingProvider
         return new RetryMaskedEvidence(
             masked.Count,
             executions.Count,
-            context.Window.SessionCount,
+            context.Window.SessionCount - context.EnvironmentalSessionCount,
             maskedSessions.Count,
             FindingOrder.Round((double)masked.Count / executions.Count),
             masked.Max(AttemptOf),
             configuration,
             retryWallClockMs,
             configuration.ConfiguredDelayMs * attemptsSpent,
+            discountedEnvironmental,
             newest.Session.StartedAt,
             RevisionContext.ReadSha(newest.Session),
             MaskedExemplars(executions, masked));

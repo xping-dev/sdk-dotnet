@@ -70,6 +70,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         WriteFindings(builder, envelope);
 
         builder.AppendLine(Fence);
+
+        WriteLegend(builder, envelope);
         WriteFooter(builder, envelope);
 
         output.Write(builder.ToString());
@@ -210,9 +212,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         foreach (string line in Wrap(finding.Headline, FenceWidth - Indent))
             builder.Append(' ', Indent).AppendLine(line);
 
+        // Between the evidence level and the id: the two say how much to believe the finding and
+        // which finding it is, and which executions its rate was taken over belongs with the first.
         var trailer = new List<string>
         {
             $"evidence {finding.EvidenceLevel}",
+            ReportVocabulary.PopulationTokenFor(finding.Population),
             finding.Id
         };
 
@@ -234,14 +239,37 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
                 spent += part.Length + SeparatorWidth;
 
             // spent counts one separator per segment already in the list, which is exactly the
-            // number string.Join adds once the location makes a third — two separators for three
-            // segments — so the joined line lands on the budget rather than three columns over it.
+            // number string.Join adds once the location joins them: three segments here — evidence,
+            // population, id — is three separators for the four the join sees. So the joined line
+            // lands on the budget rather than three columns over it, whatever the segment count.
             if (FitPath(location, budget - spent) is { } fitted)
                 trailer.Add(fitted);
         }
 
         builder.Append(' ', Indent)
                .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), budget)));
+    }
+
+    /// <summary>
+    /// Writes the lines that say what the population markers on each finding mean.
+    /// </summary>
+    /// <remarks>
+    /// Below the fence, for the reason the truncation line is: it is about the report rather than
+    /// about any finding in it, and inside the fence it would spend three of the seventy-two columns
+    /// the findings need. Once for the whole report rather than once per finding — thirteen
+    /// footnotes saying the same thing is how a reader learns to skip the end of the block.
+    /// </remarks>
+    private void WriteLegend(StringBuilder builder, ReportEnvelope envelope)
+    {
+        // A report with nothing in it printed no markers, so there is nothing to explain. The empty
+        // report already says why it is empty, and a legend under it would be the only line there.
+        if (envelope.Findings.Count == 0)
+            return;
+
+        builder.AppendLine();
+
+        foreach (string line in ReportVocabulary.PopulationLegend)
+            builder.AppendLine(capabilities.Dim(line));
     }
 
     /// <summary>
