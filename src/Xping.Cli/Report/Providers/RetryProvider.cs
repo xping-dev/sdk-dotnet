@@ -211,9 +211,22 @@ internal sealed record RetryDeepeningEvidence(
 /// <param name="Sessions">Sessions in the window.</param>
 /// <param name="ExhaustedRate">
 /// <paramref name="ExhaustedRuns"/> over <paramref name="RetriedRuns"/>, at published precision —
-/// the share of the occasions retries were spent on which they did not help. This is the figure the
-/// threshold was applied to; it is not how unreliable the test is, which is measured against every
-/// run of it and is what the finding is ranked by.
+/// the share of the occasions retries were spent on which they did not help. It is the observed
+/// share and not the figure the threshold was applied to, which is
+/// <paramref name="ExhaustedRateBound"/>; nor is it how unreliable the test is, which is measured
+/// against every run of it and is what the finding is ranked by. Three figures, three questions,
+/// and the report publishes the two a reader can act on.
+/// </param>
+/// <param name="ExhaustedRateBound">
+/// The 95% Wilson lower bound of the same ratio, at published precision — the share of
+/// <paramref name="ExhaustedRate"/> the evidence behind it actually supports, and the figure the
+/// emission gate is thresholded on. Published so that the decision to report is reproducible from
+/// the evidence alone: without it, four exhausted runs in four and forty in forty are both a rate
+/// of 1.00 and nothing on the page separates them. It climbs towards
+/// <paramref name="ExhaustedRate"/> as retried runs accumulate, and reaches it at no finite number
+/// of them. Distinct from the bound the finding is ranked by, which is taken over
+/// <paramref name="RunsConsidered"/> rather than <paramref name="RetriedRuns"/> and answers how
+/// unreliable the test is rather than whether its retries work.
 /// </param>
 /// <param name="MaxAttemptObserved">
 /// The deepest attempt an exhausted run reached before giving up. Set beside
@@ -245,6 +258,7 @@ internal sealed record RetryExhaustedEvidence(
     int RunsConsidered,
     int Sessions,
     double ExhaustedRate,
+    double ExhaustedRateBound,
     int MaxAttemptObserved,
     int RetryAttemptsSpent,
     RetryConfiguration Configuration,
@@ -543,13 +557,13 @@ internal sealed class RetryProvider : IFindingProvider
         // Thresholded on the lower bound of the share rather than on the share itself. The claim is
         // that retries are not rescuing this test, which is a statement about the mechanism, and two
         // retried runs that both ran out is 1.00 of a denominator that cannot support it. The
-        // published rate below stays the point estimate: a reader wants "7 of 8", not "0.88".
+        // published rate below stays the point estimate — a reader wants "7 of 8", not "0.88" — and
+        // the bound is published beside it, so the gate's decision can be read off the evidence
+        // rather than inferred from a constant the reader does not have.
         double exhaustedShare = (double)exhausted.Count / retried.Count;
-        if (WilsonInterval.LowerBound(exhausted.Count, retried.Count) <
-            LocalAnalysisConstants.RetryExhaustedShareMin)
-        {
+        double exhaustedBound = WilsonInterval.LowerBound(exhausted.Count, retried.Count);
+        if (exhaustedBound < LocalAnalysisConstants.RetryExhaustedShareMin)
             return null;
-        }
 
         RunAttempts newest = exhausted[0];
 
@@ -573,6 +587,7 @@ internal sealed class RetryProvider : IFindingProvider
                 considered.Count,
                 context.Window.SessionCount,
                 FindingOrder.Round(exhaustedShare),
+                FindingOrder.Round(exhaustedBound),
                 exhausted.Max(r => r.Attempts),
                 attemptsSpent,
                 configuration,

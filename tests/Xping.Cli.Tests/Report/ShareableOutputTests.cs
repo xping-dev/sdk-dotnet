@@ -118,7 +118,7 @@ public sealed class ShareableOutputTests
 
             FindingKind.RetryExhausted =>
                 new RetryExhaustedEvidence(
-                    6, 7, 1, 20, 20, 0.857, 3, 12, configuration, 41_000, 3_000, 0,
+                    7, 8, 1, 20, 20, 0.875, 0.529, 3, 12, configuration, 41_000, 3_000, 0,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e",
                     [attemptExemplar], attemptExemplar),
 
@@ -413,7 +413,7 @@ public sealed class ShareableOutputTests
             FindingKind.RetryExhausted, EvidenceFor(FindingKind.RetryExhausted));
 
         Assert.Equal(
-            "gave up after 3 attempts in 6 of 7 retried runs (85.7%), 41s spent retrying",
+            "gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent retrying",
             exhausted);
     }
 

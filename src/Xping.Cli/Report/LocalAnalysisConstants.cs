@@ -243,20 +243,31 @@ internal static class LocalAnalysisConstants
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Deliberately the same figure as <see cref="TimingOutShareMin"/> and applied the same way.
-    /// Below half, the retries rescue the test more often than not and the attribute is earning its
+    /// Deliberately the same figure as <see cref="TimingOutShareMin"/>, and read the same way:
+    /// below half, the retries rescue the test more often than not and the attribute is earning its
     /// keep; reporting that as retries running out would point a reader at the mitigation when the
     /// problem is the test.
     /// </para>
     /// <para>
-    /// Applied the same way includes being compared against the 95% Wilson lower bound of the share
-    /// rather than the share itself, which is what supplies the denominator that
-    /// <see cref="RetryExhaustedMinRuns"/> cannot. The claim this kind makes is about a mechanism —
-    /// that retries are not rescuing this test — and two retried runs that both ran out is a point
-    /// estimate of 1.00 with nothing behind it. The bound rises towards the share as the runs
-    /// accumulate, so the shapes that clear it are four runs in four, seven in eight, ten in twelve
-    /// and fifteen in twenty — well above one half, and deliberately so while the denominator is
-    /// small. The published <c>ExhaustedRate</c> is unaffected.
+    /// The same figure, but <i>not</i> applied the same way. This one is compared against the 95%
+    /// Wilson lower bound of the share rather than the share itself, which is what supplies the
+    /// denominator that <see cref="RetryExhaustedMinRuns"/> cannot. The claim this kind makes is
+    /// about a mechanism — that retries are not rescuing this test — and two retried runs that both
+    /// ran out is a point estimate of 1.00 with nothing behind it. The bound rises towards the share
+    /// as the runs accumulate, so the shapes that clear it are four runs in four, seven in eight,
+    /// ten in twelve and fifteen in twenty — well above one half, and deliberately so while the
+    /// denominator is small.
+    /// </para>
+    /// <para>
+    /// <see cref="TimingOutShareMin"/> stays on the share itself, and the asymmetry is the point of
+    /// each gate rather than an inconsistency between them. This gate decides whether the reader is
+    /// told anything at all, so declining costs a line; that one decides which evidence describes a
+    /// test that is reported either way, so declining hands over the wrong page. Caution belongs on
+    /// opposite sides of the two lines.
+    /// </para>
+    /// <para>
+    /// The published <c>ExhaustedRate</c> is unaffected. The bound is published beside it as
+    /// <c>ExhaustedRateBound</c>, so this decision is reproducible from the evidence.
     /// </para>
     /// </remarks>
     public const double RetryExhaustedShareMin = 0.50;

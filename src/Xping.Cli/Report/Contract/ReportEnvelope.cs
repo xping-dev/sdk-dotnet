@@ -39,10 +39,11 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.10 is where the summary gained
-    /// <c>excludedNotSignificant</c>, the candidates a kind's multiplicity correction silenced.
+    /// leaving the number still would tell it nothing had moved. 1.11 is where
+    /// <c>RetryExhausted</c> evidence gained <c>exhaustedRateBound</c>, the Wilson lower bound its
+    /// emission gate is thresholded on, published beside the rate it prints.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.10";
+    public const string CurrentSchemaVersion = "1.11";
 }
 
 /// <summary>

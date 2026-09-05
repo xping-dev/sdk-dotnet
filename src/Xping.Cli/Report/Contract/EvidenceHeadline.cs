@@ -129,9 +129,17 @@ internal static class EvidenceHeadline
     /// Phrases a test whose retries ran out.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The declared limit is a metric and never the headline. It is the number the attribute wrote
     /// down, the frameworks disagree about what it counts, and putting it in the sentence would
     /// invite a reader to do the subtraction this report deliberately refuses to do.
+    /// </para>
+    /// <para>
+    /// The supported share is a metric and never the headline either, for the opposite reason: the
+    /// sentence states what happened, and how firmly it is known is the line beneath it. It is the
+    /// only kind that publishes one, because it is the only kind whose emission is decided on a
+    /// bound rather than on the figure it prints.
+    /// </para>
     /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) RetryExhausted(RetryExhaustedEvidence e)
     {
@@ -147,6 +155,9 @@ internal static class EvidenceHeadline
             new(
                 "gave up",
                 $"{e.ExhaustedRuns} of {e.RetriedRuns} retried runs ({Percent(e.ExhaustedRate)})"),
+            new(
+                "at least",
+                $"{Percent(e.ExhaustedRateBound)} of retried runs, 95% confidence"),
             new("rescued", $"{e.RescuedRuns} of {e.RetriedRuns}"),
             new("runs affected", $"{e.ExhaustedRuns} of {e.RunsConsidered}"),
             new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture)),

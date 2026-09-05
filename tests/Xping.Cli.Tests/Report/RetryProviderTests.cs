@@ -769,6 +769,37 @@ public sealed class RetryProviderTests
     }
 
     [Fact]
+    public void TheSupportedShareIsPublishedBesideTheObservedOne()
+    {
+        // Eight exhausted of nine retried. The rate is what happened; the bound is how much of it
+        // nine runs support, and it is the figure the gate was thresholded on. Publishing only the
+        // first leaves a reader unable to tell why a neighbouring test at a higher rate was
+        // declined.
+        RetryExhaustedEvidence evidence =
+            ExhaustedFrom(Retrying(sessions: 12, exhausted: 8, rescued: 1));
+
+        Assert.Equal(0.889, evidence.ExhaustedRate);
+        Assert.Equal(0.565, evidence.ExhaustedRateBound);
+        Assert.True(evidence.ExhaustedRateBound >= LocalAnalysisConstants.RetryExhaustedShareMin);
+    }
+
+    [Fact]
+    public void TheSupportedShareGrowsWithTheRunsBehindAnUnchangedRate()
+    {
+        // Every retried run gave up in both fixtures, so the published rate is 1.00 either way and
+        // says nothing about which finding rests on more. The bound is the figure that separates
+        // them, and the smallest reportable shape sits barely over the half the gate asks for.
+        RetryExhaustedEvidence four = ExhaustedFrom(Retrying(sessions: 8, exhausted: 4));
+        RetryExhaustedEvidence twelve = ExhaustedFrom(Retrying(sessions: 14, exhausted: 12));
+
+        Assert.Equal(1.0, four.ExhaustedRate);
+        Assert.Equal(1.0, twelve.ExhaustedRate);
+
+        Assert.Equal(0.51, four.ExhaustedRateBound);
+        Assert.True(twelve.ExhaustedRateBound > four.ExhaustedRateBound);
+    }
+
+    [Fact]
     public void TheDeepestAttemptIsPublishedBesideTheDeclaredLimit()
     {
         // Five attempts observed against a declared limit of two. Both are published and neither is

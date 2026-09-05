@@ -294,7 +294,7 @@ And once the retry budget stops covering it:
 
 ```
 HIGH  out of retries  ...Checkout_CompletesWithinTheServiceBudget
-      gave up after 3 attempts in 6 of 7 retried runs (86%), 41s spent
+      gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent
       retrying
 ```
 
