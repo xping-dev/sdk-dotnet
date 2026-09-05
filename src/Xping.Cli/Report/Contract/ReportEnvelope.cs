@@ -40,10 +40,11 @@ internal sealed record ReportEnvelope(
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
     /// leaving the number still would tell it nothing had moved. 1.12 is where every evidence
-    /// record renamed the field a rate is taken over — <c>executionsConsidered</c> where discounting
-    /// applied and <c>executionsInWindow</c> where it did not — split <c>discountedExecutions</c>
-    /// into its environmental and clustered halves, and where the finding gained
-    /// <c>population</c>, which says which of those two the numbers beside it describe.
+    /// record renamed the fields a rate is taken over — <c>executionsConsidered</c> and
+    /// <c>sessionsConsidered</c> where discounting applied, <c>executionsInWindow</c> and
+    /// <c>sessions</c> where it did not — split <c>discountedExecutions</c> into its environmental
+    /// and clustered halves, and where the finding gained <c>population</c>, which says which of
+    /// those the numbers beside it describe.
     /// </remarks>
     public const string CurrentSchemaVersion = "1.12";
 }

@@ -34,23 +34,29 @@ ten of the tests it ran — `SessionView.For`, against `EnvironmentalSessionFail
 enough tests to be reported once as a `SharedFailure` or `BrokenFixture`.
 
 The rule reaches the JSON envelope as `population` on every finding, and the rendered report as a
-marker in each finding's trailer — `all runs`, `-env`, `-env-cluster` — expanded by one legend line
-below the fence.
+marker in each finding's trailer — `all runs`, `-env`, `-env-cluster` — expanded by a two-line
+legend below the fence.
 
 ## What each kind publishes
 
 | kind | denominator | discounts published |
 |---|---|---|
-| `Flaky`, `AlwaysFailing`, `TimingOut` | `executionsConsidered` | `discountedEnvironmental`, `discountedClustered` |
-| `RetryMasked` | `executionsConsidered` | `discountedEnvironmental` |
+| `Flaky`, `AlwaysFailing`, `TimingOut` | `executionsConsidered`, `sessionsConsidered` | `discountedEnvironmental`, `discountedClustered` |
+| `RetryMasked` | `executionsConsidered`, `sessionsConsidered` | `discountedEnvironmental` |
 | `RetryDeepening` | `current.runs`, `baseline.runs` | `discountedEnvironmentalRuns` |
-| `RetryExhausted` | `runsConsidered`, `retriedRuns` | `discountedEnvironmentalRuns` |
+| `RetryExhausted` | `runsConsidered`, `retriedRuns`, `sessionsConsidered` | `discountedEnvironmentalRuns` |
 | `DurationRegression` | `current.executionsConsidered`, `baseline.executionsConsidered` | `discountedEnvironmental`, per slice |
-| `DurationUnstable` | `executionsConsidered` | `discountedEnvironmental` |
+| `DurationUnstable` | `executionsConsidered`, `sessionsConsidered` | `discountedEnvironmental` |
 | `ParallelSensitive` | `levels[].executionsConsidered` | `discountedEnvironmental`, `executionsWithoutConcurrency` |
 | `TimeSensitive` | `worse.sessions`, `other.sessions` | `discountedEnvironmentalRuns`, `runsWithoutClock` |
-| `SharedFailure`, `BrokenFixture` | `failures`, `sessionsAffected` | none — nothing is set aside |
+| `SharedFailure`, `BrokenFixture` | `failures`, `sessionsAffected`, `sessions` | none — nothing is set aside |
 | `Vanished` | `baselineSessionCount`, `currentSessionCount` | none — nothing is set aside |
+
+`sessions` is the window's run count and appears only on the kinds that discount nothing.
+Everywhere else it is `sessionsConsidered`, the analysed runs less the environmental ones — which
+is what "in 5 of 18 runs" has to be counted out of, because the numerator beside it already is.
+Publishing a considered numerator over a window denominator understates the finding in exactly the
+way discounting only the numerator would.
 
 The counts reconcile. For `Flaky`, `AlwaysFailing` and `TimingOut`:
 
@@ -58,6 +64,9 @@ The counts reconcile. For `Flaky`, `AlwaysFailing` and `TimingOut`:
 executionsConsidered + discountedEnvironmental + discountedClustered
     = the number of times the test ran in the window
 ```
+
+Clustered failures do not shorten `sessionsConsidered`: they remove a failure, not a run — the test
+still ran in that session and still did not fail there on its own account.
 
 An execution that qualifies for both discounts is charged to the environment, so the two never
 double-count. This is the arithmetic the field names exist to make possible: a test with twenty

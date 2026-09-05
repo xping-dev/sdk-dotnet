@@ -120,6 +120,55 @@ public sealed class TimeSensitiveProviderTests
     }
 
     [Fact]
+    public void BothArmsAndBothExclusionCountsAccountForEveryRun()
+    {
+        // Two runs vanish from the arms for unrelated reasons, and both were silent before this.
+        // One is the report setting a run aside as an outage; the other is a session that recorded
+        // no UTC offset, which is a reading the question cannot be asked of rather than a judgement
+        // about the run. A reader shown only "6 and 6" cannot tell a split over the whole window
+        // from one over most of it.
+        List<TestSession> sessions = TimeOfDay(eveningFailures: 6, morningFailures: 0);
+
+        // No offset recorded: an unreadable clock, not a discount.
+        sessions.Add(Session(sessions.Count, Local(11, 20), [Execution(sessions.Count, failed: true)], offset: null));
+
+        // Twelve of thirty-one down, on a clock the report can read perfectly well.
+        sessions.Add(Session(
+            sessions.Count,
+            Local(12, 20),
+            [
+                Execution(sessions.Count, failed: true),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    TestSessionFactory.Execution($"Fine{i}", TestOutcome.Failed, errorMessage: "down")),
+                .. Enumerable.Range(12, 18).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+            ],
+            Offset));
+
+        TimeSensitiveEvidence evidence = Assert.IsType<TimeSensitiveEvidence>(
+            Assert.Single(
+                Analyze(sessions),
+                c => c.Subject is FindingSubject.SingleTest test &&
+                     test.Test.DisplayName == Subject)
+                .Evidence);
+
+        // The arms are untouched: both dropped runs were evenings the subject failed in, and
+        // counting either would have strengthened the very gap being published.
+        Assert.Equal(6, evidence.Worse.Sessions);
+        Assert.Equal(6, evidence.Other.Sessions);
+
+        // Neither is interchangeable with the other, and neither is zero.
+        Assert.Equal(1, evidence.DiscountedEnvironmentalRuns);
+        Assert.Equal(1, evidence.RunsWithoutClock);
+
+        Assert.Equal(
+            sessions.Count,
+            evidence.Worse.Sessions +
+            evidence.Other.Sessions +
+            evidence.DiscountedEnvironmentalRuns +
+            evidence.RunsWithoutClock);
+    }
+
+    [Fact]
     public void TheEvidenceCountsTheDaysTheFailuresFellOnRatherThanTheArmsSpan()
     {
         // Eight evening runs across five local days, six of them red and those six falling on three

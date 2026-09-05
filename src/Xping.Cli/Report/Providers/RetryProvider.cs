@@ -104,7 +104,11 @@ internal sealed record RetryMaskedExemplar(
 /// Executions of the test in the window, after environmental runs were set aside — not how many
 /// times the test ran. Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
 /// </param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithMasking"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithMasking">Sessions in which masking happened.</param>
 /// <param name="MaskedRate">
 /// <paramref name="MaskedOccurrences"/> over <paramref name="ExecutionsConsidered"/>, at published
@@ -127,7 +131,7 @@ internal sealed record RetryMaskedExemplar(
 internal sealed record RetryMaskedEvidence(
     int MaskedOccurrences,
     int ExecutionsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     int SessionsWithMasking,
     double MaskedRate,
     int MaxAttemptObserved,
@@ -216,7 +220,10 @@ internal sealed record RetryDeepeningEvidence(
 /// Retried runs that settled green — the occasions the retry attribute earned its keep.
 /// </param>
 /// <param name="RunsConsidered">Runs of this test, after environmental runs were set aside.</param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside. Larger than
+/// <paramref name="RunsConsidered"/> by the runs this test did not appear in.
+/// </param>
 /// <param name="ExhaustedRate">
 /// <paramref name="ExhaustedRuns"/> over <paramref name="RetriedRuns"/>, at published precision —
 /// the share of the occasions retries were spent on which they did not help. It is the observed
@@ -264,7 +271,7 @@ internal sealed record RetryExhaustedEvidence(
     int RetriedRuns,
     int RescuedRuns,
     int RunsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     double ExhaustedRate,
     double ExhaustedRateBound,
     int MaxAttemptObserved,
@@ -593,7 +600,7 @@ internal sealed class RetryProvider : IFindingProvider
                 retried.Count,
                 retried.Count - exhausted.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                context.Window.SessionCount - context.EnvironmentalSessionCount,
                 FindingOrder.Round(exhaustedShare),
                 FindingOrder.Round(exhaustedBound),
                 exhausted.Max(r => r.Attempts),
@@ -960,7 +967,7 @@ internal sealed class RetryProvider : IFindingProvider
         return new RetryMaskedEvidence(
             masked.Count,
             executions.Count,
-            context.Window.SessionCount,
+            context.Window.SessionCount - context.EnvironmentalSessionCount,
             maskedSessions.Count,
             FindingOrder.Round((double)masked.Count / executions.Count),
             masked.Max(AttemptOf),

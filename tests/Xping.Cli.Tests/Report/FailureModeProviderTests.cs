@@ -1034,7 +1034,7 @@ public sealed class FailureModeProviderTests
         Assert.Equal(0.3, evidence.FailureRate);
         Assert.Equal(3, evidence.Failures);
         Assert.Equal(10, evidence.ExecutionsConsidered);
-        Assert.Equal(10, evidence.Sessions);
+        Assert.Equal(10, evidence.SessionsConsidered);
         Assert.Equal(3, evidence.SessionsWithFailures);
     }
 

@@ -145,7 +145,10 @@ internal sealed record DurationRegressionEvidence(
 /// Executions across the whole window, after environmental runs were set aside — not how many times
 /// the test ran. Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
 /// </param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="DiscountedEnvironmental">
 /// Executions set aside because their run looked like a broken machine rather than a broken test.
 /// </param>
@@ -174,7 +177,7 @@ internal sealed record DurationRegressionEvidence(
 /// <param name="Exemplars">Up to three executions chosen to span the observed spread.</param>
 internal sealed record DurationUnstableEvidence(
     int ExecutionsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     int DiscountedEnvironmental,
     long P50Ms,
     long P95Ms,
@@ -640,7 +643,7 @@ internal sealed class DurationProvider : IFindingProvider
             new FindingSubject.SingleTest(test),
             new DurationUnstableEvidence(
                 whole.Executions,
-                context.Window.SessionCount,
+                context.Window.SessionCount - context.EnvironmentalSessionCount,
                 discountedEnvironmental,
                 RoundMs(whole.RawP50),
                 RoundMs(whole.RawP95),

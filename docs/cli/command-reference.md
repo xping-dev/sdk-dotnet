@@ -103,7 +103,7 @@ failures. Rates over different populations are not comparable.
 
 **The marker between the evidence level and the finding id says which executions the rate was taken over.** Kinds do not all count the same population: `flaky` sets aside runs where a third of the suite fell over *and* failures already reported as a shared cause, `slower` sets aside only the first, and `stopped running` sets aside neither. Two rates in the list are comparable only where their markers agree — which is why every finding carries one, including the ones that discount nothing.
 
-Only the top ten findings are shown by default. When some are withheld, one line follows the fence — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the fence.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
 
 Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
 

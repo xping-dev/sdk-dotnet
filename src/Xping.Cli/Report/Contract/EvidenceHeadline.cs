@@ -68,7 +68,8 @@ internal static class EvidenceHeadline
     {
         string headline =
             $"passed on retry {Times(e.MaskedOccurrences)} in " +
-            $"{e.SessionsWithMasking} of {Runs(e.Sessions)}, up to attempt {e.MaxAttemptObserved}";
+            $"{e.SessionsWithMasking} of {Runs(e.SessionsConsidered)}, up to attempt " +
+            $"{e.MaxAttemptObserved}";
 
         if (e.RetryWallClockMs > 0)
             headline += $", {Duration(e.RetryWallClockMs)} spent retrying";
@@ -76,7 +77,7 @@ internal static class EvidenceHeadline
         List<MetricDto> metrics =
         [
             new("masked", $"{e.MaskedOccurrences} of {e.ExecutionsConsidered} executions ({Percent(e.MaskedRate)})"),
-            new("runs affected", $"{e.SessionsWithMasking} of {e.Sessions}"),
+            new("runs affected", $"{e.SessionsWithMasking} of {e.SessionsConsidered}"),
             new("deepest attempt", e.MaxAttemptObserved.ToString(CultureInfo.InvariantCulture)),
             new("time retrying", Duration(e.RetryWallClockMs))
         ];
@@ -208,10 +209,10 @@ internal static class EvidenceHeadline
 
         return (
             $"failed {e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)}) " +
-            $"in {e.SessionsWithFailures} of {Runs(e.Sessions)}, {modes}",
+            $"in {e.SessionsWithFailures} of {Runs(e.SessionsConsidered)}, {modes}",
             [
                 new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
-                new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+                new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
                 new("failure modes", e.DistinctSignatureCount.ToString(CultureInfo.InvariantCulture))
             ]);
     }
@@ -240,7 +241,7 @@ internal static class EvidenceHeadline
         List<MetricDto> metrics =
         [
             new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
-            new("runs affected", $"{e.SessionsWithFailures} of {e.Sessions}"),
+            new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
             new("failure mode", e.Signature.ExceptionType ?? "not recorded by the adapter")
         ];
 
@@ -254,7 +255,7 @@ internal static class EvidenceHeadline
     {
         string headline =
             $"timed out {e.Timeouts} of {e.ExecutionsConsidered} executions ({Percent(e.TimeoutRate)}) " +
-            $"in {e.SessionsWithTimeouts} of {Runs(e.Sessions)}";
+            $"in {e.SessionsWithTimeouts} of {Runs(e.SessionsConsidered)}";
 
         // The budget beside the observed run is the whole reading. Stated only when the test declared
         // one: a limit that came from a suite-wide or runner-level setting is not in the session, and
@@ -267,7 +268,7 @@ internal static class EvidenceHeadline
         List<MetricDto> metrics =
         [
             new("timed out", $"{e.Timeouts} of {e.ExecutionsConsidered} executions ({Percent(e.TimeoutRate)})"),
-            new("runs affected", $"{e.SessionsWithTimeouts} of {e.Sessions}"),
+            new("runs affected", $"{e.SessionsWithTimeouts} of {e.SessionsConsidered}"),
             new("declared limit", e.DeclaredBudgetMs is { } ms ? Duration(ms) : "none declared by the test")
         ];
 

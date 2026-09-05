@@ -201,7 +201,7 @@ public sealed class DurationProviderTests
         var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
 
         Assert.Equal(10, evidence.ExecutionsConsidered);
-        Assert.Equal(10, evidence.Sessions);
+        Assert.Equal(10, evidence.SessionsConsidered);
         Assert.Equal(100, evidence.MinMs);
         Assert.Equal(300, evidence.MaxMs);
 

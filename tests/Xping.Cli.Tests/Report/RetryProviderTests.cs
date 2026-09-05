@@ -218,7 +218,7 @@ public sealed class RetryProviderTests
 
         Assert.Equal(3, evidence.MaskedOccurrences);
         Assert.Equal(6, evidence.ExecutionsConsidered);
-        Assert.Equal(6, evidence.Sessions);
+        Assert.Equal(6, evidence.SessionsConsidered);
         Assert.Equal(3, evidence.SessionsWithMasking);
         Assert.Equal(0.5, evidence.MaskedRate);
     }
@@ -268,7 +268,13 @@ public sealed class RetryProviderTests
         Assert.Equal(3, evidence.MaskedOccurrences);
         Assert.Equal(9, evidence.ExecutionsConsidered);
         Assert.Equal(2, evidence.DiscountedEnvironmental);
+
+        // The run fraction follows the same population as the rate. The outage is out of the
+        // numerator, so leaving it in the denominator would publish "3 of 7" for a test that was
+        // masked in four of the seven runs — understating it in exactly the way discounting only
+        // the numerator does.
         Assert.Equal(3, evidence.SessionsWithMasking);
+        Assert.Equal(6, evidence.SessionsConsidered);
 
         // 3 of 9 rather than the 4 of 11 the undiscounted window would have published.
         Assert.Equal(0.333, evidence.MaskedRate);
@@ -576,7 +582,7 @@ public sealed class RetryProviderTests
 
         Assert.Equal(3, evidence.MaskedOccurrences);
         Assert.Equal(6, evidence.ExecutionsConsidered);
-        Assert.Equal(8, evidence.Sessions);
+        Assert.Equal(8, evidence.SessionsConsidered);
     }
 
     [Fact]
@@ -790,7 +796,7 @@ public sealed class RetryProviderTests
         Assert.Equal(8, evidence.RetriedRuns);
         Assert.Equal(1, evidence.RescuedRuns);
         Assert.Equal(12, evidence.RunsConsidered);
-        Assert.Equal(12, evidence.Sessions);
+        Assert.Equal(12, evidence.SessionsConsidered);
     }
 
     [Fact]

@@ -115,7 +115,11 @@ internal sealed record ClusterMember(string Fingerprint, string FullyQualifiedNa
 /// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
 /// that figure.
 /// </param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithFailures"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
 /// <param name="FailureRate">
 /// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
@@ -135,7 +139,7 @@ internal sealed record ClusterMember(string Fingerprint, string FullyQualifiedNa
 internal sealed record FlakyEvidence(
     int Failures,
     int ExecutionsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     int SessionsWithFailures,
     double FailureRate,
     int DiscountedEnvironmental,
@@ -154,7 +158,11 @@ internal sealed record FlakyEvidence(
 /// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
 /// that figure.
 /// </param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithFailures"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
 /// <param name="FailureRate">
 /// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
@@ -178,7 +186,7 @@ internal sealed record FlakyEvidence(
 internal sealed record AlwaysFailingEvidence(
     int Failures,
     int ExecutionsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     int SessionsWithFailures,
     double FailureRate,
     int DiscountedEnvironmental,
@@ -198,7 +206,11 @@ internal sealed record AlwaysFailingEvidence(
 /// <paramref name="DiscountedEnvironmental"/> and <paramref name="DiscountedClustered"/> to reach
 /// that figure.
 /// </param>
-/// <param name="Sessions">Sessions in the window.</param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside — the population
+/// <paramref name="SessionsWithTimeouts"/> is counted out of. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
 /// <param name="SessionsWithTimeouts">Sessions this test timed out in.</param>
 /// <param name="TimeoutRate">
 /// <paramref name="Timeouts"/> over <paramref name="ExecutionsConsidered"/>.
@@ -227,7 +239,7 @@ internal sealed record TimingOutEvidence(
     int Timeouts,
     int Failures,
     int ExecutionsConsidered,
-    int Sessions,
+    int SessionsConsidered,
     int SessionsWithTimeouts,
     double TimeoutRate,
     double TimeoutShareOfFailures,
@@ -611,6 +623,15 @@ internal sealed class FailureModeProvider : IFindingProvider
 
         double failureRate = (double)failures.Count / considered.Count;
 
+        // The runs the session counts below are taken out of. Environmental runs are gone from the
+        // numerator — every count here is over `considered` — so leaving them in the denominator
+        // would understate how much of the window this test spoiled, which is the same mistake
+        // discounting the numerator alone would make one line further up.
+        //
+        // Clustered failures do not shorten it. They remove a failure, not a run: the test still ran
+        // in that session and still did not fail on its own account there.
+        int sessionsConsidered = context.Window.SessionCount - context.EnvironmentalSessionCount;
+
         List<SignatureView> signatures = DistinctSignatures(context, fingerprint, failures);
 
         int sessionsWithFailures = failures.Select(f => f.Session.SessionId).Distinct().Count();
@@ -640,7 +661,14 @@ internal sealed class FailureModeProvider : IFindingProvider
             (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
         {
             return TimingOut(
-                context, test, considered, failures, timeouts, environmental, clusteredOut);
+                context,
+                test,
+                considered,
+                failures,
+                timeouts,
+                sessionsConsidered,
+                environmental,
+                clusteredOut);
         }
 
         // Modal rather than sole. Failure modes are compared by exact hash over the exception type,
@@ -668,7 +696,7 @@ internal sealed class FailureModeProvider : IFindingProvider
                 new AlwaysFailingEvidence(
                     failures.Count,
                     considered.Count,
-                    context.Window.SessionCount,
+                    sessionsConsidered,
                     sessionsWithFailures,
                     FindingOrder.Round(failureRate),
                     environmental,
@@ -697,7 +725,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             new FlakyEvidence(
                 failures.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                sessionsConsidered,
                 sessionsWithFailures,
                 FindingOrder.Round(failureRate),
                 environmental,
@@ -763,6 +791,7 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> considered,
         List<ExecutionRef> failures,
         List<ExecutionRef> timeouts,
+        int sessionsConsidered,
         int environmental,
         int clusteredOut)
     {
@@ -792,7 +821,7 @@ internal sealed class FailureModeProvider : IFindingProvider
                 timeouts.Count,
                 failures.Count,
                 considered.Count,
-                context.Window.SessionCount,
+                sessionsConsidered,
                 sessionsWithTimeouts,
                 FindingOrder.Round(timeoutRate),
                 FindingOrder.Round((double)timeouts.Count / failures.Count),

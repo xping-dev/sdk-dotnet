@@ -67,7 +67,7 @@ internal static class PopulationRules
     /// <returns>The rule.</returns>
     /// <remarks>
     /// <para>
-    /// The two <see cref="PopulationRule.AllExecutions"/> kinds are the argued exceptions.
+    /// The three <see cref="PopulationRule.AllExecutions"/> kinds are the argued exceptions.
     /// <see cref="FindingKind.SharedFailure"/> and <see cref="FindingKind.BrokenFixture"/> keep
     /// environmental sessions because a shared cause is precisely what an environmental session
     /// looks like from underneath, and discounting them would silence the finding that explains
