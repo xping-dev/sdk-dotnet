@@ -101,11 +101,48 @@ rates: -env excludes environmental runs, -cluster excludes clustered
 failures. Rates over different populations are not comparable.
 ````
 
-**The marker between the evidence level and the finding id says which executions the rate was taken over.** Kinds do not all count the same population: `flaky` sets aside runs where a third of the suite fell over *and* failures already reported as a shared cause, `slower` sets aside only the first, and `stopped running` sets aside neither. Two rates in the list are comparable only where their markers agree — which is why every finding carries one, including the ones that discount nothing.
+The `-env-cluster`, `-env` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
 The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
 
 Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
+
+### The population marker
+
+The marker between the evidence level and the finding id — `all runs`, `-env` or `-env-cluster` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
+
+| Marker | The rate is over |
+|---|---|
+| `all runs` | Every execution of the test in the window |
+| `-env` | Every execution **except** those from environmental runs |
+| `-env-cluster` | Every execution except those from environmental runs, and except failures already reported as a shared cause |
+
+**An environmental run** is a single run in which at least 10 tests failed *and* they were at least 30% of the tests it ran. Both bounds matter: the rate alone would condemn a five-test suite with two failures, and the count alone would condemn a thousand-test suite with ten unrelated ones. When that many tests fail at once they did not all break simultaneously — something underneath them did — so the run is set aside rather than counted against each test individually.
+
+**A clustered failure** is one whose signature is shared by at least three tests *in a single run*, which the report already publishes once as its own `shared failure` or `broken fixture` finding. Two tests failing alike is a coincidence; three at once is a cause. Counting it a second time against each test that was caught by it is what turns one cause into forty findings.
+
+**Why it is on the page.** The list is ranked, so it invites you to compare rates — and the comparison is only valid where the markers agree. The arithmetic is not small. A test that ran 20 times, was caught by a shared cause 10 times and failed twice on its own reports:
+
+```
+failed 2 of 12 executions (16.7%)
+```
+
+Not `2 of 22 (9.1%)`. Both are defensible and they answer different questions — "how often does this test fail on its own account" against "how often does this test fail" — but only the marker tells you which one you are reading. A `-env-cluster` finding at 16.7% beside an `all runs` finding at 12% is not the milder of the two.
+
+**The marker states the rule, not whether it fired.** A finding marked `-env-cluster` in a window with no outages and no clusters has had nothing removed from it, and its denominator is simply how many times the test ran. To see whether a rule actually bit, read the counts in the JSON evidence:
+
+```bash
+xping report --all --format json \
+  | jq '.findings[] | select(.population != "allExecutions")
+        | {kind, population, evidence: (.evidence | {
+            executionsConsidered, discountedEnvironmental, discountedClustered })}'
+```
+
+Those three add up to the number of times the test ran in the window, which is the figure `executionsConsidered` is *not*. `discountedEnvironmental` and `discountedClustered` are published apart because they are set aside for unrelated reasons, and a reader chasing a surprising rate needs to know which one narrowed it.
+
+The filter is there because an `all runs` finding carries no discount counts at all — there is nothing for it to report having set aside. Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, and `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on.
+
+Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them because an environmental run is still a run the test either was or was not in.
 
 ### Finding kinds
 
