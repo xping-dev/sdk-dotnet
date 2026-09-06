@@ -97,8 +97,9 @@ LOW   stopped running  LegacyImport.Roundtrip
       evidence moderate | all runs | f_1d77e3f5 | .../ImportTests.cs:41
 ```
 
-rates: -env excludes environmental runs, -cluster excludes clustered
-failures. Rates over different populations are not comparable.
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
 ````
 
 The `-env-cluster`, `-env` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.

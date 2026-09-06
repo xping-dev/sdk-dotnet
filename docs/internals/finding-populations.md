@@ -34,8 +34,10 @@ ten of the tests it ran — `SessionView.For`, against `EnvironmentalSessionFail
 enough tests to be reported once as a `SharedFailure` or `BrokenFixture`.
 
 The rule reaches the JSON envelope as `population` on every finding, and the rendered report as a
-marker in each finding's trailer — `all runs`, `-env`, `-env-cluster` — expanded by a two-line
-legend below the fence.
+marker in each finding's trailer — `all runs`, `-env`, `-env-cluster` — with a legend below the
+fence that states the comparison rule and links the definitions in `docs/cli/command-reference.md`.
+The legend deliberately does not define the markers: it could not do so in the space, and the only
+thing a reader has to do with one is decide whether two percentages can be compared.
 
 ## What each kind publishes
 
