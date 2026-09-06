@@ -482,6 +482,37 @@ public sealed class ShareableOutputTests
     }
 
     [Fact]
+    public void TheLegendStatesTheRuleAndPointsAtTheDefinitions()
+    {
+        // The legend cannot define three markers in the space it has — the wording it replaced tried
+        // and explained one that is never printed alone while omitting another entirely. So it
+        // carries the only thing a reader has to act on, and a link for the rest. Pinned because a
+        // renderer test that reads PopulationLegend symbolically would pass against an empty legend
+        // or a dead link.
+        Assert.Contains(
+            "compare two only where the markers match",
+            string.Join(' ', ReportVocabulary.PopulationLegend),
+            StringComparison.Ordinal);
+
+        // The section this points at is `### The population marker` in
+        // docs/cli/command-reference.md. Renaming that heading moves the anchor and breaks this.
+        Assert.Equal(
+            "https://docs.xping.io/cli/command-reference.html#the-population-marker",
+            ReportVocabulary.PopulationLegend[^1]);
+
+        foreach (string line in ReportVocabulary.PopulationLegend)
+        {
+            // Outside the fence, so no assertion enforces this on the rendered report — but the
+            // legend is pasted wherever the block is, and a wrapped line there reads as badly as a
+            // wrapped line inside it.
+            Assert.True(line.Length <= FenceWidth, $"'{line}' is {line.Length} columns");
+
+            // Same rule the headlines keep: a report leaves for a terminal on a legacy code page.
+            Assert.All(line, c => Assert.InRange(c, ' ', '~'));
+        }
+    }
+
+    [Fact]
     public void AReportWithNothingInItPrintsNoLegend()
     {
         // Nothing printed a marker, so there is nothing to explain — and the empty report already

@@ -93,15 +93,30 @@ internal static class ReportVocabulary
     /// The lines that say what the population markers mean.
     /// </summary>
     /// <remarks>
-    /// Two short lines rather than one long one, so the whole legend survives the same paste the
-    /// fence above it was shaped for. The last sentence is the reason the markers exist at all: the
-    /// report ranks kinds against each other, and a reader who compares two rates taken over
-    /// different populations gets a wrong answer from two correct numbers.
+    /// <para>
+    /// States the rule and links the definitions, rather than trying to define each marker in the
+    /// space available. Defining them here is what the previous wording attempted and it could not
+    /// be done in two lines: it explained <c>-cluster</c>, which is never printed on its own, and
+    /// left <c>all runs</c> unexplained altogether. The one thing a reader has to do with a marker
+    /// is decide whether two percentages can be compared, and that needs no definitions at all.
+    /// </para>
+    /// <para>
+    /// Short lines rather than long ones, so the whole legend survives the same paste the fence
+    /// above it was shaped for. The URL is on a line of its own so that a terminal which turns it
+    /// into a link has a whole line to make one out of, and so a reader copying it does not take
+    /// half a sentence with it.
+    /// </para>
+    /// <para>
+    /// The middle sentence is the reason the markers exist at all: the report ranks kinds against
+    /// each other, and a reader who compares two rates taken over different populations gets a
+    /// wrong answer from two correct numbers.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<string> PopulationLegend { get; } =
     [
-        "rates: -env excludes environmental runs, -cluster excludes clustered",
-        "failures. Rates over different populations are not comparable."
+        "rates: the marker on each finding says which runs its percentage was",
+        "counted out of; compare two only where the markers match.",
+        "https://docs.xping.io/cli/command-reference.html#the-population-marker"
     ];
 
     /// <summary>
