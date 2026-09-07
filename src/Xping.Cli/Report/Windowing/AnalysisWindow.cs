@@ -89,13 +89,7 @@ internal sealed record AnalysisWindow(
         WindowResolution resolution,
         string? argument)
     {
-        // In a small window three sessions would be most of the history, leaving a baseline too thin
-        // to compare against. One session is a worse "now" but leaves a usable "before".
-        int sliceSize = sessions.Count < LocalAnalysisConstants.SmallWindowSessionCount
-            ? 1
-            : LocalAnalysisConstants.CurrentSliceSize;
-
-        sliceSize = Math.Min(sliceSize, sessions.Count);
+        int sliceSize = SliceSizeFor(sessions.Count);
 
         return new AnalysisWindow(
             sessions,
@@ -105,5 +99,30 @@ internal sealed record AnalysisWindow(
             argument,
             [.. sessions.Take(sliceSize)],
             [.. sessions.Skip(sliceSize)]);
+    }
+
+    /// <summary>
+    /// Returns how many of a run of sessions form the "now" side of a delta.
+    /// </summary>
+    /// <param name="sessionCount">Sessions available to split.</param>
+    /// <returns>The size of the current slice, never larger than what there is.</returns>
+    /// <remarks>
+    /// In a small window three sessions would be most of the history, leaving a baseline too thin to
+    /// compare against. One session is a worse "now" but leaves a usable "before".
+    /// <para>
+    /// Shared rather than inlined at the split, because a kind that re-slices over a subset of the
+    /// window has to narrow on the same rule or the two drift — one would call three sessions "now"
+    /// on a history the other had already decided was too short to have one. The only such kind is
+    /// <see cref="Providers.VanishedProvider"/>, which re-slices over the sessions that covered the
+    /// suite.
+    /// </para>
+    /// </remarks>
+    public static int SliceSizeFor(int sessionCount)
+    {
+        int sliceSize = sessionCount < LocalAnalysisConstants.SmallWindowSessionCount
+            ? 1
+            : LocalAnalysisConstants.CurrentSliceSize;
+
+        return Math.Min(sliceSize, sessionCount);
     }
 }

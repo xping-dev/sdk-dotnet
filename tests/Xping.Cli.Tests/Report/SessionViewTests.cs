@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Report;
 using Xping.Cli.Report.Indexes;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
@@ -118,4 +119,56 @@ public sealed class SessionViewTests
         Assert.Equal(0, view.FailureRate);
         Assert.False(view.IsLikelyEnvironmental);
     }
+
+    [Fact]
+    public void PartialityIsAPropertyOfTheWindowAndNotOfTheSession()
+    {
+        // The same run, measured twice. Six tests is the whole suite in one window and a tenth of it
+        // in another, and only the window can say which — which is why SessionView.For leaves the
+        // flag alone and AnalysisContext sets it.
+        TestSession small = TestSessionFactory.Session(1, [.. Names(6)]);
+
+        AnalysisContext alone = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(6)]), small);
+
+        AnalysisContext beside = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(60)]), small);
+
+        Assert.False(ViewOf(alone, small).IsPartial);
+        Assert.Equal(0, alone.PartialSessionCount);
+
+        Assert.True(ViewOf(beside, small).IsPartial);
+        Assert.Equal(1, beside.PartialSessionCount);
+    }
+
+    [Fact]
+    public void ARunCoveringExactlyHalfTheSuiteIsStillARunOfIt()
+    {
+        // The threshold is a floor the session has to fall below, not one it has to clear. Half is
+        // the last size that still counts, so the boundary is pinned rather than left to a rounding
+        // argument in a review.
+        TestSession half = TestSessionFactory.Session(1, [.. Names(5)]);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(10)]), half);
+
+        Assert.False(ViewOf(context, half).IsPartial);
+    }
+
+    [Fact]
+    public void AWindowInWhichNothingRanHasNoSuiteToBePartOf()
+    {
+        // Every session empty makes the anchor zero, and a share of zero is a division nobody wants
+        // to be surprised by.
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, []), TestSessionFactory.Session(1, []));
+
+        Assert.Equal(0, context.PartialSessionCount);
+    }
+
+    private static IEnumerable<string> Names(int count) =>
+        Enumerable.Range(0, count).Select(i => $"T{i:00}");
+
+    private static SessionView ViewOf(AnalysisContext context, TestSession session) =>
+        context.SessionViewFor(session.SessionId)!;
 }

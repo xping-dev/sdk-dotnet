@@ -4,6 +4,7 @@
  */
 
 using Xping.Cli.Report;
+using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Sdk.Core.Models;
@@ -290,5 +291,203 @@ public sealed class VanishedProviderTests
         Assert.Empty(result.FailedProviders);
         Assert.StartsWith("f_", finding.Id, StringComparison.Ordinal);
         Assert.Contains("--kind Vanished", finding.DrillDownCommand, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Builds a suite of <paramref name="suiteSize"/> tests, the newest sessions running only some.
+    /// </summary>
+    /// <param name="total">Sessions to build.</param>
+    /// <param name="filtered">How many of the newest sessions run a reduced set.</param>
+    /// <param name="suiteSize">Tests the full runs execute.</param>
+    /// <param name="selected">Tests the reduced runs execute.</param>
+    private static AnalysisContext Suite(int total, int filtered, int suiteSize, int selected)
+    {
+        string[] suite = [.. Enumerable.Range(0, suiteSize).Select(i => $"T{i:00}")];
+
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < total; i++)
+        {
+            // Ordinal 0 is the oldest, so the filtered runs are the last ones built.
+            bool reduced = i >= total - filtered;
+            sessions.Add(TestSessionFactory.Session(i, reduced ? suite[..selected] : suite));
+        }
+
+        return TestSessionFactory.Context([.. sessions]);
+    }
+
+    [Fact]
+    public void AFilteredRunIsNotASessionEveryUnselectedTestVanishedFrom()
+    {
+        // The defect, exactly as reported: seventeen full runs of a suite, then three runs under a
+        // `dotnet test --filter` naming one test. Every other test is absent from all three, ran in
+        // all seventeen, and scores p = 8.8e-4 — the best any twenty-run window can do. The absence
+        // is real and the conclusion is false: those runs never asked about the other sixteen.
+        Assert.Empty(Analyze(Suite(total: 20, filtered: 3, suiteSize: 17, selected: 1)));
+    }
+
+    [Fact]
+    public void TheFamilyIsTheQuestionsTheFullRunsCouldAnswer()
+    {
+        // Setting the filtered runs aside does not empty the family, and should not. Seventeen full
+        // runs remain, every test in the suite is still asked whether it stopped, and seventeen
+        // askings that answered no is what the Benjamini-Hochberg pass has to be charged for — the
+        // multiplicity is real even though none of it became a finding.
+        Assert.Equal(17, Family(Suite(total: 20, filtered: 3, suiteSize: 17, selected: 1)));
+    }
+
+    [Fact]
+    public void AWindowWithTooFewFullRunsToSplitAsksNothingAtAll()
+    {
+        // Where the filtered runs leave a single run covering the suite there is a "now" and no
+        // "before", so the kind returns an empty family rather than no candidates. The difference
+        // matters to the coordinator: a family of seventeen would tighten the bar for a comparison
+        // that was never actually made.
+        AnalysisContext context = Suite(total: 20, filtered: 19, suiteSize: 17, selected: 1);
+
+        Assert.Empty(Analyze(context));
+        Assert.Equal(0, Family(context));
+    }
+
+    [Fact]
+    public void ARunThatStillCoversTheSuiteIsNotSetAside()
+    {
+        // The control for the two above. Same shape, same denominators, but the last three runs
+        // execute the whole suite bar the one test that genuinely stopped — so the absence stands.
+        IReadOnlyList<FindingCandidate> candidates =
+            Analyze(Suite(total: 20, filtered: 3, suiteSize: 17, selected: 16));
+
+        FindingCandidate candidate = Assert.Single(candidates);
+        var evidence = Assert.IsType<VanishedEvidence>(candidate.Evidence);
+
+        Assert.Equal(0, evidence.PartialSessionsSetAside);
+        Assert.Equal(17, evidence.BaselineSessionCount);
+        Assert.Equal(3, evidence.CurrentSessionCount);
+    }
+
+    [Fact]
+    public void TheNowIsTheMostRecentRunsThatCoveredTheSuiteAndNotTheMostRecentRuns()
+    {
+        // A re-split, not a filter of the window's own slices. Three filtered runs sit at the head
+        // of this window; dropping them from a current slice of three would leave nothing to ask
+        // about and the kind would go silent. Taking the three most recent runs that covered the
+        // suite instead still finds the test that stopped before them.
+        string[] suite = ["A", "B", "C", "D"];
+
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < 17; i++)
+            sessions.Add(TestSessionFactory.Session(i, suite));          // 0-16: the whole suite
+        for (int i = 17; i < 20; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A", "B", "C"));  // 17-19: D has stopped
+        for (int i = 20; i < 23; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A"));            // 20-22: under a filter
+
+        FindingCandidate candidate = Assert.Single(
+            Analyze(TestSessionFactory.Context([.. sessions])));
+
+        var evidence = Assert.IsType<VanishedEvidence>(candidate.Evidence);
+
+        Assert.Equal(3, evidence.PartialSessionsSetAside);
+        Assert.Equal(3, evidence.CurrentSessionCount);
+        Assert.Equal(17, evidence.BaselineSessionCount);
+        Assert.Equal(17, evidence.BaselineSessions);
+    }
+
+    [Fact]
+    public void AFilteredBaselineIsNotAHabitTheTestFailedToKeep()
+    {
+        // The other half. Interleave the filtered runs through the baseline and a test that ran in
+        // every run that asked for it reads as a 5-of-17 occasional visitor, which is the one shape
+        // the p-value gate exists to decline. Counted over the runs that covered the suite it is
+        // 5 of 5, and the absence carries.
+        //
+        // Eight runs cover the suite, at every second ordinal; the five oldest of them run "F" and
+        // the three newest do not. The twelve between them name one test and are set aside, so the
+        // table is 5 of 5 against 3 — one deal in fifty-six — rather than 5 of 17 against 3.
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < 20; i++)
+        {
+            if (i % 2 != 0 || i > 14)
+                sessions.Add(TestSessionFactory.Session(i, "A"));
+            else if (i <= 8)
+                sessions.Add(TestSessionFactory.Session(i, "A", "B", "C", "D", "E", "F"));
+            else
+                sessions.Add(TestSessionFactory.Session(i, "A", "B", "C", "D", "E"));
+        }
+
+        FindingCandidate candidate = Assert.Single(
+            Analyze(TestSessionFactory.Context([.. sessions])));
+
+        Assert.Equal("fp-F", Assert.IsType<FindingSubject.SingleTest>(candidate.Subject).Test.TestFingerprint);
+
+        var evidence = Assert.IsType<VanishedEvidence>(candidate.Evidence);
+
+        Assert.Equal(5, evidence.BaselineSessions);
+        Assert.Equal(5, evidence.BaselineSessionCount);
+        Assert.Equal(3, evidence.CurrentSessionCount);
+        Assert.Equal(12, evidence.PartialSessionsSetAside);
+        Assert.Equal(1.0, evidence.BaselineRunRate);
+    }
+
+    [Fact]
+    public void TheEvidenceSaysHowManyRunsCoveredOnlyPartOfTheSuite()
+    {
+        // Otherwise the denominators are unexplainable: a reader who asked for twenty-three runs is
+        // being shown a claim about twenty, and nothing on the finding says which twenty or why.
+        string[] suite = ["A", "B", "C", "D"];
+
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < 17; i++)
+            sessions.Add(TestSessionFactory.Session(i, suite));
+        for (int i = 17; i < 20; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A", "B", "C"));
+        for (int i = 20; i < 23; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A"));
+
+        FindingCandidate candidate = Assert.Single(
+            Analyze(TestSessionFactory.Context([.. sessions])));
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(FindingKind.Vanished, candidate.Evidence);
+
+        // Both clauses, not just the first. "the last 3" and "the last 3 full runs" are different
+        // runs once anything has been set aside, and a headline is read a clause at a time.
+        Assert.Equal(
+            "ran in 17 of 17 earlier full runs, absent from the last 3 full runs",
+            headline);
+
+        Assert.Contains(
+            metrics,
+            m => m.Label == "set aside" && m.Value == "3 runs that covered part of the suite");
+    }
+
+    [Fact]
+    public void AnOrdinaryStoreIsNotToldAboutRunsItDoesNotHave()
+    {
+        // The qualification is earned, not standing. With nothing set aside there is nothing for
+        // the word "full" to distinguish the runs from, and the shorter sentence is the true one.
+        FindingCandidate candidate = Assert.Single(Analyze(Context(total: 20, presentIn: 17)));
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(FindingKind.Vanished, candidate.Evidence);
+
+        // Byte for byte the sentence this kind has always printed: with nothing set aside, "the
+        // last 3" can mean nothing but the last three runs.
+        Assert.Equal("ran in 17 of 17 earlier runs, absent from the last 3", headline);
+        Assert.DoesNotContain(metrics, m => m.Label == "set aside");
+    }
+
+    [Fact]
+    public void ADeletionOfMostOfASuiteIsNotReported()
+    {
+        // The cost of deciding this on counts, pinned rather than left to be discovered. Sixteen of
+        // seventeen tests removed and one kept is arithmetically indistinguishable from a filter
+        // selecting that one, so the report says nothing. Deliberate: the finding is capped at
+        // Severity.Low because a disappearance is usually something the developer just did, and the
+        // false positive it trades against arrives once per unselected test on every filtered run.
+        Assert.Empty(Analyze(Suite(total: 20, filtered: 3, suiteSize: 17, selected: 1)));
+
+        // A deletion that leaves most of the suite standing still reports, which is the case the
+        // kind is actually for.
+        Assert.Single(Analyze(Suite(total: 20, filtered: 3, suiteSize: 17, selected: 16)));
     }
 }

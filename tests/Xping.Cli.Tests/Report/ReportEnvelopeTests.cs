@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using Xping.Cli.Commands;
+using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
@@ -51,13 +52,34 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// <summary>
     /// Writes sessions in which several tests stop running, so the report has findings to rank.
     /// </summary>
+    /// <param name="vanishingTests">Tests that stop.</param>
+    /// <param name="total">Sessions to write.</param>
+    /// <param name="presentIn">How many of the oldest sessions run the vanishing tests.</param>
+    /// <remarks>
+    /// <para>
+    /// The suite is sized from <paramref name="vanishingTests"/> rather than fixed, because these
+    /// tests want findings and the kind is squeezed from both sides at once.
+    /// </para>
+    /// <para>
+    /// Too few stable tests and the later sessions drop below half the suite, which reads as runs
+    /// that covered part of it — see <see cref="LocalAnalysisConstants.PartialSessionShare"/> — and
+    /// a kind reading absence rightly declines them. Too many and the Benjamini-Hochberg pass, whose
+    /// bar is <see cref="LocalAnalysisConstants.FalseDiscoveryRate"/> times the discoveries over the
+    /// family, tightens past the 1/56 these eight sessions can produce. One more stable test than
+    /// vanishing ones sits comfortably inside both, at every count seeded here. <c>Vanished</c> is
+    /// only the most convenient finding to make several of; neither bound is what is under test.
+    /// </para>
+    /// </remarks>
     private static void SeedVanishing(int vanishingTests = 1, int total = 8, int presentIn = 5)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
 
         for (int i = 0; i < total; i++)
         {
-            var executions = new List<TestExecution> { TestSessionFactory.Execution("Stable") };
+            var executions = new List<TestExecution>();
+
+            for (int t = 0; t <= vanishingTests; t++)
+                executions.Add(TestSessionFactory.Execution($"Stable{t}"));
 
             if (i < presentIn)
             {
@@ -104,7 +126,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.12", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.13", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -238,10 +260,10 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement summary = RunJson().GetProperty("summary");
 
-        // Three distinct tests in the window; two vanished.
-        Assert.Equal(3, summary.GetProperty("tests").GetInt32());
+        // Five distinct tests in the window; two vanished.
+        Assert.Equal(5, summary.GetProperty("tests").GetInt32());
         Assert.Equal(2, summary.GetProperty("findings").GetInt32());
-        Assert.Equal(1, summary.GetProperty("healthy").GetInt32());
+        Assert.Equal(3, summary.GetProperty("healthy").GetInt32());
     }
 
     [Fact]
@@ -287,7 +309,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.12", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.13", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

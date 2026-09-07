@@ -536,27 +536,57 @@ internal static class EvidenceHeadline
     /// <param name="e">The evidence.</param>
     /// <returns>The headline and its metrics.</returns>
     /// <remarks>
+    /// <para>
     /// The headline carries the denominator and not the p-value, because here the denominator is the
     /// discriminating figure: "3 of 17" and "17 of 17" are visibly different claims to a reader
     /// skimming the fence, where the two arms of a split are not. The p-value is a metric, for the
     /// reader who opens the finding to check how much belief the sentence earned.
+    /// </para>
+    /// <para>
+    /// Both denominators count only the runs that covered the suite, so where any were set aside
+    /// both clauses say "full runs" and a metric says how many were left out. Both, because "the
+    /// last 3" and "the last 3 full runs" are not the same three runs once anything has been set
+    /// aside, and a clause that is only true given the one before it is the kind a reader pastes
+    /// into a chat window on its own. Qualified rather than worded that way always, because in a
+    /// store with no filtered runs there is nothing for the word to distinguish the runs from and
+    /// the shorter sentence is the true one. The wording cannot destabilise the finding's id, which
+    /// hashes the kind and the subject and nothing else — see <see cref="Model.FindingId"/>.
+    /// </para>
     /// </remarks>
-    private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e) =>
-    (
-        $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier runs, " +
-        $"absent from the last {e.CurrentSessionCount}",
+    private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e)
+    {
+        bool anySetAside = e.PartialSessionsSetAside > 0;
+        string runs = anySetAside ? "full runs" : "runs";
+
+        List<MetricDto> metrics =
         [
             new(
                 "ran in",
-                $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier runs " +
+                $"{e.BaselineSessions} of {e.BaselineSessionCount} earlier {runs} " +
                 $"({Percent(e.BaselineRunRate)})"),
-            new("absent from", $"the last {e.CurrentSessionCount} runs"),
+            new("absent from", $"the last {e.CurrentSessionCount} {runs}"),
             new("executions", e.ExecutionsInWindow.ToString(CultureInfo.InvariantCulture)),
 
             // One-sided, and legitimately so: the kind only ever forms a table for a test already
             // absent, so the direction was fixed before the counts were.
             new("significance", $"p {Probability(e.PValue)} one-sided")
-        ]);
+        ];
+
+        // Only where there were any. A "0 set aside" line on every finding in every ordinary store
+        // would be noise standing in for the absence of a caveat.
+        if (anySetAside)
+            metrics.Add(new("set aside", $"{Runs(e.PartialSessionsSetAside)} that covered part of the suite"));
+
+        // The trailing noun only where it discriminates. On an ordinary store "the last 3" can mean
+        // nothing but the last three runs, and the sentence is the one this kind has always printed.
+        string absence = anySetAside
+            ? $"absent from the last {e.CurrentSessionCount} {runs}"
+            : $"absent from the last {e.CurrentSessionCount}";
+
+        return (
+            $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier {runs}, {absence}",
+            metrics);
+    }
 
     private static string Times(int count) =>
         count == 1 ? "once" : $"{count.ToString(CultureInfo.InvariantCulture)} times";

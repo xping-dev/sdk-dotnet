@@ -238,6 +238,17 @@ it eases towards 0.632 as the history lengthens. On a window shorter than eight 
 slice narrows to a single run and one run's absence never reaches the bar, so the kind is silent
 there — see [known limitations](../known-limitations.md).
 
+It also asks only the runs that were in a position to answer. A run under a `dotnet test --filter`
+did not fail to see the tests it excluded; it never looked for them, and counting its silence makes
+every unselected test look deleted. A run whose distinct tests are under half those of the largest
+run in the window is therefore set aside, the rest are re-split into their own earlier and current
+runs, and the finding's denominators count only those — the sentence says `full runs` and a
+`set aside` metric gives the number left out. The summary line reports how many runs covered part of
+the suite. Only this kind sets them aside; every other kind still counts them in full, because a
+filtered run's outcomes are as true as any other run's. The cost is that a deletion removing more
+than half a suite is indistinguishable from a filter and is not reported — see
+[known limitations](../known-limitations.md).
+
 ### Finding ids
 
 The `f_…` on each finding is a short, stable identity for that finding — a hash of what the
@@ -328,7 +339,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
 
 ```json
 {
-  "schemaVersion": "1.12",
+  "schemaVersion": "1.13",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -337,7 +348,8 @@ Every finding carries a `headline` — the same sentence the rendered report pri
     "counts": { "high": 1, "medium": 2, "low": 0 },
     "healthy": 409,
     "excludedLowEvidence": 41,
-    "excludedNotSignificant": 6
+    "excludedNotSignificant": 6,
+    "partialSessions": 0
   },
   "findings": [
     {
