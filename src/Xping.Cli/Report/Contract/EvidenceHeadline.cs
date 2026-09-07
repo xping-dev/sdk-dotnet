@@ -367,7 +367,22 @@ internal static class EvidenceHeadline
             new(
                 "significance",
                 $"p {Probability(e.Shift.PValue)} one-sided, " +
-                $"{e.Current.ComparedSessions} recent runs against {e.Baseline.ComparedSessions}")
+                $"{e.Current.ComparedSessions} recent runs against {e.Baseline.ComparedSessions}"),
+
+            // Directly under the p-value, because it is the qualifier on it rather than another
+            // fact about the test. The comparison is calibrated by relabelling the pooled readings,
+            // which is exact where the two arms are equally dispersed and liberal where the recent
+            // slice is the wilder one -- so a reader who can see both spreads can see when a
+            // "slower" finding rests on a recent slice that was merely wilder, which is the whole
+            // of what #187 asks the report to say.
+            //
+            // Two numbers rather than their quotient. A steady baseline reads exactly zero -- a
+            // fast test quantised to the same millisecond in every run is the commonest shape here
+            // -- so the ratio would be undefined precisely where the comparison is most confident.
+            new(
+                "spread",
+                $"recent {Rate(e.Current.ComparedDispersion)} against " +
+                $"baseline {Rate(e.Baseline.ComparedDispersion)} over the compared runs")
         ]);
 
     private static (string, IReadOnlyList<MetricDto>) DurationUnstable(DurationUnstableEvidence e) =>

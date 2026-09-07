@@ -225,6 +225,10 @@ public sealed class BrunnerMunzelTests
         // nonparametric Behrens–Fisher problem has no exact finite-sample solution. It is pinned
         // here so that the number is a measurement in the suite rather than a claim in a comment,
         // and so that a later attempt at it has something to move.
+        //
+        // What was done about it instead: the caller publishes each arm's spread beside the p-value
+        // it decided on, so a reader meets the quantity this calibration is blind to rather than
+        // having to take the level on trust. DurationProviderTests has that end of it.
         ulong state = 20260902UL + (ulong)(baselineSigma * 100) + (ulong)(currentSigma * 1000);
 
         int rejected = 0;

@@ -396,6 +396,55 @@ exactly like one that needs one.
 
 ---
 
+### `DurationRegression` Is Calibrated On Two Arms That Spread Alike, And The Recent One Is Only Three Runs
+
+**Impact**: where a test's three most recent runs vary much more widely than its history does, it can
+be reported as `DurationRegression` — "slower" — when its typical duration has not moved. Read at
+one in a hundred, that happens on the order of two in a hundred where the recent runs spread twice as
+widely as the baseline, and six in a hundred where they spread four times as widely.
+
+**Reason**: the finding asks whether the recent runs are drawn from a slower distribution by
+comparing them against every way the runs could have been split between "recent" and "earlier". That
+comparison is exact when the two arms are equally dispersed. Brunner–Munzel's own null is weaker — it
+asks only that neither arm be slower, and lets the two differ in spread — and what carries the
+calibration to that weaker null holds only as the samples grow. The recent arm is three runs, which
+is not large enough for it to hold. Both arms centred so that neither is slower, seventeen earlier
+runs against three, read at one in a hundred:
+
+| how the two spreads compare | reported as slower |
+|---|---|
+| earlier runs four times as wide as the recent | 0.02% |
+| the two alike | 1.0% |
+| recent runs twice as wide as the earlier | 2.0% |
+| recent runs four times as wide as the earlier | 6.5% |
+
+The common direction is the safe one: a fortnight of history usually spreads more widely than three
+runs do, and there the finding is reported far *less* often than one in a hundred. The liberal
+direction is real but needs the recent runs to be much the wilder of the two.
+
+There is no fix available. This is the nonparametric Behrens–Fisher problem, which has no exact
+answer at any sample size, and three recent readings leave nothing approximate to fall back on.
+Requiring the confidence interval's lower end to clear the practical threshold reaches 1.9% and finds
+only half of all true twofold slowdowns, against 97% today, which is a worse report.
+
+**What the finding is really saying when this happens**: not nothing. The recent runs genuinely have
+changed — in how much they vary, rather than in how long they take. `DurationUnstable` is the finding
+that claim belongs to, and a regression suppresses it for the same test.
+
+**How to tell**: every `DurationRegression` publishes both arms' spread, over exactly the runs the
+comparison read, on the line under the p-value:
+
+```
+spread  recent 1.05 against baseline 0 over the compared runs
+```
+
+A recent figure much larger than the baseline one is the shape described above, and the number to
+weigh the "slower" claim against. In JSON they are `evidence.current.comparedDispersion` and
+`evidence.baseline.comparedDispersion`. Measured over four thousand windows of the six-in-a-hundred
+cell, 85% of the findings it wrongly produced published the recent arm as the wider one.
+
+---
+
 ---
 
 ## General Limitations
@@ -530,3 +579,4 @@ When reporting, please include:
 | 1.8.0   | Documented what `ParallelSensitive` now measures, and the duration confound it cannot correct |
 | 1.9.0   | Documented the run rate `Vanished` now requires, and the window size below which it is silent |
 | 1.10.0  | Documented how `Vanished` treats a run that covered part of the suite, and what that trade costs |
+| 1.11.0  | Documented what `DurationRegression`'s calibration is exact for, where it is not, and the two spreads published beside every such finding |

@@ -180,6 +180,18 @@ earlier ones and needs five earlier passing runs to compare against, so it stays
 history. A test can still be reported as both out of retries and flaky: those are different claims
 about the same red run, and they carry different ids.
 
+`DurationRegression` is a comparison of two samples, not of two numbers. The test's three most recent
+runs and the runs before them are each reduced to one duration per run — the median of that test's
+attempts there, over the run's own median, so a busy machine moves every test together and cancels —
+and the report asks whether the recent runs are drawn from a slower distribution or are doing what
+the test always did. The size of the change is published as a factor with the interval around it,
+`3.51x slower (95% CI 1.94-5.87x)`, because on three recent runs the interval is the more useful half
+of the sentence. A finding has to be both real and worth a morning: the factor must clear a half and
+a hundred milliseconds at the test's own speed, *and* the comparison must clear its bar. Where that
+comparison's bar holds and where it does not — the recent slice being only three runs — is in
+[known limitations](../known-limitations.md); both arms publish the spread of the runs they were
+measured over so the answer is visible on the finding itself.
+
 `TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
 and — when the window contains two UTC offsets for one time zone, which is what a daylight-saving
 change looks like — one side of the change against the other. Each side is counted in runs rather
@@ -348,7 +360,7 @@ means "no finding was raised" rather than "checked and fine":
 
 ```json
 {
-  "schemaVersion": "1.15",
+  "schemaVersion": "1.16",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
