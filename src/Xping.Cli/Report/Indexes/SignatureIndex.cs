@@ -34,6 +34,11 @@ internal sealed record SignatureOccurrence(
 /// <param name="Signature">The signature, readable components and all.</param>
 /// <param name="Fingerprints">Distinct tests that failed with it, in ordinal order.</param>
 /// <param name="Failures">Every failure carrying it, newest first.</param>
+/// <param name="FailuresByFingerprint">
+/// How many of those failures each test contributed. Counted here rather than by whoever needs the
+/// number, so that the count of a member's failures and the decision that it is a member come from
+/// one walk of one list and cannot disagree.
+/// </param>
 /// <param name="MaxTestsInOneSession">
 /// The most distinct tests it hit within a single session — the measurement the shared-failure
 /// threshold is applied to.
@@ -46,6 +51,7 @@ internal sealed record SignatureGroup(
     FailureSignature Signature,
     IReadOnlyList<string> Fingerprints,
     IReadOnlyList<ExecutionRef> Failures,
+    IReadOnlyDictionary<string, int> FailuresByFingerprint,
     int MaxTestsInOneSession,
     int SessionCount,
     int OldestSessionIndex,
@@ -254,11 +260,20 @@ internal sealed class SignatureIndex
                 .ThenBy(f => f.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
                     StringComparer.Ordinal)];
 
-            var fingerprints = failures
-                .Select(f => f.Execution.Identity.TestFingerprint)
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(f => f, StringComparer.Ordinal)
-                .ToList();
+            // Membership and each member's share of the failures come out of the same walk. Counting
+            // them separately later would be quadratic in the size of the cluster, and a cluster is
+            // widest exactly when the finding matters most: one broken fixture takes the whole
+            // assembly with it, so the members and the failures grow together.
+            var failuresByFingerprint = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (ExecutionRef failure in failures)
+            {
+                string fingerprint = failure.Execution.Identity.TestFingerprint;
+                failuresByFingerprint[fingerprint] =
+                    failuresByFingerprint.TryGetValue(fingerprint, out int seen) ? seen + 1 : 1;
+            }
+
+            List<string> fingerprints =
+                [.. failuresByFingerprint.Keys.OrderBy(f => f, StringComparer.Ordinal)];
 
             // The shared-failure threshold is about one run: three tests failing the same way in the
             // same session share something. Three tests failing the same way in three different
@@ -277,6 +292,7 @@ internal sealed class SignatureIndex
                 signatures[entry.Key],
                 fingerprints,
                 failures,
+                failuresByFingerprint,
                 maxTestsInOneSession,
                 sessionCount,
                 failures.Max(f => f.SessionIndex),
