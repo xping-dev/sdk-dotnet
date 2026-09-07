@@ -352,6 +352,42 @@ public sealed class TimeSensitiveProviderTests
         Assert.Empty(Analyze(TimeOfDay(eveningFailures: 6, morningFailures: 0, recordOffset: false)));
     }
 
+    /// <summary>
+    /// A window no session recorded a clock in counts every test, not none of them.
+    /// </summary>
+    /// <remarks>
+    /// #185: the exclusion above used to be silent, so a suite whose adapter recorded no offset was
+    /// reported as healthy on a question nothing in it could answer. Taken at the top of the window
+    /// rather than per test, so the number has to be the one the per-test gate would have reached
+    /// one test at a time — otherwise a suite's tally would collapse the moment one session happened
+    /// to record an offset.
+    /// </remarks>
+    [Fact]
+    public void AWindowWithNoRecordedClockCountsEveryTestAsUnreadable()
+    {
+        List<TestSession> window =
+            TimeOfDay(eveningFailures: 6, morningFailures: 0, recordOffset: false);
+
+        NotMeasuredCount count = NotMeasured(window);
+
+        Assert.Equal(Context(window).Tests.Fingerprints.Count, count.Unreadable);
+        Assert.Equal(0, count.AwaitingRuns);
+    }
+
+    /// <summary>
+    /// A test on a clock that the search found no split in is measured, and counted nowhere.
+    /// </summary>
+    [Fact]
+    public void ATestTheSearchJudgedAndFoundNothingInIsNotCounted()
+    {
+        // Ten evening runs and ten morning ones, failing at the same rate on both sides.
+        List<TestSession> window = TimeOfDay(
+            eveningFailures: 3, morningFailures: 3, evenings: 10, mornings: 10);
+
+        Assert.Empty(Analyze(window));
+        Assert.True(NotMeasured(window).IsEmpty);
+    }
+
     [Fact]
     public void ASideWithTooFewExecutionsIsNotCompared()
     {
@@ -1170,6 +1206,10 @@ public sealed class TimeSensitiveProviderTests
 
     private static IReadOnlyList<FindingCandidate> Analyze(List<TestSession> sessions) =>
         new TimeSensitiveProvider().Analyze(Context(sessions)).Candidates;
+
+    private static NotMeasuredCount NotMeasured(List<TestSession> sessions) =>
+        new TimeSensitiveProvider().Analyze(Context(sessions)).NotMeasured
+            .GetValueOrDefault(FindingKind.TimeSensitive);
 
     private static FindingCandidate Single(List<TestSession> sessions) =>
         Assert.Single(Analyze(sessions));

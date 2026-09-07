@@ -35,6 +35,44 @@ public sealed class ParallelSensitiveProviderTests
         Assert.Equal(Subject, Named(candidate));
     }
 
+    /// <summary>
+    /// A suite that never varied its concurrency is counted, and counted as unreadable.
+    /// </summary>
+    /// <remarks>
+    /// #185: the decline used to be silent, so every test in a single-threaded suite was reported as
+    /// healthy on a question that had never been asked of it. Unreadable rather than awaiting runs,
+    /// because more runs at the one level the suite uses produce more readings at that level; what
+    /// this needs is a run at a different one.
+    /// </remarks>
+    [Fact]
+    public void ASuiteThatNeverVariedItsConcurrencyIsCountedAsUnreadable()
+    {
+        List<TestSession> window = Split(
+            highFailures: 3, lowFailures: 3, lowConcurrency: 4, highConcurrency: 4);
+
+        Assert.Empty(Analyze(window));
+
+        NotMeasuredCount count = NotMeasured(window);
+
+        Assert.True(count.Unreadable > 0);
+
+        // Structurally zero: this kind has no session floor, so it never declines for want of runs.
+        Assert.Equal(0, count.AwaitingRuns);
+    }
+
+    /// <summary>
+    /// A test the trend was computed on and found nothing in is not counted.
+    /// </summary>
+    [Fact]
+    public void ATestWhoseTrendWasMeasuredAndSaidNothingIsNotCounted()
+    {
+        // Two levels, so the trend test runs; the same failure rate at both, so it says nothing.
+        List<TestSession> window = Split(highFailures: 2, lowFailures: 2);
+
+        Assert.Empty(Analyze(window));
+        Assert.Equal(0, NotMeasured(window).Unreadable);
+    }
+
     [Fact]
     public void APinnedSuiteWithOccasionalSerialRunsIsAnalysable()
     {
@@ -732,6 +770,10 @@ public sealed class ParallelSensitiveProviderTests
 
     private static IReadOnlyList<FindingCandidate> Analyze(List<TestSession> sessions) =>
         new ParallelSensitiveProvider().Analyze(TestSessionFactory.Context([.. sessions])).Candidates;
+
+    private static NotMeasuredCount NotMeasured(List<TestSession> sessions) =>
+        new ParallelSensitiveProvider().Analyze(TestSessionFactory.Context([.. sessions]))
+            .NotMeasured.GetValueOrDefault(FindingKind.ParallelSensitive);
 
     private static FindingCandidate Single(List<TestSession> sessions) =>
         Assert.Single(Analyze(sessions));

@@ -880,6 +880,187 @@ public sealed class ShareableOutputTests
     }
 
     /// <summary>
+    /// The report names the questions this window's data could not answer.
+    /// </summary>
+    /// <remarks>
+    /// #185: a metric that could compute nothing about a test used to leave no trace, so the test
+    /// fell through into "healthy" and a reader was told it had been looked at. The line is what
+    /// stops the count beside it being read as "412 tests were checked".
+    /// </remarks>
+    [Fact]
+    public void TheReportNamesTheKindsItCouldNotMeasureAndHowManyTests()
+    {
+        string report = Render(Envelope(
+            [],
+            shown: 0,
+            total: 0,
+            lowEvidence: 0,
+            notSignificant: 0,
+            notMeasured: new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+            {
+                ["ParallelSensitive"] = new NotMeasuredDto(0, 108),
+                ["DurationRegression"] = new NotMeasuredDto(63, 32)
+            }));
+
+        string line = Lines(report).Single(
+            l => l.Contains("nothing to measure:", StringComparison.Ordinal));
+
+        Assert.Contains("concurrency 108", line, StringComparison.Ordinal);
+        Assert.Contains("slower 32", line, StringComparison.Ordinal);
+
+        // Largest first, whatever order the envelope happened to list them in.
+        Assert.True(
+            line.IndexOf("concurrency", StringComparison.Ordinal) <
+            line.IndexOf("slower", StringComparison.Ordinal));
+
+        // The waiting half stays in the JSON. The counts line above already says "awaiting more
+        // runs" in a different unit, and two waiting figures on one screen is the confusion this
+        // change exists to remove.
+        Assert.DoesNotContain("63", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A window every metric could read prints no such line at all.
+    /// </summary>
+    [Fact]
+    public void TheReportSaysNothingAboutMeasurementWhereEverythingWasMeasurable()
+    {
+        string report = Render(Envelope(
+            [],
+            shown: 0,
+            total: 0,
+            lowEvidence: 0,
+            notSignificant: 0,
+            notMeasured: new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+            {
+                ["Flaky"] = new NotMeasuredDto(0, 0),
+                ["Vanished"] = new NotMeasuredDto(4, 0)
+            }));
+
+        Assert.DoesNotContain("nothing to measure:", report, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Past three kinds the line stops naming them and says how many more there are.
+    /// </summary>
+    /// <remarks>
+    /// Thirteen kinds do not fit a line above a fence that exists to survive a phone, and a reader
+    /// scanning four numbers for the largest is being handed a table one segment at a time. The
+    /// full breakdown is in the JSON envelope.
+    /// </remarks>
+    [Fact]
+    public void TheUnmeasuredLineNamesThreeKindsAndCountsTheRest()
+    {
+        string report = Render(Envelope(
+            [],
+            shown: 0,
+            total: 0,
+            lowEvidence: 0,
+            notSignificant: 0,
+            notMeasured: new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+            {
+                ["ParallelSensitive"] = new NotMeasuredDto(0, 50),
+                ["TimeSensitive"] = new NotMeasuredDto(0, 40),
+                ["DurationRegression"] = new NotMeasuredDto(0, 30),
+                ["DurationUnstable"] = new NotMeasuredDto(0, 20),
+                ["Vanished"] = new NotMeasuredDto(0, 10)
+            }));
+
+        string line = Lines(report).Single(
+            l => l.Contains("nothing to measure:", StringComparison.Ordinal));
+
+        Assert.Contains("+2 more", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("stopped running", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Two renders of one envelope order the kinds identically.
+    /// </summary>
+    /// <remarks>
+    /// Equal counts are broken by the kind's declaration order rather than left to the dictionary,
+    /// because a report has to be byte-identical over unchanged input and a hash order is not.
+    /// </remarks>
+    [Fact]
+    public void KindsWithEqualCountsAreOrderedByTheKindAndNotByTheDictionary()
+    {
+        Dictionary<string, NotMeasuredDto> Tally() =>
+            new(StringComparer.Ordinal)
+            {
+                ["Vanished"] = new NotMeasuredDto(0, 7),
+                ["DurationRegression"] = new NotMeasuredDto(0, 7)
+            };
+
+        string first = Render(Envelope([], 0, 0, 0, 0, Tally()));
+        string second = Render(Envelope([], 0, 0, 0, 0, Tally()));
+
+        Assert.Equal(first, second);
+
+        string line = Lines(first).Single(
+            l => l.Contains("nothing to measure:", StringComparison.Ordinal));
+
+        // `DurationRegression` is declared before `Vanished`.
+        Assert.True(
+            line.IndexOf("slower", StringComparison.Ordinal) <
+            line.IndexOf("stopped running", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The unmeasured kinds are not appended to the line of counts.
+    /// </summary>
+    /// <remarks>
+    /// Those are suite-wide totals of candidates the report saw and withheld; this is per kind and
+    /// counts tests no candidate ever existed for. Thirteen kinds cannot join a line of totals, and
+    /// a reader adding them to it would be adding two different units.
+    /// </remarks>
+    [Fact]
+    public void TheUnmeasuredKindsAreNotAppendedToTheCountsLine()
+    {
+        string report = Render(Envelope(
+            [Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20")],
+            shown: 1,
+            total: 1,
+            lowEvidence: 41,
+            notSignificant: 6,
+            notMeasured: new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+            {
+                ["ParallelSensitive"] = new NotMeasuredDto(0, 108)
+            }));
+
+        string counts = Lines(report).Single(l => l.Contains("healthy", StringComparison.Ordinal));
+
+        Assert.DoesNotContain("nothing to measure:", counts, StringComparison.Ordinal);
+        Assert.DoesNotContain("108", counts, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An empty report whose questions all went unanswered does not report success.
+    /// </summary>
+    /// <remarks>
+    /// The reading #185 was filed about, at its sharpest: a suite nothing could be measured on used
+    /// to print a green "No findings." Counted in kinds rather than tests, because the sentence
+    /// answers "why is this block empty" and the per-kind test counts are on the line above.
+    /// </remarks>
+    [Theory]
+    [InlineData(1, "Nothing reportable yet: 1 kind had nothing to measure.")]
+    [InlineData(2, "Nothing reportable yet: 2 kinds had nothing to measure.")]
+    public void AnEmptyReportSaysWhenItsQuestionsWentUnanswered(int kinds, string expected)
+    {
+        var tally = new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+        {
+            ["ParallelSensitive"] = new NotMeasuredDto(0, 108)
+        };
+
+        if (kinds > 1)
+            tally["TimeSensitive"] = new NotMeasuredDto(0, 27);
+
+        string report = Render(Envelope([], 0, 0, 0, 0, tally));
+
+        Assert.Contains(
+            Fenced(report),
+            line => line.EndsWith(expected, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// An empty report says which kind of empty it is.
     /// </summary>
     /// <remarks>
@@ -1003,7 +1184,16 @@ public sealed class ShareableOutputTests
         Envelope(findings, shown, total, lowEvidence: 0, notSignificant: 0);
 
     private static ReportEnvelope Envelope(
-        FindingDto[] findings, int shown, int total, int lowEvidence, int notSignificant)
+        FindingDto[] findings, int shown, int total, int lowEvidence, int notSignificant) =>
+        Envelope(findings, shown, total, lowEvidence, notSignificant, notMeasured: null);
+
+    private static ReportEnvelope Envelope(
+        FindingDto[] findings,
+        int shown,
+        int total,
+        int lowEvidence,
+        int notSignificant,
+        IReadOnlyDictionary<string, NotMeasuredDto>? notMeasured)
     {
         int high = findings.Count(f => f.Severity == "high");
         int medium = findings.Count(f => f.Severity == "medium");
@@ -1028,6 +1218,7 @@ public sealed class ShareableOutputTests
                 412 - findings.Length,
                 lowEvidence,
                 notSignificant,
+                notMeasured ?? new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal),
                 0,
                 0,
                 0,

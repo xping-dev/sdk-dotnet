@@ -264,29 +264,49 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
 
         var candidates = new List<FindingCandidate>();
         int tested = 0;
+        NotMeasuredCount notMeasured = default;
 
         // Built once for the window rather than once per test: every test in a session shares its
         // clock reading, and resolving it per fingerprint would repeat the same arithmetic for each
         // of a suite's several hundred tests.
         Dictionary<Guid, SessionClock> clocks = ClocksIn(context);
 
+        // Every fingerprint, not zero. No session in the window recorded a UTC offset, so no test in
+        // it could be placed on a clock — which is the same statement the per-fingerprint gate below
+        // would have made one test at a time, and it has to come out as the same number. A summary
+        // whose unmeasured count collapsed the moment one session happened to record an offset would
+        // be describing the store's metadata rather than the suite.
         if (clocks.Count == 0)
-            return Report(candidates, tested);
+        {
+            return Report(
+                candidates,
+                tested,
+                new NotMeasuredCount(0, context.Tests.Fingerprints.Count));
+        }
 
         // Fingerprints are ordinal-sorted by the index, so findings come out in the same sequence on
         // every run whatever order the sessions were read in.
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            Examination examination = Examine(context, clocks, fingerprint);
+            // Resolved here rather than inside `Examine`, so that a fingerprint the index cannot
+            // resolve leaves the examination alone. It is an inconsistency inside the index and not
+            // a question the data declined, and it belongs in neither the family nor the tally.
+            TestReference? test = context.Tests.ReferenceFor(fingerprint);
+            if (test == null)
+                continue;
+
+            Examination examination = Examine(context, clocks, test, fingerprint);
 
             if (examination.Tested)
                 tested++;
+            else
+                notMeasured += examination.NotMeasured;
 
             if (examination.Candidate is { } candidate)
                 candidates.Add(candidate);
         }
 
-        return Report(candidates, tested);
+        return Report(candidates, tested, notMeasured);
     }
 
     /// <summary>
@@ -294,9 +314,14 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// </summary>
     /// <param name="candidates">Tests some axis separated.</param>
     /// <param name="tested">Tests at least one axis could be judged on.</param>
+    /// <param name="notMeasured">Tests no axis could be built for, and why not.</param>
     /// <returns>The provider's report.</returns>
-    private static ProviderReport Report(IReadOnlyList<FindingCandidate> candidates, int tested) =>
-        new(candidates, new Dictionary<FindingKind, int> { [FindingKind.TimeSensitive] = tested });
+    private static ProviderReport Report(
+        IReadOnlyList<FindingCandidate> candidates, int tested, NotMeasuredCount notMeasured) =>
+        new(
+            candidates,
+            new Dictionary<FindingKind, int> { [FindingKind.TimeSensitive] = tested },
+            new Dictionary<FindingKind, NotMeasuredCount> { [FindingKind.TimeSensitive] = notMeasured });
 
     /// <summary>
     /// Reads the local clock of every session that recorded one.
@@ -337,26 +362,31 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
     /// Examines one test, saying both whether any axis could be judged and what survived.
     /// </summary>
     private static Examination Examine(
-        AnalysisContext context, Dictionary<Guid, SessionClock> clocks, string fingerprint)
+        AnalysisContext context,
+        Dictionary<Guid, SessionClock> clocks,
+        TestReference test,
+        string fingerprint)
     {
         Population population = Considered(context, clocks, fingerprint);
         List<Measured> considered = population.Considered;
 
+        // Not one run of this test sits on a clock. More runs of a suite whose sessions record no
+        // offset produce more runs that cannot be placed, so this is not answered by waiting.
+        if (considered.Count == 0)
+            return Examination.Unreadable;
+
         // Two arms' worth is the least that can be split at all, and checking here saves the axis
         // work for the overwhelming majority of tests.
         if (considered.Count < LocalAnalysisConstants.TimeSensitiveMinArmSessions * 2)
-            return Examination.NotPosed;
+            return Examination.AwaitingRuns;
 
         // One zone for the whole comparison. A machine that moved between zones has two populations
         // in it, and a local hour drawn from both describes neither; the offset axis in particular
-        // would read the move as a daylight-saving shift.
+        // would read the move as a daylight-saving shift. Unreadable rather than awaiting: the runs
+        // already recorded are the two populations, and adding to either does not merge them.
         string? zone = SingleZone(considered);
         if (zone == null)
-            return Examination.NotPosed;
-
-        TestReference? test = context.Tests.ReferenceFor(fingerprint);
-        if (test == null)
-            return Examination.NotPosed;
+            return Examination.Unreadable;
 
         // Every division this test's runs admit, before any of them is judged. The multiplicity the
         // search has to be charged for has to be known before the first p-value is computed, which
@@ -365,8 +395,12 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
         // second multiplicity, one test per fingerprint rather than one per axis.
         List<Partition> partitions = [.. Offered(considered)];
 
+        // Enough runs on a clock, and no division of them that puts a floor's worth on each side —
+        // every run in one evening, say. Another run may fall on the other side of some axis, but
+        // the runs already recorded contain no such split, and this is the honest reading of what
+        // is here rather than a prediction about what arrives next.
         if (partitions.Count == 0)
-            return Examination.NotPosed;
+            return Examination.Unreadable;
 
         int comparisons = Comparisons(partitions);
 

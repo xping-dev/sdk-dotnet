@@ -154,16 +154,73 @@ internal interface IFindingProvider
 }
 
 /// <summary>
-/// What one provider observed in a window, and how many questions it asked to observe it.
+/// How many fingerprints a kind could not be measured on, and which of the two reasons applies.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The second half is the reason this is a record rather than a list. A p-value on its own cannot
-/// be judged: the same 0.02 is strong evidence from one comparison and the commonest thing three
-/// hundred comparisons produce. The coordinator applies
+/// Two numbers rather than one, because the two are not the same news and only one of them is
+/// answered by waiting. A window that holds four runs of a test the comparison needs seven of will
+/// hold seven eventually; a test whose every run recorded a zero median normalises nothing, and the
+/// eighth such run normalises nothing either. Publishing one figure over both would repeat, one
+/// level down, exactly the conflation #185 was filed about — a reader told "awaiting more runs"
+/// about a test that will never be measurable learns the wrong thing and waits.
+/// </para>
+/// <para>
+/// The question that decides between them at a decline site is whether another run of the same
+/// shape as the ones already recorded would fix it. Nothing subtler is needed, and nothing subtler
+/// is defensible: the two reasons differ in what the reader should do next, not in how the gate
+/// was written.
+/// </para>
+/// </remarks>
+/// <param name="AwaitingRuns">
+/// Fingerprints the kind could not be measured on for want of runs. Shrinks as a store fills.
+/// </param>
+/// <param name="Unreadable">
+/// Fingerprints whose recorded data cannot answer this kind's question at all — no reading the
+/// statistic can be taken over, no second concurrency level, no clock, no signature. More runs of
+/// the same shape do not help.
+/// </param>
+internal readonly record struct NotMeasuredCount(int AwaitingRuns, int Unreadable)
+{
+    /// <summary>Gets the fingerprints not measured, for whichever reason.</summary>
+    public int Total => AwaitingRuns + Unreadable;
+
+    /// <summary>Gets whether this kind measured every fingerprint it was offered.</summary>
+    public bool IsEmpty => AwaitingRuns == 0 && Unreadable == 0;
+
+    /// <summary>Adds two counts.</summary>
+    /// <param name="left">One count.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Their sum, reason by reason.</returns>
+    public static NotMeasuredCount operator +(NotMeasuredCount left, NotMeasuredCount right) =>
+        new(left.AwaitingRuns + right.AwaitingRuns, left.Unreadable + right.Unreadable);
+
+    /// <summary>Adds two counts.</summary>
+    /// <param name="left">One count.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Their sum, reason by reason.</returns>
+    public static NotMeasuredCount Add(NotMeasuredCount left, NotMeasuredCount right) =>
+        left + right;
+}
+
+/// <summary>
+/// What one provider observed in a window, how many questions it asked, and how many it could not.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The second component is the reason this is a record rather than a list. A p-value on its own
+/// cannot be judged: the same 0.02 is strong evidence from one comparison and the commonest thing
+/// three hundred comparisons produce. The coordinator applies
 /// <see cref="Scoring.BenjaminiHochberg"/> once per kind and needs the denominator, and only the
 /// provider knows it — the count includes every fingerprint whose answer never became a candidate,
 /// which by definition is not in <see cref="Candidates"/>.
+/// </para>
+/// <para>
+/// The third exists for the opposite reason. A provider that declines for want of data used to leave
+/// no trace at all: the summary's excluded tally counts only the candidates the coordinator itself
+/// dropped at the reporting floor, so a test the provider could compute nothing about landed
+/// silently inside "healthy" and was reported to a reader as fine. It is not fine — it is a test
+/// nothing was concluded about, and #185 is that distinction.
 /// </para>
 /// <para>
 /// Eager rather than an iterator, unlike the shape this replaced. A family size is not known until
@@ -181,46 +238,124 @@ internal interface IFindingProvider
 /// after the gates instead would report a family in which every member is a discovery, and correct
 /// for nothing.
 /// </param>
+/// <param name="NotMeasured">
+/// Per kind, the fingerprints that kind's question could not be asked of, split by whether waiting
+/// fixes it.
+/// <para>
+/// The unit is a fingerprint, so a kind whose subject is not a test does not appear here at all:
+/// <c>SharedFailure</c> and <c>BrokenFixture</c> are enumerated over signature groups, and a count
+/// of groups published under a field every other kind counts tests in is the confusion
+/// <c>docs/internals/finding-populations.md</c> exists to prevent.
+/// </para>
+/// <para>
+/// Absence and a published zero are different statements. Absent means this kind keeps no such
+/// tally; a zero means the kind was offered fingerprints and could read every one of them. Both are
+/// worth saying and only one of them can be said by a number.
+/// </para>
+/// </param>
 internal sealed record ProviderReport(
     IReadOnlyList<FindingCandidate> Candidates,
-    IReadOnlyDictionary<FindingKind, int> HypothesesTested)
+    IReadOnlyDictionary<FindingKind, int> HypothesesTested,
+    IReadOnlyDictionary<FindingKind, NotMeasuredCount> NotMeasured)
 {
+    /// <summary>
+    /// A report from a provider that tested hypotheses and measured every fingerprint it was
+    /// offered.
+    /// </summary>
+    /// <param name="candidates">What it is claiming.</param>
+    /// <param name="hypothesesTested">The family behind each kind.</param>
+    public ProviderReport(
+        IReadOnlyList<FindingCandidate> candidates,
+        IReadOnlyDictionary<FindingKind, int> hypothesesTested)
+        : this(candidates, hypothesesTested, ReadOnlyDictionary<FindingKind, NotMeasuredCount>.Empty)
+    {
+    }
+
     /// <summary>
     /// A report from a provider that counted things rather than testing anything.
     /// </summary>
     /// <param name="candidates">What it counted.</param>
+    /// <param name="notMeasured">What it could not count, per kind.</param>
     /// <returns>A report claiming no family.</returns>
     /// <remarks>
     /// Every kind the retry and failure-mode providers emit is an observation of something that
     /// demonstrably happened — a retry that masked a failure, a signature that knocked over four
     /// tests at once. There is no null hypothesis to reject and so nothing to correct for, and the
     /// empty family is what carries all eight of them past the multiplicity pass untouched.
+    /// Reporting no family says nothing about whether the observation could be made, which is why
+    /// the second argument is still asked for.
     /// </remarks>
-    public static ProviderReport Observations(IReadOnlyList<FindingCandidate> candidates) =>
-        new(candidates, ReadOnlyDictionary<FindingKind, int>.Empty);
+    public static ProviderReport Observations(
+        IReadOnlyList<FindingCandidate> candidates,
+        IReadOnlyDictionary<FindingKind, NotMeasuredCount> notMeasured) =>
+        new(candidates, ReadOnlyDictionary<FindingKind, int>.Empty, notMeasured);
+}
+
+/// <summary>
+/// Why one fingerprint produced no candidate, or that it produced one.
+/// </summary>
+/// <remarks>
+/// Both declining states yield no candidate and neither is charged to the multiplicity correction,
+/// so for the family size alone one value would do. They are kept apart because the summary reads
+/// them too, and a reader acts differently on the two: one empties as the store fills and the other
+/// never will.
+/// </remarks>
+internal enum Examined
+{
+    /// <summary>The window does not hold enough of this test yet. More runs fix it.</summary>
+    AwaitingRuns,
+
+    /// <summary>Nothing this kind reads was recorded. More runs of the same shape do not.</summary>
+    Unreadable,
+
+    /// <summary>The question was asked, whatever the gates after it then said.</summary>
+    Measured
 }
 
 /// <summary>
 /// What examining one fingerprint produced.
 /// </summary>
 /// <remarks>
-/// The distinction the pair exists to draw is between a fingerprint the question could not be asked
-/// of and one it was asked of and answered no. Both yield no candidate, and only the second is a
+/// <para>
+/// The distinction this exists to draw is between a fingerprint the question could not be asked of
+/// and one it was asked of and answered no. Both yield no candidate, and only the second is a
 /// hypothesis test that the multiplicity correction has to be charged for. A provider returning a
 /// bare <c>FindingCandidate?</c> conflates them, and undercounting the family is the direction that
 /// invents findings.
+/// </para>
+/// <para>
+/// Every value is now read twice: once as a family the correction is or is not charged for, and once
+/// as a measurement the summary says was or was not taken. That second reading is why the declining
+/// side is two values rather than one, and why kinds that test no hypothesis — <c>DurationUnstable</c>
+/// among them — return this type at all. For those, <see cref="Tested"/> is nobody's denominator and
+/// <see cref="Examined.Measured"/> is simply the honest word for what happened.
+/// </para>
 /// </remarks>
-/// <param name="Tested">Whether the kind's hypothesis test was computed on this fingerprint.</param>
+/// <param name="Outcome">Whether the question was asked, and why not where it was not.</param>
 /// <param name="Candidate">What survived the gates after it, if anything did.</param>
-internal readonly record struct Examination(bool Tested, FindingCandidate? Candidate)
+internal readonly record struct Examination(Examined Outcome, FindingCandidate? Candidate)
 {
-    /// <summary>Gets the result for a fingerprint the question could not be asked of.</summary>
-    public static Examination NotPosed { get; }
+    /// <summary>Gets the result for a fingerprint the window does not yet hold enough of.</summary>
+    public static Examination AwaitingRuns { get; } = new(Examined.AwaitingRuns, null);
+
+    /// <summary>Gets the result for a fingerprint whose data cannot answer the question.</summary>
+    public static Examination Unreadable { get; } = new(Examined.Unreadable, null);
+
+    /// <summary>Gets whether the kind's question was asked of this fingerprint.</summary>
+    public bool Tested => Outcome == Examined.Measured;
+
+    /// <summary>Gets what this examination contributes to the kind's not-measured tally.</summary>
+    public NotMeasuredCount NotMeasured => Outcome switch
+    {
+        Examined.AwaitingRuns => new NotMeasuredCount(1, 0),
+        Examined.Unreadable => new NotMeasuredCount(0, 1),
+        _ => default
+    };
 
     /// <summary>
     /// The result for a fingerprint the test was computed on, whatever the gates then said.
     /// </summary>
     /// <param name="candidate">The candidate, or <see langword="null"/> if a gate declined it.</param>
     /// <returns>An examination that counts towards the family.</returns>
-    public static Examination Of(FindingCandidate? candidate) => new(true, candidate);
+    public static Examination Of(FindingCandidate? candidate) => new(Examined.Measured, candidate);
 }

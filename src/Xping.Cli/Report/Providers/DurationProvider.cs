@@ -353,6 +353,12 @@ internal sealed class DurationProvider : IFindingProvider
         var candidates = new List<FindingCandidate>();
         int tested = 0;
 
+        // One tally per kind, because the two are declined by different gates over different
+        // samples: a test can be comparable and not dispersible, or the reverse. A single figure
+        // would be true of neither.
+        NotMeasuredCount regressionNotMeasured = default;
+        NotMeasuredCount unstableNotMeasured = default;
+
         // Computed once for the whole window and shared by every test in a run, which is what makes
         // the normalisation a property of the run rather than something each test re-derives.
         Dictionary<Guid, double> medians = SessionMedians(context);
@@ -362,6 +368,9 @@ internal sealed class DurationProvider : IFindingProvider
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
+            // Counted against neither kind. The fingerprint and the reference come out of the same
+            // index, so this is an inconsistency inside it rather than a measurement the data
+            // declined — and there is no test to put a number against in any case.
             TestReference? test = context.Tests.ReferenceFor(fingerprint);
             if (test == null)
                 continue;
@@ -399,6 +408,12 @@ internal sealed class DurationProvider : IFindingProvider
             // A test that has stopped running is not a duration finding. Its absence is what is
             // interesting about it, and that belongs to `Vanished` — claiming it here as well would
             // report one disappearance twice under two names.
+            //
+            // Counted against neither kind, for the same reason. "Duration could not measure this
+            // test" is a true sentence about a test that has gone, and printing it would state the
+            // disappearance a second time in the summary, in a line whose whole purpose is to name
+            // questions whose answers are missing rather than questions that have been answered
+            // elsewhere.
             if (current.Count == 0)
                 continue;
 
@@ -428,8 +443,10 @@ internal sealed class DurationProvider : IFindingProvider
 
             if (regression.Tested)
                 tested++;
+            else
+                regressionNotMeasured += regression.NotMeasured;
 
-            FindingCandidate? unstable = Unstable(
+            Examination instability = Unstable(
                 context,
                 test,
                 all,
@@ -437,6 +454,10 @@ internal sealed class DurationProvider : IFindingProvider
                 baselineProfile,
                 referenceMs,
                 currentDiscounted + baselineDiscounted);
+
+            unstableNotMeasured += instability.NotMeasured;
+
+            FindingCandidate? unstable = instability.Candidate;
 
             // A regression suppresses the instability finding for the same test, and the two now
             // overlap more than they used to: a test whose baseline swings and whose recent runs
@@ -465,7 +486,12 @@ internal sealed class DurationProvider : IFindingProvider
         // against.
         return new ProviderReport(
             candidates,
-            new Dictionary<FindingKind, int> { [FindingKind.DurationRegression] = tested });
+            new Dictionary<FindingKind, int> { [FindingKind.DurationRegression] = tested },
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.DurationRegression] = regressionNotMeasured,
+                [FindingKind.DurationUnstable] = unstableNotMeasured
+            });
     }
 
     /// <summary>
@@ -495,10 +521,22 @@ internal sealed class DurationProvider : IFindingProvider
         // disagree with the claim. A run whose own median was not positive normalises nothing, and a
         // run where the test itself took no measurable time contributes a reading no ratio can be
         // taken against; either way the arm is thinner than its session count says.
+        // An arm that held runs and produced no reading from any of them. A run whose own median was
+        // not positive is no divisor, so a test whose recent or earlier runs are all of that shape
+        // contributes nothing to compare however many of them there are — and the next run of the
+        // same shape contributes nothing either. Separated from the floor below because the two are
+        // different news: this one is not answered by waiting, and telling a reader it is sends them
+        // back in a fortnight to be told the same thing.
+        if ((baselineProfile.Sessions > 0 && baselineProfile.Compared.Count == 0) ||
+            (currentProfile.Sessions > 0 && currentProfile.Compared.Count == 0))
+        {
+            return Examination.Unreadable;
+        }
+
         if (baselineProfile.Compared.Count < MinimumBaselineSessions ||
             currentProfile.Compared.Count < MinimumCurrentSessions)
         {
-            return Examination.NotPosed;
+            return Examination.AwaitingRuns;
         }
 
         // Everything past this line is a test the provider ran on this fingerprint, and counts
@@ -613,14 +651,15 @@ internal sealed class DurationProvider : IFindingProvider
         Math.Round(value, 6, MidpointRounding.AwayFromZero);
 
     /// <summary>
-    /// Attempts the instability finding, returning <see langword="null"/> when a gate declines it.
+    /// Attempts the instability finding, saying both whether it could be measured and what
+    /// survived.
     /// </summary>
     /// <remarks>
     /// Measured over the whole window rather than either slice. Instability is a standing property
     /// of a test, not a change between two halves of its history, and splitting the window would
     /// only halve the evidence behind it.
     /// </remarks>
-    private static FindingCandidate? Unstable(
+    private static Examination Unstable(
         AnalysisContext context,
         TestReference test,
         IReadOnlyList<ExecutionRef> all,
@@ -629,9 +668,22 @@ internal sealed class DurationProvider : IFindingProvider
         double referenceMs,
         int discountedEnvironmental)
     {
+        // Nothing to take a dispersion of. `RobustDispersion.Of` answers zero both for a sample too
+        // short to have a spread and for one whose median is not positive, so reading the gate below
+        // without asking this first reports a test whose every run recorded a zero median as
+        // perfectly steady — which is #185's own example, and the reason it was filed. An unmeasured
+        // test and a steady one are opposite pieces of news and they used to print the same way,
+        // which is to say they used to print as nothing at all.
+        if (whole.Normalised.Count == 0 || whole.NormalisedP50 <= 0)
+            return Examination.Unreadable;
+
+        // One normalised reading is a point, not a spread. More runs give it one.
+        if (whole.Normalised.Count < 2)
+            return Examination.AwaitingRuns;
+
         double dispersion = RobustDispersion.Of(whole.Normalised);
         if (dispersion < LocalAnalysisConstants.DurationUnstableDispersionMin)
-            return null;
+            return Examination.Of(null);
 
         // The test's own prior behaviour where it has any, and the window where it does not. A test
         // first seen this week has no baseline, and refusing to measure it at all would make its
@@ -645,11 +697,19 @@ internal sealed class DurationProvider : IFindingProvider
         // labouring at a fifth of the window's speed is.
         double floor = against.NormalisedP50 * referenceMs;
 
+        // No run this test appeared in had a usable median, so there is no scale to express the
+        // floor in and the product below is zero for a reason that has nothing to do with the test
+        // being quick. Implied by the guard above — both readings come from the same missing
+        // medians — but computed over `all` rather than over `whole`, and a floor that declines
+        // every millisecond gate is worth saying out loud where it happens.
+        if (referenceMs <= 0)
+            return Examination.Unreadable;
+
         // Below a few tens of milliseconds the dispersion is measuring the scheduler, not the test.
         if (floor < LocalAnalysisConstants.DurationTrivialMs)
-            return null;
+            return Examination.Of(null);
 
-        return new FindingCandidate(
+        return Examination.Of(new FindingCandidate(
             FindingKind.DurationUnstable,
             new FindingSubject.SingleTest(test),
             new DurationUnstableEvidence(
@@ -677,7 +737,7 @@ internal sealed class DurationProvider : IFindingProvider
             // The runs behind the normalised readings, which is what the dispersion was computed
             // over. Two normalisable readings of 1 and 10 clear the dispersion floor on their own,
             // and a test present in five runs and normalisable in two holds two runs of evidence.
-            EvidenceSessions: whole.NormalisedSessions);
+            EvidenceSessions: whole.NormalisedSessions));
     }
 
     /// <summary>

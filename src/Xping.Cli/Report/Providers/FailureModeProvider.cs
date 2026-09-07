@@ -351,17 +351,12 @@ internal sealed class FailureModeProvider : IFindingProvider
     /// Every kind here is a count of failures that happened, so no family is reported and nothing
     /// downstream corrects them for multiplicity.
     /// </remarks>
-    public ProviderReport Analyze(AnalysisContext context) =>
-        ProviderReport.Observations([.. Observed(context)]);
-
-    /// <summary>
-    /// Walks the window, yielding what it observed.
-    /// </summary>
-    /// <param name="context">The window, sessions and shared indexes.</param>
-    /// <returns>Candidate findings, in any order.</returns>
-    private static IEnumerable<FindingCandidate> Observed(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int awaitingRuns = 0;
 
         IReadOnlyList<SignatureGroup> clusters = FindClusters(context);
 
@@ -369,14 +364,37 @@ internal sealed class FailureModeProvider : IFindingProvider
             clusters.Select(c => c.Signature.Hash), StringComparer.Ordinal);
 
         foreach (SignatureGroup cluster in clusters)
-            yield return SharedFailure(context, cluster);
+            candidates.Add(SharedFailure(context, cluster));
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
-            FindingCandidate? candidate = Individual(context, fingerprint, clustered);
-            if (candidate != null)
-                yield return candidate;
+            Examination examination = Individual(context, fingerprint, clustered);
+
+            awaitingRuns += examination.NotMeasured.AwaitingRuns;
+
+            if (examination.Candidate is { } candidate)
+                candidates.Add(candidate);
         }
+
+        // Three kinds and one number, because the three read one thing: whether this test failed on
+        // its own account, and how. A test whose outcomes could not be read could not be read for
+        // any of them.
+        //
+        // `SharedFailure` and `BrokenFixture` are absent rather than zero. They are enumerated over
+        // signature groups, and a count of groups published under a field every other kind counts
+        // tests in would be a number a reader cannot compare with the one beside it. Absence says
+        // this kind keeps no such tally; the published zeros elsewhere say the kind was offered
+        // tests and read every one.
+        var notMeasured = new NotMeasuredCount(awaitingRuns, 0);
+
+        return ProviderReport.Observations(
+            candidates,
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.Flaky] = notMeasured,
+                [FindingKind.AlwaysFailing] = notMeasured,
+                [FindingKind.TimingOut] = notMeasured
+            });
     }
 
     /// <summary>
@@ -592,7 +610,7 @@ internal sealed class FailureModeProvider : IFindingProvider
     /// <summary>
     /// Classifies one test's own failures, once the shared and environmental ones are set aside.
     /// </summary>
-    private static FindingCandidate? Individual(
+    private static Examination Individual(
         AnalysisContext context, string fingerprint, HashSet<string> clustered)
     {
         IReadOnlyList<ExecutionRef> all = context.Tests.ExecutionsOf(fingerprint);
@@ -629,15 +647,27 @@ internal sealed class FailureModeProvider : IFindingProvider
         }
 
         if (considered.Count == 0)
-            return null;
+        {
+            // Nothing of this test's own behaviour was observed. Counted only where no failure of
+            // its was absorbed into a cluster: a test whose every failure was reported as part of a
+            // shared cause has not gone unmeasured, it has been measured and reported under a group,
+            // and naming it here would state one finding twice.
+            //
+            // Awaiting runs rather than unreadable. What is missing is a run of this test that was
+            // not an outage, and the next ordinary run supplies one — unlike a duration that cannot
+            // be normalised, which no number of further runs of the same shape repairs.
+            return clusteredOut == 0 ? Examination.AwaitingRuns : Examination.Of(null);
+        }
 
         List<ExecutionRef> failures = [.. considered.Where(e => e.Failed)];
         if (failures.Count == 0)
-            return null;
+            return Examination.Of(null);
 
+        // Charged to nothing: an index that holds the fingerprint but not the reference is
+        // inconsistent with itself, which is not a measurement the data declined.
         TestReference? test = context.Tests.ReferenceFor(fingerprint);
         if (test == null)
-            return null;
+            return Examination.Of(null);
 
         double failureRate = (double)failures.Count / considered.Count;
 
@@ -678,7 +708,7 @@ internal sealed class FailureModeProvider : IFindingProvider
         if (timeouts.Count > 0 &&
             (double)timeouts.Count / failures.Count >= LocalAnalysisConstants.TimingOutShareMin)
         {
-            return TimingOut(
+            return Examination.Of(TimingOut(
                 context,
                 test,
                 considered,
@@ -687,7 +717,7 @@ internal sealed class FailureModeProvider : IFindingProvider
                 sessionsConsidered,
                 environmental,
                 clusteredOut,
-                occasions.Count);
+                occasions.Count));
         }
 
         // Modal rather than sole. Failure modes are compared by exact hash over the exception type,
@@ -709,7 +739,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             failureRate >= LocalAnalysisConstants.AlwaysFailingRate &&
             modalShare >= LocalAnalysisConstants.AlwaysFailingModalShareMin)
         {
-            return new FindingCandidate(
+            return Examination.Of(new FindingCandidate(
                 FindingKind.AlwaysFailing,
                 new FindingSubject.SingleTest(test),
                 new AlwaysFailingEvidence(
@@ -733,13 +763,13 @@ internal sealed class FailureModeProvider : IFindingProvider
 
                 LastOccurrenceIn: lastFailureIn,
                 DrillDown.ForTest(FindingKind.AlwaysFailing, test),
-                EvidenceSessions: occasions.Count);
+                EvidenceSessions: occasions.Count));
         }
 
         // Everything else that failed at all. Either the failure mode varies between runs, or one
         // mode occurs inconsistently — two observations that a developer investigates the same way
         // and that the specification names alike.
-        return new FindingCandidate(
+        return Examination.Of(new FindingCandidate(
             FindingKind.Flaky,
             new FindingSubject.SingleTest(test),
             new FlakyEvidence(
@@ -776,7 +806,7 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             LastOccurrenceIn: lastFailureIn,
             DrillDown.ForTest(FindingKind.Flaky, test),
-            EvidenceSessions: occasions.Count);
+            EvidenceSessions: occasions.Count));
     }
 
     /// <summary>

@@ -6,6 +6,7 @@
 using System.Globalization;
 using System.Text;
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
 
 namespace Xping.Cli.Report.Rendering;
 
@@ -41,6 +42,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// quoting the block back at someone.
     /// </remarks>
     private const int FenceWidth = 72;
+
+    // Kinds named on the unmeasured line before the rest become a count. Three is what fits beside
+    // the glyph and the prefix at the widths `ReportVocabulary` labels take; a fourth pushes the
+    // line past the fence it sits above, and a reader scanning four numbers for the largest is
+    // being given a table one segment at a time.
+    private const int UnmeasuredKindsShown = 3;
 
     private const string Fence = "```";
 
@@ -116,8 +123,73 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         builder.AppendLine(string.Join(separator, counts));
 
+        WriteUnmeasured(builder, summary, separator);
         WriteCaveats(builder, envelope, separator);
     }
+
+    /// <summary>
+    /// Writes the questions this window's data could not answer at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own line, because it is neither of the things the two lines around it are. The counts
+    /// line holds suite-wide totals of candidates the report saw and withheld; this is per kind and
+    /// counts tests no candidate ever existed for. The caveat line holds things that went wrong;
+    /// a question the recorded data cannot answer is the report working. And thirteen kinds cannot
+    /// be appended to a line of totals in any case.
+    /// </para>
+    /// <para>
+    /// <b>Only the unreadable half is printed.</b> The counts line already says "awaiting more
+    /// runs", and a second waiting figure beside it in a different unit — tests here, candidates
+    /// there — is the confusion this whole change exists to remove. The awaiting half is published
+    /// in the JSON envelope, where a caller can read the two apart by name.
+    /// </para>
+    /// <para>
+    /// Three kinds and then a count of the rest. At the widths these labels take, three segments
+    /// and the glyph land around the fence's own width; four are reliably past it, and a reader who
+    /// has to scan four numbers to find the big one would have been better served by the JSON.
+    /// </para>
+    /// </remarks>
+    private void WriteUnmeasured(StringBuilder builder, SummaryDto summary, string separator)
+    {
+        // Count descending so the largest gap is read first, then by the enum's own order so that
+        // two kinds with equal counts resolve the same way on every run. Without the tie-break the
+        // line would depend on dictionary order and two reports over one store could differ.
+        List<KeyValuePair<string, NotMeasuredDto>> unreadable =
+        [
+            .. summary.NotMeasured
+                .Where(entry => entry.Value.Unreadable > 0)
+                .OrderByDescending(entry => entry.Value.Unreadable)
+                .ThenBy(entry => KindOrder(entry.Key))
+        ];
+
+        if (unreadable.Count == 0)
+            return;
+
+        var segments = new List<string>();
+
+        foreach (KeyValuePair<string, NotMeasuredDto> entry in unreadable.Take(UnmeasuredKindsShown))
+        {
+            segments.Add(
+                $"{ReportVocabulary.LabelFor(entry.Key)} " +
+                entry.Value.Unreadable.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (unreadable.Count > UnmeasuredKindsShown)
+            segments.Add($"+{unreadable.Count - UnmeasuredKindsShown} more");
+
+        builder.Append(capabilities.Glyphs.Pending).Append(' ')
+               .Append("nothing to measure: ")
+               .AppendLine(string.Join(separator, segments));
+    }
+
+    /// <summary>
+    /// Orders a kind by its declaration, for a tie-break that cannot vary between runs.
+    /// </summary>
+    /// <param name="kind">The kind, as the envelope spells it.</param>
+    /// <returns>Its position, or one past the end for a kind this build does not know.</returns>
+    private static int KindOrder(string kind) =>
+        Enum.TryParse(kind, out FindingKind parsed) ? (int)parsed : int.MaxValue;
 
     /// <summary>
     /// Writes the ways in which the report saw less than it wanted to.
@@ -200,6 +272,15 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         if (summary.ExcludedNotSignificant > 0)
             reasons.Add($"{summary.ExcludedNotSignificant} could be chance");
+
+        // Counted in kinds, not tests. The sentence is answering "why is this block empty", and the
+        // answer is which questions went unasked; how many tests each of them covers is on the line
+        // above, in the unit that line uses. A suite where every question was unanswerable used to
+        // reach here and print a green "No findings.", which is the reading #185 was filed about.
+        int silent = summary.NotMeasured.Count(entry => entry.Value.Unreadable > 0);
+
+        if (silent > 0)
+            reasons.Add($"{silent} {KindWord(silent)} had nothing to measure");
 
         return reasons.Count == 0
             ? $"{capabilities.Glyphs.Pass} No findings."
@@ -343,6 +424,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     private static string RunWord(int count) => count == 1 ? "run" : "runs";
 
     private static string NeedWord(int count) => count == 1 ? "needs" : "need";
+
+    private static string KindWord(int count) => count == 1 ? "kind" : "kinds";
 
     private static string Format(DateTime value, string format) =>
         value.ToString(format, CultureInfo.InvariantCulture);

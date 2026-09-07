@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
+
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Scoring;
@@ -21,14 +23,34 @@ namespace Xping.Cli.Report;
 /// eleven candidates and one that had nothing to discard are the same empty block, and a reader who
 /// cannot tell them apart learns the wrong thing from silence.
 /// </param>
+/// <param name="NotMeasured">
+/// Per kind, the fingerprints that kind could not be measured on at all, split by whether waiting
+/// fixes it.
+/// <para>
+/// A different quantity from the two counts above, and deliberately not added to them. Those count
+/// candidates a provider offered and this pass then dropped; this counts fingerprints no candidate
+/// was ever offered for, because the provider could compute nothing about them. Only the first kind
+/// of drop is a judgement the report made.
+/// </para>
+/// <para>
+/// <b>Per kind, and never totalled.</b> Summing across kinds would count one test as many times as
+/// there are questions its data could not answer; intersecting them collapses to nothing, because
+/// a test's pass and fail are always readable and so nearly every test is measured by something.
+/// Worse, either total would move with <c>--kind</c>, which is the one thing a count of what could
+/// not be measured must not do. Per kind it cannot: the six providers own disjoint kind sets, so a
+/// kind's figure comes from its own provider or the kind is absent from the map.
+/// </para>
+/// </param>
 internal sealed record AnalysisResult(
     IReadOnlyList<Finding> Findings,
     IReadOnlyList<string> FailedProviders,
     int ExcludedLowEvidence,
-    int ExcludedNotSignificant)
+    int ExcludedNotSignificant,
+    IReadOnlyDictionary<FindingKind, NotMeasuredCount> NotMeasured)
 {
     /// <summary>Gets an empty result.</summary>
-    public static AnalysisResult Empty { get; } = new([], [], 0, 0);
+    public static AnalysisResult Empty { get; } =
+        new([], [], 0, 0, ReadOnlyDictionary<FindingKind, NotMeasuredCount>.Empty);
 }
 
 /// <summary>
@@ -46,6 +68,14 @@ internal sealed record AnalysisResult(
 /// kind and cannot see how many fingerprints the other providers asked their question of, nor —
 /// more to the point — can it judge its own p-values against the number of times it produced one.
 /// It reports the size of the family it tested and this decides what that family may claim.
+/// </para>
+/// <para>
+/// What a provider may report about itself, on the other side of that line, is what it observed and
+/// what it could not — never what either is worth. <see cref="AnalysisResult.NotMeasured"/> is a
+/// description of coverage and not a gate on emission: no candidate appears or disappears because
+/// of it, exactly as no finding's severity moves because of the denominator a provider publishes
+/// beside it. The rule the division protects is that a test flagged by one metric is never silently
+/// dropped by another, and a count of unanswered questions cannot drop anything.
 /// </para>
 /// </remarks>
 internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers)
@@ -68,6 +98,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
         // provider has run.
         var surviving = new List<FindingCandidate>();
         var tested = new Dictionary<FindingKind, int>();
+        var notMeasured = new Dictionary<FindingKind, NotMeasuredCount>();
 
         int lowEvidence = 0;
 
@@ -100,6 +131,20 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
             {
                 if (kinds == null || kinds.Contains(kind))
                     tested[kind] = tested.GetValueOrDefault(kind) + count;
+            }
+
+            // The same filter, deliberately. `--kind` has to narrow a kind's family, its candidates
+            // and the tally of what it could not measure together, or the report answers "how much
+            // of the suite could this metric read" differently according to what else was asked for
+            // in the same invocation.
+            //
+            // The addition never actually adds across providers, because each kind is owned by
+            // exactly one of them. It is written as an addition anyway so that a provider split in
+            // two later cannot silently overwrite half its own answer.
+            foreach ((FindingKind kind, NotMeasuredCount count) in report.NotMeasured)
+            {
+                if (kinds == null || kinds.Contains(kind))
+                    notMeasured[kind] = notMeasured.GetValueOrDefault(kind) + count;
             }
 
             foreach (FindingCandidate candidate in report.Candidates)
@@ -162,7 +207,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
         findings.Sort(FindingOrder.Instance);
         failed.Sort(StringComparer.Ordinal);
 
-        return new AnalysisResult(findings, failed, lowEvidence, notSignificant);
+        return new AnalysisResult(findings, failed, lowEvidence, notSignificant, notMeasured);
     }
 
     /// <summary>

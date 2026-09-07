@@ -255,6 +255,7 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
         var candidates = new List<FindingCandidate>();
         int tested = 0;
+        NotMeasuredCount notMeasured = default;
 
         // Fingerprints are ordinal-sorted by the index, so findings come out in the same sequence on
         // every run whatever order the sessions were read in.
@@ -264,14 +265,25 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
             if (examination.Tested)
                 tested++;
+            else
+                notMeasured += examination.NotMeasured;
 
             if (examination.Candidate is { } candidate)
                 candidates.Add(candidate);
         }
 
+        // The awaiting half is structurally zero and published as such. This kind has no session
+        // floor — the paragraph on `Examine` says why — so nothing here is ever declined for want of
+        // runs of the shape already recorded. What it declines, it declines because the suite never
+        // varied its concurrency, and a hundred more single-threaded runs answer that no better than
+        // the twenty already read.
         return new ProviderReport(
             candidates,
-            new Dictionary<FindingKind, int> { [FindingKind.ParallelSensitive] = tested });
+            new Dictionary<FindingKind, int> { [FindingKind.ParallelSensitive] = tested },
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.ParallelSensitive] = notMeasured
+            });
     }
 
     /// <summary>
@@ -299,11 +311,17 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         List<Measured> considered = population.Considered;
         ConcurrencyRange range = Range(considered);
 
-        // A test whose concurrency never varied. There is no trend to test for and so nothing to
-        // charge the correction with: a fingerprint that never ran at two levels is not a
-        // comparison this provider made and lost, it is one it could not make.
+        // A test whose concurrency never varied, or whose executions carried no concurrency at all.
+        // There is no trend to test for and so nothing to charge the correction with: a fingerprint
+        // that never ran at two levels is not a comparison this provider made and lost, it is one it
+        // could not make.
+        //
+        // Unreadable rather than awaiting runs, and the distinction is the whole of what a reader
+        // does with the number. More runs of a suite that always executes at one level produce more
+        // readings at one level; what this needs is a run at a different one, or an adapter that
+        // records the level at all.
         if (range.DistinctLevels < 2)
-            return Examination.NotPosed;
+            return Examination.Unreadable;
 
         List<TrendPoint> points = [.. considered.Select(m =>
             new TrendPoint(m.Concurrency, m.Reference.Failed, m.Reference.SessionIndex))];
@@ -327,6 +345,11 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
         if (Math.Abs(tau) < LocalAnalysisConstants.ParallelSensitivityTau)
             return Examination.Of(null);
 
+        // Left as a tested fingerprint deliberately, unlike the same condition in the duration and
+        // time providers. Those read it before any statistic; here `CochranArmitage.Of` has already
+        // run, so the comparison genuinely was made and the family it was made in has to say so.
+        // Removing it from the denominator after the fact is the one direction a multiplicity
+        // correction cannot be adjusted in.
         TestReference? test = context.Tests.ReferenceFor(fingerprint);
         if (test == null)
             return Examination.Of(null);

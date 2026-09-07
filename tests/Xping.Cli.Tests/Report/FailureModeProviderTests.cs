@@ -73,8 +73,117 @@ public sealed class FailureModeProviderTests
             errorMessage: "unexpected null",
             stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
 
+    /// <summary>
+    /// A window that was one long outage is counted, test by test.
+    /// </summary>
+    /// <remarks>
+    /// #185: nothing of any test's own behaviour was observed here — every occasion of every one of
+    /// them was discounted as environmental — and until the tally existed the whole suite came out
+    /// of this window reported as healthy. Awaiting runs rather than unreadable: what is missing is
+    /// an ordinary run, and the next one supplies it.
+    /// <para>
+    /// <c>SharedFailure</c> and <c>BrokenFixture</c> keep no tally at all. They are counted in
+    /// signature groups, and a count of groups under a field every other kind counts tests in is not
+    /// a number a reader can compare with the one beside it — absence says so where a zero would
+    /// claim the kind had looked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AWindowThatWasOneLongOutageIsCountedTestByTest()
+    {
+        TestSession[] sessions = EveryRunAnOutage();
+
+        int tests = TestSessionFactory.Context(sessions).Tests.Fingerprints.Count;
+
+        foreach (FindingKind kind in
+            (FindingKind[])
+            [FindingKind.Flaky, FindingKind.AlwaysFailing, FindingKind.TimingOut])
+        {
+            NotMeasuredCount count = NotMeasured(kind, sessions);
+
+            Assert.Equal(tests, count.AwaitingRuns);
+            Assert.Equal(0, count.Unreadable);
+        }
+
+        Assert.False(
+            new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions))
+                .NotMeasured.ContainsKey(FindingKind.SharedFailure));
+    }
+
+    /// <summary>
+    /// A test the shared cause absorbed is reported, not counted as unmeasured.
+    /// </summary>
+    /// <remarks>
+    /// The discrimination the tally has to make. A test whose every failure was attributed to a
+    /// signature shared across the suite has not gone unmeasured — it is on the page, under the
+    /// group — and naming it here as well would state one finding twice in a line whose whole
+    /// purpose is to name questions whose answers are missing.
+    /// </remarks>
+    [Fact]
+    public void ATestWhoseEveryFailureWentIntoAClusterIsNotCountedAsUnmeasured()
+    {
+        // Four of thirty down together in every run: enough tests to be one cause, and far short of
+        // the ten failures and three in ten that would read as an outage.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 4).Select(i => SharedFailure($"Down{i}")),
+                    .. Enumerable.Range(4, 26).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+                ]))
+        ];
+
+        Assert.Equal(0, TestSessionFactory.Context(sessions).EnvironmentalSessionCount);
+        Assert.Contains(Analyze(sessions), c => c.Kind == FindingKind.SharedFailure);
+
+        Assert.True(NotMeasured(FindingKind.Flaky, sessions).IsEmpty);
+    }
+
+    /// <summary>
+    /// Builds a window in which every run looked like an outage.
+    /// </summary>
+    /// <remarks>
+    /// Twelve of thirty-one tests down in every one of six runs, which is what <c>SessionView.For</c>
+    /// reads as environmental. The subject passes throughout, and is discounted with everything
+    /// else: an environmental run is a run no test's own behaviour was observed on.
+    /// </remarks>
+    private static TestSession[] EveryRunAnOutage() =>
+    [
+        .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                TestSessionFactory.Execution("Subject"),
+                .. Enumerable.Range(0, 12).Select(i => SharedFailure($"Down{i}")),
+                .. Enumerable.Range(12, 18).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+            ]))
+    ];
+
+    /// <summary>
+    /// A test that simply never failed was measured, and is counted nowhere.
+    /// </summary>
+    /// <remarks>
+    /// The common case, and the one that decides whether the number means anything: counting every
+    /// green test would make the tally the test count.
+    /// </remarks>
+    [Fact]
+    public void ATestThatNeverFailedIsMeasuredAndCountedNowhere()
+    {
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, "Green"))
+        ];
+
+        Assert.Empty(Analyze(sessions));
+        Assert.True(NotMeasured(FindingKind.Flaky, sessions).IsEmpty);
+    }
     private static List<FindingCandidate> Analyze(params TestSession[] sessions) =>
         [.. new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions)).Candidates];
+
+    private static NotMeasuredCount NotMeasured(FindingKind kind, params TestSession[] sessions) =>
+        new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions))
+            .NotMeasured.GetValueOrDefault(kind);
 
     private static FindingCandidate Single(List<FindingCandidate> candidates, FindingKind kind) =>
         Assert.Single(candidates, c => c.Kind == kind);

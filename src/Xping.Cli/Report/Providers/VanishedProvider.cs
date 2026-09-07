@@ -99,6 +99,7 @@ internal sealed class VanishedProvider : IFindingProvider
     {
         var candidates = new List<FindingCandidate>();
         int tested = 0;
+        int awaitingRuns = 0;
 
         AnalysisWindowSlices slices = AnalysisWindowSlices.From(context);
 
@@ -108,7 +109,7 @@ internal sealed class VanishedProvider : IFindingProvider
         // coordinator's Benjamini-Hochberg pass is handed a kind that asked nothing instead of a
         // kind that asked three hundred questions and liked none of the answers.
         if (slices.BaselineCount == 0 || slices.CurrentCount == 0)
-            return Report(candidates, tested);
+            return Report(candidates, tested, context.Tests.Fingerprints.Count);
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
@@ -117,6 +118,7 @@ internal sealed class VanishedProvider : IFindingProvider
             if (!slices.BaselineAppearances.TryGetValue(fingerprint, out int appearances) ||
                 appearances < LocalAnalysisConstants.VanishedMinBaselineSessions)
             {
+                awaitingRuns++;
                 continue;
             }
 
@@ -127,6 +129,14 @@ internal sealed class VanishedProvider : IFindingProvider
             // answered no. Counting only the absences would describe a family in which every member
             // is a discovery and correct for nothing — a suite of three hundred stable tests holding
             // one absence would report m = 1 and pass it through untouched.
+            // Ahead of the Fisher test rather than after it, unlike the two gates below. A
+            // fingerprint the index cannot resolve to a test is an inconsistency inside the index
+            // and not a question the data declined, so it is charged to neither the family nor the
+            // tally — and reading it here keeps it out of both.
+            TestReference? reference = context.Tests.ReferenceFor(fingerprint);
+            if (reference == null)
+                continue;
+
             tested++;
 
             if (slices.Current.Contains(fingerprint))
@@ -140,10 +150,6 @@ internal sealed class VanishedProvider : IFindingProvider
                 appearances, slices.BaselineCount, 0, slices.CurrentCount);
 
             if (pValue > LocalAnalysisConstants.VanishedAlpha)
-                continue;
-
-            TestReference? reference = context.Tests.ReferenceFor(fingerprint);
-            if (reference == null)
                 continue;
 
             IReadOnlyList<ExecutionRef> executions = context.Tests.ExecutionsOf(fingerprint);
@@ -197,7 +203,7 @@ internal sealed class VanishedProvider : IFindingProvider
                 SeverityCeiling: Severity.Low));
         }
 
-        return Report(candidates, tested);
+        return Report(candidates, tested, awaitingRuns);
     }
 
     /// <summary>
@@ -205,9 +211,27 @@ internal sealed class VanishedProvider : IFindingProvider
     /// </summary>
     /// <param name="candidates">Absences the gate let through.</param>
     /// <param name="tested">Fingerprints the absence was measured on.</param>
+    /// <param name="awaitingRuns">Fingerprints the baseline had not seen enough of to ask.</param>
     /// <returns>The provider's report.</returns>
-    private static ProviderReport Report(IReadOnlyList<FindingCandidate> candidates, int tested) =>
-        new(candidates, new Dictionary<FindingKind, int> { [FindingKind.Vanished] = tested });
+    /// <remarks>
+    /// Nothing is ever unreadable here, and the published zero says so rather than leaving a reader
+    /// to wonder. A session appearance is the one observation every adapter records by existing: a
+    /// test either ran in a run or it did not, and there is no shape of data this kind cannot read.
+    /// Everything it declines, it declines for want of history — which is why the whole-window
+    /// return above expands to every fingerprint rather than to nothing. A window that holds no
+    /// baseline has not measured the suite and could not have; the number has to be the same whether
+    /// that was decided once at the top or once per fingerprint below, or a reader comparing two
+    /// reports would see a suite's unmeasured count collapse the moment a second full run arrived.
+    /// </remarks>
+    private static ProviderReport Report(
+        IReadOnlyList<FindingCandidate> candidates, int tested, int awaitingRuns) =>
+        new(
+            candidates,
+            new Dictionary<FindingKind, int> { [FindingKind.Vanished] = tested },
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.Vanished] = new NotMeasuredCount(awaitingRuns, 0)
+            });
 }
 
 /// <summary>
