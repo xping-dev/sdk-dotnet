@@ -43,7 +43,6 @@ internal sealed class TestIndex
     private readonly Dictionary<string, int> _sessionsRunIn;
     private readonly Dictionary<string, TestReference> _references;
     private readonly Dictionary<Guid, int> _sessionPositions;
-    private readonly HashSet<Guid> _sessionsWithFinalFailures;
 
     private TestIndex(
         AnalysisWindow window,
@@ -52,7 +51,6 @@ internal sealed class TestIndex
         Dictionary<string, int> sessionsRunIn,
         Dictionary<string, TestReference> references,
         Dictionary<Guid, int> sessionPositions,
-        HashSet<Guid> sessionsWithFinalFailures,
         IReadOnlyList<string> fingerprints)
     {
         Window = window;
@@ -61,7 +59,6 @@ internal sealed class TestIndex
         _sessionsRunIn = sessionsRunIn;
         _references = references;
         _sessionPositions = sessionPositions;
-        _sessionsWithFinalFailures = sessionsWithFinalFailures;
         Fingerprints = fingerprints;
     }
 
@@ -201,30 +198,61 @@ internal sealed class TestIndex
     }
 
     /// <summary>
-    /// Gets the fraction of a test's failures that landed in a session that ended up failing.
+    /// Gets the fraction of the sessions a test failed in that it ended red.
     /// </summary>
     /// <param name="fingerprint">The test to measure.</param>
     /// <returns>A value in [0,1]; zero when the test never failed.</returns>
     /// <remarks>
+    /// <para>
     /// Separates a test that fails and blocks the build from one whose failures are always masked by
     /// a retry. Both are worth fixing; only the first is stopping anyone today.
+    /// </para>
+    /// <para>
+    /// Both counts are sessions, for the reason <see cref="RunFrequencyOf"/> gives: a retried run
+    /// records an execution per attempt, so counting attempts put every masked failure in the
+    /// denominator and none in the numerator, and a test that failed four times in one green session
+    /// and once in a red one scored 0.20 where the occasions say 0.50. The bias ran hardest against
+    /// the tests the retry findings report, and it made this term disagree about its unit with the
+    /// one immediately above it in the same scorer.
+    /// </para>
+    /// <para>
+    /// Blocking means <em>this</em> test ended the session red, read off its deciding attempt via
+    /// <see cref="RunsOf"/>. Asking instead whether the session ended red — as this did — credited a
+    /// test whose every failure was masked with blocking the build whenever some other test failed
+    /// finally in the same session, which is the opposite of the separation above.
+    /// </para>
     /// </remarks>
     public double BlockingRateOf(string fingerprint)
     {
-        int failures = 0;
-        int blocking = 0;
+        int failedSessions = 0;
+        int lastFailedSession = -1;
 
+        // Executions arrive grouped by session, so a session is new to the tally only when the last
+        // failure counted came from a different one. The same walk Build takes, and for the same
+        // reason: a retried run must not count as several occasions.
         foreach (ExecutionRef reference in ExecutionsOf(fingerprint))
         {
-            if (!reference.Failed)
+            if (!reference.Failed || reference.SessionIndex == lastFailedSession)
                 continue;
 
-            failures++;
-            if (_sessionsWithFinalFailures.Contains(reference.Session.SessionId))
+            failedSessions++;
+            lastFailedSession = reference.SessionIndex;
+        }
+
+        if (failedSessions == 0)
+            return 0;
+
+        int blocking = 0;
+
+        foreach (ExecutionRef run in RunsOf(fingerprint))
+        {
+            if (run.Failed)
                 blocking++;
         }
 
-        return failures == 0 ? 0 : (double)blocking / failures;
+        // A run that failed is a session the test failed in, so the numerator cannot outrun the
+        // denominator and the ratio needs no clamping.
+        return (double)blocking / failedSessions;
     }
 
     /// <summary>
@@ -313,7 +341,6 @@ internal sealed class TestIndex
         var sessionsRunIn = new Dictionary<string, int>(StringComparer.Ordinal);
         var references = new Dictionary<string, TestReference>(StringComparer.Ordinal);
         var sessionPositions = new Dictionary<Guid, int>();
-        var sessionsWithFinalFailures = new HashSet<Guid>();
 
         for (int position = 0; position < window.Sessions.Count; position++)
         {
@@ -365,9 +392,6 @@ internal sealed class TestIndex
                 if (!references.ContainsKey(fingerprint))
                     references[fingerprint] = ToReference(execution);
             }
-
-            if (SessionOutcomes.HasFinalFailure(session))
-                sessionsWithFinalFailures.Add(session.SessionId);
         }
 
         var fingerprints = byFingerprint.Keys.OrderBy(f => f, StringComparer.Ordinal).ToList();
@@ -379,7 +403,6 @@ internal sealed class TestIndex
             sessionsRunIn,
             references,
             sessionPositions,
-            sessionsWithFinalFailures,
             fingerprints);
     }
 

@@ -175,7 +175,7 @@ public sealed class TestIndexTests
             TestIndex.Build(TestSessionFactory.Window(session)).RunsOf(SubjectFingerprint));
 
         Assert.True(run.Failed);
-        Assert.True(SessionOutcomes.HasFinalFailure(session));
+        Assert.Equal((1, 1), SessionOutcomes.Tally(session));
     }
 
     [Fact]
@@ -194,6 +194,110 @@ public sealed class TestIndexTests
         IReadOnlyList<ExecutionRef> runs = index.RunsOf(SubjectFingerprint);
 
         Assert.Equal(Enumerable.Range(0, 8), runs.Select(r => r.SessionIndex));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Blocking rate
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds one session in which <see cref="Subject"/> took <paramref name="attempts"/> attempts
+    /// and ended the way <paramref name="ends"/> says.
+    /// </summary>
+    /// <param name="ordinal">The session's position; 0 is the oldest.</param>
+    /// <param name="attempts">How many attempts the subject took.</param>
+    /// <param name="ends">The outcome of the deciding attempt; every earlier one failed.</param>
+    /// <param name="alsoFailing">A second test that ends the session red on its only attempt.</param>
+    private static TestSession Attempted(
+        int ordinal,
+        int attempts,
+        TestOutcome ends,
+        bool alsoFailing = false)
+    {
+        var executions = new List<TestExecution>();
+
+        for (int attempt = 1; attempt <= attempts; attempt++)
+        {
+            bool deciding = attempt == attempts;
+
+            executions.Add(TestSessionFactory.Execution(
+                Subject,
+                outcome: deciding ? ends : TestOutcome.Failed,
+                attempt: attempt,
+                passedOnRetry: deciding && ends == TestOutcome.Passed && attempts > 1,
+                maxRetries: attempts - 1,
+                errorMessage: deciding && ends == TestOutcome.Passed ? null : "boom"));
+        }
+
+        executions.Add(alsoFailing
+            ? TestSessionFactory.Execution("Neighbour", TestOutcome.Failed, errorMessage: "boom")
+            : TestSessionFactory.Execution("Neighbour"));
+
+        return TestSessionFactory.Session(ordinal, executions);
+    }
+
+    [Fact]
+    public void BlockingRateCountsSessionsRatherThanAttempts()
+    {
+        // The bug this pins: four failed attempts in one session that ended green and one failure in
+        // a session that ended red is five failed executions of which one blocked — 0.20 — where the
+        // occasions say one of two, 0.50. Counting attempts made a test look less blocking the more
+        // it retried, which is the opposite of the truth and worst for the tests the retry findings
+        // already report.
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window(
+            Attempted(0, attempts: 5, ends: TestOutcome.Passed),
+            Attempted(1, attempts: 1, ends: TestOutcome.Failed)));
+
+        Assert.Equal(0.50, index.BlockingRateOf(SubjectFingerprint), 3);
+    }
+
+    [Fact]
+    public void AMaskedFailureIsNotBlockingEvenWhenAnotherTestFailedTheSession()
+    {
+        // Blocking has to mean this test ended the session red. Asking whether the session ended red
+        // credited a test whose every failure was masked with blocking the build whenever a
+        // neighbour failed finally in the same session.
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window(
+            Attempted(0, attempts: 3, ends: TestOutcome.Passed, alsoFailing: true),
+            Attempted(1, attempts: 2, ends: TestOutcome.Passed, alsoFailing: true)));
+
+        Assert.Equal(0, index.BlockingRateOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void ATestThatEndsEverySessionRedBlocksEveryTimeItFails()
+    {
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window(
+            Attempted(0, attempts: 1, ends: TestOutcome.Failed),
+            Attempted(1, attempts: 3, ends: TestOutcome.Failed)));
+
+        Assert.Equal(1.0, index.BlockingRateOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void ATimeoutCountsAsAFailureAndAsABlock()
+    {
+        // Failure is TestOutcome.Failed or TestOutcome.Timeout, and both counts read it the same way.
+        TestIndex index = TestIndex.Build(TestSessionFactory.Window(
+            Attempted(0, attempts: 1, ends: TestOutcome.Timeout)));
+
+        Assert.Equal(1.0, index.BlockingRateOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void BlockingRateIsZeroForATestThatNeverFailed()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 6, presentIn: 6, attempts: 1));
+
+        Assert.Equal(0, index.BlockingRateOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void BlockingRateIsZeroForAFingerprintTheWindowNeverSaw()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 6, presentIn: 6, attempts: 2));
+
+        Assert.Equal(0, index.BlockingRateOf("fp-NeverRan"));
     }
 
     // ---------------------------------------------------------------------------------------

@@ -40,22 +40,6 @@ internal static class SessionOutcomes
     }
 
     /// <summary>
-    /// Returns whether a session ended with at least one test failing on its final attempt.
-    /// </summary>
-    /// <param name="session">The session to inspect.</param>
-    /// <returns><see langword="true"/> when the session ended red.</returns>
-    public static bool HasFinalFailure(TestSession session)
-    {
-        foreach (var outcome in FinalOutcomes(session).Values)
-        {
-            if (outcome.Outcome.IsFailure())
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Reduces a session to one outcome per test, taken from its last attempt.
     /// </summary>
     /// <param name="session">The session to reduce.</param>
