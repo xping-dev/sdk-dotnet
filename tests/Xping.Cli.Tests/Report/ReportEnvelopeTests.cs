@@ -126,7 +126,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.13", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.14", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -166,6 +166,14 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal("Vanished", finding.GetProperty("kind").GetString());
         Assert.Equal("low", finding.GetProperty("severity").GetString());
         Assert.Equal("low", finding.GetProperty("evidenceLevel").GetString());
+
+        // The number the band above was decided from, published so it can be reconciled with the
+        // counts inside `evidence` rather than taken on trust. For a vanished test it is the
+        // baseline runs it appeared in, which is what its absence is a change from — not the runs
+        // in the window, and not the runs it ran in on either side of the slice boundary.
+        Assert.Equal(
+            finding.GetProperty("evidence").GetProperty("baselineSessions").GetInt32(),
+            finding.GetProperty("evidenceSessions").GetInt32());
 
         // Which executions the counts below were taken over. Vanished counts session appearances, so
         // it discounts nothing — and says so rather than leaving the reader to infer it.
@@ -309,7 +317,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.13", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.14", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

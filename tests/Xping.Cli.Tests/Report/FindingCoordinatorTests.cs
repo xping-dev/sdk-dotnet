@@ -284,14 +284,15 @@ public sealed class FindingCoordinatorTests
     }
 
     [Fact]
-    public void EvidenceLevelFollowsTheSubjectsSessionCount()
+    public void EvidenceLevelFollowsTheCandidatesOwnDenominator()
     {
         var coordinator = new FindingCoordinator(
             [new StubProvider("stub", FindingKind.Flaky, "Test0")]);
 
         using var warnings = new StringWriter();
 
-        // The subject runs once in every session, so its session count is the window's.
+        // The stub measures over every run its subject appeared in, and the subject runs once in
+        // every session, so all three numbers coincide here. The next test is where they part.
         Assert.Equal(
             EvidenceLevel.Low,
             coordinator.Run(Context(sessionCount: 7), null, warnings).Findings[0].EvidenceLevel);
@@ -303,6 +304,66 @@ public sealed class FindingCoordinatorTests
         Assert.Equal(
             EvidenceLevel.High,
             coordinator.Run(Context(sessionCount: 16), null, warnings).Findings[0].EvidenceLevel);
+    }
+
+    [Fact]
+    public void AClaimMeasuredOverFewerRunsThanItsTestRanInIsBandedOnTheFewer()
+    {
+        // #182. A test present in all twenty runs of the window, whose finding was computed from
+        // ten of them - the shape every provider produces, because every provider drops runs it
+        // cannot read or has discounted. Banded on the subject this published as `high`, which is
+        // evidence the split has not got and the top of a three-level scale besides.
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0", evidenceSessions: 10)]);
+
+        using var warnings = new StringWriter();
+        Finding finding = coordinator.Run(Context(sessionCount: 20), null, warnings).Findings[0];
+
+        Assert.Equal(20, Context(sessionCount: 20).Tests.SessionsRunIn("fp-Test0"));
+        Assert.Equal(EvidenceLevel.Moderate, finding.EvidenceLevel);
+
+        // Published beside the band, so a reader can see which of the two numbers it came from.
+        Assert.Equal(10, finding.EvidenceSessions);
+    }
+
+    [Fact]
+    public void TheReportingFloorStillReadsTheSubjectRatherThanTheClaim()
+    {
+        // The half of #182 that deliberately did not move. Whether a test is worth reporting at all
+        // has to be answered the same way for every kind, or one metric flags a test that another
+        // silently drops with nothing on screen to explain it. So a claim resting on two runs is
+        // still emitted where its subject has history - it is emitted saying `low`.
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.Flaky, "Test0", evidenceSessions: 2)]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(sessionCount: 20), null, warnings);
+
+        Assert.Equal(0, result.ExcludedLowEvidence);
+        Assert.Equal(EvidenceLevel.Low, Assert.Single(result.Findings).EvidenceLevel);
+    }
+
+    [Fact]
+    public void AnAlternativeIsBandedOnItsOwnDenominatorRatherThanTheClaimItReplaces()
+    {
+        // The superseding stub's alternative measures over half the runs the silenced claim did,
+        // which is the normal case rather than a contrivance: DurationUnstable reads what could be
+        // normalised where the DurationRegression it stands in for read what could be compared.
+        // Banding the handover on the original would label the replacement with the evidence of a
+        // finding that was never printed.
+        var coordinator = new FindingCoordinator(
+        [
+            new SupersedingProvider(
+                FindingKind.DurationRegression, FindingKind.DurationUnstable, 0.9, 100)
+        ]);
+
+        using var warnings = new StringWriter();
+        Finding finding = Assert.Single(
+            coordinator.Run(Context(sessionCount: 20), null, warnings).Findings);
+
+        Assert.Equal(FindingKind.DurationUnstable, finding.Kind);
+        Assert.Equal(10, finding.EvidenceSessions);
+        Assert.Equal(EvidenceLevel.Moderate, finding.EvidenceLevel);
     }
 
     [Fact]
@@ -455,6 +516,12 @@ public sealed class FindingCoordinatorTests
     /// pass reads. Left at their defaults the stub is an observation of something that happened,
     /// which is the shape <c>RetryMasked</c> and <c>SharedFailure</c> have and the shape every test
     /// written before that pass existed assumed.
+    /// <para>
+    /// <paramref name="evidenceSessions"/> defaults to every session the subject ran in, which is
+    /// the shape of a kind that sets nothing aside. A test that wants the mismatch this stub cannot
+    /// otherwise produce — a claim measured over fewer runs than its subject appeared in — passes
+    /// its own.
+    /// </para>
     /// </remarks>
     private sealed class StubProvider(
         string name,
@@ -462,7 +529,8 @@ public sealed class FindingCoordinatorTests
         string test,
         double unreliability = 0.5,
         double? pValue = null,
-        int hypothesesTested = 0)
+        int hypothesesTested = 0,
+        int? evidenceSessions = null)
         : IFindingProvider
     {
         public string Name { get; } = name;
@@ -493,6 +561,8 @@ public sealed class FindingCoordinatorTests
                         unreliability,
                         LastOccurrenceIn: context.Window.Sessions[0],
                         DrillDownCommand: "xping report",
+                        EvidenceSessions:
+                            evidenceSessions ?? context.Tests.SessionsRunIn($"fp-{test}"),
                         PValue: pValue)
                 ],
                 family);
@@ -529,6 +599,7 @@ public sealed class FindingCoordinatorTests
                         0.5,
                         LastOccurrenceIn: context.Window.Sessions[0],
                         DrillDownCommand: "xping report",
+                        EvidenceSessions: context.Tests.SessionsRunIn("fp-Test0"),
                         PValue: pValue,
                         Instead: new FindingCandidate(
                             alternative,
@@ -536,7 +607,11 @@ public sealed class FindingCoordinatorTests
                             new StubEvidence(2),
                             0.4,
                             LastOccurrenceIn: context.Window.Sessions[0],
-                            DrillDownCommand: "xping report"))
+                            DrillDownCommand: "xping report",
+
+                            // Half the runs the claim it replaces was measured over, so the
+                            // handover can be seen to band on its own denominator.
+                            EvidenceSessions: context.Tests.SessionsRunIn("fp-Test0") / 2))
                 ],
                 family);
         }

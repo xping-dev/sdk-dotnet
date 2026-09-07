@@ -26,13 +26,21 @@ internal enum Severity
 }
 
 /// <summary>
-/// How much data a finding rests on, measured in sessions the subject ran in within the window.
+/// How much data a finding rests on, measured in the runs it was computed from.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Sessions, not executions: attempts of one test inside one session are correlated, so a test that
 /// retried its way to forty executions across six builds has six occasions' worth of evidence and
 /// must not be labelled as though it had forty.
+/// </para>
+/// <para>
+/// The finding's runs, not the subject's. Every kind measures over a subset of the runs its test
+/// appeared in — environmental runs are discounted, and a run whose session recorded no clock or
+/// whose durations cannot be normalised is one the question could not be asked of. The number is
+/// carried on the finding as <c>EvidenceSessions</c> and published beside the level, so a reader
+/// can see which of the two it came from. Whether a finding is emitted at all is a separate
+/// judgement, made on the subject — see <see cref="Scoring.EvidenceLevelResolver"/>.
 /// </para>
 /// <para>
 /// The unit matches Xping Cloud, which bands an effective sample size computed over runs collapsed

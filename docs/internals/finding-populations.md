@@ -86,6 +86,42 @@ double-count. This is the arithmetic the field names exist to make possible: a t
 executions, ten clustered failures and two of its own publishes `2 of 12`, and `12` is not how many
 times it ran.
 
+## What each kind's evidence level counts
+
+The `evidence low|moderate|high` label on a finding is banded on the **runs that finding was
+computed from** — not on the runs its test appeared in. They are different numbers for every kind in
+the table above, and for the same reasons: a discounted run is not an occasion the test's own
+behaviour was observed on, and a run the kind could not read at all is not an occasion either.
+
+| kind | runs the level counts |
+|---|---|
+| `Flaky`, `AlwaysFailing`, `TimingOut` | runs of the test, less the environmental ones |
+| `RetryMasked` | the same |
+| `RetryDeepening` | the settled runs in both arms of the comparison |
+| `RetryExhausted` | `runsConsidered` |
+| `SharedFailure`, `BrokenFixture` | runs the cluster's best-evidenced member ran in — nothing is set aside |
+| `DurationRegression` | `current.comparedSessions` + `baseline.comparedSessions` |
+| `DurationUnstable` | the runs behind the normalised readings the dispersion was taken over |
+| `ParallelSensitive` | `trend.sessions` |
+| `TimeSensitive` | `worse.sessions` + `other.sessions` |
+| `Vanished` | `baselineSessions` — the habit the absence is a change from |
+
+Wherever the kind already publishes that figure, the level is banded on the published one, so the
+label and the counts a reader can check it against cannot drift apart. The number itself reaches the
+JSON as `evidenceSessions` on every finding, beside `evidenceLevel`.
+
+**Two findings about one test may therefore carry different levels.** That is the same statement the
+population marker already makes, one layer up: the kinds do not count the same runs, so they do not
+have the same amount of evidence either. A `TimeSensitive` split over the ten runs that recorded a
+clock is not better evidenced because the test also ran in ten that did not.
+
+**What is *not* banded this way is whether the finding is reported at all.** The reporting floor —
+`MinimumSessionsPerTestToReport`, applied in `FindingCoordinator` — reads the runs the subject
+appeared in, for every kind alike. Emission has to be one rule, or a test flagged by one metric is
+silently dropped by another with nothing on screen to explain it. So a claim resting on two runs of
+a test with twenty runs of history is still printed. It is printed saying `evidence low`, which is
+what the level is for.
+
 ## Why the exceptions are exceptions
 
 **`SharedFailure` and `BrokenFixture` keep environmental sessions.** An environmental session *is* a

@@ -110,6 +110,8 @@ Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted
 
 ### The population marker
 
+**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence moderate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
+
 The marker between the evidence level and the finding id — `all runs`, `-env` or `-env-cluster` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
 
 | Marker | The rate is over |
@@ -335,11 +337,11 @@ For scripts and agents. Emits a versioned envelope and nothing else — no rende
 xping report --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over:
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over, and `evidenceSessions`, the number `evidenceLevel` was banded from:
 
 ```json
 {
-  "schemaVersion": "1.13",
+  "schemaVersion": "1.14",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -357,6 +359,7 @@ Every finding carries a `headline` — the same sentence the rendered report pri
       "kind": "Flaky",
       "severity": "high",
       "evidenceLevel": "moderate",
+      "evidenceSessions": 12,
       "population": "excludesEnvironmentalAndClustered",
       "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests",
                     "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },

@@ -92,7 +92,14 @@ internal abstract record FindingEvidence;
 /// <param name="Id">Stable short identity; see <see cref="FindingId"/>.</param>
 /// <param name="Kind">What the finding claims.</param>
 /// <param name="Severity">Banded from <paramref name="Impact"/>.</param>
-/// <param name="EvidenceLevel">How much data the claim rests on.</param>
+/// <param name="EvidenceLevel">How much data the claim rests on, banded.</param>
+/// <param name="EvidenceSessions">
+/// The number <paramref name="EvidenceLevel"/> was banded from: independent runs the claim was
+/// computed from, which is generally fewer than the runs the subject appeared in. Carried and
+/// published alongside the band for the reason every other threshold in the report publishes its
+/// input — a level a reader cannot reconcile with the counts beside it is a level they have to take
+/// on trust.
+/// </param>
 /// <param name="Subject">The test or group the finding is about.</param>
 /// <param name="Evidence">The kind-specific payload.</param>
 /// <param name="DrillDownCommand">
@@ -108,6 +115,7 @@ internal sealed record Finding(
     FindingKind Kind,
     Severity Severity,
     EvidenceLevel EvidenceLevel,
+    int EvidenceSessions,
     FindingSubject Subject,
     FindingEvidence Evidence,
     string DrillDownCommand,

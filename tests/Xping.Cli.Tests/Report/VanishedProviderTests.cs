@@ -429,6 +429,32 @@ public sealed class VanishedProviderTests
     }
 
     [Fact]
+    public void TheEvidenceCountsTheHabitRatherThanEveryRunTheTestAppearedIn()
+    {
+        // #182. D ran in twenty runs of this window: seventeen that covered the suite, and three
+        // filtered ones that named only D. The absence is a change from the seventeen — the
+        // filtered three are set aside from both slices before anything is counted, and the current
+        // slice holds none of D's appearances by construction.
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < 17; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A", "B", "C", "D"));
+        for (int i = 17; i < 20; i++)
+            sessions.Add(TestSessionFactory.Session(i, "D"));
+        for (int i = 20; i < 23; i++)
+            sessions.Add(TestSessionFactory.Session(i, "A", "B", "C"));
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+        FindingCandidate candidate = Assert.Single(Analyze(context));
+
+        var evidence = Assert.IsType<VanishedEvidence>(candidate.Evidence);
+
+        Assert.Equal(20, context.Tests.SessionsRunIn("fp-D"));
+        Assert.Equal(3, evidence.PartialSessionsSetAside);
+        Assert.Equal(17, candidate.EvidenceSessions);
+        Assert.Equal(evidence.BaselineSessions, candidate.EvidenceSessions);
+    }
+
+    [Fact]
     public void TheEvidenceSaysHowManyRunsCoveredOnlyPartOfTheSuite()
     {
         // Otherwise the denominators are unexplainable: a reader who asked for twenty-three runs is

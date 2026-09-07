@@ -577,6 +577,13 @@ internal sealed class DurationProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.DurationRegression, test),
 
+            // The runs the two-sample test actually read, both arms — the same two figures the
+            // evidence publishes as `comparedSessions`. Narrower than the runs the test appeared in
+            // twice over: a run whose own median was not positive normalises nothing, and a long
+            // baseline is capped at `MaxComparedSessions`.
+            EvidenceSessions:
+                baselineProfile.Compared.Count + currentProfile.Compared.Count,
+
             PValue: pValue));
     }
 
@@ -665,7 +672,12 @@ internal sealed class DurationProvider : IFindingProvider
 
             LastOccurrenceIn: TestIndex.NewestSession(all),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.DurationUnstable, test));
+            DrillDownCommand: DrillDown.ForTest(FindingKind.DurationUnstable, test),
+
+            // The runs behind the normalised readings, which is what the dispersion was computed
+            // over. Two normalisable readings of 1 and 10 clear the dispersion floor on their own,
+            // and a test present in five runs and normalisable in two holds two runs of evidence.
+            EvidenceSessions: whole.NormalisedSessions);
     }
 
     /// <summary>
@@ -871,6 +883,11 @@ internal sealed class DurationProvider : IFindingProvider
         var normalised = new List<double>(executions.Count);
         var sessions = new HashSet<Guid>();
 
+        // The runs behind `normalised`, which are fewer than `sessions` whenever a run recorded no
+        // positive median of its own — the xUnit adapter produces one for a failure raised outside
+        // the timed invocation, and a run made mostly of those normalises nothing.
+        var normalisedSessions = new HashSet<Guid>();
+
         // One entry per run the test appeared in, holding every attempt it made there. Kept in the
         // order the runs are reached so the truncation below can take the most recent ones.
         var perSession = new List<(int Index, Guid Session, List<double> Attempts)>();
@@ -882,7 +899,10 @@ internal sealed class DurationProvider : IFindingProvider
             sessions.Add(reference.Session.SessionId);
 
             if (medians.TryGetValue(reference.Session.SessionId, out double median))
+            {
                 normalised.Add(Milliseconds(reference) / median);
+                normalisedSessions.Add(reference.Session.SessionId);
+            }
 
             if (!comparable)
                 continue;
@@ -903,7 +923,12 @@ internal sealed class DurationProvider : IFindingProvider
         normalised.Sort();
 
         return new Profile(
-            executions, raw, normalised, sessions.Count, Compared(perSession, medians));
+            executions,
+            raw,
+            normalised,
+            sessions.Count,
+            normalisedSessions.Count,
+            Compared(perSession, medians));
     }
 
     /// <summary>
@@ -990,6 +1015,12 @@ internal sealed class DurationProvider : IFindingProvider
     /// of that however correlated the two are.
     /// </param>
     /// <param name="Sessions">Distinct runs the executions came from.</param>
+    /// <param name="NormalisedSessions">
+    /// Distinct runs behind <paramref name="Normalised"/> — the occasions the dispersion rests on,
+    /// which is what the instability finding's evidence level is banded from. A strict subset of
+    /// <paramref name="Sessions"/>: a run with no positive median of its own contributes raw
+    /// readings and no normalised ones.
+    /// </param>
     /// <param name="Compared">
     /// One normalised reading per run, ascending. What the two-sample comparison reads, and a
     /// strict subset of the runs behind <paramref name="Normalised"/> — see <c>Compared</c>.
@@ -999,6 +1030,7 @@ internal sealed class DurationProvider : IFindingProvider
         List<double> Raw,
         List<double> Normalised,
         int Sessions,
+        int NormalisedSessions,
         List<double> Compared)
     {
         public int Executions => Raw.Count;

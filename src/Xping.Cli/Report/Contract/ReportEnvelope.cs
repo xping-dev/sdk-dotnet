@@ -39,12 +39,11 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.13 is where the summary gained
-    /// <c>partialSessions</c> and <c>VanishedEvidence</c> gained <c>partialSessionsSetAside</c> —
-    /// the runs that covered only part of the suite, which an absence is counted on neither side
-    /// of.
+    /// leaving the number still would tell it nothing had moved. 1.14 is where every finding gained
+    /// <c>evidenceSessions</c> — the denominator <c>evidenceLevel</c> is banded from, which is the
+    /// runs the finding was computed over rather than the runs its test appeared in.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.13";
+    public const string CurrentSchemaVersion = "1.14";
 }
 
 /// <summary>
@@ -122,6 +121,11 @@ internal sealed record SummaryDto(
 /// <param name="Kind">What the finding claims.</param>
 /// <param name="Severity">How much attention it deserves.</param>
 /// <param name="EvidenceLevel">How much data it rests on.</param>
+/// <param name="EvidenceSessions">
+/// Independent runs this finding was computed from — what <paramref name="EvidenceLevel"/> was
+/// banded from. Not the window's run count, and not the runs the test appeared in: a kind that
+/// discounts environmental runs, or that cannot read a run at all, measured over fewer.
+/// </param>
 /// <param name="Population">
 /// Which executions the counts and rates below were taken over. The report ranks findings of
 /// different kinds against each other and the kinds do not all count the same population, so two
@@ -137,6 +141,7 @@ internal sealed record FindingDto(
     string Kind,
     string Severity,
     string EvidenceLevel,
+    int EvidenceSessions,
     string Population,
     SubjectDto Subject,
     string Headline,

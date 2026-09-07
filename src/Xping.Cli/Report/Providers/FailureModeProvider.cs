@@ -473,9 +473,11 @@ internal sealed class FailureModeProvider : IFindingProvider
             ? BuildSharedEvidence(context, cluster, members)
             : BuildBrokenFixtureEvidence(context, cluster, members, site.Value);
 
+        var subject = new FindingSubject.Group(groupId, references);
+
         return new FindingCandidate(
             kind,
-            new FindingSubject.Group(groupId, references),
+            subject,
             evidence,
             unreliability,
 
@@ -483,7 +485,14 @@ internal sealed class FailureModeProvider : IFindingProvider
             // so the head is the last time this cluster was seen.
             LastOccurrenceIn: cluster.Failures[0].Session,
 
-            DrillDown.ForGroup(kind, assembly));
+            DrillDown.ForGroup(kind, assembly),
+
+            // The two kinds that set nothing aside — an environmental run is a shared cause seen
+            // from underneath, so discounting one here would silence the finding that explains it.
+            // With nothing removed, the runs the claim was computed over are the runs its subject
+            // ran in, and the cluster is measured by its best-evidenced member for the reason it is
+            // ranked by one: it is worth opening if any single member stands behind it.
+            EvidenceSessions: EvidenceLevelResolver.CountSessions(subject, context.Tests));
     }
 
     /// <summary>
@@ -592,6 +601,15 @@ internal sealed class FailureModeProvider : IFindingProvider
         int environmental = 0;
         int clusteredOut = 0;
 
+        // The occasions behind whichever of the three kinds below is emitted. Counted from the
+        // discount rather than from `considered`, because the two discounts do not remove the same
+        // thing: an environmental run is a run this test's own behaviour was never observed on,
+        // while a clustered failure removes a failure and leaves the run — the test still ran there
+        // and still did not fail on its own account. That is the same distinction
+        // `sessionsConsidered` is built on a few lines down, and reading it off `considered` would
+        // quietly disagree with it whenever a session held nothing but clustered failures.
+        var occasions = new HashSet<Guid>();
+
         foreach (ExecutionRef reference in all)
         {
             switch (DiscountFor(context, reference, clustered))
@@ -601,9 +619,11 @@ internal sealed class FailureModeProvider : IFindingProvider
                     break;
                 case Discount.Clustered:
                     clusteredOut++;
+                    occasions.Add(reference.Session.SessionId);
                     break;
                 default:
                     considered.Add(reference);
+                    occasions.Add(reference.Session.SessionId);
                     break;
             }
         }
@@ -666,7 +686,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                 timeouts,
                 sessionsConsidered,
                 environmental,
-                clusteredOut);
+                clusteredOut,
+                occasions.Count);
         }
 
         // Modal rather than sole. Failure modes are compared by exact hash over the exception type,
@@ -711,7 +732,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                 WilsonInterval.LowerBound(failures.Count, considered.Count),
 
                 LastOccurrenceIn: lastFailureIn,
-                DrillDown.ForTest(FindingKind.AlwaysFailing, test));
+                DrillDown.ForTest(FindingKind.AlwaysFailing, test),
+                EvidenceSessions: occasions.Count);
         }
 
         // Everything else that failed at all. Either the failure mode varies between runs, or one
@@ -753,7 +775,8 @@ internal sealed class FailureModeProvider : IFindingProvider
             FlakyUnreliability(failureRate, failures.Count, considered.Count),
 
             LastOccurrenceIn: lastFailureIn,
-            DrillDown.ForTest(FindingKind.Flaky, test));
+            DrillDown.ForTest(FindingKind.Flaky, test),
+            EvidenceSessions: occasions.Count);
     }
 
     /// <summary>
@@ -791,7 +814,8 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> timeouts,
         int sessionsConsidered,
         int environmental,
-        int clusteredOut)
+        int clusteredOut,
+        int occasions)
     {
         double timeoutRate = (double)timeouts.Count / considered.Count;
 
@@ -838,7 +862,8 @@ internal sealed class FailureModeProvider : IFindingProvider
             WilsonInterval.LowerBound(timeouts.Count, considered.Count),
 
             LastOccurrenceIn: TestIndex.NewestSession(timeouts),
-            DrillDown.ForTest(FindingKind.TimingOut, test));
+            DrillDown.ForTest(FindingKind.TimingOut, test),
+            EvidenceSessions: occasions);
     }
 
     /// <summary>

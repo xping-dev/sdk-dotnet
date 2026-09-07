@@ -180,6 +180,13 @@ internal sealed class VanishedProvider : IFindingProvider
 
                 DrillDownCommand: DrillDown.ForTest(FindingKind.Vanished, reference),
 
+                // The habit, which is the whole of what this claim rests on. The current arm holds
+                // none of this test's appearances by construction, and the runs that covered only
+                // part of the suite were set aside from both slices before any of them were
+                // counted — so the runs the test appeared in and the runs the claim was computed
+                // from are not the same number.
+                EvidenceSessions: appearances,
+
                 // Unrounded: this is the number the coordinator's Benjamini-Hochberg pass sorts on,
                 // and the rounded copy in the evidence is only what gets written down.
                 PValue: pValue,

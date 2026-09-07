@@ -596,6 +596,32 @@ public sealed class TimeSensitiveProviderTests
     // ---------------------------------------------------------------------------------------
 
     [Fact]
+    public void TheEvidenceCountsTheRunsThatCouldBePlacedOnAClock()
+    {
+        // #182. Twelve runs carrying an offset and eight that recorded none, all twenty running the
+        // subject. The split is over the twelve; banded on the twenty the test appeared in, this
+        // published a comparison of six against six as the top of a three-level scale.
+        List<TestSession> sessions = TimeOfDay(eveningFailures: 6, morningFailures: 0);
+
+        for (int i = 0; i < 8; i++)
+            sessions.Add(Session(12 + i, Local(20 + i, 14), [Execution(12 + i, false)], null));
+
+        AnalysisContext context = Context(sessions);
+        FindingCandidate candidate = Assert.Single(
+            new TimeSensitiveProvider().Analyze(context).Candidates);
+
+        Assert.Equal(20, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(12, candidate.EvidenceSessions);
+
+        // The same twelve the two published arms add up to, so the level and the counts a reader
+        // can see cannot disagree.
+        var evidence = Assert.IsType<TimeSensitiveEvidence>(candidate.Evidence);
+        Assert.Equal(
+            candidate.EvidenceSessions, evidence.Worse.Sessions + evidence.Other.Sessions);
+        Assert.Equal(8, evidence.RunsWithoutClock);
+    }
+
+    [Fact]
     public void TheFindingIsDatedByTheFailuresThatDroveIt()
     {
         // The newest run in the fixture is an evening one, and evenings are where the failures are.

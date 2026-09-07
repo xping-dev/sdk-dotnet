@@ -16,6 +16,7 @@ public sealed class ExitCodeTests
             FindingKind.Flaky,
             severity,
             EvidenceLevel.Moderate,
+            10,
             new FindingSubject.SingleTest(
                 new TestReference("fp-A", "N.C.M", "M", null, null, "A.Tests")),
             new StubEvidence(),
