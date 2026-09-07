@@ -426,6 +426,12 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.TimeSensitive, test),
 
+            // The runs that could be placed on a clock, which is what the split divided and what
+            // the two published arm counts add up to. Every other run of this test was either
+            // discounted as environmental or came from a session that recorded no UTC offset, and a
+            // test present in twenty runs but readable in ten holds ten runs of evidence.
+            EvidenceSessions: population.Considered.Count,
+
             // Unrounded, unlike the copy in the evidence. This is the number the coordinator's
             // Benjamini-Hochberg pass sorts on, and rounding two neighbouring p-values onto each
             // other would reorder the ranked list that pass walks down.

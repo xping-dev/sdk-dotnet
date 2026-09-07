@@ -66,7 +66,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
         // time. Whether a p-value is worth reporting depends on how many fingerprints the kind was
         // tested on and on what the other survivors read, neither of which is known until every
         // provider has run.
-        var surviving = new List<(FindingCandidate Candidate, int Sessions)>();
+        var surviving = new List<FindingCandidate>();
         var tested = new Dictionary<FindingKind, int>();
 
         int lowEvidence = 0;
@@ -107,15 +107,22 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 if (kinds != null && !kinds.Contains(candidate.Kind))
                     continue;
 
-                int sessions = EvidenceLevelResolver.CountSessions(candidate.Subject, context.Tests);
+                // The subject's own history, not the candidate's. The floor asks whether this test
+                // has been around long enough to be judged at all, which is a property of the test
+                // and has to be answered the same way for every kind — otherwise one metric flags a
+                // test that another silently drops, with nothing on screen to explain it. What the
+                // candidate measured over decides its evidence band further down, and only that.
+                int subjectSessions =
+                    EvidenceLevelResolver.CountSessions(candidate.Subject, context.Tests);
 
-                if (!EvidenceLevelResolver.MeetsReportingFloor(sessions, context.Window.SessionCount))
+                if (!EvidenceLevelResolver.MeetsReportingFloor(
+                        subjectSessions, context.Window.SessionCount))
                 {
                     lowEvidence++;
                     continue;
                 }
 
-                surviving.Add((candidate, sessions));
+                surviving.Add(candidate);
             }
         }
 
@@ -124,7 +131,7 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
         var findings = new List<Finding>();
         int notSignificant = 0;
 
-        foreach ((FindingCandidate collected, int sessions) in surviving)
+        foreach (FindingCandidate collected in surviving)
         {
             FindingCandidate? candidate = Reported(collected, cutoffs);
 
@@ -140,7 +147,12 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 FindingId.Compute(candidate.Kind, candidate.Subject.SortKey),
                 candidate.Kind,
                 candidate.Cap(ImpactScorer.Band(impact)),
-                EvidenceLevelResolver.Resolve(sessions),
+
+                // Read off the candidate that is actually being reported, so an `Instead` handover
+                // is banded on what the replacement claim was measured over rather than on what the
+                // claim it replaced was.
+                EvidenceLevelResolver.Resolve(candidate.EvidenceSessions),
+                candidate.EvidenceSessions,
                 candidate.Subject,
                 candidate.Evidence,
                 candidate.DrillDownCommand,
@@ -175,12 +187,12 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
     /// </para>
     /// </remarks>
     private static Dictionary<FindingKind, double?> Cutoffs(
-        IReadOnlyList<(FindingCandidate Candidate, int Sessions)> surviving,
+        IReadOnlyList<FindingCandidate> surviving,
         IReadOnlyDictionary<FindingKind, int> tested)
     {
         var byKind = new Dictionary<FindingKind, List<double>>();
 
-        foreach ((FindingCandidate candidate, _) in surviving)
+        foreach (FindingCandidate candidate in surviving)
         {
             if (candidate.PValue is not { } p)
                 continue;

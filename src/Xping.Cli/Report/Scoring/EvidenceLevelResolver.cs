@@ -12,16 +12,40 @@ namespace Xping.Cli.Report.Scoring;
 /// Decides how much data a finding rests on, and whether it rests on enough to report at all.
 /// </summary>
 /// <remarks>
-/// Applied centrally rather than per provider. Two providers disagreeing about what counts as enough
-/// evidence would produce a report where a test is confidently flagged by one metric and silently
-/// dropped by another, with nothing on screen to explain the difference.
+/// <para>
+/// The two questions are answered from different numbers, and the split is the point.
+/// </para>
+/// <para>
+/// <b>Whether to report</b> is decided centrally, on the subject's own history —
+/// <see cref="CountSessions"/> and <see cref="MeetsReportingFloor"/>. Letting each provider decide
+/// that would produce a report where a test is confidently flagged by one metric and silently
+/// dropped by another, with nothing on screen to explain the difference. Emission stays one rule,
+/// applied once, to every kind alike.
+/// </para>
+/// <para>
+/// <b>How much it rests on</b> is banded on the candidate's own denominator, which only the provider
+/// knows. Every provider measures over a subset of the runs its subject appeared in: environmental
+/// runs are discounted, a session that recorded no UTC offset cannot be placed on a clock, a run of
+/// zero-duration executions cannot be normalised. A split computed from ten runs and labelled with
+/// the twenty the test appeared in claims evidence it has not got, and under bands that fit a
+/// twenty-run window it claims the top one.
+/// </para>
+/// <para>
+/// So two findings about one test may now carry different levels. That is the same thing the report
+/// already says with its population marker — see <c>docs/internals/finding-populations.md</c> — and
+/// it is a description of a claim rather than a gate on it, so it costs none of what the central
+/// floor above is there to protect.
+/// </para>
 /// </remarks>
 internal static class EvidenceLevelResolver
 {
     /// <summary>
-    /// Bands a subject's session count into an evidence level.
+    /// Bands a finding's own denominator into an evidence level.
     /// </summary>
-    /// <param name="sessions">Distinct sessions the subject ran in, within the window.</param>
+    /// <param name="sessions">
+    /// Independent runs the claim was computed from — <c>FindingCandidate.EvidenceSessions</c>, not
+    /// the runs the subject appeared in.
+    /// </param>
     /// <returns>The level.</returns>
     public static EvidenceLevel Resolve(int sessions) => sessions switch
     {
@@ -31,12 +55,18 @@ internal static class EvidenceLevelResolver
     };
 
     /// <summary>
-    /// Counts the sessions a finding rests on.
+    /// Counts the sessions the subject ran in — the reporting floor's denominator.
     /// </summary>
     /// <param name="subject">The test or group the finding is about.</param>
     /// <param name="index">The shared index.</param>
     /// <returns>The distinct session count.</returns>
     /// <remarks>
+    /// <para>
+    /// The subject's whole history in the window, whatever any one provider then measured over.
+    /// That is what the floor wants to know — has this test been around long enough to be judged —
+    /// and it is deliberately not what <see cref="Resolve"/> bands. A kind that does publish this
+    /// figure as its own denominator, because it sets nothing aside, may hand it over as such.
+    /// </para>
     /// <para>
     /// A group is measured by its best-evidenced member, matching how it is scored: the cluster is
     /// worth reporting if any one member is well enough evidenced to stand behind.

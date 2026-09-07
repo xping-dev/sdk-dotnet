@@ -42,6 +42,13 @@ internal static class LocalAnalysisConstants
     /// session that retried five times cleared an execution-denominated floor of five on its own —
     /// exactly the shape the floor exists to exclude, and worst for the tests that retry most.
     /// </para>
+    /// <para>
+    /// The subject's sessions, deliberately, and not the ones a given finding was computed from —
+    /// which is what <see cref="EvidenceModerateSessions"/> bands. Whether a test has enough
+    /// history to be judged has to be answered once for every kind, or one metric flags a test that
+    /// another silently drops with nothing on screen to explain the difference. A claim resting on
+    /// less than its subject's history is still reported; it is reported saying <c>low</c>.
+    /// </para>
     /// </remarks>
     public const int MinimumSessionsPerTestToReport = 5;
 
@@ -430,9 +437,15 @@ internal static class LocalAnalysisConstants
     public const double SeverityMediumThreshold = 0.30;
 
     /// <summary>
-    /// Sessions a test must have run in before its evidence is better than <c>Low</c> (8).
+    /// Runs a finding must rest on before its evidence is better than <c>Low</c> (8).
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The runs the finding was computed from, not the runs its test appeared in — see
+    /// <see cref="Scoring.EvidenceLevelResolver"/> for why those are different numbers and why only
+    /// this one is banded. It brings the CLI closer to Cloud rather than further from it: Cloud's
+    /// effective sample size is computed over the rows its own analysis read.
+    /// </para>
     /// <para>
     /// Banded on sessions, which is the unit Xping Cloud already bands on: its
     /// <c>EvidenceLevelThresholds</c> classifies an effective sample size computed over runs that
@@ -449,7 +462,7 @@ internal static class LocalAnalysisConstants
     public const int EvidenceModerateSessions = 8;
 
     /// <summary>
-    /// Sessions above which evidence is <c>High</c> (15).
+    /// Runs above which evidence is <c>High</c> (15).
     /// </summary>
     public const int EvidenceHighSessions = 15;
 

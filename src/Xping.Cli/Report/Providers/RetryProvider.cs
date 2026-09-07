@@ -628,7 +628,14 @@ internal sealed class RetryProvider : IFindingProvider
             // test that ran out of retries a fortnight ago and has been clean since decays.
             LastOccurrenceIn: TestIndex.NewestSession(exhausted.Select(r => r.Final)),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryExhausted, test));
+            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryExhausted, test),
+
+            // Every non-environmental run of this test — the population the exhaustion rate is
+            // taken over, which is not the runs it appeared in whenever an outage discounted one.
+            // Not `retried.Count`: a run that never needed a retry is still an occasion on which
+            // this test's retry behaviour was observed, and it is the observation that says the
+            // behaviour is not universal.
+            EvidenceSessions: considered.Count);
     }
 
     /// <summary>
@@ -760,6 +767,11 @@ internal sealed class RetryProvider : IFindingProvider
             LastOccurrenceIn: TestIndex.NewestSession(currentGreen.Select(r => r.Final)),
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.RetryDeepening, test),
+
+            // The runs on both sides of the comparison, which is what a difference between two
+            // medians rests on. Runs that failed finally are in neither arm — the two medians are
+            // of settled runs — so this is again narrower than the runs the test appeared in.
+            EvidenceSessions: currentGreen.Count + baselineGreen.Count,
 
             // Nothing has failed a build here. Left uncapped, the generic impact formula would rank a
             // frequently-run test that still goes green above one that is failing today, because
@@ -934,7 +946,12 @@ internal sealed class RetryProvider : IFindingProvider
 
             LastOccurrenceIn: newest.Session,
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryMasked, test));
+            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryMasked, test),
+
+            // Runs rather than the executions the rate above is taken over. Attempts within one run
+            // are the very correlation this kind is measuring, so counting them as occasions would
+            // let the behaviour inflate its own evidence.
+            EvidenceSessions: runs.Count - discountedSessions.Count);
     }
 
     private static bool IsMasked(ExecutionRef reference) =>

@@ -108,7 +108,7 @@ the claim.
 | `HIGH` / `MED` / `LOW` | Impact ranking. Findings are ordered most severe first, so the top of the block is the part worth reading. |
 | `flaky`, `slower`, `stopped running` | The *kind* — what the finding claims. There are sixteen; the [CLI reference](../cli/command-reference.md#finding-kinds) lists them all. |
 | The counts line | The measurement the claim rests on, in plain numbers. |
-| `evidence low\|moderate\|high` | How much history stands behind it. A `low`-evidence finding is a lead, not a verdict. |
+| `evidence low\|moderate\|high` | How many runs stand behind *this claim* — which is not always every run the test appeared in, since a finding can only count the runs it could measure. A `low`-evidence finding is a lead, not a verdict. |
 | `f_2a91c0de` | A stable id for that finding, so you can refer to it in a ticket or diff two reports. |
 
 The report body sits inside a fenced code block and stays under 72 columns, so pasting it into

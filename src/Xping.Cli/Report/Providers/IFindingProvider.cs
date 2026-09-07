@@ -13,10 +13,10 @@ namespace Xping.Cli.Report.Providers;
 /// What a provider hands back for one subject, before severity and evidence are resolved.
 /// </summary>
 /// <remarks>
-/// A provider states what it observed and how unreliable that makes the subject. It does not band
-/// severity, compute an evidence level or apply the reporting floor: those are defined once, for
-/// every kind, by the coordinator. A provider that scored its own findings would drift from the
-/// others the first time a threshold moved.
+/// A provider states what it observed, how unreliable that makes the subject, and how many
+/// independent runs it observed it over. It does not band severity, band evidence or apply the
+/// reporting floor: those are defined once, for every kind, by the coordinator. A provider that
+/// scored its own findings would drift from the others the first time a threshold moved.
 /// </remarks>
 /// <param name="Kind">What this candidate claims.</param>
 /// <param name="Subject">The test or group it claims it about.</param>
@@ -35,6 +35,24 @@ namespace Xping.Cli.Report.Providers;
 /// the two separately could hand over two that disagree.
 /// </param>
 /// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
+/// <param name="EvidenceSessions">
+/// Independent runs this claim was computed from — the denominator the coordinator bands
+/// <see cref="Model.EvidenceLevel"/> on.
+/// <para>
+/// Not the window's run count, and not the runs the subject merely appeared in. Every provider
+/// measures over a subset of those: environmental runs are discounted, a run whose session recorded
+/// no UTC offset cannot be placed on a clock, a run made of zero-duration executions cannot be
+/// normalised, an execution whose adapter recorded no concurrency cannot be placed at a level. A
+/// split computed from ten runs labelled with the twenty the test appeared in is a claim of evidence
+/// the finding has not got, and it is the top band that the overclaim lands in.
+/// </para>
+/// <para>
+/// Required rather than defaulted, deliberately. A default would be some other number — the
+/// subject's, most likely — and the next kind added would inherit this bug in silence. Where the
+/// count is already published on <paramref name="Evidence"/>, hand over that same value rather than
+/// recomputing it, so the band and the counts a reader can see cannot disagree.
+/// </para>
+/// </param>
 /// <param name="PValue">
 /// How probable an observation this extreme would be if the kind's claim were false, or
 /// <see langword="null"/> where no hypothesis was tested. Null is not "not computed yet": most kinds
@@ -62,7 +80,10 @@ namespace Xping.Cli.Report.Providers;
 /// <para>
 /// The subject must be the same, so that the reporting floor already applied to this candidate
 /// applies unchanged to its replacement. The replacement should carry no <paramref name="PValue"/>:
-/// it was not in any family, so there is no multiplicity for it to be charged with.
+/// it was not in any family, so there is no multiplicity for it to be charged with. It carries its
+/// own <paramref name="EvidenceSessions"/>, because a different claim about one subject is
+/// generally measured over a different population — <c>DurationUnstable</c> reads what could be
+/// normalised where <c>DurationRegression</c> read what could be compared.
 /// </para>
 /// </param>
 internal sealed record FindingCandidate(
@@ -72,6 +93,7 @@ internal sealed record FindingCandidate(
     double Unreliability,
     TestSession LastOccurrenceIn,
     string DrillDownCommand,
+    int EvidenceSessions,
     double? PValue = null,
     Severity? SeverityCeiling = null,
     FindingCandidate? Instead = null)

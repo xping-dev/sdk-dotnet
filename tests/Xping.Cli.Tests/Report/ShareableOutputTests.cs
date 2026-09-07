@@ -988,6 +988,7 @@ public sealed class ShareableOutputTests
             kind,
             severity,
             "moderate",
+            10,
             ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
             new SubjectDto("test", "fp", name, name, null, null, "MyApp.Tests", null, null, null),
             headline,

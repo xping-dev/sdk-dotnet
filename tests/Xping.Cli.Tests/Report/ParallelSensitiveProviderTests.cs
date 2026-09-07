@@ -260,6 +260,38 @@ public sealed class ParallelSensitiveProviderTests
     }
 
     [Fact]
+    public void TheEvidenceCountsTheRunsAConcurrencyCouldBeReadFrom()
+    {
+        // #182. Ten runs the adapter recorded a level for and eight it did not, all eighteen
+        // running the subject. The trend is over the ten, and banding it on the eighteen the test
+        // appeared in would label a curve built on a subset with the history of the whole.
+        List<TestSession> sessions = Split(highFailures: 5, lowFailures: 0);
+
+        for (int i = 0; i < 8; i++)
+        {
+            sessions.Add(TestSessionFactory.Session(10 + i,
+            [
+                TestSessionFactory.Execution(
+                    Subject,
+                    executionId: TestSessionFactory.ExecutionIdFor(
+                        Subject, 10 + i, TestOutcome.Passed))
+            ]));
+        }
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+        FindingCandidate candidate = Assert.Single(
+            new ParallelSensitiveProvider().Analyze(context).Candidates);
+
+        Assert.Equal(18, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(10, candidate.EvidenceSessions);
+
+        // The same figure the trend publishes, so the band cannot drift from the counts beside it.
+        var evidence = Assert.IsType<ParallelSensitiveEvidence>(candidate.Evidence);
+        Assert.Equal(candidate.EvidenceSessions, evidence.Trend.Sessions);
+        Assert.Equal(8, evidence.ExecutionsWithoutConcurrency);
+    }
+
+    [Fact]
     public void TheTrendCarriesItsUnroundedProbabilityToTheCoordinator()
     {
         FindingCandidate candidate = Single(Split(highFailures: 5, lowFailures: 0));

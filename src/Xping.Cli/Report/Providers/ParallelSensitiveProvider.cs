@@ -376,6 +376,13 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
 
             DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
 
+            // Sessions rather than the executions the trend was measured on, and the same figure
+            // the trend publishes. Concurrency genuinely varies between attempts within a run, so
+            // the executions are real readings — but they are not separate occasions, and evidence
+            // is a claim about occasions. An adapter that filled no orchestration record for most
+            // of the window leaves a trend over whatever few runs it did fill, and this says so.
+            EvidenceSessions: DistinctSessions(considered),
+
             PValue: statistic.PValue));
     }
 

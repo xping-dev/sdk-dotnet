@@ -735,6 +735,48 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
+    public void TheRegressionEvidenceCountsTheRunsBothArmsCompared()
+    {
+        // #182. Eleven runs of the subject, ten of which carry a comparable reading: the run whose
+        // own median was zero normalises nothing. Banded on the eleven the test appeared in, the
+        // level would claim a run the two-sample test never read.
+        AnalysisContext context = Build(
+            sessions: 11,
+            subjectMs: o => o < 8 ? 200 : 800,
+            companionMs: o => o == 3 ? 0 : CompanionMs);
+
+        FindingCandidate candidate = Single(Analyze(context));
+        var evidence = Assert.IsType<DurationRegressionEvidence>(candidate.Evidence);
+
+        Assert.Equal(11, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(
+            evidence.Baseline.ComparedSessions + evidence.Current.ComparedSessions,
+            candidate.EvidenceSessions);
+        Assert.Equal(10, candidate.EvidenceSessions);
+    }
+
+    [Fact]
+    public void TheInstabilityEvidenceCountsTheRunsThatCouldBeNormalised()
+    {
+        // #182 again, on the other kind. Two of the twelve runs are made of zero-duration
+        // executions, so they have no divisor and contribute no normalised reading — but the
+        // subject ran in them, and the dispersion is what the finding rests on.
+        AnalysisContext context = Build(
+            sessions: 12,
+            subjectMs: o => o < 6 ? 300 : 100,
+            companionMs: o => o is 3 or 4 ? 0 : CompanionMs);
+
+        FindingCandidate candidate = Assert.Single(Unstables(context));
+        var evidence = Assert.IsType<DurationUnstableEvidence>(candidate.Evidence);
+
+        Assert.Equal(12, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(10, candidate.EvidenceSessions);
+
+        // One reading per run here, so the two agree — what they do not agree with is the twelve.
+        Assert.Equal(evidence.NormalisedExecutions, candidate.EvidenceSessions);
+    }
+
+    [Fact]
     public void AWindowWithNoUsableRunMedianProducesNoDurationFindingOfEitherKind()
     {
         // Every run is mostly zero-duration executions, so no run has a divisor and nothing in the

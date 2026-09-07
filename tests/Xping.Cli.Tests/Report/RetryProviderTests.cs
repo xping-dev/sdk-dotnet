@@ -257,12 +257,12 @@ public sealed class RetryProviderTests
 
         Assert.Equal(1, context.EnvironmentalSessionCount);
 
-        RetryMaskedEvidence evidence = Assert.IsType<RetryMaskedEvidence>(
-            Assert.Single(
-                Analyze(context),
-                c => c.Subject is FindingSubject.SingleTest test &&
-                     test.Test.TestFingerprint == $"fp-{Subject}")
-                .Evidence);
+        FindingCandidate candidate = Assert.Single(
+            Analyze(context),
+            c => c.Subject is FindingSubject.SingleTest test &&
+                 test.Test.TestFingerprint == $"fp-{Subject}");
+
+        RetryMaskedEvidence evidence = Assert.IsType<RetryMaskedEvidence>(candidate.Evidence);
 
         // Three plain passes and three masked pairs. The outage's pair is in neither count.
         Assert.Equal(3, evidence.MaskedOccurrences);
@@ -278,6 +278,12 @@ public sealed class RetryProviderTests
 
         // 3 of 9 rather than the 4 of 11 the undiscounted window would have published.
         Assert.Equal(0.333, evidence.MaskedRate);
+
+        // #182. The subject ran in all seven runs; six are occasions its own retry behaviour was
+        // observed on. Counted in runs rather than in the nine executions the rate is over, because
+        // attempts within one run are the very correlation this kind is measuring.
+        Assert.Equal(7, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(6, candidate.EvidenceSessions);
     }
 
     [Fact]
@@ -513,12 +519,14 @@ public sealed class RetryProviderTests
     [InlineData(8, 0, 8, "Moderate")]
     [InlineData(15, 0, 15, "Moderate")]
     [InlineData(15, 1, 16, "High")]
-    public void EvidenceIsBandedBySessionsOfTheSubject(
+    public void EvidenceIsBandedInSessionsRatherThanAttempts(
         int maskedSessions, int padding, int expectedSessions, string expected)
     {
         // Sessions, not executions: seven masked sessions are fourteen executions, and banding those
         // would call one week of a twice-retrying test better evidenced than a fortnight of a clean
-        // one.
+        // one. Nothing here is discounted, so the runs the claim was computed over and the runs the
+        // subject appeared in are the same number — `AnEnvironmentalRunIsLeftOutOfTheMaskedRate` is
+        // where they part.
         AnalysisContext context = Context(sessions: 24, maskedSessions, padding);
 
         Assert.Equal(expectedSessions, context.Tests.SessionsRunIn($"fp-{Subject}"));
@@ -1047,11 +1055,21 @@ public sealed class RetryProviderTests
                 : TestSessionFactory.Session(ordinal, [TestSessionFactory.Execution(Subject)]));
         }
 
-        RetryExhaustedEvidence evidence = ExhaustedFrom(TestSessionFactory.Context([.. built]));
+        AnalysisContext context = TestSessionFactory.Context([.. built]);
+        FindingCandidate candidate = Assert.Single(Analyze(context));
+
+        var evidence = Assert.IsType<RetryExhaustedEvidence>(candidate.Evidence);
 
         Assert.Equal(1, evidence.DiscountedEnvironmentalRuns);
         Assert.Equal(4, evidence.ExhaustedRuns);
         Assert.Equal(8, evidence.RunsConsidered);
+
+        // #182. The nine runs the subject appeared in, less the outage — and the eight rather than
+        // the four retried ones, because a run that needed no retry is still an occasion the retry
+        // behaviour was observed on, and it is the observation that says the behaviour is not
+        // universal.
+        Assert.Equal(9, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(evidence.RunsConsidered, candidate.EvidenceSessions);
     }
 
     // ===========================================================================================
@@ -1314,10 +1332,18 @@ public sealed class RetryProviderTests
         AnalysisContext context = Depths(
             sessions: 12, baselineAttempts: 1, currentAttempts: 3, outageOrdinal: 0);
 
-        RetryDeepeningEvidence evidence = DeepeningFrom(context);
+        FindingCandidate candidate = Assert.Single(Analyze(context));
+        var evidence = Assert.IsType<RetryDeepeningEvidence>(candidate.Evidence);
 
         Assert.Equal(1, evidence.DiscountedEnvironmentalRuns);
         Assert.Equal(8, evidence.Baseline.Runs);
+
+        // #182. Both arms of the comparison and nothing else: the outage is in neither, and a
+        // difference between two medians rests on the runs those medians were taken over.
+        Assert.Equal(12, context.Tests.SessionsRunIn($"fp-{Subject}"));
+        Assert.Equal(
+            evidence.Baseline.RunsSettledGreen + evidence.Current.RunsSettledGreen,
+            candidate.EvidenceSessions);
     }
 
     // ===========================================================================================

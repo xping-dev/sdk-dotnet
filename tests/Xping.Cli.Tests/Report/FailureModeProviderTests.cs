@@ -977,6 +977,18 @@ public sealed class FailureModeProviderTests
             evidence.DiscountedClustered);
 
         Assert.Equal(0.25, evidence.FailureRate);
+
+        // #182. Alpha ran in all six runs; the outage is not one of the occasions its own behaviour
+        // was observed on, so the finding rests on five. The cluster is not deducted — it removed a
+        // failure, not a run: Alpha still ran there and still did not fail on its own account.
+        FindingCandidate flaky = For(candidates, "Alpha");
+        Assert.Equal(6, context.Tests.SessionsRunIn("fp-Alpha"));
+        Assert.Equal(5, flaky.EvidenceSessions);
+
+        // The shared cause keeps every run, environmental ones included — an outage is a shared
+        // cause seen from underneath — so its own evidence is the whole of its members' history.
+        FindingCandidate shared = Single(candidates, FindingKind.SharedFailure);
+        Assert.Equal(6, shared.EvidenceSessions);
     }
 
     [Fact]
