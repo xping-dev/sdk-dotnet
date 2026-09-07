@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Collections.ObjectModel;
+
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
@@ -188,6 +190,92 @@ public sealed class FindingCoordinatorTests
         Assert.Contains(everything.Findings, f => f.Kind == FindingKind.TimeSensitive);
         Assert.Contains(narrowed.Findings, f => f.Kind == FindingKind.TimeSensitive);
         Assert.Equal(0, narrowed.ExcludedNotSignificant);
+    }
+
+    /// <summary>
+    /// Narrowing the report to one kind does not change what that kind could not measure.
+    /// </summary>
+    /// <remarks>
+    /// The third of #185's criteria, and the reason the tally is per kind rather than a total. A
+    /// figure that shrank whenever `--kind` was passed would be describing the invocation instead of
+    /// the store, and a reader comparing yesterday's full report with today's narrowed one would
+    /// read the difference as the suite improving. The filter is applied to the tally with the same
+    /// condition it is applied to the family and the candidates, which is what makes this hold.
+    /// </remarks>
+    [Fact]
+    public void TheNotMeasuredTallyForAKindIsUnchangedWhenTheReportIsNarrowedToIt()
+    {
+        StubProvider[] Providers() =>
+        [
+            new("time", FindingKind.TimeSensitive, "Test0", awaitingRuns: 11, unreadable: 4),
+            new("concurrency", FindingKind.ParallelSensitive, "Test0", unreadable: 97)
+        ];
+
+        using var warnings = new StringWriter();
+
+        AnalysisResult everything = new FindingCoordinator(Providers()).Run(Context(), null, warnings);
+
+        AnalysisResult narrowed = new FindingCoordinator(Providers()).Run(
+            Context(), new HashSet<FindingKind> { FindingKind.TimeSensitive }, warnings);
+
+        Assert.Equal(
+            new NotMeasuredCount(11, 4),
+            everything.NotMeasured[FindingKind.TimeSensitive]);
+
+        Assert.Equal(
+            new NotMeasuredCount(11, 4),
+            narrowed.NotMeasured[FindingKind.TimeSensitive]);
+
+        // And the kind that was filtered out contributes nothing rather than a zero, so a reader
+        // cannot mistake "not asked about" for "asked, and every test was readable".
+        Assert.True(everything.NotMeasured.ContainsKey(FindingKind.ParallelSensitive));
+        Assert.False(narrowed.NotMeasured.ContainsKey(FindingKind.ParallelSensitive));
+    }
+
+    /// <summary>
+    /// A candidate the floor dropped is not also counted as one nothing could be measured about.
+    /// </summary>
+    /// <remarks>
+    /// The two are opposite statements and #185 exists because they were being told apart nowhere. A
+    /// candidate at the floor is a claim the provider computed and this pass withheld for resting on
+    /// too little of the test's history; the tally counts tests no claim was ever computed for. A
+    /// candidate that reaches the coordinator at all has been measured by definition.
+    /// </remarks>
+    [Fact]
+    public void ACandidateDroppedAtTheFloorIsNotAlsoCountedAsUnmeasured()
+    {
+        var coordinator = new FindingCoordinator(
+            [new StubProvider("stub", FindingKind.TimeSensitive, "Test0")]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(sessionCount: 4), null, warnings);
+
+        Assert.Equal(1, result.ExcludedLowEvidence);
+        Assert.True(result.NotMeasured[FindingKind.TimeSensitive].IsEmpty);
+    }
+
+    /// <summary>
+    /// A provider that throws costs its own tally and nobody else's.
+    /// </summary>
+    /// <remarks>
+    /// The same contract the candidates already have. A metric that fell over has said nothing about
+    /// its coverage, and publishing a zero for it would say the opposite — that it looked at every
+    /// test and could read them all. Absence is what the caveat line's "metrics unavailable" is for.
+    /// </remarks>
+    [Fact]
+    public void AProviderThatThrowsContributesNoTallyAndDoesNotDisturbAnother()
+    {
+        var coordinator = new FindingCoordinator(
+        [
+            new ThrowingProvider(),
+            new StubProvider("stub", FindingKind.TimeSensitive, "Test0", unreadable: 5)
+        ]);
+
+        using var warnings = new StringWriter();
+        AnalysisResult result = coordinator.Run(Context(), null, warnings);
+
+        Assert.Equal(5, result.NotMeasured[FindingKind.TimeSensitive].Unreadable);
+        Assert.False(result.NotMeasured.ContainsKey(FindingKind.DurationRegression));
     }
 
     /// <summary>
@@ -530,7 +618,9 @@ public sealed class FindingCoordinatorTests
         double unreliability = 0.5,
         double? pValue = null,
         int hypothesesTested = 0,
-        int? evidenceSessions = null)
+        int? evidenceSessions = null,
+        int awaitingRuns = 0,
+        int unreadable = 0)
         : IFindingProvider
     {
         public string Name { get; } = name;
@@ -548,9 +638,14 @@ public sealed class FindingCoordinatorTests
             if (hypothesesTested > 0)
                 family[kind] = hypothesesTested;
 
+            var notMeasured = new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [kind] = new NotMeasuredCount(awaitingRuns, unreadable)
+            };
+
             TestReference? reference = context.Tests.ReferenceFor($"fp-{test}");
             if (reference == null)
-                return new ProviderReport([], family);
+                return new ProviderReport([], family, notMeasured);
 
             return new ProviderReport(
                 [
@@ -565,7 +660,8 @@ public sealed class FindingCoordinatorTests
                             evidenceSessions ?? context.Tests.SessionsRunIn($"fp-{test}"),
                         PValue: pValue)
                 ],
-                family);
+                family,
+                notMeasured);
         }
     }
 
@@ -634,7 +730,8 @@ public sealed class FindingCoordinatorTests
         public IReadOnlyList<FindingKind> Kinds => [FindingKind.ParallelSensitive];
 
         public ProviderReport Analyze(AnalysisContext context) =>
-            ProviderReport.Observations([.. Candidates()]);
+            ProviderReport.Observations(
+                [.. Candidates()], ReadOnlyDictionary<FindingKind, NotMeasuredCount>.Empty);
 
         private static IEnumerable<FindingCandidate> Candidates()
         {

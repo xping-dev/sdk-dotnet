@@ -91,6 +91,9 @@ public sealed class RetryProviderTests
     private static IReadOnlyList<FindingCandidate> Analyze(AnalysisContext context) =>
         new RetryProvider().Analyze(context).Candidates;
 
+    private static NotMeasuredCount NotMeasured(AnalysisContext context, FindingKind kind) =>
+        new RetryProvider().Analyze(context).NotMeasured.GetValueOrDefault(kind);
+
     private static RetryMaskedEvidence EvidenceFrom(AnalysisContext context) =>
         Assert.IsType<RetryMaskedEvidence>(Assert.Single(Analyze(context)).Evidence);
 
@@ -221,6 +224,72 @@ public sealed class RetryProviderTests
         Assert.Equal(6, evidence.SessionsConsidered);
         Assert.Equal(3, evidence.SessionsWithMasking);
         Assert.Equal(0.5, evidence.MaskedRate);
+    }
+
+    /// <summary>
+    /// A test whose every run was an outage is counted, for all three kinds at once.
+    /// </summary>
+    /// <remarks>
+    /// #185: the three kinds read one reduction of a test's runs, and none of them can read a test
+    /// whose every occasion was discounted. The tally is taken at that one shared precondition
+    /// rather than per kind, because the chain that picks between them stops at the first kind that
+    /// fires and never asks whether a later one could have been measured.
+    /// <para>
+    /// Awaiting runs rather than unreadable: an attempt number is recorded by every adapter that
+    /// records an execution, so what is missing here is an ordinary run and not a shape of data.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ATestWhoseEveryRunWasAnOutageIsCountedForAllThreeRetryKinds()
+    {
+        AnalysisContext context = EveryRunAnOutage();
+
+        foreach (FindingKind kind in
+            (FindingKind[])
+            [FindingKind.RetryMasked, FindingKind.RetryDeepening, FindingKind.RetryExhausted])
+        {
+            NotMeasuredCount count = NotMeasured(context, kind);
+
+            Assert.True(count.AwaitingRuns > 0, $"{kind} counted nothing");
+            Assert.Equal(0, count.Unreadable);
+        }
+    }
+
+    /// <summary>
+    /// A test whose runs were readable and uneventful is counted nowhere.
+    /// </summary>
+    [Fact]
+    public void ATestWhoseRetriesWereReadAndSaidNothingIsNotCounted()
+    {
+        AnalysisContext context = Context(sessions: 8, maskedSessions: 0);
+
+        Assert.Empty(Analyze(context));
+        Assert.True(NotMeasured(context, FindingKind.RetryMasked).IsEmpty);
+    }
+
+    /// <summary>
+    /// Builds a window in which every run looked like an outage.
+    /// </summary>
+    /// <remarks>
+    /// Twelve of thirty-one tests down in every one of six runs, which is what
+    /// <c>SessionView.For</c> reads as environmental. The subject passes throughout, so its every
+    /// occasion is discounted and nothing of its own behaviour is left to read.
+    /// </remarks>
+    private static AnalysisContext EveryRunAnOutage()
+    {
+        IEnumerable<TestExecution> Filler() =>
+        [
+            .. Enumerable.Range(0, 12).Select(i =>
+                TestSessionFactory.Execution($"Fine{i}", TestOutcome.Failed)),
+            .. Enumerable.Range(12, 18).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+        ];
+
+        return TestSessionFactory.Context(
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [TestSessionFactory.Execution(Subject), .. Filler()]))
+        ]);
     }
 
     [Fact]

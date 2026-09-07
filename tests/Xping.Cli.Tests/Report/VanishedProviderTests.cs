@@ -39,6 +39,50 @@ public sealed class VanishedProviderTests
         new VanishedProvider().Analyze(context).HypothesesTested
             .GetValueOrDefault(FindingKind.Vanished);
 
+    private static NotMeasuredCount NotMeasured(AnalysisContext context) =>
+        new VanishedProvider().Analyze(context).NotMeasured
+            .GetValueOrDefault(FindingKind.Vanished);
+
+    /// <summary>
+    /// A test the baseline barely saw is waiting for history, and never unreadable.
+    /// </summary>
+    /// <remarks>
+    /// A session appearance is the one observation every adapter records by existing: a test either
+    /// ran in a run or it did not. So this kind has no unreadable half at all, and the published
+    /// zero says so rather than leaving a reader to infer it from an absence.
+    /// </remarks>
+    [Fact]
+    public void ATestTheBaselineBarelySawIsCountedAsAwaitingRunsAndNeverAsUnreadable()
+    {
+        // `Removed` appears in one baseline run, under the floor the absence is measured against;
+        // `Stable` appears throughout and is measured.
+        AnalysisContext context = Context(total: 8, presentIn: 1);
+
+        NotMeasuredCount count = NotMeasured(context);
+
+        Assert.Equal(1, count.AwaitingRuns);
+        Assert.Equal(0, count.Unreadable);
+    }
+
+    /// <summary>
+    /// A window with no baseline counts every test, not none of them.
+    /// </summary>
+    /// <remarks>
+    /// The whole-window decline has to come out as the same number the per-test gate would have
+    /// produced one test at a time. A tally that collapsed the moment a second full run arrived
+    /// would be describing the store's shape rather than the suite's.
+    /// </remarks>
+    [Fact]
+    public void AWindowWithNoBaselineCountsEveryTestRatherThanNone()
+    {
+        AnalysisContext context = Context(total: 1, presentIn: 1);
+
+        NotMeasuredCount count = NotMeasured(context);
+
+        Assert.Equal(context.Tests.Fingerprints.Count, count.AwaitingRuns);
+        Assert.Equal(0, count.Unreadable);
+    }
+
     /// <summary>
     /// A test that is still running is an asking that answered no, not an asking that never happened.
     /// </summary>

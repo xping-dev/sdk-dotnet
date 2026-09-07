@@ -337,11 +337,18 @@ For scripts and agents. Emits a versioned envelope and nothing else — no rende
 xping report --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over, and `evidenceSessions`, the number `evidenceLevel` was banded from:
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over, and `evidenceSessions`, the number `evidenceLevel` was banded from.
+
+`summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
+split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
+however long you wait. It is deliberately not a total: adding the entries counts a test once per
+question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
+ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
+means "no finding was raised" rather than "checked and fine":
 
 ```json
 {
-  "schemaVersion": "1.14",
+  "schemaVersion": "1.15",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -351,6 +358,10 @@ Every finding carries a `headline` — the same sentence the rendered report pri
     "healthy": 409,
     "excludedLowEvidence": 41,
     "excludedNotSignificant": 6,
+    "notMeasured": {
+      "DurationRegression": { "awaitingRuns": 63, "unreadable": 32 },
+      "ParallelSensitive": { "awaitingRuns": 0, "unreadable": 108 }
+    },
     "partialSessions": 0
   },
   "findings": [

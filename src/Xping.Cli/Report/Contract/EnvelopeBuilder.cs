@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
 
 namespace Xping.Cli.Report.Contract;
@@ -82,6 +83,7 @@ internal static class EnvelopeBuilder
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
                 result.ExcludedNotSignificant,
+                NotMeasured(result),
 
                 context.EnvironmentalSessionCount,
                 context.PartialSessionCount,
@@ -90,6 +92,38 @@ internal static class EnvelopeBuilder
                 result.FailedProviders),
             [.. shown.Select(BuildFinding)],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
+    }
+
+    /// <summary>
+    /// Projects the per-kind not-measured tally into the envelope's spelling.
+    /// </summary>
+    /// <param name="result">What the providers produced.</param>
+    /// <returns>One entry per kind that keeps such a tally, in <see cref="FindingKind"/> order.</returns>
+    /// <remarks>
+    /// Enumerated over the enum rather than over the dictionary, because a dictionary's order is
+    /// its insertion order and that is provider execution order — which the coordinator already
+    /// sorts, but only by provider name. Two runs over an unchanged store have to serialise
+    /// byte-identically, and taking the order from the declaration is what makes that a property of
+    /// the code rather than of a hash.
+    /// <para>
+    /// Keyed by <c>nameof</c> rather than by the enum. The registered converter camel-cases enum
+    /// values while <c>JsonSerializerOptions.DictionaryKeyPolicy</c> is unset, so a
+    /// <see cref="FindingKind"/> key would serialise as <c>durationRegression</c> and disagree with
+    /// the <c>DurationRegression</c> that every finding's <c>kind</c> and every <c>--kind</c>
+    /// argument spell.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, NotMeasuredDto> NotMeasured(AnalysisResult result)
+    {
+        var published = new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal);
+
+        foreach (FindingKind kind in Enum.GetValues<FindingKind>())
+        {
+            if (result.NotMeasured.TryGetValue(kind, out NotMeasuredCount count))
+                published[kind.ToString()] = new NotMeasuredDto(count.AwaitingRuns, count.Unreadable);
+        }
+
+        return published;
     }
 
     private static WindowDto BuildWindow(AnalysisWindow window) =>

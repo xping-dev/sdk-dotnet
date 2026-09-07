@@ -791,6 +791,80 @@ public sealed class DurationProviderTests
         Assert.Empty(Analyze(context));
     }
 
+    /// <summary>
+    /// A test nothing could be computed about is counted, not called healthy.
+    /// </summary>
+    /// <remarks>
+    /// The case #185 was filed from. Both gates decline, and until they said so the test fell
+    /// through every count in the summary and landed inside "healthy" — which tells a reader it was
+    /// looked at and is fine. It was not looked at: neither statistic exists for it. And no number
+    /// of further runs of the same shape produces one, so it belongs on the unreadable side rather
+    /// than beside the candidates that are only waiting for the store to fill.
+    /// </remarks>
+    [Fact]
+    public void ATestWhoseRunsAllRecordedAZeroMedianIsCountedRatherThanSilentlyCalledHealthy()
+    {
+        AnalysisContext context = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            companionMs: _ => 0);
+
+        Assert.Empty(Analyze(context));
+
+        // Every test in the fixture, subject and companions alike, since no run in the window has a
+        // divisor and so nothing in it can be normalised.
+        int tests = context.Tests.Fingerprints.Count;
+
+        NotMeasuredCount regression = NotMeasured(context, FindingKind.DurationRegression);
+        NotMeasuredCount unstable = NotMeasured(context, FindingKind.DurationUnstable);
+
+        Assert.Equal(tests, regression.Unreadable);
+        Assert.Equal(tests, unstable.Unreadable);
+
+        Assert.Equal(0, regression.AwaitingRuns);
+        Assert.Equal(0, unstable.AwaitingRuns);
+    }
+
+    /// <summary>
+    /// A test the provider measured and had nothing to say about is not counted.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the distinction, and the one that decides whether the number means
+    /// anything: counting a steady test as unmeasured would make the tally the test count, and the
+    /// line would tell a reader nothing they could act on.
+    /// </remarks>
+    [Fact]
+    public void ASteadyTestIsMeasuredAndThereforeCountedNowhere()
+    {
+        AnalysisContext context = Build(sessions: 20, subjectMs: _ => 200);
+
+        Assert.Empty(Analyze(context));
+
+        Assert.True(NotMeasured(context, FindingKind.DurationRegression).IsEmpty);
+        Assert.True(NotMeasured(context, FindingKind.DurationUnstable).IsEmpty);
+    }
+
+    /// <summary>
+    /// A test the window has not seen enough of is waiting, not unreadable.
+    /// </summary>
+    /// <remarks>
+    /// The two reasons differ in what a reader does next. This one empties as the store fills; the
+    /// zero-median case above never will, and telling someone to wait for it would send them back in
+    /// a fortnight to be told the same thing.
+    /// </remarks>
+    [Fact]
+    public void AThinBaselineIsCountedAsAwaitingRunsRatherThanAsUnreadable()
+    {
+        // Six comparable baseline runs against the three recent ones, one short of the seven the
+        // comparison needs. Every duration normalises; there is simply not enough history yet.
+        AnalysisContext context = Build(sessions: 9, subjectMs: o => o < 3 ? 800 : 200);
+
+        NotMeasuredCount regression = NotMeasured(context, FindingKind.DurationRegression);
+
+        Assert.Equal(0, regression.Unreadable);
+        Assert.True(regression.AwaitingRuns > 0);
+    }
+
     [Fact]
     public void AnInstantBaselineProducesNoRegressionRatherThanAnInfinity()
     {
@@ -1317,6 +1391,9 @@ public sealed class DurationProviderTests
 
     private static int Family(AnalysisContext context, FindingKind kind) =>
         new DurationProvider().Analyze(context).HypothesesTested.GetValueOrDefault(kind);
+
+    private static NotMeasuredCount NotMeasured(AnalysisContext context, FindingKind kind) =>
+        new DurationProvider().Analyze(context).NotMeasured.GetValueOrDefault(kind);
 
     /// <summary>
     /// Asserts that exactly one candidate was produced, and returns it.

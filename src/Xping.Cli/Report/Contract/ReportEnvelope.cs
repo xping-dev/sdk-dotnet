@@ -43,7 +43,7 @@ internal sealed record ReportEnvelope(
     /// <c>evidenceSessions</c> — the denominator <c>evidenceLevel</c> is banded from, which is the
     /// runs the finding was computed over rather than the runs its test appeared in.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.14";
+    public const string CurrentSchemaVersion = "1.15";
 }
 
 /// <summary>
@@ -84,12 +84,34 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="Tests">Distinct tests seen in the window.</param>
 /// <param name="Findings">Findings produced, before truncation.</param>
 /// <param name="Counts">Those findings broken down by severity.</param>
-/// <param name="Healthy">Tests no finding was raised about.</param>
+/// <param name="Healthy">
+/// Tests no finding was raised about. Not "tests that were checked and are fine": a test a metric
+/// could not be computed for is in here too, and <paramref name="NotMeasured"/> is what says so.
+/// The unmeasured are deliberately not subtracted — which of them there are depends on which kinds
+/// were asked for, and a headline count that moves with <c>--kind</c> would be worse than one that
+/// needs a second number read beside it.
+/// </param>
 /// <param name="ExcludedLowEvidence">Candidates dropped for resting on too little data.</param>
 /// <param name="ExcludedNotSignificant">
 /// Candidates dropped because their kind's comparison, charged for every fingerprint it ran on,
 /// no longer said anything. A large suite over a short window silences most of what it tests, and a
 /// reader given only an empty block cannot tell that from a suite with nothing to report.
+/// </param>
+/// <param name="NotMeasured">
+/// Per kind, the tests that kind could not be measured on at all, keyed by the kind as
+/// <c>findings[].kind</c> and <c>--kind</c> spell it.
+/// <para>
+/// Not a total and cannot be made into one. Adding the values counts a test once per question its
+/// data could not answer; a reader wanting "how much of my suite could this metric read" has to
+/// read one entry. The four kinds absent from the map keep no such tally — <c>SharedFailure</c> and
+/// <c>BrokenFixture</c> are counted in signature groups rather than tests, and the retry kinds are
+/// decided by a chain in which a later kind is never attempted once an earlier one fires. A present
+/// zero is a real statement: the kind was offered tests and read every one.
+/// </para>
+/// <para>
+/// Distinct from <paramref name="ExcludedLowEvidence"/>, which counts candidates a provider offered
+/// and the report then withheld. These are tests no candidate ever existed for.
+/// </para>
 /// </param>
 /// <param name="EnvironmentalSessions">Sessions discounted as environment failures.</param>
 /// <param name="PartialSessions">
@@ -108,11 +130,26 @@ internal sealed record SummaryDto(
     int Healthy,
     int ExcludedLowEvidence,
     int ExcludedNotSignificant,
+    IReadOnlyDictionary<string, NotMeasuredDto> NotMeasured,
     int EnvironmentalSessions,
     int PartialSessions,
     int IncompleteSessions,
     int UnreadableSessions,
     IReadOnlyList<string> FailedProviders);
+
+/// <summary>
+/// Why one kind could not be measured on some of the tests it was offered.
+/// </summary>
+/// <remarks>
+/// Two numbers because only one of them is answered by waiting. A test the comparison needs seven
+/// runs of and has four will have seven; a test whose every run recorded a zero median normalises
+/// nothing, and another such run normalises nothing either. A script deciding whether to keep
+/// collecting reads the first; a developer deciding whether their adapter is recording what the
+/// metric needs reads the second.
+/// </remarks>
+/// <param name="AwaitingRuns">Tests the kind needs more runs of.</param>
+/// <param name="Unreadable">Tests whose recorded data cannot answer this kind's question.</param>
+internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 
 /// <summary>
 /// One finding, with every value already at its published precision.

@@ -122,6 +122,95 @@ silently dropped by another with nothing on screen to explain it. So a claim res
 a test with twenty runs of history is still printed. It is printed saying `evidence low`, which is
 what the level is for.
 
+## What each kind could not measure
+
+A finding's population says which executions its counts were taken over. This section says something
+prior to that: which **tests the kind could not be computed for at all**, and why. Until it was
+recorded, a provider that declined for want of data left no trace anywhere — the summary's excluded
+tally counts only the candidates the coordinator itself dropped at the reporting floor — so a test no
+statistic could be taken of fell through into `healthy` and was reported to a reader as fine.
+
+The tally reaches the JSON as `summary.notMeasured`, keyed by kind, and the rendered report as one
+line above the fence naming the three largest with `+n more`.
+
+### The two reasons, and the question that separates them
+
+| reason | meaning | what a reader does |
+|---|---|---|
+| `awaitingRuns` | the window does not hold enough of this test yet | wait; the store fills |
+| `unreadable` | nothing this kind reads was recorded | change what is recorded, or accept it |
+
+The question at every decline site is whether **another run of the same shape as the ones already
+recorded** would fix it. Nothing subtler is needed: the two differ in what the reader should do next,
+not in how the gate was written. Six baseline runs where the comparison needs seven is `awaitingRuns`;
+a test whose every run recorded a zero median normalises nothing, and the eighth such run normalises
+nothing either, so it is `unreadable`.
+
+**This is not the reporting floor.** That floor asks whether a test has been around long enough to be
+judged and is applied centrally, to a candidate a provider already computed. This counts tests for
+which no candidate was ever computed. A candidate that reaches the coordinator has been measured by
+definition, so the two can never both fire on one claim.
+
+### The matrix
+
+| kind | `awaitingRuns` | `unreadable` |
+|---|---|---|
+| `DurationRegression` | either arm under 7 / 3 comparable runs | an arm that held runs and normalised none of them |
+| `DurationUnstable` | one normalised reading | nothing normalisable, or no run with a usable median |
+| `ParallelSensitive` | structurally none — this kind has no session floor | fewer than two distinct concurrency levels |
+| `TimeSensitive` | fewer than two arms' worth of runs on a clock | no clock at all, two time zones, or no split the runs admit |
+| `Vanished` | baseline under `VanishedMinBaselineSessions`, or no baseline slice | structurally none — an appearance is always readable |
+| `RetryMasked`, `RetryDeepening`, `RetryExhausted` | every run of the test was discounted as environmental | structurally none — an attempt number is always recorded |
+| `Flaky`, `AlwaysFailing`, `TimingOut` | every execution of the test was discounted | structurally none — an outcome is always readable |
+| `SharedFailure`, `BrokenFixture` | **absent** | **absent** |
+
+A published zero and an absence are different statements. A zero means the kind was offered tests and
+could read every one; an absence means the kind keeps no such tally.
+
+### Why five kinds publish nothing
+
+**`SharedFailure` and `BrokenFixture` are counted in signature groups, not tests.** Every other entry
+in the table is a count of fingerprints, and a count of groups published under the same field is not
+a number a reader can compare with the one beside it.
+
+**The three retry kinds share one figure rather than each publishing their own.** They read one
+reduction of a test's runs, and the chain that picks between them — exhausted, then deepening, then
+masked — stops at the first that fires. Whether a later kind could have been measured on a test an
+earlier one claimed is a question the algorithm never asks, and answering it for the tally alone would
+mean running all three on every fingerprint to fill in a number nobody reads. So the count is taken at
+the one precondition the three share: a test whose every run was an outage.
+
+### Two skips that are charged to nothing
+
+A fingerprint the index holds but cannot resolve to a test is an inconsistency inside the index, not a
+measurement the data declined; every provider passes over it silently.
+
+A test absent from the recent slice is passed over by `DurationProvider` for the reason the population
+matrix already gives — its absence belongs to `Vanished` — and counting it here would state one
+disappearance twice, in a line whose whole purpose is to name questions whose answers are missing.
+
+### Why it is per kind and never a total
+
+Summing across kinds counts one test once per question its data could not answer. Intersecting them
+collapses to nothing, because a test's pass and fail are always readable and so nearly every test is
+measured by something. And either total would move with `--kind`, which is the one thing a count of
+what could not be measured must not do: a reader comparing a full report with a narrowed one would
+read the difference as the suite improving. Per kind it cannot move, because the six providers own
+disjoint kind sets — a kind's figure comes from its own provider or the kind is absent from the map.
+
+### What the terms do not sum to
+
+For a kind that publishes both figures:
+
+```
+hypothesesTested[k] + notMeasured[k].AwaitingRuns + notMeasured[k].Unreadable
+    = the fingerprints that kind was offered
+```
+
+and the tests it measured and had nothing to say about are inside `hypothesesTested`, not published
+separately. That term is the common case — it is very nearly the suite — and publishing it would make
+the number the test count.
+
 ## Why the exceptions are exceptions
 
 **`SharedFailure` and `BrokenFixture` keep environmental sessions.** An environmental session *is* a

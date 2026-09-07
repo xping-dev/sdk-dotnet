@@ -355,31 +355,44 @@ internal sealed class RetryProvider : IFindingProvider
     /// <inheritdoc/>
     /// <remarks>
     /// Every kind here is a count of attempts that happened, so no family is reported and nothing
-    /// downstream corrects them for multiplicity.
+    /// downstream corrects them for multiplicity. Reporting no family says nothing about coverage,
+    /// which is counted separately and shared by all three kinds — see the remark inside.
     /// </remarks>
-    public ProviderReport Analyze(AnalysisContext context) =>
-        ProviderReport.Observations([.. Observed(context)]);
-
-    /// <summary>
-    /// Walks the window, yielding what it observed.
-    /// </summary>
-    /// <param name="context">The window, sessions and shared indexes.</param>
-    /// <returns>Candidate findings, in any order.</returns>
-    private static IEnumerable<FindingCandidate> Observed(AnalysisContext context)
+    public ProviderReport Analyze(AnalysisContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int awaitingRuns = 0;
 
         var currentSessions = new HashSet<Guid>(
             context.Window.CurrentSlice.Select(s => s.SessionId));
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
+            // Charged to nothing: the fingerprint and the reference come from one index, so this is
+            // an inconsistency inside it and not a measurement the data declined.
             TestReference? test = context.Tests.ReferenceFor(fingerprint);
             if (test == null)
                 continue;
 
             IReadOnlyList<ExecutionRef> executions = context.Tests.ExecutionsOf(fingerprint);
             List<RunAttempts> runs = RunsOf(context, executions);
+
+            // Every run of this test was an outage. All three kinds read the same reduction, and
+            // none of them can read a test whose every occasion was discounted — so the tally is
+            // taken here, at the one precondition the three share, rather than per kind.
+            //
+            // Deliberately not per kind past this point. The chain below stops at the first kind
+            // that fires, so whether a later kind could have been measured on this test is a
+            // question the algorithm never asks; answering it for the tally alone would mean running
+            // all three on every fingerprint to fill in a number nobody reads. One shared
+            // precondition is what these three kinds honestly have to say about their coverage.
+            if (runs.Count == 0 || runs.TrueForAll(r => r.Discounted))
+            {
+                awaitingRuns++;
+                continue;
+            }
 
             // One test, one finding. A test qualifying for two of these kinds has not done two
             // things: it has done one thing that two thresholds both noticed.
@@ -389,8 +402,23 @@ internal sealed class RetryProvider : IFindingProvider
                 Masked(context, test, executions, runs);
 
             if (candidate != null)
-                yield return candidate;
+                candidates.Add(candidate);
         }
+
+        // Awaiting runs rather than unreadable, for every one of them. An attempt number is recorded
+        // by every adapter that records an execution at all, so there is no shape of retry data this
+        // provider cannot read; what it can be short of is a run of this test that was not an
+        // outage, and the next ordinary run supplies one.
+        var notMeasured = new NotMeasuredCount(awaitingRuns, 0);
+
+        return ProviderReport.Observations(
+            candidates,
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.RetryMasked] = notMeasured,
+                [FindingKind.RetryDeepening] = notMeasured,
+                [FindingKind.RetryExhausted] = notMeasured
+            });
     }
 
     // -------------------------------------------------------------------------------------------
