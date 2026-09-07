@@ -24,9 +24,13 @@ public sealed class FailureModeProviderTests
     private static TestExecution Passing(string name) => TestSessionFactory.Execution(name);
 
     /// <summary>A failure every test in a fixture can share, so it clusters.</summary>
-    private static TestExecution SharedFailure(string name) =>
+    private static TestExecution SharedFailure(string name, int durationMs = 100) =>
         TestSessionFactory.Execution(
-            name, TestOutcome.Failed, exceptionType: SharedType, errorMessage: SharedMessage);
+            name,
+            TestOutcome.Failed,
+            durationMs: durationMs,
+            exceptionType: SharedType,
+            errorMessage: SharedMessage);
 
     /// <summary>The same shared failure, recorded in a named lifecycle member.</summary>
     private static TestExecution FixtureFailure(
@@ -534,6 +538,54 @@ public sealed class FailureModeProviderTests
         Assert.Equal(
             ["fp-Alpha", "fp-Beta", "fp-Gamma"],
             evidence.Members.Select(m => m.Fingerprint));
+    }
+
+    [Fact]
+    public void EachClusterMemberCarriesItsOwnFailureCount()
+    {
+        // The members share a cause, not a history. A test the cluster took out three times is not
+        // evidence of the same weight as one it took out once, and the report says which is which.
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")]),
+            TestSessionFactory.Session(
+                5, [SharedFailure("Alpha"), SharedFailure("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(
+                6, [SharedFailure("Alpha"), Passing("Beta"), Passing("Gamma")])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal(
+            ["fp-Alpha", "fp-Beta", "fp-Gamma"],
+            evidence.Members.Select(m => m.Fingerprint));
+        Assert.Equal([3, 2, 1], evidence.Members.Select(m => m.Failures));
+        Assert.Equal(6, evidence.Failures);
+    }
+
+    [Fact]
+    public void ClusterExemplarsAreOneMemberEachInOrdinalOrder()
+    {
+        // Which three, not just how many. Six members failed in one run, so the three exemplars are
+        // the ordinally first three — Alpha, Beta and Delta, which is not the order they were
+        // recorded in. Durations stand in for identity, since the exemplars of one cluster carry
+        // the same exception and message by construction.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [.. ClusterFixtureTests.Select(Passing)])),
+            TestSessionFactory.Session(
+                4,
+                [.. ClusterFixtureTests.Select((name, index) => SharedFailure(name, 10 + index))])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal([10L, 11L, 13L], evidence.Exemplars.Select(e => e.DurationMs));
     }
 
     /// <summary>

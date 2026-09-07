@@ -447,9 +447,7 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             references.Add(reference);
 
-            int failures = cluster.Failures.Count(
-                f => string.Equals(
-                    f.Execution.Identity.TestFingerprint, fingerprint, StringComparison.Ordinal));
+            cluster.FailuresByFingerprint.TryGetValue(fingerprint, out int failures);
 
             members.Add(new ClusterMember(fingerprint, reference.FullyQualifiedName, failures));
 
@@ -985,27 +983,52 @@ internal sealed class FailureModeProvider : IFindingProvider
     private static List<ExecutionRef> Spread(
         IReadOnlyList<ExecutionRef> failures, Func<ExecutionRef, string> key)
     {
-        List<ExecutionRef> ordered = [.. failures
-            .OrderBy(f => f.SessionIndex)
-            .ThenBy(f => f.Execution.Retry?.AttemptNumber ?? 1)
-            .ThenBy(f => f.Execution.Identity.TestFingerprint, StringComparer.Ordinal)
-            .ThenBy(f => f.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
-                StringComparer.Ordinal)];
+        // Selected rather than sorted. A cluster's failure list is the largest collection the report
+        // handles — every test in a broken assembly, once per run — and ordering all of it to read
+        // three entries off the front was the expensive half of assembling that finding.
+        var earliestPerKey = new Dictionary<string, ExecutionRef>(StringComparer.Ordinal);
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        List<ExecutionRef> chosen = [];
-
-        foreach (ExecutionRef reference in ordered)
+        foreach (ExecutionRef reference in failures)
         {
-            if (chosen.Count == MaxExemplars)
-                break;
-
-            if (seen.Add(key(reference)))
-                chosen.Add(reference);
+            if (!earliestPerKey.TryGetValue(key(reference), out ExecutionRef? held) ||
+                ByExemplarOrder(reference, held) < 0)
+            {
+                earliestPerKey[key(reference)] = reference;
+            }
         }
 
+        // The entries of the ordered list that introduce a new key are exactly the earliest failure
+        // under each key, so ordering those answers the same question the ordered walk did. No two
+        // of them can tie: a tie needs the same session, attempt, test and execution id, which is
+        // one execution and so one key.
+        List<ExecutionRef> candidates = [.. earliestPerKey.Values];
+        candidates.Sort(ByExemplarOrder);
+
+        List<ExecutionRef> chosen = [.. candidates.Take(MaxExemplars)];
+
         // Then top up in the same order, so a test with one failure mode still gets three exemplars.
-        foreach (ExecutionRef reference in ordered)
+        if (chosen.Count < MaxExemplars)
+            TopUp(failures, chosen);
+
+        return chosen;
+    }
+
+    /// <summary>
+    /// Fills the remaining exemplar slots from the earliest failures overall, repeating a key.
+    /// </summary>
+    /// <remarks>
+    /// Reached only when the failures span fewer keys than there are exemplars to fill, so fewer
+    /// than <see cref="MaxExemplars"/> entries are already spoken for. Holding twice that many
+    /// leaves the shortlist unable to run dry before <paramref name="chosen"/> is full.
+    /// </remarks>
+    private static void TopUp(IReadOnlyList<ExecutionRef> failures, List<ExecutionRef> chosen)
+    {
+        List<ExecutionRef> shortlist = new(MaxExemplars * 2);
+
+        foreach (ExecutionRef reference in failures)
+            Offer(shortlist, reference, MaxExemplars * 2);
+
+        foreach (ExecutionRef reference in shortlist)
         {
             if (chosen.Count == MaxExemplars)
                 break;
@@ -1013,8 +1036,54 @@ internal sealed class FailureModeProvider : IFindingProvider
             if (!chosen.Contains(reference))
                 chosen.Add(reference);
         }
+    }
 
-        return chosen;
+    /// <summary>
+    /// Keeps a short list holding the <paramref name="capacity"/> earliest failures offered to it.
+    /// </summary>
+    private static void Offer(List<ExecutionRef> shortlist, ExecutionRef reference, int capacity)
+    {
+        if (shortlist.Count == capacity && ByExemplarOrder(reference, shortlist[^1]) >= 0)
+            return;
+
+        int at = shortlist.Count;
+        while (at > 0 && ByExemplarOrder(reference, shortlist[at - 1]) < 0)
+            at--;
+
+        shortlist.Insert(at, reference);
+
+        if (shortlist.Count > capacity)
+            shortlist.RemoveAt(shortlist.Count - 1);
+    }
+
+    /// <summary>
+    /// Orders failures the way exemplars are picked: newest run first, then earliest attempt.
+    /// </summary>
+    /// <remarks>
+    /// Total, so the same window always yields the same exemplars. Sessions are indexed newest
+    /// first, which is why ascending order here reads as most recent.
+    /// </remarks>
+    private static int ByExemplarOrder(ExecutionRef left, ExecutionRef right)
+    {
+        int bySession = left.SessionIndex.CompareTo(right.SessionIndex);
+        if (bySession != 0)
+            return bySession;
+
+        int byAttempt = (left.Execution.Retry?.AttemptNumber ?? 1)
+            .CompareTo(right.Execution.Retry?.AttemptNumber ?? 1);
+        if (byAttempt != 0)
+            return byAttempt;
+
+        int byTest = string.CompareOrdinal(
+            left.Execution.Identity.TestFingerprint, right.Execution.Identity.TestFingerprint);
+        if (byTest != 0)
+            return byTest;
+
+        // Ordinal over the hex form rather than Guid.CompareTo, which orders differently. Reached
+        // only by two attempts of one test in one run, so the formatting is off the hot path.
+        return string.CompareOrdinal(
+            left.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
+            right.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture));
     }
 
     private static FailureExemplar ToExemplar(AnalysisContext context, ExecutionRef reference)
