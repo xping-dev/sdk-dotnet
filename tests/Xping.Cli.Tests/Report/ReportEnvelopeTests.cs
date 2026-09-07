@@ -52,9 +52,6 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// <summary>
     /// Writes sessions in which several tests stop running, so the report has findings to rank.
     /// </summary>
-    /// <summary>
-    /// Seeds a store in which the newest sessions stop running some of the tests.
-    /// </summary>
     /// <param name="vanishingTests">Tests that stop.</param>
     /// <param name="total">Sessions to write.</param>
     /// <param name="presentIn">How many of the oldest sessions run the vanishing tests.</param>

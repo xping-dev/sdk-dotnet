@@ -449,7 +449,12 @@ public sealed class VanishedProviderTests
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(FindingKind.Vanished, candidate.Evidence);
 
-        Assert.Contains("earlier full runs", headline, StringComparison.Ordinal);
+        // Both clauses, not just the first. "the last 3" and "the last 3 full runs" are different
+        // runs once anything has been set aside, and a headline is read a clause at a time.
+        Assert.Equal(
+            "ran in 17 of 17 earlier full runs, absent from the last 3 full runs",
+            headline);
+
         Assert.Contains(
             metrics,
             m => m.Label == "set aside" && m.Value == "3 runs that covered part of the suite");
@@ -465,8 +470,9 @@ public sealed class VanishedProviderTests
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(FindingKind.Vanished, candidate.Evidence);
 
-        Assert.Contains("earlier runs", headline, StringComparison.Ordinal);
-        Assert.DoesNotContain("full", headline, StringComparison.Ordinal);
+        // Byte for byte the sentence this kind has always printed: with nothing set aside, "the
+        // last 3" can mean nothing but the last three runs.
+        Assert.Equal("ran in 17 of 17 earlier runs, absent from the last 3", headline);
         Assert.DoesNotContain(metrics, m => m.Label == "set aside");
     }
 

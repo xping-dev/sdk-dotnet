@@ -543,12 +543,14 @@ internal static class EvidenceHeadline
     /// reader who opens the finding to check how much belief the sentence earned.
     /// </para>
     /// <para>
-    /// Both denominators count only the runs that covered the suite, so where any were set aside the
-    /// sentence says "full runs" and a metric says how many were left out. Qualified rather than
-    /// worded that way always, because in a store with no filtered runs in it there is nothing for
-    /// the word to distinguish the runs from, and the shorter sentence is the true one. The wording
-    /// cannot destabilise the finding's id, which hashes the kind and the subject and nothing else
-    /// — see <see cref="Model.FindingId"/>.
+    /// Both denominators count only the runs that covered the suite, so where any were set aside
+    /// both clauses say "full runs" and a metric says how many were left out. Both, because "the
+    /// last 3" and "the last 3 full runs" are not the same three runs once anything has been set
+    /// aside, and a clause that is only true given the one before it is the kind a reader pastes
+    /// into a chat window on its own. Qualified rather than worded that way always, because in a
+    /// store with no filtered runs there is nothing for the word to distinguish the runs from and
+    /// the shorter sentence is the true one. The wording cannot destabilise the finding's id, which
+    /// hashes the kind and the subject and nothing else — see <see cref="Model.FindingId"/>.
     /// </para>
     /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) Vanished(VanishedEvidence e)
@@ -575,9 +577,14 @@ internal static class EvidenceHeadline
         if (anySetAside)
             metrics.Add(new("set aside", $"{Runs(e.PartialSessionsSetAside)} that covered part of the suite"));
 
+        // The trailing noun only where it discriminates. On an ordinary store "the last 3" can mean
+        // nothing but the last three runs, and the sentence is the one this kind has always printed.
+        string absence = anySetAside
+            ? $"absent from the last {e.CurrentSessionCount} {runs}"
+            : $"absent from the last {e.CurrentSessionCount}";
+
         return (
-            $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier {runs}, " +
-            $"absent from the last {e.CurrentSessionCount}",
+            $"ran in {e.BaselineSessions} of {e.BaselineSessionCount} earlier {runs}, {absence}",
             metrics);
     }
 
