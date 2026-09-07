@@ -158,9 +158,10 @@ public sealed class DurationProviderTests
 
         var alternative = Assert.IsType<DurationUnstableEvidence>(instead.Evidence);
 
-        Assert.True(
-            alternative.Dispersion > 1.0,
-            $"expected the per-execution dispersion to be far from zero, was {alternative.Dispersion}");
+        // 4.148 over the executions, against zero over the runs. The gap is the point: these are
+        // two different samples answering two different questions, and only one of them is what a
+        // comparison of two arms was made on.
+        Assert.Equal(4.148, alternative.Dispersion);
     }
 
     [Fact]
