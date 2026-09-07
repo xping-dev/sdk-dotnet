@@ -319,6 +319,44 @@ anything stopped — but it does mean a fresh store says nothing about deleted t
 eight runs in it. The run rate and the p-value are published with every finding that does clear the
 bar.
 
+---
+
+### `Vanished` Cannot Tell A Filtered Run From A Deletion, So It Trusts Neither Below Half A Suite
+
+**Impact**: a run that covered less than half the suite is counted on neither side of an absence, so
+a deletion that removed more than half a suite is never reported. A `--filter` selecting *more* than
+half the suite still produces one false `stopped running` per unselected test.
+
+**Reason**: a run under a `dotnet test --filter` did not fail to see the tests it excluded — it never
+looked for them. Counting its silence makes every unselected test look deleted, which is what an
+ordinary inner loop produces in about ten minutes: a handful of full runs, then a stream of filtered
+ones, then a report claiming most of the suite has stopped running. Every statement in it is true of
+the data and false about the world.
+
+So the report classifies each run by how much of the suite it covered — its distinct tests against
+the largest run in the window, which is the best evidence the window holds of how big the suite is,
+and the only anchor a store of mostly filtered runs does not corrupt. The median does not work: four
+full runs and sixteen filtered ones has a median of one test, and every run in it measures as
+typical. A report is scoped to exactly one assembly, so the runs being compared are always runs of
+the same suite. Runs covering less than half are set aside, the remaining runs are re-split into
+their own "now" and "before", and the counts on the finding are of those runs alone — `full runs` in
+the sentence, with a `set aside` metric saying how many were left out.
+
+**The trade, stated rather than discovered**: a count cannot separate the two cases, and no threshold
+makes it able to. Nine tests missing from a suite of seventeen is the same table whether they were
+excluded or removed. The line is placed at a half — the point at which a run stopped being a run of
+the suite and became a run of part of it — and it is deliberately biased towards silence: `Vanished`
+is capped at `Severity.Low` because a disappearance is usually something the developer did on purpose
+a minute ago, so a missed one costs little, whereas the false positive arrives once per unselected
+test on every filtered run for as long as it stays in the window.
+
+**Related**: setting runs aside shortens the history this kind measures against, so a store whose
+runs are mostly filtered can fall below the eight runs the section above requires and report nothing
+at all. Only the kinds that read absence set these runs aside — every other kind still counts them in
+full, because a filtered run's *outcomes* are as true as any other run's and it is only its silences
+that mean nothing. The summary line says how many runs covered part of the suite, so the distinction
+is visible rather than inferred.
+
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 
 **Impact**: a test whose retry attribute allows three retries but which only ever recorded two
@@ -491,3 +529,4 @@ When reporting, please include:
 | 1.7.0   | Documented what `TimeSensitive` now charges for searching three axes, and what that costs |
 | 1.8.0   | Documented what `ParallelSensitive` now measures, and the duration confound it cannot correct |
 | 1.9.0   | Documented the run rate `Vanished` now requires, and the window size below which it is silent |
+| 1.10.0  | Documented how `Vanished` treats a run that covered part of the suite, and what that trade costs |

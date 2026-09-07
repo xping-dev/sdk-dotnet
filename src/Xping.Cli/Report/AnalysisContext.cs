@@ -44,9 +44,28 @@ internal sealed class AnalysisContext
         for (int position = 0; position < window.Sessions.Count; position++)
             views.Add(SessionView.For(window.Sessions[position], position));
 
+        // Partiality is a comparison and not a measurement, so it needs the whole window before any
+        // one session can be classified. The anchor is the largest run in it: the best evidence the
+        // window holds of how big the suite is, and the only one a store of mostly filtered runs
+        // does not corrupt — see LocalAnalysisConstants.PartialSessionShare.
+        int suiteSize = 0;
+        foreach (SessionView view in views)
+            suiteSize = Math.Max(suiteSize, view.Tests);
+
+        if (suiteSize > 0)
+        {
+            double floor = LocalAnalysisConstants.PartialSessionShare * suiteSize;
+            for (int position = 0; position < views.Count; position++)
+            {
+                if (views[position].Tests < floor)
+                    views[position] = views[position] with { IsPartial = true };
+            }
+        }
+
         SessionViews = views;
         _viewsBySession = views.ToDictionary(v => v.Session.SessionId);
         EnvironmentalSessionCount = views.Count(v => v.IsLikelyEnvironmental);
+        PartialSessionCount = views.Count(v => v.IsPartial);
     }
 
     /// <summary>Gets the sessions under analysis and the boundaries that produced them.</summary>
@@ -70,6 +89,17 @@ internal sealed class AnalysisContext
     /// in the report with nothing on screen to explain it.
     /// </remarks>
     public int EnvironmentalSessionCount { get; }
+
+    /// <summary>
+    /// Gets how many analysed sessions covered only part of the suite.
+    /// </summary>
+    /// <remarks>
+    /// Reported in the summary as an observation rather than a discount. Only the kinds that read
+    /// absence set these sessions aside — every other kind reads outcomes of executions that
+    /// happened, and a filtered run's outcomes are as true as any other's — so the line says what
+    /// the window contains and does not claim the numbers were adjusted.
+    /// </remarks>
+    public int PartialSessionCount { get; }
 
     /// <summary>
     /// Gets the health of one analysed session.

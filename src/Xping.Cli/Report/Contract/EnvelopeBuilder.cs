@@ -84,6 +84,7 @@ internal static class EnvelopeBuilder
                 result.ExcludedNotSignificant,
 
                 context.EnvironmentalSessionCount,
+                context.PartialSessionCount,
                 incompleteSessions,
                 unreadableSessions,
                 result.FailedProviders),

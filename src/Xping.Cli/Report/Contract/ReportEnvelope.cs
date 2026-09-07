@@ -39,14 +39,12 @@ internal sealed record ReportEnvelope(
     /// Moves whenever anything a consumer reads changes shape, and the per-kind evidence payloads
     /// are part of that even though this document describes them as opaque: a script that reached
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
-    /// leaving the number still would tell it nothing had moved. 1.12 is where every evidence
-    /// record renamed the fields a rate is taken over — <c>executionsConsidered</c> and
-    /// <c>sessionsConsidered</c> where discounting applied, <c>executionsInWindow</c> and
-    /// <c>sessions</c> where it did not — split <c>discountedExecutions</c> into its environmental
-    /// and clustered halves, and where the finding gained <c>population</c>, which says which of
-    /// those the numbers beside it describe.
+    /// leaving the number still would tell it nothing had moved. 1.13 is where the summary gained
+    /// <c>partialSessions</c> and <c>VanishedEvidence</c> gained <c>partialSessionsSetAside</c> —
+    /// the runs that covered only part of the suite, which an absence is counted on neither side
+    /// of.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.12";
+    public const string CurrentSchemaVersion = "1.13";
 }
 
 /// <summary>
@@ -95,6 +93,12 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// reader given only an empty block cannot tell that from a suite with nothing to report.
 /// </param>
 /// <param name="EnvironmentalSessions">Sessions discounted as environment failures.</param>
+/// <param name="PartialSessions">
+/// Sessions that covered only part of the suite — a <c>dotnet test --filter</c> run, or anything
+/// else that ran a fraction of the tests the window's largest run did. An observation and not a
+/// discount: only the kinds that read absence set such a session aside, because a filtered run's
+/// outcomes are as true as any other run's and it is only its silences that mean nothing.
+/// </param>
 /// <param name="IncompleteSessions">Sessions found but not finalised.</param>
 /// <param name="UnreadableSessions">Session files that could not be read.</param>
 /// <param name="FailedProviders">Metrics that threw and produced nothing.</param>
@@ -106,6 +110,7 @@ internal sealed record SummaryDto(
     int ExcludedLowEvidence,
     int ExcludedNotSignificant,
     int EnvironmentalSessions,
+    int PartialSessions,
     int IncompleteSessions,
     int UnreadableSessions,
     IReadOnlyList<string> FailedProviders);

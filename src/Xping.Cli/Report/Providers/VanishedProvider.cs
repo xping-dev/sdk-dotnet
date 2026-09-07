@@ -6,6 +6,7 @@
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Scoring;
+using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Providers;
@@ -16,6 +17,13 @@ namespace Xping.Cli.Report.Providers;
 /// <param name="BaselineSessions">Sessions in the baseline slice the test appeared in.</param>
 /// <param name="BaselineSessionCount">Sessions in the baseline slice.</param>
 /// <param name="CurrentSessionCount">Sessions in the current slice it is absent from.</param>
+/// <param name="PartialSessionsSetAside">
+/// Sessions in the window that covered only part of the suite and were counted on neither side. A
+/// run under a filter never asked about this test, so its silence is not an absence. Published
+/// because the two denominators above are otherwise unexplainable to a reader who asked for twenty
+/// runs and is being shown a claim about four: the sentence is true of the runs that ran the suite,
+/// and this is how many did not.
+/// </param>
 /// <param name="BaselineRunRate">
 /// Share of the baseline sessions it appeared in — the habit itself, as a point estimate.
 /// </param>
@@ -40,6 +48,7 @@ internal sealed record VanishedEvidence(
     int BaselineSessions,
     int BaselineSessionCount,
     int CurrentSessionCount,
+    int PartialSessionsSetAside,
     double BaselineRunRate,
     double PValue,
     int ExecutionsInWindow,
@@ -66,6 +75,16 @@ internal sealed record VanishedEvidence(
 /// table is formed: this kind only ever looks at a test already known to be absent, and there is no
 /// finding for one that started running.
 /// </para>
+/// <para>
+/// And absence is only meaningful in a session that asked. A run under a <c>dotnet test --filter</c>
+/// did not fail to see the tests it excluded; it never looked for them, and counting its silence
+/// makes every unselected test look deleted. So this kind reads the window as the sequence of
+/// sessions that covered the suite — <see cref="Indexes.SessionView.IsPartial"/> — and re-splits
+/// that sequence into its own "now" and "before". A re-split rather than a filter of the window's
+/// own slices, because the two differ on a store that interleaves full and filtered runs: dropping
+/// the partial sessions out of a current slice of three filtered runs leaves nothing to ask about,
+/// where taking the three most recent full runs still finds a test that genuinely stopped.
+/// </para>
 /// </remarks>
 internal sealed class VanishedProvider : IFindingProvider
 {
@@ -84,7 +103,10 @@ internal sealed class VanishedProvider : IFindingProvider
         AnalysisWindowSlices slices = AnalysisWindowSlices.From(context);
 
         // Nothing to compare against: with no baseline every test looks new, and with no current
-        // slice every test looks vanished.
+        // slice every test looks vanished. This is also where a window holding too few full runs
+        // stops — and it stops with an empty family rather than merely with no candidates, so the
+        // coordinator's Benjamini-Hochberg pass is handed a kind that asked nothing instead of a
+        // kind that asked three hundred questions and liked none of the answers.
         if (slices.BaselineCount == 0 || slices.CurrentCount == 0)
             return Report(candidates, tested);
 
@@ -136,6 +158,7 @@ internal sealed class VanishedProvider : IFindingProvider
                     appearances,
                     slices.BaselineCount,
                     slices.CurrentCount,
+                    slices.PartialSessionsSetAside,
                     FindingOrder.Round((double)appearances / slices.BaselineCount),
                     FindingOrder.RoundProbability(pValue),
                     executions.Count,
@@ -181,17 +204,27 @@ internal sealed class VanishedProvider : IFindingProvider
 }
 
 /// <summary>
-/// The fingerprints present on each side of a window's split.
+/// The fingerprints present on each side of a split, taken over the runs that covered the suite.
 /// </summary>
+/// <remarks>
+/// Not the window's own <see cref="AnalysisWindow.CurrentSlice"/> and
+/// <see cref="AnalysisWindow.BaselineSlice"/>. Those are every session in order, and a session that
+/// ran a tenth of the suite belongs in neither side of a question about absence — it did not fail to
+/// see the tests it excluded, it never looked. So the sessions that covered the suite are taken in
+/// order and split again, on <see cref="AnalysisWindow.SliceSizeFor(int)"/>, which is the same rule
+/// the window itself narrows by.
+/// </remarks>
 /// <param name="Current">Fingerprints seen anywhere in the current slice.</param>
 /// <param name="BaselineAppearances">Baseline sessions each fingerprint appeared in.</param>
 /// <param name="CurrentCount">Sessions in the current slice.</param>
 /// <param name="BaselineCount">Sessions in the baseline slice.</param>
+/// <param name="PartialSessionsSetAside">Sessions left out of both for covering part of the suite.</param>
 internal sealed record AnalysisWindowSlices(
     IReadOnlySet<string> Current,
     IReadOnlyDictionary<string, int> BaselineAppearances,
     int CurrentCount,
-    int BaselineCount)
+    int BaselineCount,
+    int PartialSessionsSetAside)
 {
     /// <summary>
     /// Derives the split for a window.
@@ -200,17 +233,29 @@ internal sealed record AnalysisWindowSlices(
     /// <returns>The fingerprints on each side.</returns>
     public static AnalysisWindowSlices From(AnalysisContext context)
     {
-        var current = new HashSet<string>(StringComparer.Ordinal);
-        foreach (TestSession session in context.Window.CurrentSlice)
+        // Newest first, because AnalysisContext builds its views in window order and the window is
+        // ordered newest first. Dropping the partial ones preserves that, so the head of what is
+        // left is still the most recent thing that ran the suite.
+        var covering = new List<TestSession>(context.SessionViews.Count);
+        foreach (SessionView view in context.SessionViews)
         {
-            foreach (string fingerprint in TestIndex.FingerprintsIn(session))
+            if (!view.IsPartial)
+                covering.Add(view.Session);
+        }
+
+        int sliceSize = AnalysisWindow.SliceSizeFor(covering.Count);
+
+        var current = new HashSet<string>(StringComparer.Ordinal);
+        for (int position = 0; position < sliceSize; position++)
+        {
+            foreach (string fingerprint in TestIndex.FingerprintsIn(covering[position]))
                 current.Add(fingerprint);
         }
 
         var baseline = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (TestSession session in context.Window.BaselineSlice)
+        for (int position = sliceSize; position < covering.Count; position++)
         {
-            foreach (string fingerprint in TestIndex.FingerprintsIn(session))
+            foreach (string fingerprint in TestIndex.FingerprintsIn(covering[position]))
             {
                 baseline.TryGetValue(fingerprint, out int seen);
                 baseline[fingerprint] = seen + 1;
@@ -220,7 +265,8 @@ internal sealed record AnalysisWindowSlices(
         return new AnalysisWindowSlices(
             current,
             baseline,
-            context.Window.CurrentSlice.Count,
-            context.Window.BaselineSlice.Count);
+            sliceSize,
+            covering.Count - sliceSize,
+            context.SessionViews.Count - covering.Count);
     }
 }

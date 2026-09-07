@@ -21,6 +21,11 @@ namespace Xping.Cli.Report.Indexes;
 /// It is a classification against two thresholds, not a claim about what went wrong. The report says
 /// a session looks environmental; it never says why, and it never says so about a test.
 /// </para>
+/// <para>
+/// <see cref="IsPartial"/> is the other flag, and it answers a different question: not whether the
+/// session's outcomes can be trusted, but whether its silences can. It is window-relative, so
+/// <see cref="For"/> cannot decide it — see <see cref="AnalysisContext.PartialSessionCount"/>.
+/// </para>
 /// </remarks>
 /// <param name="Session">The session itself.</param>
 /// <param name="Index">Its position in the window; 0 is the newest.</param>
@@ -38,6 +43,30 @@ internal sealed record SessionView(
     double FailureRate,
     bool IsLikelyEnvironmental)
 {
+    /// <summary>
+    /// Gets a value indicating whether the session covered only part of the suite.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run under a <c>dotnet test --filter</c> is not a run in which the tests it excluded failed
+    /// to appear — it is a run that never asked about them. A kind reading absence has to set such a
+    /// session aside, or every unselected test looks deleted.
+    /// </para>
+    /// <para>
+    /// Not a positional member, because it cannot be measured from one session: it is
+    /// <see cref="Tests"/> against <see cref="LocalAnalysisConstants.PartialSessionShare"/> of the
+    /// largest run in the window, and the window is what <see cref="For"/> does not have.
+    /// <see cref="AnalysisContext"/> sets it once the whole window is measured, which is also the
+    /// only place it means anything.
+    /// </para>
+    /// <para>
+    /// A classification against a threshold and not a claim about what happened, in the same way
+    /// <see cref="IsLikelyEnvironmental"/> is. The report says a session covered part of the suite;
+    /// it never says a filter was the reason, because a deletion produces the same count.
+    /// </para>
+    /// </remarks>
+    public bool IsPartial { get; init; }
+
     /// <summary>
     /// Measures one session.
     /// </summary>

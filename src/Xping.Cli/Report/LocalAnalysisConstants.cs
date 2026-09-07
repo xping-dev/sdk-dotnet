@@ -78,6 +78,43 @@ internal static class LocalAnalysisConstants
     public const int SmallWindowSessionCount = 8;
 
     /// <summary>
+    /// Share of the window's largest run a session must cover to count as a run of the suite (0.50).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <c>dotnet test --filter</c> run is an ordinary thing to find in a local store, and a
+    /// session that ran one test of seventeen says nothing whatever about the other sixteen. Absence
+    /// is only evidence where the run was in a position to produce a presence, so a session covering
+    /// a small part of the suite is set aside by the kinds that read absence rather than outcome —
+    /// today that is <see cref="Providers.VanishedProvider"/> alone.
+    /// </para>
+    /// <para>
+    /// The anchor is the largest session in the window and deliberately not its median. A store of
+    /// four full runs and sixteen filtered ones — which is what ten minutes of an inner loop
+    /// produces — has a median of one test, and every session in it would measure as typical
+    /// against that. The largest run is the best evidence the window holds of how big the suite
+    /// actually is, and a report is scoped to exactly one assembly, so the sessions being compared
+    /// are always runs of the same suite.
+    /// </para>
+    /// <para>
+    /// A count cannot tell a filtered run from a deletion, and no threshold makes it able to: a run
+    /// of eight tests where the suite has seventeen is the same table whether nine tests were
+    /// excluded or removed. So the line is a trade rather than a discovery, and it is placed at a
+    /// half — the point at which a run stopped being a run of the suite and became a run of part of
+    /// it. What that costs, in both directions: a filter selecting more than half the suite still
+    /// produces false absences, and a deletion of more than half a suite is never reported at all.
+    /// </para>
+    /// <para>
+    /// Biased towards silence on purpose. <see cref="Model.FindingKind.Vanished"/> is capped at
+    /// <see cref="Model.Severity.Low"/> because a disappearance is usually something the developer
+    /// did on purpose thirty seconds ago, so a missed one costs almost nothing; whereas the false
+    /// positive arrives one per unselected test, on every filtered run, for as long as the run stays
+    /// in the window.
+    /// </para>
+    /// </remarks>
+    public const double PartialSessionShare = 0.50;
+
+    /// <summary>
     /// Failure rate at or above which a test is broken rather than flaky (0.90).
     /// </summary>
     /// <remarks>

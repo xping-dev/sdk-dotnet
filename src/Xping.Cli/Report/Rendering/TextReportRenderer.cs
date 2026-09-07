@@ -142,6 +142,14 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
                 $"{summary.EnvironmentalSessions} {RunWord(summary.EnvironmentalSessions)} " +
                 "discounted as environmental");
 
+        // Worded as what the window holds, not as what was done about it. Only the kinds that read
+        // absence set these aside; every other kind still counts them in full, and "discounted"
+        // beside the environmental line would claim a symmetry that does not exist.
+        if (summary.PartialSessions > 0)
+            caveats.Add(
+                $"{summary.PartialSessions} {RunWord(summary.PartialSessions)} " +
+                "covered part of the suite");
+
         if (summary.FailedProviders.Count > 0)
             caveats.Add($"metrics unavailable: {string.Join(", ", summary.FailedProviders)}");
 
