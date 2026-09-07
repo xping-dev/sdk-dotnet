@@ -52,12 +52,25 @@ public sealed class FailureModeProviderTests
             errorMessage: "The operation timed out");
 
     /// <summary>A failure whose signature is the test's own.</summary>
-    private static TestExecution Failure(string name, string message = "unexpected null") =>
+    private static TestExecution Failure(
+        string name, string message = "unexpected null", int durationMs = 100) =>
         TestSessionFactory.Execution(
             name,
             TestOutcome.Failed,
+            durationMs: durationMs,
             exceptionType: "System.InvalidOperationException",
             errorMessage: message,
+            stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
+
+    /// <summary>The same failure, recorded as one attempt of a run that retried.</summary>
+    private static TestExecution FailedAttempt(string name, int attempt, int maxRetries) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            attempt: attempt,
+            maxRetries: maxRetries,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
             stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
 
     private static List<FindingCandidate> Analyze(params TestSession[] sessions) =>
@@ -1112,6 +1125,112 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(3, evidence.Exemplars.Count);
         Assert.Equal(3, evidence.Exemplars.Select(e => e.SignatureHash).Distinct().Count());
+    }
+
+    [Fact]
+    public void ThreeExemplarsOfOneFailureModeAreTheThreeMostRecent()
+    {
+        // A test that only ever fails one way still gets three exemplars, and which three is not
+        // incidental: they are the most recent, so they describe what the test does now rather than
+        // what it did a fortnight ago.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= 5
+                    ? Failure("Subject", durationMs: 100 + ordinal)
+                    : Passing("Subject")]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([109L, 108L, 107L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void TheThirdExemplarRepeatsAModeOnlyAfterBothHaveBeenShown()
+    {
+        // Two modes, three slots. Each mode is shown once before either is shown twice, so the
+        // third exemplar is the newest of what is left over — which is not the third newest
+        // failure, and is the whole point of spreading them.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= 6
+                    ? Failure("Subject", ordinal == 7 ? "mode b" : "mode a", 100 + ordinal)
+                    : Passing("Subject")]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        // Newest of mode a, then newest of mode b, then the next newest failure overall.
+        Assert.Equal([109L, 107L, 108L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void ExemplarsOfARetriedRunAreItsEarliestAttempts()
+    {
+        // Nothing promises an adapter writes a run's attempts in order, and the exemplars must not
+        // depend on it: this run recorded its seventh attempt first.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 7).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+            TestSessionFactory.Session(7, [Failure("Subject")]),
+            TestSessionFactory.Session(8, [Failure("Subject")]),
+            TestSessionFactory.Session(
+                9,
+                [.. Enumerable.Range(1, 7).Reverse().Select(
+                    attempt => FailedAttempt("Subject", attempt, maxRetries: 6))])
+        ];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([1, 2, 3], evidence.Exemplars.Select(e => e.AttemptNumber));
+    }
+
+    [Fact]
+    public void TwoFailuresRecordedAlikeInOneRunStillOrderTheSameWay()
+    {
+        // The last tie-break. Two executions of one test in one run, recorded by an adapter that
+        // tracks no retry metadata, agree on everything the order reads except their execution ids
+        // — and the exemplars have to pick the same one every time, or the published report moves
+        // between runs over an unchanged store.
+        TestExecution second = TestSessionFactory.Execution(
+            "Subject",
+            TestOutcome.Failed,
+            durationMs: 100,
+            executionId: new Guid("00000000-0000-0000-0000-0000000000bb"),
+            retry: false,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
+            stackTrace: "   at MyApp.Tests.SampleTests.Subject()");
+
+        TestExecution first = TestSessionFactory.Execution(
+            "Subject",
+            TestOutcome.Failed,
+            durationMs: 300,
+            executionId: new Guid("00000000-0000-0000-0000-0000000000aa"),
+            retry: false,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
+            stackTrace: "   at MyApp.Tests.SampleTests.Subject()");
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 7).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+            TestSessionFactory.Session(7, [Failure("Subject", durationMs: 400)]),
+            TestSessionFactory.Session(8, [Failure("Subject", durationMs: 200)]),
+
+            // Recorded id-descending, which is not the order they are published in.
+            TestSessionFactory.Session(9, [second, first])
+        ];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([300L, 100L, 200L], evidence.Exemplars.Select(e => e.DurationMs));
     }
 
     [Fact]
