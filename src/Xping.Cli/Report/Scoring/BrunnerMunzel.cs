@@ -52,7 +52,7 @@ namespace Xping.Cli.Report.Scoring;
 /// <para>
 /// Which is why a caller must publish the two arms' spreads beside whatever it decides on this
 /// p-value. <see cref="Providers.DurationProvider"/> does: both arms carry the dispersion of the
-/// very readings handed here, the rendered finding states them side by side, and
+/// very readings handed here, the finding's metrics state them side by side, and
 /// <c>known-limitations.md</c> says what a reader should make of a recent arm that is much the
 /// wider of the two. A p-value alone would invite the reader to treat the level as a ceiling in
 /// both directions, which is the one thing this calibration does not promise.

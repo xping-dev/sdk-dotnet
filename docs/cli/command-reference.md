@@ -191,7 +191,7 @@ half as long again — a factor of 1.5, which is a 50% increase — *and* have g
 milliseconds at its own speed, *and* the comparison must clear its bar. Where that bar holds and
 where it does not — the recent slice being only three runs — is in
 [known limitations](../known-limitations.md); both arms publish the spread of the runs they were
-measured over, so the answer is visible on the finding itself.
+measured over, in the JSON evidence, so the answer can be read off the finding rather than assumed.
 
 `TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
 and — when the window contains two UTC offsets for one time zone, which is what a daylight-saving

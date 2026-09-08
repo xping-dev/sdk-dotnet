@@ -72,6 +72,14 @@ internal sealed record DurationExemplar(
 /// of the two the level is not a ceiling. A reader comparing the two numbers can see when a
 /// "slower" finding rests on a recent slice that was merely wilder; #187 has the measurement, and
 /// <c>known-limitations.md</c> states it in the reader's own terms.
+/// <para>
+/// Relative to this arm's own median, per <see cref="RobustDispersion"/>, and that is what makes
+/// the two figures comparable rather than an inconsistency. Every regression has a recent arm at
+/// least half again the baseline's level, by the gate that admitted it, so an absolute spread would
+/// read larger on the slower arm for no reason but its being the slower arm. Durations are
+/// perturbed multiplicatively and the effect size beside this is a ratio; on that scale two arms
+/// that vary alike read alike however far apart their levels are.
+/// </para>
 /// </param>
 internal sealed record DurationProfile(
     long P50Ms,
@@ -325,7 +333,7 @@ internal sealed class DurationProvider : IFindingProvider
     //
     // So the residual is published rather than left behind this number. Both arms carry their own
     // `ComparedDispersion` in the evidence, over exactly the runs the comparison read, and the
-    // rendered finding states the two side by side -- which is what lets a reader who meets a
+    // finding's metrics state the two side by side -- which is what lets a reader who meets a
     // "slower" finding see for themselves whether the recent slice was merely the wilder arm.
     // `known-limitations.md` says the same thing in the reader's own terms, and
     // AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt is what keeps those two

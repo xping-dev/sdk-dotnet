@@ -99,12 +99,16 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
-    public void TheRenderedFindingStatesBothSpreadsUnderneathTheProbability()
+    public void TheEvidenceStatesBothSpreadsUnderneathTheProbability()
     {
-        // Where the reader actually meets it. The row sits directly under `significance` because it
-        // is a qualifier on that number rather than another fact about the test: the p-value was
-        // calibrated by relabelling the pooled readings, which is exact where the two arms are
-        // equally dispersed, and these two are not.
+        // Where the reader meets it: the finding's metrics, which reach a consumer through the JSON
+        // envelope. The terminal report prints a headline and nothing else — that is true of every
+        // kind's metrics and not a property of this one.
+        //
+        // The row sits directly under `significance` because it is a qualifier on that number
+        // rather than another fact about the test: the p-value was calibrated by relabelling the
+        // pooled readings, which is exact where the two arms are equally dispersed, and these two
+        // are not.
         //
         // Two figures rather than their quotient, and this fixture is why: the baseline reads
         // exactly zero, so a published ratio would have been a division by it.

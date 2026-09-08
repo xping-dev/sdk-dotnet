@@ -439,15 +439,20 @@ changed — in how much they vary, rather than in how long they take. `DurationU
 that claim belongs to, and a regression suppresses it for the same test.
 
 **How to tell**: every `DurationRegression` publishes both arms' spread, over exactly the runs the
-comparison read, on the line under the p-value:
+comparison read. Ask for `--format json` — the terminal report prints each finding's headline and
+nothing else, so the per-finding figures live in the JSON evidence, this pair among them:
 
-```
-spread  recent 1.05 against baseline 0 over the compared runs
+```json
+"evidence": {
+  "current":  { "comparedSessions": 3, "comparedDispersion": 1.048 },
+  "baseline": { "comparedSessions": 7, "comparedDispersion": 0 }
+}
 ```
 
 A recent figure much larger than the baseline one is the shape described above, and the number to
-weigh the "slower" claim against. In JSON they are `evidence.current.comparedDispersion` and
-`evidence.baseline.comparedDispersion`. Measured over four thousand windows of the six-in-a-hundred
+weigh the "slower" claim against. Both are relative to their own arm's median — a spread of 0.2 means
+a typical run fell a fifth away from that arm's own level — which is what makes the two comparable
+when one arm is the slower of the two. Measured over four thousand windows of the six-in-a-hundred
 cell, 85% of the findings it wrongly produced published the recent arm as the wider one.
 
 ---
