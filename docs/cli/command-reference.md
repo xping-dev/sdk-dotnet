@@ -186,11 +186,12 @@ attempts there, over the run's own median, so a busy machine moves every test to
 and the report asks whether the recent runs are drawn from a slower distribution or are doing what
 the test always did. The size of the change is published as a factor with the interval around it,
 `3.51x slower (95% CI 1.94-5.87x)`, because on three recent runs the interval is the more useful half
-of the sentence. A finding has to be both real and worth a morning: the factor must clear a half and
-a hundred milliseconds at the test's own speed, *and* the comparison must clear its bar. Where that
-comparison's bar holds and where it does not — the recent slice being only three runs — is in
+of the sentence. A finding has to be both real and worth a morning: the test must have got at least
+half as long again — a factor of 1.5, which is a 50% increase — *and* have gained at least a hundred
+milliseconds at its own speed, *and* the comparison must clear its bar. Where that bar holds and
+where it does not — the recent slice being only three runs — is in
 [known limitations](../known-limitations.md); both arms publish the spread of the runs they were
-measured over so the answer is visible on the finding itself.
+measured over, so the answer is visible on the finding itself.
 
 `TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
 and — when the window contains two UTC offsets for one time zone, which is what a daylight-saving

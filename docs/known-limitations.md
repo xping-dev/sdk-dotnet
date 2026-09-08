@@ -422,10 +422,17 @@ The common direction is the safe one: a fortnight of history usually spreads mor
 runs do, and there the finding is reported far *less* often than one in a hundred. The liberal
 direction is real but needs the recent runs to be much the wilder of the two.
 
-There is no fix available. This is the nonparametric Behrens–Fisher problem, which has no exact
-answer at any sample size, and three recent readings leave nothing approximate to fall back on.
-Requiring the confidence interval's lower end to clear the practical threshold reaches 1.9% and finds
-only half of all true twofold slowdowns, against 97% today, which is a worse report.
+No correction to the comparison fixes this. It is the nonparametric Behrens–Fisher problem, which has
+no exact answer at any sample size, and three recent readings leave nothing approximate to fall back
+on. Nor does tightening what the finding demands: requiring the confidence interval's lower end to
+clear the practical threshold reaches 1.9% and finds only half of all true twofold slowdowns, against
+97% today, which is a worse report.
+
+What would move it is more recent runs rather than a better test — most of this is a three-readings
+problem. A wider recent slice makes it far less likely that all of its runs land above a steady
+baseline by chance, at the cost of a slowdown having to persist longer before it is reported, and of
+changing what "recent" means for every other finding that compares two slices. That change is not
+made here, and until it is, the figures above are what the finding costs.
 
 **What the finding is really saying when this happens**: not nothing. The recent runs genuinely have
 changed — in how much they vary, rather than in how long they take. `DurationUnstable` is the finding
@@ -442,8 +449,6 @@ A recent figure much larger than the baseline one is the shape described above, 
 weigh the "slower" claim against. In JSON they are `evidence.current.comparedDispersion` and
 `evidence.baseline.comparedDispersion`. Measured over four thousand windows of the six-in-a-hundred
 cell, 85% of the findings it wrongly produced published the recent arm as the wider one.
-
----
 
 ---
 
