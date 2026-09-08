@@ -6,6 +6,7 @@
 using System.Globalization;
 using Xping.Cli.Report.Store;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Report.Windowing;
 
@@ -95,6 +96,13 @@ internal interface IWindowResolver
     /// <param name="request">What the caller asked for.</param>
     /// <returns>The resolved window, or the reason none could be resolved.</returns>
     WindowResult Resolve(ISessionSource source, WindowRequest request);
+
+    /// <summary>
+    /// Returns the assembly to scope to when the caller named none, or <see langword="null"/>.
+    /// </summary>
+    /// <param name="source">Where sessions are read from.</param>
+    /// <returns>The assembly, or <see langword="null"/> when no run names one.</returns>
+    string? ScopeAssembly(ISessionSource source);
 }
 
 /// <summary>
@@ -111,6 +119,9 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     // Bounds the read when --since selects by date or commit: we do not know how many sessions fall
     // inside the boundary until we have looked, but retention caps the store well below this.
     private const int UnboundedReadCeiling = 1000;
+
+    // A generous probe used only to discover which assembly to scope to, never to bound analysis.
+    private const int AssemblyDiscoveryWindow = 200;
 
     /// <summary>
     /// What a read yielded, once the sessions this machine cannot date were set aside.
@@ -133,6 +144,41 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
             { Runs: { } runs } => ResolveCount(source, request, runs, WindowResolution.Runs, runs.ToString(CultureInfo.InvariantCulture)),
             _ => ResolveDefault(source, request)
         };
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// <para>
+    /// The newest run can cover several assemblies at once, and a report covers one. Taking the
+    /// first in ordinal order makes the choice deterministic and repeatable, which matters more than
+    /// which one wins: it is not a silent choice, because the report names the assembly it settled
+    /// on and counts the ones it left out.
+    /// </para>
+    /// <para>
+    /// The newest run may also name no assembly at all, so this walks back to the newest one that
+    /// does rather than reading only the first. Stopping at an unattributable run would return
+    /// <see langword="null"/> and leave the caller unscoped, which is the one outcome auto-scoping
+    /// exists to avoid: an unscoped report pools every suite in the store into one.
+    /// </para>
+    /// <para>
+    /// Resolved here rather than at the store, because "newest" is the same question the window
+    /// bounds ask and has to be answered the same way. A run stamped ahead of this machine's clock
+    /// that chose the scope would hand the developer a report about a suite they are not working on,
+    /// which is the one decision in the report that no later filtering can undo.
+    /// </para>
+    /// </remarks>
+    public string? ScopeAssembly(ISessionSource source)
+    {
+        DatableRead read = Read(source, AssemblyDiscoveryWindow, null);
+
+        foreach (TestSession session in read.Sessions)
+        {
+            IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
+            if (assemblies.Count > 0)
+                return assemblies[0];
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -277,17 +323,24 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// one place licensed to ask it.
     /// </para>
     /// <para>
-    /// When <em>every</em> session read is ahead of the clock, none is excluded. There is then no
-    /// disagreement inside the store to correct — one clock wrote all of it and the spacing between
+    /// A read that finds any skew is taken again without the caller's bound, and the window is then
+    /// filled from the runs this machine can date. The first read stopped at
+    /// <paramref name="maxSessions"/>, so the runs a skewed session displaced are still on disk, and
+    /// a window that returned nineteen sessions for twenty would let a wrong clock decide how much
+    /// history the report rests on — quietly, and in the direction of less evidence.
+    /// </para>
+    /// <para>
+    /// Only a read that reaches the end of the store and finds nothing datable says the store itself
+    /// is skewed, which is why the second read is what decides it. Bounded reads cannot: a store
+    /// whose newest three runs came from a fast clock answers "all of them" to <c>--runs 3</c> while
+    /// holding a year of datable history right behind them.
+    /// </para>
+    /// <para>
+    /// When the store really does hold nothing this machine can date, none is excluded. There is
+    /// then no disagreement inside it to correct — one clock wrote all of it and the spacing between
     /// its sessions is intact — and excluding them would leave a developer whose container runs fast
     /// with no report at all, which is a worse answer than a report dated against the store's own
     /// clock and a warning saying so.
-    /// </para>
-    /// <para>
-    /// A skewed session still occupies a slot in the read, so a window asked for twenty sessions
-    /// over a store holding one of them analyses nineteen. Reading again to top the window back up
-    /// would cost a second pass over the disk to recover a session the report is about to say it
-    /// could not trust.
     /// </para>
     /// </remarks>
     private DatableRead Read(ISessionSource source, int maxSessions, string? assembly)
@@ -297,19 +350,34 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         DateTime horizon = timeProvider.GetUtcNow().UtcDateTime
             .AddHours(LocalAnalysisConstants.ClockSkewToleranceHours);
 
-        var datable = read.Sessions.Where(s => s.StartedAt <= horizon).ToList();
-
-        if (datable.Count == read.Sessions.Count)
+        if (read.Sessions.All(s => s.StartedAt <= horizon))
             return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: false);
 
-        if (datable.Count == 0)
+        // Already the whole store, so there is nothing deeper to read.
+        SessionReadResult deep = maxSessions >= UnboundedReadCeiling
+            ? read
+            : source.Read(UnboundedReadCeiling, assembly);
+
+        var selected = new List<TestSession>(maxSessions);
+        int skewed = 0;
+
+        // Counted over the runs walked past to fill the window, and not over the whole store: this
+        // is what the report left out of the window it is about to publish.
+        foreach (TestSession session in deep.Sessions)
+        {
+            if (selected.Count == maxSessions)
+                break;
+
+            if (session.StartedAt > horizon)
+                skewed++;
+            else
+                selected.Add(session);
+        }
+
+        if (selected.Count == 0)
             return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: true);
 
-        return new DatableRead(
-            datable,
-            read.UnreadableCount,
-            read.Sessions.Count - datable.Count,
-            WholeStoreSkewed: false);
+        return new DatableRead(selected, deep.UnreadableCount, skewed, WholeStoreSkewed: false);
     }
 
     private static WindowResult Build(

@@ -51,7 +51,10 @@ internal sealed class ReportCommand(
 
         if (assembly == null)
         {
-            assembly = source.NewestAssembly();
+            // Asked of the resolver rather than of the store: "newest" has to mean the same thing
+            // here as it does at the window bounds, or a run from a fast clock chooses which suite
+            // the report is about — the one decision no later filtering can undo.
+            assembly = windowResolver.ScopeAssembly(source);
 
             // Every report is scoped to exactly one assembly, so there is no unscoped fallback to
             // fall back to. A store holding runs that none of them attributes to an assembly has
@@ -186,9 +189,14 @@ internal sealed class ReportCommand(
     {
         if (result.WholeStoreSkewed)
         {
+            // Said two ways, because this runs on the failure path too. There is no report to be
+            // dated against anything when no window resolved, and a warning that describes one is
+            // the wrong thing to hand a developer who was just told they have nothing to look at.
             io.Error.WriteLine(
                 "warning: every recorded run is stamped ahead of this machine's clock. " +
-                "The report is dated against the clock that recorded them.");
+                (result.Window == null
+                    ? "Check the clock on the machine that recorded them."
+                    : "The report is dated against the clock that recorded them."));
             return;
         }
 

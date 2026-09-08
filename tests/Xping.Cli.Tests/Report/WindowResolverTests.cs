@@ -306,17 +306,34 @@ public sealed class WindowResolverTests
     }
 
     [Fact]
-    public void SkewedSessionsAreExcludedBeforeTheRunCountApplies()
+    public void TheRunCountIsFilledFromTheRunsTheMachineCanDate()
     {
         var source = new FakeSessionSource([.. Sessions(10), Skewed(0)]);
 
         WindowResult result = CreateResolver().Resolve(source, new WindowRequest(5, null, null));
 
-        // Four, not five: a skewed session still occupies a slot in the read. Reading again to top
-        // the window back up would cost a second pass over the disk to recover a run the report is
-        // about to say it could not trust.
-        Assert.Equal(4, result.Window!.SessionCount);
+        // Five, not four. The runs the skewed one displaced are still in the store, and a window
+        // that returned four would let a wrong clock decide how much history the report rests on.
+        Assert.Equal(5, result.Window!.SessionCount);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(5), result.Window.From);
         Assert.Equal(1, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void ASkewedHeadIsNotMistakenForASkewedStore()
+    {
+        // Three runs from a fast clock, and a store full of datable history right behind them. A
+        // read bounded at three sees nothing it can date and would call the whole store skewed —
+        // keeping the very runs that poison the window, with the history to replace them on disk.
+        var source = new FakeSessionSource([.. Sessions(10), Skewed(0), Skewed(1), Skewed(2)]);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(3, null, null));
+
+        Assert.Equal(3, result.Window!.SessionCount);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
+        Assert.Equal(3, result.SkewedSessions);
+        Assert.False(result.WholeStoreSkewed);
     }
 
     [Fact]
@@ -335,6 +352,36 @@ public sealed class WindowResolverTests
         Assert.Equal(4, result.Window!.SessionCount);
         Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
         Assert.Equal(1, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void AFastClockDoesNotChooseWhichSuiteTheReportCovers()
+    {
+        // The developer's own runs, and one run of another suite recorded by a machine four days
+        // ahead. Scoping to that suite would hand them a report about tests they are not working
+        // on — and unlike a bound, a wrong scope is not something later filtering can undo.
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(
+                100,
+                [TestSessionFactory.Execution("Beta", assembly: "Beta.Tests")],
+                startedAt: TestSessionFactory.Epoch.AddDays(4))
+        ];
+
+        Assert.Equal("Alpha.Tests", CreateResolver().ScopeAssembly(new FakeSessionSource(sessions)));
+    }
+
+    [Fact]
+    public void AStoreThatIsEntirelyAheadStillNamesASuiteToScopeTo()
+    {
+        // Nothing here can be dated, so nothing is excluded — including from this choice. Returning
+        // null would leave the report unscoped, which pools every suite in the store into one.
+        var source = new FakeSessionSource(
+            [.. Enumerable.Range(0, 3).Select(i => Skewed(i))]);
+
+        Assert.Equal(TestSessionFactory.DefaultAssembly, CreateResolver().ScopeAssembly(source));
     }
 
     [Fact]
