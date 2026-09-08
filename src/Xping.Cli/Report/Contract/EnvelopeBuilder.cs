@@ -29,6 +29,7 @@ internal static class EnvelopeBuilder
     /// <param name="result">What the providers produced.</param>
     /// <param name="incompleteSessions">Sessions found but not finalised.</param>
     /// <param name="unreadableSessions">Session files that could not be read.</param>
+    /// <param name="skewedSessions">Sessions stamped ahead of this machine's clock.</param>
     /// <param name="top">Findings to show, or <see langword="null"/> to show all of them.</param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
@@ -36,6 +37,7 @@ internal static class EnvelopeBuilder
         AnalysisResult result,
         int incompleteSessions,
         int unreadableSessions,
+        int skewedSessions,
         int? top)
     {
         IReadOnlyList<Finding> shown = top is { } limit && limit < result.Findings.Count
@@ -89,6 +91,7 @@ internal static class EnvelopeBuilder
                 context.PartialSessionCount,
                 incompleteSessions,
                 unreadableSessions,
+                skewedSessions,
                 result.FailedProviders),
             [.. shown.Select(BuildFinding)],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));

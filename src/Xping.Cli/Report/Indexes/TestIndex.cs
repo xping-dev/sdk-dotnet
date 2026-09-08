@@ -297,6 +297,13 @@ internal sealed class TestIndex
     /// exactly as old as the window and decay to nothing, which is the opposite of falling back.
     /// </para>
     /// <para>
+    /// That arm is a fallback for a stamp the window chose to keep, and not the defence against a
+    /// store one clock writes ahead of another. It cannot be: a session ahead of every other one is
+    /// the newest, so it <em>becomes</em> <see cref="AnalysisWindow.To"/> and passes its own test
+    /// while every other finding is aged against it. Deciding which stamps can be believed is the
+    /// window's job, and <see cref="Windowing.WindowResolver"/> settles it before this index exists.
+    /// </para>
+    /// <para>
     /// A fallback and deliberately not a <c>Math.Max</c> floor over both forms: the floor would hold
     /// a finding eight days back at index five to 0.50 rather than 0.16, reinstating in the
     /// sparse-CI direction exactly the over-weighting this measure exists to remove.

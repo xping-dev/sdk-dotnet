@@ -1223,6 +1223,7 @@ public sealed class ShareableOutputTests
                 0,
                 0,
                 0,
+                0,
                 []),
             findings,
             new TruncationDto(shown, total, "xping report --all"));

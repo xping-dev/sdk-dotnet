@@ -84,7 +84,13 @@ internal sealed class ReportCommand(
             // store gains a way to persist a run that did not finish.
             incompleteSessions: 0,
             resolved.UnreadableSessions,
+            resolved.SkewedSessions,
             options.Top);
+
+        // On standard error even though the report also carries the count, and on every format:
+        // a wrong clock is a defect on the machine rather than a fact about the suite, and the
+        // developer reading JSON through a pipe is exactly the one who will not see the caveat line.
+        WriteClockWarning(resolved);
 
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
@@ -162,7 +168,36 @@ internal sealed class ReportCommand(
         if (result.UnreadableSessions > 0)
             error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
 
+        WriteClockWarning(result);
+
         return ExitCodes.InsufficientData;
+    }
+
+    /// <summary>
+    /// Says that a clock somewhere disagrees with this machine's.
+    /// </summary>
+    /// <param name="result">What the window resolved to.</param>
+    /// <remarks>
+    /// Names the clock rather than the runs, because the clock is the defect. A run stamped in the
+    /// future is not a corrupt file to be shrugged at; it is a machine writing into this store whose
+    /// time is wrong, and until that is fixed the same runs will keep arriving undatable.
+    /// </remarks>
+    private void WriteClockWarning(WindowResult result)
+    {
+        if (result.WholeStoreSkewed)
+        {
+            io.Error.WriteLine(
+                "warning: every recorded run is stamped ahead of this machine's clock. " +
+                "The report is dated against the clock that recorded them.");
+            return;
+        }
+
+        if (result.SkewedSessions > 0)
+        {
+            io.Error.WriteLine(
+                $"warning: {result.SkewedSessions} run(s) stamped ahead of this machine's clock " +
+                "were excluded. Check the clock on the machine that recorded them.");
+        }
     }
 
     /// <summary>

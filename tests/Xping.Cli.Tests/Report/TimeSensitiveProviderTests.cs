@@ -1238,7 +1238,7 @@ public sealed class TimeSensitiveProviderTests
             new FindingCoordinator([new TimeSensitiveProvider()]).Run(context, null, warnings);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, top: null);
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null);
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
     }

@@ -44,9 +44,11 @@ internal sealed record ReportEnvelope(
     /// runs the finding was computed over rather than the runs its test appeared in. 1.16 is where
     /// both arms of a <c>DurationRegression</c> gained <c>comparedDispersion</c>, the spread of the
     /// runs that side of the comparison read — published because the p-value beside it is not
-    /// calibrated against a difference in spread between the two.
+    /// calibrated against a difference in spread between the two. 1.17 is where the summary gained
+    /// <c>skewedSessions</c>, the runs stamped ahead of this machine's clock and therefore left out
+    /// of the window rather than allowed to date it.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.16";
+    public const string CurrentSchemaVersion = "1.17";
 }
 
 /// <summary>
@@ -125,6 +127,15 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// </param>
 /// <param name="IncompleteSessions">Sessions found but not finalised.</param>
 /// <param name="UnreadableSessions">Session files that could not be read.</param>
+/// <param name="SkewedSessions">
+/// Sessions left out because they are stamped ahead of this machine's clock — a run recorded by a
+/// clock that disagrees with this one, which the window cannot date and must not be bounded by.
+/// <para>
+/// Zero does not mean no clock disagrees. Where <em>every</em> recorded run is ahead of this
+/// machine, one clock wrote the whole store, the spacing between its sessions is intact and none is
+/// excluded; the report is dated against that clock and says so on standard error.
+/// </para>
+/// </param>
 /// <param name="FailedProviders">Metrics that threw and produced nothing.</param>
 internal sealed record SummaryDto(
     int Tests,
@@ -138,6 +149,7 @@ internal sealed record SummaryDto(
     int PartialSessions,
     int IncompleteSessions,
     int UnreadableSessions,
+    int SkewedSessions,
     IReadOnlyList<string> FailedProviders);
 
 /// <summary>

@@ -206,6 +206,14 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (summary.UnreadableSessions > 0)
             caveats.Add($"{summary.UnreadableSessions} unreadable {RunWord(summary.UnreadableSessions)} skipped");
 
+        // Named by what is wrong with them rather than by what was done about them: "skipped" alone
+        // would read as another unreadable file, and the reader can only act on this one by fixing
+        // the clock on the machine that wrote them.
+        if (summary.SkewedSessions > 0)
+            caveats.Add(
+                $"{summary.SkewedSessions} {RunWord(summary.SkewedSessions)} " +
+                "skipped, stamped ahead of this machine's clock");
+
         if (summary.IncompleteSessions > 0)
             caveats.Add($"{summary.IncompleteSessions} incomplete {RunWord(summary.IncompleteSessions)} skipped");
 
