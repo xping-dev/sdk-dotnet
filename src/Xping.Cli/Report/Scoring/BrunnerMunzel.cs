@@ -50,6 +50,14 @@ namespace Xping.Cli.Report.Scoring;
 /// than a bug to fix, and #187 owns it.
 /// </para>
 /// <para>
+/// Which is why a caller must publish the two arms' spreads beside whatever it decides on this
+/// p-value. <see cref="Providers.DurationProvider"/> does: both arms carry the dispersion of the
+/// very readings handed here, the finding's metrics state them side by side, and
+/// <c>known-limitations.md</c> says what a reader should make of a recent arm that is much the
+/// wider of the two. A p-value alone would invite the reader to treat the level as a ceiling in
+/// both directions, which is the one thing this calibration does not promise.
+/// </para>
+/// <para>
 /// <b>Ranks, so the scale does not matter.</b> Every conclusion here is invariant under any strictly
 /// increasing transform of the readings, which is why the caller may hand over durations, ratios or
 /// logarithms of either and read the same p-value. What the caller must not do is hand over readings

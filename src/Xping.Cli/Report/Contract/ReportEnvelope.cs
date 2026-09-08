@@ -41,9 +41,12 @@ internal sealed record ReportEnvelope(
     /// into <c>evidence</c> for a field this build no longer emits is reading a contract, and
     /// leaving the number still would tell it nothing had moved. 1.14 is where every finding gained
     /// <c>evidenceSessions</c> — the denominator <c>evidenceLevel</c> is banded from, which is the
-    /// runs the finding was computed over rather than the runs its test appeared in.
+    /// runs the finding was computed over rather than the runs its test appeared in. 1.16 is where
+    /// both arms of a <c>DurationRegression</c> gained <c>comparedDispersion</c>, the spread of the
+    /// runs that side of the comparison read — published because the p-value beside it is not
+    /// calibrated against a difference in spread between the two.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.15";
+    public const string CurrentSchemaVersion = "1.16";
 }
 
 /// <summary>

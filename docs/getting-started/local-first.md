@@ -130,7 +130,7 @@ The report distinguishes sixteen finding kinds. The ones you meet first:
 | flaky | `Flaky` | The test both passes and fails, or fails in varying ways. |
 | always failing | `AlwaysFailing` | The test fails almost always, in one dominant way — a likely real bug, not flake. |
 | timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
-| slower | `DurationRegression` | The test's recent runs are slower than its earlier ones by more than the variation it already had. The headline states the factor and the interval around it. |
+| slower | `DurationRegression` | The test's recent runs are slower than its earlier ones by more than the variation it already had. The headline states the factor and the interval around it, and the evidence states each side's spread — see [known limitations](../known-limitations.md). |
 | stopped running | `Vanished` | The test ran habitually through the baseline and has stopped. |
 
 The rest — order dependence, concurrency sensitivity, broken fixtures, shared failures, time-of-day

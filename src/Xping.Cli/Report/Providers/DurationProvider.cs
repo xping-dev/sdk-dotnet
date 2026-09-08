@@ -39,7 +39,9 @@ internal sealed record DurationExemplar(
 /// every execution; the comparison that decides a regression reads one normalised reading per run,
 /// and a run can be missing from it — its own median was not positive, so nothing in it can be
 /// normalised, or the test itself took no measurable time in it. Publishing one count for both would
-/// let the evidence claim five runs behind a comparison made on one.
+/// let the evidence claim five runs behind a comparison made on one. The dispersion belongs to that
+/// second sample too, for the same reason: it qualifies the comparison, so it has to be over the
+/// readings the comparison made.
 /// </remarks>
 /// <param name="P50Ms">Median duration, in milliseconds.</param>
 /// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
@@ -61,13 +63,32 @@ internal sealed record DurationExemplar(
 /// <paramref name="Sessions"/>, and the count both the arm floors and the test itself were applied
 /// to.
 /// </param>
+/// <param name="ComparedDispersion">
+/// How widely this arm's own readings fall, per <see cref="RobustDispersion"/>, over exactly the
+/// <paramref name="ComparedSessions"/> runs the comparison read — one normalised reading each, and
+/// not the executions behind them. Published on both arms because it is the one thing the p-value
+/// beside it is blind to and is not calibrated against: relabelling the pooled readings is exact
+/// where the two arms are equally dispersed, and where the recent arm's figure is much the larger
+/// of the two the level is not a ceiling. A reader comparing the two numbers can see when a
+/// "slower" finding rests on a recent slice that was merely wilder; #187 has the measurement, and
+/// <c>known-limitations.md</c> states it in the reader's own terms.
+/// <para>
+/// Relative to this arm's own median, per <see cref="RobustDispersion"/>, and that is what makes
+/// the two figures comparable rather than an inconsistency. Every regression has a recent arm at
+/// least half again the baseline's level, by the gate that admitted it, so an absolute spread would
+/// read larger on the slower arm for no reason but its being the slower arm. Durations are
+/// perturbed multiplicatively and the effect size beside this is a ratio; on that scale two arms
+/// that vary alike read alike however far apart their levels are.
+/// </para>
+/// </param>
 internal sealed record DurationProfile(
     long P50Ms,
     long P95Ms,
     int ExecutionsConsidered,
     int Sessions,
     int DiscountedEnvironmental,
-    int ComparedSessions);
+    int ComparedSessions,
+    double ComparedDispersion);
 
 /// <summary>
 /// The change in raw wall-clock terms — what a developer would notice on the clock.
@@ -210,7 +231,9 @@ internal sealed record DurationUnstableEvidence(
 /// recent slice is drawn from a slower distribution or is doing what the test always did, and the
 /// size of the change is <see cref="HodgesLehmann"/>'s ratio with the interval it was measured to.
 /// Its level holds where the two arms are equally dispersed and is exceeded where the recent slice
-/// is the wilder one, which #187 measures and owns.
+/// is the wilder one, which #187 measures and owns — so both arms publish the spread of the
+/// readings the comparison made, and a reader meets that number beside the p-value rather than
+/// having to take the level on trust.
 /// Both are required: a statistically solid three percent is not worth a developer's morning, and a
 /// twofold gap over three runs that the test's own history contains is not a finding. There is no
 /// longer a dispersion gate on the baseline, because the only job it had was to stand in for the
@@ -307,6 +330,14 @@ internal sealed class DurationProvider : IFindingProvider
     // at four times, with no slowdown present. #187 states the measurement and what can be done
     // about it; the honest summary is that three recent readings cannot calibrate against an
     // arbitrary difference in spread, and nothing available does.
+    //
+    // So the residual is published rather than left behind this number. Both arms carry their own
+    // `ComparedDispersion` in the evidence, over exactly the runs the comparison read, and the
+    // finding's metrics state the two side by side -- which is what lets a reader who meets a
+    // "slower" finding see for themselves whether the recent slice was merely the wilder arm.
+    // `known-limitations.md` says the same thing in the reader's own terms, and
+    // AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt is what keeps those two
+    // numbers worth reading.
     //
     // What it costs is the shape that needs the most evidence anyway. A true doubling on a steady
     // test is still reported 97% of the time against seventeen baseline runs and 89% against seven.
@@ -1107,6 +1138,23 @@ internal sealed class DurationProvider : IFindingProvider
 
         public double NormalisedP50 => Quantile.Interpolated(Normalised, 0.50);
 
+        /// <summary>
+        /// How widely this arm's own comparison readings fall.
+        /// </summary>
+        /// <remarks>
+        /// Over <see cref="Compared"/> and deliberately not over <see cref="Normalised"/>, which is
+        /// the sample <see cref="FindingKind.DurationUnstable"/> reads. The two are different
+        /// questions and the counts behind them differ on purpose: instability asks how much a
+        /// test's timing moves and an attempt is part of that answer, while this one qualifies a
+        /// comparison that read one reading per run and would misdescribe it if it counted more.
+        /// <para>
+        /// The same small-sample-corrected statistic the instability finding is decided on, whose
+        /// median-unbiasing table starts at two readings — so it is defined at the three-run arm
+        /// floor rather than needing a special case there.
+        /// </para>
+        /// </remarks>
+        public double ComparedDispersion => RobustDispersion.Of(Compared);
+
         public DurationProfile ToPublished(int discountedEnvironmental) =>
             new(
                 RoundMs(RawP50),
@@ -1114,6 +1162,7 @@ internal sealed class DurationProvider : IFindingProvider
                 Executions,
                 Sessions,
                 discountedEnvironmental,
-                Compared.Count);
+                Compared.Count,
+                FindingOrder.Round(ComparedDispersion));
     }
 }

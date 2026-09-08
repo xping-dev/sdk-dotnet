@@ -59,6 +59,113 @@ public sealed class DurationProviderTests
         Assert.Equal(7, evidence.Baseline.ExecutionsConsidered);
         Assert.Equal(7, evidence.Baseline.Sessions);
         Assert.Equal(7, evidence.Baseline.ComparedSessions);
+
+        // Both arms perfectly steady, so both spreads are exactly zero and the p-value beside them
+        // means what it says. This is the shape the permutation calibration is exact for, and the
+        // reason the two numbers are published at all is that the report cannot tell a reader it is
+        // always this shape.
+        Assert.Equal(0.0, evidence.Current.ComparedDispersion);
+        Assert.Equal(0.0, evidence.Baseline.ComparedDispersion);
+    }
+
+    [Fact]
+    public void AFindingWhoseRecentSliceIsTheWilderArmSaysSoInTheEvidence()
+    {
+        // The shape #187 is about, built so its two spreads can be computed by hand. Seven baseline
+        // runs at 200ms and three recent ones at 400, 800 and 1600, against companions holding
+        // every session's median at 100ms — so the comparison reads seven readings of 2 against
+        // three of 4, 8 and 16.
+        //
+        // Every gate passes: the Hodges–Lehmann ratio is 4, the recent runs are the whole top of
+        // the pooled sample, and complete separation over ten runs is 1/120. On the p-value alone
+        // this is indistinguishable from the fixture above, where the recent slice stepped cleanly
+        // from one steady level to another — which is exactly the reader's problem, and exactly
+        // what the spread beside it answers.
+        DurationRegressionEvidence evidence = RegressionFrom(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : o == 7 ? 400 : o == 8 ? 800 : 1600));
+
+        Assert.Equal(0.008333, evidence.Shift.PValue);
+
+        // Seven identical readings: no deviation and no interquartile range, so the statistic is
+        // zero rather than small.
+        Assert.Equal(0.0, evidence.Baseline.ComparedDispersion);
+
+        // 4, 8, 16 about a median of 8. The absolute deviations are 4, 0 and 8, whose median is 4,
+        // so the scaled deviation is 1.4826 × 4 = 5.9304; the interpolated quartiles are 6 and 12,
+        // so the scaled range is 6 / 1.349 = 4.4477. The larger wins, the small-sample correction
+        // at three readings is 1.4136, and 5.9304 × 1.4136 / 8 = 1.048.
+        Assert.Equal(1.048, evidence.Current.ComparedDispersion);
+    }
+
+    [Fact]
+    public void TheEvidenceStatesBothSpreadsUnderneathTheProbability()
+    {
+        // Where the reader meets it: the finding's metrics, which reach a consumer through the JSON
+        // envelope. The terminal report prints a headline and nothing else — that is true of every
+        // kind's metrics and not a property of this one.
+        //
+        // The row sits directly under `significance` because it is a qualifier on that number
+        // rather than another fact about the test: the p-value was calibrated by relabelling the
+        // pooled readings, which is exact where the two arms are equally dispersed, and these two
+        // are not.
+        //
+        // Two figures rather than their quotient, and this fixture is why: the baseline reads
+        // exactly zero, so a published ratio would have been a division by it.
+        FindingCandidate candidate = Single(Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : o == 7 ? 400 : o == 8 ? 800 : 1600));
+
+        (_, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(FindingKind.DurationRegression, candidate.Evidence);
+
+        Assert.Equal("spread", metrics[^1].Label);
+        Assert.Equal("significance", metrics[^2].Label);
+        Assert.Equal("recent 1.05 against baseline 0 over the compared runs", metrics[^1].Value);
+    }
+
+    [Fact]
+    public void TheSpreadPublishedBesideTheComparisonIsOverTheRunsItRead()
+    {
+        // Seven baseline runs, each of which retried twice at 100ms, 200ms and 1200ms, against
+        // three recent runs at 800ms. Every baseline run's median attempt is 200ms, so the sample
+        // the comparison read is seven readings of exactly 2 and the spread over it is zero — even
+        // though the executions behind those runs swing by a factor of twelve.
+        //
+        // That is the whole distinction, and it is not a technicality: `DurationUnstable` reads
+        // every execution on purpose, because an attempt that took longer than its neighbour is
+        // part of how much a test's timing moves. A regression's arms cannot, because the test they
+        // feed assumes its readings are independent and three attempts of one test in one minute
+        // are not. A spread computed over the wrong one of those two samples would describe a
+        // comparison that was never made.
+        AnalysisContext window = Build(
+            sessions: 10,
+            subjectMs: o => o < 7 ? 200 : 800,
+            subjectAttempts: o => o < 7 ? 3 : 1,
+            attemptMs: (ordinal, attempt) => ordinal >= 7
+                ? 800
+                : attempt == 1 ? 100 : attempt == 2 ? 200 : 1200);
+
+        FindingCandidate candidate = Single(Analyze(window));
+        var evidence = Assert.IsType<DurationRegressionEvidence>(candidate.Evidence);
+
+        Assert.Equal(0.0, evidence.Baseline.ComparedDispersion);
+        Assert.Equal(0.0, evidence.Current.ComparedDispersion);
+        Assert.Equal(7, evidence.Baseline.ComparedSessions);
+        Assert.Equal(21, evidence.Baseline.ExecutionsConsidered);
+
+        // The same window read the other way, from the instability finding this regression
+        // suppressed. Over every execution the dispersion is far from zero, which is the number the
+        // two fields would collapse into each other if the arms were measured per execution.
+        FindingCandidate? instead = candidate.Instead;
+        Assert.NotNull(instead);
+
+        var alternative = Assert.IsType<DurationUnstableEvidence>(instead.Evidence);
+
+        // 4.148 over the executions, against zero over the runs. The gap is the point: these are
+        // two different samples answering two different questions, and only one of them is what a
+        // comparison of two arms was made on.
+        Assert.Equal(4.148, alternative.Dispersion);
     }
 
     [Fact]
@@ -1019,7 +1126,8 @@ public sealed class DurationProviderTests
         // the finding a reader gets says "slower" about a test whose typical duration has not moved.
         // It is not nothing — the test's variability really did change — but `DurationUnstable` is
         // the kind that claim belongs to, and a regression suppresses it. #187 owns the gap; this
-        // pins its size.
+        // pins its size, and AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt
+        // measures how often the evidence beside such a finding shows the reader what happened.
         ulong state = 20260902UL + (ulong)(baselineSigma * 100) + (ulong)(currentSigma * 1000);
 
         int reported = 0;
@@ -1038,6 +1146,56 @@ public sealed class DurationProviderTests
         }
 
         Assert.InRange((double)reported / NullDraws, low, high);
+    }
+
+    [Fact]
+    public void AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt()
+    {
+        // The cell above, asked what the reader actually gets. Every finding it produces is false —
+        // both arms are centred on 200ms and nothing has slowed — so this measures whether the
+        // evidence beside those findings shows why.
+        //
+        // It does: the recent arm's published spread is the larger of the two in nearly all of
+        // them, because being the wilder arm is the only thing that put them there. That is the
+        // whole of what this issue can deliver. The rate is not bounded and cannot be — the
+        // nonparametric Behrens–Fisher problem has no exact finite-sample solution and three recent
+        // readings are not asymptotic — so what is published instead is the quantity the
+        // calibration is blind to, next to the p-value that was calibrated without it.
+        //
+        // Not all of them, and the shortfall is honest rather than slack in the band: three
+        // readings from a wide distribution can land close together, and when they do the finding
+        // looks exactly like a real step and nothing in the data says otherwise. Measured over four
+        // thousand windows the cell produces 296 findings, 251 of which publish the recent arm as
+        // the wider one — 0.848, with the band below allowing Monte-Carlo slack at that count.
+        ulong state = 20260902UL + (ulong)(0.2 * 100) + (ulong)(0.8 * 1000);
+
+        int reported = 0;
+        int wilder = 0;
+
+        for (int draw = 0; draw < NullDraws; draw++)
+        {
+            int[] durations = new int[20];
+            for (int session = 0; session < durations.Length; session++)
+            {
+                double sigma = session >= 17 ? 0.8 : 0.2;
+                durations[session] = (int)Math.Round(200 * Math.Exp(sigma * Gaussian(ref state)));
+            }
+
+            IReadOnlyList<FindingCandidate> found =
+                Regressions(Build(sessions: 20, subjectMs: o => durations[o]));
+
+            if (found.Count == 0)
+                continue;
+
+            reported++;
+
+            var evidence = Assert.IsType<DurationRegressionEvidence>(found[0].Evidence);
+            if (evidence.Current.ComparedDispersion > evidence.Baseline.ComparedDispersion)
+                wilder++;
+        }
+
+        Assert.True(reported > 100, $"too few findings to measure a share: {reported}");
+        Assert.InRange((double)wilder / reported, 0.80, 0.90);
     }
 
     [Fact]
@@ -1324,6 +1482,12 @@ public sealed class DurationProviderTests
     /// <param name="companions">How many companions ran, given the session ordinal.</param>
     /// <param name="subjectRuns">Whether the subject ran at all, given the session ordinal.</param>
     /// <param name="subjectAttempts">How many attempts the subject took, given the ordinal.</param>
+    /// <param name="attemptMs">
+    /// What one attempt took, given the session ordinal and the attempt number — overriding
+    /// <paramref name="subjectMs"/> where supplied. Only a fixture that needs attempts of one run to
+    /// differ from each other has any use for it, and that is the one shape which tells a figure
+    /// computed per run apart from one computed per execution.
+    /// </param>
     /// <param name="sha">The commit the session ran at, given its ordinal.</param>
     private static AnalysisContext Build(
         int sessions,
@@ -1332,6 +1496,7 @@ public sealed class DurationProviderTests
         Func<int, int>? companions = null,
         Func<int, bool>? subjectRuns = null,
         Func<int, int>? subjectAttempts = null,
+        Func<int, int, int>? attemptMs = null,
         Func<int, string?>? sha = null)
     {
         var built = new List<TestSession>(sessions);
@@ -1345,7 +1510,13 @@ public sealed class DurationProviderTests
                 int attempts = subjectAttempts?.Invoke(ordinal) ?? 1;
 
                 for (int attempt = 1; attempt <= attempts; attempt++)
-                    executions.Add(Execution(Subject, ordinal, subjectMs(ordinal), attempt));
+                {
+                    executions.Add(Execution(
+                        Subject,
+                        ordinal,
+                        attemptMs?.Invoke(ordinal, attempt) ?? subjectMs(ordinal),
+                        attempt));
+                }
             }
 
             for (int companion = 0; companion < (companions?.Invoke(ordinal) ?? Companions); companion++)

@@ -151,8 +151,8 @@ public sealed class ShareableOutputTests
 
             FindingKind.DurationRegression =>
                 new DurationRegressionEvidence(
-                    new DurationProfile(1240, 1890, 4, 3, 0, 3),
-                    new DurationProfile(340, 410, 10, 10, 0, 10),
+                    new DurationProfile(1240, 1890, 4, 3, 0, 3, 0.21),
+                    new DurationProfile(340, 410, 10, 10, 0, 10, 0.14),
                     new DurationDelta(264.7, 900),
                     new DurationShift(3.512, 1.94, 5.87, 251.2, 880, 0.004),
                     "a3f9c2e",
