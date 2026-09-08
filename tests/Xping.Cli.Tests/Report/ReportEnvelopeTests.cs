@@ -126,7 +126,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.16", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.17", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -140,7 +140,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         [
             "tests", "findings", "healthy", "excludedLowEvidence", "excludedNotSignificant",
             "notMeasured", "environmentalSessions", "incompleteSessions", "unreadableSessions",
-            "failedProviders"
+            "skewedSessions", "failedProviders"
         ])
         {
             Assert.True(summary.TryGetProperty(key, out _), $"summary.{key} missing");
@@ -306,6 +306,51 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
+    public void ARunFromAFastClockIsExcludedCountedAndWarnedAbout()
+    {
+        SeedVanishing();
+
+        // A machine sharing this checkout whose clock runs four days fast. Its stamp is the largest
+        // in the store, so the window would take it as the instant every other finding is aged
+        // against — and it does not have to be the run carrying a finding to do that.
+        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+            99,
+            [TestSessionFactory.Execution("Stable0")],
+            startedAt: DateTime.UtcNow.AddDays(4)));
+
+        var (code, output, error) = Run("--format", "json");
+
+        // The report still renders, over the runs it can date, and says what it left out.
+        Assert.Equal(0, code);
+
+        using JsonDocument document = JsonDocument.Parse(output);
+        JsonElement root = document.RootElement;
+
+        Assert.Equal(1, root.GetProperty("summary").GetProperty("skewedSessions").GetInt32());
+        Assert.Equal(8, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.True(root.GetProperty("window").GetProperty("to").GetDateTime() <= DateTime.UtcNow);
+
+        // On standard error, where the JSON reader still sees it: the defect is the clock on the
+        // machine that recorded the run, and nothing in the suite will fix it.
+        Assert.Contains("ahead of this machine's clock", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheTextReportSaysWhenARunWasLeftOutForItsClock()
+    {
+        SeedVanishing();
+
+        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+            99,
+            [TestSessionFactory.Execution("Stable0")],
+            startedAt: DateTime.UtcNow.AddDays(4)));
+
+        var (_, output, _) = Run();
+
+        Assert.Contains("stamped ahead of this machine's clock", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WarningsGoToStandardErrorSoJsonStaysParsable()
     {
         SeedVanishing();
@@ -318,7 +363,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.16", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.17", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

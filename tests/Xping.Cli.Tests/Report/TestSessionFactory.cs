@@ -354,10 +354,6 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     }
 
     /// <inheritdoc/>
-    public string? NewestAssembly() =>
-        _sessions.Count == 0 ? null : TestSessionFactory.FirstAssemblyOf(_sessions[0]);
-
-    /// <inheritdoc/>
     public IReadOnlyList<string> KnownAssemblies() =>
         _sessions
             .SelectMany(SessionAssemblies.Of)

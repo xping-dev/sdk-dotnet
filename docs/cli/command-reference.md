@@ -75,6 +75,14 @@ xping report [options]
 
 The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
 
+A run stamped more than a day ahead of your clock is left out of the window rather than allowed to
+define it. The window's end is the instant every finding is aged against, so one run recorded by a
+fast clock — a container sharing the checkout, a CI runner that drifted — would age the whole report
+against a moment that never happened. Such runs are counted in `summary.skewedSessions`, called out
+above the report, and named on stderr, because the fix is the clock on the machine that recorded
+them. When *every* recorded run is ahead of your clock, none is excluded: one clock wrote the whole
+store, the spacing between its runs is intact, and the report is dated against that clock and says so.
+
 ### The report
 
 The default output is built to be shared. The findings sit inside a fenced code block, so selecting the report and pasting it into Slack, a pull request or a ticket renders it in monospace with its columns intact:
@@ -361,7 +369,7 @@ means "no finding was raised" rather than "checked and fine":
 
 ```json
 {
-  "schemaVersion": "1.16",
+  "schemaVersion": "1.17",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

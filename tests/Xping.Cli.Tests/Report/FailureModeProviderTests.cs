@@ -1539,7 +1539,7 @@ public sealed class FailureModeProviderTests
             ]);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, top: null);
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null);
 
         // Without this line the discounting silently changes every rate in the report, with nothing
         // on screen to explain it.
@@ -1555,7 +1555,7 @@ public sealed class FailureModeProviderTests
         AnalysisContext context = TestSessionFactory.Context(sessions);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, top: null);
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null);
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
     }

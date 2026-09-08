@@ -71,6 +71,27 @@ internal static class LocalAnalysisConstants
     public const int DefaultWindowDays = 14;
 
     /// <summary>
+    /// Hours a session may be stamped ahead of this machine's clock and still be believed (24).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A session stamped ahead of the clock records a run that has not happened. One is enough to
+    /// do real damage: the window's bounds come from the ends of the session list, so the largest
+    /// stamp in the store becomes the instant every recency reading is measured against, and every
+    /// other finding is then dated against a moment that never was.
+    /// </para>
+    /// <para>
+    /// Wide enough to absorb every benign cause — NTP jitter, a virtual machine resumed from
+    /// suspend, a host and a container sharing one checkout, a stamp written against a zone offset
+    /// where UTC+14 is the worst there is. Narrow enough that what passes cannot move the report: a
+    /// full day of lead costs <c>0.5 ^ (1 / 3)</c> of the recency term against
+    /// <see cref="RecencyHalfLifeDays"/>, some 0.03 of impact, while the days of skew a wrong clock
+    /// produces cost several times that and are caught.
+    /// </para>
+    /// </remarks>
+    public const int ClockSkewToleranceHours = 24;
+
+    /// <summary>
     /// Sessions forming the "now" side of a delta (3).
     /// </summary>
     /// <remarks>

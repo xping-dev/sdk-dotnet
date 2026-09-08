@@ -23,6 +23,15 @@ public sealed class WindowResolverTests
     private static TestSession[] Sessions(int count) =>
         [.. Enumerable.Range(0, count).Select(i => TestSessionFactory.Session(i, "Alpha", "Beta"))];
 
+    // Four days ahead of every fixture session and of the clock the resolver reads, which is well
+    // past ClockSkewToleranceHours: the devcontainer sharing the checkout, or the CI runner whose
+    // clock drifted. Ordinals from a hundred up so its session id sorts apart from the real ones.
+    private static TestSession Skewed(int ordinal, TimeSpan? ahead = null) =>
+        TestSessionFactory.Session(
+            100 + ordinal,
+            [TestSessionFactory.Execution("Alpha"), TestSessionFactory.Execution("Beta")],
+            startedAt: TestSessionFactory.Epoch + (ahead ?? TimeSpan.FromDays(4)));
+
     [Fact]
     public void NoStoreIsReportedRatherThanTreatedAsEmpty()
     {
@@ -231,6 +240,148 @@ public sealed class WindowResolverTests
         WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, null, null));
 
         Assert.Equal(2, result.UnreadableSessions);
+    }
+
+    [Fact]
+    public void ASessionStampedAheadOfTheClockDoesNotBecomeTheWindowsNow()
+    {
+        TestSession skewed = Skewed(0);
+        var source = new FakeSessionSource([.. Sessions(10), skewed]);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, null, null));
+
+        // The bound is the newest session this machine can date, not the newest stamp in the store.
+        // Letting the skewed one stand would age every other finding against an instant that never
+        // happened — four days of it, which is most of the recency term for all of them at once.
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window!.To);
+        Assert.DoesNotContain(result.Window.Sessions, s => s.SessionId == skewed.SessionId);
+        Assert.Equal(10, result.Window.SessionCount);
+        Assert.Equal(1, result.SkewedSessions);
+        Assert.False(result.WholeStoreSkewed);
+    }
+
+    [Fact]
+    public void ASkewedSessionDoesNotSupplyTheNowSideOfADelta()
+    {
+        TestSession skewed = Skewed(0);
+
+        WindowResult result = CreateResolver().Resolve(
+            new FakeSessionSource([.. Sessions(10), skewed]), new WindowRequest(null, null, null));
+
+        // The same session would otherwise head the ordering and so occupy the current slice, which
+        // would have every delta comparing "before" against a run from a clock four days out.
+        Assert.DoesNotContain(result.Window!.CurrentSlice, s => s.SessionId == skewed.SessionId);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.CurrentSlice[0].StartedAt);
+    }
+
+    [Fact]
+    public void AStampInsideTheSkewToleranceIsStillBelieved()
+    {
+        // Twenty hours ahead of the fixtures and nineteen ahead of the clock: inside the tolerance,
+        // which exists so that NTP jitter, a resumed virtual machine or a zone offset is not called
+        // a wrong clock. What passes here costs the recency term less than a day of decay.
+        TestSession ahead = Skewed(0, TimeSpan.FromHours(20));
+
+        WindowResult result = CreateResolver().Resolve(
+            new FakeSessionSource([.. Sessions(10), ahead]), new WindowRequest(null, null, null));
+
+        Assert.Equal(TestSessionFactory.Epoch.AddHours(20), result.Window!.To);
+        Assert.Equal(11, result.Window.SessionCount);
+        Assert.Equal(0, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void AStoreWrittenEntirelyByAFastClockIsStillReported()
+    {
+        // Every run recorded inside one container whose clock runs fast. There is no disagreement
+        // inside the store to correct — the spacing between these sessions is intact — and excluding
+        // them would leave the developer with no report at all, which is the worse answer.
+        var source = new FakeSessionSource([.. Enumerable.Range(0, 6).Select(i => Skewed(i))]);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, null, null));
+
+        Assert.Equal(6, result.Window!.SessionCount);
+        Assert.Equal(0, result.SkewedSessions);
+        Assert.True(result.WholeStoreSkewed);
+    }
+
+    [Fact]
+    public void TheRunCountIsFilledFromTheRunsTheMachineCanDate()
+    {
+        var source = new FakeSessionSource([.. Sessions(10), Skewed(0)]);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(5, null, null));
+
+        // Five, not four. The runs the skewed one displaced are still in the store, and a window
+        // that returned four would let a wrong clock decide how much history the report rests on.
+        Assert.Equal(5, result.Window!.SessionCount);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(5), result.Window.From);
+        Assert.Equal(1, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void ASkewedHeadIsNotMistakenForASkewedStore()
+    {
+        // Three runs from a fast clock, and a store full of datable history right behind them. A
+        // read bounded at three sees nothing it can date and would call the whole store skewed —
+        // keeping the very runs that poison the window, with the history to replace them on disk.
+        var source = new FakeSessionSource([.. Sessions(10), Skewed(0), Skewed(1), Skewed(2)]);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(3, null, null));
+
+        Assert.Equal(3, result.Window!.SessionCount);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
+        Assert.Equal(3, result.SkewedSessions);
+        Assert.False(result.WholeStoreSkewed);
+    }
+
+    [Fact]
+    public void SkewedSessionsAreExcludedBeforeTheSinceDateApplies()
+    {
+        var source = new FakeSessionSource([.. Sessions(10), Skewed(0)]);
+
+        // Sessions are one minute apart from the epoch, so this selects the newest four. The skewed
+        // stamp is inside the boundary too, and would otherwise be counted among them.
+        string boundary = TestSessionFactory.Epoch
+            .AddMinutes(6)
+            .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+        WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, boundary, null));
+
+        Assert.Equal(4, result.Window!.SessionCount);
+        Assert.Equal(TestSessionFactory.Epoch.AddMinutes(9), result.Window.To);
+        Assert.Equal(1, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void AFastClockDoesNotChooseWhichSuiteTheReportCovers()
+    {
+        // The developer's own runs, and one run of another suite recorded by a machine four days
+        // ahead. Scoping to that suite would hand them a report about tests they are not working
+        // on — and unlike a bound, a wrong scope is not something later filtering can undo.
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(
+                100,
+                [TestSessionFactory.Execution("Beta", assembly: "Beta.Tests")],
+                startedAt: TestSessionFactory.Epoch.AddDays(4))
+        ];
+
+        Assert.Equal("Alpha.Tests", CreateResolver().ScopeAssembly(new FakeSessionSource(sessions)));
+    }
+
+    [Fact]
+    public void AStoreThatIsEntirelyAheadStillNamesASuiteToScopeTo()
+    {
+        // Nothing here can be dated, so nothing is excluded — including from this choice. Returning
+        // null would leave the report unscoped, which pools every suite in the store into one.
+        var source = new FakeSessionSource(
+            [.. Enumerable.Range(0, 3).Select(i => Skewed(i))]);
+
+        Assert.Equal(TestSessionFactory.DefaultAssembly, CreateResolver().ScopeAssembly(source));
     }
 
     [Fact]
