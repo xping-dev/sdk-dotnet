@@ -441,12 +441,17 @@ pull-request flag tell Xping Cloud how far to trust that revision, and `IsCIEnvi
 build agent. If your suite only ever tests one deployment, leave `XPING_ENVIRONMENT` unset - runs
 land in `Default` and the laptop and the pipeline share one bucket, which is the point.
 
-To reuse the .NET hosting variable, pass it through explicitly - it is never read on its own:
+To reuse the .NET hosting variable, pass it through explicitly - it is never read on its own. Do it
+in the shell, so the value is read from the process the tests run in:
 
 ```yaml
-env:
-  XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}
+- name: Run tests
+  run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
 ```
+
+`${{ env.ASPNETCORE_ENVIRONMENT }}` will **not** do this. The `env` context only contains variables
+declared in a workflow, job or step `env:` block - not ones set by the runner image, a container
+`ENV`, or an earlier step - so it would expand to nothing in exactly the case you wanted it for.
 
 ### 4. Conditional Execution for PRs
 

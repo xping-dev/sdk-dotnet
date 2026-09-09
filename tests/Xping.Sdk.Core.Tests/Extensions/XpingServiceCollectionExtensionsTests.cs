@@ -16,6 +16,10 @@ using Xping.Sdk.Core.Services.Upload;
 
 namespace Xping.Sdk.Core.Tests.Extensions;
 
+// Sets process-wide XPING_* variables, so it shares the collection with every other test that
+// reads or writes them. Left in its own collection, xUnit would run it in parallel with those and
+// each would see the other's variables.
+[Collection("Sequential")]
 public sealed class XpingServiceCollectionExtensionsTests
 {
     // ---------------------------------------------------------------------------
@@ -776,6 +780,62 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         var services = new ServiceCollection();
         services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindStandardFormat_WithBlankApiKey_ShouldNotDropTheRunToLocalOnly(string value)
+    {
+        // Xping__ApiKey: ${{ secrets.XPING_APIKEY }} writes an empty string when the secret is
+        // missing. Left set-but-empty it resolves LocalOnly and the suite stops uploading silently.
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:ApiKey"] = value,
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Null(bound.ApiKey);
+        Assert.Equal(XpingMode.LocalOnly, bound.ResolveMode());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindStandardFormat_WithBlankEnvironment_ShouldResolveToDefault(string value)
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:Environment"] = value,
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Null(bound.Environment);
+        Assert.Equal("Default", bound.ResolvedEnvironment);
+    }
+
+    [Fact]
+    public void BindStandardFormat_ShouldTrimEnvironment()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:Environment"] = "  Staging  ",
+            }).Build());
 
         var bound = services.BuildServiceProvider()
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;

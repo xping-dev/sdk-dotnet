@@ -521,14 +521,20 @@ whose base image carries `ENV ASPNETCORE_ENVIRONMENT=Production` would stamp eve
 Development-vs-Production costume, and a convincing one, because the resulting "Production gap"
 looks like a real finding.
 
-If you do want that value, pass it through explicitly:
+If you do want that value, pass it through explicitly. Do it in the shell, so the variable is read
+from the process the tests actually run in:
 
 ```yaml
-env:
-  XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}
+- name: Run tests
+  run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
 ```
 
-One line, and it cannot fire by accident.
+Note that `${{ env.ASPNETCORE_ENVIRONMENT }}` will **not** work here. GitHub Actions' `env` context
+only exposes variables declared in a workflow, job or step `env:` block; it cannot see one set by
+the runner image, a container `ENV`, or an earlier step's `export` - which is exactly the case worth
+passing through. The expression would silently expand to nothing.
+
+One line, explicit, and it cannot fire by accident.
 
 #### CI detection still happens
 
