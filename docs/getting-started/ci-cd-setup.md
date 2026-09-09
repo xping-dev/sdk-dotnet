@@ -85,7 +85,6 @@ jobs:
         env:
           XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
           XPING_ENABLED: true
-          XPING_AUTODETECTCIENVIRONMENT: true
         run: dotnet test --no-build --configuration Release --logger "console;verbosity=detailed"
 ```
 
@@ -155,7 +154,6 @@ steps:
   env:
     XPING_APIKEY: $(XPING.ApiKey)
     XPING_ENABLED: true
-    XPING_AUTODETECTCIENVIRONMENT: true
 ```
 
 ### Captured Metadata
@@ -193,7 +191,6 @@ stages:
 
 variables:
   XPING_ENABLED: "true"
-  XPING_AUTODETECTCIENVIRONMENT: "true"
 
 before_script:
   - dotnet --version
@@ -253,7 +250,6 @@ pipeline {
     environment {
         XPING_APIKEY = credentials('xping-api-key')
         XPING_ENABLED = 'true'
-        XPING_AUTODETECTCIENVIRONMENT = 'true'
     }
     
     stages {
@@ -325,7 +321,6 @@ jobs:
     environment:
       XPING_APIKEY: $XPING_APIKEY
       XPING_ENABLED: "true"
-      XPING_AUTODETECTCIENVIRONMENT: "true"
     
     steps:
       - checkout
@@ -416,24 +411,41 @@ env:
   XPING_APIKEY: "pk_live_1234567890abcdef"  # Never hardcode!
 ```
 
-### 2. Enable Auto-Detection
+### 2. CI Metadata Is Captured Automatically
 
-Set `XPING_AUTODETECTCIENVIRONMENT: true` to automatically capture CI/CD metadata:
+Nothing needs enabling. Every run detects its CI platform and records the branch, commit SHA, run
+ID, actor and `IsCIEnvironment` flag on its own.
 
+### 3. Name Environments After Deployments, Not After Runs
+
+`XPING_ENVIRONMENT` names the **deployed environment your tests targeted**. Set it only when a
+pipeline points at a genuinely different deployment:
+
+**✅ Do:**
 ```yaml
 env:
-  XPING_AUTODETECTCIENVIRONMENT: true
+  XPING_ENVIRONMENT: "Staging"
 ```
 
-### 3. Use Descriptive Environment Names
+**❌ Don't:**
+```yaml
+env:
+  XPING_ENVIRONMENT: "PR-${{ github.event.pull_request.number }}"   # a new environment per PR
+  # or
+  XPING_ENVIRONMENT: "Production-CI"                                # CI is not an environment
+```
 
-Override the auto-detected environment with a descriptive name:
+Confidence scores are computed per (test, environment). A name that changes run to run splits each
+test's history permanently, and the distinction is already recorded: a run's commit SHA and
+pull-request flag tell Xping Cloud how far to trust that revision, and `IsCIEnvironment` marks the
+build agent. If your suite only ever tests one deployment, leave `XPING_ENVIRONMENT` unset - runs
+land in `Default` and the laptop and the pipeline share one bucket, which is the point.
+
+To reuse the .NET hosting variable, pass it through explicitly - it is never read on its own:
 
 ```yaml
 env:
-  XPING_ENVIRONMENT: "Production-CI"
-  # or
-  XPING_ENVIRONMENT: "PR-${{ github.event.pull_request.number }}"
+  XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}
 ```
 
 ### 4. Conditional Execution for PRs
@@ -473,7 +485,6 @@ Create environment-specific configurations:
     "Enabled": true,
     "BatchSize": 500,
     "FlushInterval": "00:01:00",
-    "AutoDetectCIEnvironment": true,
     "CaptureStackTraces": true
   }
 }
@@ -575,14 +586,10 @@ it came from. Leave it unset unless you specifically want that.
 > Branch is captured automatically from CI metadata and does not need its own project. Splitting
 > branches across projects fragments the history the confidence score depends on.
 
-### Custom CI Environment Label
-
-If you want auto-detected CI runs grouped under a label other than the default `CI`, set `XPING_CIENVIRONMENTNAME`:
-
-```yaml
-env:
-  XPING_CIENVIRONMENTNAME: "BuildPipeline"
-```
+> The same applies to the environment name. Labelling pipeline runs `CI`, `BuildPipeline` or
+> `PullRequestValidation` separates them from the identical runs on a developer's machine, which
+> halves the evidence behind every score on both sides. `XPING_ENVIRONMENT` is for naming
+> deployments - `Staging`, `Production` - and nothing else.
 
 ---
 

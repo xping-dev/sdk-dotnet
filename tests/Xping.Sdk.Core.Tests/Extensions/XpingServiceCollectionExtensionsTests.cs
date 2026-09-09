@@ -620,36 +620,6 @@ public sealed class XpingServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void BindEnvVars_AUTODETECTCIENVIRONMENT_ShouldParseBool()
-    {
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_AUTODETECTCIENVIRONMENT", "false");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.False(bound.AutoDetectCIEnvironment);
-    }
-
-    [Fact]
-    public void BindEnvVars_CIENVIRONMENTNAME_ShouldOverrideConfiguredValue()
-    {
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_CIENVIRONMENTNAME", "BuildPipeline");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.Equal("BuildPipeline", bound.CiEnvironmentName);
-    }
-
-    [Fact]
     public void BindEnvVars_COLLECTLOCALGITAUTHOR_ShouldParseBool()
     {
         using var _key = WithEnv("XPING_APIKEY", "k");

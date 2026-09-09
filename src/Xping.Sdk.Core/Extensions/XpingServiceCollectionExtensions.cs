@@ -627,13 +627,6 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("ENVIRONMENT") is { } environment)
             config.Environment = environment;
 
-        if (GetEnv("AUTODETECTCIENVIRONMENT") is { } autoDetect
-            && bool.TryParse(autoDetect, out var ad))
-            config.AutoDetectCIEnvironment = ad;
-
-        if (GetEnv("CIENVIRONMENTNAME") is { } ciEnvironmentName)
-            config.CiEnvironmentName = ciEnvironmentName;
-
         // Feature Flags
         if (GetEnv("ENABLED") is { } enabled && bool.TryParse(enabled, out var e))
             config.Enabled = e;
@@ -718,13 +711,7 @@ public static class XpingServiceCollectionExtensions
         target.ProjectId = source.ProjectId;
         target.BatchSize = source.BatchSize;
         target.FlushInterval = source.FlushInterval;
-        if (source.HasExplicitEnvironment)
-        {
-            target.Environment = source.Environment;
-        }
-
-        target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
-        target.CiEnvironmentName = source.CiEnvironmentName;
+        target.Environment = source.Environment;
         target.Enabled = source.Enabled;
         target.Mode = source.Mode;
         target.CaptureStackTraces = source.CaptureStackTraces;

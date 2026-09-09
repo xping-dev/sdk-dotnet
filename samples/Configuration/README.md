@@ -12,8 +12,7 @@ This directory contains sample configuration files for the Xping SDK.
     "ApiEndpoint": "https://api.xping.io",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
-    "Environment": "Local",
-    "AutoDetectCIEnvironment": true,
+    "Environment": "Staging",
     "Enabled": true,
     "CaptureStackTraces": true,
     "EnableCompression": true,
@@ -102,11 +101,9 @@ creating one project per test project. Set it to pin every assembly in the run t
 
 ### Environment Configuration
 
-- **Environment** (string): Environment name (e.g., "Local", "CI", "Staging", "Production")
-  - Default: `"Local"`
-  
-- **AutoDetectCIEnvironment** (bool): Automatically detect CI/CD environments
-  - Default: `true`
+- **Environment** (string): The deployed environment the tests target (e.g. "Staging", "Production").
+  Not a label for where the suite ran - CI and local runs of one suite share an environment.
+  - Default: `"Default"`
 
 ### Feature Flags
 
