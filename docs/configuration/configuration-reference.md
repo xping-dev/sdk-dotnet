@@ -10,7 +10,7 @@ Xping SDK supports multiple configuration methods with the following priority or
 
 1. **`XPING_*` environment variables** - e.g. `XPING_APIKEY`, `XPING_BATCHSIZE`
 2. **`Xping__*` environment variables** - the standard .NET nested format, e.g. `Xping__ApiKey`
-3. **JSON configuration files** - `appsettings.{Environment}.json`, then `appsettings.json`
+3. **JSON configuration files** - `appsettings.{Environment}.json` first, since it is loaded after and therefore overrides `appsettings.json`
 4. **Programmatic configuration** - the instance passed to `XpingContext.Initialize(config)`
 5. **Default values** - built-in defaults when nothing above applies
 

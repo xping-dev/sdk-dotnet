@@ -842,4 +842,33 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         Assert.Equal("Staging", bound.Environment);
     }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithEnvVarMakingTheInstanceInvalid_ShouldValidate()
+    {
+        // The caller vouched for the instance they passed; the env-var override can put a value in
+        // it they never wrote. Without validation parity this reached IOptions.Value unchallenged
+        // and the run proceeded on a batch size of zero.
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithValidInstance_ShouldNotThrowOnValidation()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(100, bound.BatchSize);
+    }
 }

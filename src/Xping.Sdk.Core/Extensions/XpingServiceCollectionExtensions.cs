@@ -327,6 +327,16 @@ public static class XpingServiceCollectionExtensions
             NormalizeBlankSettings(options);
         });
 
+        // Same validation the IConfiguration path registers. It matters more here than it looks:
+        // the caller vouched for the instance they passed, but the PostConfigure above can now put
+        // a value in it that they never wrote - XPING_BATCHSIZE=0 is enough - and without this the
+        // result reaches IOptions.Value unchallenged. XpingContextOrchestrator already treats an
+        // OptionsValidationException as a configuration error and degrades to no-op services, so
+        // this reports the problem rather than running on a batch size of zero.
+        services.AddOptions<XpingConfiguration>()
+            .ValidateDataAnnotations()
+            .Validate(config => config.Validate().Count == 0);
+
         return services;
     }
 
