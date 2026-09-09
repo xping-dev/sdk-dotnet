@@ -20,11 +20,61 @@ namespace Xping.Sdk.Core.Tests.Extensions;
 // reads or writes them. Left in its own collection, xUnit would run it in parallel with those and
 // each would see the other's variables.
 [Collection("Sequential")]
-public sealed class XpingServiceCollectionExtensionsTests
+public sealed class XpingServiceCollectionExtensionsTests : IDisposable
 {
+    private readonly List<KeyValuePair<string, string?>> _ambientXpingVariables = [];
+
+    /// <summary>
+    /// Removes every ambient <c>XPING_*</c> variable for the duration of one test, restoring them
+    /// in <see cref="Dispose"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These tests assert what a given configuration produces, which requires knowing every input.
+    /// The variables used to be one input this class could ignore, because the instance path did
+    /// not read them - it does now, deliberately, and that is what most of these tests cover.
+    /// </para>
+    /// <para>
+    /// The CI workflow sets <c>XPING_APIKEY</c> and <c>XPING_ENABLED</c> for the whole job, so the
+    /// SDK can record its own test runs. Without this, that key reaches every test on the instance
+    /// path: an assertion on a code-set key sees the workspace secret, and a suite that expects
+    /// local-only mode gets a real uploader. The variables are cleared rather than the workflow
+    /// changed, because the workflow is right - the leak is the tests assuming an empty
+    /// environment.
+    /// </para>
+    /// <para>
+    /// Cleared by prefix rather than from a list of names, so a binding added later is covered
+    /// without anyone remembering to come back here. A test that wants a variable sets it with
+    /// <see cref="WithEnv"/> afterwards and restores it first, the two nesting correctly.
+    /// </para>
+    /// </remarks>
+    public XpingServiceCollectionExtensionsTests()
+    {
+        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string name &&
+                name.StartsWith(EnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                _ambientXpingVariables.Add(
+                    new KeyValuePair<string, string?>(name, entry.Value as string));
+            }
+        }
+
+        foreach (var variable in _ambientXpingVariables)
+            System.Environment.SetEnvironmentVariable(variable.Key, null);
+    }
+
+    public void Dispose()
+    {
+        foreach (var variable in _ambientXpingVariables)
+            System.Environment.SetEnvironmentVariable(variable.Key, variable.Value);
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
+
+    private const string EnvironmentVariablePrefix = "XPING_";
 
     private static XpingConfiguration ValidConfig() => new()
     {
