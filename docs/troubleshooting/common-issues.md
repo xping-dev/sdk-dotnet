@@ -625,23 +625,22 @@ If uploads fail repeatedly, tests accumulate in memory:
 
 ## CI/CD Specific Issues
 
-### Environment Not Detected
+### CI Not Detected
 
 **Symptoms:**
-- Tests run in CI but environment shows as "Local" instead of "CI"
+- `IsCIEnvironment` is false on a pipeline run
 - CI-specific metadata (build number, commit SHA) not captured
+
+> **Not a symptom:** the environment name reading `Default` on a CI run. That is correct.
+> `Environment` names the deployed environment your tests targeted, not the machine they ran on, so
+> a pipeline run and a local run of the same suite deliberately share one name. CI-ness is recorded
+> by the `IsCIEnvironment` flag and the `ExecutionContext` custom property instead. See
+> [Environment](../configuration/configuration-reference.md#environment).
 
 **Solution:**
 
-The SDK auto-detects most CI/CD platforms via environment variables. Verify detection is enabled:
-
-```json
-{
-  "Xping": {
-    "AutoDetectCIEnvironment": true  // Default
-  }
-}
-```
+Detection is automatic and always on - there is no flag to enable. It keys off the platform's own
+environment variables, so it fails only when none of them are present in the test process.
 
 **Supported CI/CD platforms:**
 - GitHub Actions
@@ -653,21 +652,15 @@ The SDK auto-detects most CI/CD platforms via environment variables. Verify dete
 - TeamCity
 - Generic CI (via `CI=true` environment variable)
 
-**For unsupported platforms:** Explicitly set the environment:
+**For unsupported platforms:** set `CI=true` in the pipeline. That is the generic signal, and it
+gets you `IsCIEnvironment` plus the developer-machine and git-metadata behaviour that depends on it.
 
-```json
-{
-  "Xping": {
-    "Environment": "CI",
-    "AutoDetectCIEnvironment": false
-  }
-}
-```
-
-Or via environment variable:
 ```bash
-export XPING__ENVIRONMENT="CI"
+export CI=true
 ```
+
+Do **not** reach for `XPING_ENVIRONMENT="CI"` here. It would name the deployment "CI", splitting
+every affected test's scored history away from the local runs of the same suite.
 
 ---
 

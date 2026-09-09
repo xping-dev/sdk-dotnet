@@ -113,7 +113,7 @@ The adapter uses the standard Xping configuration. Add a `"Xping"` section to yo
 **Optional Fields:**
 - `ProjectId` - Pins every test assembly in the run to one project. Omit it and Xping names the project after each test assembly, creating one project per test project.
 - `ApiEndpoint` - API server URL (default: `https://upload.xping.io/v1`)
-- `Environment` - Environment name (default: `Local`)
+- `Environment` - The deployed environment the tests target (default: `Default`)
 - `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
 - `MaxRetries` - Maximum retry attempts (default: `3`)
 

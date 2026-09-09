@@ -28,10 +28,10 @@ public sealed class NoOpEnvironmentDetectorTests
     }
 
     [Fact]
-    public void EnvironmentName_ReturnsLocal()
+    public void EnvironmentName_ReturnsDefault()
     {
         var detector = new NoOpEnvironmentDetector();
-        Assert.Equal("Local", detector.EnvironmentName);
+        Assert.Equal("Default", detector.EnvironmentName);
     }
 
     [Fact]

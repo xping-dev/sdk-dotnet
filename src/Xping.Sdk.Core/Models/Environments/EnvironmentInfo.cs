@@ -71,7 +71,9 @@ public sealed class EnvironmentInfo
     public string Framework { get; init; }
 
     /// <summary>
-    /// Gets the environment name (e.g., "Local", "CI", "Staging", "Production").
+    /// Gets the deployed environment the tests targeted (e.g. "Staging", "Production"), or
+    /// "Default" when none was configured. Not a record of where the run happened - see
+    /// <see cref="IsCIEnvironment"/> for that.
     /// </summary>
     public string EnvironmentName { get; init; }
 

@@ -387,21 +387,25 @@ public async Task Xping_UploadsSuccessfully_WhenEnabled()
 
 ### Per-Environment Configuration
 
-Use different configurations for different branches:
+Name the environment after the deployment the tests point at. Branch is only the trigger here -
+what matters is that these two jobs test genuinely different deployments:
 
 ```yaml
-# Production branch
+# Tests against the production deployment
 - name: Run Tests (Production)
   if: github.ref == 'refs/heads/main'
   env:
     XPING_ENVIRONMENT: Production
 
-# Development branch
-- name: Run Tests (Development)
+# Tests against the staging deployment
+- name: Run Tests (Staging)
   if: github.ref == 'refs/heads/develop'
   env:
-    XPING_ENVIRONMENT: Development
+    XPING_ENVIRONMENT: Staging
 ```
+
+If both jobs hit the same deployment, leave `XPING_ENVIRONMENT` unset in both. Splitting them by
+branch would halve the evidence behind every score without describing a real difference.
 
 ### Custom Retry Configuration
 

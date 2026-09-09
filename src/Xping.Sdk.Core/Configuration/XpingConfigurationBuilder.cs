@@ -84,35 +84,18 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets the environment name.
+    /// Sets the deployed environment the tests target (e.g. "Staging", "Production").
     /// </summary>
+    /// <remarks>
+    /// Set this only to distinguish runs against genuinely different deployments. It is not a label
+    /// for where the suite ran: naming CI and local separately, or giving each pull request its own
+    /// name, splits a test's scored history along an axis that is already recorded elsewhere.
+    /// </remarks>
     /// <param name="environment">The environment name.</param>
     /// <returns>The builder instance for method chaining.</returns>
     public XpingConfigurationBuilder WithEnvironment(string environment)
     {
         _configuration.Environment = environment;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets whether to automatically detect CI/CD environments.
-    /// </summary>
-    /// <param name="autoDetect">Whether to auto-detect CI environments.</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithAutoDetectCIEnvironment(bool autoDetect)
-    {
-        _configuration.AutoDetectCIEnvironment = autoDetect;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets the environment name to use when CI/CD is auto-detected.
-    /// </summary>
-    /// <param name="ciEnvironmentName">The CI/CD environment name.</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithCiEnvironmentName(string ciEnvironmentName)
-    {
-        _configuration.CiEnvironmentName = ciEnvironmentName;
         return this;
     }
 

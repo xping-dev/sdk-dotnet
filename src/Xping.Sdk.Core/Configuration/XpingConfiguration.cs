@@ -13,16 +13,22 @@ namespace Xping.Sdk.Core.Configuration;
 public sealed class XpingConfiguration
 {
     /// <summary>
-    /// Represents the default environment setting for the Xping SDK if none is specified.
+    /// The environment name recorded when <see cref="Environment"/> is left unset.
     /// </summary>
-    public const string DefaultEnvironment = "Local";
-
-    /// <summary>
-    /// Represents the default value for <see cref="CiEnvironmentName"/> when CI/CD is auto-detected and no explicit override is configured.
-    /// </summary>
-    public const string DefaultCiEnvironment = "CI";
-
-    private string? _environment;
+    /// <remarks>
+    /// <para>
+    /// Deliberately not a deployment name. The SDK cannot know which deployed environment a suite
+    /// targeted, so naming one would be a guess: an unconfigured pipeline running smoke tests
+    /// against production would be stamped with whatever constant was chosen here. "Default"
+    /// describes the configuration state - nothing was set - which is the one thing that is true.
+    /// </para>
+    /// <para>
+    /// It is a full environment for scoring purposes, never a value to be filtered out. For most
+    /// projects it is the only environment there is, so excluding it would empty every
+    /// per-environment comparison at once.
+    /// </para>
+    /// </remarks>
+    public const string DefaultEnvironment = "Default";
 
     /// <summary>
     /// Gets or sets the Xping API endpoint URL.
@@ -74,25 +80,26 @@ public sealed class XpingConfiguration
     public TimeSpan FlushInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Gets or sets the environment name (e.g., "Local", "CI", "Staging", "Production").
-    /// When left unset, the SDK falls back to <see cref="DefaultEnvironment"/> unless a CI or framework-specific
-    /// environment variable takes precedence during environment detection.
+    /// Gets or sets the deployed environment the tests targeted (e.g. "Staging", "Production").
+    /// Optional; when left unset the SDK records <see cref="DefaultEnvironment"/>.
     /// </summary>
-    public string Environment
-    {
-        get => string.IsNullOrWhiteSpace(_environment) ? DefaultEnvironment : _environment!;
-        set => _environment = value;
-    }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to automatically detect CI/CD environments.
-    /// </summary>
-    public bool AutoDetectCIEnvironment { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the environment name to use when CI/CD is auto-detected.
-    /// </summary>
-    public string CiEnvironmentName { get; set; } = DefaultCiEnvironment;
+    /// <remarks>
+    /// <para>
+    /// This names <i>what the suite tested against</i>, not <i>where the suite ran</i>. A developer's
+    /// laptop run and the CI run of the same suite belong in the same environment, because they are
+    /// the same environment; they differ in how far the revision under test can be trusted, which is
+    /// recorded separately. Scores are computed per (test, environment), so every extra name splits a
+    /// test's history - one environment per pull request fragments it permanently.
+    /// </para>
+    /// <para>
+    /// Nothing is inferred from the host. <c>ASPNETCORE_ENVIRONMENT</c> and <c>DOTNET_ENVIRONMENT</c>
+    /// are deliberately not read: they state how the app under test should configure itself, which
+    /// overlaps with but is not the same question, and a base image or shell profile setting one
+    /// inconsistently would manufacture a split that looks legitimate. Teams that want that value can
+    /// pass it through explicitly with <c>XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}</c>.
+    /// </para>
+    /// </remarks>
+    public string? Environment { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the SDK is enabled.
@@ -303,7 +310,17 @@ public sealed class XpingConfiguration
     private static bool IsDefinedMode(XpingMode mode) =>
         mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;
 
-    internal bool HasExplicitEnvironment => !string.IsNullOrWhiteSpace(_environment);
+    /// <summary>
+    /// Gets the environment to record: the configured one, or <see cref="DefaultEnvironment"/>.
+    /// </summary>
+    /// <remarks>
+    /// Whitespace counts as unset, so a blank placeholder left in a configuration template
+    /// (<c>"Environment": ""</c>) means "not configured" rather than "the empty-string environment".
+    /// Trimmed for the same reason a name is not fabricated: <c>"Staging "</c> and <c>"Staging"</c>
+    /// are one environment, and letting them be two would split the very history this field keys.
+    /// </remarks>
+    internal string ResolvedEnvironment =>
+        string.IsNullOrWhiteSpace(Environment) ? DefaultEnvironment : Environment!.Trim();
 
     /// <summary>
     /// Gets a value indicating whether an API key has been supplied.

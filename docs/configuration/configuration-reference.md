@@ -32,9 +32,7 @@ modified; the override is applied to the copy the SDK resolves.
 | `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud`, or `Disabled` |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
-| `Environment` | string | `Local` | `XPING_ENVIRONMENT` | Environment name |
-| `AutoDetectCIEnvironment` | bool | `true` | `XPING_AUTODETECTCIENVIRONMENT` | Auto-detect CI/CD |
-| `CiEnvironmentName` | string | `CI` | `XPING_CIENVIRONMENTNAME` | Label used for auto-detected CI executions |
+| `Environment` | string | `Default` | `XPING_ENVIRONMENT` | The deployed environment the tests target |
 | `Enabled` | bool | `true` | `XPING_ENABLED` | SDK enabled/disabled |
 | `CaptureStackTraces` | bool | `true` | `XPING_CAPTURESTACKTRACES` | Include stack traces |
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
@@ -466,17 +464,33 @@ export XPING_RETRYDELAY="5"
 ### Environment
 
 **Type:** `string`  
-**Default:** `"Local"`  
+**Default:** `"Default"`  
 **Environment Variable:** `XPING_ENVIRONMENT`
 
-Descriptive name for the execution environment. Used for filtering and analysis in Xping Cloud.
+The **deployed environment your tests targeted** - `Staging`, `Production`, `QA`. Confidence
+scores are computed per (test, environment), so this is the axis along which Xping Cloud compares
+a test's behaviour between deployments.
+
+It is *not* a label for where the suite ran. A developer's laptop run and the CI run of the same
+suite belong to the same environment, because they *are* the same environment; what differs is how
+far the revision under test can be trusted, and Xping Cloud records that separately from the commit
+SHA and pull-request flag. Recording them as two environments would halve the evidence on both
+sides and produce a "gap between environments" finding that is really the gap between a laptop and
+a build agent.
+
+**Resolution:**
+
+1. The `Environment` setting - from `XPING_ENVIRONMENT`, `appsettings.json`, or code
+2. `"Default"` when nothing was set
+
+Two rungs, and nothing is inferred from the host. Every distinct environment name in your data
+traces to a decision somebody made.
 
 **Common values:**
-- `"Local"` - Developer workstation
-- `"CI"` - Continuous integration
-- `"Staging"` - Staging environment
-- `"Production"` - Production environment
-- `"QA"` - QA/testing environment
+- `"Default"` - nothing configured; you have one environment and nothing to compare
+- `"Staging"` - the staging deployment
+- `"Production"` - the production deployment
+- `"QA"` - the QA deployment
 
 **Example:**
 
@@ -492,82 +506,42 @@ Descriptive name for the execution environment. Used for filtering and analysis 
 export XPING_ENVIRONMENT="Staging"
 ```
 
-**Priority Order for Environment Detection:**
+#### Set one name per deployment, not per run
 
-The SDK determines the environment name using the following priority (highest to lowest):
+Avoid names that vary run to run - one per pull request, per branch, or per build agent. Each new
+name permanently splits that test's scored history, and the distinction you are reaching for is
+already recorded. A handful of stable names is the goal; most projects need none at all.
 
-1. **`XPING_ENVIRONMENT` environment variable** - Explicit Xping-specific setting (highest priority)
-2. **Auto-detected CI** - Returns `CiEnvironmentName` (default `"CI"`) when `AutoDetectCIEnvironment=true` and running in a detected CI/CD platform
-3. **`Environment` configuration property** - Value set programmatically or in configuration files
-4. **Framework environment variables** - `ASPNETCORE_ENVIRONMENT`, then `DOTNET_ENVIRONMENT`
-5. **Default** - Returns `"Local"` when none of the above are set
+#### `ASPNETCORE_ENVIRONMENT` and `DOTNET_ENVIRONMENT` are not read
 
-**Example:** If you don't specify `Environment` and `AutoDetectCIEnvironment=false`, Xping will use `DOTNET_ENVIRONMENT`/`ASPNETCORE_ENVIRONMENT` when available, and otherwise fall back to `"Local"`. Setting `XPING_ENVIRONMENT=Staging` still overrides everything and uses `"Staging"` instead.
+These answer a different question: how the app under test should configure *itself*, not which
+deployment your suite pointed at. They also fire by accident. A CI job running inside a container
+whose base image carries `ENV ASPNETCORE_ENVIRONMENT=Production` would stamp every pipeline run
+`"Production"` while developer runs said otherwise - a CI-vs-local split wearing a
+Development-vs-Production costume, and a convincing one, because the resulting "Production gap"
+looks like a real finding.
 
----
+If you do want that value, pass it through explicitly. Do it in the shell, so the variable is read
+from the process the tests actually run in:
 
-### AutoDetectCIEnvironment
-
-**Type:** `bool`  
-**Default:** `true`  
-**Environment Variable:** `XPING_AUTODETECTCIENVIRONMENT`
-
-Automatically detect when running in CI/CD environments and set `Environment` to `CiEnvironmentName` (default `"CI"`). Also captures CI-specific metadata (build numbers, commit SHAs, branch names, etc.).
-
-**Supported CI/CD platforms:**
-- GitHub Actions
-- Azure DevOps
-- GitLab CI/CD
-- Jenkins
-- CircleCI
-- Travis CI
-- TeamCity
-- Generic CI (via `CI` environment variable)
-
-**When to disable:**
-- You want explicit control over environment naming
-- Custom CI platform not auto-detected
-- Running in CI but want to track as different environment
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "AutoDetectCIEnvironment": false,
-    "Environment": "CustomCI"
-  }
-}
+```yaml
+- name: Run tests
+  run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
 ```
 
-```bash
-export XPING_AUTODETECTCIENVIRONMENT="false"
-```
+Note that `${{ env.ASPNETCORE_ENVIRONMENT }}` will **not** work here. GitHub Actions' `env` context
+only exposes variables declared in a workflow, job or step `env:` block; it cannot see one set by
+the runner image, a container `ENV`, or an earlier step's `export` - which is exactly the case worth
+passing through. The expression would silently expand to nothing.
 
----
+One line, explicit, and it cannot fire by accident.
 
-### CiEnvironmentName
+#### CI detection still happens
 
-**Type:** `string`  
-**Default:** `"CI"`  
-**Environment Variable:** `XPING_CIENVIRONMENTNAME`
-
-Overrides the label used when CI/CD is auto-detected. This is useful when you want CI executions grouped under a more specific environment name such as `"BuildPipeline"` or `"PullRequestValidation"` without disabling auto-detection.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "AutoDetectCIEnvironment": true,
-    "CiEnvironmentName": "BuildPipeline"
-  }
-}
-```
-
-```bash
-export XPING_CIENVIRONMENTNAME="BuildPipeline"
-```
+Dropping the CI-vs-local distinction from `Environment` does not stop Xping detecting CI. Every run
+still records `IsCIEnvironment`, an `ExecutionContext` custom property (`"CI"` or `"Local"`), the
+detected platform, and its build metadata - branch, commit SHA, run ID, actor. Those are
+diagnostics attached to the run rather than a second scoring axis.
 
 ---
 
@@ -872,8 +846,7 @@ XpingContext.Initialize(config);
     "ApiEndpoint": "https://api.xping.io",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
-    "Environment": "Local",
-    "AutoDetectCIEnvironment": true,
+    "Environment": "Production",
     "Enabled": true,
     "CaptureStackTraces": true,
     "EnableCompression": true,

@@ -289,6 +289,7 @@ public static class XpingServiceCollectionExtensions
         services.PostConfigure<XpingConfiguration>(options =>
         {
             BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(options);
         });
 
         // 3. Add validation
@@ -323,6 +324,7 @@ public static class XpingServiceCollectionExtensions
         services.PostConfigure<XpingConfiguration>(options =>
         {
             BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(options);
         });
 
         return services;
@@ -627,13 +629,6 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("ENVIRONMENT") is { } environment)
             config.Environment = environment;
 
-        if (GetEnv("AUTODETECTCIENVIRONMENT") is { } autoDetect
-            && bool.TryParse(autoDetect, out var ad))
-            config.AutoDetectCIEnvironment = ad;
-
-        if (GetEnv("CIENVIRONMENTNAME") is { } ciEnvironmentName)
-            config.CiEnvironmentName = ciEnvironmentName;
-
         // Feature Flags
         if (GetEnv("ENABLED") is { } enabled && bool.TryParse(enabled, out var e))
             config.Enabled = e;
@@ -688,7 +683,54 @@ public static class XpingServiceCollectionExtensions
             config.StrictMode = sm;
         return;
 
-        string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
+        // A variable set to nothing means "not set", never "set to the empty string". A pipeline
+        // reaches that state routinely - `XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}`
+        // expands to empty when the source is unset, and a template that always exports a variable
+        // does the same - and because these bindings are the highest-precedence source, treating it
+        // as a value would let it clear what appsettings or code configured. Emptying XPING_APIKEY
+        // that way drops the run from Cloud to LocalOnly, and the suite simply stops uploading.
+        //
+        // Trimmed for the same reason: a stray space around a name would otherwise make "Staging "
+        // an environment of its own, splitting the history that name keys.
+        string? GetEnv(string name) =>
+            Environment.GetEnvironmentVariable(prefix + name) is { } value
+            && !string.IsNullOrWhiteSpace(value)
+                ? value.Trim()
+                : null;
+    }
+
+    /// <summary>
+    /// Treats an optional setting left blank as unset, whatever source supplied it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="BindEnvironmentVariablesWithPrefix"/> already ignores a blank <c>XPING_*</c>
+    /// variable, but that is only one of the two ways a value arrives. The standard .NET format
+    /// binds through <c>IConfiguration</c> and reaches here as an empty string:
+    /// <c>Xping__ApiKey: ${{ secrets.XPING_APIKEY }}</c> with the secret missing writes
+    /// <c>""</c>, which would leave <c>ApiKey</c> set-but-empty, resolve the mode to
+    /// <see cref="XpingMode.LocalOnly"/>, and stop the suite uploading without saying so.
+    /// </para>
+    /// <para>
+    /// Only the optional settings are normalized. A blank <c>ApiEndpoint</c> is left alone
+    /// deliberately: it fails validation, which is the loud outcome this method exists to produce
+    /// for the quiet ones.
+    /// </para>
+    /// </remarks>
+    private static void NormalizeBlankSettings(XpingConfiguration config)
+    {
+        if (string.IsNullOrWhiteSpace(config.ApiKey))
+            config.ApiKey = null;
+        else
+            config.ApiKey = config.ApiKey!.Trim();
+
+        if (string.IsNullOrWhiteSpace(config.ProjectId))
+            config.ProjectId = null;
+
+        if (string.IsNullOrWhiteSpace(config.Environment))
+            config.Environment = null;
+        else
+            config.Environment = config.Environment!.Trim();
     }
 
     /// <summary>
@@ -707,6 +749,7 @@ public static class XpingServiceCollectionExtensions
         XpingConfiguration effective = new();
         CopyConfiguration(configuration, effective);
         BindEnvironmentVariablesWithPrefix(effective, EnvironmentVariablePrefix);
+        NormalizeBlankSettings(effective);
 
         return effective;
     }
@@ -718,13 +761,7 @@ public static class XpingServiceCollectionExtensions
         target.ProjectId = source.ProjectId;
         target.BatchSize = source.BatchSize;
         target.FlushInterval = source.FlushInterval;
-        if (source.HasExplicitEnvironment)
-        {
-            target.Environment = source.Environment;
-        }
-
-        target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
-        target.CiEnvironmentName = source.CiEnvironmentName;
+        target.Environment = source.Environment;
         target.Enabled = source.Enabled;
         target.Mode = source.Mode;
         target.CaptureStackTraces = source.CaptureStackTraces;
