@@ -8,10 +8,17 @@ Complete reference guide for configuring Xping SDK. This document covers all ava
 
 Xping SDK supports multiple configuration methods with the following priority order (highest to lowest):
 
-1. **Programmatic Configuration** - Pass configuration to `XpingContext.Initialize()`
-2. **Environment Variables** - System or process environment variables
-3. **JSON Configuration Files** - `appsettings.json` or custom files
-4. **Default Values** - Built-in defaults when no explicit configuration provided
+1. **`XPING_*` environment variables** - e.g. `XPING_APIKEY`, `XPING_BATCHSIZE`
+2. **`Xping__*` environment variables** - the standard .NET nested format, e.g. `Xping__ApiKey`
+3. **JSON configuration files** - `appsettings.{Environment}.json`, then `appsettings.json`
+4. **Programmatic configuration** - the instance passed to `XpingContext.Initialize(config)`
+5. **Default values** - built-in defaults when nothing above applies
+
+The `XPING_*` variables sit at the top deliberately, and they apply on **every** configuration
+path — including `XpingContext.Initialize(config)`. A pipeline can therefore inject a secret or
+redirect an endpoint without the test assembly being rebuilt, and a value hardcoded in
+`Initialize(config)` does not shield the run from it. Your `XpingConfiguration` instance is not
+modified; the override is applied to the copy the SDK resolves.
 
 ---
 
@@ -928,8 +935,8 @@ using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 
 // Fluent builder pattern
+// XPING_APIKEY is applied automatically, so it does not need reading by hand here.
 var config = new XpingConfigurationBuilder()
-    .WithApiKey(Environment.GetEnvironmentVariable("XPING_APIKEY"))
     .WithProjectId("my-application")
     .WithBatchSize(200)
     .WithFlushInterval(TimeSpan.FromMinutes(1))

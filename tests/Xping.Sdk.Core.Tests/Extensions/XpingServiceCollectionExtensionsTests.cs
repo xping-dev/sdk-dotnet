@@ -663,4 +663,98 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         Assert.True(bound.CollectLocalGitAuthor);
     }
+
+    // ---------------------------------------------------------------------------
+    // BindEnvironmentVariablesWithPrefix — applies on the instance path too
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_ShouldApplyEnvironmentVariableOverrides()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+        using var _batch = WithEnv("XPING_BATCHSIZE", "777");
+        using var _env = WithEnv("XPING_ENVIRONMENT", "env-staging");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration
+        {
+            ApiKey = "code-key",
+            Environment = "code-staging"
+        });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("env-key", bound.ApiKey);
+        Assert.Equal(777, bound.BatchSize);
+        Assert.Equal("env-staging", bound.Environment);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithNoEnvironmentVariables_ShouldKeepInstanceValues()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration
+        {
+            ApiKey = "code-key",
+            BatchSize = 42,
+            Environment = "code-staging"
+        });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("code-key", bound.ApiKey);
+        Assert.Equal(42, bound.BatchSize);
+        Assert.Equal("code-staging", bound.Environment);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_ShouldNotMutateTheCallersInstance()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var original = new XpingConfiguration { ApiKey = "code-key" };
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(original);
+        services.BuildServiceProvider().GetRequiredService<IOptions<XpingConfiguration>>();
+
+        Assert.Equal("code-key", original.ApiKey);
+    }
+
+    [Fact]
+    public void AddXping_WithInstanceAndEnvApiKey_ShouldResolveCloudModeAndRegisterHttpUploader()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var services = new ServiceCollection();
+
+        // No API key in code: the mode chosen at registration time has to come from the
+        // environment, or a Cloud run would be wired up with the local-only pipeline.
+        services.AddXping(new XpingConfiguration());
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.Equal(XpingMode.Cloud,
+            provider.GetRequiredService<IOptions<XpingConfiguration>>().Value.ResolveMode());
+        Assert.Equal("XpingUploader", provider.GetRequiredService<IXpingUploader>().GetType().Name);
+    }
+
+    [Fact]
+    public void AddXping_WithBuilderAndEnvApiKey_ShouldNotReportTheKeyAsMissing()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var services = new ServiceCollection();
+
+        // StrictMode forces Cloud, which requires an API key. Supplying it through the environment
+        // must satisfy that requirement rather than throw.
+        services.AddXping(b => b.WithStrictMode(true));
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("env-key", bound.ApiKey);
+    }
 }

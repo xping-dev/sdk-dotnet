@@ -125,6 +125,10 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping SDK with fluent builder configuration.
     /// </summary>
+    /// <remarks>
+    /// The <c>XPING_*</c> environment variables are applied on top of whatever the builder set, so
+    /// a value configured in code can still be overridden by the pipeline that runs the suite.
+    /// </remarks>
     public static IServiceCollection AddXping(
         this IServiceCollection services,
         Action<XpingConfigurationBuilder> configureBuilder)
@@ -134,22 +138,27 @@ public static class XpingServiceCollectionExtensions
             .RequireNotNull()
             .Invoke(builder);
 
-        if (!builder.TryBuild(out var config, out var errors) || config == null)
+        // Validated against the effective values rather than the builder's own, so that a setting
+        // the caller deliberately left to XPING_APIKEY is not reported as missing.
+        XpingConfiguration effective = WithEnvironmentOverrides(builder.Configuration);
+
+        IReadOnlyList<string> errors = effective.Validate();
+        if (errors.Count > 0)
         {
             string message = $"Invalid Xping configuration: {string.Join(", ", errors)}";
 
-            if (builder.StrictMode)
+            if (effective.StrictMode)
                 throw new XpingConfigurationException(message);
 
             throw new InvalidOperationException(message);
         }
 
-        XpingMode mode = config.ResolveMode();
+        XpingMode mode = effective.ResolveMode();
 
         return services
             .AddXpingInfrastructure()
             .AddXpingSerialization()
-            .AddXpingConfigurationFromInstance(config)
+            .AddXpingConfigurationFromInstance(builder.Configuration)
             .AddXpingEnvironment()
             .AddXpingCollectors()
             .AddXpingPullRequest()
@@ -161,6 +170,11 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping SDK with a pre-built configuration instance.
     /// </summary>
+    /// <remarks>
+    /// The <c>XPING_*</c> environment variables are applied on top of the supplied instance, so a
+    /// value configured in code can still be overridden by the pipeline that runs the suite. The
+    /// instance itself is not modified.
+    /// </remarks>
     public static IServiceCollection AddXping(
         this IServiceCollection services,
         XpingConfiguration configuration)
@@ -168,18 +182,22 @@ public static class XpingServiceCollectionExtensions
         if (configuration == null)
             throw new ArgumentNullException(nameof(configuration));
 
-        var errors = configuration.Validate();
+        // Validated against the effective values rather than the caller's own, so that a setting
+        // the caller deliberately left to XPING_APIKEY is not reported as missing.
+        XpingConfiguration effective = WithEnvironmentOverrides(configuration);
+
+        IReadOnlyList<string> errors = effective.Validate();
         if (errors.Count > 0)
         {
             string message = $"Xping configuration invalid: {string.Join(", ", errors)}";
 
-            if (configuration.StrictMode)
+            if (effective.StrictMode)
                 throw new XpingConfigurationException(message);
 
             throw new InvalidOperationException(message);
         }
 
-        XpingMode mode = configuration.ResolveMode();
+        XpingMode mode = effective.ResolveMode();
 
         return services
             .AddXpingInfrastructure()
@@ -282,7 +300,8 @@ public static class XpingServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds Xping configuration from a pre-built instance.
+    /// Adds Xping configuration from a pre-built instance, then applies the <c>XPING_*</c>
+    /// environment variables on top.
     /// Use this when you have a pre-configured XpingConfiguration object.
     /// </summary>
     /// <param name="services">The service collection.</param>
@@ -295,6 +314,15 @@ public static class XpingServiceCollectionExtensions
         services.Configure<XpingConfiguration>(options =>
         {
             CopyConfiguration(configuration, options);
+        });
+
+        // The XPING_* variables are the highest-precedence source on every configuration path, not
+        // only the IConfiguration one. Without this a pipeline that exports XPING_APIKEY sees it
+        // silently ignored the moment the suite switches to XpingContext.Initialize(config), which
+        // is the difference between uploading and not.
+        services.PostConfigure<XpingConfiguration>(options =>
+        {
+            BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
         });
 
         return services;
@@ -661,6 +689,26 @@ public static class XpingServiceCollectionExtensions
         return;
 
         string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="configuration"/> with the <c>XPING_*</c> environment
+    /// variables applied on top, matching what the options system will hand out at resolve time.
+    /// </summary>
+    /// <remarks>
+    /// Registration-time decisions - validation, and the mode that selects the uploader and the
+    /// local store - have to see the same values a resolved <c>IOptions</c> will. Reading them off
+    /// the caller's instance instead would register a LocalOnly pipeline for a run that
+    /// <c>XPING_APIKEY</c> has already made a Cloud one. The caller's instance is copied rather
+    /// than mutated: it belongs to the caller, who may still be holding it.
+    /// </remarks>
+    private static XpingConfiguration WithEnvironmentOverrides(XpingConfiguration configuration)
+    {
+        XpingConfiguration effective = new();
+        CopyConfiguration(configuration, effective);
+        BindEnvironmentVariablesWithPrefix(effective, EnvironmentVariablePrefix);
+
+        return effective;
     }
 
     private static void CopyConfiguration(XpingConfiguration source, XpingConfiguration target)

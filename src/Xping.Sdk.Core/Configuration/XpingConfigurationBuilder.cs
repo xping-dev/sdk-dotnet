@@ -13,6 +13,17 @@ public sealed class XpingConfigurationBuilder
     private readonly XpingConfiguration _configuration = new();
 
     /// <summary>
+    /// Gets the configuration as configured so far, without validating it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Build"/> and <see cref="TryBuild"/> validate before handing the instance back,
+    /// which is right for a caller that is finished. Registration paths are not: they still have to
+    /// layer the <c>XPING_*</c> environment variables on top, and a missing value those variables
+    /// supply must not be reported as an error before they have been applied.
+    /// </remarks>
+    internal XpingConfiguration Configuration => _configuration;
+
+    /// <summary>
     /// Sets the API endpoint URL.
     /// </summary>
     /// <param name="apiEndpoint">The API endpoint URL.</param>
