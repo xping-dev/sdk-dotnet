@@ -681,7 +681,20 @@ public static class XpingServiceCollectionExtensions
             config.StrictMode = sm;
         return;
 
-        string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
+        // A variable set to nothing means "not set", never "set to the empty string". A pipeline
+        // reaches that state routinely - `XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}`
+        // expands to empty when the source is unset, and a template that always exports a variable
+        // does the same - and because these bindings are the highest-precedence source, treating it
+        // as a value would let it clear what appsettings or code configured. Emptying XPING_APIKEY
+        // that way drops the run from Cloud to LocalOnly, and the suite simply stops uploading.
+        //
+        // Trimmed for the same reason: a stray space around a name would otherwise make "Staging "
+        // an environment of its own, splitting the history that name keys.
+        string? GetEnv(string name) =>
+            Environment.GetEnvironmentVariable(prefix + name) is { } value
+            && !string.IsNullOrWhiteSpace(value)
+                ? value.Trim()
+                : null;
     }
 
     /// <summary>

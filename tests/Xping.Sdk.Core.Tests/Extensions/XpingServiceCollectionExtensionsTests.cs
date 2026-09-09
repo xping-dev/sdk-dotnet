@@ -727,4 +727,59 @@ public sealed class XpingServiceCollectionExtensionsTests
 
         Assert.Equal("env-key", bound.ApiKey);
     }
+
+    // ---------------------------------------------------------------------------
+    // BindEnvironmentVariablesWithPrefix — an empty variable is "not set"
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindEnvVars_WithEmptyENVIRONMENT_ShouldNotClearTheConfiguredEnvironment(string value)
+    {
+        // How a pipeline reaches this state: XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}
+        // expands to empty whenever the source variable is unset - the very pass-through the CI
+        // guide recommends.
+        using var _ = WithEnv("XPING_ENVIRONMENT", value);
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { Environment = "Staging" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+        Assert.Equal("Staging", bound.ResolvedEnvironment);
+    }
+
+    [Fact]
+    public void BindEnvVars_WithEmptyAPIKEY_ShouldNotDropTheRunToLocalOnly()
+    {
+        using var _ = WithEnv("XPING_APIKEY", "");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "configured-key" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        // Clearing the key here would silently stop the suite uploading, which is the loudest
+        // possible consequence for the quietest possible cause.
+        Assert.Equal("configured-key", bound.ApiKey);
+        Assert.Equal(XpingMode.Cloud, bound.ResolveMode());
+    }
+
+    [Fact]
+    public void BindEnvVars_ShouldTrimSoOneEnvironmentDoesNotBecomeTwo()
+    {
+        using var _ = WithEnv("XPING_ENVIRONMENT", "  Staging  ");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+    }
 }
