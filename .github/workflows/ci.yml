@@ -49,9 +49,14 @@ jobs:
         run: dotnet test tests/Xping.Sdk.MSTest.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
         timeout-minutes: 5
 
+      # 10 minutes, matching the integration step, because this suite is the one that needs it.
+      # It is the largest here - 979 tests - and coverage instrumentation costs it roughly ten
+      # times its uninstrumented runtime: ~10s becomes ~100s on a developer machine, which leaves
+      # no headroom inside five minutes on a loaded two-core runner. That is what the intermittent
+      # "'Run CLI Tests' has timed out after 5 minutes" on main was, with no test failing.
       - name: Run CLI Tests
         run: dotnet test tests/Xping.Cli.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
-        timeout-minutes: 5
+        timeout-minutes: 10
 
       - name: Run Integration Tests
         run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
