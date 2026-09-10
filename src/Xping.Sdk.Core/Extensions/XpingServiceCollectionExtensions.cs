@@ -142,8 +142,9 @@ public static class XpingServiceCollectionExtensions
         // the caller deliberately left to XPING_APIKEY is not reported as missing.
         XpingConfiguration effective = WithEnvironmentOverrides(builder.Configuration);
 
+        // Thrown only for configuration the caller could fix in code - see the instance overload.
         IReadOnlyList<string> errors = effective.Validate();
-        if (errors.Count > 0)
+        if (errors.Count > 0 && builder.Configuration.Validate().Count > 0)
         {
             string message = $"Invalid Xping configuration: {string.Join(", ", errors)}";
 
@@ -186,8 +187,14 @@ public static class XpingServiceCollectionExtensions
         // the caller deliberately left to XPING_APIKEY is not reported as missing.
         XpingConfiguration effective = WithEnvironmentOverrides(configuration);
 
+        // Registration throws only when the caller's own instance is invalid too - a programming
+        // error, and theirs to fix. An environment variable can now invalidate an instance that was
+        // valid when handed over (XPING_BATCHSIZE=0 in a pipeline is enough), and this throw is not
+        // caught anywhere: XpingContext.Initialize would take the whole test run down over a typo
+        // in someone's YAML. Those reach the registered options validation instead, which
+        // XpingContextOrchestrator catches and degrades on, as the IConfiguration path already did.
         IReadOnlyList<string> errors = effective.Validate();
-        if (errors.Count > 0)
+        if (errors.Count > 0 && configuration.Validate().Count > 0)
         {
             string message = $"Xping configuration invalid: {string.Join(", ", errors)}";
 
@@ -294,8 +301,9 @@ public static class XpingServiceCollectionExtensions
 
         // 3. Add validation
         services.AddOptions<XpingConfiguration>()
-            .ValidateDataAnnotations()
-            .Validate(config => config.Validate().Count == 0);
+            .ValidateDataAnnotations();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 
         return services;
     }
@@ -334,8 +342,9 @@ public static class XpingServiceCollectionExtensions
         // OptionsValidationException as a configuration error and degrades to no-op services, so
         // this reports the problem rather than running on a batch size of zero.
         services.AddOptions<XpingConfiguration>()
-            .ValidateDataAnnotations()
-            .Validate(config => config.Validate().Count == 0);
+            .ValidateDataAnnotations();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 
         return services;
     }
@@ -597,6 +606,7 @@ public static class XpingServiceCollectionExtensions
             var probe = new XpingConfiguration();
             configuration.GetSection(ConfigurationSectionName).Bind(probe);
             BindEnvironmentVariablesWithPrefix(probe, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(probe);
             return probe.ResolveMode();
         }
         catch (InvalidOperationException)
@@ -736,6 +746,8 @@ public static class XpingServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(config.ProjectId))
             config.ProjectId = null;
+        else
+            config.ProjectId = config.ProjectId!.Trim();
 
         if (string.IsNullOrWhiteSpace(config.Environment))
             config.Environment = null;

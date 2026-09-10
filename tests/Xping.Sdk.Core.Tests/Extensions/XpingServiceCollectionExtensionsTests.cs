@@ -921,4 +921,76 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
 
         Assert.Equal(100, bound.BatchSize);
     }
+
+    // ---------------------------------------------------------------------------
+    // Registration throws for the caller's mistakes, not the pipeline's
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void AddXping_WithEnvVarInvalidatingAValidInstance_ShouldNotThrowAtRegistration()
+    {
+        // A typo in a pipeline variable must not take the whole test run down: nothing catches an
+        // exception out of AddXping, so XpingContext.Initialize would abort the run outright.
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+
+        services.AddXping(new XpingConfiguration { ApiKey = "k" });
+
+        // It surfaces where the orchestrator can degrade on it instead.
+        var provider = services.BuildServiceProvider();
+        Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+    }
+
+    [Fact]
+    public void AddXping_WithBuilderAndEnvVarInvalidatingAValidConfig_ShouldNotThrowAtRegistration()
+    {
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+
+        services.AddXping(b => b.WithApiKey("k"));
+    }
+
+    [Fact]
+    public void AddXping_WithInstanceTheCallerMadeInvalid_ShouldStillThrowAtRegistration()
+    {
+        // The caller wrote this one, so it stays a programming error reported where they can see it.
+        var services = new ServiceCollection();
+
+        Assert.Throws<InvalidOperationException>(
+            () => services.AddXping(new XpingConfiguration { ApiKey = "k", BatchSize = 0 }));
+    }
+
+    [Fact]
+    public void OptionsValidation_ShouldNameTheSettingThatFailed()
+    {
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+
+        // "A validation error has occurred." would leave the reader guessing which of a dozen
+        // XPING_* settings the pipeline got wrong.
+        Assert.Contains(ex.Failures, f => f.Contains("BatchSize", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BindEnvVars_PROJECTID_ShouldBeTrimmed()
+    {
+        using var _ = WithEnv("XPING_PROJECTID", "  my-proj  ");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("my-proj", bound.ProjectId);
+    }
 }

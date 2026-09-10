@@ -6,19 +6,31 @@ Complete reference guide for configuring Xping SDK. This document covers all ava
 
 ## Configuration Methods
 
-Xping SDK supports multiple configuration methods with the following priority order (highest to lowest):
+How you initialize decides which sources are read. There are two paths, and only one of them
+loads files.
+
+**`XpingContext.Initialize()`** — no argument. Configuration is discovered:
 
 1. **`XPING_*` environment variables** - e.g. `XPING_APIKEY`, `XPING_BATCHSIZE`
 2. **`Xping__*` environment variables** - the standard .NET nested format, e.g. `Xping__ApiKey`
-3. **JSON configuration files** - `appsettings.{Environment}.json` first, since it is loaded after and therefore overrides `appsettings.json`
-4. **Programmatic configuration** - the instance passed to `XpingContext.Initialize(config)`
-5. **Default values** - built-in defaults when nothing above applies
+3. **`appsettings.{Environment}.json`** - loaded after the base file, so it overrides it
+4. **`appsettings.json`**
+5. **Default values**
 
-The `XPING_*` variables sit at the top deliberately, and they apply on **every** configuration
-path — including `XpingContext.Initialize(config)`. A pipeline can therefore inject a secret or
-redirect an endpoint without the test assembly being rebuilt, and a value hardcoded in
-`Initialize(config)` does not shield the run from it. Your `XpingConfiguration` instance is not
-modified; the override is applied to the copy the SDK resolves.
+**`XpingContext.Initialize(config)`** — you supply the object. No files are read, and the nested
+`Xping__*` format does not apply, because there is no `IConfiguration` in this path at all:
+
+1. **`XPING_*` environment variables**
+2. **The `XpingConfiguration` you passed**
+3. **Default values**
+
+The `XPING_*` variables sit at the top of **both**, which is the point: a pipeline can inject a
+secret or redirect an endpoint without the test assembly being rebuilt, and a value hardcoded in
+`Initialize(config)` does not shield the run from it. Your instance is not modified — the override
+is applied to the copy the SDK resolves.
+
+If you configure in code and want `appsettings.json` or `Xping__*` honoured as well, build an
+`IConfiguration` yourself and call `services.AddXping(configuration)`.
 
 ---
 
@@ -947,48 +959,29 @@ All other settings use default values.
 
 ## Configuration Loading Order
 
-Configuration values are merged from multiple sources in this priority order:
+See [Configuration Methods](#configuration-methods) above for the two resolution orders and which
+one applies to how you initialize. The short version: `XPING_*` beats everything, on both paths.
 
-1. **Programmatic configuration** (highest priority)
-   ```csharp
-   var config = new XpingConfiguration { ApiKey = "key" };
-   XpingContext.Initialize(config);
-   ```
+**Example resolution** under `XpingContext.Initialize()`, which reads files:
 
-2. **Environment variables**
-   ```bash
-   export XPING_APIKEY="key"
-   ```
-
-3. **Environment-specific JSON**
-   ```
-   appsettings.Development.json
-   appsettings.Production.json
-   ```
-
-4. **Base JSON configuration**
-   ```
-   appsettings.json
-   ```
-
-5. **Default values** (lowest priority)
-
-**Note:** The `Environment` property has special detection logic that considers multiple sources beyond just configuration values. See the [Environment](#environment) section for the complete priority order used for environment name detection.
-
-**Example resolution:**
 ```
 ApiKey:
   - Default: null
   - appsettings.json: "xpg_test_key"
-  - Environment variable: "xpg_live_key"  ← Wins
+  - Environment variable: "xpg_live_key"  <- Wins
   - Programmatic: Not set
 
 BatchSize:
   - Default: 100
-  - appsettings.json: 200  ← Wins
+  - appsettings.json: 200  <- Wins
   - Environment variable: Not set
   - Programmatic: Not set
 ```
+
+A blank variable counts as unset rather than as the empty string, on both formats. That matters
+because `XPING_APIKEY: ${{ secrets.XPING_APIKEY }}` expands to nothing when the secret is missing:
+treated as a value it would clear a key configured elsewhere and silently drop the run to
+local-only, so it is ignored instead.
 
 ---
 
