@@ -46,4 +46,38 @@ public sealed class ReportVocabularyTests
     {
         Assert.Equal("SomethingNewer", ReportVocabulary.LabelFor("SomethingNewer"));
     }
+
+    /// <summary>
+    /// Every population rule resolves to a marker of its own.
+    /// </summary>
+    /// <remarks>
+    /// The fallback echoes the envelope's own spelling, which exists for a rule written by a newer
+    /// build. A rule this build knows reaching it means no marker was chosen for it, and the column
+    /// would print `excludesPartialRuns` inside a seventy-two column fence.
+    /// </remarks>
+    [Fact]
+    public void EveryPopulationRuleHasAMarkerOfItsOwn()
+    {
+        string[] tokens =
+        [
+            .. Enum.GetValues<PopulationRule>()
+                .Select(rule => ReportVocabulary.PopulationTokenFor(CamelCase(rule.ToString())))
+        ];
+
+        foreach (string token in tokens)
+        {
+            Assert.NotEmpty(token);
+            Assert.DoesNotContain("excludes", token, StringComparison.OrdinalIgnoreCase);
+
+            // The trailer holds evidence, population, id and a source path inside the fence, and
+            // the path is what makes a finding actionable. A marker wider than the widest already
+            // shipped takes those columns from it.
+            Assert.True(token.Length <= "-env-cluster".Length, $"'{token}' is {token.Length} columns");
+        }
+
+        Assert.Equal(tokens.Length, tokens.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    private static string CamelCase(string value) =>
+        char.ToLowerInvariant(value[0]) + value[1..];
 }

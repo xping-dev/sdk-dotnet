@@ -290,6 +290,15 @@ internal sealed record DurationUnstableEvidence(
 /// much as its speed, so runs executed under different filters normalise against different
 /// populations. Nothing here can distinguish the two, and no claim is made that it does.
 /// </para>
+/// <para>
+/// That anchoring is deliberately <i>not</i> expressed through
+/// <see cref="Indexes.SessionView.IsPartial"/>, which is how the report classifies a run elsewhere.
+/// The classification is window-relative and decided against a threshold; this is per test and
+/// needs neither, because "the runs this test appeared in" is exactly the set a filtered run either
+/// joins or does not. Reading the flag instead would also throw away a perfectly good speed reading
+/// from a filtered run for the test that <i>was</i> selected in it. The flag is read once here, for
+/// the one question it answers better — whether the current slice asked about the test at all.
+/// </para>
 /// </remarks>
 internal sealed class DurationProvider : IFindingProvider
 {
@@ -397,6 +406,16 @@ internal sealed class DurationProvider : IFindingProvider
         var currentSessions = new HashSet<Guid>(
             context.Window.CurrentSlice.Select(s => s.SessionId));
 
+        // Whether the "now" side of the comparison is made entirely of runs that covered part of the
+        // suite. Computed once for the window rather than per test, because it is a property of the
+        // slice: a `dotnet test --filter` loop puts nothing but filtered runs at the head of the
+        // store, and then every unselected test has an empty current slice for a reason that has
+        // nothing to do with the test.
+        bool currentSliceIsAllPartial =
+            context.Window.CurrentSlice.Count > 0 &&
+            context.Window.CurrentSlice.All(
+                session => context.SessionViewFor(session.SessionId)?.IsPartial == true);
+
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
             // Counted against neither kind. The fingerprint and the reference come out of the same
@@ -445,8 +464,24 @@ internal sealed class DurationProvider : IFindingProvider
             // disappearance a second time in the summary, in a line whose whole purpose is to name
             // questions whose answers are missing rather than questions that have been answered
             // elsewhere.
+            //
+            // Unless nothing in the current slice asked about the test. Then there is no
+            // disappearance to state twice: `Vanished` sets those runs aside precisely so it does
+            // not claim one, so deferring to it charges the skip to a kind that is also silent and
+            // the summary ends up asserting duration read every test it was offered. An absence
+            // from runs that never selected the test is a measurement waiting on a full run, which
+            // is what `awaitingRuns` means, and both kinds want it — the comparison and the
+            // dispersion are equally starved by an empty "now".
             if (current.Count == 0)
+            {
+                if (currentSliceIsAllPartial)
+                {
+                    regressionNotMeasured += new NotMeasuredCount(1, 0);
+                    unstableNotMeasured += new NotMeasuredCount(1, 0);
+                }
+
                 continue;
+            }
 
             // The scale this test's own figures are expressed in. Per test rather than per window,
             // because a run median is only a machine-speed reading among runs that ran the same

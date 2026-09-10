@@ -91,6 +91,118 @@ public sealed class ReportEnvelopeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes 17 runs of a suite, then optionally 3 runs naming a single test.
+    /// </summary>
+    /// <param name="filtered">Whether to append the runs that cover part of the suite.</param>
+    /// <remarks>
+    /// The shape an ordinary inner loop produces, and the one issue #204 was reported on: a stretch
+    /// of full runs, then a `dotnet test --filter` loop long enough to fill the current slice.
+    /// </remarks>
+    private static void SeedFilteredTail(bool filtered)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < 17; i++)
+        {
+            var executions = new List<TestExecution> { TestSessionFactory.Execution("Selected") };
+
+            // A test that stops running 3 full runs before the end, so `Vanished` has something to
+            // report and the finding carries a population marker to read.
+            if (i < 14)
+                executions.Add(TestSessionFactory.Execution("Removed"));
+
+            for (int t = 0; t < 15; t++)
+                executions.Add(TestSessionFactory.Execution($"Stable{t}"));
+
+            store.Write(TestSessionFactory.Session(i, executions));
+        }
+
+        if (!filtered)
+            return;
+
+        for (int i = 0; i < 3; i++)
+            store.Write(TestSessionFactory.Session(17 + i, [TestSessionFactory.Execution("Selected")]));
+    }
+
+    /// <summary>
+    /// A run under a filter changes what the report says it could measure, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The issue this pins claimed three filtered runs push tests under the per-test evidence
+    /// floor. They do not, and cannot: the floor reads the runs the subject itself appeared in, so
+    /// a test absent from a filtered run simply has fewer of them, and the window count the
+    /// filtered runs inflate is not what decides — see
+    /// <c>TheWindowArmOfTheFloorNeverDecidesOnItsOwn</c>. Asserted equal across the two stores
+    /// rather than argued, so a change to either constant surfaces here.
+    /// </para>
+    /// <para>
+    /// What does move is <c>notMeasured</c>. With nothing but filtered runs in the current slice
+    /// the duration kinds cannot read the tests those runs did not select, and the report says so
+    /// instead of reporting a suite it measured in full.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void FilteredRunsMoveWhatCouldBeMeasuredAndNotTheEvidenceFloor()
+    {
+        SeedFilteredTail(filtered: true);
+
+        JsonElement root = RunJson("--all");
+        JsonElement summary = root.GetProperty("summary");
+
+        Assert.Equal(20, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal(3, summary.GetProperty("partialSessions").GetInt32());
+
+        // The filtered runs add no test the full runs did not already hold, so the denominator the
+        // headline states is unmoved by them.
+        Assert.Equal(17, summary.GetProperty("tests").GetInt32());
+        Assert.Equal(0, summary.GetProperty("excludedLowEvidence").GetInt32());
+
+        Assert.Equal(
+            16,
+            summary.GetProperty("notMeasured").GetProperty("DurationRegression")
+                   .GetProperty("awaitingRuns").GetInt32());
+
+        JsonElement vanished = root.GetProperty("findings").EnumerateArray()
+            .Single(f => f.GetProperty("kind").GetString() == "Vanished");
+
+        Assert.Equal("excludesPartialRuns", vanished.GetProperty("population").GetString());
+    }
+
+    /// <summary>
+    /// The same store without the filtered runs, so the two can be read against each other.
+    /// </summary>
+    /// <remarks>
+    /// The marker states the rule and not whether it fired, so <c>Vanished</c> carries it here too —
+    /// a reader must not have to know whether a window happened to contain a filtered run before
+    /// they can tell what a rate was counted over.
+    /// </remarks>
+    [Fact]
+    public void WithoutFilteredRunsTheSameStoreMeasuresEverythingAndKeepsTheMarker()
+    {
+        SeedFilteredTail(filtered: false);
+
+        JsonElement root = RunJson("--all");
+        JsonElement summary = root.GetProperty("summary");
+
+        Assert.Equal(17, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
+        Assert.Equal(0, summary.GetProperty("partialSessions").GetInt32());
+
+        Assert.Equal(17, summary.GetProperty("tests").GetInt32());
+        Assert.Equal(0, summary.GetProperty("excludedLowEvidence").GetInt32());
+
+        Assert.Equal(
+            0,
+            summary.GetProperty("notMeasured").GetProperty("DurationRegression")
+                   .GetProperty("awaitingRuns").GetInt32());
+
+        JsonElement vanished = root.GetProperty("findings").EnumerateArray()
+            .Single(f => f.GetProperty("kind").GetString() == "Vanished");
+
+        Assert.Equal("excludesPartialRuns", vanished.GetProperty("population").GetString());
+    }
+
     private static void SeedWithRevision(int count, string sha, string branch)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
@@ -126,7 +238,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.17", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.18", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -176,9 +288,11 @@ public sealed class ReportEnvelopeTests : IDisposable
             finding.GetProperty("evidence").GetProperty("baselineSessions").GetInt32(),
             finding.GetProperty("evidenceSessions").GetInt32());
 
-        // Which executions the counts below were taken over. Vanished counts session appearances, so
-        // it discounts nothing — and says so rather than leaving the reader to infer it.
-        Assert.Equal("allExecutions", finding.GetProperty("population").GetString());
+        // Which runs the counts below were taken over. Vanished counts session appearances and sets
+        // aside the runs that covered part of the suite, so it says so rather than leaving the
+        // reader to infer it — and says so whether or not any run in this window was set aside,
+        // because the marker states the rule and not whether it fired.
+        Assert.Equal("excludesPartialRuns", finding.GetProperty("population").GetString());
 
         JsonElement subject = finding.GetProperty("subject");
         Assert.Equal("test", subject.GetProperty("type").GetString());
@@ -206,11 +320,20 @@ public sealed class ReportEnvelopeTests : IDisposable
         foreach (FindingKind kind in Enum.GetValues<FindingKind>())
             Assert.True(Enum.IsDefined(PopulationRules.For(kind)));
 
-        // And the three arms are all reachable, so the marker actually distinguishes findings rather
-        // than printing one word on every line.
+        // And every arm is reachable, so the marker actually distinguishes findings rather than
+        // printing one word on every line.
         Assert.Equal(
-            3,
+            Enum.GetValues<PopulationRule>().Length,
             Enum.GetValues<FindingKind>().Select(PopulationRules.For).Distinct().Count());
+
+        // Vanished is the only kind counted in runs rather than executions, and the only one that
+        // sets a run aside for having covered part of the suite. A second kind arriving here means
+        // the argument in `docs/internals/finding-populations.md` needs revisiting rather than
+        // extending, so it is pinned rather than left to be noticed.
+        Assert.Equal(
+            [FindingKind.Vanished],
+            Enum.GetValues<FindingKind>()
+                .Where(kind => PopulationRules.For(kind) == PopulationRule.ExcludesPartialRuns));
     }
 
     [Fact]
@@ -363,7 +486,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.17", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.18", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

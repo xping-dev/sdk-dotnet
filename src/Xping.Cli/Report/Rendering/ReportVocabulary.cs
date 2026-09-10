@@ -84,6 +84,12 @@ internal static class ReportVocabulary
         "excludesEnvironmental" => "-env",
         "excludesEnvironmentalAndClustered" => "-env-cluster",
 
+        // Subtractive, like its two neighbours, and for the same reason: the marker's job is to say
+        // what was taken out. The headline of the one kind that carries this says what was left in
+        // — "full runs" — and a marker reading `full runs` beside `all runs` would differ by one
+        // letter in the column whose whole purpose is discrimination at a glance.
+        "excludesPartialRuns" => "-partial",
+
         // A rule added to the enum without a marker. Printing what the envelope said is worse than
         // a word and far better than a blank segment.
         _ => population

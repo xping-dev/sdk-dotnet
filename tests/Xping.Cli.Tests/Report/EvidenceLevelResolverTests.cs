@@ -141,4 +141,40 @@ public sealed class EvidenceLevelResolverTests
 
         return TestIndex.Build(TestSessionFactory.Window([.. sessions]));
     }
+
+    /// <summary>
+    /// The window clause of the floor cannot decide anything the per-test clause has not already.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The subject's session count is drawn from the same window, so it can never exceed the
+    /// window's own — which means that while the two constants are equal, every window the first
+    /// clause would reject was already rejected by the second. This is why a run under a
+    /// <c>dotnet test --filter</c> cannot push a test under the evidence floor: the count it
+    /// inflates is not the count that decides.
+    /// </para>
+    /// <para>
+    /// Pinned rather than left as a remark, because it holds only <i>while</i> the constants are
+    /// equal. Raising <see cref="LocalAnalysisConstants.MinimumSessionsToReport"/> above its
+    /// per-test counterpart would make the window clause live, and that is a decision about
+    /// filtered runs whether or not it is taken as one.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheWindowArmOfTheFloorNeverDecidesOnItsOwn()
+    {
+        Assert.Equal(
+            LocalAnalysisConstants.MinimumSessionsToReport,
+            LocalAnalysisConstants.MinimumSessionsPerTestToReport);
+
+        for (int windowSessions = 0; windowSessions <= 30; windowSessions++)
+        {
+            for (int subjectSessions = 0; subjectSessions <= windowSessions; subjectSessions++)
+            {
+                Assert.Equal(
+                    subjectSessions >= LocalAnalysisConstants.MinimumSessionsPerTestToReport,
+                    EvidenceLevelResolver.MeetsReportingFloor(subjectSessions, windowSessions));
+            }
+        }
+    }
 }

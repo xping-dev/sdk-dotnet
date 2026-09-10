@@ -46,9 +46,11 @@ internal sealed record ReportEnvelope(
     /// runs that side of the comparison read — published because the p-value beside it is not
     /// calibrated against a difference in spread between the two. 1.17 is where the summary gained
     /// <c>skewedSessions</c>, the runs stamped ahead of this machine's clock and therefore left out
-    /// of the window rather than allowed to date it.
+    /// of the window rather than allowed to date it. 1.18 is where <c>population</c> gained
+    /// <c>excludesPartialRuns</c>, the rule <c>Vanished</c> had been applying since 1.13 while
+    /// still publishing <c>allExecutions</c> — a consumer switching on the value sees a fourth one.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.17";
+    public const string CurrentSchemaVersion = "1.18";
 }
 
 /// <summary>

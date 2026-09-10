@@ -465,7 +465,12 @@ public sealed class ShareableOutputTests
         Assert.Contains("-env-cluster", trailers[0], StringComparison.Ordinal);
         Assert.Contains("-env", trailers[1], StringComparison.Ordinal);
         Assert.DoesNotContain("-cluster", trailers[1], StringComparison.Ordinal);
-        Assert.Contains("all runs", trailers[2], StringComparison.Ordinal);
+
+        // Vanished sets aside the runs that covered part of the suite, so it is not an `all runs`
+        // finding and must not read as one — which is what it published while its provider was
+        // already setting them aside.
+        Assert.Contains("-partial", trailers[2], StringComparison.Ordinal);
+        Assert.DoesNotContain("all runs", trailers[2], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1083,6 +1088,33 @@ public sealed class ShareableOutputTests
         Assert.Contains(
             Fenced(report),
             line => line.EndsWith(expected, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The caveat gives the partial runs their denominator, so the reader has the fraction.
+    /// </summary>
+    /// <remarks>
+    /// Against the window's own run count, which is the number the header states and the one every
+    /// rate below is read against. "3 runs covered part of the suite" says a filtered run happened;
+    /// only "3 of 20" says how much of the window it is.
+    /// </remarks>
+    [Fact]
+    public void ThePartialRunCaveatCountsAgainstTheWindowItQualifies()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"));
+
+        string report = Render(envelope with
+        {
+            Summary = envelope.Summary with { PartialSessions = 3 }
+        });
+
+        Assert.Contains(
+            "3 of 20 runs covered part of the suite", report, StringComparison.Ordinal);
+
+        // And absent entirely where none were, rather than reading "0 of 20". A caveat that fires on
+        // every ordinary store is one a reader learns to skip.
+        Assert.DoesNotContain("covered part of the suite", Render(envelope), StringComparison.Ordinal);
     }
 
     private static string Render(ReportEnvelope envelope, OutputCapabilities? capabilities = null)
