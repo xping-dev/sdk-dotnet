@@ -6,6 +6,7 @@
 namespace Xping.Integration.Tests;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -24,7 +25,37 @@ using XpingCtx = Xping.Sdk.NUnit.XpingContext;
 /// </summary>
 public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
 {
+    private const string EnvironmentVariablePrefix = "XPING_";
+
     private readonly MockApiServer _mockServer = new();
+    private readonly List<KeyValuePair<string, string?>> _ambientXpingVariables = [];
+
+    /// <summary>
+    /// Removes every ambient <c>XPING_*</c> variable for the duration of one test, restoring them
+    /// in <see cref="Dispose"/>.
+    /// </summary>
+    /// <remarks>
+    /// These tests point the SDK at a mock server and assert on what it sends, so every input to
+    /// the configuration has to come from <c>CreateConfig</c>. The CI workflow sets
+    /// <c>XPING_APIKEY</c> for the whole job so the SDK can record its own test runs, and those
+    /// variables now reach <c>Initialize(config)</c> - which is deliberate, and is exactly what
+    /// makes the real workspace key arrive at the mock server in place of "test-key".
+    /// </remarks>
+    public ApiCommunicationTests()
+    {
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string name &&
+                name.StartsWith(EnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                _ambientXpingVariables.Add(
+                    new KeyValuePair<string, string?>(name, entry.Value as string));
+            }
+        }
+
+        foreach (var variable in _ambientXpingVariables)
+            Environment.SetEnvironmentVariable(variable.Key, null);
+    }
 
     // xUnit calls DisposeAsync before Dispose, so each cleans up its own resource.
     public Task InitializeAsync()
@@ -42,6 +73,9 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
     public void Dispose()
     {
         _mockServer.Dispose();
+
+        foreach (var variable in _ambientXpingVariables)
+            Environment.SetEnvironmentVariable(variable.Key, variable.Value);
     }
 
     [Fact]

@@ -125,6 +125,10 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping SDK with fluent builder configuration.
     /// </summary>
+    /// <remarks>
+    /// The <c>XPING_*</c> environment variables are applied on top of whatever the builder set, so
+    /// a value configured in code can still be overridden by the pipeline that runs the suite.
+    /// </remarks>
     public static IServiceCollection AddXping(
         this IServiceCollection services,
         Action<XpingConfigurationBuilder> configureBuilder)
@@ -134,22 +138,28 @@ public static class XpingServiceCollectionExtensions
             .RequireNotNull()
             .Invoke(builder);
 
-        if (!builder.TryBuild(out var config, out var errors) || config == null)
+        // Validated against the effective values rather than the builder's own, so that a setting
+        // the caller deliberately left to XPING_APIKEY is not reported as missing.
+        XpingConfiguration effective = WithEnvironmentOverrides(builder.Configuration);
+
+        // Thrown only for configuration the caller could fix in code - see the instance overload.
+        IReadOnlyList<string> errors = effective.Validate();
+        if (errors.Count > 0 && builder.Configuration.Validate().Count > 0)
         {
             string message = $"Invalid Xping configuration: {string.Join(", ", errors)}";
 
-            if (builder.StrictMode)
+            if (effective.StrictMode)
                 throw new XpingConfigurationException(message);
 
             throw new InvalidOperationException(message);
         }
 
-        XpingMode mode = config.ResolveMode();
+        XpingMode mode = effective.ResolveMode();
 
         return services
             .AddXpingInfrastructure()
             .AddXpingSerialization()
-            .AddXpingConfigurationFromInstance(config)
+            .AddXpingConfigurationFromInstance(builder.Configuration)
             .AddXpingEnvironment()
             .AddXpingCollectors()
             .AddXpingPullRequest()
@@ -161,6 +171,11 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping SDK with a pre-built configuration instance.
     /// </summary>
+    /// <remarks>
+    /// The <c>XPING_*</c> environment variables are applied on top of the supplied instance, so a
+    /// value configured in code can still be overridden by the pipeline that runs the suite. The
+    /// instance itself is not modified.
+    /// </remarks>
     public static IServiceCollection AddXping(
         this IServiceCollection services,
         XpingConfiguration configuration)
@@ -168,18 +183,28 @@ public static class XpingServiceCollectionExtensions
         if (configuration == null)
             throw new ArgumentNullException(nameof(configuration));
 
-        var errors = configuration.Validate();
-        if (errors.Count > 0)
+        // Validated against the effective values rather than the caller's own, so that a setting
+        // the caller deliberately left to XPING_APIKEY is not reported as missing.
+        XpingConfiguration effective = WithEnvironmentOverrides(configuration);
+
+        // Registration throws only when the caller's own instance is invalid too - a programming
+        // error, and theirs to fix. An environment variable can now invalidate an instance that was
+        // valid when handed over (XPING_BATCHSIZE=0 in a pipeline is enough), and this throw is not
+        // caught anywhere: XpingContext.Initialize would take the whole test run down over a typo
+        // in someone's YAML. Those reach the registered options validation instead, which
+        // XpingContextOrchestrator catches and degrades on, as the IConfiguration path already did.
+        IReadOnlyList<string> errors = effective.Validate();
+        if (errors.Count > 0 && configuration.Validate().Count > 0)
         {
             string message = $"Xping configuration invalid: {string.Join(", ", errors)}";
 
-            if (configuration.StrictMode)
+            if (effective.StrictMode)
                 throw new XpingConfigurationException(message);
 
             throw new InvalidOperationException(message);
         }
 
-        XpingMode mode = configuration.ResolveMode();
+        XpingMode mode = effective.ResolveMode();
 
         return services
             .AddXpingInfrastructure()
@@ -271,18 +296,21 @@ public static class XpingServiceCollectionExtensions
         services.PostConfigure<XpingConfiguration>(options =>
         {
             BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(options);
         });
 
         // 3. Add validation
         services.AddOptions<XpingConfiguration>()
-            .ValidateDataAnnotations()
-            .Validate(config => config.Validate().Count == 0);
+            .ValidateDataAnnotations();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 
         return services;
     }
 
     /// <summary>
-    /// Adds Xping configuration from a pre-built instance.
+    /// Adds Xping configuration from a pre-built instance, then applies the <c>XPING_*</c>
+    /// environment variables on top.
     /// Use this when you have a pre-configured XpingConfiguration object.
     /// </summary>
     /// <param name="services">The service collection.</param>
@@ -296,6 +324,27 @@ public static class XpingServiceCollectionExtensions
         {
             CopyConfiguration(configuration, options);
         });
+
+        // The XPING_* variables are the highest-precedence source on every configuration path, not
+        // only the IConfiguration one. Without this a pipeline that exports XPING_APIKEY sees it
+        // silently ignored the moment the suite switches to XpingContext.Initialize(config), which
+        // is the difference between uploading and not.
+        services.PostConfigure<XpingConfiguration>(options =>
+        {
+            BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(options);
+        });
+
+        // Same validation the IConfiguration path registers. It matters more here than it looks:
+        // the caller vouched for the instance they passed, but the PostConfigure above can now put
+        // a value in it that they never wrote - XPING_BATCHSIZE=0 is enough - and without this the
+        // result reaches IOptions.Value unchallenged. XpingContextOrchestrator already treats an
+        // OptionsValidationException as a configuration error and degrades to no-op services, so
+        // this reports the problem rather than running on a batch size of zero.
+        services.AddOptions<XpingConfiguration>()
+            .ValidateDataAnnotations();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 
         return services;
     }
@@ -557,6 +606,7 @@ public static class XpingServiceCollectionExtensions
             var probe = new XpingConfiguration();
             configuration.GetSection(ConfigurationSectionName).Bind(probe);
             BindEnvironmentVariablesWithPrefix(probe, EnvironmentVariablePrefix);
+            NormalizeBlankSettings(probe);
             return probe.ResolveMode();
         }
         catch (InvalidOperationException)
@@ -598,13 +648,6 @@ public static class XpingServiceCollectionExtensions
         // Environment Options
         if (GetEnv("ENVIRONMENT") is { } environment)
             config.Environment = environment;
-
-        if (GetEnv("AUTODETECTCIENVIRONMENT") is { } autoDetect
-            && bool.TryParse(autoDetect, out var ad))
-            config.AutoDetectCIEnvironment = ad;
-
-        if (GetEnv("CIENVIRONMENTNAME") is { } ciEnvironmentName)
-            config.CiEnvironmentName = ciEnvironmentName;
 
         // Feature Flags
         if (GetEnv("ENABLED") is { } enabled && bool.TryParse(enabled, out var e))
@@ -660,7 +703,77 @@ public static class XpingServiceCollectionExtensions
             config.StrictMode = sm;
         return;
 
-        string? GetEnv(string name) => Environment.GetEnvironmentVariable(prefix + name);
+        // A variable set to nothing means "not set", never "set to the empty string". A pipeline
+        // reaches that state routinely - `XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}`
+        // expands to empty when the source is unset, and a template that always exports a variable
+        // does the same - and because these bindings are the highest-precedence source, treating it
+        // as a value would let it clear what appsettings or code configured. Emptying XPING_APIKEY
+        // that way drops the run from Cloud to LocalOnly, and the suite simply stops uploading.
+        //
+        // Trimmed for the same reason: a stray space around a name would otherwise make "Staging "
+        // an environment of its own, splitting the history that name keys.
+        string? GetEnv(string name) =>
+            Environment.GetEnvironmentVariable(prefix + name) is { } value
+            && !string.IsNullOrWhiteSpace(value)
+                ? value.Trim()
+                : null;
+    }
+
+    /// <summary>
+    /// Treats an optional setting left blank as unset, whatever source supplied it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="BindEnvironmentVariablesWithPrefix"/> already ignores a blank <c>XPING_*</c>
+    /// variable, but that is only one of the two ways a value arrives. The standard .NET format
+    /// binds through <c>IConfiguration</c> and reaches here as an empty string:
+    /// <c>Xping__ApiKey: ${{ secrets.XPING_APIKEY }}</c> with the secret missing writes
+    /// <c>""</c>, which would leave <c>ApiKey</c> set-but-empty, resolve the mode to
+    /// <see cref="XpingMode.LocalOnly"/>, and stop the suite uploading without saying so.
+    /// </para>
+    /// <para>
+    /// Only the optional settings are normalized. A blank <c>ApiEndpoint</c> is left alone
+    /// deliberately: it fails validation, which is the loud outcome this method exists to produce
+    /// for the quiet ones.
+    /// </para>
+    /// </remarks>
+    private static void NormalizeBlankSettings(XpingConfiguration config)
+    {
+        if (string.IsNullOrWhiteSpace(config.ApiKey))
+            config.ApiKey = null;
+        else
+            config.ApiKey = config.ApiKey!.Trim();
+
+        if (string.IsNullOrWhiteSpace(config.ProjectId))
+            config.ProjectId = null;
+        else
+            config.ProjectId = config.ProjectId!.Trim();
+
+        if (string.IsNullOrWhiteSpace(config.Environment))
+            config.Environment = null;
+        else
+            config.Environment = config.Environment!.Trim();
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="configuration"/> with the <c>XPING_*</c> environment
+    /// variables applied on top, matching what the options system will hand out at resolve time.
+    /// </summary>
+    /// <remarks>
+    /// Registration-time decisions - validation, and the mode that selects the uploader and the
+    /// local store - have to see the same values a resolved <c>IOptions</c> will. Reading them off
+    /// the caller's instance instead would register a LocalOnly pipeline for a run that
+    /// <c>XPING_APIKEY</c> has already made a Cloud one. The caller's instance is copied rather
+    /// than mutated: it belongs to the caller, who may still be holding it.
+    /// </remarks>
+    private static XpingConfiguration WithEnvironmentOverrides(XpingConfiguration configuration)
+    {
+        XpingConfiguration effective = new();
+        CopyConfiguration(configuration, effective);
+        BindEnvironmentVariablesWithPrefix(effective, EnvironmentVariablePrefix);
+        NormalizeBlankSettings(effective);
+
+        return effective;
     }
 
     private static void CopyConfiguration(XpingConfiguration source, XpingConfiguration target)
@@ -670,13 +783,7 @@ public static class XpingServiceCollectionExtensions
         target.ProjectId = source.ProjectId;
         target.BatchSize = source.BatchSize;
         target.FlushInterval = source.FlushInterval;
-        if (source.HasExplicitEnvironment)
-        {
-            target.Environment = source.Environment;
-        }
-
-        target.AutoDetectCIEnvironment = source.AutoDetectCIEnvironment;
-        target.CiEnvironmentName = source.CiEnvironmentName;
+        target.Environment = source.Environment;
         target.Enabled = source.Enabled;
         target.Mode = source.Mode;
         target.CaptureStackTraces = source.CaptureStackTraces;

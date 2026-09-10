@@ -31,18 +31,77 @@ public sealed class EnvironmentDetectorTests
         "DOTNET_ENVIRONMENT",
     ];
 
-    [Fact]
-    public async Task BuildEnvironmentInfoAsync_WithDotnetEnvironmentAndDefaultConfiguration_UsesDotnetEnvironment()
+    [Theory]
+    [InlineData("DOTNET_ENVIRONMENT")]
+    [InlineData("ASPNETCORE_ENVIRONMENT")]
+    public async Task BuildEnvironmentInfoAsync_WithHostingEnvironmentVariable_IgnoresIt(string variable)
     {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var dotnetEnvironment = new EnvRestorer("DOTNET_ENVIRONMENT", "Development");
+        using var hostingEnvironment = new EnvRestorer(variable, "Production");
 
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
-        Assert.Equal("Development", info.EnvironmentName);
+        // These say how the app under test configures itself, not which deployment the suite
+        // targeted. A base image that sets one would otherwise stamp every CI run "Production"
+        // while developer runs said something else - a CI-vs-local split in a convincing costume.
+        Assert.Equal("Default", info.EnvironmentName);
         Assert.False(info.IsCIEnvironment);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_WithXpingEnvironmentVariableOnly_IgnoresIt()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var xpingEnvironment = new EnvRestorer("XPING_ENVIRONMENT", "Staging");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        // XPING_ENVIRONMENT reaches the detector through configuration, which is bound by
+        // AddXping. Reading the process variable here as well would give one value two paths,
+        // free to disagree - and they did, whenever a caller passed an instance in code.
+        Assert.Equal("Default", info.EnvironmentName);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_InCiWithConfiguredEnvironment_KeepsTheConfiguredName()
+    {
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration
+        {
+            Environment = "Staging",
+        });
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        // The setting a team made deliberately survives the runs they care about most. CI-ness is
+        // still recorded, just not by overwriting the name.
+        Assert.Equal("Staging", info.EnvironmentName);
+        Assert.True(info.IsCIEnvironment);
+        Assert.Equal("CI", info.CustomProperties["ExecutionContext"]);
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_InCiAndLocally_ReportsTheSameEnvironmentName()
+    {
+        string ciName;
+        using (new EnvRestorer("GITHUB_ACTIONS", "true"))
+        {
+            IEnvironmentDetector inCi = CreateDetector();
+            ciName = (await inCi.BuildEnvironmentInfoAsync()).EnvironmentName;
+        }
+
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        IEnvironmentDetector onLaptop = CreateDetector();
+        EnvironmentInfo local = await onLaptop.BuildEnvironmentInfoAsync();
+
+        // The point of the change: a laptop run and a build-agent run of the same suite are the
+        // same environment, so they share a scoring bucket instead of halving each other's evidence.
+        Assert.Equal(local.EnvironmentName, ciName);
     }
 
     [Fact]
@@ -55,7 +114,7 @@ public sealed class EnvironmentDetectorTests
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.False(info.IsCIEnvironment);
-        Assert.Equal("Local", info.EnvironmentName);
+        Assert.Equal("Default", info.EnvironmentName);
         Assert.Equal("Local", info.CustomProperties["ExecutionContext"]);
         Assert.Equal("true", info.CustomProperties["IsDeveloperMachine"]);
     }
@@ -135,7 +194,7 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
-    public async Task BuildEnvironmentInfoAsync_WithGitHubActions_CapturesNormalizedBranchAndConfiguredCiName()
+    public async Task BuildEnvironmentInfoAsync_WithGitHubActions_CapturesNormalizedBranchAndCiMetadata()
     {
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
         using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/refactor-environment");
@@ -146,15 +205,12 @@ public sealed class EnvironmentDetectorTests
         using var githubSha = new EnvRestorer("GITHUB_SHA", "abc123");
         using var githubActor = new EnvRestorer("GITHUB_ACTOR", "octocat");
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration
-        {
-            CiEnvironmentName = "BuildPipeline",
-        });
+        IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.True(info.IsCIEnvironment);
-        Assert.Equal("BuildPipeline", info.EnvironmentName);
+        Assert.Equal("Default", info.EnvironmentName);
         Assert.Equal("CI", info.CustomProperties["ExecutionContext"]);
         Assert.Equal("GitHubActions", info.CustomProperties["CIPlatform"]);
         Assert.Equal("feature/refactor-environment", info.CustomProperties["CI.Branch"]);

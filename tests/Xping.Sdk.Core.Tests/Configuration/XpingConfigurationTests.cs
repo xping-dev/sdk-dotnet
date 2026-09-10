@@ -21,9 +21,8 @@ public sealed class XpingConfigurationTests
         Assert.Null(config.ProjectId);
         Assert.Equal(100, config.BatchSize);
         Assert.Equal(TimeSpan.FromSeconds(30), config.FlushInterval);
-        Assert.Equal("Local", config.Environment);
-        Assert.True(config.AutoDetectCIEnvironment);
-        Assert.Equal("CI", config.CiEnvironmentName);
+        Assert.Null(config.Environment);
+        Assert.Equal("Default", config.ResolvedEnvironment);
         Assert.True(config.Enabled);
         Assert.True(config.CaptureStackTraces);
         Assert.True(config.EnableCompression);
@@ -397,6 +396,27 @@ public sealed class XpingConfigurationTests
         Assert.Contains("UploadTimeout must be greater than zero.", errors);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ResolvedEnvironment_WithNothingConfigured_ShouldBeDefault(string? configured)
+    {
+        var config = new XpingConfiguration { Environment = configured };
+
+        Assert.Equal("Default", config.ResolvedEnvironment);
+    }
+
+    [Fact]
+    public void ResolvedEnvironment_ShouldTrimSoOneEnvironmentDoesNotBecomeTwo()
+    {
+        var padded = new XpingConfiguration { Environment = "  Staging  " };
+        var plain = new XpingConfiguration { Environment = "Staging" };
+
+        Assert.Equal(plain.ResolvedEnvironment, padded.ResolvedEnvironment);
+        Assert.Equal("Staging", padded.ResolvedEnvironment);
+    }
+
     [Fact]
     public void ShouldAllowSettingAllProperties()
     {
@@ -409,7 +429,6 @@ public sealed class XpingConfigurationTests
             BatchSize = 50,
             FlushInterval = TimeSpan.FromMinutes(1),
             Environment = "Production",
-            AutoDetectCIEnvironment = false,
             Enabled = false,
             CaptureStackTraces = false,
             EnableCompression = false,
@@ -425,7 +444,6 @@ public sealed class XpingConfigurationTests
         Assert.Equal(50, config.BatchSize);
         Assert.Equal(TimeSpan.FromMinutes(1), config.FlushInterval);
         Assert.Equal("Production", config.Environment);
-        Assert.False(config.AutoDetectCIEnvironment);
         Assert.False(config.Enabled);
         Assert.False(config.CaptureStackTraces);
         Assert.False(config.EnableCompression);

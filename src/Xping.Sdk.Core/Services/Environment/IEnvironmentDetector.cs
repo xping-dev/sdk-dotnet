@@ -50,14 +50,18 @@ public interface IEnvironmentDetector
     IReadOnlyDictionary<string, string> CustomProperties { get; }
 
     /// <summary>
-    /// Gets the environment name based on configuration and auto-detection rules.
-    /// Priority:
-    ///   XPING_ENVIRONMENT > AutoDetectCI > explicitly configured Options.Environment >
-    ///   ASPNETCORE_ENVIRONMENT/DOTNET_ENVIRONMENT > "Local"
+    /// Gets the deployed environment the tests targeted: the configured
+    /// <c>Environment</c>, or <c>"Default"</c> when none was configured.
     /// </summary>
     /// <remarks>
-    /// The environment name is used in confidence calculations, which are performed both globally across all executions
-    /// and per-environment to enable behavioral comparison and trend analysis.
+    /// <para>
+    /// Nothing is inferred from the host. Every distinct environment name in the system traces to a
+    /// human decision, because confidence is scored per (test, environment) and each additional name
+    /// splits that test's history. A CI run and a local run of the same suite therefore share an
+    /// environment - what separates them is the trust placed in the revision under test, which
+    /// <see cref="IsCiEnvironment"/> and the <c>ExecutionContext</c> custom property record
+    /// diagnostically rather than by fragmenting the sample.
+    /// </para>
     /// </remarks>
     string EnvironmentName { get; }
 

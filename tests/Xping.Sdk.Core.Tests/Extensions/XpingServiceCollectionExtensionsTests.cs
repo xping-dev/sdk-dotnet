@@ -16,11 +16,65 @@ using Xping.Sdk.Core.Services.Upload;
 
 namespace Xping.Sdk.Core.Tests.Extensions;
 
-public sealed class XpingServiceCollectionExtensionsTests
+// Sets process-wide XPING_* variables, so it shares the collection with every other test that
+// reads or writes them. Left in its own collection, xUnit would run it in parallel with those and
+// each would see the other's variables.
+[Collection("Sequential")]
+public sealed class XpingServiceCollectionExtensionsTests : IDisposable
 {
+    private readonly List<KeyValuePair<string, string?>> _ambientXpingVariables = [];
+
+    /// <summary>
+    /// Removes every ambient <c>XPING_*</c> variable for the duration of one test, restoring them
+    /// in <see cref="Dispose"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These tests assert what a given configuration produces, which requires knowing every input.
+    /// The variables used to be one input this class could ignore, because the instance path did
+    /// not read them - it does now, deliberately, and that is what most of these tests cover.
+    /// </para>
+    /// <para>
+    /// The CI workflow sets <c>XPING_APIKEY</c> and <c>XPING_ENABLED</c> for the whole job, so the
+    /// SDK can record its own test runs. Without this, that key reaches every test on the instance
+    /// path: an assertion on a code-set key sees the workspace secret, and a suite that expects
+    /// local-only mode gets a real uploader. The variables are cleared rather than the workflow
+    /// changed, because the workflow is right - the leak is the tests assuming an empty
+    /// environment.
+    /// </para>
+    /// <para>
+    /// Cleared by prefix rather than from a list of names, so a binding added later is covered
+    /// without anyone remembering to come back here. A test that wants a variable sets it with
+    /// <see cref="WithEnv"/> afterwards and restores it first, the two nesting correctly.
+    /// </para>
+    /// </remarks>
+    public XpingServiceCollectionExtensionsTests()
+    {
+        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string name &&
+                name.StartsWith(EnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                _ambientXpingVariables.Add(
+                    new KeyValuePair<string, string?>(name, entry.Value as string));
+            }
+        }
+
+        foreach (var variable in _ambientXpingVariables)
+            System.Environment.SetEnvironmentVariable(variable.Key, null);
+    }
+
+    public void Dispose()
+    {
+        foreach (var variable in _ambientXpingVariables)
+            System.Environment.SetEnvironmentVariable(variable.Key, variable.Value);
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
+
+    private const string EnvironmentVariablePrefix = "XPING_";
 
     private static XpingConfiguration ValidConfig() => new()
     {
@@ -620,36 +674,6 @@ public sealed class XpingServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void BindEnvVars_AUTODETECTCIENVIRONMENT_ShouldParseBool()
-    {
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_AUTODETECTCIENVIRONMENT", "false");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.False(bound.AutoDetectCIEnvironment);
-    }
-
-    [Fact]
-    public void BindEnvVars_CIENVIRONMENTNAME_ShouldOverrideConfiguredValue()
-    {
-        using var _key = WithEnv("XPING_APIKEY", "k");
-        using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_CIENVIRONMENTNAME", "BuildPipeline");
-
-        var services = new ServiceCollection();
-        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
-        var bound = services.BuildServiceProvider()
-            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
-
-        Assert.Equal("BuildPipeline", bound.CiEnvironmentName);
-    }
-
-    [Fact]
     public void BindEnvVars_COLLECTLOCALGITAUTHOR_ShouldParseBool()
     {
         using var _key = WithEnv("XPING_APIKEY", "k");
@@ -662,5 +686,311 @@ public sealed class XpingServiceCollectionExtensionsTests
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.True(bound.CollectLocalGitAuthor);
+    }
+
+    // ---------------------------------------------------------------------------
+    // BindEnvironmentVariablesWithPrefix — applies on the instance path too
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_ShouldApplyEnvironmentVariableOverrides()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+        using var _batch = WithEnv("XPING_BATCHSIZE", "777");
+        using var _env = WithEnv("XPING_ENVIRONMENT", "env-staging");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration
+        {
+            ApiKey = "code-key",
+            Environment = "code-staging"
+        });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("env-key", bound.ApiKey);
+        Assert.Equal(777, bound.BatchSize);
+        Assert.Equal("env-staging", bound.Environment);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithNoEnvironmentVariables_ShouldKeepInstanceValues()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration
+        {
+            ApiKey = "code-key",
+            BatchSize = 42,
+            Environment = "code-staging"
+        });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("code-key", bound.ApiKey);
+        Assert.Equal(42, bound.BatchSize);
+        Assert.Equal("code-staging", bound.Environment);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_ShouldNotMutateTheCallersInstance()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var original = new XpingConfiguration { ApiKey = "code-key" };
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(original);
+        services.BuildServiceProvider().GetRequiredService<IOptions<XpingConfiguration>>();
+
+        Assert.Equal("code-key", original.ApiKey);
+    }
+
+    [Fact]
+    public void AddXping_WithInstanceAndEnvApiKey_ShouldResolveCloudModeAndRegisterHttpUploader()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var services = new ServiceCollection();
+
+        // No API key in code: the mode chosen at registration time has to come from the
+        // environment, or a Cloud run would be wired up with the local-only pipeline.
+        services.AddXping(new XpingConfiguration());
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.Equal(XpingMode.Cloud,
+            provider.GetRequiredService<IOptions<XpingConfiguration>>().Value.ResolveMode());
+        Assert.Equal("XpingUploader", provider.GetRequiredService<IXpingUploader>().GetType().Name);
+    }
+
+    [Fact]
+    public void AddXping_WithBuilderAndEnvApiKey_ShouldNotReportTheKeyAsMissing()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "env-key");
+
+        var services = new ServiceCollection();
+
+        // StrictMode forces Cloud, which requires an API key. Supplying it through the environment
+        // must satisfy that requirement rather than throw.
+        services.AddXping(b => b.WithStrictMode(true));
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("env-key", bound.ApiKey);
+    }
+
+    // ---------------------------------------------------------------------------
+    // BindEnvironmentVariablesWithPrefix — an empty variable is "not set"
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindEnvVars_WithEmptyENVIRONMENT_ShouldNotClearTheConfiguredEnvironment(string value)
+    {
+        // How a pipeline reaches this state: XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}
+        // expands to empty whenever the source variable is unset - the very pass-through the CI
+        // guide recommends.
+        using var _ = WithEnv("XPING_ENVIRONMENT", value);
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { Environment = "Staging" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+        Assert.Equal("Staging", bound.ResolvedEnvironment);
+    }
+
+    [Fact]
+    public void BindEnvVars_WithEmptyAPIKEY_ShouldNotDropTheRunToLocalOnly()
+    {
+        using var _ = WithEnv("XPING_APIKEY", "");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "configured-key" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        // Clearing the key here would silently stop the suite uploading, which is the loudest
+        // possible consequence for the quietest possible cause.
+        Assert.Equal("configured-key", bound.ApiKey);
+        Assert.Equal(XpingMode.Cloud, bound.ResolveMode());
+    }
+
+    [Fact]
+    public void BindEnvVars_ShouldTrimSoOneEnvironmentDoesNotBecomeTwo()
+    {
+        using var _ = WithEnv("XPING_ENVIRONMENT", "  Staging  ");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindStandardFormat_WithBlankApiKey_ShouldNotDropTheRunToLocalOnly(string value)
+    {
+        // Xping__ApiKey: ${{ secrets.XPING_APIKEY }} writes an empty string when the secret is
+        // missing. Left set-but-empty it resolves LocalOnly and the suite stops uploading silently.
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:ApiKey"] = value,
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Null(bound.ApiKey);
+        Assert.Equal(XpingMode.LocalOnly, bound.ResolveMode());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindStandardFormat_WithBlankEnvironment_ShouldResolveToDefault(string value)
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:Environment"] = value,
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Null(bound.Environment);
+        Assert.Equal("Default", bound.ResolvedEnvironment);
+    }
+
+    [Fact]
+    public void BindStandardFormat_ShouldTrimEnvironment()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:Environment"] = "  Staging  ",
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("Staging", bound.Environment);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithEnvVarMakingTheInstanceInvalid_ShouldValidate()
+    {
+        // The caller vouched for the instance they passed; the env-var override can put a value in
+        // it they never wrote. Without validation parity this reached IOptions.Value unchallenged
+        // and the run proceeded on a batch size of zero.
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+    }
+
+    [Fact]
+    public void AddXpingConfigurationFromInstance_WithValidInstance_ShouldNotThrowOnValidation()
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(100, bound.BatchSize);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Registration throws for the caller's mistakes, not the pipeline's
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void AddXping_WithEnvVarInvalidatingAValidInstance_ShouldNotThrowAtRegistration()
+    {
+        // A typo in a pipeline variable must not take the whole test run down: nothing catches an
+        // exception out of AddXping, so XpingContext.Initialize would abort the run outright.
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+
+        services.AddXping(new XpingConfiguration { ApiKey = "k" });
+
+        // It surfaces where the orchestrator can degrade on it instead.
+        var provider = services.BuildServiceProvider();
+        Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+    }
+
+    [Fact]
+    public void AddXping_WithBuilderAndEnvVarInvalidatingAValidConfig_ShouldNotThrowAtRegistration()
+    {
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+
+        services.AddXping(b => b.WithApiKey("k"));
+    }
+
+    [Fact]
+    public void AddXping_WithInstanceTheCallerMadeInvalid_ShouldStillThrowAtRegistration()
+    {
+        // The caller wrote this one, so it stays a programming error reported where they can see it.
+        var services = new ServiceCollection();
+
+        Assert.Throws<InvalidOperationException>(
+            () => services.AddXping(new XpingConfiguration { ApiKey = "k", BatchSize = 0 }));
+    }
+
+    [Fact]
+    public void OptionsValidation_ShouldNameTheSettingThatFailed()
+    {
+        using var _ = WithEnv("XPING_BATCHSIZE", "0");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+
+        // "A validation error has occurred." would leave the reader guessing which of a dozen
+        // XPING_* settings the pipeline got wrong.
+        Assert.Contains(ex.Failures, f => f.Contains("BatchSize", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BindEnvVars_PROJECTID_ShouldBeTrimmed()
+    {
+        using var _ = WithEnv("XPING_PROJECTID", "  my-proj  ");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("my-proj", bound.ProjectId);
     }
 }

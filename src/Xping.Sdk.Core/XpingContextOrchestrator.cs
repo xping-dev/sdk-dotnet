@@ -221,19 +221,19 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                     _logger.LogInformation(
                         "Initialized in local-only mode. SessionId: {SessionId}, Environment: {Environment}. " +
                         "{Reason} - results stay on this machine.",
-                        SessionId, configuration.Environment, reason);
+                        SessionId, _environmentDetector.EnvironmentName, reason);
                 }
                 else if (configuration.ProjectPin is { } projectPin)
                 {
                     _logger.LogInformation(
                         "Initialized. SessionId: {SessionId}, Project: {ProjectId} (pinned), Environment: {Environment}",
-                        SessionId, projectPin, configuration.Environment);
+                        SessionId, projectPin, _environmentDetector.EnvironmentName);
                 }
                 else
                 {
                     _logger.LogInformation(
                         "Initialized. SessionId: {SessionId}, Environment: {Environment}",
-                        SessionId, configuration.Environment);
+                        SessionId, _environmentDetector.EnvironmentName);
                 }
             }
             else

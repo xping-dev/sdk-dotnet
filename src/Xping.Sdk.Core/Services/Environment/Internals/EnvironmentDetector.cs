@@ -26,11 +26,15 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private readonly Lazy<string> _operatingSystem;
     private readonly Lazy<string> _runtimeVersion;
     private readonly Lazy<string> _framework;
-    private readonly Lazy<string> _environmentName;
     private readonly Lazy<CIPlatform?> _ciPlatform;
     private readonly Lazy<bool> _isContainer;
     private readonly Lazy<TimeZoneInfo?> _localTimeZone;
     private readonly Lazy<Dictionary<string, string>> _customProperties;
+
+    // Not lazy: reading it is a null check on a string the configuration already holds. The
+    // laziness the other fields need exists to defer probing the host - environment variables, the
+    // file system, the time zone database - and there is nothing here left to defer.
+    private readonly string _environmentName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
@@ -44,7 +48,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         _operatingSystem = new Lazy<string>(DetectOperatingSystem);
         _runtimeVersion = new Lazy<string>(DetectRuntimeVersion);
         _framework = new Lazy<string>(() => DetectFramework(_operatingSystem.Value));
-        _environmentName = new Lazy<string>(() => DetectEnvironmentName(_configuration));
+        _environmentName = _configuration.ResolvedEnvironment;
         _ciPlatform = new Lazy<CIPlatform?>(DetectCiPlatform);
         _isContainer = new Lazy<bool>(DetectIsContainer);
         _localTimeZone = new Lazy<TimeZoneInfo?>(DetectLocalTimeZone);
@@ -65,7 +69,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     string IEnvironmentDetector.Framework => _framework.Value;
 
     /// <inheritdoc/>
-    string IEnvironmentDetector.EnvironmentName => _environmentName.Value;
+    string IEnvironmentDetector.EnvironmentName => _environmentName;
 
     /// <inheritdoc/>
     bool IEnvironmentDetector.IsCiEnvironment => _ciPlatform.Value.HasValue;
@@ -93,7 +97,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             .WithOperatingSystem(_operatingSystem.Value)
             .WithRuntimeVersion(_runtimeVersion.Value)
             .WithFramework(_framework.Value)
-            .WithEnvironmentName(_environmentName.Value)
+            .WithEnvironmentName(_environmentName)
             .WithIsCIEnvironment(_ciPlatform.Value.HasValue)
             .WithLocalTimeZone(zone?.GetUtcOffset(DateTime.UtcNow), zone?.Id)
             .AddCustomProperties(_customProperties.Value)
@@ -330,46 +334,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         return null;
     }
 
-    private string DetectEnvironmentName(XpingConfiguration configuration)
-    {
-        // Priority 1: XPING_ENVIRONMENT - explicit Xping environment variable (the highest priority)
-        string? xpingEnv = GetEnvironmentVariable("XPING_ENVIRONMENT");
-        if (!string.IsNullOrWhiteSpace(xpingEnv))
-        {
-            return xpingEnv!;
-        }
-
-        // Priority 2: Auto-detect CI if enabled
-        if (configuration.AutoDetectCIEnvironment && _ciPlatform.Value.HasValue)
-        {
-            return string.IsNullOrWhiteSpace(configuration.CiEnvironmentName)
-                ? XpingConfiguration.DefaultCiEnvironment
-                : configuration.CiEnvironmentName;
-        }
-
-        // Priority 3: Use explicitly configured environment property
-        if (configuration.HasExplicitEnvironment)
-        {
-            return configuration.Environment;
-        }
-
-        // Priority 4: Framework environment variables (ASPNETCORE_ENVIRONMENT, DOTNET_ENVIRONMENT)
-        string? aspNetCoreEnv = GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        if (!string.IsNullOrWhiteSpace(aspNetCoreEnv))
-        {
-            return aspNetCoreEnv!;
-        }
-
-        string? dotnetEnv = GetEnvironmentVariable("DOTNET_ENVIRONMENT");
-        if (!string.IsNullOrWhiteSpace(dotnetEnv))
-        {
-            return dotnetEnv!;
-        }
-
-        // Priority 5: Default to configured/default local environment
-        return configuration.Environment;
-    }
-
     private bool DetectIsContainer()
     {
         try
@@ -412,9 +376,11 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     {
         Dictionary<string, string> properties = new()
         {
-            ["ExecutionContext"] = ciPlatform.HasValue
-                ? XpingConfiguration.DefaultCiEnvironment
-                : XpingConfiguration.DefaultEnvironment
+            // Where the run happened, which is a different question from the environment name and
+            // is why these are literals rather than XpingConfiguration.DefaultEnvironment. The
+            // environment name no longer carries the CI-vs-local distinction; this property and
+            // IsCIEnvironment do, diagnostically.
+            ["ExecutionContext"] = ciPlatform.HasValue ? "CI" : "Local"
         };
 
         if (!ciPlatform.HasValue && !isContainer)

@@ -34,8 +34,15 @@
         <EmbedUntrackedSources Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</EmbedUntrackedSources>
     </PropertyGroup>
 
-    <!-- Source Link support for debugging (only in CI/CD) -->
-    <ItemGroup Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
-    </ItemGroup>
+    <!--
+        Source Link needs no PackageReference. The .NET 8+ SDK includes it, detects GitHub from the
+        origin remote, and is driven by the PublishRepositoryUrl and EmbedUntrackedSources
+        properties above, which stay conditioned on CI so local builds do not pay for it.
+
+        The explicit Microsoft.SourceLink.GitHub 8.0.0 reference that used to live here dragged in
+        Microsoft.Build.Tasks.Git 8.0.0, and once that package drew a moderate-severity advisory
+        NuGet audit raised NU1902 - which TreatWarningsAsErrors turns into a failed restore. The
+        package has no fixed release to move to: 8.0.0 is the last of its line, because the whole
+        thing moved into the SDK. Removing it is the upgrade.
+    -->
 </Project>

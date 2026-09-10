@@ -42,7 +42,7 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
 - **Operating System**: e.g., "Windows 11", "macOS 14.0", "Ubuntu 22.04"
 - **Runtime Version**: .NET version (e.g., ".NET 8.0.0")
 - **Test Framework**: NUnit, xUnit, MSTest with version numbers
-- **Environment Name**: "Local", "CI", "Staging", "Production"
+- **Environment Name**: the deployed environment tested - "Default" when none was configured, otherwise "Staging", "Production" and so on
 - **CI/CD Context**: Whether running in continuous integration
 - **Time Zone and UTC Offset**: The machine's clock at the start of the run, which is what places a
   failure at a local time of day rather than only at a UTC instant
