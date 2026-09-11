@@ -366,7 +366,9 @@ the page rather than inferred.
 --filter` runs in a row is enough — no `slower` or `unstable duration` finding can be raised about a
 test those runs did not select, however clear the regression is in the full runs before them. The
 tests are counted in `summary.notMeasured.DurationRegression.awaitingRuns` and
-`.DurationUnstable.awaitingRuns`.
+`.DurationUnstable.awaitingRuns`, less any that had already stopped running before the filtered runs
+began: those are reported once as `stopped running` rather than a second time as a measurement that
+could not be taken.
 
 A run of the whole suite makes the test eligible again; it does not on its own produce a finding.
 The ordinary gates still apply after it — `DurationRegression` wants 7 and 3 comparable runs across
@@ -381,7 +383,9 @@ because a filter never selected the test, nothing said so at all: `stopped runni
 aside precisely so it makes no claim about them, so the skip deferred to a kind that was also
 silent, and the summary went on reporting that duration had read every test it was offered. An
 absence from runs that never asked is a measurement waiting on a full run, which is what
-`awaitingRuns` means.
+`awaitingRuns` means. The two cases are told apart per test, against the most recent runs that did
+cover the suite, so a test those runs asked about and did not find stays with `stopped running`
+alone.
 
 **Not fixed by widening the slice**: the comparison would then be against runs a filter chose, whose
 composition is not a machine-speed reading of the same suite. The honest answer is to name the

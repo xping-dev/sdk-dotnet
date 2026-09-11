@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.Immutable;
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
@@ -407,14 +408,19 @@ internal sealed class DurationProvider : IFindingProvider
             context.Window.CurrentSlice.Select(s => s.SessionId));
 
         // Whether the "now" side of the comparison is made entirely of runs that covered part of the
-        // suite. Computed once for the window rather than per test, because it is a property of the
-        // slice: a `dotnet test --filter` loop puts nothing but filtered runs at the head of the
-        // store, and then every unselected test has an empty current slice for a reason that has
-        // nothing to do with the test.
+        // suite, which is what a `dotnet test --filter` loop puts at the head of a local store.
         bool currentSliceIsAllPartial =
             context.Window.CurrentSlice.Count > 0 &&
             context.Window.CurrentSlice.All(
                 session => context.SessionViewFor(session.SessionId)?.IsPartial == true);
+
+        // The tests the most recent runs that covered the suite did run. Only needed to tell a test
+        // a filter passed over from one that has genuinely gone, so it is derived only where that
+        // question arises — and derived from the same re-split `Vanished` reads, so the two cannot
+        // disagree about which runs were in a position to ask.
+        IReadOnlySet<string> askedRecently = currentSliceIsAllPartial
+            ? AnalysisWindowSlices.From(context).Current
+            : ImmutableHashSet<string>.Empty;
 
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
@@ -465,16 +471,23 @@ internal sealed class DurationProvider : IFindingProvider
             // questions whose answers are missing rather than questions that have been answered
             // elsewhere.
             //
-            // Unless nothing in the current slice asked about the test. Then there is no
-            // disappearance to state twice: `Vanished` sets those runs aside precisely so it does
-            // not claim one, so deferring to it charges the skip to a kind that is also silent and
-            // the summary ends up asserting duration read every test it was offered. An absence
-            // from runs that never selected the test is a measurement waiting on a full run, which
-            // is what `awaitingRuns` means, and both kinds want it — the comparison and the
-            // dispersion are equally starved by an empty "now".
+            // Unless no run that asked about this test is in the slice at all. Then there is no
+            // disappearance to state twice: `Vanished` sets filtered runs aside precisely so it
+            // does not claim one, so deferring to it charges the skip to a kind that is also
+            // silent, and the summary ends up asserting duration read every test it was offered.
+            // An absence from runs that never selected the test is a measurement waiting on a run
+            // of the suite, which is what `awaitingRuns` means, and both kinds want it — the
+            // comparison and the dispersion are equally starved by an empty "now".
+            //
+            // Asked per test and not per slice. A slice of nothing but filtered runs holds two
+            // kinds of absent test at once: the ones a filter passed over, which are still running
+            // whenever the suite is run in full, and the ones that have actually gone. Only the
+            // first is waiting on anything. Charging both would put every vanished test in this
+            // tally *and* in a `Vanished` finding — the same disappearance under two names, which
+            // is the thing this skip exists to avoid.
             if (current.Count == 0)
             {
-                if (currentSliceIsAllPartial)
+                if (askedRecently.Contains(fingerprint))
                 {
                     regressionNotMeasured += new NotMeasuredCount(1, 0);
                     unstableNotMeasured += new NotMeasuredCount(1, 0);

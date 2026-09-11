@@ -159,8 +159,13 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal(17, summary.GetProperty("tests").GetInt32());
         Assert.Equal(0, summary.GetProperty("excludedLowEvidence").GetInt32());
 
+        // Fifteen, not sixteen. The suite is `Selected`, `Removed` and fifteen `Stable` tests:
+        // `Selected` ran in the filtered runs and needs nothing, the fifteen are waiting on a run
+        // of the suite, and `Removed` is not here at all — it has genuinely gone, and is reported
+        // once as `Vanished` below rather than a second time as a measurement duration could not
+        // take.
         Assert.Equal(
-            16,
+            15,
             summary.GetProperty("notMeasured").GetProperty("DurationRegression")
                    .GetProperty("awaitingRuns").GetInt32());
 
@@ -168,6 +173,7 @@ public sealed class ReportEnvelopeTests : IDisposable
             .Single(f => f.GetProperty("kind").GetString() == "Vanished");
 
         Assert.Equal("excludesPartialRuns", vanished.GetProperty("population").GetString());
+        Assert.Equal("Removed", vanished.GetProperty("subject").GetProperty("displayName").GetString());
     }
 
     /// <summary>

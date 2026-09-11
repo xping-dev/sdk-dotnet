@@ -1510,6 +1510,41 @@ public sealed class DurationProviderTests
     }
 
     /// <summary>
+    /// A test that had already gone before the filtered runs is not waiting on anything.
+    /// </summary>
+    /// <remarks>
+    /// A current slice of nothing but filtered runs holds two kinds of absent test at once: the
+    /// ones a filter passed over, which still run whenever the suite is run in full, and the ones
+    /// that have actually stopped. Only the first is waiting on a run. Charging both would put
+    /// every vanished test in this tally <i>and</i> in a `Vanished` finding — the same
+    /// disappearance under two names, which is what the skip exists to avoid — so the question is
+    /// asked per test, against the runs that covered the suite, and not per slice.
+    /// </remarks>
+    [Fact]
+    public void ATestThatStoppedBeforeTheFilteredRunsIsNotCountedAsAwaitingThem()
+    {
+        // The subject stops after ordinal 5, three covering runs before the filtered tail begins,
+        // so the most recent runs that covered the suite did ask about it and did not find it.
+        AnalysisContext context = Build(
+            sessions: 12,
+            subjectMs: _ => 200,
+            subjectRuns: ordinal => ordinal < 6,
+            companions: ordinal => ordinal < 9 ? 12 : 1);
+
+        Assert.Equal(3, context.PartialSessionCount);
+        Assert.All(context.Window.CurrentSlice, session =>
+            Assert.True(context.SessionViewFor(session.SessionId)!.IsPartial));
+
+        Assert.Empty(Analyze(context));
+
+        // Eleven, not twelve: the companions the filtered runs did not select are waiting on a run
+        // of the suite, and the subject — which the covering runs did ask about — is not among
+        // them.
+        Assert.Equal(11, NotMeasured(context, FindingKind.DurationRegression).AwaitingRuns);
+        Assert.Equal(11, NotMeasured(context, FindingKind.DurationUnstable).AwaitingRuns);
+    }
+
+    /// <summary>
     /// One run of the suite in the current slice and the skip is a disappearance again.
     /// </summary>
     /// <remarks>

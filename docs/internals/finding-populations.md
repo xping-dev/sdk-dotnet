@@ -222,14 +222,23 @@ A test absent from the recent slice is passed over by `DurationProvider` for the
 matrix already gives — its absence belongs to `Vanished` — and counting it here would state one
 disappearance twice, in a line whose whole purpose is to name questions whose answers are missing.
 
-**Unless nothing in the recent slice asked about it.** When every run in the current slice covered
-part of the suite, there is no disappearance to state twice: `Vanished` sets those runs aside
-precisely so it makes no claim about them, so deferring to it charged the test to a kind that is
-also silent, and the summary went on reporting that duration had read every test it was offered — a
-local `dotnet test --filter` loop reaches this the moment three filtered runs land in a row. Both
+**Unless no run that asked about it is in the slice at all.** When every run in the current slice
+covered part of the suite, there is no disappearance to state twice: `Vanished` sets those runs
+aside precisely so it makes no claim about them, so deferring to it charged the test to a kind that
+is also silent, and the summary went on reporting that duration had read every test it was offered —
+a local `dotnet test --filter` loop reaches this the moment three filtered runs land in a row. Both
 duration kinds then count the test as `awaitingRuns`, which is what it is: a measurement waiting on
-a run of the whole suite. The predicate is the slice, not the window — one full run in the current
-slice did ask, so a test missing from it has genuinely stopped and belongs to `Vanished` again.
+a run of the whole suite.
+
+**Asked per test, not per slice.** A slice of nothing but filtered runs holds two kinds of absent
+test at once — the ones a filter passed over, which still run whenever the suite is run in full, and
+the ones that have actually gone — and only the first is waiting on anything. So the question is put
+to the runs that *did* cover the suite: a test the most recent of those ran is waiting, and a test
+they asked about and did not find has genuinely stopped and belongs to `Vanished` alone. Charging
+the slice as a whole would put every vanished test in this tally *and* in a `Vanished` finding,
+which is the same disappearance under two names and the thing the skip exists to avoid. The set is
+taken from `AnalysisWindowSlices.From`, the same re-split `Vanished` reads, so the two cannot
+disagree about which runs were in a position to ask.
 
 ### Why it is per kind and never a total
 
