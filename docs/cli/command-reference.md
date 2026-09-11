@@ -102,7 +102,7 @@ MED   slower           CheckoutFlow_Completes
 
 LOW   stopped running  LegacyImport.Roundtrip
       ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | all runs | f_1d77e3f5 | .../ImportTests.cs:41
+      evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -110,7 +110,7 @@ counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 ````
 
-The `-env-cluster`, `-env` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
+The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
 The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
 
@@ -120,17 +120,20 @@ Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted
 
 **The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence moderate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
 
-The marker between the evidence level and the finding id — `all runs`, `-env` or `-env-cluster` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
+The marker between the evidence level and the finding id — `all runs`, `-env`, `-env-cluster` or `-partial` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
 
 | Marker | The rate is over |
 |---|---|
 | `all runs` | Every execution of the test in the window |
 | `-env` | Every execution **except** those from environmental runs |
 | `-env-cluster` | Every execution except those from environmental runs, and except failures already reported as a shared cause |
+| `-partial` | Every run that covered the suite; runs that covered only part of it are set aside |
 
 **An environmental run** is a single run in which at least 10 tests failed *and* they were at least 30% of the tests it ran. Both bounds matter: the rate alone would condemn a five-test suite with two failures, and the count alone would condemn a thousand-test suite with ten unrelated ones. When that many tests fail at once they did not all break simultaneously — something underneath them did — so the run is set aside rather than counted against each test individually.
 
 **A clustered failure** is one whose signature is shared by at least three tests *in a single run*, which the report already publishes once as its own `shared failure` or `broken fixture` finding. Two tests failing alike is a coincidence; three at once is a cause. Counting it a second time against each test that was caught by it is what turns one cause into forty findings.
+
+**A partial run** is one whose distinct tests are under half those of the largest run in the window — what a `dotnet test --filter` produces. Only `-partial` sets one aside, and only one kind carries `-partial`, because the asymmetry is real: a filtered run's *outcomes* are as true as any other run's, so a kind reading outcomes counts it in full or throws away real evidence, while its *silences* mean nothing, because it did not fail to see the tests it excluded — it never looked for them. `stopped running` is the only kind that reasons from absence, so it is the only one for which the distinction changes a denominator.
 
 **Why it is on the page.** The list is ranked, so it invites you to compare rates — and the comparison is only valid where the markers agree. The arithmetic is not small. A test that ran 20 times, was caught by a shared cause 10 times and failed twice on its own reports:
 
@@ -144,16 +147,24 @@ Not `2 of 22 (9.1%)`. Both are defensible and they answer different questions �
 
 ```bash
 xping report --all --format json \
-  | jq '.findings[] | select(.population != "allExecutions")
+  | jq '.findings[] | select(.population | startswith("excludesEnvironmental"))
         | {kind, population, evidence: (.evidence | {
             executionsConsidered, discountedEnvironmental, discountedClustered })}'
 ```
 
 Those three add up to the number of times the test ran in the window, which is the figure `executionsConsidered` is *not*. `discountedEnvironmental` and `discountedClustered` are published apart because they are set aside for unrelated reasons, and a reader chasing a surprising rate needs to know which one narrowed it.
 
-The filter is there because an `all runs` finding carries no discount counts at all — there is nothing for it to report having set aside. Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, and `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on.
+The filter names the two execution populations rather than excluding `allExecutions`, because those are the findings that carry these three fields. An `all runs` finding has no discount counts at all — there is nothing for it to report having set aside — and `excludesPartialRuns` discounts runs rather than executions, so projecting it here would return a row of nulls. Read that one with its own projection:
 
-Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them because an environmental run is still a run the test either was or was not in.
+```bash
+xping report --all --format json \
+  | jq '.findings[] | select(.population == "excludesPartialRuns")
+        | {kind, population, evidence: (.evidence | {
+            baselineSessions, baselineSessionCount, currentSessionCount,
+            partialSessionsSetAside })}'
+``` Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
+
+Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them too, because an environmental run is still a run the test either was or was not in. What `stopped running` does set aside is the runs that covered part of the suite, which is why it is the one kind marked `-partial` rather than `all runs`.
 
 ### Finding kinds
 
@@ -265,10 +276,11 @@ It also asks only the runs that were in a position to answer. A run under a `dot
 did not fail to see the tests it excluded; it never looked for them, and counting its silence makes
 every unselected test look deleted. A run whose distinct tests are under half those of the largest
 run in the window is therefore set aside, the rest are re-split into their own earlier and current
-runs, and the finding's denominators count only those — the sentence says `full runs` and a
-`set aside` metric gives the number left out. The summary line reports how many runs covered part of
-the suite. Only this kind sets them aside; every other kind still counts them in full, because a
-filtered run's outcomes are as true as any other run's. The cost is that a deletion removing more
+runs, and the finding's denominators count only those — the sentence says `full runs`, a
+`set aside` metric gives the number left out, and the finding is marked `-partial` rather than
+`all runs` so a rate from it is not compared with one taken over every run. The summary line reports
+how many of the window's runs covered part of the suite. Only this kind sets them aside; every other
+kind still counts them in full, because a filtered run's outcomes are as true as any other run's. The cost is that a deletion removing more
 than half a suite is indistinguishable from a filter and is not reported — see
 [known limitations](../known-limitations.md).
 
@@ -358,18 +370,19 @@ For scripts and agents. Emits a versioned envelope and nothing else — no rende
 xping report --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental` or `excludesEnvironmentalAndClustered` and says which executions the counts inside `evidence` were taken over, and `evidenceSessions`, the number `evidenceLevel` was banded from.
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
 
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
 question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
 ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
-means "no finding was raised" rather than "checked and fine":
+means "no finding was raised" rather than "checked and fine" — a test first seen in a run that
+covered only part of the suite is inside it too, on one run of history:
 
 ```json
 {
-  "schemaVersion": "1.17",
+  "schemaVersion": "1.18",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

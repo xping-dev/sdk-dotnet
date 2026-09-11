@@ -354,8 +354,42 @@ test on every filtered run for as long as it stays in the window.
 runs are mostly filtered can fall below the eight runs the section above requires and report nothing
 at all. Only the kinds that read absence set these runs aside — every other kind still counts them in
 full, because a filtered run's *outcomes* are as true as any other run's and it is only its silences
-that mean nothing. The summary line says how many runs covered part of the suite, so the distinction
-is visible rather than inferred.
+that mean nothing. The summary line says how many of the window's runs covered part of the suite,
+and the finding itself carries the `-partial` population marker, so the distinction is visible on
+the page rather than inferred.
+
+---
+
+### The Duration Kinds Cannot Measure A Test When No Recent Run Has Selected It, And Say So
+
+**Impact**: while every run in the current slice covered part of the suite — three `dotnet test
+--filter` runs in a row is enough — no `slower` or `unstable duration` finding can be raised about a
+test those runs did not select, however clear the regression is in the full runs before them. The
+tests are counted in `summary.notMeasured.DurationRegression.awaitingRuns` and
+`.DurationUnstable.awaitingRuns`, less any that had already stopped running before the filtered runs
+began: those are reported once as `stopped running` rather than a second time as a measurement that
+could not be taken.
+
+A run of the whole suite makes the test eligible again; it does not on its own produce a finding.
+The ordinary gates still apply after it — `DurationRegression` wants 7 and 3 comparable runs across
+its two arms, `DurationUnstable` wants more than one normalised reading — so a test can clear the
+partial-slice case and stay in `awaitingRuns` for the usual reason, which is that there is not yet
+enough of it to compare.
+
+**Reason**: both kinds compare a recent slice against a baseline, so a test with nothing in the
+recent slice has no "now" to compare. Where that happened because the test stopped running, the
+report says so once, as `stopped running`, rather than twice under two names. Where it happened
+because a filter never selected the test, nothing said so at all: `stopped running` sets those runs
+aside precisely so it makes no claim about them, so the skip deferred to a kind that was also
+silent, and the summary went on reporting that duration had read every test it was offered. An
+absence from runs that never asked is a measurement waiting on a full run, which is what
+`awaitingRuns` means. The two cases are told apart per test, against the most recent runs that did
+cover the suite, so a test those runs asked about and did not find stays with `stopped running`
+alone.
+
+**Not fixed by widening the slice**: the comparison would then be against runs a filter chose, whose
+composition is not a machine-speed reading of the same suite. The honest answer is to name the
+tests that could not be measured and wait for a run of the suite.
 
 ### `RetryExhausted` Is Observed, And The Declared Retry Limit Is Not Interpreted
 

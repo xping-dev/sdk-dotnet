@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Collections.Immutable;
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
@@ -290,6 +291,15 @@ internal sealed record DurationUnstableEvidence(
 /// much as its speed, so runs executed under different filters normalise against different
 /// populations. Nothing here can distinguish the two, and no claim is made that it does.
 /// </para>
+/// <para>
+/// That anchoring is deliberately <i>not</i> expressed through
+/// <see cref="Indexes.SessionView.IsPartial"/>, which is how the report classifies a run elsewhere.
+/// The classification is window-relative and decided against a threshold; this is per test and
+/// needs neither, because "the runs this test appeared in" is exactly the set a filtered run either
+/// joins or does not. Reading the flag instead would also throw away a perfectly good speed reading
+/// from a filtered run for the test that <i>was</i> selected in it. The flag is read once here, for
+/// the one question it answers better — whether the current slice asked about the test at all.
+/// </para>
 /// </remarks>
 internal sealed class DurationProvider : IFindingProvider
 {
@@ -397,6 +407,21 @@ internal sealed class DurationProvider : IFindingProvider
         var currentSessions = new HashSet<Guid>(
             context.Window.CurrentSlice.Select(s => s.SessionId));
 
+        // Whether the "now" side of the comparison is made entirely of runs that covered part of the
+        // suite, which is what a `dotnet test --filter` loop puts at the head of a local store.
+        bool currentSliceIsAllPartial =
+            context.Window.CurrentSlice.Count > 0 &&
+            context.Window.CurrentSlice.All(
+                session => context.SessionViewFor(session.SessionId)?.IsPartial == true);
+
+        // The tests the most recent runs that covered the suite did run. Only needed to tell a test
+        // a filter passed over from one that has genuinely gone, so it is derived only where that
+        // question arises — and derived from the same re-split `Vanished` reads, so the two cannot
+        // disagree about which runs were in a position to ask.
+        IReadOnlySet<string> askedRecently = currentSliceIsAllPartial
+            ? AnalysisWindowSlices.From(context).Current
+            : ImmutableHashSet<string>.Empty;
+
         foreach (string fingerprint in context.Tests.Fingerprints)
         {
             // Counted against neither kind. The fingerprint and the reference come out of the same
@@ -445,8 +470,31 @@ internal sealed class DurationProvider : IFindingProvider
             // disappearance a second time in the summary, in a line whose whole purpose is to name
             // questions whose answers are missing rather than questions that have been answered
             // elsewhere.
+            //
+            // Unless no run that asked about this test is in the slice at all. Then there is no
+            // disappearance to state twice: `Vanished` sets filtered runs aside precisely so it
+            // does not claim one, so deferring to it charges the skip to a kind that is also
+            // silent, and the summary ends up asserting duration read every test it was offered.
+            // An absence from runs that never selected the test is a measurement waiting on a run
+            // of the suite, which is what `awaitingRuns` means, and both kinds want it — the
+            // comparison and the dispersion are equally starved by an empty "now".
+            //
+            // Asked per test and not per slice. A slice of nothing but filtered runs holds two
+            // kinds of absent test at once: the ones a filter passed over, which are still running
+            // whenever the suite is run in full, and the ones that have actually gone. Only the
+            // first is waiting on anything. Charging both would put every vanished test in this
+            // tally *and* in a `Vanished` finding — the same disappearance under two names, which
+            // is the thing this skip exists to avoid.
             if (current.Count == 0)
+            {
+                if (askedRecently.Contains(fingerprint))
+                {
+                    regressionNotMeasured += new NotMeasuredCount(1, 0);
+                    unstableNotMeasured += new NotMeasuredCount(1, 0);
+                }
+
                 continue;
+            }
 
             // The scale this test's own figures are expressed in. Per test rather than per window,
             // because a run median is only a machine-speed reading among runs that ran the same

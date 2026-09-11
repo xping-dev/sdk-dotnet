@@ -225,10 +225,19 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         // Worded as what the window holds, not as what was done about it. Only the kinds that read
         // absence set these aside; every other kind still counts them in full, and "discounted"
         // beside the environmental line would claim a symmetry that does not exist.
+        //
+        // Against the window's own run count, because that is the number the header states and the
+        // one this caveat qualifies. "3 runs covered part of the suite" says a filtered run
+        // happened; "3 of 20" says what fraction of the window it is, which is the only thing a
+        // reader can do anything with.
+        //
+        // Deliberately not "the denominator every rate is read against": the rates below are not
+        // all taken over the same thing, which is what each finding's population marker exists to
+        // say. This line scopes the window; the marker scopes the finding.
         if (summary.PartialSessions > 0)
             caveats.Add(
-                $"{summary.PartialSessions} {RunWord(summary.PartialSessions)} " +
-                "covered part of the suite");
+                $"{summary.PartialSessions} of {envelope.Window.SessionCount} " +
+                $"{RunWord(envelope.Window.SessionCount)} covered part of the suite");
 
         if (summary.FailedProviders.Count > 0)
             caveats.Add($"metrics unavailable: {string.Join(", ", summary.FailedProviders)}");

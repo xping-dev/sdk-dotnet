@@ -1474,6 +1474,116 @@ public sealed class DurationProviderTests
         Build(sessions: 10, subjectMs: o => o < 4 ? 400 : o < 7 ? 200 : 100);
 
     /// <summary>
+    /// A "now" made only of runs that covered part of the suite is a measurement waiting on a full
+    /// run, not a disappearance.
+    /// </summary>
+    /// <remarks>
+    /// The empty-current-slice skip defers to <c>Vanished</c>, on the grounds that the absence is
+    /// already being reported under another name. That holds for a test that stopped running and
+    /// not for one a <c>dotnet test --filter</c> never selected: <c>Vanished</c> sets those runs
+    /// aside precisely so it makes no claim about them, so the skip charged the test to a kind that
+    /// is also silent and the summary went on asserting duration had read every test it was
+    /// offered. A local inner loop reaches this the moment three filtered runs land in a row.
+    /// </remarks>
+    [Fact]
+    public void ACurrentSliceOfNothingButPartialRunsIsAwaitingRunsRatherThanASilentSkip()
+    {
+        AnalysisContext context = Build(
+            sessions: 12,
+            subjectMs: _ => 200,
+            subjectRuns: ordinal => ordinal < 9,
+            companions: ordinal => ordinal < 9 ? 12 : 1);
+
+        // The premise: the three newest runs really are the partial ones, so the slice under test
+        // is the one the remark describes rather than an ordinary short window.
+        Assert.Equal(3, context.PartialSessionCount);
+        Assert.All(context.Window.CurrentSlice, session =>
+            Assert.True(context.SessionViewFor(session.SessionId)!.IsPartial));
+
+        Assert.Empty(Analyze(context));
+
+        // Both kinds, because an empty "now" starves the comparison and the dispersion alike. The
+        // subject and the eleven companions the filtered runs did not select are all waiting on the
+        // same thing.
+        Assert.Equal(12, NotMeasured(context, FindingKind.DurationRegression).AwaitingRuns);
+        Assert.Equal(12, NotMeasured(context, FindingKind.DurationUnstable).AwaitingRuns);
+    }
+
+    /// <summary>
+    /// A test that had already gone before the filtered runs is not waiting on anything.
+    /// </summary>
+    /// <remarks>
+    /// A current slice of nothing but filtered runs holds two kinds of absent test at once: the
+    /// ones a filter passed over, which still run whenever the suite is run in full, and the ones
+    /// that have actually stopped. Only the first is waiting on a run. Charging both would put
+    /// every vanished test in this tally <i>and</i> in a `Vanished` finding — the same
+    /// disappearance under two names, which is what the skip exists to avoid — so the question is
+    /// asked per test, against the runs that covered the suite, and not per slice.
+    /// </remarks>
+    [Fact]
+    public void ATestThatStoppedBeforeTheFilteredRunsIsNotCountedAsAwaitingThem()
+    {
+        // The subject stops after ordinal 5, three covering runs before the filtered tail begins,
+        // so the most recent runs that covered the suite did ask about it and did not find it.
+        AnalysisContext context = Build(
+            sessions: 12,
+            subjectMs: _ => 200,
+            subjectRuns: ordinal => ordinal < 6,
+            companions: ordinal => ordinal < 9 ? 12 : 1);
+
+        Assert.Equal(3, context.PartialSessionCount);
+        Assert.All(context.Window.CurrentSlice, session =>
+            Assert.True(context.SessionViewFor(session.SessionId)!.IsPartial));
+
+        Assert.Empty(Analyze(context));
+
+        // Eleven, not twelve: the companions the filtered runs did not select are waiting on a run
+        // of the suite, and the subject — which the covering runs did ask about — is not among
+        // them.
+        Assert.Equal(11, NotMeasured(context, FindingKind.DurationRegression).AwaitingRuns);
+        Assert.Equal(11, NotMeasured(context, FindingKind.DurationUnstable).AwaitingRuns);
+    }
+
+    /// <summary>
+    /// One run of the suite in the current slice and the skip is a disappearance again.
+    /// </summary>
+    /// <remarks>
+    /// The discriminating fact is whether anything in the "now" asked about the test, not whether
+    /// any filtered run is in the window at all. A slice holding one full run asked, so a test
+    /// missing from it has genuinely stopped and belongs to <c>Vanished</c> — charging it here as
+    /// well would state one disappearance twice under two names.
+    /// </remarks>
+    [Fact]
+    public void ASliceHoldingOneFullRunStillChargesAVanishedTestToNeitherKind()
+    {
+        AnalysisContext context = Build(
+            sessions: 12,
+            subjectMs: _ => 200,
+            subjectRuns: ordinal => ordinal < 9,
+            companions: ordinal => ordinal is >= 9 and <= 10 ? 1 : 12);
+
+        Assert.Equal(2, context.PartialSessionCount);
+        Assert.Contains(
+            context.Window.CurrentSlice,
+            session => context.SessionViewFor(session.SessionId)!.IsPartial == false);
+
+        Assert.Empty(Analyze(context));
+
+        // Eleven rather than the twelve above, and the one missing is the subject. The eleven
+        // companions are charged by the ordinary gate — they ran in the slice and need more runs of
+        // it — while the subject, which a run of the whole suite asked about and did not find, is
+        // charged to neither kind. That is a disappearance, and it belongs to `Vanished`.
+        Assert.Equal(11, NotMeasured(context, FindingKind.DurationRegression).AwaitingRuns);
+
+        // Zero, and not eleven, because the two kinds are declined by different gates over
+        // different samples — the comparison needs both slices, the dispersion reads the whole
+        // window and the companions gave it one. The subject is absent from both tallies, which is
+        // the point: what the wholly-partial slice above charges to each kind, a slice holding a
+        // run of the suite charges to neither.
+        Assert.Equal(0, NotMeasured(context, FindingKind.DurationUnstable).AwaitingRuns);
+    }
+
+    /// <summary>
     /// Builds a window of sessions, each running the subject alongside fixed-duration companions.
     /// </summary>
     /// <param name="sessions">Sessions to build; ordinal 0 is the oldest.</param>

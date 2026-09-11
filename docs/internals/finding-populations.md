@@ -1,7 +1,8 @@
-# Which executions each finding kind counts
+# Which executions, or runs, each finding kind counts
 
 Every kind that publishes a rate publishes a count for that rate to be taken over, and the kinds do
-not all count the same executions. The report ranks findings of different kinds against each other,
+not all count the same thing. Most count executions; `Vanished` counts runs, because it reads
+appearances rather than outcomes. The report ranks findings of different kinds against each other,
 so a reader comparing two rates is comparing two denominators — and until this was recorded, the
 per-kind decision existed only as six separate remarks in six provider files, which is how the
 inconsistency arose in the first place.
@@ -12,32 +13,49 @@ seventh time.
 
 ## The matrix
 
-| kind | environmental sessions | clustered failures | rule |
-|---|---|---|---|
-| `RetryMasked` | excluded (whole run) | kept | `ExcludesEnvironmental` |
-| `RetryDeepening` | excluded (whole run) | kept | `ExcludesEnvironmental` |
-| `RetryExhausted` | excluded (whole run) | kept | `ExcludesEnvironmental` |
-| `Flaky` | excluded | excluded | `ExcludesEnvironmentalAndClustered` |
-| `AlwaysFailing` | excluded | excluded | `ExcludesEnvironmentalAndClustered` |
-| `TimingOut` | excluded | excluded | `ExcludesEnvironmentalAndClustered` |
-| `BrokenFixture` | **kept** | n/a | `AllExecutions` |
-| `SharedFailure` | **kept** | n/a | `AllExecutions` |
-| `DurationRegression` | excluded | kept | `ExcludesEnvironmental` |
-| `DurationUnstable` | excluded | kept | `ExcludesEnvironmental` |
-| `ParallelSensitive` | excluded | kept | `ExcludesEnvironmental` |
-| `TimeSensitive` | excluded (whole run) | kept | `ExcludesEnvironmental` |
-| `Vanished` | **kept** | kept | `AllExecutions` |
+| kind | environmental sessions | clustered failures | partial runs | rule |
+|---|---|---|---|---|
+| `RetryMasked` | excluded (whole run) | kept | kept | `ExcludesEnvironmental` |
+| `RetryDeepening` | excluded (whole run) | kept | kept | `ExcludesEnvironmental` |
+| `RetryExhausted` | excluded (whole run) | kept | kept | `ExcludesEnvironmental` |
+| `Flaky` | excluded | excluded | kept | `ExcludesEnvironmentalAndClustered` |
+| `AlwaysFailing` | excluded | excluded | kept | `ExcludesEnvironmentalAndClustered` |
+| `TimingOut` | excluded | excluded | kept | `ExcludesEnvironmentalAndClustered` |
+| `BrokenFixture` | **kept** | n/a | kept | `AllExecutions` |
+| `SharedFailure` | **kept** | n/a | kept | `AllExecutions` |
+| `DurationRegression` | excluded | kept | kept | `ExcludesEnvironmental` |
+| `DurationUnstable` | excluded | kept | kept | `ExcludesEnvironmental` |
+| `ParallelSensitive` | excluded | kept | kept | `ExcludesEnvironmental` |
+| `TimeSensitive` | excluded (whole run) | kept | kept | `ExcludesEnvironmental` |
+| `Vanished` | **kept** | kept | **set aside** | `ExcludesPartialRuns` |
 
 A session is *environmental* when at least ten of its tests failed and they are at least three in
 ten of the tests it ran — `SessionView.For`, against `EnvironmentalSessionFailureRate` and
 `EnvironmentalSessionMinFailures`. A failure is *clustered* when its signature is shared across
-enough tests to be reported once as a `SharedFailure` or `BrokenFixture`.
+enough tests to be reported once as a `SharedFailure` or `BrokenFixture`. A run is *partial* when
+its distinct tests are under `PartialSessionShare` — a half — of the largest run in the window,
+which is what a `dotnet test --filter` produces; `SessionView.IsPartial`, set on the whole window at
+once because the classification is a comparison rather than a measurement.
+
+**Only one kind sets a partial run aside, and the asymmetry is the reason.** A filtered run's
+*outcomes* are as true as any other run's — a test that failed in one failed — so a kind reading
+outcomes must count it in full or it would throw away real evidence. Its *silences* mean nothing: it
+did not fail to see the tests it excluded, it never looked for them. So the rule applies to the
+kinds reasoning from absence, which today is `Vanished` alone.
+
+That is also why this is a fourth rule rather than a second, orthogonal marker on each finding. The
+two dimensions are mutually exclusive in practice: a kind either reads execution outcomes, and then
+discounting executions is its whole question and partiality is none of its business, or it reads
+appearances, and then the reverse. There is no `ExcludesEnvironmentalAndClusteredAndPartial` waiting
+to be written. A second marker would also double the comparison a marker exists to make cheap, and
+spend the trailer columns the finding's source path needs.
 
 The rule reaches the JSON envelope as `population` on every finding, and the rendered report as a
-marker in each finding's trailer — `all runs`, `-env`, `-env-cluster` — with a legend below the
-fence that states the comparison rule and links the definitions in `docs/cli/command-reference.md`.
-The legend deliberately does not define the markers: it could not do so in the space, and the only
-thing a reader has to do with one is decide whether two percentages can be compared.
+marker in each finding's trailer — `all runs`, `-env`, `-env-cluster`, `-partial` — with a legend
+below the fence that states the comparison rule and links the definitions in
+`docs/cli/command-reference.md`. The legend deliberately does not define the markers: it could not
+do so in the space, and the only thing a reader has to do with one is decide whether two percentages
+can be compared.
 
 ## What each kind publishes
 
@@ -52,7 +70,7 @@ thing a reader has to do with one is decide whether two percentages can be compa
 | `ParallelSensitive` | `levels[].executionsConsidered` | `discountedEnvironmental`, `executionsWithoutConcurrency` |
 | `TimeSensitive` | `worse.sessions`, `other.sessions` | `discountedEnvironmentalRuns`, `runsWithoutClock` |
 | `SharedFailure`, `BrokenFixture` | `failures`, `sessionsAffected`, `sessions` | none — nothing is set aside |
-| `Vanished` | `baselineSessionCount`, `currentSessionCount` | none — nothing is set aside |
+| `Vanished` | `baselineSessionCount`, `currentSessionCount` | `partialSessionsSetAside` |
 
 ### `sessions` and `sessionsConsidered`
 
@@ -122,10 +140,25 @@ silently dropped by another with nothing on screen to explain it. So a claim res
 a test with twenty runs of history is still printed. It is printed saying `evidence low`, which is
 what the level is for.
 
+**A filtered run cannot push a test under that floor, and this is arithmetic rather than judgement.**
+`EvidenceLevelResolver.MeetsReportingFloor` has two clauses — the window's run count against
+`MinimumSessionsToReport`, and the subject's own against `MinimumSessionsPerTestToReport`. The
+subject's runs are drawn from the same window, so that count can never exceed the window's; while
+the two constants are both 5, every window the first clause would reject the second has rejected
+already, and the first can decide nothing on its own. The count a filtered run inflates is therefore
+not the count that decides. The per-test clause self-corrects by construction: a test absent from a
+filtered run simply has one fewer run of its own.
+
+That holds *while* the constants are equal. Raising `MinimumSessionsToReport` above its per-test
+counterpart would make the window clause live, and would then be a decision about filtered runs
+whether or not it were taken as one — `TheWindowArmOfTheFloorNeverDecidesOnItsOwn` fails at that
+point rather than leaving it to be discovered.
+
 ## What each kind could not measure
 
-A finding's population says which executions its counts were taken over. This section says something
-prior to that: which **tests the kind could not be computed for at all**, and why. Until it was
+A finding's population says which executions — or, for `Vanished`, which runs — its rate was counted
+over. This section says something prior to that: which **tests the kind could not be computed for at
+all**, and why. Until it was
 recorded, a provider that declined for want of data left no trace anywhere — the summary's excluded
 tally counts only the candidates the coordinator itself dropped at the reporting floor — so a test no
 statistic could be taken of fell through into `healthy` and was reported to a reader as fine.
@@ -155,8 +188,8 @@ definition, so the two can never both fire on one claim.
 
 | kind | `awaitingRuns` | `unreadable` |
 |---|---|---|
-| `DurationRegression` | either arm under 7 / 3 comparable runs | an arm that held runs and normalised none of them |
-| `DurationUnstable` | one normalised reading | nothing normalisable, or no run with a usable median |
+| `DurationRegression` | either arm under 7 / 3 comparable runs, or a current slice of nothing but partial runs | an arm that held runs and normalised none of them |
+| `DurationUnstable` | one normalised reading, or a current slice of nothing but partial runs | nothing normalisable, or no run with a usable median |
 | `ParallelSensitive` | structurally none — this kind has no session floor | fewer than two distinct concurrency levels |
 | `TimeSensitive` | fewer than two arms' worth of runs on a clock | no clock at all, two time zones, or no split the runs admit |
 | `Vanished` | baseline under `VanishedMinBaselineSessions`, or no baseline slice | structurally none — an appearance is always readable |
@@ -188,6 +221,24 @@ measurement the data declined; every provider passes over it silently.
 A test absent from the recent slice is passed over by `DurationProvider` for the reason the population
 matrix already gives — its absence belongs to `Vanished` — and counting it here would state one
 disappearance twice, in a line whose whole purpose is to name questions whose answers are missing.
+
+**Unless no run that asked about it is in the slice at all.** When every run in the current slice
+covered part of the suite, there is no disappearance to state twice: `Vanished` sets those runs
+aside precisely so it makes no claim about them, so deferring to it charged the test to a kind that
+is also silent, and the summary went on reporting that duration had read every test it was offered —
+a local `dotnet test --filter` loop reaches this the moment three filtered runs land in a row. Both
+duration kinds then count the test as `awaitingRuns`, which is what it is: a measurement waiting on
+a run of the whole suite.
+
+**Asked per test, not per slice.** A slice of nothing but filtered runs holds two kinds of absent
+test at once — the ones a filter passed over, which still run whenever the suite is run in full, and
+the ones that have actually gone — and only the first is waiting on anything. So the question is put
+to the runs that *did* cover the suite: a test the most recent of those ran is waiting, and a test
+they asked about and did not find has genuinely stopped and belongs to `Vanished` alone. Charging
+the slice as a whole would put every vanished test in this tally *and* in a `Vanished` finding,
+which is the same disappearance under two names and the thing the skip exists to avoid. The set is
+taken from `AnalysisWindowSlices.From`, the same re-split `Vanished` reads, so the two cannot
+disagree about which runs were in a position to ask.
 
 ### Why it is per kind and never a total
 

@@ -94,10 +94,20 @@ internal sealed class AnalysisContext
     /// Gets how many analysed sessions covered only part of the suite.
     /// </summary>
     /// <remarks>
-    /// Reported in the summary as an observation rather than a discount. Only the kinds that read
+    /// <para>
+    /// Reported in the summary as an observation rather than a discount, against the window's own
+    /// run count so the reader has the fraction and not just the fact. Only the kinds that read
     /// absence set these sessions aside — every other kind reads outcomes of executions that
     /// happened, and a filtered run's outcomes are as true as any other's — so the line says what
-    /// the window contains and does not claim the numbers were adjusted.
+    /// the window contains and does not claim every number was adjusted.
+    /// </para>
+    /// <para>
+    /// Which numbers <i>were</i> is on each finding rather than here.
+    /// <see cref="Model.PopulationRule.ExcludesPartialRuns"/> is the marker the kinds reading
+    /// absence carry, and it is what makes the summary line an observation instead of an
+    /// unexplained caveat: the reader is told a filtered run is in the window, and told per finding
+    /// whether that finding counted it.
+    /// </para>
     /// </remarks>
     public int PartialSessionCount { get; }
 
