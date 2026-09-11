@@ -360,13 +360,19 @@ the page rather than inferred.
 
 ---
 
-### The Duration Kinds Cannot Measure A Test No Recent Run Selected, And Say So Rather Than Reporting It
+### The Duration Kinds Cannot Measure A Test When No Recent Run Has Selected It, And Say So
 
 **Impact**: while every run in the current slice covered part of the suite — three `dotnet test
 --filter` runs in a row is enough — no `slower` or `unstable duration` finding can be raised about a
 test those runs did not select, however clear the regression is in the full runs before them. The
 tests are counted in `summary.notMeasured.DurationRegression.awaitingRuns` and
-`.DurationUnstable.awaitingRuns`, and one run of the whole suite restores them.
+`.DurationUnstable.awaitingRuns`.
+
+A run of the whole suite makes the test eligible again; it does not on its own produce a finding.
+The ordinary gates still apply after it — `DurationRegression` wants 7 and 3 comparable runs across
+its two arms, `DurationUnstable` wants more than one normalised reading — so a test can clear the
+partial-slice case and stay in `awaitingRuns` for the usual reason, which is that there is not yet
+enough of it to compare.
 
 **Reason**: both kinds compare a recent slice against a baseline, so a test with nothing in the
 recent slice has no "now" to compare. Where that happened because the test stopped running, the

@@ -1,7 +1,8 @@
-# Which executions each finding kind counts
+# Which executions, or runs, each finding kind counts
 
 Every kind that publishes a rate publishes a count for that rate to be taken over, and the kinds do
-not all count the same executions. The report ranks findings of different kinds against each other,
+not all count the same thing. Most count executions; `Vanished` counts runs, because it reads
+appearances rather than outcomes. The report ranks findings of different kinds against each other,
 so a reader comparing two rates is comparing two denominators — and until this was recorded, the
 per-kind decision existed only as six separate remarks in six provider files, which is how the
 inconsistency arose in the first place.
@@ -155,8 +156,9 @@ point rather than leaving it to be discovered.
 
 ## What each kind could not measure
 
-A finding's population says which executions its counts were taken over. This section says something
-prior to that: which **tests the kind could not be computed for at all**, and why. Until it was
+A finding's population says which executions — or, for `Vanished`, which runs — its rate was counted
+over. This section says something prior to that: which **tests the kind could not be computed for at
+all**, and why. Until it was
 recorded, a provider that declined for want of data left no trace anywhere — the summary's excluded
 tally counts only the candidates the coordinator itself dropped at the reporting floor — so a test no
 statistic could be taken of fell through into `healthy` and was reported to a reader as fine.

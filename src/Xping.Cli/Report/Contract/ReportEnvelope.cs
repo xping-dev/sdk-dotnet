@@ -181,9 +181,17 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// discounts environmental runs, or that cannot read a run at all, measured over fewer.
 /// </param>
 /// <param name="Population">
-/// Which executions the counts and rates below were taken over. The report ranks findings of
-/// different kinds against each other and the kinds do not all count the same population, so two
-/// rates on one screen are comparable only where this agrees.
+/// Which executions — or, where a kind counts appearances rather than outcomes, which runs — the
+/// rate below was counted out of. The report ranks findings of different kinds against each other
+/// and the kinds do not all count the same population, so two rates on one screen are comparable
+/// only where this agrees.
+/// <para>
+/// It qualifies the denominator the rate is taken over, and not every figure in
+/// <paramref name="Evidence"/> beside it. A <c>Vanished</c> finding counts its appearances over the
+/// runs that covered the suite while its <c>executionsInWindow</c> stays a whole-window count with
+/// nothing set aside, because the two answer different questions and folding them under one marker
+/// would make it mean less rather than more.
+/// </para>
 /// </param>
 /// <param name="Subject">The test or group it is about.</param>
 /// <param name="Headline">The observations in one already-resolved sentence.</param>

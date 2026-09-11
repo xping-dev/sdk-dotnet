@@ -147,14 +147,22 @@ Not `2 of 22 (9.1%)`. Both are defensible and they answer different questions �
 
 ```bash
 xping report --all --format json \
-  | jq '.findings[] | select(.population != "allExecutions")
+  | jq '.findings[] | select(.population | startswith("excludesEnvironmental"))
         | {kind, population, evidence: (.evidence | {
             executionsConsidered, discountedEnvironmental, discountedClustered })}'
 ```
 
 Those three add up to the number of times the test ran in the window, which is the figure `executionsConsidered` is *not*. `discountedEnvironmental` and `discountedClustered` are published apart because they are set aside for unrelated reasons, and a reader chasing a surprising rate needs to know which one narrowed it.
 
-The filter is there because an `all runs` finding carries no discount counts at all — there is nothing for it to report having set aside. Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
+The filter names the two execution populations rather than excluding `allExecutions`, because those are the findings that carry these three fields. An `all runs` finding has no discount counts at all — there is nothing for it to report having set aside — and `excludesPartialRuns` discounts runs rather than executions, so projecting it here would return a row of nulls. Read that one with its own projection:
+
+```bash
+xping report --all --format json \
+  | jq '.findings[] | select(.population == "excludesPartialRuns")
+        | {kind, population, evidence: (.evidence | {
+            baselineSessions, baselineSessionCount, currentSessionCount,
+            partialSessionsSetAside })}'
+``` Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
 
 Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them too, because an environmental run is still a run the test either was or was not in. What `stopped running` does set aside is the runs that covered part of the suite, which is why it is the one kind marked `-partial` rather than `all runs`.
 
@@ -362,7 +370,7 @@ For scripts and agents. Emits a versioned envelope and nothing else — no rende
 xping report --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says which executions — or, for `excludesPartialRuns`, which runs — the counts inside `evidence` were taken over, and `evidenceSessions`, the number `evidenceLevel` was banded from.
+Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
 
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
