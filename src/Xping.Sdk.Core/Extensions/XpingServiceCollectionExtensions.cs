@@ -459,7 +459,8 @@ public static class XpingServiceCollectionExtensions
 
         services.TryAddSingleton<ILocalSessionStore>(sp => new JsonSessionStore(
             sp.GetRequiredService<LocalStoreOptions>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonSessionStore>()));
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<JsonSessionStore>(),
+            storePath: sp.GetRequiredService<IOptions<XpingConfiguration>>().Value.LocalStorePath));
 
         return services;
     }
@@ -701,6 +702,10 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("STRICTMODE") is { } strictMode
             && bool.TryParse(strictMode, out var sm))
             config.StrictMode = sm;
+
+        // Local Store Options. The same variable the CLI reads, so one export moves both sides.
+        if (GetEnv("LOCAL_STORE") is { } localStore)
+            config.LocalStorePath = localStore;
         return;
 
         // A variable set to nothing means "not set", never "set to the empty string". A pipeline
@@ -753,6 +758,11 @@ public static class XpingServiceCollectionExtensions
             config.Environment = null;
         else
             config.Environment = config.Environment!.Trim();
+
+        if (string.IsNullOrWhiteSpace(config.LocalStorePath))
+            config.LocalStorePath = null;
+        else
+            config.LocalStorePath = config.LocalStorePath!.Trim();
     }
 
     /// <summary>
@@ -794,6 +804,7 @@ public static class XpingServiceCollectionExtensions
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
         target.CollectLocalGitAuthor = source.CollectLocalGitAuthor;
         target.StrictMode = source.StrictMode;
+        target.LocalStorePath = source.LocalStorePath;
     }
 
     #endregion

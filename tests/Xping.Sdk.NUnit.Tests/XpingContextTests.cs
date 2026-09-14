@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using xRetry;
@@ -19,14 +20,21 @@ using Xunit;
 [Collection("XpingContext")]
 public sealed class XpingContextTests : IAsyncLifetime
 {
+    // A store of its own, thrown away with the fixture. Without it the context under test resolves
+    // the repository's .xping/ - the same one the run recording this suite writes to - and every
+    // synthetic execution recorded below would land in the real history.
+    private readonly string _scratchStore = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
     public Task InitializeAsync()
     {
         return XpingContext.ShutdownAsync().AsTask();
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
-        return XpingContext.ShutdownAsync().AsTask();
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        DeleteScratchStore();
     }
 
     [Fact]
@@ -79,7 +87,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [RetryFact(3)]
     public void RecordTest_AfterInitialize_DoesNotThrow()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         var execution = CreateTestExecution();
 
         var exception = Record.Exception(() => XpingContext.RecordTest(execution));
@@ -156,6 +164,15 @@ public sealed class XpingContextTests : IAsyncLifetime
             await XpingContext.FinalizeAsync().ConfigureAwait(true)).ConfigureAwait(true);
 
         Assert.Null(exception);
+    }
+
+    private XpingConfiguration ScratchConfiguration() =>
+        new() { LocalStorePath = _scratchStore };
+
+    private void DeleteScratchStore()
+    {
+        if (Directory.Exists(_scratchStore))
+            Directory.Delete(_scratchStore, recursive: true);
     }
 
     private static TestExecution CreateTestExecution()

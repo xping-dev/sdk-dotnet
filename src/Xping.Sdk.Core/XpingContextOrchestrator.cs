@@ -455,29 +455,47 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// Warns when executions cannot be attributed to a project.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Lives here rather than in the adapters because the assembly name is resolved per test in
     /// three different framework packages, none of which can reach the core SDK's logging, and
     /// because the interesting condition - "nothing in this whole run named an assembly" - is only
     /// knowable once the run is over.
+    /// </para>
+    /// <para>
+    /// The whole-run case is warned about in every mode that keeps history, not only Cloud: a run
+    /// that named no assembly is not written locally either, and without this line the only trace
+    /// of it would be <c>xping report</c> insisting there is no history.
+    /// </para>
     /// </remarks>
     private void WarnAboutUnattributableExecutions()
     {
-        if (_mode != XpingMode.Cloud || _hasProjectPin)
+        if (_mode == XpingMode.Disabled || _unattributedExecutionCount == 0)
             return;
 
-        if (_unattributedExecutionCount > 0)
+        bool cloudDerivesProject = _mode == XpingMode.Cloud && !_hasProjectPin;
+
+        if (cloudDerivesProject)
         {
             _logger.LogWarning(
                 "{Count} executions carry no test assembly and cannot be attributed to a project.",
                 _unattributedExecutionCount);
         }
 
-        if (_sessionAssemblies.Count == 0 && _unattributedExecutionCount > 0)
+        if (_sessionAssemblies.Count > 0)
+            return;
+
+        if (cloudDerivesProject)
         {
             _logger.LogWarning(
                 "No test assembly could be resolved for this session, so no project can be derived " +
                 "and the results will be rejected. Set ProjectId to pin a project, or report this " +
                 "as an SDK defect.");
+        }
+        else
+        {
+            _logger.LogWarning(
+                "No test assembly could be resolved for this session, so it will not be kept in the " +
+                "local store. Report this as an SDK defect.");
         }
     }
 
@@ -681,9 +699,17 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// prints a single line pointing at the CLI.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The SDK does not analyse history or render reports. It states one fact about the run it just
     /// observed — how many tests failed and then passed on a retry — which is available from the
     /// executions already in memory and needs no store read. Everything historical is the CLI's job.
+    /// </para>
+    /// <para>
+    /// A run in which no execution named its assembly is not written. Every CLI report scopes by
+    /// assembly, so such a run could never be shown, only counted — and it is exactly what a
+    /// hand-built <c>TestExecution</c> recorded from a test of the SDK itself produces. Skipping
+    /// it keeps that noise out of the store rather than asking the CLI to explain it.
+    /// </para>
     /// </remarks>
     private void WriteLocalHistory()
     {
@@ -698,6 +724,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         if (executions.Count == 0)
             return;
+
+        if (_sessionAssemblies.Count == 0)
+        {
+            _logger.LogDebug(
+                "Local session not stored: none of its {Count} executions named a test assembly.",
+                executions.Count);
+            return;
+        }
 
         EnvironmentInfo? environment = _lastEnvironmentInfo;
 

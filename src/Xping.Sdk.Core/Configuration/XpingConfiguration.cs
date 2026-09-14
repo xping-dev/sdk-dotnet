@@ -181,6 +181,26 @@ public sealed class XpingConfiguration
     public bool StrictMode { get; set; }
 
     /// <summary>
+    /// Gets or sets the directory the local session store is kept in. Optional.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When left unset, the store lives in <c>.xping/</c> under the root of the repository that
+    /// contains the test assembly — the nearest ancestor holding <c>.git</c>, <c>*.sln</c> or
+    /// <c>*.slnx</c> — and falls back to a per-repository folder under the user's local application
+    /// data when no repository is found or its root is not writable. That default is what lets the
+    /// CLI, run from anywhere inside the repository, find the history of that repository.
+    /// </para>
+    /// <para>
+    /// Set it to keep a session out of that shared history: a test host that drives the SDK as its
+    /// subject, for example, points it at a scratch directory so its synthetic runs never land next
+    /// to the real ones. Can also be set with the <c>XPING_LOCAL_STORE</c> environment variable,
+    /// which the CLI honours too.
+    /// </para>
+    /// </remarks>
+    public string? LocalStorePath { get; set; }
+
+    /// <summary>
     /// Resolves <see cref="Mode"/> to a concrete operating mode.
     /// </summary>
     /// <returns>

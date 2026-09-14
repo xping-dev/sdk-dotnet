@@ -56,13 +56,27 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // A large window: this is a diagnostic, so completeness beats speed.
         IReadOnlyList<TestSession> sessions = store.ReadRecent(500).Sessions;
 
+        // The SDK no longer writes a run that named no assembly, but a store can still hold some
+        // from before it stopped. They fit no listing below, so without this line the run count
+        // above and the list would disagree until retention evicts them.
+        int unattributed = sessions.Count(session => SessionAssemblies.Of(session).Count == 0);
+        if (unattributed > 0)
+        {
+            output.WriteLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0} {1} no assembly and {2} not shown",
+                unattributed,
+                unattributed == 1 ? "run names" : "runs name",
+                unattributed == 1 ? "is" : "are"));
+        }
+
         // A run is listed under every assembly it executed, so the run counts below can add up to
         // more than the file count above. That is the honest reading: one `dotnet test` across a
         // solution is one run of each test project it covered, and each of them has that much
         // history. Collapsing it to a single arbitrary assembly is what this listing exists to
         // stop the reader believing.
         var byAssembly = sessions
-            .SelectMany(AssemblyPairs)
+            .SelectMany(session => SessionAssemblies.Of(session).Select(a => (Assembly: a, Session: session)))
             .GroupBy(pair => pair.Assembly, pair => pair.Session, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .ThenBy(g => g.Key, StringComparer.Ordinal);
@@ -94,24 +108,6 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         bytes >= 1024L * 1024
             ? string.Format(CultureInfo.InvariantCulture, "{0:0.0} MB", bytes / (1024.0 * 1024.0))
             : string.Format(CultureInfo.InvariantCulture, "{0:0.0} KB", bytes / 1024.0);
-
-    /// <summary>
-    /// Pairs a session with each test assembly it executed.
-    /// </summary>
-    /// <remarks>
-    /// A session that named no assembly at all is still listed, under <c>(unknown)</c>. It is
-    /// invisible to every scoped report — there is nothing to scope it by — so a diagnostic that
-    /// dropped it too would leave the runs unaccounted for and the file count unexplained.
-    /// </remarks>
-    private static IEnumerable<(string Assembly, TestSession Session)> AssemblyPairs(
-        TestSession session)
-    {
-        IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
-
-        return assemblies.Count == 0
-            ? [("(unknown)", session)]
-            : assemblies.Select(assembly => (assembly, session));
-    }
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : string.Concat(value.AsSpan(0, max - 1), "~");

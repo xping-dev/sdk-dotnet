@@ -13,7 +13,7 @@ The Xping SDK records every test run to a local store on disk. This happens in *
 
 The store is resolved in this order:
 
-1. The `XPING_LOCAL_STORE` environment variable, if set.
+1. The `XPING_LOCAL_STORE` environment variable, or the `LocalStorePath` configuration setting, if set.
 2. A `.xping` folder at your **repository root** — the nearest ancestor of the test assembly containing `.git`, `*.sln`, or `*.slnx`.
 3. A per-repository folder under your local application data, when no repository root is found or the root is not writable.
 
@@ -97,6 +97,8 @@ export XPING_LOCAL_STORE=/var/tmp/xping-store
 Both the SDK and the CLI read this variable, and they must agree: if you set it for your test run, set it for `xping report` too, or the CLI will look somewhere else and find nothing.
 
 Useful for read-only checkouts, containers where the repository root is not writable, and keeping history outside a workspace that gets wiped between builds.
+
+The same setting is available in code and `appsettings.json` as `LocalStorePath`; the environment variable wins when both are set. A path set that way reaches only the SDK — export the variable for the CLI.
 
 ### `XPING_NO_BANNER`
 

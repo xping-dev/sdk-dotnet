@@ -7,6 +7,7 @@ namespace Xping.Integration.Tests;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -29,6 +30,12 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
 
     private readonly MockApiServer _mockServer = new();
     private readonly List<KeyValuePair<string, string?>> _ambientXpingVariables = [];
+
+    // A store of its own, thrown away with the fixture. Without it the context under test resolves
+    // the repository's .xping/ - the same one the run recording this suite writes to - and every
+    // synthetic execution below would land in the real history.
+    private readonly string _scratchStore = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
 
     /// <summary>
     /// Removes every ambient <c>XPING_*</c> variable for the duration of one test, restoring them
@@ -76,6 +83,9 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
 
         foreach (var variable in _ambientXpingVariables)
             Environment.SetEnvironmentVariable(variable.Key, variable.Value);
+
+        if (Directory.Exists(_scratchStore))
+            Directory.Delete(_scratchStore, recursive: true);
     }
 
     [Fact]
@@ -182,7 +192,8 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
             ProjectId = "test-project",
             BatchSize = batchSize,
             MaxRetries = maxRetries,
-            Enabled = true
+            Enabled = true,
+            LocalStorePath = _scratchStore
         };
     }
 
