@@ -49,8 +49,12 @@ internal sealed record ReportEnvelope(
     /// of the window rather than allowed to date it. 1.18 is where <c>population</c> gained
     /// <c>excludesPartialRuns</c>, the rule <c>Vanished</c> had been applying since 1.13 while
     /// still publishing <c>allExecutions</c> — a consumer switching on the value sees a fourth one.
+    /// 1.19 is where a subject gained <c>shortName</c>, the identity a reader greps for and pastes
+    /// into <c>dotnet test --filter</c>, and <c>causeLabel</c>, what the members of a cluster have in
+    /// common — both resolved here rather than by a renderer, which is what lets the rendered report
+    /// name a test the way its author would.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.18";
+    public const string CurrentSchemaVersion = "1.19";
 }
 
 /// <summary>
@@ -243,6 +247,19 @@ internal sealed record SeverityCountsDto(int High, int Medium, int Low);
 /// <param name="Fingerprint">Stable identity, for a single-test subject.</param>
 /// <param name="FullyQualifiedName">Namespace, class and method, for a single-test subject.</param>
 /// <param name="DisplayName">Runner-facing name, for a single-test subject.</param>
+/// <param name="ShortName">
+/// The identity a reader is shown: <c>Class.Method</c>, with the adapter's own argument list where
+/// the case is parameterised. Resolved here, once, so that no renderer performs string surgery on a
+/// name — and taken from <paramref name="FullyQualifiedName"/> rather than from
+/// <paramref name="DisplayName"/>, because it has to be greppable and has to survive being pasted
+/// after <c>dotnet test --filter FullyQualifiedName~</c>. Null for a group subject.
+/// </param>
+/// <param name="CauseLabel">
+/// What the members of a cluster have in common — the broken lifecycle member, the site it failed
+/// at, or the exception type they share. Null for a single-test subject. Never
+/// <paramref name="GroupId"/>: that is a signature hash, and a hash presented as a cause is worse
+/// than saying the cause was not recorded.
+/// </param>
 /// <param name="SourceFile">Source path, when the SDK captured one.</param>
 /// <param name="SourceLineNumber">Line the test begins on, when the SDK captured one.</param>
 /// <param name="Assembly">Owning test assembly.</param>
@@ -254,6 +271,8 @@ internal sealed record SubjectDto(
     string? Fingerprint,
     string? FullyQualifiedName,
     string? DisplayName,
+    string? ShortName,
+    string? CauseLabel,
     string? SourceFile,
     int? SourceLineNumber,
     string? Assembly,

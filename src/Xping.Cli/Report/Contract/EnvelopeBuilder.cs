@@ -154,26 +154,42 @@ internal static class EnvelopeBuilder
             ToCamelCase(finding.EvidenceLevel.ToString()),
             finding.EvidenceSessions,
             ToCamelCase(PopulationRules.For(finding.Kind).ToString()),
-            BuildSubject(finding.Subject),
+            BuildSubject(finding.Subject, finding.Evidence),
             headline,
             metrics,
             BuildEvidence(finding.Evidence),
             finding.DrillDownCommand);
     }
 
-    private static SubjectDto BuildSubject(FindingSubject subject) => subject switch
-    {
-        FindingSubject.SingleTest single => ForTest(single.Test),
+    /// <summary>
+    /// Projects a finding's subject into the envelope.
+    /// </summary>
+    /// <param name="subject">The test or group the finding is about.</param>
+    /// <param name="evidence">
+    /// That finding's evidence, which is where a cluster's cause is recorded. Passed in because a
+    /// subject does not carry one: a group knows which tests it holds and not what they share.
+    /// </param>
+    /// <returns>The subject, with every name it is presented under already resolved.</returns>
+    /// <remarks>
+    /// No subject carries both names. A single test has a <c>shortName</c> and no cause; a group has
+    /// a cause and no name of its own, and its members each carry theirs.
+    /// </remarks>
+    private static SubjectDto BuildSubject(FindingSubject subject, FindingEvidence evidence) =>
+        subject switch
+        {
+            FindingSubject.SingleTest single => ForTest(single.Test),
 
-        FindingSubject.Group group => new SubjectDto(
-            "group",
-            null, null, null, null, null, null,
-            group.GroupId,
-            group.Members.Count,
-            [.. group.Members.Select(ForTest)]),
+            FindingSubject.Group group => new SubjectDto(
+                "group",
+                null, null, null, null,
+                SubjectNames.CauseLabel(evidence),
+                null, null, null,
+                group.GroupId,
+                group.Members.Count,
+                [.. group.Members.Select(ForTest)]),
 
-        _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
-    };
+            _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
+        };
 
     private static SubjectDto ForTest(TestReference test) =>
         new(
@@ -181,6 +197,12 @@ internal static class EnvelopeBuilder
             test.TestFingerprint,
             test.FullyQualifiedName,
             test.DisplayName,
+
+            // The name the report shows, resolved here so that no renderer chooses between the two
+            // above it. Both are kept beside it: this one is deliberately lossy, and a consumer that
+            // wants the whole identity must not have to reassemble it.
+            SubjectNames.ShortName(test.FullyQualifiedName, test.DisplayName),
+            null,
 
             // Never stripped for brevity. These two are what let an agent open the file rather than
             // go searching for a name.

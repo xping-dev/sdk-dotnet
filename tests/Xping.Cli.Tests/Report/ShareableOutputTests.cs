@@ -1203,7 +1203,9 @@ public sealed class ShareableOutputTests
             "moderate",
             10,
             ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
-            new SubjectDto("test", "fp", name, name, null, null, "MyApp.Tests", null, null, null),
+            new SubjectDto(
+                "test", "fp", name, name, SubjectNames.ShortName(name, name), null,
+                null, null, "MyApp.Tests", null, null, null),
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,

@@ -209,6 +209,88 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal("excludesPartialRuns", vanished.GetProperty("population").GetString());
     }
 
+    /// <summary>
+    /// Writes quiet runs, then runs in which one broken lifecycle member takes three tests down.
+    /// </summary>
+    /// <param name="member">The member the adapter names, or null where it named none.</param>
+    /// <remarks>
+    /// The one shape that produces a group subject, which is the only subject carrying a cause. Two
+    /// stable tests ride along so the failing runs still cover the suite.
+    /// </remarks>
+    private static void SeedBrokenFixture(string? member)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < 8; i++)
+        {
+            var executions = new List<TestExecution>
+            {
+                TestSessionFactory.Execution("Stable0"),
+                TestSessionFactory.Execution("Stable1")
+            };
+
+            foreach (string name in (string[])["Alpha", "Beta", "Gamma"])
+            {
+                executions.Add(i < 4
+                    ? TestSessionFactory.Execution(name)
+                    : TestSessionFactory.Execution(
+                        name,
+                        TestOutcome.Failed,
+                        exceptionType: "System.Net.Sockets.SocketException",
+                        errorMessage: "Connection refused",
+                        failureSite: FailureSite.FixtureSetup,
+                        failureSiteMember: member));
+            }
+
+            store.Write(TestSessionFactory.Session(i, executions));
+        }
+    }
+
+    /// <summary>
+    /// A cluster is named by what its members share, and each member by its own identity.
+    /// </summary>
+    /// <remarks>
+    /// The group id is never the label. It is a signature hash — the cluster is keyed on the
+    /// signature so the subject survives a promotion between kinds — and a hash presented as a cause
+    /// is worse than saying the cause was not recorded.
+    /// </remarks>
+    [Fact]
+    public void AClusterIsNamedByItsCauseAndItsMembersByTheirOwnNames()
+    {
+        SeedBrokenFixture("UnprovisionedDatabase..ctor");
+
+        JsonElement subject = RunJson("--all").GetProperty("findings").EnumerateArray()
+            .Select(f => f.GetProperty("subject"))
+            .Single(s => s.GetProperty("type").GetString() == "group");
+
+        Assert.Equal(
+            "UnprovisionedDatabase..ctor", subject.GetProperty("causeLabel").GetString());
+
+        // A group has no name of its own: it is not a test, and naming it after one of its members
+        // is the defect this field exists to remove.
+        Assert.Equal(JsonValueKind.Null, subject.GetProperty("shortName").ValueKind);
+
+        Assert.Equal(
+            ["SampleTests.Alpha", "SampleTests.Beta", "SampleTests.Gamma"],
+            subject.GetProperty("members").EnumerateArray()
+                   .Select(m => m.GetProperty("shortName").GetString()));
+    }
+
+    /// <summary>
+    /// Where the adapter named no member, the cluster is named by where it failed.
+    /// </summary>
+    [Fact]
+    public void AClusterWhoseMemberWasNotRecordedIsNamedByItsSite()
+    {
+        SeedBrokenFixture(member: null);
+
+        JsonElement subject = RunJson("--all").GetProperty("findings").EnumerateArray()
+            .Select(f => f.GetProperty("subject"))
+            .Single(s => s.GetProperty("type").GetString() == "group");
+
+        Assert.Equal("fixture setup", subject.GetProperty("causeLabel").GetString());
+    }
+
     private static void SeedWithRevision(int count, string sha, string branch)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
@@ -244,7 +326,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.18", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.19", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -306,6 +388,15 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal(
             "MyApp.Tests.SampleTests.Removed0",
             subject.GetProperty("fullyQualifiedName").GetString());
+
+        // The name the report shows, resolved on the envelope rather than by a renderer: the
+        // namespace goes, the class stays, and what is left is what a reader greps for and pastes
+        // after `dotnet test --filter FullyQualifiedName~`. The whole name is still beside it.
+        Assert.Equal("SampleTests.Removed0", subject.GetProperty("shortName").GetString());
+
+        // A single test has no shared cause to name. Written rather than dropped, so a consumer can
+        // tell a subject that has none from a field this build stopped emitting.
+        Assert.Equal(JsonValueKind.Null, subject.GetProperty("causeLabel").ValueKind);
 
         // Never stripped for brevity: this is what lets an agent open the file.
         Assert.Equal("SampleTests.cs", subject.GetProperty("sourceFile").GetString());
@@ -492,7 +583,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.18", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.19", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

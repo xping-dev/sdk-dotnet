@@ -382,7 +382,7 @@ covered only part of the suite is inside it too, on one run of history:
 
 ```json
 {
-  "schemaVersion": "1.18",
+  "schemaVersion": "1.19",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -406,7 +406,8 @@ covered only part of the suite is inside it too, on one run of history:
       "evidenceLevel": "moderate",
       "evidenceSessions": 12,
       "population": "excludesEnvironmentalAndClustered",
-      "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests",
+      "subject": { "type": "test", "fullyQualifiedName": "…", "shortName": "SummaryTests.TotalsLineItems",
+                    "causeLabel": null, "assembly": "Checkout.Tests",
                     "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },
       "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",
       "metrics": [

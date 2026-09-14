@@ -285,6 +285,19 @@ internal static class EvidenceHeadline
     }
 
     /// <summary>
+    /// Names what a broken fixture's failures agree on.
+    /// </summary>
+    /// <param name="e">The evidence.</param>
+    /// <returns>The lifecycle member, or the site it failed at where the frameworks named none.</returns>
+    /// <remarks>
+    /// Public because the subject line above the headline resolves from it too — see
+    /// <see cref="SubjectNames.CauseLabel"/>. Shared rather than copied so that the two name the
+    /// same member in the same words: two spellings of one member on adjacent lines reads as two
+    /// members, and the member is what a reader opens.
+    /// </remarks>
+    public static string FixtureSubject(BrokenFixtureEvidence e) => e.Member ?? Phrase(e.Site);
+
+    /// <summary>
     /// Phrases a cluster whose cause is a named lifecycle member.
     /// </summary>
     /// <remarks>
@@ -294,7 +307,7 @@ internal static class EvidenceHeadline
     /// </remarks>
     private static (string, IReadOnlyList<MetricDto>) BrokenFixture(BrokenFixtureEvidence e)
     {
-        string subject = e.Member ?? Phrase(e.Site);
+        string subject = FixtureSubject(e);
 
         return
         (
