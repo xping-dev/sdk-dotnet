@@ -372,6 +372,11 @@ xping report --all --format json > findings.json
 
 Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
 
+Findings about one test are listed together, however far apart their severities put them: the first
+keeps the rank it earned, the rest follow it, and each of those carries an `annotation` saying which
+row the first one is. The reordering happens before `--top` cuts the list, so a limit never leaves a
+finding pointing at a row that is not there.
+
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
@@ -413,6 +418,7 @@ are not each other and `tests` is what they add up to:
       "subject": { "type": "test", "fullyQualifiedName": "…", "shortName": "SummaryTests.TotalsLineItems",
                     "causeLabel": null, "assembly": "Checkout.Tests",
                     "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },
+      "annotation": null,
       "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",
       "metrics": [
         { "label": "failed", "value": "7 of 20 executions (35%)" },

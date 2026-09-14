@@ -53,7 +53,9 @@ internal sealed record ReportEnvelope(
     /// into <c>dotnet test --filter</c>, and <c>causeLabel</c>, what the members of a cluster have in
     /// common — both resolved here rather than by a renderer, which is what lets the rendered report
     /// name a test the way its author would; and where the summary gained <c>flagged</c>, the count
-    /// <c>healthy</c> had been the complement of without ever saying so.
+    /// <c>healthy</c> had been the complement of without ever saying so. 1.19 also reorders
+    /// <c>findings</c> so that two findings about one test are adjacent, and gives the second of
+    /// them an <c>annotation</c> saying which row the first is.
     /// </remarks>
     public const string CurrentSchemaVersion = "1.19";
 }
@@ -208,6 +210,13 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// </para>
 /// </param>
 /// <param name="Subject">The test or group it is about.</param>
+/// <param name="Annotation">
+/// What connects this finding to the one above it, or null where nothing does. Today that is only
+/// <c>same test as #4</c>: one test can carry findings of several kinds, and the ranking used to
+/// leave them four rows apart with nothing saying they were the same test. Resolved here rather
+/// than by a renderer, like every other display string on this envelope, and carried in the JSON so
+/// a consumer reading the list in order sees the same relationship.
+/// </param>
 /// <param name="Headline">The observations in one already-resolved sentence.</param>
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
 /// <param name="Evidence">The kind-specific observations.</param>
@@ -220,6 +229,7 @@ internal sealed record FindingDto(
     int EvidenceSessions,
     string Population,
     SubjectDto Subject,
+    string? Annotation,
     string Headline,
     IReadOnlyList<MetricDto> Metrics,
     JsonNode? Evidence,

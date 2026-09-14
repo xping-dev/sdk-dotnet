@@ -40,9 +40,16 @@ internal static class EnvelopeBuilder
         int skewedSessions,
         int? top)
     {
-        IReadOnlyList<Finding> shown = top is { } limit && limit < result.Findings.Count
-            ? [.. result.Findings.Take(limit)]
-            : result.Findings;
+        // Reordered before anything is cut. A sibling always follows the finding it points at, so a
+        // limit either keeps both or drops the sibling — it can never leave a row saying "same test
+        // as #4" in a report whose fourth row is something else.
+        IReadOnlyList<Finding> ordered = FindingOrder.WithSiblingsAdjacent(result.Findings);
+
+        IReadOnlyList<Finding> shown = top is { } limit && limit < ordered.Count
+            ? [.. ordered.Take(limit)]
+            : ordered;
+
+        Dictionary<string, string> annotations = Annotations(ordered);
 
         int tests = context.Tests.Fingerprints.Count;
 
@@ -94,7 +101,7 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
-            [.. shown.Select(BuildFinding)],
+            [.. shown.Select(finding => BuildFinding(finding, annotations))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
     }
 
@@ -143,7 +150,39 @@ internal static class EnvelopeBuilder
     private static ContextDto? BuildContext(RevisionContext? revision) =>
         revision == null ? null : new ContextDto(revision.Sha, revision.Branch, revision.Assembly);
 
-    private static FindingDto BuildFinding(Finding finding)
+    /// <summary>
+    /// Says, of each finding that is not the first about its test, which row the first one is.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <returns>The annotation for each finding that has one, keyed by finding id.</returns>
+    /// <remarks>
+    /// Rows are numbered from 1 over the whole ordered list, which is what the renderer prints, so
+    /// the number is right whether or not the report was truncated — the reordering guarantees an
+    /// anchor is shown wherever its sibling is. Phrased here for the reason every other display
+    /// string is: a renderer that worded it would be the second place the relationship is described.
+    /// </remarks>
+    internal static Dictionary<string, string> Annotations(IReadOnlyList<Finding> ordered)
+    {
+        var anchors = new Dictionary<string, int>(StringComparer.Ordinal);
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            if (FindingOrder.Test(ordered[index]) is not { } test)
+                continue;
+
+            if (anchors.TryGetValue(test, out int anchor))
+                annotations[ordered[index].Id] =
+                    $"same test as #{anchor.ToString(CultureInfo.InvariantCulture)}";
+            else
+                anchors[test] = index + 1;
+        }
+
+        return annotations;
+    }
+
+    private static FindingDto BuildFinding(
+        Finding finding, Dictionary<string, string> annotations)
     {
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(finding.Kind, finding.Evidence);
@@ -156,6 +195,7 @@ internal static class EnvelopeBuilder
             finding.EvidenceSessions,
             ToCamelCase(PopulationRules.For(finding.Kind).ToString()),
             BuildSubject(finding.Subject, finding.Evidence),
+            annotations.GetValueOrDefault(finding.Id),
             headline,
             metrics,
             BuildEvidence(finding.Evidence),

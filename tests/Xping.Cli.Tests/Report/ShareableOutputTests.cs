@@ -585,6 +585,62 @@ public sealed class ShareableOutputTests
     }
 
     /// <summary>
+    /// A second finding about one test says which row the first one is.
+    /// </summary>
+    /// <remarks>
+    /// Right-aligned to the fence, at the far end of the line the eye is already on, and resolved on
+    /// the envelope so the JSON consumer reading the list in order sees the same relationship.
+    /// </remarks>
+    [Fact]
+    public void ASiblingRowNamesTheRowItSharesItsTestWith()
+    {
+        string report = Render(Envelope(
+            Finding("DurationUnstable", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "p50 820ms"),
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
+                with { Annotation = "same test as #1" }));
+
+        // Four lines for the first finding, then the blank line between rows.
+        string header = Fenced(report)[5];
+
+        Assert.Equal(FenceWidth, header.Length);
+        Assert.StartsWith("2.  HIGH  flaky ", header, StringComparison.Ordinal);
+        Assert.EndsWith("same test as #1", header, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A row with nothing to say about the one above it says nothing, and ends where its label does.
+    /// </summary>
+    [Fact]
+    public void ARowWithNoAnnotationCarriesNoTrailingSpace()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")));
+
+        Assert.Equal("1.  HIGH  flaky", Fenced(report)[0]);
+    }
+
+    /// <summary>
+    /// Colour must not move the annotation off the edge it is aligned to.
+    /// </summary>
+    /// <remarks>
+    /// The marker beside it is wrapped in escape codes, which occupy no columns. Padding to a length
+    /// that counted them would leave the annotation short of the fence in a terminal and on it in a
+    /// pipe — the one place in this layout where the two could disagree.
+    /// </remarks>
+    [Fact]
+    public void ColourDoesNotMoveTheAnnotation()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
+                with { Annotation = "same test as #1" });
+
+        string terminal = Render(envelope, Capabilities(redirected: false));
+
+        Assert.Equal(FenceWidth, Strip(Lines(terminal).Single(
+            l => l.Contains("same test as", StringComparison.Ordinal))).Length);
+    }
+
+    /// <summary>
     /// The members are listed beneath the cause, indented past it.
     /// </summary>
     /// <remarks>
@@ -1475,6 +1531,7 @@ public sealed class ShareableOutputTests
             new SubjectDto(
                 "test", "fp", name, name, SubjectNames.ShortName(name, name), null,
                 null, null, "MyApp.Tests", null, null, null),
+            null,
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,

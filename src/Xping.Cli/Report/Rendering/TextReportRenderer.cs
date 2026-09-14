@@ -343,15 +343,35 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// a row number carries no severity, and a coloured name would say the identity was the thing
     /// worth ranking.
     /// </para>
+    /// <para>
+    /// The annotation is right-aligned to the fence, at the far end of the line the eye is already
+    /// on. Measured against the plain text: the marker beside it may be wrapped in escape codes,
+    /// which occupy no columns, and padding to a length that counted them would put the annotation
+    /// short of the edge on a terminal and at it in a pipe.
+    /// </para>
     /// </remarks>
     private void WriteFinding(StringBuilder builder, FindingDto finding, int row)
     {
-        builder.Append(row.ToString(CultureInfo.InvariantCulture))
-               .Append('.')
-               .Append(' ', Math.Max(1, RowLabelWidth - 1 - Digits(row)))
-               .Append(capabilities.Colorize(finding.Severity, ReportVocabulary.MarkerFor(finding.Severity)))
+        string number = row.ToString(CultureInfo.InvariantCulture) + ".";
+        string marker = ReportVocabulary.MarkerFor(finding.Severity);
+        string label = ReportVocabulary.LabelFor(finding.Kind);
+        int spacing = Math.Max(1, RowLabelWidth - number.Length);
+
+        builder.Append(number)
+               .Append(' ', spacing)
+               .Append(capabilities.Colorize(finding.Severity, marker))
                .Append("  ")
-               .AppendLine(ReportVocabulary.LabelFor(finding.Kind));
+               .Append(label);
+
+        if (finding.Annotation is { Length: > 0 } annotation)
+        {
+            int written = number.Length + spacing + marker.Length + 2 + label.Length;
+
+            builder.Append(' ', Math.Max(1, FenceWidth - written - annotation.Length))
+                   .Append(annotation);
+        }
+
+        builder.AppendLine();
 
         builder.Append(' ', ContinuationIndent)
                .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
@@ -506,22 +526,6 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
     private static string Tests(int count) =>
         count == 1 ? "1 test" : $"{count.ToString(CultureInfo.InvariantCulture)} tests";
-
-    /// <summary>
-    /// Counts the digits a row number takes.
-    /// </summary>
-    private static int Digits(int row)
-    {
-        int digits = 1;
-
-        while (row >= 10)
-        {
-            row /= 10;
-            digits++;
-        }
-
-        return digits;
-    }
 
     /// <summary>
     /// Formats the analysed period, keeping the times when they are what distinguishes the runs.
