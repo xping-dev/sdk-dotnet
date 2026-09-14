@@ -62,7 +62,7 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // history. Collapsing it to a single arbitrary assembly is what this listing exists to
         // stop the reader believing.
         var byAssembly = sessions
-            .SelectMany(AssemblyPairs)
+            .SelectMany(session => SessionAssemblies.Of(session).Select(a => (Assembly: a, Session: session)))
             .GroupBy(pair => pair.Assembly, pair => pair.Session, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .ThenBy(g => g.Key, StringComparer.Ordinal);
@@ -94,24 +94,6 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         bytes >= 1024L * 1024
             ? string.Format(CultureInfo.InvariantCulture, "{0:0.0} MB", bytes / (1024.0 * 1024.0))
             : string.Format(CultureInfo.InvariantCulture, "{0:0.0} KB", bytes / 1024.0);
-
-    /// <summary>
-    /// Pairs a session with each test assembly it executed.
-    /// </summary>
-    /// <remarks>
-    /// A session that named no assembly at all is still listed, under <c>(unknown)</c>. It is
-    /// invisible to every scoped report — there is nothing to scope it by — so a diagnostic that
-    /// dropped it too would leave the runs unaccounted for and the file count unexplained.
-    /// </remarks>
-    private static IEnumerable<(string Assembly, TestSession Session)> AssemblyPairs(
-        TestSession session)
-    {
-        IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
-
-        return assemblies.Count == 0
-            ? [("(unknown)", session)]
-            : assemblies.Select(assembly => (assembly, session));
-    }
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : string.Concat(value.AsSpan(0, max - 1), "~");

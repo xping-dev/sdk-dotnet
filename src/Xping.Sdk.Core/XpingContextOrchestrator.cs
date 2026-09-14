@@ -681,9 +681,17 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// prints a single line pointing at the CLI.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The SDK does not analyse history or render reports. It states one fact about the run it just
     /// observed — how many tests failed and then passed on a retry — which is available from the
     /// executions already in memory and needs no store read. Everything historical is the CLI's job.
+    /// </para>
+    /// <para>
+    /// A run in which no execution named its assembly is not written. Every CLI report scopes by
+    /// assembly, so such a run could never be shown, only counted — and it is exactly what a
+    /// hand-built <c>TestExecution</c> recorded from a test of the SDK itself produces. Skipping
+    /// it keeps that noise out of the store rather than asking the CLI to explain it.
+    /// </para>
     /// </remarks>
     private void WriteLocalHistory()
     {
@@ -698,6 +706,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         if (executions.Count == 0)
             return;
+
+        if (_sessionAssemblies.Count == 0)
+        {
+            _logger.LogDebug(
+                "Local session not stored: none of its {Count} executions named a test assembly.",
+                executions.Count);
+            return;
+        }
 
         EnvironmentInfo? environment = _lastEnvironmentInfo;
 

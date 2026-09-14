@@ -54,7 +54,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
-| *(store path)* | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
+| `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
 | *(banner)* | string | *(unset)* | `XPING_NO_BANNER` | Suppresses the SDK's retry hint and the CLI's invitation |
 
 ---
@@ -847,6 +847,24 @@ XpingContext.Initialize(config);
 ---
 
 ## Configuration Examples
+
+
+### LocalStorePath
+
+**Type:** `string`  
+**Default:** *(unset — resolved to the repository root)*  
+**Environment Variable:** `XPING_LOCAL_STORE`
+
+Overrides where the [local store](local-store.md) is kept. Leave it unset for the default — `.xping/` at the repository root, which is where `xping report` looks — and set it only when a run must keep its history somewhere else: a read-only checkout, a container whose source tree is not writable, or a test host that drives the SDK as its subject and must not write next to the real runs.
+
+```csharp
+XpingContext.Initialize(new XpingConfiguration
+{
+    LocalStorePath = Path.Combine(Path.GetTempPath(), "xping-scratch")
+});
+```
+
+The CLI reads the same environment variable, so an exported `XPING_LOCAL_STORE` moves both sides together. A value set in code or `appsettings.json` moves only the SDK; export the variable when running the CLI against it (`--directory` starts the CLI's repository walk somewhere else, it does not name a store).
 
 ### Complete JSON Configuration
 

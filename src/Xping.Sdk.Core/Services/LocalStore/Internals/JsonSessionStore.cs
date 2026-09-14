@@ -39,11 +39,25 @@ internal sealed class JsonSessionStore : ILocalSessionStore
     private readonly ILogger _logger;
     private readonly Lazy<string?> _storePath;
 
-    public JsonSessionStore(LocalStoreOptions options, ILogger logger, string? startDirectory = null)
+    /// <param name="options">Retention limits for the store.</param>
+    /// <param name="logger">Receives the store's diagnostics.</param>
+    /// <param name="startDirectory">
+    /// Where the repository walk starts when no path is configured. Defaults to the location of
+    /// the calling assembly.
+    /// </param>
+    /// <param name="storePath">
+    /// The store root, when configured explicitly. Skips the repository walk altogether; the
+    /// directory is created on first write like any resolved root.
+    /// </param>
+    public JsonSessionStore(
+        LocalStoreOptions options, ILogger logger, string? startDirectory = null, string? storePath = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _storePath = new Lazy<string?>(() => LocalStorePathResolver.Resolve(startDirectory));
+        _storePath = new Lazy<string?>(() =>
+            string.IsNullOrWhiteSpace(storePath)
+                ? LocalStorePathResolver.Resolve(startDirectory)
+                : storePath);
     }
 
     public bool IsAvailable => _storePath.Value != null;
