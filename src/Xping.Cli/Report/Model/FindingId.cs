@@ -33,9 +33,9 @@ namespace Xping.Cli.Report.Model;
 /// </remarks>
 internal static class FindingId
 {
-    // Eight hex characters. The specification's example shows four, but a 16-bit space makes
-    // collisions plausible once a report carries a few dozen findings, and two findings sharing an
-    // id is indistinguishable from one finding to any consumer keyed on it.
+    // Eight hex characters. A shorter id makes collisions plausible once a report carries a few
+    // dozen findings, and two findings sharing an id is indistinguishable from one finding to any
+    // consumer keyed on it.
     private const int HexLength = 8;
 
     /// <summary>

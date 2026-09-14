@@ -478,9 +478,11 @@ internal sealed class FailureModeProvider : IFindingProvider
             unreliability = Math.Max(unreliability, WilsonInterval.LowerBound(failures, executions));
         }
 
-        // Unchanged by the promotion below: the id identifies the claim's subject, and the subject is
-        // the same cluster whichever kind describes it. Recomputing it from the member would move
-        // every finding's id the first time an adapter learned to name one.
+        // Keyed on the signature, not on the site the promotion below may name: the subject is the
+        // same cluster whichever kind describes it. The finding's id still moves on promotion,
+        // because the kind is half of it and BrokenFixture is a different claim from SharedFailure —
+        // that is the id doing its job. What must not move is the group id alone, or the same
+        // cluster would carry two subjects the first time an adapter learned to name a member.
         string groupId = string.Create(CultureInfo.InvariantCulture, $"sig_{cluster.Signature.Hash}");
 
         FailureSite? site = AgreedSite(cluster);
