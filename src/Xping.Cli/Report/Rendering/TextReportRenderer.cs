@@ -54,10 +54,19 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     // Width of the " | " the trailer's segments are joined with.
     private const int SeparatorWidth = 3;
 
-    // Severity marker, two spaces, kind label, two spaces. Everything after this is the subject.
-    private const int MarkerWidth = 4;
-    private const int Indent = MarkerWidth + 2;
-    private const int SubjectColumn = Indent + ReportVocabulary.LongestLabel + 2;
+    // The row number, right-padded so that single and double digits agree, plus one space. Rows are
+    // numbered because a truncated list only reads as truncated when they are, and because a
+    // finding has to be referrable to from the row beneath it.
+    private const int RowLabelWidth = 4;
+
+    // Everything below a row's header line is indented to here, which puts it under the severity
+    // marker. The name, the headline and the trailer all get the same budget as a result: a name is
+    // the one line in the report that must never be cut, and the old layout gave it the least room
+    // of the three by spending a third of the fence on the marker and the kind label beside it.
+    private const int ContinuationIndent = RowLabelWidth;
+
+    // What every line below a row's header has to fit in.
+    private const int ContinuationBudget = FenceWidth - ContinuationIndent;
 
     /// <inheritdoc/>
     public void Render(ReportEnvelope envelope, TextWriter output)
@@ -265,7 +274,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             if (index > 0)
                 builder.AppendLine();
 
-            WriteFinding(builder, envelope.Findings[index]);
+            WriteFinding(builder, envelope.Findings[index], index + 1);
         }
     }
 
@@ -305,18 +314,40 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
               $"{string.Join(", ", reasons)}.";
     }
 
-    private void WriteFinding(StringBuilder builder, FindingDto finding)
+    /// <summary>
+    /// Writes one finding: a header line, the name, the headline, and the dim trailer.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="finding">The finding.</param>
+    /// <param name="row">Its position in the list, from 1.</param>
+    /// <remarks>
+    /// <para>
+    /// The name has a line to itself and is never competed with for horizontal space. With the
+    /// marker and the kind label in front of it the name had 49 of the fence's 72 columns, on the
+    /// one line in the report that must not be truncated; it now has 68, which no
+    /// <c>Class.Method</c> in practice reaches. The cost is one line per finding, and that line is
+    /// the fix.
+    /// </para>
+    /// <para>
+    /// The severity marker is the coloured element and the only one. It is what the colour encodes:
+    /// a row number carries no severity, and a coloured name would say the identity was the thing
+    /// worth ranking.
+    /// </para>
+    /// </remarks>
+    private void WriteFinding(StringBuilder builder, FindingDto finding, int row)
     {
-        string label = ReportVocabulary.LabelFor(finding.Kind).PadRight(ReportVocabulary.LongestLabel);
-
-        builder.Append(capabilities.Colorize(finding.Severity, ReportVocabulary.MarkerFor(finding.Severity)))
+        builder.Append(row.ToString(CultureInfo.InvariantCulture))
+               .Append('.')
+               .Append(' ', Math.Max(1, RowLabelWidth - 1 - Digits(row)))
+               .Append(capabilities.Colorize(finding.Severity, ReportVocabulary.MarkerFor(finding.Severity)))
                .Append("  ")
-               .Append(label)
-               .Append("  ")
-               .AppendLine(Fit(Subject(finding.Subject), FenceWidth - SubjectColumn));
+               .AppendLine(ReportVocabulary.LabelFor(finding.Kind));
 
-        foreach (string line in Wrap(finding.Headline, FenceWidth - Indent))
-            builder.Append(' ', Indent).AppendLine(line);
+        builder.Append(' ', ContinuationIndent)
+               .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
+
+        foreach (string line in Wrap(finding.Headline, ContinuationBudget))
+            builder.Append(' ', ContinuationIndent).AppendLine(line);
 
         // Between the evidence level and the id: the two say how much to believe the finding and
         // which finding it is, and which executions its rate was taken over belongs with the first.
@@ -327,7 +358,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             finding.Id
         };
 
-        const int budget = FenceWidth - Indent;
+        const int budget = ContinuationBudget;
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
@@ -352,7 +383,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
                 trailer.Add(fitted);
         }
 
-        builder.Append(' ', Indent)
+        builder.Append(' ', ContinuationIndent)
                .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), budget)));
     }
 
@@ -400,15 +431,48 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             $"{capabilities.Glyphs.Separator} all: {truncated.Command}"));
     }
 
-    private static string Subject(SubjectDto subject)
+    /// <summary>
+    /// Reads the line that says what a finding is about.
+    /// </summary>
+    /// <param name="subject">The subject, with its names already resolved.</param>
+    /// <returns>The name, or the shared cause and how many tests carry it.</returns>
+    /// <remarks>
+    /// Read and not resolved. Every choice between a subject's recorded names was made in
+    /// <c>EnvelopeBuilder</c>, which is what stopped this renderer preferring a prose display name
+    /// to an identity and naming a cluster after whichever member happened to sort first.
+    /// <para>
+    /// Parentheses rather than a dash: they are ASCII in both glyph sets and need no
+    /// <c>ReportGlyphs</c> pair of their own, and piped output is asserted to carry nothing
+    /// above <c>0x7f</c>.
+    /// </para>
+    /// </remarks>
+    private static string Name(SubjectDto subject)
     {
-        if (subject.MemberCount is not { } members)
-            return subject.DisplayName ?? subject.FullyQualifiedName ?? subject.GroupId ?? "(unnamed)";
+        if (subject.ShortName is { Length: > 0 } name)
+            return name;
 
-        SubjectDto? first = subject.Members?.Count > 0 ? subject.Members[0] : null;
-        string name = first?.DisplayName ?? first?.FullyQualifiedName ?? subject.GroupId ?? "(cluster)";
+        string cause = subject.CauseLabel is { Length: > 0 } label ? label : "(cause not recorded)";
 
-        return members > 1 ? $"{name} +{members - 1} more" : name;
+        return subject.MemberCount is { } members ? $"{cause} ({Tests(members)})" : cause;
+    }
+
+    private static string Tests(int count) =>
+        count == 1 ? "1 test" : $"{count.ToString(CultureInfo.InvariantCulture)} tests";
+
+    /// <summary>
+    /// Counts the digits a row number takes.
+    /// </summary>
+    private static int Digits(int row)
+    {
+        int digits = 1;
+
+        while (row >= 10)
+        {
+            row /= 10;
+            digits++;
+        }
+
+        return digits;
     }
 
     /// <summary>
@@ -460,6 +524,46 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             return value;
 
         return string.Concat("...", value.AsSpan(value.Length - (width - 3)));
+    }
+
+    /// <summary>
+    /// Truncates a name from the left, never inside the method segment.
+    /// </summary>
+    /// <param name="value">The resolved name, which may carry an argument list.</param>
+    /// <param name="width">Columns available.</param>
+    /// <returns>The name, elided from the left where it did not fit.</returns>
+    /// <remarks>
+    /// <para>
+    /// The method segment is the half a reader greps for and the half that identifies the test, so
+    /// the class in front of it is what pays: <c>...Tests.VeryLongMethodName</c>. Where the method
+    /// alone cannot fit either, it is emitted whole and the line overflows — half an identifier is
+    /// unsearchable, and a few columns past the fence is the smaller harm. This is
+    /// <see cref="Wrap"/>'s policy for an over-long word and <see cref="FitPath"/>'s for a single
+    /// path segment, applied to the one line in the report that must stay usable.
+    /// </para>
+    /// <para>
+    /// The dot is looked for in front of the argument list, never inside it. A parameterised NUnit
+    /// case is recorded as <c>SampleTests.Add(1.5, 2)</c>, and the last dot in that string belongs
+    /// to an argument.
+    /// </para>
+    /// </remarks>
+    private static string FitName(string value, int width)
+    {
+        if (value.Length <= width)
+            return value;
+
+        int paren = value.IndexOf('(', StringComparison.Ordinal);
+        int end = paren < 0 ? value.Length : paren;
+        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+
+        if (dot < 0)
+            return value;
+
+        // The ellipsis, at least one character of the class, the dot and the whole method segment.
+        // Below that, Fit() would start eating the method, so the class goes entirely instead.
+        return width >= value.Length - dot + 4
+            ? Fit(value, width)
+            : string.Concat("...", value.AsSpan(dot + 1));
     }
 
     /// <summary>

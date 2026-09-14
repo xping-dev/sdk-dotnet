@@ -26,9 +26,6 @@ namespace Xping.Cli.Report.Rendering;
 /// </remarks>
 internal static class ReportVocabulary
 {
-    /// <summary>Longest label here, so a column can be sized without measuring at runtime.</summary>
-    public const int LongestLabel = 15;
-
     /// <summary>
     /// Gets the human label for a finding kind.
     /// </summary>

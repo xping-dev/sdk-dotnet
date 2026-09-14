@@ -25,8 +25,9 @@ public sealed class ShareableOutputTests
 {
     private const int FenceWidth = 72;
 
-    // Severity marker, two spaces, kind label, two spaces — the column the trailer starts at.
-    private const int Indent = 6;
+    // The column everything below a row's header line starts at — the name, the headline and the
+    // trailer alike.
+    private const int Indent = 4;
     private const string Fence = "```";
 
     // ---------------------------------------------------------------------
@@ -445,6 +446,173 @@ public sealed class ShareableOutputTests
 
         foreach (string line in Fenced(report))
             Assert.True(line.Length <= FenceWidth, $"'{line}' is {line.Length} columns");
+    }
+
+    /// <summary>
+    /// A row is a numbered header line and then everything else, indented under the marker.
+    /// </summary>
+    /// <remarks>
+    /// The name has a line to itself. Behind the marker and the kind label it had 49 of the fence's
+    /// 72 columns, on the one line in the report that must never be cut — and it was the line the
+    /// old layout truncated first.
+    /// </remarks>
+    [Fact]
+    public void ARowIsNumberedAndItsNameHasALineOfItsOwn()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Settles", "ran in 12 of 17 earlier runs")));
+
+        Assert.Equal(
+            [
+                "1.  HIGH  flaky",
+                "    CartTests.PlacesAnOrder",
+                "    failed 7 of 20",
+                "    evidence moderate | -env-cluster | f_2a91",
+                "",
+                "2.  LOW   stopped running",
+                "    CartTests.Settles",
+                "    ran in 12 of 17 earlier runs",
+                "    evidence moderate | -partial | f_2a91"
+            ],
+            Fenced(report));
+    }
+
+    /// <summary>
+    /// The name gets every column the fence has, less the indent.
+    /// </summary>
+    /// <remarks>
+    /// Sixty-eight, not the forty-nine the marker and the kind label used to leave. This name is 64
+    /// columns and was truncated by the old layout; no <c>Class.Method</c> anyone writes reaches the
+    /// new budget.
+    /// </remarks>
+    [Fact]
+    public void ANameTooLongForTheOldSubjectColumnSurvivesWhole()
+    {
+        const string name = "OrderPlacementIntegrationTests.PlacesAnOrderAndSettlesItProperly";
+
+        string report = Render(Envelope(
+            Finding("Flaky", "high", $"MyApp.Tests.{name}", "failed 7 of 20")));
+
+        Assert.Equal(64, name.Length);
+        Assert.Contains($"    {name}", Fenced(report), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// A name past the budget pays with its class, never with its method.
+    /// </summary>
+    /// <remarks>
+    /// The method segment is what a reader greps for and what <c>--filter</c> matches. Truncating
+    /// from the right would leave a column of identical class names; truncating into the method
+    /// leaves something that matches nothing.
+    /// </remarks>
+    [Fact]
+    public void AnOverLongNameIsElidedFromTheLeftAndKeepsItsMethodWhole()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "MyApp.Tests." + new string('C', 40) + "Tests.PlacesAnOrderAndSettlesItProperly",
+            "failed 7 of 20")));
+
+        string name = Fenced(report)[1];
+
+        Assert.Equal(FenceWidth, name.Length);
+        Assert.StartsWith("    ...", name, StringComparison.Ordinal);
+        Assert.EndsWith("Tests.PlacesAnOrderAndSettlesItProperly", name, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A method segment that cannot fit at all is emitted whole and the line overflows.
+    /// </summary>
+    /// <remarks>
+    /// The same trade <c>Wrap</c> makes for an over-long word and <c>FitPath</c> for a single path
+    /// segment: half an identifier is unsearchable, and a few columns past the fence is the smaller
+    /// harm. The class in front of it goes entirely rather than leaving a stub nobody can use.
+    /// </remarks>
+    [Fact]
+    public void AMethodNameWiderThanTheFenceIsEmittedWhole()
+    {
+        string method = new('M', 80);
+
+        string report = Render(Envelope(
+            Finding("Flaky", "high", $"MyApp.Tests.CartTests.{method}", "failed 7 of 20")));
+
+        Assert.Equal($"    ...{method}", Fenced(report)[1]);
+    }
+
+    /// <summary>
+    /// The elision cuts at the dot between class and method, never at one inside an argument.
+    /// </summary>
+    /// <remarks>
+    /// NUnit records a parameterised case as <c>SampleTests.Add(1.5, 2)</c>. The last dot in that
+    /// string belongs to an argument, and cutting there would leave <c>...5, 2)</c>.
+    /// </remarks>
+    [Fact]
+    public void AnArgumentListIsNotMistakenForTheBoundaryBetweenClassAndMethod()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "MyApp.Tests." + new string('C', 40) + "Tests.Add(1.5, 2.25, 3.125)",
+            "failed 7 of 20")));
+
+        string name = Fenced(report)[1];
+
+        Assert.EndsWith("Tests.Add(1.5, 2.25, 3.125)", name, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A cluster is named by what its members share, and says how many of them there are.
+    /// </summary>
+    /// <remarks>
+    /// Never by a member: naming one of three tests and appending "+2 more" leaves a reader opening
+    /// whichever member happened to sort first, when the finding's own evidence had already
+    /// identified the one place to go.
+    /// </remarks>
+    [Fact]
+    public void AClusterRowNamesItsCauseAndHowManyTestsCarryIt()
+    {
+        string report = Render(Envelope(Cluster(
+            "UnprovisionedDatabase..ctor",
+            3,
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20 runs")));
+
+        Assert.Equal("    UnprovisionedDatabase..ctor (3 tests)", Fenced(report)[1]);
+
+        // The group id is a signature hash. A hash presented as a cause is worse than an admission.
+        Assert.DoesNotContain("sig_", report, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One test in a cluster is one test, not "1 tests".
+    /// </summary>
+    [Fact]
+    public void AClusterOfOneCountsInTheSingular()
+    {
+        string report = Render(Envelope(Cluster("SocketException", 1, "1 test failed alike")));
+
+        Assert.Equal("    SocketException (1 test)", Fenced(report)[1]);
+    }
+
+    /// <summary>
+    /// The severity marker is the coloured element, and the only one.
+    /// </summary>
+    /// <remarks>
+    /// It is what the colour encodes. A row number carries no severity, and colouring the name would
+    /// say the identity was the thing worth ranking rather than the thing worth reading.
+    /// </remarks>
+    [Fact]
+    public void TheSeverityMarkerIsTheOnlyColouredElementOfARow()
+    {
+        string report = Render(
+            Envelope(Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")),
+            Capabilities(redirected: false));
+
+        string[] fenced = Fenced(report);
+
+        Assert.Equal("1.  \u001b[31mHIGH\u001b[0m  flaky", fenced[0]);
+        Assert.DoesNotContain("\u001b", fenced[1], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1210,6 +1378,27 @@ public sealed class ShareableOutputTests
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,
             "xping report --kind Flaky --format json");
+
+    /// <summary>
+    /// A finding about a cluster: no name of its own, a cause, and members beneath it.
+    /// </summary>
+    private static FindingDto Cluster(string cause, int members, string headline) =>
+        Finding("BrokenFixture", "high", "MyApp.Tests.SampleTests.First", headline) with
+        {
+            Subject = new SubjectDto(
+                "group", null, null, null, null, cause, null, null, null,
+                "sig_c7b87f12",
+                members,
+                [
+                    .. Enumerable.Range(0, members).Select(i => new SubjectDto(
+                        "test",
+                        $"fp{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                        $"MyApp.Tests.FixtureTests.Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                        $"Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                        $"FixtureTests.Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                        null, null, null, "MyApp.Tests", null, null, null))
+                ])
+        };
 
     private static ReportEnvelope Envelope(params FindingDto[] findings) =>
         Envelope(findings, findings.Length, findings.Length);
