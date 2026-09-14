@@ -1249,6 +1249,7 @@ public sealed class ShareableOutputTests
                 412,
                 produced,
                 new SeverityCountsDto(high, medium, low),
+                findings.Length,
                 412 - findings.Length,
                 lowEvidence,
                 notSignificant,

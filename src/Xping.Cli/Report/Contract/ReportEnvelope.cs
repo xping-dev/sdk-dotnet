@@ -52,7 +52,8 @@ internal sealed record ReportEnvelope(
     /// 1.19 is where a subject gained <c>shortName</c>, the identity a reader greps for and pastes
     /// into <c>dotnet test --filter</c>, and <c>causeLabel</c>, what the members of a cluster have in
     /// common — both resolved here rather than by a renderer, which is what lets the rendered report
-    /// name a test the way its author would.
+    /// name a test the way its author would; and where the summary gained <c>flagged</c>, the count
+    /// <c>healthy</c> had been the complement of without ever saying so.
     /// </remarks>
     public const string CurrentSchemaVersion = "1.19";
 }
@@ -95,6 +96,14 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="Tests">Distinct tests seen in the window.</param>
 /// <param name="Findings">Findings produced, before truncation.</param>
 /// <param name="Counts">Those findings broken down by severity.</param>
+/// <param name="Flagged">
+/// Tests named by at least one finding, counted once each. Not <paramref name="Findings"/> and not
+/// derivable from it in either direction: one test attracts findings of several kinds, and one
+/// finding about a cluster covers every test in it. Published because it is the number
+/// <paramref name="Healthy"/> is the complement of — without it, a reader given three findings and
+/// four unhealthy tests out of sixteen has to reconstruct a deduplication they cannot see, and the
+/// two counts read as an arithmetic error.
+/// </param>
 /// <param name="Healthy">
 /// Tests no finding was raised about. Not "tests that were checked and are fine": a test a metric
 /// could not be computed for is in here too, and <paramref name="NotMeasured"/> is what says so.
@@ -147,6 +156,7 @@ internal sealed record SummaryDto(
     int Tests,
     int Findings,
     SeverityCountsDto Counts,
+    int Flagged,
     int Healthy,
     int ExcludedLowEvidence,
     int ExcludedNotSignificant,

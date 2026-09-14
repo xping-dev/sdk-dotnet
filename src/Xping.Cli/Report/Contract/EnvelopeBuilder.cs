@@ -82,6 +82,7 @@ internal static class EnvelopeBuilder
                 tests,
                 result.Findings.Count,
                 new SeverityCountsDto(high, medium, low),
+                flagged.Count,
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
                 result.ExcludedNotSignificant,

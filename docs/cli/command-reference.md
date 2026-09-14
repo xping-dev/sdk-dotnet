@@ -378,7 +378,10 @@ however long you wait. It is deliberately not a total: adding the entries counts
 question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
 ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
 means "no finding was raised" rather than "checked and fine" — a test first seen in a run that
-covered only part of the suite is inside it too, on one run of history:
+covered only part of the suite is inside it too, on one run of history. `flagged` is its complement,
+and counts tests where `findings` counts findings: one test can attract findings of several kinds,
+and one finding about a broken fixture covers every test that fixture took down, so the two numbers
+are not each other and `tests` is what they add up to:
 
 ```json
 {
@@ -389,6 +392,7 @@ covered only part of the suite is inside it too, on one run of history:
     "tests": 412,
     "findings": 3,
     "counts": { "high": 1, "medium": 2, "low": 0 },
+    "flagged": 3,
     "healthy": 409,
     "excludedLowEvidence": 41,
     "excludedNotSignificant": 6,

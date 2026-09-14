@@ -338,7 +338,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         JsonElement summary = root.GetProperty("summary");
         foreach (string key in (string[])
         [
-            "tests", "findings", "healthy", "excludedLowEvidence", "excludedNotSignificant",
+            "tests", "findings", "flagged", "healthy", "excludedLowEvidence", "excludedNotSignificant",
             "notMeasured", "environmentalSessions", "incompleteSessions", "unreadableSessions",
             "skewedSessions", "failedProviders"
         ])
@@ -492,7 +492,35 @@ public sealed class ReportEnvelopeTests : IDisposable
         // Five distinct tests in the window; two vanished.
         Assert.Equal(5, summary.GetProperty("tests").GetInt32());
         Assert.Equal(2, summary.GetProperty("findings").GetInt32());
+        Assert.Equal(2, summary.GetProperty("flagged").GetInt32());
         Assert.Equal(3, summary.GetProperty("healthy").GetInt32());
+
+        // The line has to add up. Here one finding names one test and the two counts happen to
+        // agree, which is exactly the case that hides a deduplication going wrong.
+        Assert.Equal(
+            summary.GetProperty("tests").GetInt32(),
+            summary.GetProperty("healthy").GetInt32() + summary.GetProperty("flagged").GetInt32());
+    }
+
+    /// <summary>
+    /// One finding covering three tests is one finding and three unhealthy tests.
+    /// </summary>
+    /// <remarks>
+    /// The shape that makes the count worth publishing. Without it a reader sees one finding beside
+    /// two healthy tests out of five and reads an arithmetic error — the deduplication that reconciles
+    /// them happens in the builder and is invisible from the report.
+    /// </remarks>
+    [Fact]
+    public void FlaggedCountsTestsAndNotFindings()
+    {
+        SeedBrokenFixture("UnprovisionedDatabase..ctor");
+
+        JsonElement summary = RunJson("--all").GetProperty("summary");
+
+        Assert.Equal(5, summary.GetProperty("tests").GetInt32());
+        Assert.Equal(1, summary.GetProperty("findings").GetInt32());
+        Assert.Equal(3, summary.GetProperty("flagged").GetInt32());
+        Assert.Equal(2, summary.GetProperty("healthy").GetInt32());
     }
 
     [Fact]
