@@ -68,6 +68,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     // What every line below a row's header has to fit in.
     private const int ContinuationBudget = FenceWidth - ContinuationIndent;
 
+    // A cluster's members are indented past the cause they share, so the two read as a list under a
+    // heading rather than as four names of equal standing.
+    private const int MemberIndent = ContinuationIndent + 2;
+
+    // Members named before the rest become a count. Three is enough to recognise what the cluster
+    // is -- one test suite, one fixture, one namespace -- and a forty-member cluster listed in full
+    // is a finding nobody scrolls past. The whole list is in the JSON, where a caller reads it by
+    // name rather than by eye.
+    private const int MembersShown = 3;
+
     /// <inheritdoc/>
     public void Render(ReportEnvelope envelope, TextWriter output)
     {
@@ -346,6 +356,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         builder.Append(' ', ContinuationIndent)
                .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
 
+        WriteMembers(builder, finding.Subject);
+
         foreach (string line in Wrap(finding.Headline, ContinuationBudget))
             builder.Append(' ', ContinuationIndent).AppendLine(line);
 
@@ -429,6 +441,42 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         builder.AppendLine(capabilities.Dim(
             $"Showing {truncated.Shown} of {truncated.Total} " +
             $"{capabilities.Glyphs.Separator} all: {truncated.Command}"));
+    }
+
+    /// <summary>
+    /// Lists the tests a cluster covers, beneath the cause they share.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="subject">The subject, which lists members only when it is a group.</param>
+    /// <remarks>
+    /// <para>
+    /// The members are what makes a cluster navigable, and they are listed in every case — including
+    /// the one where the evidence named no cause at all. A finding a reader cannot name and cannot
+    /// open is a finding they skip.
+    /// </para>
+    /// <para>
+    /// Three and then a count. The cause above is the line that is acted on; these say what it took
+    /// down, and three of them establish that as well as forty do.
+    /// </para>
+    /// </remarks>
+    private static void WriteMembers(StringBuilder builder, SubjectDto subject)
+    {
+        if (subject.Members is not { Count: > 0 } members)
+            return;
+
+        foreach (SubjectDto member in members.Take(MembersShown))
+        {
+            builder.Append(' ', MemberIndent)
+                   .AppendLine(FitName(Name(member), FenceWidth - MemberIndent));
+        }
+
+        if (members.Count > MembersShown)
+        {
+            builder.Append(' ', MemberIndent)
+                   .Append('+')
+                   .Append((members.Count - MembersShown).ToString(CultureInfo.InvariantCulture))
+                   .AppendLine(" more");
+        }
     }
 
     /// <summary>

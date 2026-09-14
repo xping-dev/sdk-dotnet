@@ -585,6 +585,107 @@ public sealed class ShareableOutputTests
     }
 
     /// <summary>
+    /// The members are listed beneath the cause, indented past it.
+    /// </summary>
+    /// <remarks>
+    /// The cause is the line that gets acted on and the members are what it took down, so they are
+    /// indented under it rather than set level with it. Each is named by its own identity, resolved
+    /// on the envelope like every other name here.
+    /// </remarks>
+    [Fact]
+    public void AClusterListsItsMembersBeneathTheCause()
+    {
+        string report = Render(Envelope(Cluster(
+            "UnprovisionedDatabase..ctor",
+            3,
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20 runs")));
+
+        Assert.Equal(
+            [
+                "1.  HIGH  broken fixture",
+                "    UnprovisionedDatabase..ctor (3 tests)",
+                "      FixtureTests.Member0",
+                "      FixtureTests.Member1",
+                "      FixtureTests.Member2",
+
+                // 69 columns, so it wraps at the budget the name and the trailer share.
+                "    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20",
+                "    runs",
+                "    evidence moderate | all runs | f_2a91"
+            ],
+            Fenced(report));
+    }
+
+    /// <summary>
+    /// A wide cluster names three members and counts the rest.
+    /// </summary>
+    /// <remarks>
+    /// Three is enough to recognise what the cluster is; a forty-member list is a finding nobody
+    /// scrolls past, and the whole of it is in the JSON for a caller that wants every name.
+    /// </remarks>
+    [Fact]
+    public void AWideClusterNamesThreeMembersAndCountsTheRest()
+    {
+        string report = Render(Envelope(Cluster("SocketException", 12, "12 tests failed alike")));
+
+        string[] fenced = Fenced(report);
+
+        Assert.Equal("    SocketException (12 tests)", fenced[1]);
+        Assert.Equal(
+            ["      FixtureTests.Member0", "      FixtureTests.Member1", "      FixtureTests.Member2"],
+            fenced[2..5]);
+        Assert.Equal("      +9 more", fenced[5]);
+    }
+
+    /// <summary>
+    /// A cluster nobody could name is still navigable.
+    /// </summary>
+    /// <remarks>
+    /// Where the adapter recorded no member and no exception type, the cause line says so — and the
+    /// members are listed underneath in that case exactly as in every other, because a finding a
+    /// reader can neither name nor open is a finding they skip.
+    /// </remarks>
+    [Fact]
+    public void AClusterWithNoRecordedCauseStillListsItsMembers()
+    {
+        string report = Render(Envelope(Cluster("(cause not recorded)", 2, "2 tests failed alike")));
+
+        string[] fenced = Fenced(report);
+
+        Assert.Equal("    (cause not recorded) (2 tests)", fenced[1]);
+        Assert.Equal(["      FixtureTests.Member0", "      FixtureTests.Member1"], fenced[2..4]);
+    }
+
+    /// <summary>
+    /// A member name is subject to the fence like every other line, and elides the same way.
+    /// </summary>
+    [Fact]
+    public void AnOverLongMemberNameIsElidedAndKeepsItsMethod()
+    {
+        FindingDto finding = Cluster("SocketException", 1, "1 test failed alike");
+
+        finding = finding with
+        {
+            Subject = finding.Subject with
+            {
+                Members =
+                [
+                    finding.Subject.Members![0] with
+                    {
+                        ShortName = new string('C', 50) + "Tests.PlacesAnOrderAndSettlesItProperly"
+                    }
+                ]
+            }
+        };
+
+        string member = Fenced(Render(Envelope(finding)))[2];
+
+        Assert.Equal(FenceWidth, member.Length);
+        Assert.StartsWith("      ...", member, StringComparison.Ordinal);
+        Assert.EndsWith("Tests.PlacesAnOrderAndSettlesItProperly", member, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// One test in a cluster is one test, not "1 tests".
     /// </summary>
     [Fact]
