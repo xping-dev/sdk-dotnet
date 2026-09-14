@@ -514,8 +514,9 @@ public sealed class JsonSessionStoreTests : IDisposable
     [Fact]
     public void ARunThatNamedNoAssemblyIsUnreachableByAnyScope()
     {
-        // It cannot be attributed, so it cannot be scoped to. It stays in the store — `xping where`
-        // still accounts for it — but no report can claim it belongs to a suite.
+        // It cannot be attributed, so it cannot be scoped to. The store itself does not refuse it -
+        // the orchestrator is what stops writing one - so a file from before that guard still reads
+        // back, and `xping where` still accounts for it, but no report can claim it belongs to a suite.
         JsonSessionStore store = CreateStore();
 
         store.Write(BuildSession(

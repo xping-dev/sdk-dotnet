@@ -409,6 +409,25 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     [Fact]
+    public void WhereAccountsForRunsThatNameNoAssemblyInsteadOfListingThem()
+    {
+        // The SDK no longer writes such a run, but a store can still hold some from before it
+        // stopped. They fit no assembly line, so the header would otherwise claim more runs than
+        // the list explains.
+        Seed("Alpha.Tests", true);
+        SeedUnattributableSession();
+        SeedUnattributableSession();
+
+        var (code, output) = Run("where");
+
+        Assert.Equal(0, code);
+        Assert.Contains("3 runs", output, StringComparison.Ordinal);
+        Assert.Contains("2 runs name no assembly and are not shown", output, StringComparison.Ordinal);
+        Assert.Matches(@"Alpha\.Tests\s+1 run", output);
+        Assert.DoesNotContain("(unknown)", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WhereReportsAnEmptyStoreWithoutFailing()
     {
         var (code, output) = Run("where");

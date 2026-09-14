@@ -56,6 +56,20 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // A large window: this is a diagnostic, so completeness beats speed.
         IReadOnlyList<TestSession> sessions = store.ReadRecent(500).Sessions;
 
+        // The SDK no longer writes a run that named no assembly, but a store can still hold some
+        // from before it stopped. They fit no listing below, so without this line the run count
+        // above and the list would disagree until retention evicts them.
+        int unattributed = sessions.Count(session => SessionAssemblies.Of(session).Count == 0);
+        if (unattributed > 0)
+        {
+            output.WriteLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0} {1} no assembly and {2} not shown",
+                unattributed,
+                unattributed == 1 ? "run names" : "runs name",
+                unattributed == 1 ? "is" : "are"));
+        }
+
         // A run is listed under every assembly it executed, so the run counts below can add up to
         // more than the file count above. That is the honest reading: one `dotnet test` across a
         // solution is one run of each test project it covered, and each of them has that much
