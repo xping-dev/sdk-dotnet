@@ -51,6 +51,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
     private const string Fence = "```";
 
+    // What the heading says about the order of the rows beneath it. Right-aligned to the fence,
+    // opposite the heading, so it reads as a note on the list rather than as part of its name.
+    private const string OrderingNote = "most severe first";
+
     // Width of the " | " the trailer's segments are joined with.
     private const int SeparatorWidth = 3;
 
@@ -123,11 +127,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         SummaryDto summary = envelope.Summary;
 
+        // What state the suite is in, and nothing about the findings: the line above answers what was
+        // analysed, and the heading below the fence carries the severity breakdown beside the list
+        // it describes. The three counts reconcile -- tests is healthy plus flagged -- which is what
+        // the finding count standing in this position could never do, one test carrying two findings
+        // and one finding covering a whole cluster.
         var counts = new List<string>
         {
-            ReportVocabulary.FindingsPhrase(summary),
             $"{summary.Tests.ToString(CultureInfo.InvariantCulture)} tests",
-            $"{summary.Healthy.ToString(CultureInfo.InvariantCulture)} healthy"
+            $"{summary.Healthy.ToString(CultureInfo.InvariantCulture)} healthy",
+            $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged"
         };
 
         if (summary.ExcludedLowEvidence > 0)
@@ -277,6 +286,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             return;
         }
 
+        WriteHeading(builder, envelope.Summary);
+
         // Findings arrive ranked. The severity column carries what the old grouping by kind carried,
         // and preserving the ranking top to bottom is worth more than the grouping was.
         for (int index = 0; index < envelope.Findings.Count; index++)
@@ -286,6 +297,42 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
             WriteFinding(builder, envelope.Findings[index], index + 1);
         }
+    }
+
+    /// <summary>
+    /// Writes the heading the finding list sits under.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="summary">Counts describing the run as a whole.</param>
+    /// <remarks>
+    /// <para>
+    /// A count in an internal vocabulary word — "5 findings (5 high)" — told a reader how many rows
+    /// there were and nothing about whether the list was informational or actionable. The heading
+    /// says which it is, in words that claim nothing the evidence does not: not "problems found",
+    /// which asserts causality the evidence rules forbid, and not "reliability issues", which is
+    /// jargon.
+    /// </para>
+    /// <para>
+    /// The parenthesis is where the severity breakdown lives now that it has left the header, and it
+    /// sits beside the list it describes rather than two lines above it. Nothing is printed twice:
+    /// the heading carries the bands, the rows carry the ranking, the header carries the suite.
+    /// </para>
+    /// <para>
+    /// Only where there is something under it. A clean report and a full one should not both require
+    /// a reader to parse a heading before discovering which they are looking at.
+    /// </para>
+    /// </remarks>
+    private void WriteHeading(StringBuilder builder, SummaryDto summary)
+    {
+        string bands = ReportVocabulary.SeverityBands(summary);
+        string heading = bands.Length > 0 ? $"NEEDS ATTENTION ({bands})" : "NEEDS ATTENTION";
+
+        builder.Append(heading)
+               .Append(' ', Math.Max(1, FenceWidth - heading.Length - OrderingNote.Length))
+               .AppendLine(OrderingNote);
+
+        builder.Append(capabilities.Glyphs.HorizontalRule, FenceWidth).AppendLine();
+        builder.AppendLine();
     }
 
     /// <summary>

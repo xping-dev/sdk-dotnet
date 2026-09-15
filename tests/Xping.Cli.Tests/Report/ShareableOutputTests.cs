@@ -449,6 +449,132 @@ public sealed class ShareableOutputTests
     }
 
     /// <summary>
+    /// The second header line answers what state the suite is in, and its counts reconcile.
+    /// </summary>
+    /// <remarks>
+    /// It used to open with a finding count, which is a different unit from the two beside it: one
+    /// test can carry two findings and one finding can cover a cluster, so "5 findings · 16 tests ·
+    /// 10 healthy" read as an arithmetic error to anyone who tried to add it up. Tests, healthy and
+    /// flagged are one unit and do add up.
+    /// </remarks>
+    [Fact]
+    public void TheSecondHeaderLineCountsTestsAndNotFindings()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Settles", "ran in 12 of 17 earlier runs")));
+
+        string counts = Lines(report).Single(l => l.Contains("healthy", StringComparison.Ordinal));
+
+        Assert.Equal("412 tests | 410 healthy | 2 flagged", counts);
+        Assert.DoesNotContain("findings", counts, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The finding list is headed, and the heading says how the list is ordered.
+    /// </summary>
+    /// <remarks>
+    /// A count in an internal vocabulary word said how many rows there were and nothing about
+    /// whether the list was informational or actionable. The heading is imperative and asserts no
+    /// verdict: "problems found" would claim a causality the evidence rules forbid.
+    /// </remarks>
+    [Fact]
+    public void TheFindingListIsHeadedAndSaysHowItIsOrdered()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")));
+
+        string[] fenced = Fenced(report);
+
+        Assert.Equal(FenceWidth, fenced[0].Length);
+        Assert.StartsWith("NEEDS ATTENTION (1 high)", fenced[0], StringComparison.Ordinal);
+        Assert.EndsWith("most severe first", fenced[0], StringComparison.Ordinal);
+
+        Assert.Equal(new string('-', FenceWidth), fenced[1]);
+        Assert.Equal("", fenced[2]);
+    }
+
+    /// <summary>
+    /// The heading carries the severity breakdown the header line used to.
+    /// </summary>
+    [Fact]
+    public void TheHeadingCarriesTheSeverityBreakdown()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.One", "failed 7 of 20"),
+            Finding("RetryMasked", "medium", "MyApp.Tests.CartTests.Two", "passed on retry 4 times"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Three", "ran in 12 of 17 earlier runs")));
+
+        Assert.StartsWith(
+            "NEEDS ATTENTION (1 high, 1 medium, 1 low)", Fenced(report)[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The bands count every finding produced, not the rows a truncated report shows.
+    /// </summary>
+    /// <remarks>
+    /// So <c>--top 1</c> can head one row with three bands. That is correct: the report found three
+    /// things and is showing one of them, and the truncation line below the fence is what says so.
+    /// A heading that counted the rows would make the number move with a display flag.
+    /// </remarks>
+    [Fact]
+    public void TheHeadingCountsEveryFindingProducedAndNotTheRowsShown()
+    {
+        ReportEnvelope envelope = Envelope(
+            [Finding("Flaky", "high", "MyApp.Tests.CartTests.One", "failed 7 of 20")],
+            shown: 1,
+            total: 3);
+
+        envelope = envelope with
+        {
+            Summary = envelope.Summary with { Counts = new SeverityCountsDto(2, 1, 0) }
+        };
+
+        string report = Render(envelope);
+
+        Assert.StartsWith(
+            "NEEDS ATTENTION (2 high, 1 medium)", Fenced(report)[0], StringComparison.Ordinal);
+        Assert.Single(Fenced(report), l => l.StartsWith("1.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A report with nothing in it prints no heading.
+    /// </summary>
+    /// <remarks>
+    /// A clean report and a full one should not both require a reader to parse a heading before
+    /// discovering which of the two they are looking at.
+    /// </remarks>
+    [Fact]
+    public void AnEmptyReportIsNotHeaded()
+    {
+        string report = Render(Envelope());
+
+        Assert.DoesNotContain("NEEDS ATTENTION", report, StringComparison.Ordinal);
+        Assert.Single(Fenced(report));
+    }
+
+    /// <summary>
+    /// The rule under the heading is drawn from the glyph set in use, not from a literal.
+    /// </summary>
+    /// <remarks>
+    /// A bare box-drawing character would arrive as mojibake on a code page that cannot render it,
+    /// and would break the assertion that piped output carries nothing but printable ASCII.
+    /// </remarks>
+    [Fact]
+    public void TheRuleUnderTheHeadingIsDrawnFromTheGlyphSet()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"));
+
+        string unicode = Render(
+            envelope,
+            OutputCapabilities.Resolve(forceAscii: false, noColor: true, redirected: false, _ => null));
+
+        Assert.Equal(new string('\u2500', FenceWidth), Fenced(unicode)[1]);
+        Assert.Equal(new string('-', FenceWidth), Fenced(Render(envelope))[1]);
+    }
+
+    /// <summary>
     /// A row is a numbered header line and then everything else, indented under the marker.
     /// </summary>
     /// <remarks>
@@ -475,7 +601,7 @@ public sealed class ShareableOutputTests
                 "    ran in 12 of 17 earlier runs",
                 "    evidence moderate | -partial | f_2a91"
             ],
-            Fenced(report));
+            Rows(report));
     }
 
     /// <summary>
@@ -515,7 +641,7 @@ public sealed class ShareableOutputTests
             "MyApp.Tests." + new string('C', 40) + "Tests.PlacesAnOrderAndSettlesItProperly",
             "failed 7 of 20")));
 
-        string name = Fenced(report)[1];
+        string name = Rows(report)[1];
 
         Assert.Equal(FenceWidth, name.Length);
         Assert.StartsWith("    ...", name, StringComparison.Ordinal);
@@ -538,7 +664,7 @@ public sealed class ShareableOutputTests
         string report = Render(Envelope(
             Finding("Flaky", "high", $"MyApp.Tests.CartTests.{method}", "failed 7 of 20")));
 
-        Assert.Equal($"    ...{method}", Fenced(report)[1]);
+        Assert.Equal($"    ...{method}", Rows(report)[1]);
     }
 
     /// <summary>
@@ -557,7 +683,7 @@ public sealed class ShareableOutputTests
             "MyApp.Tests." + new string('C', 40) + "Tests.Add(1.5, 2.25, 3.125)",
             "failed 7 of 20")));
 
-        string name = Fenced(report)[1];
+        string name = Rows(report)[1];
 
         Assert.EndsWith("Tests.Add(1.5, 2.25, 3.125)", name, StringComparison.Ordinal);
     }
@@ -578,7 +704,7 @@ public sealed class ShareableOutputTests
             3,
             "UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20 runs")));
 
-        Assert.Equal("    UnprovisionedDatabase..ctor (3 tests)", Fenced(report)[1]);
+        Assert.Equal("    UnprovisionedDatabase..ctor (3 tests)", Rows(report)[1]);
 
         // The group id is a signature hash. A hash presented as a cause is worse than an admission.
         Assert.DoesNotContain("sig_", report, StringComparison.Ordinal);
@@ -600,7 +726,7 @@ public sealed class ShareableOutputTests
                 with { Annotation = "same test as #1" }));
 
         // Four lines for the first finding, then the blank line between rows.
-        string header = Fenced(report)[5];
+        string header = Rows(report)[5];
 
         Assert.Equal(FenceWidth, header.Length);
         Assert.StartsWith("2.  HIGH  flaky ", header, StringComparison.Ordinal);
@@ -616,7 +742,7 @@ public sealed class ShareableOutputTests
         string report = Render(Envelope(
             Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")));
 
-        Assert.Equal("1.  HIGH  flaky", Fenced(report)[0]);
+        Assert.Equal("1.  HIGH  flaky", Rows(report)[0]);
     }
 
     /// <summary>
@@ -669,7 +795,7 @@ public sealed class ShareableOutputTests
                 "    runs",
                 "    evidence moderate | all runs | f_2a91"
             ],
-            Fenced(report));
+            Rows(report));
     }
 
     /// <summary>
@@ -684,13 +810,13 @@ public sealed class ShareableOutputTests
     {
         string report = Render(Envelope(Cluster("SocketException", 12, "12 tests failed alike")));
 
-        string[] fenced = Fenced(report);
+        string[] rows = Rows(report);
 
-        Assert.Equal("    SocketException (12 tests)", fenced[1]);
+        Assert.Equal("    SocketException (12 tests)", rows[1]);
         Assert.Equal(
             ["      FixtureTests.Member0", "      FixtureTests.Member1", "      FixtureTests.Member2"],
-            fenced[2..5]);
-        Assert.Equal("      +9 more", fenced[5]);
+            rows[2..5]);
+        Assert.Equal("      +9 more", rows[5]);
     }
 
     /// <summary>
@@ -706,10 +832,10 @@ public sealed class ShareableOutputTests
     {
         string report = Render(Envelope(Cluster("(cause not recorded)", 2, "2 tests failed alike")));
 
-        string[] fenced = Fenced(report);
+        string[] rows = Rows(report);
 
-        Assert.Equal("    (cause not recorded) (2 tests)", fenced[1]);
-        Assert.Equal(["      FixtureTests.Member0", "      FixtureTests.Member1"], fenced[2..4]);
+        Assert.Equal("    (cause not recorded) (2 tests)", rows[1]);
+        Assert.Equal(["      FixtureTests.Member0", "      FixtureTests.Member1"], rows[2..4]);
     }
 
     /// <summary>
@@ -734,7 +860,7 @@ public sealed class ShareableOutputTests
             }
         };
 
-        string member = Fenced(Render(Envelope(finding)))[2];
+        string member = Rows(Render(Envelope(finding)))[2];
 
         Assert.Equal(FenceWidth, member.Length);
         Assert.StartsWith("      ...", member, StringComparison.Ordinal);
@@ -749,7 +875,7 @@ public sealed class ShareableOutputTests
     {
         string report = Render(Envelope(Cluster("SocketException", 1, "1 test failed alike")));
 
-        Assert.Equal("    SocketException (1 test)", Fenced(report)[1]);
+        Assert.Equal("    SocketException (1 test)", Rows(report)[1]);
     }
 
     /// <summary>
@@ -766,10 +892,10 @@ public sealed class ShareableOutputTests
             Envelope(Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")),
             Capabilities(redirected: false));
 
-        string[] fenced = Fenced(report);
+        string[] rows = Rows(report);
 
-        Assert.Equal("1.  \u001b[31mHIGH\u001b[0m  flaky", fenced[0]);
-        Assert.DoesNotContain("\u001b", fenced[1], StringComparison.Ordinal);
+        Assert.Equal("1.  \u001b[31mHIGH\u001b[0m  flaky", rows[0]);
+        Assert.DoesNotContain("\u001b", rows[1], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1465,6 +1591,23 @@ public sealed class ShareableOutputTests
         Assert.True(open >= 0 && close > open, "the report is not fenced");
 
         return lines[(open + 1)..close];
+    }
+
+    /// <summary>
+    /// Returns the finding rows — the fenced lines beneath the section heading and its rule.
+    /// </summary>
+    /// <remarks>
+    /// The heading is part of the fenced block and is width-asserted with the rest of it, but a test
+    /// about a row's shape should not have to count the lines above the first row.
+    /// </remarks>
+    private static string[] Rows(string report)
+    {
+        string[] fenced = Fenced(report);
+        int heading = Array.FindIndex(
+            fenced, l => l.StartsWith("NEEDS ATTENTION", StringComparison.Ordinal));
+
+        // The heading, the rule under it, and the blank line before the first row.
+        return heading < 0 ? fenced : fenced[(heading + 3)..];
     }
 
     private static string Strip(string value)

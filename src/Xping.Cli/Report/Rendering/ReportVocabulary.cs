@@ -153,6 +153,40 @@ internal static class ReportVocabulary
         if (summary.Findings == 0)
             return "no findings";
 
+        string count = summary.Findings == 1
+            ? "1 finding"
+            : $"{summary.Findings.ToString(CultureInfo.InvariantCulture)} findings";
+
+        return $"{count} ({SeverityBands(summary)})";
+    }
+
+    /// <summary>
+    /// Gets the severity breakdown, in words and without punctuation of its own.
+    /// </summary>
+    /// <param name="summary">Counts describing the run as a whole.</param>
+    /// <returns>Something like <c>5 high, 2 medium</c>, or empty where nothing was found.</returns>
+    /// <remarks>
+    /// <para>
+    /// Unparenthesised, because two callers want it inside different punctuation and one producer is
+    /// what stops the two drifting apart: the section heading wraps it in parentheses of its own,
+    /// and <see cref="FindingsPhrase"/> puts it after a count.
+    /// </para>
+    /// <para>
+    /// An empty band is left out rather than printed as zero. "5 high, 0 medium, 0 low" makes a
+    /// reader check two numbers to learn nothing, and the bands that are there are the ones being
+    /// counted.
+    /// </para>
+    /// <para>
+    /// Counted over every finding produced and not over the rows a report shows.
+    /// <c>SummaryDto.Counts</c> is tallied before truncation, so <c>--top 3</c> heads three rows
+    /// with the whole breakdown — which is correct, and the truncation line below the fence is what
+    /// explains it.
+    /// </para>
+    /// </remarks>
+    public static string SeverityBands(SummaryDto summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+
         var bands = new List<string>();
 
         if (summary.Counts.High > 0)
@@ -162,10 +196,6 @@ internal static class ReportVocabulary
         if (summary.Counts.Low > 0)
             bands.Add($"{summary.Counts.Low.ToString(CultureInfo.InvariantCulture)} low");
 
-        string count = summary.Findings == 1
-            ? "1 finding"
-            : $"{summary.Findings.ToString(CultureInfo.InvariantCulture)} findings";
-
-        return $"{count} ({string.Join(", ", bands)})";
+        return string.Join(", ", bands);
     }
 }

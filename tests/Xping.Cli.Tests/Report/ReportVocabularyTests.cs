@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
 
@@ -77,6 +78,65 @@ public sealed class ReportVocabularyTests
 
         Assert.Equal(tokens.Length, tokens.Distinct(StringComparer.Ordinal).Count());
     }
+
+    /// <summary>
+    /// The bands carry no punctuation of their own, so each caller supplies its own.
+    /// </summary>
+    /// <remarks>
+    /// One producer, two callers: the section heading wraps this in parentheses and the one-line
+    /// summary puts it after a count. Two tables of the same three words is how a report and its
+    /// summary end up disagreeing about the same run.
+    /// </remarks>
+    [Theory]
+    [InlineData(5, 2, 0, "5 high, 2 medium")]
+    [InlineData(5, 0, 0, "5 high")]
+    [InlineData(0, 0, 1, "1 low")]
+    [InlineData(1, 1, 1, "1 high, 1 medium, 1 low")]
+    public void SeverityBandsNamesOnlyTheBandsThatHaveSomethingInThem(
+        int high, int medium, int low, string expected)
+    {
+        Assert.Equal(expected, ReportVocabulary.SeverityBands(Summary(high, medium, low)));
+    }
+
+    /// <summary>
+    /// A report with nothing in it has no bands to name.
+    /// </summary>
+    [Fact]
+    public void SeverityBandsIsEmptyWhereNothingWasFound()
+    {
+        Assert.Equal(string.Empty, ReportVocabulary.SeverityBands(Summary(0, 0, 0)));
+    }
+
+    /// <summary>
+    /// The one-line summary's phrasing is unchanged by the heading taking the same bands.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0, 0, "1 finding (1 high)")]
+    [InlineData(5, 2, 0, "7 findings (5 high, 2 medium)")]
+    public void TheFindingsPhraseStillReadsAsItDid(
+        int high, int medium, int low, string expected)
+    {
+        Assert.Equal(expected, ReportVocabulary.FindingsPhrase(Summary(high, medium, low)));
+    }
+
+    [Fact]
+    public void AReportWithNoFindingsSaysSoRatherThanCountingBands()
+    {
+        Assert.Equal("no findings", ReportVocabulary.FindingsPhrase(Summary(0, 0, 0)));
+    }
+
+    private static SummaryDto Summary(int high, int medium, int low) =>
+        new(
+            412,
+            high + medium + low,
+            new SeverityCountsDto(high, medium, low),
+            0,
+            412,
+            0,
+            0,
+            new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal),
+            0, 0, 0, 0, 0,
+            []);
 
     private static string CamelCase(string value) =>
         char.ToLowerInvariant(value[0]) + value[1..];
