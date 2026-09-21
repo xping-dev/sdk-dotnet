@@ -683,6 +683,16 @@ internal static class ReportFixtures
         int low = findings.Count(f => f.Severity == "low");
         int produced = Math.Max(total, findings.Length);
 
+        // Tests, not findings, deduplicated the way the builder does it: one test carrying two
+        // findings is one flagged test, and a cluster of five is five. A count of findings here
+        // would pin a header whose arithmetic the second line exists to make legible.
+        int flagged = findings
+            .SelectMany(f => f.Subject.Members ?? [f.Subject])
+            .Select(subject => subject.Fingerprint)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
         return new ReportEnvelope(
             ReportEnvelope.CurrentSchemaVersion,
             new WindowDto(
@@ -698,8 +708,8 @@ internal static class ReportFixtures
                 412,
                 produced,
                 new SeverityCountsDto(high, medium, low),
-                findings.Length,
-                412 - findings.Length,
+                flagged,
+                412 - flagged,
                 lowEvidence,
                 notSignificant,
                 notMeasured ?? new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal),

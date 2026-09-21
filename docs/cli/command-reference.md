@@ -144,9 +144,9 @@ The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's 
 
 The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
 
-Nothing inside the fence exceeds 72 columns, so the block survives being pasted into a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
+Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
 
-Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
+Rows are ordered most severe first, so the top of the block is the part worth reading. The one thing that interrupts that order is a second finding about a test already listed, which sits under the first rather than at its own rank and says so.
 
 ### The population marker
 

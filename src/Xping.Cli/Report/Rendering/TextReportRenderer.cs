@@ -53,6 +53,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
     // What the heading says about the order of the rows beneath it. Right-aligned to the fence,
     // opposite the heading, so it reads as a note on the list rather than as part of its name.
+    //
+    // It ranks tests, not rows. A second finding about a test already listed follows the first
+    // whatever its own severity, and its header line says so; between distinct tests the order is
+    // exactly what the note claims. The alternative wording -- "grouped by test" -- would describe
+    // the exception and not the rule.
     private const string OrderingNote = "most severe first";
 
     // Width of the " | " the trailer's segments are joined with.

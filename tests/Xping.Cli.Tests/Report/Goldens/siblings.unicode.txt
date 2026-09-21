@@ -1,5 +1,5 @@
 Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
-412 tests · 408 healthy · 4 flagged
+412 tests · 410 healthy · 2 flagged
 
 ```
 NEEDS ATTENTION (2 high, 1 medium, 1 low)              most severe first
