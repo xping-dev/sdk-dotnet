@@ -367,19 +367,31 @@ dotnet tool install -g Xping.Cli      # puts `xping` on your PATH; needs .NET 10
 xping report
 ```
 
-```
+<!-- xping:sample docs-xunit -->
+````
 Xping · MyTestProject · 9 runs · 2026-08-20 07:52 → 09:02 · main@bdbafba
-2 findings (2 high) · 17 tests · 15 healthy
+17 tests · 15 healthy · 2 flagged
 
-HIGH  flaky            FlakyTest_PassesOnRetry
-      failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
-      evidence moderate | f_2b84a621
-
-HIGH  always failing   ThrowingTestIsTracked
-      failed 9 of 9 executions (100%), one failure mode:
-      System.InvalidOperationException
-      evidence low | f_c1774d82
 ```
+NEEDS ATTENTION (2 high)                               most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    SampleTests.FlakyTest_PassesOnRetry
+    failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
+    evidence moderate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
+
+2.  HIGH  always failing
+    SampleTests.ThrowingTestIsTracked
+    failed 9 of 9 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence low | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+````
 
 `xping report --format json` emits the same findings as a versioned envelope, which is what you
 hand an agent. See the [CLI Command Reference](../cli/command-reference.md) for every flag and

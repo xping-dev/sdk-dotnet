@@ -79,23 +79,35 @@ To pin the CLI version alongside your repo instead, install it into a tool manif
 xping report
 ```
 
+<!-- xping:sample docs-checkout -->
 ````
 Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
-3 findings (1 high, 2 medium) · 412 tests · 409 healthy
+412 tests · 409 healthy · 3 flagged · 41 awaiting more runs · 6 not significant
+◷ nothing to measure: concurrency 108 · slower 32
 
 ```
-HIGH  flaky            GenerateMonthlySummary
-      failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
+────────────────────────────────────────────────────────────────────────
 
-MED   slower           CheckoutFlow_Completes
-      3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-      evidence high | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+1.  HIGH  flaky
+    SummaryTests.GenerateMonthlySummary
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+    evidence moderate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
 
-LOW   stopped running  LegacyImport.Roundtrip
-      ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | f_1d77e3f5 | tests/Legacy/ImportTests.cs:41
+2.  MED   slower
+    FlowTests.CheckoutFlow_Completes
+    3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
+    evidence high | -env | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+
+3.  LOW   stopped running
+    LegacyImport.Roundtrip
+    ran in 12 of 17 earlier runs, absent from the last 3
+    evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
 ```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
 ````
 
 ### How to read it

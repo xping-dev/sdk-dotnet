@@ -30,26 +30,33 @@ Add an Xping SDK adapter to your test project, run `dotnet test` a few times, th
 xping report
 ```
 
+<!-- xping:sample docs-xunit -->
+````
+Xping · MyTestProject · 9 runs · 2026-08-20 07:52 → 09:02 · main@bdbafba
+17 tests · 15 healthy · 2 flagged
+
 ```
-──────────────────────────────────────────────────────────────────────────
-  Xping · local run summary                             412 tests · 38.2s
-──────────────────────────────────────────────────────────────────────────
-  ✓ 405 passed     ✗ 4 failed     ○ 3 skipped
+NEEDS ATTENTION (2 high)                               most severe first
+────────────────────────────────────────────────────────────────────────
 
-  ⚠  2 unstable tests · last 12 local runs
+1.  HIGH  flaky
+    SampleTests.FlakyTest_PassesOnRetry
+    failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
+    evidence moderate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
 
-     ●●○●●●○●●●●○   Checkout.AppliesDiscount_WhenCouponValid         9/12
-                    passed 9 of 12 runs · inconsistent
-
-     ●●●●●●●●●●●○   Db.MigratesSchema_OnStartup                     11/12
-                    newly failing · first failure in this window
-
-  ✗  1 test failed in all 12 runs - not flaky, likely real bugs
-     Auth.RejectsExpiredToken
-──────────────────────────────────────────────────────────────────────────
+2.  HIGH  always failing
+    SampleTests.ThrowingTestIsTracked
+    failed 9 of 9 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence low | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
 ```
 
-The sparkline reads left to right, oldest run to newest — `●` passed, `○` failed. A test that flips between the two is flaky; one that has never passed is a real bug, and is listed separately.
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+````
+
+The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.
 
 ## Commands
 
