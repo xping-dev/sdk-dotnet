@@ -1,0 +1,18 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged | 6 awaiting more runs | 11 not significant
+* nothing to measure: slower 12 | unstable timing 9 | concurrency 4 | +1 more
+! 4 unreadable runs skipped | 1 run skipped, stamped ahead of this machine's clock | 1 incomplete run skipped | 2 runs discounted as environmental | 3 of 20 runs covered part of the suite | metrics unavailable: DurationRegression
+
+```
+NEEDS ATTENTION (1 high)                               most severe first
+------------------------------------------------------------------------
+
+1.  HIGH  flaky
+    CartTests.PlacesAnOrder
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+    evidence moderate | -env-cluster | f_2a91
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

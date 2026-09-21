@@ -76,6 +76,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     // heading rather than as four names of equal standing.
     private const int MemberIndent = ContinuationIndent + 2;
 
+    // The column a wrapped empty-report line continues at: the width of the glyph and the space
+    // after it, so the continuation aligns under the sentence and reads as more of it rather than
+    // as a second piece of news. Not ContinuationIndent -- that is where a finding's lines sit, and
+    // the empty report is not a finding.
+    private const int EmptyReportIndent = 2;
+
     // Members named before the rest become a count. Three is enough to recognise what the cluster
     // is -- one test suite, one fixture, one namespace -- and a forty-member cluster listed in full
     // is a finding nobody scrolls past. The whole list is in the JSON, where a caller reads it by
@@ -281,7 +287,18 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         {
             // Still fenced. A clean report and a full one should paste as the same shape, or a
             // reader learns to read the presence of a block as bad news.
-            builder.AppendLine(EmptyReport(envelope.Summary));
+            //
+            // Wrapped like every other line in the block. The sentence names one reason per thing
+            // the report withheld, and a store that withheld all three ran past the fence -- which
+            // stayed invisible until the width assertion swept every fixture rather than one.
+            //
+            // The budget is the indent's short of the fence for every line, including the first,
+            // which does not carry it. Two budgets would buy the first line two columns it has
+            // never needed, and would put the arithmetic somewhere a reader has to check.
+            List<string> reason = Wrap(EmptyReport(envelope.Summary), FenceWidth - EmptyReportIndent);
+
+            for (int index = 0; index < reason.Count; index++)
+                builder.Append(' ', index == 0 ? 0 : EmptyReportIndent).AppendLine(reason[index]);
 
             return;
         }

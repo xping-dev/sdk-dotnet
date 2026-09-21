@@ -1,0 +1,16 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 411 healthy · 1 flagged
+
+```
+NEEDS ATTENTION (1 high)                               most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    SampleTests.FlakyTest_PassesOnRetry
+    failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode
+    evidence low | -env-cluster | f_8f042eab | .../SampleTests.cs:135
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

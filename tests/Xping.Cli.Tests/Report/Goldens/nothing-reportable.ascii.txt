@@ -1,0 +1,8 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 412 healthy | 0 flagged | 4 awaiting more runs | 2 not significant
+* nothing to measure: slower 7 | time sensitive 2
+
+```
+* Nothing reportable yet: 4 need more runs, 2 could be chance, 2 kinds
+  had nothing to measure.
+```

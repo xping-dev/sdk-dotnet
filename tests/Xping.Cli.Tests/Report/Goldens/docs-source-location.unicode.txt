@@ -1,0 +1,16 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 411 healthy · 1 flagged
+
+```
+NEEDS ATTENTION (1 medium)                             most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   slower
+    SummaryTests.GenerateMonthlySummary
+    3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
+    evidence high | -env | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

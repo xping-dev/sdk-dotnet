@@ -10,6 +10,9 @@ using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
 using Xping.Sdk.Core.Models.Executions;
 
+using static Xping.Cli.Tests.Report.ReportFixtures;
+using static Xping.Cli.Tests.Report.ReportText;
+
 namespace Xping.Cli.Tests.Report;
 
 /// <summary>
@@ -23,13 +26,6 @@ namespace Xping.Cli.Tests.Report;
 /// </remarks>
 public sealed class ShareableOutputTests
 {
-    private const int FenceWidth = 72;
-
-    // The column everything below a row's header line starts at — the name, the headline and the
-    // trailer alike.
-    private const int Indent = 4;
-    private const string Fence = "```";
-
     // ---------------------------------------------------------------------
     // Headlines
     // ---------------------------------------------------------------------
@@ -554,6 +550,47 @@ public sealed class ShareableOutputTests
     }
 
     /// <summary>
+    /// The line an empty report prints is wrapped to the fence like every other line in the block.
+    /// </summary>
+    /// <remarks>
+    /// It names one reason per thing the report withheld, so a store that withheld for all three
+    /// reasons at once produces a sentence half again as wide as the fence. Nothing printed it
+    /// until a store grew all three, which is why it went unnoticed until the width assertion swept
+    /// the catalogue rather than one report. The continuation is indented to the sentence, not to
+    /// the glyph, so the second line reads as more of the first.
+    /// </remarks>
+    [Fact]
+    public void TheLineAnEmptyReportPrintsIsWrappedToTheFence()
+    {
+        ReportEnvelope envelope = Envelope(
+            [], shown: 0, total: 0, lowEvidence: 4, notSignificant: 2);
+
+        envelope = envelope with
+        {
+            Summary = envelope.Summary with
+            {
+                NotMeasured = new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+                {
+                    [nameof(FindingKind.DurationRegression)] = new(3, 7),
+                    [nameof(FindingKind.TimeSensitive)] = new(0, 2)
+                }
+            }
+        };
+
+        string[] fenced = Fenced(Render(envelope));
+
+        Assert.Equal(
+            [
+                "* Nothing reportable yet: 4 need more runs, 2 could be chance, 2 kinds",
+                "  had nothing to measure."
+            ],
+            fenced);
+
+        Assert.All(fenced, line => Assert.True(
+            line.Length <= FenceWidth, $"'{line}' is {line.Length} columns"));
+    }
+
+    /// <summary>
     /// The rule under the heading is drawn from the glyph set in use, not from a literal.
     /// </summary>
     /// <remarks>
@@ -566,9 +603,10 @@ public sealed class ShareableOutputTests
         ReportEnvelope envelope = Envelope(
             Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"));
 
-        string unicode = Render(
-            envelope,
-            OutputCapabilities.Resolve(forceAscii: false, noColor: true, redirected: false, _ => null));
+        // Drawn rather than resolved: Resolve reaches ReportGlyphs.Detect for any caller that did
+        // not force ASCII, so asking for Unicode through it would pass or fail on the machine's
+        // console encoding rather than on the renderer.
+        string unicode = Render(envelope, Drawn(ReportGlyphs.Unicode, color: false));
 
         Assert.Equal(new string('\u2500', FenceWidth), Fenced(unicode)[1]);
         Assert.Equal(new string('-', FenceWidth), Fenced(Render(envelope))[1]);
@@ -1300,13 +1338,6 @@ public sealed class ShareableOutputTests
     }
 
     // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
-    private static OutputCapabilities Capabilities(bool redirected) =>
-        OutputCapabilities.Resolve(forceAscii: true, noColor: false, redirected, _ => null);
-
-    // ---------------------------------------------------------------------
     // What the report did not print
     // ---------------------------------------------------------------------
 
@@ -1568,189 +1599,10 @@ public sealed class ShareableOutputTests
         Assert.DoesNotContain("covered part of the suite", Render(envelope), StringComparison.Ordinal);
     }
 
-    private static string Render(ReportEnvelope envelope, OutputCapabilities? capabilities = null)
-    {
-        using var writer = new StringWriter();
-        new TextReportRenderer(capabilities ?? Capabilities(redirected: true)).Render(envelope, writer);
-
-        return writer.ToString();
-    }
-
-    private static string[] Lines(string report) =>
-        report.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
-
     /// <summary>
-    /// Returns the lines between the fences — the part that has to survive a paste.
+    /// Builds a finding whose evidence level and source location are what the test is about.
     /// </summary>
-    private static string[] Fenced(string report)
-    {
-        string[] lines = Lines(report);
-        int open = Array.FindIndex(lines, l => l.Trim() == Fence);
-        int close = Array.FindLastIndex(lines, l => l.Trim() == Fence);
-
-        Assert.True(open >= 0 && close > open, "the report is not fenced");
-
-        return lines[(open + 1)..close];
-    }
-
-    /// <summary>
-    /// Returns the finding rows — the fenced lines beneath the section heading and its rule.
-    /// </summary>
-    /// <remarks>
-    /// The heading is part of the fenced block and is width-asserted with the rest of it, but a test
-    /// about a row's shape should not have to count the lines above the first row.
-    /// </remarks>
-    private static string[] Rows(string report)
-    {
-        string[] fenced = Fenced(report);
-        int heading = Array.FindIndex(
-            fenced, l => l.StartsWith("NEEDS ATTENTION", StringComparison.Ordinal));
-
-        // The heading, the rule under it, and the blank line before the first row.
-        return heading < 0 ? fenced : fenced[(heading + 3)..];
-    }
-
-    private static string Strip(string value)
-    {
-        var builder = new System.Text.StringBuilder(value.Length);
-
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (value[i] != '\u001b')
-            {
-                builder.Append(value[i]);
-                continue;
-            }
-
-            while (i < value.Length && value[i] != 'm')
-                i++;
-        }
-
-        return builder.ToString();
-    }
-
     private static FindingDto FindingWith(string evidence, string? sourceFile, int? sourceLineNumber) =>
         Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", sourceFile, sourceLineNumber)
             with { EvidenceLevel = evidence };
-
-    /// <summary>Returns the dim trailer line of a single-finding report.</summary>
-    private static string Trailer(string report) =>
-        Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal)).TrimEnd();
-
-    private static FindingDto Finding(
-        string kind,
-        string severity,
-        string name,
-        string headline,
-        string? sourceFile,
-        int? sourceLineNumber)
-    {
-        FindingDto finding = Finding(kind, severity, name, headline);
-
-        return finding with
-        {
-            Subject = finding.Subject with
-            {
-                SourceFile = sourceFile,
-                SourceLineNumber = sourceLineNumber
-            }
-        };
-    }
-
-    /// <summary>
-    /// Spells an enum name the way the envelope does, so the fixtures cannot drift from the builder.
-    /// </summary>
-    private static string ToCamelCase(string value) =>
-        char.ToLowerInvariant(value[0]) + value.Substring(1);
-
-    private static FindingDto Finding(string kind, string severity, string name, string headline) =>
-        new(
-            "f_2a91",
-            kind,
-            severity,
-            "moderate",
-            10,
-            ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
-            new SubjectDto(
-                "test", "fp", name, name, SubjectNames.ShortName(name, name), null,
-                null, null, "MyApp.Tests", null, null, null),
-            null,
-            headline,
-            [new MetricDto("failed", "7 of 20 executions (35%)")],
-            null,
-            "xping report --kind Flaky --format json");
-
-    /// <summary>
-    /// A finding about a cluster: no name of its own, a cause, and members beneath it.
-    /// </summary>
-    private static FindingDto Cluster(string cause, int members, string headline) =>
-        Finding("BrokenFixture", "high", "MyApp.Tests.SampleTests.First", headline) with
-        {
-            Subject = new SubjectDto(
-                "group", null, null, null, null, cause, null, null, null,
-                "sig_c7b87f12",
-                members,
-                [
-                    .. Enumerable.Range(0, members).Select(i => new SubjectDto(
-                        "test",
-                        $"fp{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                        $"MyApp.Tests.FixtureTests.Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                        $"Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                        $"FixtureTests.Member{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                        null, null, null, "MyApp.Tests", null, null, null))
-                ])
-        };
-
-    private static ReportEnvelope Envelope(params FindingDto[] findings) =>
-        Envelope(findings, findings.Length, findings.Length);
-
-    private static ReportEnvelope Envelope(FindingDto[] findings, int shown, int total) =>
-        Envelope(findings, shown, total, lowEvidence: 0, notSignificant: 0);
-
-    private static ReportEnvelope Envelope(
-        FindingDto[] findings, int shown, int total, int lowEvidence, int notSignificant) =>
-        Envelope(findings, shown, total, lowEvidence, notSignificant, notMeasured: null);
-
-    private static ReportEnvelope Envelope(
-        FindingDto[] findings,
-        int shown,
-        int total,
-        int lowEvidence,
-        int notSignificant,
-        IReadOnlyDictionary<string, NotMeasuredDto>? notMeasured)
-    {
-        int high = findings.Count(f => f.Severity == "high");
-        int medium = findings.Count(f => f.Severity == "medium");
-        int low = findings.Count(f => f.Severity == "low");
-        int produced = Math.Max(total, findings.Length);
-
-        return new ReportEnvelope(
-            ReportEnvelope.CurrentSchemaVersion,
-            new WindowDto(
-                new DateTime(2026, 8, 5, 9, 12, 0, DateTimeKind.Utc),
-                new DateTime(2026, 8, 19, 16, 40, 0, DateTimeKind.Utc),
-                20,
-                "default",
-                null,
-                3,
-                []),
-            new ContextDto("a3f9c2ed0011", "main", "MyApp.Tests"),
-            new SummaryDto(
-                412,
-                produced,
-                new SeverityCountsDto(high, medium, low),
-                findings.Length,
-                412 - findings.Length,
-                lowEvidence,
-                notSignificant,
-                notMeasured ?? new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal),
-                0,
-                0,
-                0,
-                0,
-                0,
-                []),
-            findings,
-            new TruncationDto(shown, total, "xping report --all"));
-    }
 }

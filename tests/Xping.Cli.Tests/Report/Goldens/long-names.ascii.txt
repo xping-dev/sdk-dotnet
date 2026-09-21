@@ -1,0 +1,29 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 409 healthy | 3 flagged
+
+```
+NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
+------------------------------------------------------------------------
+
+1.  HIGH  flaky
+    VeryLongNamespace.PlacesAnOrderAndSettlesItEvenSo
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes,
+    and a great deal more text besides so that wrapping has to happen at
+    least twice over
+    evidence moderate | -env-cluster | f_2a91 | .../CartTests.cs:1042
+
+2.  MED   always failing
+    ...WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    failed 20 of 20 executions (100%), one failure mode:
+    EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    evidence moderate | -env-cluster | f_2a91
+
+3.  LOW   unstable timing
+    Short
+    p50 820ms, dispersion 0.71
+    evidence moderate | -env | f_2a91
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
