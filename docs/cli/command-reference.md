@@ -57,7 +57,7 @@ xping report [options]
 |---|---|---|
 | `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last` |
 | `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
-| `--top <n>` | `10` | Findings to show. Excludes `--all` |
+| `--top <n>` | `10` | Rows to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
 | `--all` | off | Show **every finding** rather than the top ones |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Scope the report to one test assembly |
