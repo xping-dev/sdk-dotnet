@@ -165,14 +165,13 @@ Every test project in a solution shares one store. By default the report covers 
 Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly to switch).
 ```
 
-To see one suite, or all of them:
+To see another suite:
 
 ```bash
 xping report --assembly Billing.Tests
-xping report --all
 ```
 
-`--all` analyses each assembly against **its own** run history and merges the findings, so a suite that has run 3 times is never described against another suite's 12-run window.
+Each assembly is analysed against **its own** run history, so a suite that has run 3 times is never described against another suite's 12-run window. `--all` is not the way to see every suite — it shows every finding, and every row of the latest run, instead of the first ten of each.
 
 ---
 

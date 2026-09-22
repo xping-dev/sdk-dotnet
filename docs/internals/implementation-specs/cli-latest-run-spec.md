@@ -64,6 +64,8 @@ OQ-1 is resolved by the same inventory and is recorded as such below.
 | B | OQ-4: status words render undecorated except `new`, which is bold; no colour | OQ-4, D9 |
 | C | `LatestRunDto` gains `NewFailures`, the count the heading annotation and the one-liner read | §4.2 |
 | D | The heading annotation and the "also failing" line are specified, not only illustrated | D4, D8 |
+| E | OQ-5: the one-liner appends `, N new failure(s)` only when non-zero | OQ-5, P6 |
+| F | Explaining finding ids are published in envelope order, resolved in the builder | §4.2 |
 
 **A.** `NullReferenceException`, not `System.NullReferenceException`. The row's job is the
 contrast; the trailer identifies the failure and the runner's output diagnoses it. The findings'
@@ -81,6 +83,13 @@ which is the identity function when colour is off, so `--no-color` and piped out
 that number: `Failures` is the capped list and `new` rows sort first, so a run with twelve new
 failures would have shown ten and counted ten. `NewFailures` counts rows whose status is `new` or
 `newTest`, before the cap, and is positioned after `TestsFailed`. It is also what OQ-5 reads in P6.
+
+**E.** The spec's own recommendation, applied. Suppressed and environmental runs append nothing:
+the first has no news and the second's news is not a count of tests.
+
+**F.** The analyzer meets findings in the order of the tests they explain, and the builder is where
+envelope order is known — `FindingOrder.WithSiblingsAdjacent` runs there — so the ids are sorted
+there, by position in the ordered list. The store-driven golden in P5 is what caught `(#2, #1)`.
 
 **D.** The heading's right-hand annotation is `{NewFailures} new failure(s)` when the count is
 non-zero, `no new failures` when it is zero, and `looks environmental` under D6. The "also failing"
@@ -391,6 +400,23 @@ LATEST RUN  16:21 · eab9867                              no new failures
 
 Section absent entirely. No heading, no rule, no line.
 
+### 3.5 What the goldens say
+
+Per D10 the goldens are authority. `latest-run`, `latest-run-known-only`, `latest-run-environmental`,
+`latest-run-overflow`, `latest-run-suppressed` and `latest-run-store` under
+`tests/Xping.Cli.Tests/Report/Goldens/` are the rendering of §2, and §3.1 differs from
+`latest-run.unicode.txt` in two places, both by decision: the second trailer reads
+`EqualException` and not `Assert.Equal() Failure` (Amendment 3A), and the closing line reads
+`5 tests explained by findings below (#1, #2, #3)` because the block beneath it is the format
+spec's §3, whose third row is the cluster. §3.2 and §3.3 render as shown; §3.4 is
+`latest-run-suppressed`, byte-identical to `spec-section-3`.
+
+`latest-run-store` is the section as the whole pipeline produces it from twenty sessions. It shows
+one thing §1.1 does not: a test that passed nineteen times and failed once is a `Flaky` finding on a
+twenty-run window, so it appears under *also failing* and not as a `new` row. D4 is working as
+written; whether one failure in twenty should be *flaky* is a question for the provider and outside
+this spec (§7).
+
 ---
 
 ## 4. Data contract
@@ -540,11 +566,10 @@ failure, and the one that leaves the location room in the 55 columns a trailer h
 
 Undecorated, except `new` in bold. No colour, so nothing here can read as a severity.
 
-### OQ-5 — Does the one-line summary mention new failures? **Blocks P6**
+### OQ-5 — **RESOLVED** (Amendment 3E). No gate.
 
-`SummaryReportRenderer` currently emits `Xping: N findings (...) in N runs`. Adding new-failure
-counts makes the one-liner more useful in a CI step title, and makes it longer. Recommendation:
-append `, 2 new failures` only when non-zero. Confirm.
+Appended only when non-zero: `Xping: 5 findings (5 high) in 20 runs of SampleApp.XUnit, 2 new
+failures`. Pinned by the `latest-run summary` documented sample.
 
 ---
 

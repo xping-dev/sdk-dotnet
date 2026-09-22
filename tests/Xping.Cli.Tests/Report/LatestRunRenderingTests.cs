@@ -4,6 +4,7 @@
  */
 
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
 
 using static Xping.Cli.Tests.Report.ReportFixtures;
@@ -40,16 +41,8 @@ public sealed class LatestRunRenderingTests
     private static ReportEnvelope With(LatestRunDto? latestRun, params FindingDto[] findings) =>
         Envelope(findings) with { LatestRun = latestRun };
 
-    private static string[] Section(string report)
-    {
-        string[] fenced = Fenced(report);
-        int heading = Array.FindIndex(fenced, l => l.StartsWith("LATEST RUN", StringComparison.Ordinal));
-
-        Assert.True(heading >= 0, "no LATEST RUN heading");
-
-        int end = Array.FindIndex(fenced, heading, l => l.StartsWith("NEEDS ATTENTION", StringComparison.Ordinal));
-        return fenced[heading..(end < 0 ? fenced.Length : end)];
-    }
+    // The section with the blank line that closes it, so a test can assert on the blank.
+    private static string[] Section(string report) => [.. LatestRunSection(report), string.Empty];
 
     // Distinct ids, because the "also failing" line names findings by id and the fixture's
     // default gives every finding the same one.
@@ -496,6 +489,50 @@ public sealed class LatestRunRenderingTests
         string report = Render(With(LatestRun([Regression, Fresh]), ThreeFindings()));
 
         Assert.DoesNotContain("Showing", report.Split("NEEDS ATTENTION")[0], StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The one-line report (OQ-5)
+    // ---------------------------------------------------------------------------------------
+
+    private static string Summary(ReportEnvelope envelope)
+    {
+        using var writer = new StringWriter();
+        new SummaryReportRenderer().Render(envelope, writer);
+
+        return writer.ToString().TrimEnd();
+    }
+
+    [Fact]
+    public void TheOneLineReportAppendsTheNewFailureCount()
+    {
+        Assert.Equal(
+            "Xping: 3 findings (1 high, 1 medium, 1 low) in 20 runs of MyApp.Tests, 2 new failures",
+            Summary(With(LatestRun([Regression, Fresh]), ThreeFindings())));
+    }
+
+    [Fact]
+    public void TheOneLineReportIsSingularForOneNewFailure()
+    {
+        Assert.EndsWith(", 1 new failure", Summary(With(LatestRun([Regression, Known]), ThreeFindings())), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheOneLineReportSaysNothingAboutAQuietRun()
+    {
+        string quiet = Summary(With(LatestRun([]), ThreeFindings()));
+        string known = Summary(With(LatestRun([Known], explainedBy: ["f_alpha"]), ThreeFindings()));
+        string suppressed = Summary(With(LatestRun([Regression]) with { Suppressed = true }, ThreeFindings()));
+        string environmental = Summary(With(LatestRun([Regression]) with { IsLikelyEnvironmental = true }, ThreeFindings()));
+        string none = Summary(With(null, ThreeFindings()));
+
+        const string expected = "Xping: 3 findings (1 high, 1 medium, 1 low) in 20 runs of MyApp.Tests";
+
+        Assert.Equal(expected, quiet);
+        Assert.Equal(expected, known);
+        Assert.Equal(expected, suppressed);
+        Assert.Equal(expected, environmental);
+        Assert.Equal(expected, none);
     }
 
     // ---------------------------------------------------------------------------------------

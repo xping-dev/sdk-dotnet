@@ -58,12 +58,30 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.
 
+Findings need a few runs of history. What the newest run did that the runs before it did not needs only two, and when it has failures a `LATEST RUN` section opens the block, above the findings:
+
+<!-- xping:sample latest-run latest-run -->
+```
+LATEST RUN  16:21 · eab9867                               2 new failures
+────────────────────────────────────────────────────────────────────────
+
+    new          CartTests.Checkout_AppliesDiscount
+                 passed the previous 19 runs, failed just now
+                 NullReferenceException | CartTests.cs:112
+
+    new test     CartTests.Checkout_RejectsExpiredCoupon
+                 first seen this run, failed
+                 EqualException | CartTests.cs:140
+
+    Also failing: 5 tests explained by findings below (#1, #2, #3).
+```
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `xping report` | Report flakiness from recent local runs |
-| `xping report --all` | Report across every test assembly in the solution |
+| `xping report --all` | Show every finding and every latest-run row, not only the first ten of each |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |

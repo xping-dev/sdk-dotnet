@@ -16,6 +16,12 @@ namespace Xping.Cli.Report.Rendering;
 /// For the places a report has to fit into one: the body of a chat message, a commit trailer, the
 /// title of a CI step. It states the counts and nothing else — a line that tried to name a test
 /// would be the one place the report's phrasing is not the fenced block's phrasing.
+/// <para>
+/// The new-failure count is appended only when it is non-zero. A CI step title that says
+/// <c>2 new failures</c> is the reason to open the report; one that says <c>0 new failures</c> on
+/// every green build is a phrase a reader learns to skip, and the findings count beside it would
+/// go with it.
+/// </para>
 /// </remarks>
 internal sealed class SummaryReportRenderer : IReportRenderer
 {
@@ -36,6 +42,12 @@ internal sealed class SummaryReportRenderer : IReportRenderer
             ? $" of {assembly}"
             : string.Empty;
 
-        output.WriteLine($"Xping: {ReportVocabulary.FindingsPhrase(summary)} in {runs}{scope}");
+        string newFailures = envelope.LatestRun is { Suppressed: false, IsLikelyEnvironmental: false, NewFailures: > 0 } latest
+            ? latest.NewFailures == 1
+                ? ", 1 new failure"
+                : $", {latest.NewFailures.ToString(CultureInfo.InvariantCulture)} new failures"
+            : string.Empty;
+
+        output.WriteLine($"Xping: {ReportVocabulary.FindingsPhrase(summary)} in {runs}{scope}{newFailures}");
     }
 }

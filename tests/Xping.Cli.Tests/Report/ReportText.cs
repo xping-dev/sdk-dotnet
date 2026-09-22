@@ -138,6 +138,23 @@ internal static class ReportText
     /// <summary>Returns the dim trailer line of a single-finding report.</summary>
     /// <param name="report">The rendered report.</param>
     /// <returns>The trailer.</returns>
+    /// <summary>
+    /// The <c>LATEST RUN</c> section: its heading through its last line, without the blank that
+    /// separates it from whatever follows.
+    /// </summary>
+    public static string[] LatestRunSection(string report)
+    {
+        string[] fenced = Fenced(report);
+        int heading = Array.FindIndex(fenced, l => l.StartsWith("LATEST RUN", StringComparison.Ordinal));
+
+        Assert.True(heading >= 0, "the report has no LATEST RUN section");
+
+        int end = Array.FindIndex(fenced, heading, l => l.StartsWith("NEEDS ATTENTION", StringComparison.Ordinal));
+        string[] section = fenced[heading..(end < 0 ? fenced.Length : end)];
+
+        return section[^1].Length == 0 ? section[..^1] : section;
+    }
+
     public static string Trailer(string report) =>
         Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal)).TrimEnd();
 }
