@@ -405,6 +405,100 @@ public sealed class LatestRunRenderingTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // Environmental (D6) and the cap (D7)
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AnEnvironmentalRunIsOneLineAndNoRows()
+    {
+        LatestRunDto environmental = LatestRun([]) with
+        {
+            IsLikelyEnvironmental = true,
+            TestsExecuted = 210,
+            TestsFailed = 187
+        };
+
+        string[] section = Section(Render(With(environmental, ThreeFindings())));
+
+        Assert.EndsWith("looks environmental", section[0], StringComparison.Ordinal);
+        Assert.Equal(FenceWidth, section[0].Length);
+        Assert.Equal("    Looks environmental: 187 of 210 tests failed. Not itemised.", section[3]);
+        Assert.Equal(string.Empty, section[4]);
+        Assert.Equal(5, section.Length);
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunNamesNoFindingsEither()
+    {
+        // The analyzer publishes no explained count on an environmental run; were one to arrive,
+        // the section would still be the one line, because 187 rows and a footnote is 188 lines.
+        LatestRunDto environmental = LatestRun([Regression], explainedBy: ["f_alpha"]) with
+        {
+            IsLikelyEnvironmental = true
+        };
+
+        string[] section = Section(Render(With(environmental, ThreeFindings())));
+
+        Assert.DoesNotContain(section, l => l.Contains("Also failing", StringComparison.Ordinal));
+        Assert.DoesNotContain(section, l => l.Contains("Checkout_AppliesDiscount", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ACappedListSaysHowManyItWithheldAndHow()
+    {
+        LatestRunDto capped = LatestRun([Regression, Fresh]) with
+        {
+            NewFailures = 23,
+            FailuresTotal = 23,
+            OverflowCommand = "xping report --all"
+        };
+
+        string[] section = Section(Render(With(capped, ThreeFindings())));
+
+        // The section ends on the cap line and the blank that separates it from the next heading.
+        Assert.Equal(string.Empty, section[^3]);
+        Assert.Equal("    Showing 2 of 23 | all: xping report --all", section[^2]);
+        Assert.Equal(string.Empty, section[^1]);
+    }
+
+    [Fact]
+    public void TheCapLinePrecedesTheAlsoFailingLineWithNoBlankBetween()
+    {
+        LatestRunDto capped = LatestRun([Regression], explainedBy: ["f_alpha"]) with
+        {
+            FailuresTotal = 12,
+            OverflowCommand = "xping report --all"
+        };
+
+        string[] section = Section(Render(With(capped, ThreeFindings())));
+
+        Assert.Equal("    Showing 1 of 12 | all: xping report --all", section[7]);
+        Assert.Equal("    Also failing: 1 test explained by finding below (#1).", section[8]);
+    }
+
+    [Fact]
+    public void TheCapLineIsDimAndUsesTheGlyphSeparator()
+    {
+        LatestRunDto capped = LatestRun([Regression]) with
+        {
+            FailuresTotal = 12,
+            OverflowCommand = "xping report --all"
+        };
+
+        string coloured = Render(With(capped, ThreeFindings()), Drawn(ReportGlyphs.Unicode, color: true));
+
+        Assert.Contains(Faint + "Showing 1 of 12 · all: xping report --all" + Reset, coloured, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUncappedListHasNoCapLine()
+    {
+        string report = Render(With(LatestRun([Regression, Fresh]), ThreeFindings()));
+
+        Assert.DoesNotContain("Showing", report.Split("NEEDS ATTENTION")[0], StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Discipline
     // ---------------------------------------------------------------------------------------
 

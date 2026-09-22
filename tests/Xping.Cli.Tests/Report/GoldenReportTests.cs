@@ -267,7 +267,9 @@ public sealed class GoldenReportTests
             return;
         }
 
-        string heading = Fenced(Render(envelope))[0];
+        // The findings heading, which the latest-run section may sit above.
+        string heading = Fenced(Render(envelope))
+            .First(l => l.StartsWith("NEEDS ATTENTION", StringComparison.Ordinal));
 
         Assert.StartsWith($"NEEDS ATTENTION ({bands})", heading, StringComparison.Ordinal);
         Assert.Contains($"({bands})", summary, StringComparison.Ordinal);

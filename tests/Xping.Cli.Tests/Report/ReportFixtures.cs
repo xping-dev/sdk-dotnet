@@ -4,6 +4,7 @@
  */
 
 using System.Globalization;
+using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
@@ -53,7 +54,10 @@ internal static class ReportFixtures
         "docs-source-location",
         "docs-time-sensitive",
         "docs-retry-deepening",
-        "docs-retry-exhausted"
+        "docs-retry-exhausted",
+        "latest-run-suppressed",
+        "latest-run-environmental",
+        "latest-run-overflow"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -117,6 +121,23 @@ internal static class ReportFixtures
                 "gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent retrying",
                 "tests/MyApp.Tests/CheckoutTests.cs", 27) with
             { Id = "f_9c14ab63", EvidenceLevel = "high" }),
+
+        // A window of one session: the section is absent, and this golden is byte-identical to
+        // spec-section-3's. Pinned so that absence stays a rule and not an accident.
+        "latest-run-suppressed" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([Regression()]) with { Suppressed = true }
+        },
+        "latest-run-environmental" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([]) with
+            {
+                IsLikelyEnvironmental = true,
+                TestsExecuted = 210,
+                TestsFailed = 187
+            }
+        },
+        "latest-run-overflow" => LatestRunOverflow(),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
 
@@ -242,6 +263,79 @@ internal static class ReportFixtures
             },
             Context = new ContextDto("eab9867a1c40", "main", "SampleApp.XUnit"),
             Summary = envelope.Summary with { Tests = 16, Flagged = 6, Healthy = 10 }
+        };
+    }
+
+    /// <summary>
+    /// The row the latest-run spec's §3.1 opens with: a test that had always passed.
+    /// </summary>
+    private static LatestRunFailureDto Regression() =>
+        LatestRunFailure(
+            "new",
+            "Checkout_AppliesDiscount",
+            "passed the previous 19 runs, failed just now",
+            priorSessions: 19,
+            sourceFile: "src/SampleApp.XUnit/CartTests.cs") with
+        {
+            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_AppliesDiscount", "src/SampleApp.XUnit/CartTests.cs", 112)
+        };
+
+    /// <summary>
+    /// A latest-run section dated and signed like <see cref="SpecSection3"/>'s newest session.
+    /// </summary>
+    private static LatestRunDto SpecLatestRun(
+        LatestRunFailureDto[] failures, string[]? explainedBy = null, int? explained = null) =>
+        LatestRun(failures, explainedBy, explained, sha: "eab9867a1c40") with
+        {
+            StartedAt = new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc),
+            TestsExecuted = 16
+        };
+
+    /// <summary>
+    /// A single-test subject named the way the builder names one, at a given location.
+    /// </summary>
+    private static SubjectDto SampleSubject(string qualifiedName, string sourceFile, int line) =>
+        new(
+            "test", $"fp-{qualifiedName}", qualifiedName, qualifiedName,
+            SubjectNames.ShortName(qualifiedName, qualifiedName), null,
+            sourceFile, line, "SampleApp.XUnit", null, null, null);
+
+    /// <summary>
+    /// More new failures than the section shows: ten rows, a cap line, and the findings' share.
+    /// </summary>
+    private static ReportEnvelope LatestRunOverflow()
+    {
+        ReportEnvelope envelope = SpecSection3();
+
+        // Descending prior-run counts, as the analyzer orders new rows, so the golden reads as
+        // one the analyzer could have produced.
+        LatestRunFailureDto[] rows =
+        [
+            .. Enumerable.Range(0, LocalAnalysisConstants.LatestRunMaxRows).Select(index =>
+            {
+                int prior = 19 - index;
+                string name = $"SampleApp.XUnit.CartTests.Case{index.ToString("00", CultureInfo.InvariantCulture)}";
+
+                return LatestRunFailure(
+                    "new",
+                    name,
+                    $"passed the previous {prior.ToString(CultureInfo.InvariantCulture)} runs, failed just now",
+                    priorSessions: prior) with
+                {
+                    Subject = SampleSubject(name, "src/SampleApp.XUnit/CartTests.cs", 40 + index)
+                };
+            })
+        ];
+
+        return envelope with
+        {
+            LatestRun = SpecLatestRun(rows, ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5) with
+            {
+                TestsFailed = 28,
+                NewFailures = 23,
+                FailuresTotal = 23,
+                OverflowCommand = "xping report --all"
+            }
         };
     }
 

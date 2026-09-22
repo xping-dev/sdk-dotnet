@@ -1,0 +1,88 @@
+Xping | SampleApp.XUnit | 20 runs | 2026-09-05 09:00 -> 16:21 | main@eab9867
+16 tests | 10 healthy | 6 flagged
+
+```
+LATEST RUN  16:21 | eab9867                              23 new failures
+------------------------------------------------------------------------
+
+    new          CartTests.Case00
+                 passed the previous 19 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:40
+
+    new          CartTests.Case01
+                 passed the previous 18 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:41
+
+    new          CartTests.Case02
+                 passed the previous 17 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:42
+
+    new          CartTests.Case03
+                 passed the previous 16 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:43
+
+    new          CartTests.Case04
+                 passed the previous 15 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:44
+
+    new          CartTests.Case05
+                 passed the previous 14 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:45
+
+    new          CartTests.Case06
+                 passed the previous 13 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:46
+
+    new          CartTests.Case07
+                 passed the previous 12 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:47
+
+    new          CartTests.Case08
+                 passed the previous 11 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:48
+
+    new          CartTests.Case09
+                 passed the previous 10 runs, failed just now
+                 NullReferenceException | .../CartTests.cs:49
+
+    Showing 10 of 23 | all: xping report --all
+    Also failing: 5 tests explained by findings below (#1, #2, #3).
+
+NEEDS ATTENTION (5 high)                               most severe first
+------------------------------------------------------------------------
+
+1.  HIGH  always failing
+    SampleTests.ExceptionTest_ThrowsOnMissingDependency
+    failed 20 of 20 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
+
+2.  HIGH  timing out
+    SampleTests.TimeoutTest_UnresponsiveDependency_AwaitsForever
+    timed out 20 of 20 executions (100%) in 20 of 20 runs, killed at its
+    500ms limit
+    evidence high | -env-cluster | f_3ea537e4 | .../SampleTests.cs:43
+
+3.  HIGH  broken fixture
+    UnprovisionedDatabase..ctor (3 tests)
+      FixtureTests.FirstTestNeedingTheDatabase
+      FixtureTests.SecondTestNeedingTheDatabase
+      FixtureTests.ThirdTestNeedingTheDatabase
+    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
+    runs
+    evidence high | all runs | f_7c905f05
+
+4.  HIGH  unstable timing
+    SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    p50 73ms, ranging 18ms to 129ms, dispersion 0.73 over 20 executions
+    evidence high | -env | f_66c10ec3 | .../SampleTests.cs:83
+
+5.  HIGH  flaky                                          same test as #4
+    SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

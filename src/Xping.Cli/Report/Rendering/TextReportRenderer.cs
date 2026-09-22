@@ -400,9 +400,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// the first thing a reader who just watched a build go red wants to know.
     /// </para>
     /// <para>
-    /// Nothing at all on a clean run, on a window of one session — every row would restate the
-    /// test runner — and, for now, on a run that failed too widely to itemise. A section that
-    /// appears only when it has news is a section a reader learns to read.
+    /// Nothing at all on a clean run, and on a window of one session: every row would restate the
+    /// test runner. A section that appears only when it has news is a section a reader learns to
+    /// read. A run that failed too widely to itemise is news, and gets one line saying so.
     /// </para>
     /// <para>
     /// Every sentence here was composed in the envelope. The renderer lays the rows out and phrases
@@ -415,10 +415,25 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (envelope.LatestRun is not { Suppressed: false } latest)
             return false;
 
-        if (latest.Failures.Count == 0 && latest.ExplainedByFindings == 0)
+        if (!latest.IsLikelyEnvironmental && latest.Failures.Count == 0 && latest.ExplainedByFindings == 0)
             return false;
 
         WriteHeading(builder, LatestRunLabel + "  " + LatestRunProvenance(latest), LatestRunAnnotation(latest));
+
+        // The environmental heuristic exists to stop one broken dependency from poisoning every
+        // test's history, and a section that itemised the 187 tests it took down would defeat it.
+        // The run is described in one line and not listed.
+        if (latest.IsLikelyEnvironmental)
+        {
+            builder.Append(' ', LatestRunIndent)
+                   .Append("Looks environmental: ")
+                   .Append(latest.TestsFailed.ToString(CultureInfo.InvariantCulture))
+                   .Append(" of ")
+                   .Append(Tests(latest.TestsExecuted))
+                   .AppendLine(" failed. Not itemised.");
+
+            return true;
+        }
 
         for (int index = 0; index < latest.Failures.Count; index++)
         {
@@ -428,13 +443,27 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             WriteLatestRunFailure(builder, latest.Failures[index]);
         }
 
-        if (latest.ExplainedByFindings > 0)
+        // The two closing lines sit together under the rows, the cap first because it is about the
+        // rows and the "also failing" line because it is about the run. The cap line is dim like
+        // the footer that says the same thing about the findings; it is navigation, not news.
+        bool capped = latest.FailuresShown < latest.FailuresTotal;
+
+        if (capped || latest.ExplainedByFindings > 0)
         {
             if (latest.Failures.Count > 0)
                 builder.AppendLine();
-
-            builder.Append(' ', LatestRunIndent).AppendLine(AlsoFailing(latest, envelope.Findings));
         }
+
+        if (capped)
+        {
+            builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
+                $"Showing {latest.FailuresShown.ToString(CultureInfo.InvariantCulture)} of " +
+                $"{latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)} " +
+                $"{capabilities.Glyphs.Separator} all: {latest.OverflowCommand}"));
+        }
+
+        if (latest.ExplainedByFindings > 0)
+            builder.Append(' ', LatestRunIndent).AppendLine(AlsoFailing(latest, envelope.Findings));
 
         return true;
     }
@@ -467,6 +496,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// </remarks>
     private static string LatestRunAnnotation(LatestRunDto latest) => latest.NewFailures switch
     {
+        _ when latest.IsLikelyEnvironmental => "looks environmental",
         0 => "no new failures",
         1 => "1 new failure",
         int count => $"{count.ToString(CultureInfo.InvariantCulture)} new failures"
