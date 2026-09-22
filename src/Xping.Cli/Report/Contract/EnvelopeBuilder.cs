@@ -107,7 +107,7 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
-            latestRun == null ? null : BuildLatestRun(latestRun),
+            latestRun == null ? null : BuildLatestRun(latestRun, ordered),
             [.. shown.Select(finding => BuildFinding(finding, annotations))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
     }
@@ -116,11 +116,27 @@ internal static class EnvelopeBuilder
     /// Projects the latest-run analysis into the envelope, with every sentence resolved.
     /// </summary>
     /// <param name="analysis">What the analyzer read from the newest session.</param>
+    /// <param name="ordered">Every finding produced, in the order the envelope lists them.</param>
     /// <returns>The section, as both renderers will read it.</returns>
-    private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis)
+    private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered)
     {
         TestSession session = analysis.Session.Session;
         bool capped = analysis.FailuresTotal > analysis.Failures.Count;
+
+        // In envelope order and not in the order the analyzer met them, which was the order of
+        // the tests they explain. The "also failing" line names them by row number, and a reader
+        // expects "#1, #2, #4" rather than "#2, #1, #4".
+        var position = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int index = 0; index < ordered.Count; index++)
+            position[ordered[index].Id] = index;
+
+        List<string> explainedBy =
+        [
+            .. analysis.ExplainingFindings
+                .Select(finding => finding.Id)
+                .OrderBy(id => position.GetValueOrDefault(id, int.MaxValue))
+                .ThenBy(id => id, StringComparer.Ordinal)
+        ];
 
         return new LatestRunDto(
             session.SessionId.ToString("D", CultureInfo.InvariantCulture),
@@ -132,7 +148,7 @@ internal static class EnvelopeBuilder
             analysis.TestsFailed,
             analysis.NewFailures,
             analysis.ExplainedByFindings,
-            [.. analysis.ExplainingFindings.Select(finding => finding.Id)],
+            explainedBy,
             [.. analysis.Failures.Select(BuildLatestRunFailure)],
             analysis.Failures.Count,
             analysis.FailuresTotal,

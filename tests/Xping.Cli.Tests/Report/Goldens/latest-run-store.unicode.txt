@@ -1,0 +1,32 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-01 09:00 → 09:19 · main@eab9867
+15 tests · 13 healthy · 2 flagged · 1 awaiting more runs
+◷ nothing to measure: concurrency 15 · time sensitive 15
+
+```
+LATEST RUN  09:19 · eab9867                                1 new failure
+────────────────────────────────────────────────────────────────────────
+
+    new test     SampleTests.Checkout_RejectsExpiredCoupon
+                 first seen this run, failed
+                 EqualException | SampleTests.cs:10
+
+    Also failing: 2 tests explained by findings below (#1, #2).
+
+NEEDS ATTENTION (2 high)                               most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  always failing
+    SampleTests.Checkout_RequiresProvisionedDatabase
+    failed 20 of 20 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+
+2.  HIGH  flaky
+    SampleTests.Checkout_AppliesDiscount
+    failed 1 of 20 executions (5%) in 1 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_d7dbebbd | SampleTests.cs:10
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

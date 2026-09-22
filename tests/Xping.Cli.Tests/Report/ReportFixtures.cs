@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using Xping.Cli.Report;
+using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
@@ -55,9 +56,12 @@ internal static class ReportFixtures
         "docs-time-sensitive",
         "docs-retry-deepening",
         "docs-retry-exhausted",
+        "latest-run",
+        "latest-run-known-only",
         "latest-run-suppressed",
         "latest-run-environmental",
-        "latest-run-overflow"
+        "latest-run-overflow",
+        "latest-run-store"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -122,6 +126,20 @@ internal static class ReportFixtures
                 "tests/MyApp.Tests/CheckoutTests.cs", 27) with
             { Id = "f_9c14ab63", EvidenceLevel = "high" }),
 
+        // The latest-run spec's §3.1: a regression, a new test, and the failures the findings
+        // already explain, above the format spec's §3 block.
+        "latest-run" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun(
+                [Regression(), FreshFailure()], ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5)
+        },
+
+        // Its §3.3: every failure in the run is one a finding accounts for.
+        "latest-run-known-only" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([], ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5)
+        },
+
         // A window of one session: the section is absent, and this golden is byte-identical to
         // spec-section-3's. Pinned so that absence stays a rule and not an accident.
         "latest-run-suppressed" => SpecSection3() with
@@ -138,6 +156,7 @@ internal static class ReportFixtures
             }
         },
         "latest-run-overflow" => LatestRunOverflow(),
+        "latest-run-store" => LatestRunFromStore(),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
 
@@ -274,11 +293,101 @@ internal static class ReportFixtures
             "new",
             "Checkout_AppliesDiscount",
             "passed the previous 19 runs, failed just now",
-            priorSessions: 19,
-            sourceFile: "src/SampleApp.XUnit/CartTests.cs") with
+            priorSessions: 19) with
         {
-            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_AppliesDiscount", "src/SampleApp.XUnit/CartTests.cs", 112)
+            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_AppliesDiscount", "CartTests.cs", 112)
         };
+
+    /// <summary>
+    /// The row the latest-run spec's §3.1 closes with: a test the window had never seen.
+    /// </summary>
+    private static LatestRunFailureDto FreshFailure() =>
+        LatestRunFailure(
+            "newTest",
+            "Checkout_RejectsExpiredCoupon",
+            "first seen this run, failed",
+            failureSummary: "EqualException") with
+        {
+            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_RejectsExpiredCoupon", "CartTests.cs", 140)
+        };
+
+    /// <summary>
+    /// The section as the whole pipeline produces it from sessions, not as a hand-built envelope.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other latest-run fixtures spell the envelope and pin the renderer. This one spells the
+    /// sessions and pins everything downstream of them — the index, the analyzer, the coordinator,
+    /// the builder and the renderer — so that a contrast sentence or a status the builder phrases
+    /// differently from the envelope fixtures surfaces here as a golden diff.
+    /// </para>
+    /// <para>
+    /// Twenty runs of a small suite. One test passed nineteen times and fails in the newest run;
+    /// one appears in the newest run alone and fails; one has failed in every run and is a finding,
+    /// which the section defers to. The rest are stable, and there are enough of them that the
+    /// newest run stays well under the environmental thresholds.
+    /// </para>
+    /// </remarks>
+    private static ReportEnvelope LatestRunFromStore()
+    {
+        const int runs = 20;
+        var sessions = new List<Sdk.Core.Models.TestSession>();
+
+        for (int ordinal = 0; ordinal < runs; ordinal++)
+        {
+            bool newest = ordinal == runs - 1;
+            List<Sdk.Core.Models.Executions.TestExecution> executions =
+            [
+                TestSessionFactory.Execution(
+                    "Checkout_AppliesDiscount",
+                    newest ? Sdk.Core.Models.Executions.TestOutcome.Failed : Sdk.Core.Models.Executions.TestOutcome.Passed,
+                    exceptionType: newest ? "System.NullReferenceException" : null,
+                    errorMessage: newest ? "Object reference not set to an instance of an object." : null),
+                TestSessionFactory.Execution(
+                    "Checkout_RequiresProvisionedDatabase",
+                    Sdk.Core.Models.Executions.TestOutcome.Failed,
+                    exceptionType: "System.InvalidOperationException",
+                    errorMessage: "The database has not been provisioned."),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}"))
+            ];
+
+            if (newest)
+            {
+                executions.Add(TestSessionFactory.Execution(
+                    "Checkout_RejectsExpiredCoupon",
+                    Sdk.Core.Models.Executions.TestOutcome.Failed,
+                    exceptionType: "Xunit.Sdk.EqualException",
+                    errorMessage: "Assert.Equal() Failure: Values differ"));
+            }
+
+            sessions.Add(TestSessionFactory.Session(ordinal, executions, sha: "eab9867a1c40", branch: "main"));
+        }
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+
+        var coordinator = new FindingCoordinator(
+        [
+            new FailureModeProvider(),
+            new RetryProvider(),
+            new DurationProvider(),
+            new VanishedProvider(),
+            new ParallelSensitiveProvider(),
+            new TimeSensitiveProvider()
+        ]);
+
+        AnalysisResult analysis = coordinator.Run(context, kinds: null, TextWriter.Null);
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(context, analysis.Findings);
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            latestRun);
+    }
 
     /// <summary>
     /// A latest-run section dated and signed like <see cref="SpecSection3"/>'s newest session.

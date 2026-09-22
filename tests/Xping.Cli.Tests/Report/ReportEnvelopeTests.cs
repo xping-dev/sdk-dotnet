@@ -502,6 +502,34 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
+    public void ExplainingFindingIdsAreInEnvelopeOrder()
+    {
+        // Two always-failing tests whose fingerprints sort the other way round from their rank:
+        // "Zulu" fails in every run and "Alpha" in most, so Zulu ranks first and Alpha's
+        // fingerprint sorts first. The ids follow the rank, because that is what the row numbers
+        // on the "also failing" line are.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    TestSessionFactory.Execution("Zulu", TestOutcome.Failed, errorMessage: "boom"),
+                    TestSessionFactory.Execution("Alpha", i % 4 == 0 ? TestOutcome.Passed : TestOutcome.Failed, errorMessage: i % 4 == 0 ? null : "boom")
+                ]));
+        }
+
+        JsonElement root = RunJson();
+
+        string[] ranked = [.. root.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("id").GetString()!)];
+        string[] explained = [.. root.GetProperty("latestRun").GetProperty("explainedByFindingIds").EnumerateArray().Select(e => e.GetString()!)];
+
+        Assert.Equal(2, explained.Length);
+        Assert.Equal(ranked.Where(explained.Contains), explained);
+    }
+
+    [Fact]
     public void TheOverflowCommandIsTheSameOneTheFindingsTruncationPrints()
     {
         ILocalSessionStore store = LocalSessionStore.Create();
