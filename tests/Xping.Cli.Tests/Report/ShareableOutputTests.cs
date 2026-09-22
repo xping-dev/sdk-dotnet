@@ -10,6 +10,9 @@ using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
 using Xping.Sdk.Core.Models.Executions;
 
+using static Xping.Cli.Tests.Report.ReportFixtures;
+using static Xping.Cli.Tests.Report.ReportText;
+
 namespace Xping.Cli.Tests.Report;
 
 /// <summary>
@@ -23,12 +26,6 @@ namespace Xping.Cli.Tests.Report;
 /// </remarks>
 public sealed class ShareableOutputTests
 {
-    private const int FenceWidth = 72;
-
-    // Severity marker, two spaces, kind label, two spaces — the column the trailer starts at.
-    private const int Indent = 6;
-    private const string Fence = "```";
-
     // ---------------------------------------------------------------------
     // Headlines
     // ---------------------------------------------------------------------
@@ -447,6 +444,498 @@ public sealed class ShareableOutputTests
             Assert.True(line.Length <= FenceWidth, $"'{line}' is {line.Length} columns");
     }
 
+    /// <summary>
+    /// The second header line answers what state the suite is in, and its counts reconcile.
+    /// </summary>
+    /// <remarks>
+    /// It used to open with a finding count, which is a different unit from the two beside it: one
+    /// test can carry two findings and one finding can cover a cluster, so "5 findings · 16 tests ·
+    /// 10 healthy" read as an arithmetic error to anyone who tried to add it up. Tests, healthy and
+    /// flagged are one unit and do add up.
+    /// </remarks>
+    [Fact]
+    public void TheSecondHeaderLineCountsTestsAndNotFindings()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Settles", "ran in 12 of 17 earlier runs")));
+
+        string counts = Lines(report).Single(l => l.Contains("healthy", StringComparison.Ordinal));
+
+        Assert.Equal("412 tests | 410 healthy | 2 flagged", counts);
+        Assert.DoesNotContain("findings", counts, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The finding list is headed, and the heading says how the list is ordered.
+    /// </summary>
+    /// <remarks>
+    /// A count in an internal vocabulary word said how many rows there were and nothing about
+    /// whether the list was informational or actionable. The heading is imperative and asserts no
+    /// verdict: "problems found" would claim a causality the evidence rules forbid.
+    /// </remarks>
+    [Fact]
+    public void TheFindingListIsHeadedAndSaysHowItIsOrdered()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")));
+
+        string[] fenced = Fenced(report);
+
+        Assert.Equal(FenceWidth, fenced[0].Length);
+        Assert.StartsWith("NEEDS ATTENTION (1 high)", fenced[0], StringComparison.Ordinal);
+        Assert.EndsWith("most severe first", fenced[0], StringComparison.Ordinal);
+
+        Assert.Equal(new string('-', FenceWidth), fenced[1]);
+        Assert.Equal("", fenced[2]);
+    }
+
+    /// <summary>
+    /// The heading carries the severity breakdown the header line used to.
+    /// </summary>
+    [Fact]
+    public void TheHeadingCarriesTheSeverityBreakdown()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.One", "failed 7 of 20"),
+            Finding("RetryMasked", "medium", "MyApp.Tests.CartTests.Two", "passed on retry 4 times"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Three", "ran in 12 of 17 earlier runs")));
+
+        Assert.StartsWith(
+            "NEEDS ATTENTION (1 high, 1 medium, 1 low)", Fenced(report)[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The bands count every finding produced, not the rows a truncated report shows.
+    /// </summary>
+    /// <remarks>
+    /// So <c>--top 1</c> can head one row with three bands. That is correct: the report found three
+    /// things and is showing one of them, and the truncation line below the fence is what says so.
+    /// A heading that counted the rows would make the number move with a display flag.
+    /// </remarks>
+    [Fact]
+    public void TheHeadingCountsEveryFindingProducedAndNotTheRowsShown()
+    {
+        ReportEnvelope envelope = Envelope(
+            [Finding("Flaky", "high", "MyApp.Tests.CartTests.One", "failed 7 of 20")],
+            shown: 1,
+            total: 3);
+
+        envelope = envelope with
+        {
+            Summary = envelope.Summary with { Counts = new SeverityCountsDto(2, 1, 0) }
+        };
+
+        string report = Render(envelope);
+
+        Assert.StartsWith(
+            "NEEDS ATTENTION (2 high, 1 medium)", Fenced(report)[0], StringComparison.Ordinal);
+        Assert.Single(Fenced(report), l => l.StartsWith("1.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A report with nothing in it prints no heading.
+    /// </summary>
+    /// <remarks>
+    /// A clean report and a full one should not both require a reader to parse a heading before
+    /// discovering which of the two they are looking at.
+    /// </remarks>
+    [Fact]
+    public void AnEmptyReportIsNotHeaded()
+    {
+        string report = Render(Envelope());
+
+        Assert.DoesNotContain("NEEDS ATTENTION", report, StringComparison.Ordinal);
+        Assert.Single(Fenced(report));
+    }
+
+    /// <summary>
+    /// The line an empty report prints is wrapped to the fence like every other line in the block.
+    /// </summary>
+    /// <remarks>
+    /// It names one reason per thing the report withheld, so a store that withheld for all three
+    /// reasons at once produces a sentence half again as wide as the fence. Nothing printed it
+    /// until a store grew all three, which is why it went unnoticed until the width assertion swept
+    /// the catalogue rather than one report. The continuation is indented to the sentence, not to
+    /// the glyph, so the second line reads as more of the first.
+    /// </remarks>
+    [Fact]
+    public void TheLineAnEmptyReportPrintsIsWrappedToTheFence()
+    {
+        ReportEnvelope envelope = Envelope(
+            [], shown: 0, total: 0, lowEvidence: 4, notSignificant: 2);
+
+        envelope = envelope with
+        {
+            Summary = envelope.Summary with
+            {
+                NotMeasured = new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal)
+                {
+                    [nameof(FindingKind.DurationRegression)] = new(3, 7),
+                    [nameof(FindingKind.TimeSensitive)] = new(0, 2)
+                }
+            }
+        };
+
+        string[] fenced = Fenced(Render(envelope));
+
+        Assert.Equal(
+            [
+                "* Nothing reportable yet: 4 need more runs, 2 could be chance, 2 kinds",
+                "  had nothing to measure."
+            ],
+            fenced);
+
+        Assert.All(fenced, line => Assert.True(
+            line.Length <= FenceWidth, $"'{line}' is {line.Length} columns"));
+    }
+
+    /// <summary>
+    /// The rule under the heading is drawn from the glyph set in use, not from a literal.
+    /// </summary>
+    /// <remarks>
+    /// A bare box-drawing character would arrive as mojibake on a code page that cannot render it,
+    /// and would break the assertion that piped output carries nothing but printable ASCII.
+    /// </remarks>
+    [Fact]
+    public void TheRuleUnderTheHeadingIsDrawnFromTheGlyphSet()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"));
+
+        // Drawn rather than resolved: Resolve reaches ReportGlyphs.Detect for any caller that did
+        // not force ASCII, so asking for Unicode through it would pass or fail on the machine's
+        // console encoding rather than on the renderer.
+        string unicode = Render(envelope, Drawn(ReportGlyphs.Unicode, color: false));
+
+        Assert.Equal(new string('\u2500', FenceWidth), Fenced(unicode)[1]);
+        Assert.Equal(new string('-', FenceWidth), Fenced(Render(envelope))[1]);
+    }
+
+    /// <summary>
+    /// A row is a numbered header line and then everything else, indented under the marker.
+    /// </summary>
+    /// <remarks>
+    /// The name has a line to itself. Behind the marker and the kind label it had 49 of the fence's
+    /// 72 columns, on the one line in the report that must never be cut — and it was the line the
+    /// old layout truncated first.
+    /// </remarks>
+    [Fact]
+    public void ARowIsNumberedAndItsNameHasALineOfItsOwn()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20"),
+            Finding("Vanished", "low", "MyApp.Tests.CartTests.Settles", "ran in 12 of 17 earlier runs")));
+
+        Assert.Equal(
+            [
+                "1.  HIGH  flaky",
+                "    CartTests.PlacesAnOrder",
+                "    failed 7 of 20",
+                "    evidence moderate | -env-cluster | f_2a91",
+                "",
+                "2.  LOW   stopped running",
+                "    CartTests.Settles",
+                "    ran in 12 of 17 earlier runs",
+                "    evidence moderate | -partial | f_2a91"
+            ],
+            Rows(report));
+    }
+
+    /// <summary>
+    /// The name gets every column the fence has, less the indent.
+    /// </summary>
+    /// <remarks>
+    /// Sixty-eight, not the forty-nine the marker and the kind label used to leave. This name is 64
+    /// columns and was truncated by the old layout; no <c>Class.Method</c> anyone writes reaches the
+    /// new budget.
+    /// </remarks>
+    [Fact]
+    public void ANameTooLongForTheOldSubjectColumnSurvivesWhole()
+    {
+        const string name = "OrderPlacementIntegrationTests.PlacesAnOrderAndSettlesItProperly";
+
+        string report = Render(Envelope(
+            Finding("Flaky", "high", $"MyApp.Tests.{name}", "failed 7 of 20")));
+
+        Assert.Equal(64, name.Length);
+        Assert.Contains($"    {name}", Fenced(report), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// A name past the budget pays with its class, never with its method.
+    /// </summary>
+    /// <remarks>
+    /// The method segment is what a reader greps for and what <c>--filter</c> matches. Truncating
+    /// from the right would leave a column of identical class names; truncating into the method
+    /// leaves something that matches nothing.
+    /// </remarks>
+    [Fact]
+    public void AnOverLongNameIsElidedFromTheLeftAndKeepsItsMethodWhole()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "MyApp.Tests." + new string('C', 40) + "Tests.PlacesAnOrderAndSettlesItProperly",
+            "failed 7 of 20")));
+
+        string name = Rows(report)[1];
+
+        Assert.Equal(FenceWidth, name.Length);
+        Assert.StartsWith("    ...", name, StringComparison.Ordinal);
+        Assert.EndsWith("Tests.PlacesAnOrderAndSettlesItProperly", name, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A method segment that cannot fit at all is emitted whole and the line overflows.
+    /// </summary>
+    /// <remarks>
+    /// The same trade <c>Wrap</c> makes for an over-long word and <c>FitPath</c> for a single path
+    /// segment: half an identifier is unsearchable, and a few columns past the fence is the smaller
+    /// harm. The class in front of it goes entirely rather than leaving a stub nobody can use.
+    /// </remarks>
+    [Fact]
+    public void AMethodNameWiderThanTheFenceIsEmittedWhole()
+    {
+        string method = new('M', 80);
+
+        string report = Render(Envelope(
+            Finding("Flaky", "high", $"MyApp.Tests.CartTests.{method}", "failed 7 of 20")));
+
+        Assert.Equal($"    ...{method}", Rows(report)[1]);
+    }
+
+    /// <summary>
+    /// The elision cuts at the dot between class and method, never at one inside an argument.
+    /// </summary>
+    /// <remarks>
+    /// NUnit records a parameterised case as <c>SampleTests.Add(1.5, 2)</c>. The last dot in that
+    /// string belongs to an argument, and cutting there would leave <c>...5, 2)</c>.
+    /// </remarks>
+    [Fact]
+    public void AnArgumentListIsNotMistakenForTheBoundaryBetweenClassAndMethod()
+    {
+        string report = Render(Envelope(Finding(
+            "Flaky",
+            "high",
+            "MyApp.Tests." + new string('C', 40) + "Tests.Add(1.5, 2.25, 3.125)",
+            "failed 7 of 20")));
+
+        string name = Rows(report)[1];
+
+        Assert.EndsWith("Tests.Add(1.5, 2.25, 3.125)", name, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A cluster is named by what its members share, and says how many of them there are.
+    /// </summary>
+    /// <remarks>
+    /// Never by a member: naming one of three tests and appending "+2 more" leaves a reader opening
+    /// whichever member happened to sort first, when the finding's own evidence had already
+    /// identified the one place to go.
+    /// </remarks>
+    [Fact]
+    public void AClusterRowNamesItsCauseAndHowManyTestsCarryIt()
+    {
+        string report = Render(Envelope(Cluster(
+            "UnprovisionedDatabase..ctor",
+            3,
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20 runs")));
+
+        Assert.Equal("    UnprovisionedDatabase..ctor (3 tests)", Rows(report)[1]);
+
+        // The group id is a signature hash. A hash presented as a cause is worse than an admission.
+        Assert.DoesNotContain("sig_", report, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A second finding about one test says which row the first one is.
+    /// </summary>
+    /// <remarks>
+    /// Right-aligned to the fence, at the far end of the line the eye is already on, and resolved on
+    /// the envelope so the JSON consumer reading the list in order sees the same relationship.
+    /// </remarks>
+    [Fact]
+    public void ASiblingRowNamesTheRowItSharesItsTestWith()
+    {
+        string report = Render(Envelope(
+            Finding("DurationUnstable", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "p50 820ms"),
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
+                with { Annotation = "same test as #1" }));
+
+        // Four lines for the first finding, then the blank line between rows.
+        string header = Rows(report)[5];
+
+        Assert.Equal(FenceWidth, header.Length);
+        Assert.StartsWith("2.  HIGH  flaky ", header, StringComparison.Ordinal);
+        Assert.EndsWith("same test as #1", header, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A row with nothing to say about the one above it says nothing, and ends where its label does.
+    /// </summary>
+    [Fact]
+    public void ARowWithNoAnnotationCarriesNoTrailingSpace()
+    {
+        string report = Render(Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")));
+
+        Assert.Equal("1.  HIGH  flaky", Rows(report)[0]);
+    }
+
+    /// <summary>
+    /// Colour must not move the annotation off the edge it is aligned to.
+    /// </summary>
+    /// <remarks>
+    /// The marker beside it is wrapped in escape codes, which occupy no columns. Padding to a length
+    /// that counted them would leave the annotation short of the fence in a terminal and on it in a
+    /// pipe — the one place in this layout where the two could disagree.
+    /// </remarks>
+    [Fact]
+    public void ColourDoesNotMoveTheAnnotation()
+    {
+        ReportEnvelope envelope = Envelope(
+            Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
+                with { Annotation = "same test as #1" });
+
+        string terminal = Render(envelope, Capabilities(redirected: false));
+
+        Assert.Equal(FenceWidth, Strip(Lines(terminal).Single(
+            l => l.Contains("same test as", StringComparison.Ordinal))).Length);
+    }
+
+    /// <summary>
+    /// The members are listed beneath the cause, indented past it.
+    /// </summary>
+    /// <remarks>
+    /// The cause is the line that gets acted on and the members are what it took down, so they are
+    /// indented under it rather than set level with it. Each is named by its own identity, resolved
+    /// on the envelope like every other name here.
+    /// </remarks>
+    [Fact]
+    public void AClusterListsItsMembersBeneathTheCause()
+    {
+        string report = Render(Envelope(Cluster(
+            "UnprovisionedDatabase..ctor",
+            3,
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20 runs")));
+
+        Assert.Equal(
+            [
+                "1.  HIGH  broken fixture",
+                "    UnprovisionedDatabase..ctor (3 tests)",
+                "      FixtureTests.Member0",
+                "      FixtureTests.Member1",
+                "      FixtureTests.Member2",
+
+                // 69 columns, so it wraps at the budget the name and the trailer share.
+                "    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20",
+                "    runs",
+                "    evidence moderate | all runs | f_2a91"
+            ],
+            Rows(report));
+    }
+
+    /// <summary>
+    /// A wide cluster names three members and counts the rest.
+    /// </summary>
+    /// <remarks>
+    /// Three is enough to recognise what the cluster is; a forty-member list is a finding nobody
+    /// scrolls past, and the whole of it is in the JSON for a caller that wants every name.
+    /// </remarks>
+    [Fact]
+    public void AWideClusterNamesThreeMembersAndCountsTheRest()
+    {
+        string report = Render(Envelope(Cluster("SocketException", 12, "12 tests failed alike")));
+
+        string[] rows = Rows(report);
+
+        Assert.Equal("    SocketException (12 tests)", rows[1]);
+        Assert.Equal(
+            ["      FixtureTests.Member0", "      FixtureTests.Member1", "      FixtureTests.Member2"],
+            rows[2..5]);
+        Assert.Equal("      +9 more", rows[5]);
+    }
+
+    /// <summary>
+    /// A cluster nobody could name is still navigable.
+    /// </summary>
+    /// <remarks>
+    /// Where the adapter recorded no member and no exception type, the cause line says so — and the
+    /// members are listed underneath in that case exactly as in every other, because a finding a
+    /// reader can neither name nor open is a finding they skip.
+    /// </remarks>
+    [Fact]
+    public void AClusterWithNoRecordedCauseStillListsItsMembers()
+    {
+        string report = Render(Envelope(Cluster("(cause not recorded)", 2, "2 tests failed alike")));
+
+        string[] rows = Rows(report);
+
+        Assert.Equal("    (cause not recorded) (2 tests)", rows[1]);
+        Assert.Equal(["      FixtureTests.Member0", "      FixtureTests.Member1"], rows[2..4]);
+    }
+
+    /// <summary>
+    /// A member name is subject to the fence like every other line, and elides the same way.
+    /// </summary>
+    [Fact]
+    public void AnOverLongMemberNameIsElidedAndKeepsItsMethod()
+    {
+        FindingDto finding = Cluster("SocketException", 1, "1 test failed alike");
+
+        finding = finding with
+        {
+            Subject = finding.Subject with
+            {
+                Members =
+                [
+                    finding.Subject.Members![0] with
+                    {
+                        ShortName = new string('C', 50) + "Tests.PlacesAnOrderAndSettlesItProperly"
+                    }
+                ]
+            }
+        };
+
+        string member = Rows(Render(Envelope(finding)))[2];
+
+        Assert.Equal(FenceWidth, member.Length);
+        Assert.StartsWith("      ...", member, StringComparison.Ordinal);
+        Assert.EndsWith("Tests.PlacesAnOrderAndSettlesItProperly", member, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One test in a cluster is one test, not "1 tests".
+    /// </summary>
+    [Fact]
+    public void AClusterOfOneCountsInTheSingular()
+    {
+        string report = Render(Envelope(Cluster("SocketException", 1, "1 test failed alike")));
+
+        Assert.Equal("    SocketException (1 test)", Rows(report)[1]);
+    }
+
+    /// <summary>
+    /// The severity marker is the coloured element, and the only one.
+    /// </summary>
+    /// <remarks>
+    /// It is what the colour encodes. A row number carries no severity, and colouring the name would
+    /// say the identity was the thing worth ranking rather than the thing worth reading.
+    /// </remarks>
+    [Fact]
+    public void TheSeverityMarkerIsTheOnlyColouredElementOfARow()
+    {
+        string report = Render(
+            Envelope(Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")),
+            Capabilities(redirected: false));
+
+        string[] rows = Rows(report);
+
+        Assert.Equal("1.  \u001b[31mHIGH\u001b[0m  flaky", rows[0]);
+        Assert.DoesNotContain("\u001b", rows[1], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EveryFindingSaysWhichPopulationItsRateWasTakenOver()
     {
@@ -849,13 +1338,6 @@ public sealed class ShareableOutputTests
     }
 
     // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
-    private static OutputCapabilities Capabilities(bool redirected) =>
-        OutputCapabilities.Resolve(forceAscii: true, noColor: false, redirected, _ => null);
-
-    // ---------------------------------------------------------------------
     // What the report did not print
     // ---------------------------------------------------------------------
 
@@ -1117,147 +1599,10 @@ public sealed class ShareableOutputTests
         Assert.DoesNotContain("covered part of the suite", Render(envelope), StringComparison.Ordinal);
     }
 
-    private static string Render(ReportEnvelope envelope, OutputCapabilities? capabilities = null)
-    {
-        using var writer = new StringWriter();
-        new TextReportRenderer(capabilities ?? Capabilities(redirected: true)).Render(envelope, writer);
-
-        return writer.ToString();
-    }
-
-    private static string[] Lines(string report) =>
-        report.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
-
     /// <summary>
-    /// Returns the lines between the fences — the part that has to survive a paste.
+    /// Builds a finding whose evidence level and source location are what the test is about.
     /// </summary>
-    private static string[] Fenced(string report)
-    {
-        string[] lines = Lines(report);
-        int open = Array.FindIndex(lines, l => l.Trim() == Fence);
-        int close = Array.FindLastIndex(lines, l => l.Trim() == Fence);
-
-        Assert.True(open >= 0 && close > open, "the report is not fenced");
-
-        return lines[(open + 1)..close];
-    }
-
-    private static string Strip(string value)
-    {
-        var builder = new System.Text.StringBuilder(value.Length);
-
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (value[i] != '\u001b')
-            {
-                builder.Append(value[i]);
-                continue;
-            }
-
-            while (i < value.Length && value[i] != 'm')
-                i++;
-        }
-
-        return builder.ToString();
-    }
-
     private static FindingDto FindingWith(string evidence, string? sourceFile, int? sourceLineNumber) =>
         Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", sourceFile, sourceLineNumber)
             with { EvidenceLevel = evidence };
-
-    /// <summary>Returns the dim trailer line of a single-finding report.</summary>
-    private static string Trailer(string report) =>
-        Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal)).TrimEnd();
-
-    private static FindingDto Finding(
-        string kind,
-        string severity,
-        string name,
-        string headline,
-        string? sourceFile,
-        int? sourceLineNumber)
-    {
-        FindingDto finding = Finding(kind, severity, name, headline);
-
-        return finding with
-        {
-            Subject = finding.Subject with
-            {
-                SourceFile = sourceFile,
-                SourceLineNumber = sourceLineNumber
-            }
-        };
-    }
-
-    /// <summary>
-    /// Spells an enum name the way the envelope does, so the fixtures cannot drift from the builder.
-    /// </summary>
-    private static string ToCamelCase(string value) =>
-        char.ToLowerInvariant(value[0]) + value.Substring(1);
-
-    private static FindingDto Finding(string kind, string severity, string name, string headline) =>
-        new(
-            "f_2a91",
-            kind,
-            severity,
-            "moderate",
-            10,
-            ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
-            new SubjectDto("test", "fp", name, name, null, null, "MyApp.Tests", null, null, null),
-            headline,
-            [new MetricDto("failed", "7 of 20 executions (35%)")],
-            null,
-            "xping report --kind Flaky --format json");
-
-    private static ReportEnvelope Envelope(params FindingDto[] findings) =>
-        Envelope(findings, findings.Length, findings.Length);
-
-    private static ReportEnvelope Envelope(FindingDto[] findings, int shown, int total) =>
-        Envelope(findings, shown, total, lowEvidence: 0, notSignificant: 0);
-
-    private static ReportEnvelope Envelope(
-        FindingDto[] findings, int shown, int total, int lowEvidence, int notSignificant) =>
-        Envelope(findings, shown, total, lowEvidence, notSignificant, notMeasured: null);
-
-    private static ReportEnvelope Envelope(
-        FindingDto[] findings,
-        int shown,
-        int total,
-        int lowEvidence,
-        int notSignificant,
-        IReadOnlyDictionary<string, NotMeasuredDto>? notMeasured)
-    {
-        int high = findings.Count(f => f.Severity == "high");
-        int medium = findings.Count(f => f.Severity == "medium");
-        int low = findings.Count(f => f.Severity == "low");
-        int produced = Math.Max(total, findings.Length);
-
-        return new ReportEnvelope(
-            ReportEnvelope.CurrentSchemaVersion,
-            new WindowDto(
-                new DateTime(2026, 8, 5, 9, 12, 0, DateTimeKind.Utc),
-                new DateTime(2026, 8, 19, 16, 40, 0, DateTimeKind.Utc),
-                20,
-                "default",
-                null,
-                3,
-                []),
-            new ContextDto("a3f9c2ed0011", "main", "MyApp.Tests"),
-            new SummaryDto(
-                412,
-                produced,
-                new SeverityCountsDto(high, medium, low),
-                412 - findings.Length,
-                lowEvidence,
-                notSignificant,
-                notMeasured ?? new Dictionary<string, NotMeasuredDto>(StringComparer.Ordinal),
-                0,
-                0,
-                0,
-                0,
-                0,
-                []),
-            findings,
-            new TruncationDto(shown, total, "xping report --all"));
-    }
 }

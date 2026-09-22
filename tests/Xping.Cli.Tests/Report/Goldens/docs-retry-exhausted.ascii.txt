@@ -1,0 +1,17 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged
+
+```
+NEEDS ATTENTION (1 high)                               most severe first
+------------------------------------------------------------------------
+
+1.  HIGH  out of retries
+    CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+    gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent
+    retrying
+    evidence high | -env | f_9c14ab63 | .../CheckoutTests.cs:27
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

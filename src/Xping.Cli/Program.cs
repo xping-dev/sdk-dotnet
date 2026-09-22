@@ -144,7 +144,12 @@ internal static class Program
 
         Option<int?> topOption = new("--top")
         {
-            Description = $"Findings to show (default {LocalAnalysisConstants.DefaultTopFindings})",
+            // Rows, not the N most severe: a second finding about a test already listed sits under
+            // the first whatever its severity, and the cut counts it there.
+            Description =
+                $"Rows to show (default {LocalAnalysisConstants.DefaultTopFindings}); " +
+                "findings about one test stay together, so a lower one can be shown ahead of " +
+                "a higher one about another test",
             CustomParser = result => ParsePositive(result, "--top")
         };
 

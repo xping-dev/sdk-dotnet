@@ -64,6 +64,73 @@ internal sealed class FindingOrder : IComparer<Finding>
     }
 
     /// <summary>
+    /// Pulls findings about a test already named up beside the first of them.
+    /// </summary>
+    /// <param name="findings">The findings, already ranked.</param>
+    /// <returns>The same findings, with siblings adjacent.</returns>
+    /// <remarks>
+    /// <para>
+    /// One test carrying two findings appeared twice in the list with nothing connecting the two,
+    /// and at ranks far enough apart that a reader scrolling between them had no reason to connect
+    /// them either. Walking the ranked list top to bottom, a finding whose subject has already been
+    /// named moves to immediately after the last finding naming it; the first of them keeps its
+    /// rank position, so the ranking between distinct tests is exactly what it was.
+    /// </para>
+    /// <para>
+    /// Single-test subjects only. A cluster is not deduplicated against its members: a broken
+    /// fixture and the flaky test it blocked are two findings about two different things, and
+    /// pulling the second up under the first would assert a relationship the evidence does not
+    /// make.
+    /// </para>
+    /// <para>
+    /// Applied before <c>--top</c> truncates, which is what stops a limit separating a sibling from
+    /// the finding it refers to: a sibling always follows its anchor, so a cut either keeps both or
+    /// drops the sibling. It is not a comparison and cannot be one — where a finding goes depends on
+    /// what came before it, which no <see cref="IComparer{T}"/> may look at.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<Finding> WithSiblingsAdjacent(IReadOnlyList<Finding> findings)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+
+        var groups = new List<List<Finding>>(findings.Count);
+        var byTest = new Dictionary<string, List<Finding>>(StringComparer.Ordinal);
+
+        foreach (Finding finding in findings)
+        {
+            string? test = Test(finding);
+
+            if (test != null && byTest.TryGetValue(test, out List<Finding>? sibling))
+            {
+                sibling.Add(finding);
+                continue;
+            }
+
+            List<Finding> group = [finding];
+            groups.Add(group);
+
+            if (test != null)
+                byTest[test] = group;
+        }
+
+        return [.. groups.SelectMany(group => group)];
+    }
+
+    /// <summary>
+    /// Reads the test a finding is about, where it is about exactly one.
+    /// </summary>
+    /// <param name="finding">The finding.</param>
+    /// <returns>The fingerprint, or null for a cluster.</returns>
+    public static string? Test(Finding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+
+        return finding.Subject is FindingSubject.SingleTest single
+            ? single.Test.TestFingerprint
+            : null;
+    }
+
+    /// <summary>
     /// Rounds a rate to the precision the report actually publishes.
     /// </summary>
     /// <param name="value">The value to round.</param>

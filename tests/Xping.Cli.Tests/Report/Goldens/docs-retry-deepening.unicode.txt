@@ -1,0 +1,17 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 411 healthy · 1 flagged
+
+```
+NEEDS ATTENTION (1 medium)                             most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   deeper retries
+    CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+    attempts to pass 1 -> 3 (+2) over 3 runs against 14 before, 2.4s
+    spent retrying
+    evidence moderate | -env | f_5da7c018 | .../CheckoutTests.cs:27
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

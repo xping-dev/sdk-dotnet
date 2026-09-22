@@ -57,7 +57,7 @@ xping report [options]
 |---|---|---|
 | `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last` |
 | `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
-| `--top <n>` | `10` | Findings to show. Excludes `--all` |
+| `--top <n>` | `10` | Rows to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
 | `--all` | off | Show **every finding** rather than the top ones |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Scope the report to one test assembly |
@@ -87,22 +87,30 @@ store, the spacing between its runs is intact, and the report is dated against t
 
 The default output is built to be shared. The findings sit inside a fenced code block, so selecting the report and pasting it into Slack, a pull request or a ticket renders it in monospace with its columns intact:
 
+<!-- xping:sample docs-checkout -->
 ````
 Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
-3 findings (1 high, 2 medium) · 412 tests · 409 healthy
+412 tests · 409 healthy · 3 flagged · 41 awaiting more runs · 6 not significant
+◷ nothing to measure: concurrency 108 · slower 32
 
 ```
-HIGH  flaky            GenerateMonthlySummary
-      failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-      evidence moderate | -env-cluster | f_2a91c0de | .../SummaryTests.cs:88
+NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
+────────────────────────────────────────────────────────────────────────
 
-MED   slower           CheckoutFlow_Completes
-      3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-      evidence high | -env | f_8c04b71a | .../FlowTests.cs:214
+1.  HIGH  flaky
+    SummaryTests.GenerateMonthlySummary
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+    evidence moderate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
 
-LOW   stopped running  LegacyImport.Roundtrip
-      ran in 12 of 17 earlier runs, absent from the last 3
-      evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
+2.  MED   slower
+    FlowTests.CheckoutFlow_Completes
+    3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
+    evidence high | -env | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+
+3.  LOW   stopped running
+    LegacyImport.Roundtrip
+    ran in 12 of 17 earlier runs, absent from the last 3
+    evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -110,11 +118,35 @@ counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 ````
 
+The lines above the fence answer separate questions. The first says **what was analysed** — the assembly, how many runs, over what period, at which revision. The second says **what state the suite is in**, in one unit: `tests` is `healthy` plus `flagged`, and they add up because `flagged` counts tests rather than findings. One test can attract findings of several kinds, and one finding about a broken fixture covers every test that fixture took down. Candidates the report saw and withheld are counted on the end of that line: `awaiting more runs` is waiting on data, `not significant` did not clear its kind's bar. A third line appears when some kind could not be measured on part of the suite at all, which is a different statement again — those tests are inside `healthy`, and [`--format json`](#--format-json) below says why.
+
+Inside the fence, `NEEDS ATTENTION` heads the list and carries the severity breakdown for every finding the report **produced**, which is not always the number of rows beneath it — a report narrowed by `--top` still says how much it found. The note on the right says how the list is ordered.
+
+Each row is numbered and takes four lines: a header line carrying the severity marker and the finding kind, then the test's name on a line of its own, then the observations, then a dim trailer. The name gets a full-width line because it is the one thing in the report that must never be cut — it is what you grep for and what you paste after `dotnet test --filter FullyQualifiedName~`.
+
+When one test carries more than one finding, the second is pulled up to sit directly beneath the first and says so on the right of its header line — `same test as #1`. The ranking between distinct tests is unchanged.
+
+A finding about a cluster — a broken fixture, a shared failure — names the cause rather than one arbitrary member, and lists the tests it took down beneath it, up to three and then a count:
+
+<!-- xping:sample docs-cluster rows -->
+```
+1.  HIGH  broken fixture
+    UnprovisionedDatabase..ctor (3 tests)
+      FixtureTests.FirstTestNeedingTheDatabase
+      FixtureTests.SecondTestNeedingTheDatabase
+      FixtureTests.ThirdTestNeedingTheDatabase
+    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
+    runs
+    evidence high | all runs | f_7c905f05
+```
+
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
 The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
 
-Nothing inside the fence exceeds 72 columns, so it survives a phone and a quoted reply. Findings are ordered by impact, most severe first — the severity column carries the ranking, so the top of the block is the part worth reading.
+Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
+
+Rows are ordered most severe first, so the top of the block is the part worth reading. The one thing that interrupts that order is a second finding about a test already listed, which sits under the first rather than at its own rank and says so.
 
 ### The population marker
 
@@ -318,8 +350,9 @@ When stdout is not a terminal the report drops everything that is not the report
 
 The last segment of a finding's trailer is where the test is declared:
 
+<!-- xping:sample docs-source-location trailer -->
 ```
-      evidence moderate | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+    evidence high | -env | f_2a91c0de | tests/Billing/SummaryTests.cs:88
 ```
 
 It is the file and the line the test's body starts on, made relative to the repository root, and it
@@ -344,8 +377,12 @@ See [known limitations](../known-limitations.md) for what the line number can an
 One line, for a chat message, a commit trailer or a CI step title:
 
 ```bash
-$ xping report --summary
-Xping: 3 findings (1 high, 2 medium) in 20 runs of Checkout.Tests
+xping report --summary
+```
+
+<!-- xping:sample docs-checkout summary -->
+```
+Xping: 3 findings (1 high, 1 medium, 1 low) in 20 runs of Checkout.Tests
 ```
 
 ### Scoping
@@ -372,23 +409,32 @@ xping report --all --format json > findings.json
 
 Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
 
+Findings about one test are listed together, however far apart their severities put them: the first
+keeps the rank it earned, the rest follow it, and each of those carries an `annotation` saying which
+row the first one is. The reordering happens before `--top` cuts the list, so a limit never leaves a
+finding pointing at a row that is not there.
+
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
 question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
 ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
 means "no finding was raised" rather than "checked and fine" — a test first seen in a run that
-covered only part of the suite is inside it too, on one run of history:
+covered only part of the suite is inside it too, on one run of history. `flagged` is its complement,
+and counts tests where `findings` counts findings: one test can attract findings of several kinds,
+and one finding about a broken fixture covers every test that fixture took down, so the two numbers
+are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.18",
+  "schemaVersion": "1.19",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
     "tests": 412,
     "findings": 3,
-    "counts": { "high": 1, "medium": 2, "low": 0 },
+    "counts": { "high": 1, "medium": 1, "low": 1 },
+    "flagged": 3,
     "healthy": 409,
     "excludedLowEvidence": 41,
     "excludedNotSignificant": 6,
@@ -406,8 +452,10 @@ covered only part of the suite is inside it too, on one run of history:
       "evidenceLevel": "moderate",
       "evidenceSessions": 12,
       "population": "excludesEnvironmentalAndClustered",
-      "subject": { "type": "test", "fullyQualifiedName": "…", "assembly": "Checkout.Tests",
+      "subject": { "type": "test", "fullyQualifiedName": "…", "shortName": "SummaryTests.GenerateMonthlySummary",
+                    "causeLabel": null, "assembly": "Checkout.Tests",
                     "sourceFile": "tests/Billing/SummaryTests.cs", "sourceLineNumber": 88 },
+      "annotation": null,
       "headline": "failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes",
       "metrics": [
         { "label": "failed", "value": "7 of 20 executions (35%)" },

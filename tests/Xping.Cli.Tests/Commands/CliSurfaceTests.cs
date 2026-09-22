@@ -168,6 +168,65 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.False(report.EndsWith("\n\n", StringComparison.Ordinal), "a piped report is padded");
     }
 
+    /// <summary>
+    /// Every line inside the fence fits the fence, through the real command and a real store.
+    /// </summary>
+    /// <remarks>
+    /// The golden sweep asserts this over envelopes built by hand. This asserts it over an envelope
+    /// the analysis produced, so a value only the builder can make — a headline phrased from real
+    /// evidence, a path resolved from a real identity — cannot overrun the fence unobserved.
+    /// </remarks>
+    [Fact]
+    public void APipedReportFitsInsideTheFence()
+    {
+        SeedSessions("Alpha.Tests", 6);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Program.Run(["report"], output, error, input: null, isTerminal: false);
+
+        foreach (string line in ReportText.Fenced(output.ToString()))
+        {
+            if (line.Length <= ReportText.FenceWidth)
+                continue;
+
+            Assert.True(
+                !line.TrimStart().Contains(' ', StringComparison.Ordinal),
+                $"'{line}' is {line.Length} columns, over the {ReportText.FenceWidth} the fence " +
+                "allows, and is not a single unbreakable token");
+        }
+    }
+
+    /// <summary>
+    /// <c>--no-color</c> strips the decoration and leaves the report identical.
+    /// </summary>
+    /// <remarks>
+    /// The flag exists for the caller who cannot set <c>NO_COLOR</c>, so it has to reach the same
+    /// place the pipe does: not merely "fewer escapes" but the same characters in the same columns.
+    /// The two right-aligned annotations are padded from the plain marker's width, and a report that
+    /// shifted by the length of an escape sequence would show it here first.
+    /// </remarks>
+    [Fact]
+    public void NoColorOnATerminalProducesTheSameReportAPipeReceives()
+    {
+        SeedSessions("Alpha.Tests", 6);
+
+        var (code, terminal) = Run("report", "--ascii", "--no-color");
+
+        Assert.Equal(0, code);
+        Assert.DoesNotContain('\u001b', terminal);
+
+        using var piped = new StringWriter();
+        using var error = new StringWriter();
+
+        Program.Run(["report"], piped, error, input: null, isTerminal: false);
+
+        // The terminal run is padded and carries the call to action; the report between the fences
+        // is what the two have to agree on.
+        Assert.Equal(ReportText.Fenced(piped.ToString()), ReportText.Fenced(terminal));
+    }
+
     [Fact]
     public void ATerminalReportIsGivenBreathingRoomOnEitherSide()
     {
@@ -328,7 +387,7 @@ public sealed class CliSurfaceTests : IDisposable
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal("1.18", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.19", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
         Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
@@ -344,7 +403,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        Assert.Equal("1.18", doc.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.19", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

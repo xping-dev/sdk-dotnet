@@ -500,10 +500,12 @@ cell, 85% of the findings it wrongly produced published the recent arm as the wi
 
 A finding's trailer ends with the file and line the test is declared at:
 
+<!-- xping:sample docs-location rows -->
 ```
-HIGH  flaky            FlakyTest_PassesOnRetry
-      failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode
-      evidence low | f_8f042eab | .../SampleApp.MSTest/SampleTests.cs:135
+1.  HIGH  flaky
+    SampleTests.FlakyTest_PassesOnRetry
+    failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode
+    evidence low | -env-cluster | f_8f042eab | .../SampleTests.cs:135
 ```
 
 None of the three frameworks reports this, so the SDK reads it from the assembly's Portable PDB,

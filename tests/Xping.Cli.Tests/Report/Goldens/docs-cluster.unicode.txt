@@ -1,0 +1,20 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 409 healthy · 3 flagged
+
+```
+NEEDS ATTENTION (1 high)                               most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  broken fixture
+    UnprovisionedDatabase..ctor (3 tests)
+      FixtureTests.FirstTestNeedingTheDatabase
+      FixtureTests.SecondTestNeedingTheDatabase
+      FixtureTests.ThirdTestNeedingTheDatabase
+    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
+    runs
+    evidence high | all runs | f_7c905f05
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

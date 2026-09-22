@@ -49,8 +49,15 @@ internal sealed record ReportEnvelope(
     /// of the window rather than allowed to date it. 1.18 is where <c>population</c> gained
     /// <c>excludesPartialRuns</c>, the rule <c>Vanished</c> had been applying since 1.13 while
     /// still publishing <c>allExecutions</c> — a consumer switching on the value sees a fourth one.
+    /// 1.19 is where a subject gained <c>shortName</c>, the identity a reader greps for and pastes
+    /// into <c>dotnet test --filter</c>, and <c>causeLabel</c>, what the members of a cluster have in
+    /// common — both resolved here rather than by a renderer, which is what lets the rendered report
+    /// name a test the way its author would; and where the summary gained <c>flagged</c>, the count
+    /// <c>healthy</c> had been the complement of without ever saying so. 1.19 also reorders
+    /// <c>findings</c> so that two findings about one test are adjacent, and gives the second of
+    /// them an <c>annotation</c> saying which row the first is.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.18";
+    public const string CurrentSchemaVersion = "1.19";
 }
 
 /// <summary>
@@ -91,6 +98,14 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="Tests">Distinct tests seen in the window.</param>
 /// <param name="Findings">Findings produced, before truncation.</param>
 /// <param name="Counts">Those findings broken down by severity.</param>
+/// <param name="Flagged">
+/// Tests named by at least one finding, counted once each. Not <paramref name="Findings"/> and not
+/// derivable from it in either direction: one test attracts findings of several kinds, and one
+/// finding about a cluster covers every test in it. Published because it is the number
+/// <paramref name="Healthy"/> is the complement of — without it, a reader given three findings and
+/// four unhealthy tests out of sixteen has to reconstruct a deduplication they cannot see, and the
+/// two counts read as an arithmetic error.
+/// </param>
 /// <param name="Healthy">
 /// Tests no finding was raised about. Not "tests that were checked and are fine": a test a metric
 /// could not be computed for is in here too, and <paramref name="NotMeasured"/> is what says so.
@@ -143,6 +158,7 @@ internal sealed record SummaryDto(
     int Tests,
     int Findings,
     SeverityCountsDto Counts,
+    int Flagged,
     int Healthy,
     int ExcludedLowEvidence,
     int ExcludedNotSignificant,
@@ -194,6 +210,13 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// </para>
 /// </param>
 /// <param name="Subject">The test or group it is about.</param>
+/// <param name="Annotation">
+/// What connects this finding to the one above it, or null where nothing does. Today that is only
+/// <c>same test as #4</c>: one test can carry findings of several kinds, and the ranking used to
+/// leave them four rows apart with nothing saying they were the same test. Resolved here rather
+/// than by a renderer, like every other display string on this envelope, and carried in the JSON so
+/// a consumer reading the list in order sees the same relationship.
+/// </param>
 /// <param name="Headline">The observations in one already-resolved sentence.</param>
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
 /// <param name="Evidence">The kind-specific observations.</param>
@@ -206,6 +229,7 @@ internal sealed record FindingDto(
     int EvidenceSessions,
     string Population,
     SubjectDto Subject,
+    string? Annotation,
     string Headline,
     IReadOnlyList<MetricDto> Metrics,
     JsonNode? Evidence,
@@ -243,6 +267,19 @@ internal sealed record SeverityCountsDto(int High, int Medium, int Low);
 /// <param name="Fingerprint">Stable identity, for a single-test subject.</param>
 /// <param name="FullyQualifiedName">Namespace, class and method, for a single-test subject.</param>
 /// <param name="DisplayName">Runner-facing name, for a single-test subject.</param>
+/// <param name="ShortName">
+/// The identity a reader is shown: <c>Class.Method</c>, with the adapter's own argument list where
+/// the case is parameterised. Resolved here, once, so that no renderer performs string surgery on a
+/// name — and taken from <paramref name="FullyQualifiedName"/> rather than from
+/// <paramref name="DisplayName"/>, because it has to be greppable and has to survive being pasted
+/// after <c>dotnet test --filter FullyQualifiedName~</c>. Null for a group subject.
+/// </param>
+/// <param name="CauseLabel">
+/// What the members of a cluster have in common — the broken lifecycle member, the site it failed
+/// at, or the exception type they share. Null for a single-test subject. Never
+/// <paramref name="GroupId"/>: that is a signature hash, and a hash presented as a cause is worse
+/// than saying the cause was not recorded.
+/// </param>
 /// <param name="SourceFile">Source path, when the SDK captured one.</param>
 /// <param name="SourceLineNumber">Line the test begins on, when the SDK captured one.</param>
 /// <param name="Assembly">Owning test assembly.</param>
@@ -254,6 +291,8 @@ internal sealed record SubjectDto(
     string? Fingerprint,
     string? FullyQualifiedName,
     string? DisplayName,
+    string? ShortName,
+    string? CauseLabel,
     string? SourceFile,
     int? SourceLineNumber,
     string? Assembly,

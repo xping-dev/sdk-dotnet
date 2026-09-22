@@ -1,0 +1,32 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 410 healthy · 2 flagged
+
+```
+NEEDS ATTENTION (2 high, 1 medium, 1 low)              most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  always failing
+    CartTests.PlacesAnOrderAndSettlesIt
+    failed 20 of 20 executions (100%), one failure mode:
+    System.TimeoutException
+    evidence moderate | -env-cluster | f_2a91
+
+2.  HIGH  unstable timing                                same test as #1
+    CartTests.PlacesAnOrderAndSettlesIt
+    p50 73ms, ranging 18ms to 129ms, dispersion 0.73 over 20 executions
+    evidence moderate | -env | f_2a91
+
+3.  MED   flaky                                          same test as #1
+    CartTests.PlacesAnOrderAndSettlesIt
+    failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
+    evidence moderate | -env-cluster | f_2a91
+
+4.  LOW   stopped running
+    CartTests.Settles
+    ran in 12 of 17 earlier runs and in none of the last 3
+    evidence moderate | -partial | f_2a91
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

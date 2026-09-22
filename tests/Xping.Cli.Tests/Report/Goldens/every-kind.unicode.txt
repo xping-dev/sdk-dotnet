@@ -1,0 +1,76 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 399 healthy · 13 flagged
+
+```
+NEEDS ATTENTION (5 high, 4 medium, 4 low)              most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  masked by retry
+    SampleTests.Case0
+    masked by retry observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:20
+
+2.  MED   deeper retries
+    SampleTests.Case1
+    deeper retries observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:21
+
+3.  LOW   out of retries
+    SampleTests.Case2
+    out of retries observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:22
+
+4.  HIGH  flaky
+    SampleTests.Case3
+    flaky observed over 20 of 20 runs
+    evidence moderate | -env-cluster | f_2a91 | .../SampleTests.cs:23
+
+5.  MED   always failing
+    SampleTests.Case4
+    always failing observed over 20 of 20 runs
+    evidence moderate | -env-cluster | f_2a91 | .../SampleTests.cs:24
+
+6.  LOW   timing out
+    SampleTests.Case5
+    timing out observed over 20 of 20 runs
+    evidence moderate | -env-cluster | f_2a91 | .../SampleTests.cs:25
+
+7.  HIGH  broken fixture
+    SampleTests.Case6
+    broken fixture observed over 20 of 20 runs
+    evidence moderate | all runs | f_2a91 | .../SampleTests.cs:26
+
+8.  MED   shared failure
+    SampleTests.Case7
+    shared failure observed over 20 of 20 runs
+    evidence moderate | all runs | f_2a91 | .../SampleTests.cs:27
+
+9.  LOW   slower
+    SampleTests.Case8
+    slower observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:28
+
+10. HIGH  unstable timing
+    SampleTests.Case9
+    unstable timing observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:29
+
+11. MED   concurrency
+    SampleTests.Case10
+    concurrency observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:30
+
+12. LOW   time sensitive
+    SampleTests.Case11
+    time sensitive observed over 20 of 20 runs
+    evidence moderate | -env | f_2a91 | .../SampleTests.cs:31
+
+13. HIGH  stopped running
+    SampleTests.Case12
+    stopped running observed over 20 of 20 runs
+    evidence moderate | -partial | f_2a91 | .../SampleTests.cs:32
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker

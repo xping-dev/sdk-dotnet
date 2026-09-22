@@ -40,9 +40,16 @@ internal static class EnvelopeBuilder
         int skewedSessions,
         int? top)
     {
-        IReadOnlyList<Finding> shown = top is { } limit && limit < result.Findings.Count
-            ? [.. result.Findings.Take(limit)]
-            : result.Findings;
+        // Reordered before anything is cut. A sibling always follows the finding it points at, so a
+        // limit either keeps both or drops the sibling — it can never leave a row saying "same test
+        // as #4" in a report whose fourth row is something else.
+        IReadOnlyList<Finding> ordered = FindingOrder.WithSiblingsAdjacent(result.Findings);
+
+        IReadOnlyList<Finding> shown = top is { } limit && limit < ordered.Count
+            ? [.. ordered.Take(limit)]
+            : ordered;
+
+        Dictionary<string, string> annotations = Annotations(ordered);
 
         int tests = context.Tests.Fingerprints.Count;
 
@@ -82,6 +89,7 @@ internal static class EnvelopeBuilder
                 tests,
                 result.Findings.Count,
                 new SeverityCountsDto(high, medium, low),
+                flagged.Count,
                 Math.Max(0, tests - flagged.Count),
                 result.ExcludedLowEvidence,
                 result.ExcludedNotSignificant,
@@ -93,7 +101,7 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
-            [.. shown.Select(BuildFinding)],
+            [.. shown.Select(finding => BuildFinding(finding, annotations))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
     }
 
@@ -142,7 +150,39 @@ internal static class EnvelopeBuilder
     private static ContextDto? BuildContext(RevisionContext? revision) =>
         revision == null ? null : new ContextDto(revision.Sha, revision.Branch, revision.Assembly);
 
-    private static FindingDto BuildFinding(Finding finding)
+    /// <summary>
+    /// Says, of each finding that is not the first about its test, which row the first one is.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <returns>The annotation for each finding that has one, keyed by finding id.</returns>
+    /// <remarks>
+    /// Rows are numbered from 1 over the whole ordered list, which is what the renderer prints, so
+    /// the number is right whether or not the report was truncated — the reordering guarantees an
+    /// anchor is shown wherever its sibling is. Phrased here for the reason every other display
+    /// string is: a renderer that worded it would be the second place the relationship is described.
+    /// </remarks>
+    internal static Dictionary<string, string> Annotations(IReadOnlyList<Finding> ordered)
+    {
+        var anchors = new Dictionary<string, int>(StringComparer.Ordinal);
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            if (FindingOrder.Test(ordered[index]) is not { } test)
+                continue;
+
+            if (anchors.TryGetValue(test, out int anchor))
+                annotations[ordered[index].Id] =
+                    $"same test as #{anchor.ToString(CultureInfo.InvariantCulture)}";
+            else
+                anchors[test] = index + 1;
+        }
+
+        return annotations;
+    }
+
+    private static FindingDto BuildFinding(
+        Finding finding, Dictionary<string, string> annotations)
     {
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(finding.Kind, finding.Evidence);
@@ -154,26 +194,43 @@ internal static class EnvelopeBuilder
             ToCamelCase(finding.EvidenceLevel.ToString()),
             finding.EvidenceSessions,
             ToCamelCase(PopulationRules.For(finding.Kind).ToString()),
-            BuildSubject(finding.Subject),
+            BuildSubject(finding.Subject, finding.Evidence),
+            annotations.GetValueOrDefault(finding.Id),
             headline,
             metrics,
             BuildEvidence(finding.Evidence),
             finding.DrillDownCommand);
     }
 
-    private static SubjectDto BuildSubject(FindingSubject subject) => subject switch
-    {
-        FindingSubject.SingleTest single => ForTest(single.Test),
+    /// <summary>
+    /// Projects a finding's subject into the envelope.
+    /// </summary>
+    /// <param name="subject">The test or group the finding is about.</param>
+    /// <param name="evidence">
+    /// That finding's evidence, which is where a cluster's cause is recorded. Passed in because a
+    /// subject does not carry one: a group knows which tests it holds and not what they share.
+    /// </param>
+    /// <returns>The subject, with every name it is presented under already resolved.</returns>
+    /// <remarks>
+    /// No subject carries both names. A single test has a <c>shortName</c> and no cause; a group has
+    /// a cause and no name of its own, and its members each carry theirs.
+    /// </remarks>
+    private static SubjectDto BuildSubject(FindingSubject subject, FindingEvidence evidence) =>
+        subject switch
+        {
+            FindingSubject.SingleTest single => ForTest(single.Test),
 
-        FindingSubject.Group group => new SubjectDto(
-            "group",
-            null, null, null, null, null, null,
-            group.GroupId,
-            group.Members.Count,
-            [.. group.Members.Select(ForTest)]),
+            FindingSubject.Group group => new SubjectDto(
+                "group",
+                null, null, null, null,
+                SubjectNames.CauseLabel(evidence),
+                null, null, null,
+                group.GroupId,
+                group.Members.Count,
+                [.. group.Members.Select(ForTest)]),
 
-        _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
-    };
+            _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
+        };
 
     private static SubjectDto ForTest(TestReference test) =>
         new(
@@ -181,6 +238,12 @@ internal static class EnvelopeBuilder
             test.TestFingerprint,
             test.FullyQualifiedName,
             test.DisplayName,
+
+            // The name the report shows, resolved here so that no renderer chooses between the two
+            // above it. Both are kept beside it: this one is deliberately lossy, and a consumer that
+            // wants the whole identity must not have to reassemble it.
+            SubjectNames.ShortName(test.FullyQualifiedName, test.DisplayName),
+            null,
 
             // Never stripped for brevity. These two are what let an agent open the file rather than
             // go searching for a name.
