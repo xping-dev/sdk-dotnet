@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
+using Xping.Sdk.Core.Models;
 
 namespace Xping.Cli.Report.Contract;
 
@@ -31,6 +32,10 @@ internal static class EnvelopeBuilder
     /// <param name="unreadableSessions">Session files that could not be read.</param>
     /// <param name="skewedSessions">Sessions stamped ahead of this machine's clock.</param>
     /// <param name="top">Findings to show, or <see langword="null"/> to show all of them.</param>
+    /// <param name="latestRun">
+    /// The newest session read against the rest, or <see langword="null"/> when the window holds
+    /// no session.
+    /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
         AnalysisContext context,
@@ -38,7 +43,8 @@ internal static class EnvelopeBuilder
         int incompleteSessions,
         int unreadableSessions,
         int skewedSessions,
-        int? top)
+        int? top,
+        LatestRunAnalysis? latestRun)
     {
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test
@@ -101,9 +107,80 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
+            latestRun == null ? null : BuildLatestRun(latestRun),
             [.. shown.Select(finding => BuildFinding(finding, annotations))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
     }
+
+    /// <summary>
+    /// Projects the latest-run analysis into the envelope, with every sentence resolved.
+    /// </summary>
+    /// <param name="analysis">What the analyzer read from the newest session.</param>
+    /// <returns>The section, as both renderers will read it.</returns>
+    private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis)
+    {
+        TestSession session = analysis.Session.Session;
+        bool capped = analysis.FailuresTotal > analysis.Failures.Count;
+
+        return new LatestRunDto(
+            session.SessionId.ToString("D", CultureInfo.InvariantCulture),
+            session.StartedAt,
+            RevisionContext.ReadSha(session),
+            analysis.Session.IsLikelyEnvironmental,
+            analysis.Suppressed,
+            analysis.TestsExecuted,
+            analysis.TestsFailed,
+            analysis.ExplainedByFindings,
+            [.. analysis.ExplainingFindings.Select(finding => finding.Id)],
+            [.. analysis.Failures.Select(BuildLatestRunFailure)],
+            analysis.Failures.Count,
+            analysis.FailuresTotal,
+
+            // The same string the findings truncation line prints. --all means everything the
+            // report withheld, whichever cap withheld it, and one string is how the two agree.
+            capped ? DrillDown.ForFullReport() : null);
+    }
+
+    private static LatestRunFailureDto BuildLatestRunFailure(LatestRunFailure failure) =>
+        new(
+            ToCamelCase(failure.Status.ToString()),
+            ForTest(failure.Test),
+            Contrast(failure),
+            failure.Execution.ExceptionType is { Length: > 0 } type ? type : null,
+            failure.PriorSessions,
+            failure.PriorFailures);
+
+    /// <summary>
+    /// Phrases a row's history, which is the whole reason the row exists.
+    /// </summary>
+    /// <param name="failure">The row.</param>
+    /// <returns>One sentence, in ASCII.</returns>
+    /// <remarks>
+    /// <para>
+    /// ASCII for the reason <see cref="EvidenceHeadline"/> is: the glyph set is chosen after this
+    /// runs and never reaches it, and piped output is asserted to carry nothing above 0x7F.
+    /// </para>
+    /// <para>
+    /// A test seen before is counted over every run it recorded a verdict in, this one included —
+    /// the sentence explains why there is no finding, and the gate it fell short of counts this run
+    /// too. A new failure is counted over the runs before this one, because "passed the previous
+    /// N runs" is a statement about those runs alone.
+    /// </para>
+    /// </remarks>
+    private static string Contrast(LatestRunFailure failure) => failure.Status switch
+    {
+        LatestRunStatus.New => failure.PriorSessions == 1
+            ? "passed the previous run, failed just now"
+            : $"passed the previous {failure.PriorSessions.ToString(CultureInfo.InvariantCulture)} runs, failed just now",
+
+        LatestRunStatus.NewTest => "first seen this run, failed",
+
+        LatestRunStatus.SeenBefore =>
+            $"failed {(failure.PriorFailures + 1).ToString(CultureInfo.InvariantCulture)} of " +
+            $"{(failure.PriorSessions + 1).ToString(CultureInfo.InvariantCulture)} runs, too few to classify yet",
+
+        _ => throw new NotSupportedException($"Unknown status '{failure.Status}'.")
+    };
 
     /// <summary>
     /// Projects the per-kind not-measured tally into the envelope's spelling.

@@ -719,6 +719,10 @@ internal static class ReportFixtures
                 0,
                 0,
                 []),
+
+            // No latest run yet: the fixtures pin the findings block, and a section that is absent
+            // from the envelope is absent from the page. The latest-run fixtures carry their own.
+            null,
             findings,
             new TruncationDto(shown, total, "xping report --all"));
     }

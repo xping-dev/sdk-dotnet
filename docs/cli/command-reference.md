@@ -427,7 +427,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.19",
+  "schemaVersion": "1.20",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {

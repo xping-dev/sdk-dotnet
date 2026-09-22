@@ -78,6 +78,12 @@ internal sealed class ReportCommand(
 
         AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
 
+        // Beside the coordinator and not inside it: these rows are observations of one session,
+        // not hypotheses, and must never be ranked, corrected or graded with the findings. A null
+        // --top is --all, and --all lifts this section's cap along with the findings'.
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
+            context, analysis.Findings, showAll: options.Top == null);
+
         ReportEnvelope envelope = EnvelopeBuilder.Build(
             context,
             analysis,
@@ -88,7 +94,8 @@ internal sealed class ReportCommand(
             incompleteSessions: 0,
             resolved.UnreadableSessions,
             resolved.SkewedSessions,
-            options.Top);
+            options.Top,
+            latestRun);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
