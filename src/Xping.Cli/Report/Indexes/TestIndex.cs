@@ -20,6 +20,17 @@ internal sealed record ExecutionRef(TestSession Session, int SessionIndex, TestE
 {
     /// <summary>Gets a value indicating whether this execution failed.</summary>
     public bool Failed => Execution.Outcome.IsFailure();
+
+    /// <summary>
+    /// Gets a value indicating whether this execution ran to a verdict — passed, failed or timed out.
+    /// </summary>
+    /// <remarks>
+    /// A skipped, inconclusive or unexecuted test recorded that it was there, and nothing about
+    /// whether it works. Any question of the form "did it pass before" has to be asked only of the
+    /// executions that could have answered it, or a test skipped nineteen times and failed once
+    /// reads as one that passed nineteen times.
+    /// </remarks>
+    public bool HasVerdict => Execution.Outcome is TestOutcome.Passed or TestOutcome.Failed or TestOutcome.Timeout;
 }
 
 /// <summary>
@@ -40,6 +51,7 @@ internal sealed class TestIndex
 {
     private readonly Dictionary<string, List<ExecutionRef>> _byFingerprint;
     private readonly Dictionary<string, List<ExecutionRef>> _runsByFingerprint;
+    private readonly Dictionary<string, List<ExecutionRef>> _verdictRunsByFingerprint;
     private readonly Dictionary<string, int> _sessionsRunIn;
     private readonly Dictionary<string, TestReference> _references;
     private readonly Dictionary<Guid, int> _sessionPositions;
@@ -48,6 +60,7 @@ internal sealed class TestIndex
         AnalysisWindow window,
         Dictionary<string, List<ExecutionRef>> byFingerprint,
         Dictionary<string, List<ExecutionRef>> runsByFingerprint,
+        Dictionary<string, List<ExecutionRef>> verdictRunsByFingerprint,
         Dictionary<string, int> sessionsRunIn,
         Dictionary<string, TestReference> references,
         Dictionary<Guid, int> sessionPositions,
@@ -56,6 +69,7 @@ internal sealed class TestIndex
         Window = window;
         _byFingerprint = byFingerprint;
         _runsByFingerprint = runsByFingerprint;
+        _verdictRunsByFingerprint = verdictRunsByFingerprint;
         _sessionsRunIn = sessionsRunIn;
         _references = references;
         _sessionPositions = sessionPositions;
@@ -104,6 +118,35 @@ internal sealed class TestIndex
     /// </remarks>
     public IReadOnlyList<ExecutionRef> RunsOf(string fingerprint) =>
         _runsByFingerprint.TryGetValue(fingerprint, out List<ExecutionRef>? runs) ? runs : [];
+
+    /// <summary>
+    /// Gets the runs of one test that ended in a verdict, newest session first — one entry per
+    /// session.
+    /// </summary>
+    /// <param name="fingerprint">The test to look up.</param>
+    /// <returns>Its judged runs, or an empty list when the test never recorded a verdict.</returns>
+    /// <remarks>
+    /// <para>
+    /// <see cref="RunsOf"/> with the runs whose deciding attempt was skipped, inconclusive or never
+    /// executed left out. Those runs are appearances — the test was in the session — but they say
+    /// nothing about whether it works, and a reader told a test <i>passed</i> the previous
+    /// nineteen runs is being told nineteen verdicts, not nineteen appearances.
+    /// </para>
+    /// <para>
+    /// Filtered on the run's deciding attempt and not on any attempt in the session, so that
+    /// <see cref="ExecutionRef.Failed"/> on a judged run still answers the question
+    /// <see cref="SessionOutcomes"/> answers about the session. A run whose last attempt was
+    /// skipped after an earlier one failed is a run the session did not end red on, and it is not
+    /// listed here as a failure.
+    /// </para>
+    /// <para>
+    /// Kept here rather than filtered by its one consumer, because "did this test appear" is a
+    /// definition and not a query, and two definitions of it is how the latest-run section and a
+    /// finding come to count one history two ways.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<ExecutionRef> VerdictRunsOf(string fingerprint) =>
+        _verdictRunsByFingerprint.TryGetValue(fingerprint, out List<ExecutionRef>? runs) ? runs : [];
 
     /// <summary>
     /// Gets how many distinct sessions a test ran in.
@@ -403,10 +446,17 @@ internal sealed class TestIndex
 
         var fingerprints = byFingerprint.Keys.OrderBy(f => f, StringComparer.Ordinal).ToList();
 
+        // Derived from the runs once they are settled, because a run's verdict is a property of
+        // its deciding attempt and that is only known after every attempt in the session was seen.
+        var verdictRunsByFingerprint = new Dictionary<string, List<ExecutionRef>>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, List<ExecutionRef>> entry in runsByFingerprint)
+            verdictRunsByFingerprint[entry.Key] = entry.Value.Where(run => run.HasVerdict).ToList();
+
         return new TestIndex(
             window,
             byFingerprint,
             runsByFingerprint,
+            verdictRunsByFingerprint,
             sessionsRunIn,
             references,
             sessionPositions,

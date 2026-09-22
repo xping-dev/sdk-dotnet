@@ -625,4 +625,13 @@ internal static class LocalAnalysisConstants
     /// </para>
     /// </remarks>
     public const double FalseDiscoveryRate = 0.10;
+
+    /// <summary>
+    /// Rows the latest-run section shows before it says how many it withheld (10).
+    /// </summary>
+    /// <remarks>
+    /// Not governed by <c>--top</c>, which counts findings; a flag meaning two things is a flag
+    /// nobody can predict. <c>--all</c> lifts both, because it means one thing in both places.
+    /// </remarks>
+    public const int LatestRunMaxRows = 10;
 }
