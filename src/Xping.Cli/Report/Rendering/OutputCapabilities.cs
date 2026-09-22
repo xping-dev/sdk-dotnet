@@ -37,6 +37,8 @@ internal sealed record OutputCapabilities(ReportGlyphs Glyphs, bool Color, bool 
     // strength on half the terminals is not a distinction a reader can rely on.
     private const string Faint = "\u001b[90m";
 
+    private const string Bold = "\u001b[1m";
+
     /// <summary>
     /// Resolves capabilities from explicit inputs.
     /// </summary>
@@ -84,6 +86,18 @@ internal sealed record OutputCapabilities(ReportGlyphs Glyphs, bool Color, bool 
     /// pasted block is byte-identical either way.
     /// </remarks>
     public string Dim(string text) => Color ? Faint + text + Reset : text;
+
+    /// <summary>
+    /// Emphasises text, when colour is available.
+    /// </summary>
+    /// <param name="text">The text to emphasise.</param>
+    /// <returns>The text, bold or untouched.</returns>
+    /// <remarks>
+    /// Bold and not a colour. Colour is what the report spends on severity, and a word coloured
+    /// like a severity marker reads as one — the latest-run status words are observations of one
+    /// session and must not. Identity when colour is off, so a pipe sees plain text.
+    /// </remarks>
+    public string Emphasis(string text) => Color ? Bold + text + Reset : text;
 
     /// <summary>
     /// Wraps text in the colour for a severity, when colour is available.

@@ -72,6 +72,11 @@ internal sealed record LatestRunFailure(
 /// </param>
 /// <param name="TestsExecuted">Tests that recorded a verdict in this session.</param>
 /// <param name="TestsFailed">Of those, how many ended it as a failure.</param>
+/// <param name="NewFailures">
+/// Rows that are <see cref="LatestRunStatus.New"/> or <see cref="LatestRunStatus.NewTest"/>,
+/// counted before the cap. The cap keeps the first ten rows and new rows sort first, so a count
+/// taken over <see cref="Failures"/> would say ten of twelve.
+/// </param>
 /// <param name="ExplainedByFindings">Failing tests that a finding already accounts for.</param>
 /// <param name="ExplainingFindings">
 /// Those findings, each once, in the order they were given — which is the order the report ranks
@@ -84,6 +89,7 @@ internal sealed record LatestRunAnalysis(
     bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
+    int NewFailures,
     int ExplainedByFindings,
     IReadOnlyList<Finding> ExplainingFindings,
     IReadOnlyList<LatestRunFailure> Failures,

@@ -56,6 +56,39 @@ two things.
 
 OQ-1 is resolved by the same inventory and is recorded as such below.
 
+### Amendment 3 — P3 gates
+
+| Item | Decision | Changed |
+|---|---|---|
+| A | OQ-3: `FailureSummary` is the exception type with its namespace stripped, or null | OQ-3, §4.3 |
+| B | OQ-4: status words render undecorated except `new`, which is bold; no colour | OQ-4, D9 |
+| C | `LatestRunDto` gains `NewFailures`, the count the heading annotation and the one-liner read | §4.2 |
+| D | The heading annotation and the "also failing" line are specified, not only illustrated | D4, D8 |
+
+**A.** `NullReferenceException`, not `System.NullReferenceException`. The row's job is the
+contrast; the trailer identifies the failure and the runner's output diagnoses it. The findings'
+headline keeps the full type — it is the failure *mode* and a reader groups on it — and the two
+are not in tension, because a trailer is not a headline. Resolved in the builder like every other
+display string. Null when the adapter recorded no type; the trailer then carries the location
+alone, or is omitted.
+
+**B.** Colour is what the report uses for severity, and a coloured status word would read as one.
+Bold is not in the severity vocabulary. `new` is the regression signal and is the one word
+emphasised; `new test` and `seen before` are not. `OutputCapabilities` gains `Emphasis(text)`,
+which is the identity function when colour is off, so `--no-color` and piped output are unchanged.
+
+**C.** The annotation says `2 new failures`, and the DTO before this amendment could not supply
+that number: `Failures` is the capped list and `new` rows sort first, so a run with twelve new
+failures would have shown ten and counted ten. `NewFailures` counts rows whose status is `new` or
+`newTest`, before the cap, and is positioned after `TestsFailed`. It is also what OQ-5 reads in P6.
+
+**D.** The heading's right-hand annotation is `{NewFailures} new failure(s)` when the count is
+non-zero, `no new failures` when it is zero, and `looks environmental` under D6. The "also failing"
+line references findings by the row numbers they hold in the rendered list; a finding cut by
+`--top` has no row and is not referenced. When every explaining finding was cut, the line reads
+`Also failing: N tests explained by findings not shown.` — the truncation footer already names the
+command that shows them.
+
 ---
 
 ## 1. Ground truth and problem
@@ -387,6 +420,7 @@ Positioned before `Findings`, matching render order.
 /// <param name="Suppressed">True when the window holds one session (D5).</param>
 /// <param name="TestsExecuted">Tests with a verdict in this session (Amendment 2A: counted from the verdict-only view, not SessionView.Tests).</param>
 /// <param name="TestsFailed">Tests whose final outcome was a failure.</param>
+/// <param name="NewFailures">Rows whose status is new or newTest, before the cap (Amendment 3C).</param>
 /// <param name="ExplainedByFindings">Failing tests that carry a finding (D4).</param>
 /// <param name="ExplainedByFindingIds">Those findings' ids, in envelope order.</param>
 /// <param name="Failures">Rows, ordered per D11, after the D7 cap.</param>
@@ -401,6 +435,7 @@ internal sealed record LatestRunDto(
     bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
+    int NewFailures,
     int ExplainedByFindings,
     IReadOnlyList<string> ExplainedByFindingIds,
     IReadOnlyList<LatestRunFailureDto> Failures,
@@ -415,7 +450,7 @@ internal sealed record LatestRunDto(
 /// <param name="Status">"new", "newTest" or "seenBefore" (D3).</param>
 /// <param name="Subject">Reuses SubjectDto. ShortName comes from the format spec's D1.</param>
 /// <param name="Contrast">The already-resolved contrast sentence (D3).</param>
-/// <param name="FailureSummary">Exception type, or the runner's assertion header.</param>
+/// <param name="FailureSummary">Exception type, namespace stripped, or null (Amendment 3A).</param>
 /// <param name="PriorSessions">Sessions before this one in which the test appeared.</param>
 /// <param name="PriorFailures">Of those, how many it failed in.</param>
 internal sealed record LatestRunFailureDto(
@@ -496,18 +531,14 @@ counting tests judged on their last attempt, so last-attempt resolution already 
 already the definition the environmental heuristic runs on. D14 stands, with the stronger
 justification now folded into it. The plumbing half is OQ-1.
 
-### OQ-3 — What `FailureSummary` should carry. **Blocks P3**
+### OQ-3 — **RESOLVED** (Amendment 3A). No gate.
 
-Candidates: exception type alone; exception type plus elided message; the runner's assertion header.
-It must fit 55 columns (72 minus the 17-column indent) minus the location segment and separator.
-Prefer the narrowest option that identifies the failure: the row's job is the contrast, not the
-diagnosis.
+The exception type with its namespace stripped, or null. The narrowest option that identifies the
+failure, and the one that leaves the location room in the 55 columns a trailer has.
 
-### OQ-4 — Status-word palette. **Blocks P3**
+### OQ-4 — **RESOLVED** (Amendment 3B). No gate.
 
-`OutputCapabilities.Colorize` is keyed on severity strings. Decide whether it gains a second keyed
-method or the status words render undecorated. Undecorated is acceptable; a second severity-shaped
-palette is not, because it would read as a severity.
+Undecorated, except `new` in bold. No colour, so nothing here can read as a severity.
 
 ### OQ-5 — Does the one-line summary mention new failures? **Blocks P6**
 

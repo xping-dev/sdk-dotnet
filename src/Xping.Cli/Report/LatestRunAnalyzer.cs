@@ -88,13 +88,13 @@ internal static class LatestRunAnalyzer
         // test runner said thirty seconds ago; the counts are still published so a consumer can
         // tell suppressed from clean.
         if (context.SessionViews.Count == 1)
-            return new LatestRunAnalysis(newest, true, executed, failed, 0, [], [], 0);
+            return new LatestRunAnalysis(newest, true, executed, failed, 0, 0, [], [], 0);
 
         // The environmental heuristic exists to stop one broken dependency from poisoning every
         // test's history. A section that itemised the 187 tests it took down would defeat it, so
         // the run is described and not listed.
         if (newest.IsLikelyEnvironmental)
-            return new LatestRunAnalysis(newest, false, executed, failed, 0, [], [], 0);
+            return new LatestRunAnalysis(newest, false, executed, failed, 0, 0, [], [], 0);
 
         var explaining = new List<Finding>();
         var explainingIds = new HashSet<string>(StringComparer.Ordinal);
@@ -143,12 +143,14 @@ internal static class LatestRunAnalyzer
         rows.Sort(CompareRows);
 
         int cap = showAll ? rows.Count : LocalAnalysisConstants.LatestRunMaxRows;
+        int newFailures = rows.Count(row => row.Status != LatestRunStatus.SeenBefore);
 
         return new LatestRunAnalysis(
             newest,
             false,
             executed,
             failed,
+            newFailures,
             explainedFingerprints.Count,
             explaining,
             rows.Count > cap ? rows.GetRange(0, cap) : rows,

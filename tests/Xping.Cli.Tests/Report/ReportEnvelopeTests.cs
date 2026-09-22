@@ -359,7 +359,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         foreach (string key in (string[])
         [
             "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "suppressed", "testsExecuted",
-            "testsFailed", "explainedByFindings", "explainedByFindingIds", "failures",
+            "testsFailed", "newFailures", "explainedByFindings", "explainedByFindingIds", "failures",
             "failuresShown", "failuresTotal", "overflowCommand"
         ])
         {
@@ -435,6 +435,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.False(latestRun.GetProperty("isLikelyEnvironmental").GetBoolean());
         Assert.Equal(2, latestRun.GetProperty("testsExecuted").GetInt32());
         Assert.Equal(1, latestRun.GetProperty("testsFailed").GetInt32());
+        Assert.Equal(1, latestRun.GetProperty("newFailures").GetInt32());
         Assert.Equal(0, latestRun.GetProperty("explainedByFindings").GetInt32());
         Assert.Empty(latestRun.GetProperty("explainedByFindingIds").EnumerateArray());
         Assert.Equal(1, latestRun.GetProperty("failuresShown").GetInt32());
@@ -444,7 +445,9 @@ public sealed class ReportEnvelopeTests : IDisposable
         JsonElement failure = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
         Assert.Equal("new", failure.GetProperty("status").GetString());
         Assert.Equal("passed the previous 3 runs, failed just now", failure.GetProperty("contrast").GetString());
-        Assert.Equal("System.NullReferenceException", failure.GetProperty("failureSummary").GetString());
+        // Namespace stripped: the trailer identifies the failure, and the namespace is the part
+        // that pushes the location off the line.
+        Assert.Equal("NullReferenceException", failure.GetProperty("failureSummary").GetString());
         Assert.Equal(3, failure.GetProperty("priorSessions").GetInt32());
         Assert.Equal(0, failure.GetProperty("priorFailures").GetInt32());
 

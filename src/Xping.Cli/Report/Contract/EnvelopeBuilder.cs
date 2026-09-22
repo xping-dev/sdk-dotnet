@@ -130,6 +130,7 @@ internal static class EnvelopeBuilder
             analysis.Suppressed,
             analysis.TestsExecuted,
             analysis.TestsFailed,
+            analysis.NewFailures,
             analysis.ExplainedByFindings,
             [.. analysis.ExplainingFindings.Select(finding => finding.Id)],
             [.. analysis.Failures.Select(BuildLatestRunFailure)],
@@ -146,9 +147,31 @@ internal static class EnvelopeBuilder
             ToCamelCase(failure.Status.ToString()),
             ForTest(failure.Test),
             Contrast(failure),
-            failure.Execution.ExceptionType is { Length: > 0 } type ? type : null,
+            FailureSummary(failure.Execution.ExceptionType),
             failure.PriorSessions,
             failure.PriorFailures);
+
+    /// <summary>
+    /// Names a failure in the fewest characters that identify it.
+    /// </summary>
+    /// <param name="exceptionType">The recorded type, or null.</param>
+    /// <returns>The type without its namespace, or null when none was recorded.</returns>
+    /// <remarks>
+    /// The last segment after a dot, looked for in front of any generic argument list so that
+    /// <c>Foo.Bar`1[System.String]</c> keeps its arguments and loses only its own namespace. A
+    /// nested type keeps its <c>Outer+Inner</c> form, which is the type's own spelling.
+    /// </remarks>
+    private static string? FailureSummary(string? exceptionType)
+    {
+        if (exceptionType is not { Length: > 0 } type)
+            return null;
+
+        int generic = type.IndexOfAny(['`', '[']);
+        int end = generic < 0 ? type.Length : generic;
+        int dot = end == 0 ? -1 : type.LastIndexOf('.', end - 1);
+
+        return dot < 0 ? type : type.Substring(dot + 1);
+    }
 
     /// <summary>
     /// Phrases a row's history, which is the whole reason the row exists.

@@ -87,6 +87,22 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     // the empty report is not a finding.
     private const int EmptyReportIndent = 2;
 
+    // The latest-run rows: a status word at this indent, in a field this wide, and the name, the
+    // contrast and the trailer at the column after it. Wider than a severity marker's field because
+    // "seen before" is eleven characters and the status is prose, not a code; the name still keeps
+    // 55 columns, which the same Class.Method that fits a finding's 68 fits in practice.
+    private const int LatestRunIndent = 4;
+
+    private const int LatestRunStatusWidth = 13;
+
+    private const int LatestRunRowIndent = LatestRunIndent + LatestRunStatusWidth;
+
+    private const int LatestRunBudget = FenceWidth - LatestRunRowIndent;
+
+    // What the latest-run heading is called. The time and sha follow it on the same line, two
+    // spaces off, so the label reads as a label and the provenance as provenance.
+    private const string LatestRunLabel = "LATEST RUN";
+
     // Members named before the rest become a count. Three is enough to recognise what the cluster
     // is -- one test suite, one fixture, one namespace -- and a forty-member cluster listed in full
     // is a finding nobody scrolls past. The whole list is in the JSON, where a caller reads it by
@@ -288,6 +304,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
     private void WriteFindings(StringBuilder builder, ReportEnvelope envelope)
     {
+        // Above the findings, inside the same fence. The reader ran the command because something
+        // just happened, and the section is absent when nothing did, so the top slot costs nothing
+        // in the healthy case.
+        if (WriteLatestRun(builder, envelope))
+            builder.AppendLine();
+
         if (envelope.Findings.Count == 0)
         {
             // Still fenced. A clean report and a full one should paste as the same shape, or a
@@ -308,7 +330,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             return;
         }
 
-        WriteHeading(builder, envelope.Summary);
+        string bands = ReportVocabulary.SeverityBands(envelope.Summary);
+        WriteHeading(
+            builder,
+            bands.Length > 0 ? $"NEEDS ATTENTION ({bands})" : "NEEDS ATTENTION",
+            OrderingNote);
 
         // Findings arrive ranked. The severity column carries what the old grouping by kind carried,
         // and preserving the ranking top to bottom is worth more than the grouping was.
@@ -325,8 +351,15 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// Writes the heading the finding list sits under.
     /// </summary>
     /// <param name="builder">What the report is being written into.</param>
-    /// <param name="summary">Counts describing the run as a whole.</param>
+    /// <param name="label">The upper-case name of the section, with whatever qualifies it.</param>
+    /// <param name="annotation">What the reader should know about the rows, right-aligned.</param>
     /// <remarks>
+    /// <para>
+    /// One shape for every section: the label at the left, the annotation at the fence, a rule
+    /// beneath. What either says is the section's business — the findings heading carries the
+    /// severity bands and the ordering note, the latest-run heading the session's time and its
+    /// failure count — and the shape is what tells a reader they are looking at a section at all.
+    /// </para>
     /// <para>
     /// A count in an internal vocabulary word — "5 findings (5 high)" — told a reader how many rows
     /// there were and nothing about whether the list was informational or actionable. The heading
@@ -344,17 +377,192 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// a reader to parse a heading before discovering which they are looking at.
     /// </para>
     /// </remarks>
-    private void WriteHeading(StringBuilder builder, SummaryDto summary)
+    private void WriteHeading(StringBuilder builder, string label, string annotation)
     {
-        string bands = ReportVocabulary.SeverityBands(summary);
-        string heading = bands.Length > 0 ? $"NEEDS ATTENTION ({bands})" : "NEEDS ATTENTION";
-
-        builder.Append(heading)
-               .Append(' ', Math.Max(1, FenceWidth - heading.Length - OrderingNote.Length))
-               .AppendLine(OrderingNote);
+        builder.Append(label)
+               .Append(' ', Math.Max(1, FenceWidth - label.Length - annotation.Length))
+               .AppendLine(annotation);
 
         builder.Append(capabilities.Glyphs.HorizontalRule, FenceWidth).AppendLine();
         builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Writes what just broke, above the findings, when there is anything to say.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The report.</param>
+    /// <returns>Whether anything was written.</returns>
+    /// <remarks>
+    /// <para>
+    /// The findings answer what is chronically unreliable and need five runs to answer it. This
+    /// answers what the newest run did that the runs before it did not, which needs two, and it is
+    /// the first thing a reader who just watched a build go red wants to know.
+    /// </para>
+    /// <para>
+    /// Nothing at all on a clean run, on a window of one session — every row would restate the
+    /// test runner — and, for now, on a run that failed too widely to itemise. A section that
+    /// appears only when it has news is a section a reader learns to read.
+    /// </para>
+    /// <para>
+    /// Every sentence here was composed in the envelope. The renderer lays the rows out and phrases
+    /// nothing, so that a stronger statement of the same history — which is what Cloud will supply
+    /// — is a change to one string and not to this file.
+    /// </para>
+    /// </remarks>
+    private bool WriteLatestRun(StringBuilder builder, ReportEnvelope envelope)
+    {
+        if (envelope.LatestRun is not { Suppressed: false } latest)
+            return false;
+
+        if (latest.Failures.Count == 0 && latest.ExplainedByFindings == 0)
+            return false;
+
+        WriteHeading(builder, LatestRunLabel + "  " + LatestRunProvenance(latest), LatestRunAnnotation(latest));
+
+        for (int index = 0; index < latest.Failures.Count; index++)
+        {
+            if (index > 0)
+                builder.AppendLine();
+
+            WriteLatestRunFailure(builder, latest.Failures[index]);
+        }
+
+        if (latest.ExplainedByFindings > 0)
+        {
+            if (latest.Failures.Count > 0)
+                builder.AppendLine();
+
+            builder.Append(' ', LatestRunIndent).AppendLine(AlsoFailing(latest, envelope.Findings));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Says which run the section is about: its start time and, when recorded, its commit.
+    /// </summary>
+    /// <remarks>
+    /// The time and not the date, because the header two lines up already places the window, and
+    /// on the one store where the date would matter — one nobody has run in a week — the header
+    /// says so too. The sha is shortened the way the header shortens it, and never invented.
+    /// </remarks>
+    private string LatestRunProvenance(LatestRunDto latest)
+    {
+        string time = Format(latest.StartedAt, "HH:mm");
+
+        if (latest.Sha is not { Length: > 0 } sha)
+            return time;
+
+        return $"{time} {capabilities.Glyphs.Separator} {(sha.Length > 7 ? sha.Substring(0, 7) : sha)}";
+    }
+
+    /// <summary>
+    /// Says what the rows add up to, at the far end of the heading line.
+    /// </summary>
+    /// <remarks>
+    /// Counts what is new, not what is listed. A test that had failed before is a row, because the
+    /// section is a complete account of the run, but it is not news — and the number here is what a
+    /// reader glancing at the heading takes away.
+    /// </remarks>
+    private static string LatestRunAnnotation(LatestRunDto latest) => latest.NewFailures switch
+    {
+        0 => "no new failures",
+        1 => "1 new failure",
+        int count => $"{count.ToString(CultureInfo.InvariantCulture)} new failures"
+    };
+
+    /// <summary>
+    /// Writes one latest-run row: the status and name, the contrast, and the dim trailer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The status word is the only decorated element, and only <c>new</c> is decorated: it is the
+    /// regression signal and the reason the section exists. Bold rather than a colour, because
+    /// colour is what the report spends on severity and these rows have none.
+    /// </para>
+    /// <para>
+    /// The trailer is the failure and its location, and nothing else. No evidence level, because
+    /// nothing was estimated; no id, because nothing is addressable; no population marker, because
+    /// no rate was counted and a marker would assert a discounting decision that was never made.
+    /// The location stays last so its left-truncated form never opens a line.
+    /// </para>
+    /// </remarks>
+    private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure)
+    {
+        string status = ReportVocabulary.StatusWordsFor(failure.Status);
+        string decorated = failure.Status == "new" ? capabilities.Emphasis(status) : status;
+
+        // Padded against the plain word: escape codes occupy no columns, and padding to a length
+        // that counted them would put the name short of its column on a terminal.
+        builder.Append(' ', LatestRunIndent)
+               .Append(decorated)
+               .Append(' ', Math.Max(1, LatestRunStatusWidth - status.Length))
+               .AppendLine(FitName(Name(failure.Subject), LatestRunBudget));
+
+        foreach (string line in Wrap(failure.Contrast, LatestRunBudget))
+            builder.Append(' ', LatestRunRowIndent).AppendLine(line);
+
+        var trailer = new List<string>();
+
+        if (failure.FailureSummary is { Length: > 0 } summary)
+            trailer.Add(summary);
+
+        if (failure.Subject.SourceFile is { Length: > 0 } file)
+        {
+            string location = failure.Subject.SourceLineNumber is { } line
+                ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
+                : file;
+
+            // The path absorbs the truncation, for the reason the findings' trailer gives: Fit()
+            // cuts from the left, and applied to the joined line it would eat the failure and leave
+            // the one segment that can afford to lose its head untouched.
+            int spent = trailer.Count == 0 ? 0 : trailer[0].Length + SeparatorWidth;
+
+            if (FitPath(location, LatestRunBudget - spent) is { } fitted)
+                trailer.Add(fitted);
+        }
+
+        if (trailer.Count == 0)
+            return;
+
+        builder.Append(' ', LatestRunRowIndent)
+               .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), LatestRunBudget)));
+    }
+
+    /// <summary>
+    /// Closes the section with the failures a finding already accounts for.
+    /// </summary>
+    /// <param name="latest">The section.</param>
+    /// <param name="findings">The findings as rendered, whose positions are the row numbers.</param>
+    /// <returns>The line.</returns>
+    /// <remarks>
+    /// One line and not one row per test, so the section is a complete account of the run without
+    /// listing the same test twice. The findings are named by the row numbers they hold below; a
+    /// finding <c>--top</c> cut has no row and is not named, and where every one was cut the line
+    /// says so — the truncation footer already names the command that shows them.
+    /// </remarks>
+    private static string AlsoFailing(LatestRunDto latest, IReadOnlyList<FindingDto> findings)
+    {
+        var rows = new List<string>();
+
+        foreach (string id in latest.ExplainedByFindingIds)
+        {
+            for (int index = 0; index < findings.Count; index++)
+            {
+                if (string.Equals(findings[index].Id, id, StringComparison.Ordinal))
+                {
+                    rows.Add("#" + (index + 1).ToString(CultureInfo.InvariantCulture));
+                    break;
+                }
+            }
+        }
+
+        string tests = Tests(latest.ExplainedByFindings);
+
+        return rows.Count == 0
+            ? $"Also failing: {tests} explained by findings not shown."
+            : $"Also failing: {tests} explained by {(rows.Count == 1 ? "finding" : "findings")} below ({string.Join(", ", rows)}).";
     }
 
     /// <summary>

@@ -423,6 +423,37 @@ public sealed class LatestRunAnalyzerTests
     }
 
     [Fact]
+    public void NewFailuresAreCountedBeforeTheCap()
+    {
+        int many = LocalAnalysisConstants.LatestRunMaxRows + 3;
+        string[] names = [.. Enumerable.Range(0, many).Select(i => $"T{i:00}")];
+        string[] padding = [.. Enumerable.Range(0, 60).Select(i => $"P{i:00}")];
+        AnalysisContext context = Context(
+            [.. names.Concat(padding).Select(Pass)],
+            [.. names.Select(Fail).Concat(padding.Select(Pass))]);
+
+        LatestRunAnalysis analysis = Analyze(context);
+
+        // Ten rows shown, thirteen new: the heading has to say thirteen.
+        Assert.Equal(many, analysis.NewFailures);
+        Assert.Equal(LocalAnalysisConstants.LatestRunMaxRows, analysis.Failures.Count);
+    }
+
+    [Fact]
+    public void ASeenBeforeRowIsNotANewFailure()
+    {
+        AnalysisContext context = Context(
+            [Fail("Known"), Pass("Regressed")],
+            [Pass("Known"), Pass("Regressed")],
+            [Fail("Known"), Fail("Regressed"), Fail("Fresh")]);
+
+        LatestRunAnalysis analysis = Analyze(context);
+
+        Assert.Equal(3, analysis.FailuresTotal);
+        Assert.Equal(2, analysis.NewFailures);
+    }
+
+    [Fact]
     public void ShowAllLiftsTheCap()
     {
         int many = LocalAnalysisConstants.LatestRunMaxRows + 3;

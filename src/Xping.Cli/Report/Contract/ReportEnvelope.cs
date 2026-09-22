@@ -127,6 +127,11 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="Suppressed">True when the window holds this session alone.</param>
 /// <param name="TestsExecuted">Tests that recorded a verdict in this session.</param>
 /// <param name="TestsFailed">Tests whose final outcome was a failure.</param>
+/// <param name="NewFailures">
+/// Rows that are <c>new</c> or <c>newTest</c>, counted before the cap — what the heading says and
+/// what a one-line summary reads. Not <paramref name="FailuresTotal"/>: a test that had failed
+/// before is listed, but it is not news.
+/// </param>
 /// <param name="ExplainedByFindings">Failing tests that a finding already accounts for.</param>
 /// <param name="ExplainedByFindingIds">Those findings' ids, in envelope order.</param>
 /// <param name="Failures">The rows, ordered for reading, after the cap.</param>
@@ -141,6 +146,7 @@ internal sealed record LatestRunDto(
     bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
+    int NewFailures,
     int ExplainedByFindings,
     IReadOnlyList<string> ExplainedByFindingIds,
     IReadOnlyList<LatestRunFailureDto> Failures,
@@ -163,8 +169,10 @@ internal sealed record LatestRunDto(
 /// can replace it without a renderer changing.
 /// </param>
 /// <param name="FailureSummary">
-/// What went wrong, in the fewest words that identify it: the exception type, or null when the
-/// adapter recorded none.
+/// What went wrong, in the fewest words that identify it: the exception type with its namespace
+/// stripped, or null when the adapter recorded none. The findings' headline keeps the namespace
+/// because there the type is a failure <i>mode</i> a reader groups on; here it is a label beside a
+/// location, and the namespace is the part that pushes the location off the line.
 /// </param>
 /// <param name="PriorSessions">Sessions before this one in which the test recorded a verdict.</param>
 /// <param name="PriorFailures">Of those, how many it failed in.</param>

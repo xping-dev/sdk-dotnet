@@ -628,6 +628,68 @@ internal static class ReportFixtures
     }
 
     /// <summary>
+    /// Builds a latest-run section around the given rows, none of them capped.
+    /// </summary>
+    /// <param name="failures">The rows, in the order the analyzer would have put them.</param>
+    /// <param name="explainedBy">Ids of the findings that account for other failures.</param>
+    /// <param name="explained">How many failing tests those findings account for.</param>
+    /// <param name="sha">Commit the run was at, or null for none recorded.</param>
+    /// <returns>The section.</returns>
+    public static LatestRunDto LatestRun(
+        LatestRunFailureDto[] failures,
+        string[]? explainedBy = null,
+        int? explained = null,
+        string? sha = "eab9867f00d") =>
+        new(
+            "6f9a2f1c-0000-4000-8000-000000000014",
+            new DateTime(2026, 8, 19, 16, 21, 0, DateTimeKind.Utc),
+            sha,
+            IsLikelyEnvironmental: false,
+            Suppressed: false,
+            TestsExecuted: 16,
+            TestsFailed: failures.Length + (explained ?? explainedBy?.Length ?? 0),
+            NewFailures: failures.Count(f => f.Status != "seenBefore"),
+            ExplainedByFindings: explained ?? explainedBy?.Length ?? 0,
+            ExplainedByFindingIds: explainedBy ?? [],
+            Failures: failures,
+            FailuresShown: failures.Length,
+            FailuresTotal: failures.Length,
+            OverflowCommand: null);
+
+    /// <summary>
+    /// Builds one latest-run row, named the way the builder names a single test.
+    /// </summary>
+    /// <param name="status">The status, as the envelope spells it.</param>
+    /// <param name="name">The test's method name; the class is <c>SampleTests</c>.</param>
+    /// <param name="contrast">The already-resolved contrast sentence.</param>
+    /// <param name="failureSummary">The exception type, namespace stripped, or null.</param>
+    /// <param name="priorSessions">Sessions before this one the test recorded a verdict in.</param>
+    /// <param name="priorFailures">Of those, how many it failed in.</param>
+    /// <param name="sourceFile">Where the test lives, or null for none recorded.</param>
+    /// <returns>The row.</returns>
+    public static LatestRunFailureDto LatestRunFailure(
+        string status,
+        string name,
+        string contrast,
+        string? failureSummary = "NullReferenceException",
+        int priorSessions = 0,
+        int priorFailures = 0,
+        string? sourceFile = "SampleTests.cs")
+    {
+        string qualified = $"MyApp.Tests.SampleTests.{name}";
+
+        return new LatestRunFailureDto(
+            status,
+            new SubjectDto(
+                "test", $"fp-{name}", qualified, name, SubjectNames.ShortName(qualified, name), null,
+                sourceFile, sourceFile == null ? null : 42, "MyApp.Tests", null, null, null),
+            contrast,
+            failureSummary,
+            priorSessions,
+            priorFailures);
+    }
+
+    /// <summary>
     /// Builds an envelope around the given findings, none of them truncated away.
     /// </summary>
     /// <param name="findings">The findings.</param>
