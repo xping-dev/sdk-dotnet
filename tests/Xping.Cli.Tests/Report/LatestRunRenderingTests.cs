@@ -35,7 +35,7 @@ public sealed class LatestRunRenderingTests
         failureSummary: "EqualException");
 
     private static readonly LatestRunFailureDto Known = LatestRunFailure(
-        "seenBefore", "Checkout_Rounds", "failed 2 of 4 runs, too few to classify yet",
+        "seenBefore", "Checkout_Rounds", "failed 2 of 4 runs",
         priorSessions: 3, priorFailures: 1);
 
     private static ReportEnvelope With(LatestRunDto? latestRun, params FindingDto[] findings) =>
@@ -125,6 +125,45 @@ public sealed class LatestRunRenderingTests
         Assert.True(reason > 0);
         Assert.Equal(string.Empty, fenced[reason - 1]);
         Assert.NotEqual(string.Empty, fenced[reason - 2]);
+    }
+
+    [Fact]
+    public void ARegressionWithNoFindingsDoesNotGetACleanBill()
+    {
+        // Two runs, one regression, nothing withheld: the findings list is empty, but the suite is
+        // not clean and the pass glyph must not say it is.
+        string report = Render(With(LatestRun([Regression])));
+
+        Assert.DoesNotContain("No findings", report, StringComparison.Ordinal);
+
+        // The section is the whole content, so the fence closes on its last row rather than on a
+        // blank line kept for something that is not there.
+        string[] fenced = Fenced(report);
+        Assert.StartsWith("    new", fenced[3], StringComparison.Ordinal);
+        Assert.Contains("NullReferenceException", fenced[^1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACleanRunWithNoFindingsStillGetsItsCleanBill()
+    {
+        string[] fenced = Fenced(Render(With(LatestRun([]))));
+
+        Assert.Contains("No findings.", fenced[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWithheldCandidateIsStillExplainedAboveARegression()
+    {
+        // "Nothing reportable yet" says what the report withheld, which is true whatever the newest
+        // run did. Only the clean bill is suppressed.
+        ReportEnvelope envelope = Get("nothing-reportable") with { LatestRun = LatestRun([Regression]) };
+
+        string[] fenced = Fenced(Render(envelope));
+
+        Assert.StartsWith("LATEST RUN", fenced[0], StringComparison.Ordinal);
+
+        // Wrapped over several lines, so the sentence is looked for in the block and not in one.
+        Assert.Contains("Nothing reportable yet", string.Join(" ", fenced), StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -352,6 +391,28 @@ public sealed class LatestRunRenderingTests
     }
 
     [Fact]
+    public void TheAlsoFailingLineWrapsLikeEveryOtherLine()
+    {
+        // Five explaining findings compose 75 columns, three past the fence.
+        FindingDto[] findings =
+        [
+            .. Enumerable.Range(0, 5).Select(i =>
+                Finding("Flaky", "high", $"Case{i}", "failed 6 of 20 executions (30%)") with { Id = $"f_{i}" })
+        ];
+
+        ReportEnvelope envelope = Envelope(findings) with
+        {
+            LatestRun = LatestRun([], explainedBy: ["f_0", "f_1", "f_2", "f_3", "f_4"])
+        };
+
+        string[] section = Section(Render(envelope));
+
+        Assert.Equal("    Also failing: 5 tests explained by findings below (#1, #2, #3, #4,", section[3]);
+        Assert.Equal("    #5).", section[4]);
+        Assert.All(section, line => Assert.True(line.Length <= FenceWidth, line));
+    }
+
+    [Fact]
     public void TheAlsoFailingLineIsSingularForOne()
     {
         string[] section = Section(Render(With(
@@ -380,7 +441,10 @@ public sealed class LatestRunRenderingTests
 
         string[] section = Section(Render(envelope));
 
-        Assert.Equal("    Also failing: 2 tests explained by finding below (#1).", section[7]);
+        // The count is over every finding and the row numbers over the findings shown, so the line
+        // has to say that the two are not the same list.
+        Assert.Equal("    Also failing: 2 tests explained by finding below (#1) and others not", section[7]);
+        Assert.Equal("    shown.", section[8]);
     }
 
     [Fact]

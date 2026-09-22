@@ -81,6 +81,12 @@ internal sealed class ReportCommand(
         // Beside the coordinator and not inside it: these rows are observations of one session,
         // not hypotheses, and must never be ranked, corrected or graded with the findings. A null
         // --top is --all, and --all lifts this section's cap along with the findings'.
+        //
+        // The findings passed here are the ones --kind asked for, so --kind narrows what the
+        // section defers to rather than what it reports: a test whose only finding was filtered
+        // out is listed as a row instead of counted on the closing line. The row states a true
+        // thing either way, and recovering the unfiltered set would mean running every provider a
+        // second time to change one line of prose.
         LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
             context, analysis.Findings, showAll: options.Top == null);
 

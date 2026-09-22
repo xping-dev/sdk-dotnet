@@ -200,10 +200,16 @@ internal static class EnvelopeBuilder
     /// runs and never reaches it, and piped output is asserted to carry nothing above 0x7F.
     /// </para>
     /// <para>
-    /// A test seen before is counted over every run it recorded a verdict in, this one included —
-    /// the sentence explains why there is no finding, and the gate it fell short of counts this run
-    /// too. A new failure is counted over the runs before this one, because "passed the previous
-    /// N runs" is a statement about those runs alone.
+    /// A test seen before states its count and nothing else. An earlier draft added "too few to
+    /// classify yet", which names an evidence gate — and a test with twenty runs and eight failures
+    /// whose hypothesis lost the multiplicity correction, or whose provider threw, has cleared
+    /// every gate there is. The row cannot know why no finding exists and must not guess.
+    /// </para>
+    /// <para>
+    /// Its runs are counted inclusive of this one, because that is the history being handed to the
+    /// reader. A new failure is counted over the runs before this one, because "passed the previous
+    /// N runs" is a statement about those runs alone. Neither counts a run the environmental
+    /// heuristic flagged.
     /// </para>
     /// </remarks>
     private static string Contrast(LatestRunFailure failure) => failure.Status switch
@@ -216,7 +222,7 @@ internal static class EnvelopeBuilder
 
         LatestRunStatus.SeenBefore =>
             $"failed {(failure.PriorFailures + 1).ToString(CultureInfo.InvariantCulture)} of " +
-            $"{(failure.PriorSessions + 1).ToString(CultureInfo.InvariantCulture)} runs, too few to classify yet",
+            $"{(failure.PriorSessions + 1).ToString(CultureInfo.InvariantCulture)} runs",
 
         _ => throw new NotSupportedException($"Unknown status '{failure.Status}'.")
     };

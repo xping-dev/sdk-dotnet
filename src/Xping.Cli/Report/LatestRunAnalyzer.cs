@@ -42,6 +42,11 @@ internal static class LatestRunAnalyzer
     /// <param name="findings">
     /// The findings the report will show, most severe first. A test one of them names is accounted
     /// for by it and produces no row.
+    /// <para>
+    /// Narrowed by <c>--kind</c> before it arrives, so that flag narrows what this defers to and
+    /// not what it reports. A test whose only finding was filtered out becomes a row, which states
+    /// its history and claims nothing about why no finding explains it.
+    /// </para>
     /// </param>
     /// <param name="showAll">
     /// Whether to lift the row cap. <c>--all</c> means <i>everything the report withheld</i>, and
@@ -118,10 +123,21 @@ internal static class LatestRunAnalyzer
                 continue;
             }
 
-            int priorSessions = runs.Count - 1;
+            // Prior runs the environmental heuristic flagged are not history. Every provider drops
+            // them before reading a test's past, for the reason D6 gives: one broken dependency
+            // must not be counted against each test it took down. Counting them here turned a test
+            // that passed nineteen times and failed today into one that "has failed before", which
+            // is the single reading this section exists to produce.
+            int priorSessions = 0;
             int priorFailures = 0;
+
             for (int index = 1; index < runs.Count; index++)
             {
+                if (context.SessionViewFor(runs[index].Session.SessionId)?.IsLikelyEnvironmental == true)
+                    continue;
+
+                priorSessions++;
+
                 if (runs[index].Failed)
                     priorFailures++;
             }

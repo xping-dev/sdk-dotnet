@@ -98,6 +98,61 @@ line references findings by the row numbers they hold in the rendered list; a fi
 `Also failing: N tests explained by findings not shown.` — the truncation footer already names the
 command that shows them.
 
+### Amendment 4 — from the P6 review
+
+Six defects, four of which are decisions §2 never made and which the implementation therefore had
+to invent.
+
+| Item | Was | Now | Changed |
+|---|---|---|---|
+| A | the "also failing" line was composed by concatenation | wrapped like every other line in the section | D4 |
+| B | an empty finding list printed `No findings.` under a listed regression | the clean-bill line is suppressed when the section reported failures | D13 |
+| C | a test's prior failures counted runs flagged environmental | they are excluded, as every provider excludes them | D3, D6 |
+| D | `--kind` silently changed which rows appear | stated: the section defers only to the kinds asked for | D4 |
+| E | a `--top` cut left the count and the row numbers disagreeing | the line says which findings are not shown | D4 |
+| F | `seenBefore` asserted *too few to classify yet* | it states the count and claims no reason | D3 |
+
+**A.** Five explaining findings produce a 75-column line, three past `FenceWidth`. Every other line
+in the section goes through `Wrap`, `Fit` or `FitPath`; this one went through none. The golden that
+would have caught it has exactly three.
+
+**B.** `EmptyReport`'s `No findings.` carries the pass glyph, and it answers *why is this block
+empty*. With rows above it the block is not empty and the suite is not clean, so a green tick under
+a regression is the exact misreading `#185` was filed about. The line is withheld only in that
+form: `Nothing reportable yet: 4 need more runs` stays, because it explains candidates the report
+withheld and is true either way.
+
+**C.** Every provider drops a session `SessionView.IsLikelyEnvironmental` flags before reading a
+test's history — six call sites — and D6 says why: one broken dependency must not be counted
+against each test it took down. The analyzer counted them, so one outage in the window demoted a
+genuine regression from `new` to `seenBefore`, zeroed `NewFailures`, and made the heading read
+`no new failures`. **`PriorSessions` and `PriorFailures` are counted over the prior runs that were
+not flagged environmental**, which also means a test seen only in such runs is a `newTest`. D6's
+rule was written for the newest session; it holds for the rest of the window for the same reason.
+
+**D.** `analysis.Findings` is already narrowed by `--kind`, so a test whose only finding was
+filtered out stops being *explained* and becomes a row. That is not wrong — with F applied the row
+states a true thing — but it was undocumented, and a section billed as a complete account of the
+run must say what it defers to. **`--kind` narrows what the section defers to, not what it
+reports.** Running the providers twice to recover the unfiltered set would cost the whole analysis
+a second time to change one line of prose.
+
+**E.** `ExplainedByFindings` is counted over every finding produced and the row numbers resolve
+against the findings shown, so a partial cut printed `2 tests explained by finding below (#1)`.
+Three forms now, and the count is always over every finding:
+
+```
+    Also failing: 2 tests explained by findings below (#1, #2).
+    Also failing: 2 tests explained by findings not shown.
+    Also failing: 2 tests explained by findings below (#1) and others not shown.
+```
+
+**F.** *Too few to classify yet* names an evidence gate, and a test with twenty runs and eight
+failures whose hypothesis lost the Benjamini-Hochberg correction — or whose provider threw — has
+cleared every gate there is. The row cannot know why no finding exists and must not guess:
+`failed 9 of 21 runs` and nothing more. Counted inclusive of this run, because that is the history
+the reader is being handed.
+
 ---
 
 ## 1. Ground truth and problem
@@ -173,10 +228,14 @@ prior history within the analysis window:
 |---|---|---|
 | `new` | appeared in a prior session, never failed in one | `passed the previous N runs, failed just now` |
 | `newTest` | no prior appearance in the window | `first seen this run, failed` |
-| `seenBefore` | failed before, carries no finding | `failed N of M runs, too few to classify yet` |
+| `seenBefore` | failed before, carries no finding | `failed N of M runs` (Amendment 4F) |
 
 "Appeared in a session" means recorded at least one execution with a verdict in it — `Passed`,
 `Failed` or `Timeout`. Skipped tests do not count as appearances and never produce rows.
+
+**Amendment 4C.** A prior run the environmental heuristic flagged is not counted, in either
+column. The analyzer asks `AnalysisContext.SessionViewFor` exactly as the providers do, so one bad
+afternoon cannot turn a regression into a test that has failed before.
 
 **Amendment 2A.** That definition is read from `TestIndex`, not applied in the analyzer.
 `TestIndex.RunsOf` and `SessionsRunIn` count every recorded execution, skipped included, and stay

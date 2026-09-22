@@ -307,8 +307,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         // Above the findings, inside the same fence. The reader ran the command because something
         // just happened, and the section is absent when nothing did, so the top slot costs nothing
         // in the healthy case.
-        if (WriteLatestRun(builder, envelope))
-            builder.AppendLine();
+        bool latestRunSpoke = WriteLatestRun(builder, envelope);
 
         if (envelope.Findings.Count == 0)
         {
@@ -322,13 +321,25 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             // The budget is the indent's short of the fence for every line, including the first,
             // which does not carry it. Two budgets would buy the first line two columns it has
             // never needed, and would put the arithmetic somewhere a reader has to check.
-            List<string> reason = Wrap(EmptyReport(envelope.Summary), FenceWidth - EmptyReportIndent);
+            // The blank line separates the section from what follows it, so it is written only
+            // once there is something to follow. A report whose whole content is the section ends
+            // on its last row.
+            if (EmptyReport(envelope.Summary, latestRunSpoke) is not { } sentence)
+                return;
+
+            if (latestRunSpoke)
+                builder.AppendLine();
+
+            List<string> reason = Wrap(sentence, FenceWidth - EmptyReportIndent);
 
             for (int index = 0; index < reason.Count; index++)
                 builder.Append(' ', index == 0 ? 0 : EmptyReportIndent).AppendLine(reason[index]);
 
             return;
         }
+
+        if (latestRunSpoke)
+            builder.AppendLine();
 
         string bands = ReportVocabulary.SeverityBands(envelope.Summary);
         WriteHeading(
@@ -463,7 +474,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         }
 
         if (latest.ExplainedByFindings > 0)
-            builder.Append(' ', LatestRunIndent).AppendLine(AlsoFailing(latest, envelope.Findings));
+        {
+            // At the section's own indent and not the rows', so the budget is the fence less four
+            // rather than less seventeen. A continuation aligns under "Also failing".
+            foreach (string line in Wrap(AlsoFailing(latest, envelope.Findings), FenceWidth - LatestRunIndent))
+                builder.Append(' ', LatestRunIndent).AppendLine(line);
+        }
 
         return true;
     }
@@ -567,46 +583,79 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// <param name="findings">The findings as rendered, whose positions are the row numbers.</param>
     /// <returns>The line.</returns>
     /// <remarks>
+    /// <para>
     /// One line and not one row per test, so the section is a complete account of the run without
-    /// listing the same test twice. The findings are named by the row numbers they hold below; a
-    /// finding <c>--top</c> cut has no row and is not named, and where every one was cut the line
-    /// says so — the truncation footer already names the command that shows them.
+    /// listing the same test twice. The findings are named by the row numbers they hold below, and
+    /// the count is always over every finding that explains a failure.
+    /// </para>
+    /// <para>
+    /// Which is why a <c>--top</c> cut has to be said out loud. The count and the row numbers are
+    /// taken over different lists — every finding produced, and the findings shown — so a partial
+    /// cut printed "2 tests explained by finding below (#1)", from which a reader concludes that
+    /// row 1 covers both. Three forms, and the reader is never left to reconcile them.
+    /// </para>
+    /// <para>
+    /// Wrapped by the caller like every other line in the section. Five findings reach 75 columns,
+    /// and a line composed by concatenation is a line nothing measures.
+    /// </para>
     /// </remarks>
     private static string AlsoFailing(LatestRunDto latest, IReadOnlyList<FindingDto> findings)
     {
         var rows = new List<string>();
+        int cut = 0;
 
         foreach (string id in latest.ExplainedByFindingIds)
         {
+            int row = -1;
             for (int index = 0; index < findings.Count; index++)
             {
                 if (string.Equals(findings[index].Id, id, StringComparison.Ordinal))
                 {
-                    rows.Add("#" + (index + 1).ToString(CultureInfo.InvariantCulture));
+                    row = index;
                     break;
                 }
             }
+
+            if (row < 0)
+                cut++;
+            else
+                rows.Add("#" + (row + 1).ToString(CultureInfo.InvariantCulture));
         }
 
         string tests = Tests(latest.ExplainedByFindings);
 
-        return rows.Count == 0
-            ? $"Also failing: {tests} explained by findings not shown."
-            : $"Also failing: {tests} explained by {(rows.Count == 1 ? "finding" : "findings")} below ({string.Join(", ", rows)}).";
+        if (rows.Count == 0)
+            return $"Also failing: {tests} explained by findings not shown.";
+
+        string named =
+            $"Also failing: {tests} explained by {(rows.Count == 1 ? "finding" : "findings")} " +
+            $"below ({string.Join(", ", rows)})";
+
+        return cut == 0 ? named + "." : named + " and others not shown.";
     }
 
     /// <summary>
     /// Says why a report found nothing, which is three different things.
     /// </summary>
     /// <param name="summary">Counts describing the run as a whole.</param>
-    /// <returns>The one line an empty report prints.</returns>
+    /// <param name="latestRunSpoke">Whether the latest-run section reported something above.</param>
+    /// <returns>The one line an empty report prints, or null where it has nothing to say.</returns>
     /// <remarks>
+    /// <para>
     /// A suite with nothing wrong with it, a suite too young to say, and a suite whose candidates
     /// were all indistinguishable from chance are three different pieces of news, and printing "no
     /// findings" for the second and third teaches a reader that the report has looked when it has
     /// only declined to answer.
+    /// </para>
+    /// <para>
+    /// There is a fourth: a suite whose newest run just broke and whose history is too short for
+    /// any finding. This answers "why is this block empty", and with rows above it the block is not
+    /// empty — so the clean bill, which carries the pass glyph and asserts a suite with nothing
+    /// wrong with it, is withheld. The other two sentences stay: they explain candidates the report
+    /// withheld, which is true whatever the newest run did.
+    /// </para>
     /// </remarks>
-    private string EmptyReport(SummaryDto summary)
+    private string? EmptyReport(SummaryDto summary, bool latestRunSpoke)
     {
         var reasons = new List<string>();
 
@@ -625,10 +674,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (silent > 0)
             reasons.Add($"{silent} {KindWord(silent)} had nothing to measure");
 
-        return reasons.Count == 0
-            ? $"{capabilities.Glyphs.Pass} No findings."
-            : $"{capabilities.Glyphs.Pending} Nothing reportable yet: " +
-              $"{string.Join(", ", reasons)}.";
+        if (reasons.Count > 0)
+        {
+            return $"{capabilities.Glyphs.Pending} Nothing reportable yet: " +
+                   $"{string.Join(", ", reasons)}.";
+        }
+
+        return latestRunSpoke ? null : $"{capabilities.Glyphs.Pass} No findings.";
     }
 
     /// <summary>

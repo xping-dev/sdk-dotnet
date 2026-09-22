@@ -383,18 +383,55 @@ public sealed class LatestRunAnalyzerTests
     }
 
     [Fact]
-    public void AnEnvironmentalPriorSessionDoesNotCollapseTheNewestOne()
+    public void AnEnvironmentalPriorSessionIsNotCountedAgainstATest()
     {
+        // One outage, then two clean runs, then today's failure. Every provider drops the outage
+        // before reading a test's history; counting it here would call today's regression a test
+        // that has failed before, and zero the count the heading reads.
         string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
         AnalysisContext context = Context(
             [.. names.Select((n, i) => i < 12 ? Fail(n) : Pass(n))],
+            [.. names.Select(Pass)],
+            [.. names.Select(Pass)],
             [.. names.Select((n, i) => i == 0 ? Fail(n) : Pass(n))]);
 
         LatestRunAnalysis analysis = Analyze(context);
 
         Assert.False(analysis.Session.IsLikelyEnvironmental);
+
         LatestRunFailure row = Single(analysis);
+        Assert.Equal(LatestRunStatus.New, row.Status);
+        Assert.Equal(2, row.PriorSessions);
+        Assert.Equal(0, row.PriorFailures);
+        Assert.Equal(1, analysis.NewFailures);
+    }
+
+    [Fact]
+    public void ATestSeenOnlyInEnvironmentalRunsIsANewTest()
+    {
+        string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
+        AnalysisContext context = Context(
+            [.. names.Select((n, i) => i < 12 ? Fail(n) : Pass(n))],
+            [Pass("Elsewhere")],
+            [Fail("T00")]);
+
+        Assert.Equal(LatestRunStatus.NewTest, Single(Analyze(context)).Status);
+    }
+
+    [Fact]
+    public void AGenuinePriorFailureOutsideAnOutageStillCounts()
+    {
+        string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
+        AnalysisContext context = Context(
+            [.. names.Select((n, i) => i < 12 ? Fail(n) : Pass(n))],
+            [.. names.Select((n, i) => i == 0 ? Fail(n) : Pass(n))],
+            [.. names.Select((n, i) => i == 0 ? Fail(n) : Pass(n))]);
+
+        LatestRunFailure row = Single(Analyze(context));
+
         Assert.Equal(LatestRunStatus.SeenBefore, row.Status);
+        Assert.Equal(1, row.PriorSessions);
+        Assert.Equal(1, row.PriorFailures);
     }
 
     // ---------------------------------------------------------------------------------------

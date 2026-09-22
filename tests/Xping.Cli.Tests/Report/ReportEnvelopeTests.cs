@@ -502,6 +502,70 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
+    public void AKindFilterNarrowsWhatTheSectionDefersToAndNotWhatItReports()
+    {
+        // A test that failed in every one of eight runs. Unfiltered, the AlwaysFailing finding
+        // accounts for it and the section counts it on the closing line; under --kind Flaky that
+        // finding is never produced, so the section lists it instead — and the row says what its
+        // history is without claiming why nothing explains it.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    TestSessionFactory.Execution("Broken", TestOutcome.Failed, errorMessage: "boom")
+                ]));
+        }
+
+        JsonElement unfiltered = RunJson().GetProperty("latestRun");
+        Assert.Equal(1, unfiltered.GetProperty("explainedByFindings").GetInt32());
+        Assert.Empty(unfiltered.GetProperty("failures").EnumerateArray());
+
+        JsonElement filtered = RunJson("--kind", "Flaky").GetProperty("latestRun");
+        Assert.Equal(0, filtered.GetProperty("explainedByFindings").GetInt32());
+
+        JsonElement row = Assert.Single(filtered.GetProperty("failures").EnumerateArray());
+        Assert.Equal("seenBefore", row.GetProperty("status").GetString());
+        Assert.Equal("failed 8 of 8 runs", row.GetProperty("contrast").GetString());
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunIsNotCountedAgainstATestsHistory()
+    {
+        // Four runs: an outage, two clean, then one failure. Counting the outage would make the
+        // regression read as a test that has failed before.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
+
+        for (int session = 0; session < 4; session++)
+        {
+            store.Write(TestSessionFactory.Session(
+                session,
+                [
+                    .. names.Select((name, index) =>
+                    {
+                        bool failing = (session == 0 && index < 12) || (session == 3 && index == 0);
+
+                        return TestSessionFactory.Execution(
+                            name,
+                            failing ? TestOutcome.Failed : TestOutcome.Passed,
+                            errorMessage: failing ? "boom" : null);
+                    })
+                ]));
+        }
+
+        JsonElement latestRun = RunJson().GetProperty("latestRun");
+
+        Assert.Equal(1, latestRun.GetProperty("newFailures").GetInt32());
+
+        JsonElement row = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
+        Assert.Equal("new", row.GetProperty("status").GetString());
+        Assert.Equal("passed the previous 2 runs, failed just now", row.GetProperty("contrast").GetString());
+    }
+
+    [Fact]
     public void ExplainingFindingIdsAreInEnvelopeOrder()
     {
         // Two always-failing tests whose fingerprints sort the other way round from their rank:
@@ -578,7 +642,7 @@ public sealed class ReportEnvelopeTests : IDisposable
             [
                 "passed the previous 2 runs, failed just now",
                 "first seen this run, failed",
-                "failed 2 of 3 runs, too few to classify yet"
+                "failed 2 of 3 runs"
             ],
             contrasts);
         Assert.All(contrasts, c => Assert.All(c, ch => Assert.True(ch < 0x80, $"non-ASCII in '{c}'")));

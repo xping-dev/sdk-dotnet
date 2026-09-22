@@ -61,7 +61,8 @@ internal static class ReportFixtures
         "latest-run-suppressed",
         "latest-run-environmental",
         "latest-run-overflow",
-        "latest-run-store"
+        "latest-run-store",
+        "latest-run-only"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -157,6 +158,10 @@ internal static class ReportFixtures
         },
         "latest-run-overflow" => LatestRunOverflow(),
         "latest-run-store" => LatestRunFromStore(),
+
+        // A regression on a window too short for any finding: the section is the whole report, and
+        // the clean bill that would otherwise close it is withheld.
+        "latest-run-only" => Envelope() with { LatestRun = SpecLatestRun([Regression()]) },
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
 

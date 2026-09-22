@@ -1,0 +1,11 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 412 healthy | 0 flagged
+
+```
+LATEST RUN  16:21 | eab9867                                1 new failure
+------------------------------------------------------------------------
+
+    new          CartTests.Checkout_AppliesDiscount
+                 passed the previous 19 runs, failed just now
+                 NullReferenceException | CartTests.cs:112
+```
