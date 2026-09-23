@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Text;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
@@ -73,6 +74,9 @@ internal sealed class ReportCommand(
         var context = new AnalysisContext(
             resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
+        // Never narrowed under --id, which the parser guarantees by rejecting --kind beside it. An
+        // Instead handover crosses a kind filter in both directions, so a narrowed run could show a
+        // finding the full report does not, or miss one it does.
         IReadOnlySet<FindingKind>? kinds =
             options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
 
@@ -90,6 +94,11 @@ internal sealed class ReportCommand(
         LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
             context, analysis.Findings, showAll: options.Top == null);
 
+        // Over the list the full report prints, so the row it names is the row the reader saw.
+        FindingSelection? selection = options.Id is { } id
+            ? FindingSelector.Select(FindingOrder.WithSiblingsAdjacent(analysis.Findings), id)
+            : null;
+
         ReportEnvelope envelope = EnvelopeBuilder.Build(
             context,
             analysis,
@@ -101,12 +110,26 @@ internal sealed class ReportCommand(
             resolved.UnreadableSessions,
             resolved.SkewedSessions,
             options.Top,
-            latestRun);
+            latestRun,
+            selection);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
         // developer reading JSON through a pipe is exactly the one who will not see the caveat line.
         WriteClockWarning(resolved);
+
+        // The report ran and the finding is not in it. Said on standard error, with the envelope on
+        // standard output only where a script is reading one: a text report of nothing would be a
+        // fence around an absence the message already describes.
+        if (selection is { Finding: null })
+        {
+            WriteNotReported(selection, envelope, source, assembly);
+
+            if (options.Format == ReportFormat.Json)
+                new JsonReportRenderer().Render(envelope, io.Output);
+
+            return ExitCodes.FindingNotReported;
+        }
 
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
@@ -135,7 +158,10 @@ internal sealed class ReportCommand(
             io.Output.WriteLine();
         }
 
-        return ExitCodes.ForReport(analysis.Findings, options.FailOn);
+        // --fail-on is rejected beside --id, so a selected finding never fails the command.
+        return selection != null
+            ? ExitCodes.Success
+            : ExitCodes.ForReport(analysis.Findings, options.FailOn);
     }
 
     private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>
@@ -238,6 +264,59 @@ internal sealed class ReportCommand(
             "Run your tests again with the Xping SDK installed, then try again.");
 
         return ExitCodes.InsufficientData;
+    }
+
+    /// <summary>
+    /// Says that the finding <c>--id</c> named is not in this report, and where its subject went.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Not reported in this window", never "not found" or "error": an id that was on screen
+    /// yesterday and is absent today is the report working. The window is named because it is the
+    /// honest boundary — a finding that needs twenty runs is absent from five — and the other
+    /// assemblies are counted because the likeliest reason an id is missing is that the report
+    /// scoped itself to a different suite.
+    /// </para>
+    /// <para>
+    /// Names the current id rather than showing it. A promoted cluster is a different claim, and
+    /// rendering it under the id of the one it replaced would say otherwise.
+    /// </para>
+    /// </remarks>
+    private void WriteNotReported(
+        FindingSelection selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly)
+    {
+        var message = new StringBuilder("Finding ").Append(selection.Id);
+
+        if (selection.Kind is { } kind)
+            message.Append(" (").Append(ReportVocabulary.LabelFor(kind.ToString())).Append(')');
+
+        int sessions = envelope.Window.SessionCount;
+        string runs = sessions == 1 ? "1 run" : $"{sessions} runs";
+
+        message.Append(" is not reported in this window (")
+               .Append(assembly == null ? runs : $"{assembly}, {runs}")
+               .Append(").");
+
+        if (selection.SameSubject.Count > 0)
+        {
+            message.Append(" Its subject is reported as ")
+                   .AppendJoin(", ", selection.SameSubject.Select(same =>
+                       $"{same.Finding.Id} ({ReportVocabulary.LabelFor(same.Finding.Kind.ToString())}, row {same.Row})"))
+                   .Append('.');
+        }
+
+        int others = source.KnownAssemblies()
+            .Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
+
+        if (others > 0)
+        {
+            message.Append(' ')
+                   .Append(others)
+                   .Append(others == 1 ? " other assembly" : " other assemblies")
+                   .Append(" in this store (use --assembly to switch).");
+        }
+
+        io.Error.WriteLine(message.ToString());
     }
 
     /// <summary>

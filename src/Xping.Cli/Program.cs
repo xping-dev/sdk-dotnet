@@ -213,6 +213,12 @@ internal static class Program
             Description = "Restrict to one test assembly"
         };
 
+        Option<string?> idOption = new("--id")
+        {
+            Description = "Show one finding in detail, by the id on its row",
+            CustomParser = ParseFindingId
+        };
+
         Option<string?> directoryOption = new("--directory")
         {
             Description = "Resolve the store from this directory"
@@ -233,7 +239,8 @@ internal static class Program
         Command command = new("report", "Report test reliability findings from recent local runs")
         {
             runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
-            summaryOption, failOnOption, assemblyOption, directoryOption, asciiOption, noColorOption
+            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, asciiOption,
+            noColorOption
         };
 
         // Presence is tested with GetResult rather than GetValue: an option whose own parser already
@@ -262,6 +269,32 @@ internal static class Program
                 if (result.GetResult(summaryOption) != null && chosen != ReportFormat.Summary)
                     result.AddError("--summary conflicts with --format.");
             }
+
+            // `--id` is its own selection, and every flag here would either change which findings
+            // exist or say something about more than one of them.
+            if (result.GetResult(idOption) != null)
+            {
+                if (result.GetResult(kindOption) != null)
+                    result.AddError("--id and --kind are mutually exclusive.");
+
+                if (result.GetResult(topOption) != null)
+                    result.AddError("--id and --top are mutually exclusive.");
+
+                if (result.GetResult(allOption) != null)
+                    result.AddError("--id and --all are mutually exclusive.");
+
+                if (result.GetResult(failOnOption) is { Implicit: false })
+                    result.AddError("--id and --fail-on are mutually exclusive.");
+
+                if (result.GetResult(summaryOption) != null)
+                    result.AddError("--id and --summary are mutually exclusive.");
+
+                if (result.GetResult(formatOption) is { Implicit: false } idFormat
+                    && idFormat.GetValueOrDefault<ReportFormat>() == ReportFormat.Summary)
+                {
+                    result.AddError("--id and --format summary are mutually exclusive.");
+                }
+            }
         });
 
         command.SetAction(parseResult =>
@@ -277,6 +310,7 @@ internal static class Program
                     : parseResult.GetValue(topOption) ?? LocalAnalysisConstants.DefaultTopFindings,
                 Kinds = parseResult.GetValue(kindOption) ?? [],
                 Assembly = parseResult.GetValue(assemblyOption),
+                Id = parseResult.GetValue(idOption),
                 Directory = parseResult.GetValue(directoryOption),
                 Format = parseResult.GetValue(jsonOption) ? ReportFormat.Json
                     : parseResult.GetValue(summaryOption) ? ReportFormat.Summary
@@ -322,6 +356,27 @@ internal static class Program
         FailOn.Low => Severity.Low,
         _ => null
     };
+
+    /// <summary>
+    /// Parses a finding id: <c>f_</c> and eight hex digits, in either case.
+    /// </summary>
+    /// <remarks>
+    /// Rejected here rather than reported as absent: a mistyped id and one that has moved are
+    /// different mistakes with different fixes, and one message for both teaches the reader that a
+    /// healed finding and a typo look alike.
+    /// </remarks>
+    private static string? ParseFindingId(ArgumentResult result)
+    {
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+        if (raw.Length != 10 || !raw.StartsWith("f_", StringComparison.Ordinal) || !raw[2..].All(char.IsAsciiHexDigit))
+        {
+            result.AddError($"--id expects a finding id of the form f_ followed by 8 hex digits, got '{raw}'.");
+            return null;
+        }
+
+        return raw;
+    }
 
     /// <summary>
     /// Parses an option that must be a positive count.

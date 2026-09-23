@@ -11,9 +11,10 @@ namespace Xping.Cli.Report;
 /// What the process returns, and why.
 /// </summary>
 /// <remarks>
-/// Three outcomes, and the distinction between the last two is the point. A build step needs to tell
-/// "I looked and found problems" apart from "I could not look" — collapsing both into a non-zero
-/// code would make a broken store indistinguishable from a failing test suite.
+/// Four outcomes. The distinction between the second and third is the point: a build step needs to
+/// tell "I looked and found problems" apart from "I could not look" — collapsing both into a
+/// non-zero code would make a broken store indistinguishable from a failing test suite. The fourth
+/// answers the one question <c>--id</c> asks, and is not a failure of the tool.
 /// </remarks>
 internal static class ExitCodes
 {
@@ -25,6 +26,9 @@ internal static class ExitCodes
 
     /// <summary>There was not enough data to produce a report at all.</summary>
     public const int InsufficientData = 2;
+
+    /// <summary>The report ran, and the finding <c>--id</c> asked for is not in it.</summary>
+    public const int FindingNotReported = 3;
 
     /// <summary>
     /// Chooses the exit code for a finished report.

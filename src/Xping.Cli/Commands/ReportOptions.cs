@@ -50,6 +50,11 @@ internal sealed class ReportOptions
     /// <summary>Gets or sets the test assembly to restrict to, or <see langword="null"/> to auto-scope.</summary>
     public string? Assembly { get; set; }
 
+    /// <summary>
+    /// Gets or sets the finding to show in detail, or <see langword="null"/> for the full report.
+    /// </summary>
+    public string? Id { get; set; }
+
     /// <summary>Gets or sets the directory to resolve the store from. Defaults to the working directory.</summary>
     public string? Directory { get; set; }
 
