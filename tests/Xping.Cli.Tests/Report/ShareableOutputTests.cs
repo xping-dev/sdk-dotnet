@@ -53,157 +53,13 @@ public sealed class ShareableOutputTests
         nameof(FindingKind.Vanished)
     ];
 
-    private static FindingEvidence EvidenceFor(FindingKind kind)
-    {
-        SignatureView signature = new(
-            "abc123",
-            "System.InvalidOperationException",
-            "Expected <n> but was <n>",
-            ["MyApp.Tests.CheckoutTests.Completes()"],
-            Degraded: false,
-            Unavailable: false,
-            Occurrences: 12,
-            FirstSeenAt: new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
-            FirstSeenSha: "a3f9c2e",
-            FirstSeenSessionsAgo: 4,
-            FirstSeenInLatestSession: false,
-            FirstSeenAfterWindowStart: true);
-
-        FailureExemplar exemplar = new(
-            "11111111-1111-1111-1111-111111111111",
-            new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
-            "a3f9c2e",
-            AttemptNumber: 1,
-            DurationMs: 120,
-            "System.InvalidOperationException",
-            "boom",
-            ["MyApp.Tests.CheckoutTests.Completes()"],
-            "abc123",
-            Site: nameof(FailureSite.TestBody),
-            SiteMember: null);
-
-        RetryConfiguration configuration = new("RetryAttribute", 2, "NetworkError", 250);
-
-        RetryAttemptExemplar attemptExemplar = new(
-            "11111111-1111-1111-1111-111111111111",
-            new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
-            "a3f9c2e",
-            Attempts: 3,
-            Outcome: nameof(TestOutcome.Failed),
-            RetryWallClockMs: 8_200,
-            "boom");
-
-        return kind switch
-        {
-            FindingKind.RetryMasked =>
-                new RetryMaskedEvidence(
-                    4, 20, 20, 3, 0.2, 3, configuration, 12_400, 750, 2,
-                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", []),
-
-            FindingKind.RetryDeepening =>
-                new RetryDeepeningEvidence(
-                    new RetryDepthProfile(3, 4, 3, 0, 3),
-                    new RetryDepthProfile(1, 2, 14, 0, 14),
-                    new RetryDepthDelta(2, 200),
-                    configuration,
-                    2_400,
-                    500,
-                    0,
-                    "a3f9c2e",
-                    [attemptExemplar],
-                    attemptExemplar),
-
-            FindingKind.RetryExhausted =>
-                new RetryExhaustedEvidence(
-                    7, 8, 1, 20, 20, 0.875, 0.529, 3, 12, configuration, 41_000, 3_000, 0,
-                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e",
-                    [attemptExemplar], attemptExemplar),
-
-            FindingKind.Flaky =>
-                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 1, 3, [signature], [exemplar], null),
-
-            FindingKind.AlwaysFailing =>
-                new AlwaysFailingEvidence(
-                    19, 20, 20, 19, 0.95, 0, 0, signature with { Occurrences = 19 }, 1.0,
-                    [exemplar], null),
-
-            FindingKind.TimingOut =>
-                new TimingOutEvidence(
-                    9, 10, 20, 20, 9, 0.45, 0.9, 0, 0, 500, [512, 508, 503], [exemplar], null),
-
-            FindingKind.BrokenFixture =>
-                new BrokenFixtureEvidence(
-                    nameof(FailureSite.TestSetup),
-                    "CheckoutFixture.Setup",
-                    signature,
-                    12,
-                    [new ClusterMember("fp", "MyApp.Tests.A", 4)],
-                    47, 3, 20, 12,
-                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
-
-            FindingKind.SharedFailure =>
-                new SharedFailureEvidence(
-                    signature, 12, [new ClusterMember("fp", "MyApp.Tests.A", 4)], 47, 3, 20, 12,
-                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
-
-            FindingKind.DurationRegression =>
-                new DurationRegressionEvidence(
-                    new DurationProfile(1240, 1890, 4, 3, 0, 3, 0.21),
-                    new DurationProfile(340, 410, 10, 10, 0, 10, 0.14),
-                    new DurationDelta(264.7, 900),
-                    new DurationShift(3.512, 1.94, 5.87, 251.2, 880, 0.004),
-                    "a3f9c2e",
-                    [],
-                    null),
-
-            FindingKind.DurationUnstable =>
-                new DurationUnstableEvidence(18, 20, 0, 820, 3100, 210, 4100, 18, 900, 0.71, []),
-
-            FindingKind.ParallelSensitive =>
-                new ParallelSensitiveEvidence(
-                    new ConcurrencyTrend(
-                        2.874, 0.00405, 0.612, 18, nameof(ConcurrencyDirection.WithConcurrency)),
-                    new ConcurrencyRange(1, 14, 4),
-                    [
-                        new ConcurrencyLevel(1, 6, 6, 0, 0),
-                        new ConcurrencyLevel(4, 5, 5, 1, 0.2),
-                        new ConcurrencyLevel(9, 5, 5, 3, 0.6),
-                        new ConcurrencyLevel(14, 4, 4, 3, 0.75)
-                    ],
-                    [],
-                    null,
-                    0,
-                    0),
-
-            FindingKind.TimeSensitive =>
-                new TimeSensitiveEvidence(
-                    "LocalTimeOfDay",
-                    new TimeArm(9, 10, 0.9, 7, "18:00-24:00 local"),
-                    new TimeArm(0, 6, 0, 0, "the rest of the day"),
-                    new TimeDelta(0.9, 90),
-                    new TimeSignificance(0.001748, 2),
-                    "Europe/Berlin",
-                    [],
-                    null,
-                    0,
-                    0),
-
-            FindingKind.Vanished =>
-                new VanishedEvidence(
-                    12, 17, 3, 0, 0.706, 0.0491, 40,
-                    new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e"),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(kind))
-        };
-    }
-
     [Theory]
     [MemberData(nameof(EveryEvidenceShape))]
     public void EveryHeadlineIsAsciiAndCarriesItsDenominators(string kind)
     {
         FindingKind parsed = Enum.Parse<FindingKind>(kind);
 
-        var (headline, metrics) = EvidenceHeadline.For(parsed, EvidenceFor(parsed));
+        var (headline, metrics) = EvidenceHeadline.For(parsed, EvidenceSamples.For(parsed));
 
         Assert.NotEmpty(headline);
 
@@ -223,7 +79,7 @@ public sealed class ShareableOutputTests
     public void ASlowerHeadlineLeadsWithTheFactorAndItsInterval()
     {
         var (headline, metrics) = EvidenceHeadline.For(
-            FindingKind.DurationRegression, EvidenceFor(FindingKind.DurationRegression));
+            FindingKind.DurationRegression, EvidenceSamples.For(FindingKind.DurationRegression));
 
         // The sentence a developer reads first. It leads with the normalised claim rather than the
         // clock, because the raw pair can fall while the test slows, and it carries the interval,
@@ -239,7 +95,7 @@ public sealed class ShareableOutputTests
     public void ATimeSensitiveFindingShowsHowWideASearchFoundIt()
     {
         var (headline, metrics) = EvidenceHeadline.For(
-            FindingKind.TimeSensitive, EvidenceFor(FindingKind.TimeSensitive));
+            FindingKind.TimeSensitive, EvidenceSamples.For(FindingKind.TimeSensitive));
 
         // The headline is unchanged by the search charge: what a reader needs first is when the test
         // fails and over how many days, and a probability answers neither question.
@@ -258,7 +114,7 @@ public sealed class ShareableOutputTests
     public void AConcurrencyFindingShowsItsDoseResponse()
     {
         var (headline, metrics) = EvidenceHeadline.For(
-            FindingKind.ParallelSensitive, EvidenceFor(FindingKind.ParallelSensitive));
+            FindingKind.ParallelSensitive, EvidenceSamples.For(FindingKind.ParallelSensitive));
 
         // The pair that supplied the most of the correlation — here the two ends, since both are
         // well populated — always with the milder level first, the direction carried by a word, and
@@ -382,7 +238,7 @@ public sealed class ShareableOutputTests
         // dominant one. A reader who opens two exemplars and finds different messages has to be able
         // to see that the report already knew.
         var (headline, metrics) = EvidenceHeadline.For(
-            FindingKind.AlwaysFailing, EvidenceFor(FindingKind.AlwaysFailing) switch
+            FindingKind.AlwaysFailing, EvidenceSamples.For(FindingKind.AlwaysFailing) switch
             {
                 // 17 of the 19 failures agreed, which is what a share below one means.
                 AlwaysFailingEvidence e => e with
@@ -409,7 +265,7 @@ public sealed class ShareableOutputTests
         // one trailing unit, as "3 of 12 runs" does everywhere else here. Naming it on the first
         // number and not the second reads as though the two were counting different things.
         var (deepening, _) = EvidenceHeadline.For(
-            FindingKind.RetryDeepening, EvidenceFor(FindingKind.RetryDeepening));
+            FindingKind.RetryDeepening, EvidenceSamples.For(FindingKind.RetryDeepening));
 
         Assert.Equal(
             "attempts to pass 1 -> 3 (+2) across 3 recent and 14 earlier runs, " +
@@ -417,7 +273,7 @@ public sealed class ShareableOutputTests
             deepening);
 
         var (exhausted, _) = EvidenceHeadline.For(
-            FindingKind.RetryExhausted, EvidenceFor(FindingKind.RetryExhausted));
+            FindingKind.RetryExhausted, EvidenceSamples.For(FindingKind.RetryExhausted));
 
         Assert.Equal(
             "gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent retrying",

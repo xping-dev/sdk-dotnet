@@ -1,0 +1,32 @@
+Xping | SampleApp.XUnit | 20 runs | 2026-09-05 09:00 -> 16:21 | main@eab9867
+16 tests | 10 healthy | 6 flagged
+
+```
+FINDING                                                       row 3 of 5
+------------------------------------------------------------------------
+
+3.  HIGH  broken fixture
+    UnprovisionedDatabase..ctor (3 tests)
+      FixtureTests.FirstTestNeedingTheDatabase
+        tests/SampleApp.XUnit/FixtureTests.cs:12
+      FixtureTests.SecondTestNeedingTheDatabase
+        tests/SampleApp.XUnit/FixtureTests.cs:19
+      FixtureTests.ThirdTestNeedingTheDatabase
+        tests/SampleApp.XUnit/FixtureTests.cs:26
+    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
+    runs
+    evidence high | all runs | f_7c905f05
+
+    failing member  UnprovisionedDatabase..ctor
+    where           fixture setup
+    tests blocked   3
+    failures        60
+    runs affected   20 of 20
+    worst run       3 tests
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 5 | all: xping report --all

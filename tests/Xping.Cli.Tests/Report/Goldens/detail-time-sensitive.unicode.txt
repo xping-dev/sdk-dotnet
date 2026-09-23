@@ -1,0 +1,30 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 411 healthy · 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   time sensitive
+    CheckoutTests.Completes
+    failed 90% in 18:00-24:00 local against 0% in the rest of the day,
+    gap 90 pts across 7 days
+    evidence moderate | -env | f_bedfad35 | .../CheckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    18:00-24:00 local    9 of 10 runs (90%)
+    the rest of the day  0 of 6 runs (0%)
+    gap                  90 pts
+    spread               failures on 7 days
+    significance         p 0.00175 two-sided, 2 splits compared
+    time zone            Europe/Berlin
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 · all: xping report --all

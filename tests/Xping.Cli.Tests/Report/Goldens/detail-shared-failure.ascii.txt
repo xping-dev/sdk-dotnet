@@ -1,0 +1,26 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 409 healthy | 3 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  MED   shared failure
+    CheckoutFixture.Setup (3 tests)
+      CheckoutTests.Completes
+      CheckoutTests.Refunds
+      CartTests.Totals
+    12 tests failed alike in 3 of 20 runs, worst run hit 12
+    evidence moderate | all runs | f_5aefe7b7
+
+    tests affected  12
+    failures        47
+    runs affected   3 of 20
+    worst run       12 tests
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 | all: xping report --all

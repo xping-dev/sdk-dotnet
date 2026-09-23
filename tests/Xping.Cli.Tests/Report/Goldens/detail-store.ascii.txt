@@ -1,0 +1,29 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-01 09:00 -> 09:19 | main@eab9867
+15 tests | 13 healthy | 2 flagged | 1 awaiting more runs
+* nothing to measure: concurrency 15 | time sensitive 15
+
+```
+FINDING                                                       row 1 of 2
+------------------------------------------------------------------------
+
+1.  HIGH  always failing
+    SampleTests.Checkout_RequiresProvisionedDatabase
+    failed 20 of 20 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+
+    test      MyApp.Tests.SampleTests.
+              Checkout_RequiresProvisionedDatabase
+    assembly  MyApp.Tests
+    source    SampleTests.cs:10
+
+    failed         20 of 20 executions (100%)
+    runs affected  20 of 20
+    failure mode   System.InvalidOperationException
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 2 | all: xping report --all

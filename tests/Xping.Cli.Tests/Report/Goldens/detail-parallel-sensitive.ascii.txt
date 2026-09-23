@@ -1,0 +1,29 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  MED   concurrency
+    CheckoutTests.Completes
+    failed 0% at concurrency 1 and 75% at 14, rising with concurrency
+    across 4 levels in 18 runs
+    evidence moderate | -env | f_329c8bef | .../CheckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    at concurrency 1   0 of 6 executions (0%) in 6 runs
+    at concurrency 14  3 of 4 executions (75%) in 4 runs
+    trend              rising with concurrency, tau 0.61
+    concurrency seen   1 to 14
+    significance       p 0.00405 two-sided, Z 2.87 over 18 runs
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 | all: xping report --all

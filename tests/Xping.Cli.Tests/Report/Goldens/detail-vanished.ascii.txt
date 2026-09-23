@@ -1,0 +1,27 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  MED   stopped running
+    CheckoutTests.Completes
+    ran in 12 of 17 earlier runs, absent from the last 3
+    evidence moderate | -partial | f_a2fd409e | .../CheckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    ran in        12 of 17 earlier runs (70.6%)
+    absent from   the last 3 runs
+    executions    40
+    significance  p 0.0491 one-sided
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 | all: xping report --all

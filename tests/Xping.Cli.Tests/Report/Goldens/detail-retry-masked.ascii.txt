@@ -1,0 +1,32 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  MED   masked by retry
+    CheckoutTests.Completes
+    passed on retry 4 times in 3 of 20 runs, up to attempt 3, 12.4s
+    spent retrying
+    evidence moderate | -env | f_9c77ce47 | .../CheckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    masked           4 of 20 executions (20%)
+    runs affected    3 of 20
+    deepest attempt  3
+    time retrying    12.4s
+    declared limit   2 (as the attribute declared it)
+    mechanism        RetryAttribute
+    declared reason  NetworkError
+    configured wait  750ms
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 | all: xping report --all
