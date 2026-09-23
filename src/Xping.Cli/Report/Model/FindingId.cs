@@ -18,7 +18,7 @@ namespace Xping.Cli.Report.Model;
 /// identifies the <em>claim</em>, not the measurement behind it: the same id can appear in two
 /// reports quoting different failure rates, because a rate that moved as runs accumulated is the
 /// same finding observed again, not a new one. That is what lets a consumer — a person comparing
-/// two reports, an agent, or a future <c>xping test &lt;id&gt;</c> — say "still the same finding"
+/// two reports, an agent, or <c>xping report --id &lt;id&gt;</c> — say "still the same finding"
 /// across runs rather than only across two renders of an unchanged store.
 /// </para>
 /// <para>

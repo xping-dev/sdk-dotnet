@@ -29,6 +29,11 @@ namespace Xping.Cli.Report.Contract;
 /// Positioned before the findings because that is where it renders: the reader ran the command
 /// because something just happened.
 /// </param>
+/// <param name="Selection">
+/// What <c>--id</c> resolved to; null unless one was given. Positioned before the findings, which it
+/// qualifies: under <c>--id</c> they hold the selected finding alone, or nothing when it is not
+/// reported.
+/// </param>
 /// <param name="Findings">The findings, most severe first, after any truncation.</param>
 /// <param name="Truncated">How much of the finding list is shown.</param>
 internal sealed record ReportEnvelope(
@@ -37,6 +42,7 @@ internal sealed record ReportEnvelope(
     ContextDto? Context,
     SummaryDto Summary,
     LatestRunDto? LatestRun,
+    SelectionDto? Selection,
     IReadOnlyList<FindingDto> Findings,
     TruncationDto Truncated)
 {
@@ -64,9 +70,12 @@ internal sealed record ReportEnvelope(
     /// them an <c>annotation</c> saying which row the first is. 1.20 is where the envelope gained
     /// <c>latestRun</c>: the newest session read against the sessions before it, which is the one
     /// question the evidence-gated findings cannot answer and the first thing a reader who just
-    /// watched a build go red wants answered.
+    /// watched a build go red wants answered. 1.21 is where the envelope gained <c>selection</c>,
+    /// what <c>xping report --id</c> resolved to; where <c>drillDown</c> became that command for the
+    /// finding's own id; and where a <c>Flaky</c> finding's <c>metrics</c> gained one
+    /// <c>failure mode N</c> pair per distinct signature, naming the ways it failed.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.20";
+    public const string CurrentSchemaVersion = "1.21";
 }
 
 /// <summary>
@@ -391,6 +400,42 @@ internal sealed record SubjectDto(
     string? GroupId,
     int? MemberCount,
     IReadOnlyList<SubjectDto>? Members);
+
+/// <summary>
+/// What <c>xping report --id</c> resolved to.
+/// </summary>
+/// <remarks>
+/// Present whether or not the finding is reported, so that a consumer keyed on
+/// <see cref="Reported"/> never has to read standard error to learn the answer.
+/// </remarks>
+/// <param name="Id">The id as requested, normalised to lower case.</param>
+/// <param name="Reported">Whether a finding with this id is in the report.</param>
+/// <param name="Kind">
+/// The kind the id names: the finding's own when reported; the kind the reverse lookup established
+/// when not; null when the lookup found nothing.
+/// </param>
+/// <param name="Row">
+/// The finding's position, from 1, in the full ordered list — the number the full report prints
+/// for it. Null when not reported.
+/// </param>
+/// <param name="SameSubject">
+/// Every other finding about the subject this id names, in envelope order. When reported, its
+/// siblings; when not, where the claim went. Empty when there are none or the subject is unknown.
+/// </param>
+internal sealed record SelectionDto(
+    string Id,
+    bool Reported,
+    string? Kind,
+    int? Row,
+    IReadOnlyList<SameSubjectDto> SameSubject);
+
+/// <summary>
+/// Another finding about the subject a selection names.
+/// </summary>
+/// <param name="Id">The finding's id.</param>
+/// <param name="Kind">Its kind, spelled as <c>findings[].kind</c>.</param>
+/// <param name="Row">Its position in the full ordered list, from 1.</param>
+internal sealed record SameSubjectDto(string Id, string Kind, int Row);
 
 /// <summary>
 /// How much of the finding list is shown.

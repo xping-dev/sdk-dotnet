@@ -458,8 +458,6 @@ internal sealed class TimeSensitiveProvider : IFindingProvider
             // the threshold, so it cannot be zero.
             LastOccurrenceIn: TestIndex.NewestSession(failures.Select(m => m.Reference)),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.TimeSensitive, test),
-
             // The runs that could be placed on a clock, which is what the split divided and what
             // the two published arm counts add up to. Every other run of this test was either
             // discounted as environmental or came from a session that recorded no UTC offset, and a

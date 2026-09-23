@@ -784,7 +784,7 @@ internal static class ReportFixtures
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,
-            "xping report --kind Flaky --format json");
+            "xping report --id f_2a91 --assembly MyApp.Tests");
 
     /// <summary>
     /// A finding about a cluster: no name of its own, a cause, and members beneath it.
@@ -992,6 +992,7 @@ internal static class ReportFixtures
 
             // No latest run yet: the fixtures pin the findings block, and a section that is absent
             // from the envelope is absent from the page. The latest-run fixtures carry their own.
+            null,
             null,
             findings,
             new TruncationDto(shown, total, "xping report --all"));

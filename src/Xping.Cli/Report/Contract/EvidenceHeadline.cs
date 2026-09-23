@@ -207,14 +207,27 @@ internal static class EvidenceHeadline
             ? "1 failure mode"
             : $"{e.DistinctSignatureCount} failure modes";
 
+        List<MetricDto> metrics =
+        [
+            new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
+            new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
+            new("failure modes", e.DistinctSignatureCount.ToString(CultureInfo.InvariantCulture))
+        ];
+
+        // Which ones, most frequent first: the thing a reader of "3 failure modes" wants next. The
+        // type only — messages and frames are exemplar payload, not a labelled pair — and the same
+        // fallback AlwaysFailing uses where the adapter recorded none.
+        for (int i = 0; i < e.DistinctSignatures.Count; i++)
+        {
+            metrics.Add(new MetricDto(
+                $"failure mode {(i + 1).ToString(CultureInfo.InvariantCulture)}",
+                e.DistinctSignatures[i].ExceptionType ?? "not recorded by the adapter"));
+        }
+
         return (
             $"failed {e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)}) " +
             $"in {e.SessionsWithFailures} of {Runs(e.SessionsConsidered)}, {modes}",
-            [
-                new("failed", $"{e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)})"),
-                new("runs affected", $"{e.SessionsWithFailures} of {e.SessionsConsidered}"),
-                new("failure modes", e.DistinctSignatureCount.ToString(CultureInfo.InvariantCulture))
-            ]);
+            metrics);
     }
 
     private static (string, IReadOnlyList<MetricDto>) AlwaysFailing(AlwaysFailingEvidence e)

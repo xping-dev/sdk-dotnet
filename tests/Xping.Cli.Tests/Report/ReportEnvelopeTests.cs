@@ -326,7 +326,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.20", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.21", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -354,6 +354,13 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         Assert.True(root.TryGetProperty("context", out _));
         Assert.True(root.TryGetProperty("findings", out _));
+
+        // Written as null rather than left out, so a consumer can tell "no --id" from a build that
+        // stopped emitting the field; and before the findings it qualifies.
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("selection").ValueKind);
+        Assert.Equal(
+            ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "findings", "truncated"],
+            root.EnumerateObject().Select(property => property.Name));
 
         JsonElement latestRun = root.GetProperty("latestRun");
         foreach (string key in (string[])
@@ -903,7 +910,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.20", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.21", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

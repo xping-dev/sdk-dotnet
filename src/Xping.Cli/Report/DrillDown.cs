@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report.Model;
-
 namespace Xping.Cli.Report;
 
 /// <summary>
@@ -17,42 +15,33 @@ namespace Xping.Cli.Report;
 /// test is unreliable but not how to look closer forces the reader to guess at a command.
 /// </para>
 /// <para>
-/// Every command produced here is one the tool accepts today. A per-test <c>xping test</c> verb is
-/// planned and would be a better target, but emitting it before it exists would put a command that
-/// fails into the field the reader is most likely to run.
+/// Every command produced here is one the tool accepts today. The target is
+/// <c>xping report --id</c>, the detail view of one finding; nothing here names a verb that does
+/// not exist, because this is the field a reader is most likely to run.
+/// </para>
+/// <para>
+/// No command here carries <c>--format</c>. A caller that wants the envelope adds the flag, having
+/// just used it; a person who copies a command out of a pasted JSON envelope wants the view they
+/// would read, and one string then serves the envelope and the rendered report alike.
 /// </para>
 /// </remarks>
 internal static class DrillDown
 {
     /// <summary>
-    /// Builds the invocation that expands a finding about one test.
+    /// Builds the invocation that shows one finding in detail.
     /// </summary>
-    /// <param name="kind">The kind of finding being expanded.</param>
-    /// <param name="test">The test the finding is about.</param>
-    /// <returns>The command.</returns>
-    public static string ForTest(FindingKind kind, TestReference test)
-    {
-        string command = $"xping report --kind {kind} --format json";
-
-        return string.IsNullOrEmpty(test.Assembly)
-            ? command
-            : $"{command} --assembly {Quote(test.Assembly)}";
-    }
-
-    /// <summary>
-    /// Builds the invocation that expands a finding about a cluster of tests.
-    /// </summary>
-    /// <param name="kind">The kind of finding being expanded.</param>
-    /// <param name="assembly">The assembly the cluster's members belong to.</param>
+    /// <param name="id">The finding's id.</param>
+    /// <param name="assembly">
+    /// The assembly its subject belongs to, or <see langword="null"/> when none was recorded.
+    /// </param>
     /// <returns>The command.</returns>
     /// <remarks>
-    /// Scoped to the kind rather than to the cluster: there is no verb that takes a signature today,
-    /// and a drill-down that fails is worse than a coarse one, because it is the field a reader is
-    /// most likely to run.
+    /// Scoped to the assembly because an id is a fact about a window, and the window a bare
+    /// <c>xping report</c> picks is the assembly that ran most recently — not necessarily this one.
     /// </remarks>
-    public static string ForGroup(FindingKind kind, string? assembly)
+    public static string ForFinding(string id, string? assembly)
     {
-        string command = $"xping report --kind {kind} --format json";
+        string command = $"xping report --id {id}";
 
         return string.IsNullOrEmpty(assembly)
             ? command
@@ -64,10 +53,8 @@ internal static class DrillDown
     /// </summary>
     /// <returns>The command.</returns>
     /// <remarks>
-    /// Deliberately carries no <c>--format</c>. This is the "show me the other eleven" affordance,
-    /// and a reader who wants eleven more of what they are already looking at should get exactly
-    /// that; sending them to JSON would answer a question they did not ask. A caller that wants the
-    /// envelope adds the flag, having just used it.
+    /// This is the "show me the other eleven" affordance, and a reader who wants eleven more of what
+    /// they are already looking at should get exactly that.
     /// </remarks>
     public static string ForFullReport() => "xping report --all";
 

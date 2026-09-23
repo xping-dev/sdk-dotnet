@@ -410,6 +410,43 @@ public sealed class FailureModeProviderTests
         Assert.Equal(1, evidence.DistinctSignatureCount);
     }
 
+    /// <summary>
+    /// A flaky finding's metrics name each way it failed, most frequent first.
+    /// </summary>
+    /// <remarks>
+    /// "3 failure modes" is a count, and the question it raises is which three. A failure the
+    /// adapter recorded nothing about is still a mode, named for what it is rather than invented.
+    /// </remarks>
+    [Fact]
+    public void FlakyMetricsNameEachFailureMode()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(ordinal, [ordinal switch
+            {
+                < 3 => Failure("Subject"),
+                < 5 => TestSessionFactory.Execution(
+                    "Subject",
+                    TestOutcome.Failed,
+                    exceptionType: "System.TimeoutException",
+                    errorMessage: "The operation timed out"),
+                5 => TestSessionFactory.Execution("Subject", TestOutcome.Failed),
+                _ => Passing("Subject"),
+            }]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Equal(
+            [
+                ("failure modes", "3"),
+                ("failure mode 1", "System.InvalidOperationException"),
+                ("failure mode 2", "System.TimeoutException"),
+                ("failure mode 3", "not recorded by the adapter")
+            ],
+            metrics.Skip(2).Select(m => (m.Label, m.Value)));
+    }
+
     [Fact]
     public void ATestThatFailsEveryRunTheSameWayIsAlwaysFailing()
     {
@@ -1545,6 +1582,70 @@ public sealed class FailureModeProviderTests
         // on screen to explain it.
         Assert.Equal(1, envelope.Summary.EnvironmentalSessions);
     }
+
+    /// <summary>
+    /// Under <c>--id</c> the envelope is the full report's with one finding in it.
+    /// </summary>
+    /// <remarks>
+    /// Everything that describes the run is built exactly as the full report builds it: a summary
+    /// that said one finding because one was selected would contradict the report printed a moment
+    /// earlier from the same store.
+    /// </remarks>
+    [Fact]
+    public void ASelectedEnvelopeIsTheFullOneWithOneFinding()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope full = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
+
+        Assert.True(full.Findings.Count >= 2);
+        FindingDto second = full.Findings[1];
+
+        FindingSelection selection = FindingSelector.Select(
+            FindingOrder.WithSiblingsAdjacent(result.Findings), second.Id.ToUpperInvariant());
+
+        ReportEnvelope selected = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
+            selection);
+
+        Assert.Equal(Json(second), Json(Assert.Single(selected.Findings)));
+        Assert.Equal(Json(full.Summary), Json(selected.Summary));
+        Assert.Equal(new TruncationDto(1, full.Findings.Count, "xping report --all"), selected.Truncated);
+
+        SelectionDto dto = Assert.IsType<SelectionDto>(selected.Selection);
+        Assert.Equal(second.Id, dto.Id);
+        Assert.True(dto.Reported);
+        Assert.Equal(second.Kind, dto.Kind);
+        Assert.Equal(2, dto.Row);
+    }
+
+    [Fact]
+    public void AnUnreportedSelectionShowsNoFinding()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        FindingSelection selection = FindingSelector.Select(
+            FindingOrder.WithSiblingsAdjacent(result.Findings), FindingId.Compute(FindingKind.Flaky, "fp-Gone"));
+
+        ReportEnvelope selected = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
+            selection);
+
+        Assert.Empty(selected.Findings);
+        Assert.Equal(0, selected.Truncated.Shown);
+        Assert.Equal(result.Findings.Count, selected.Summary.Findings);
+
+        SelectionDto dto = Assert.IsType<SelectionDto>(selected.Selection);
+        Assert.False(dto.Reported);
+        Assert.Null(dto.Kind);
+        Assert.Null(dto.Row);
+        Assert.Empty(dto.SameSubject);
+    }
+
+    private static string Json<T>(T value) => JsonSerializer.Serialize(value, ReportJsonOptions.Default);
 
     private static AnalysisResult Run(AnalysisContext context) =>
         new FindingCoordinator([new FailureModeProvider()])

@@ -531,16 +531,6 @@ public sealed class RetryProviderTests
         Assert.Null(candidate.SeverityCeiling);
     }
 
-    [Fact]
-    public void TheDrillDownNamesTheKindAndAssembly()
-    {
-        FindingCandidate candidate = Assert.Single(Analyze(Context(sessions: 6, maskedSessions: 3)));
-
-        Assert.Equal(
-            $"xping report --kind RetryMasked --format json --assembly {TestSessionFactory.DefaultAssembly}",
-            candidate.DrillDownCommand);
-    }
-
     // ---------------------------------------------------------------------------------------
     // Thresholds, at and either side of the boundary
     // ---------------------------------------------------------------------------------------
@@ -1093,16 +1083,6 @@ public sealed class RetryProviderTests
         Assert.Null(candidate.SeverityCeiling);
     }
 
-    [Fact]
-    public void TheExhaustionDrillDownNamesTheKindAndAssembly()
-    {
-        FindingCandidate candidate = Assert.Single(Analyze(Retrying(sessions: 8, exhausted: 4)));
-
-        Assert.Equal(
-            $"xping report --kind RetryExhausted --format json --assembly {TestSessionFactory.DefaultAssembly}",
-            candidate.DrillDownCommand);
-    }
-
     // ---------------------------------------------------------------------------------------
     // Edge cases
     // ---------------------------------------------------------------------------------------
@@ -1332,17 +1312,6 @@ public sealed class RetryProviderTests
             Analyze(Depths(sessions: 12, baselineAttempts: 1, currentAttempts: 3)));
 
         Assert.Equal(Severity.Medium, candidate.SeverityCeiling);
-    }
-
-    [Fact]
-    public void TheDeepeningDrillDownNamesTheKindAndAssembly()
-    {
-        FindingCandidate candidate = Assert.Single(
-            Analyze(Depths(sessions: 12, baselineAttempts: 1, currentAttempts: 3)));
-
-        Assert.Equal(
-            $"xping report --kind RetryDeepening --format json --assembly {TestSessionFactory.DefaultAssembly}",
-            candidate.DrillDownCommand);
     }
 
     // ---------------------------------------------------------------------------------------

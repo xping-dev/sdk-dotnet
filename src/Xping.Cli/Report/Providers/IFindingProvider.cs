@@ -34,7 +34,6 @@ namespace Xping.Cli.Report.Providers;
 /// <see cref="Indexes.TestIndex.Recency(DateTime, DateTime, int)"/> — and a provider handing over
 /// the two separately could hand over two that disagree.
 /// </param>
-/// <param name="DrillDownCommand">The exact CLI invocation that expands this finding.</param>
 /// <param name="EvidenceSessions">
 /// Independent runs this claim was computed from — the denominator the coordinator bands
 /// <see cref="Model.EvidenceLevel"/> on.
@@ -92,7 +91,6 @@ internal sealed record FindingCandidate(
     FindingEvidence Evidence,
     double Unreliability,
     TestSession LastOccurrenceIn,
-    string DrillDownCommand,
     int EvidenceSessions,
     double? PValue = null,
     Severity? SeverityCeiling = null,

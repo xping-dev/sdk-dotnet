@@ -188,8 +188,10 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
 
             double impact = ImpactScorer.Score(FindingCandidateInputs.From(candidate), context.Tests);
 
+            string id = FindingId.Compute(candidate.Kind, candidate.Subject.SortKey);
+
             findings.Add(new Finding(
-                FindingId.Compute(candidate.Kind, candidate.Subject.SortKey),
+                id,
                 candidate.Kind,
                 candidate.Cap(ImpactScorer.Band(impact)),
 
@@ -200,7 +202,10 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 candidate.EvidenceSessions,
                 candidate.Subject,
                 candidate.Evidence,
-                candidate.DrillDownCommand,
+
+                // Assigned where the id is, because the command names it. The first test's assembly
+                // for a cluster too: its members come from one window, which is one assembly.
+                DrillDown.ForFinding(id, candidate.Subject.Tests is [var first, ..] ? first.Assembly : null),
                 impact));
         }
 

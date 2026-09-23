@@ -487,7 +487,6 @@ internal sealed class FailureModeProvider : IFindingProvider
 
         FailureSite? site = AgreedSite(cluster);
         FindingKind kind = site == null ? FindingKind.SharedFailure : FindingKind.BrokenFixture;
-        string? assembly = references.Count > 0 ? references[0].Assembly : null;
 
         FindingEvidence evidence = site == null
             ? BuildSharedEvidence(context, cluster, members)
@@ -504,8 +503,6 @@ internal sealed class FailureModeProvider : IFindingProvider
             // The same run the evidence above dates itself by. `Failures` is ordered newest first,
             // so the head is the last time this cluster was seen.
             LastOccurrenceIn: cluster.Failures[0].Session,
-
-            DrillDown.ForGroup(kind, assembly),
 
             // The two kinds that set nothing aside — an environmental run is a shared cause seen
             // from underneath, so discounting one here would silence the finding that explains it.
@@ -764,7 +761,6 @@ internal sealed class FailureModeProvider : IFindingProvider
                 WilsonInterval.LowerBound(failures.Count, considered.Count),
 
                 LastOccurrenceIn: lastFailureIn,
-                DrillDown.ForTest(FindingKind.AlwaysFailing, test),
                 EvidenceSessions: occasions.Count));
         }
 
@@ -807,7 +803,6 @@ internal sealed class FailureModeProvider : IFindingProvider
             FlakyUnreliability(failureRate, failures.Count, considered.Count),
 
             LastOccurrenceIn: lastFailureIn,
-            DrillDown.ForTest(FindingKind.Flaky, test),
             EvidenceSessions: occasions.Count));
     }
 
@@ -894,7 +889,6 @@ internal sealed class FailureModeProvider : IFindingProvider
             WilsonInterval.LowerBound(timeouts.Count, considered.Count),
 
             LastOccurrenceIn: TestIndex.NewestSession(timeouts),
-            DrillDown.ForTest(FindingKind.TimingOut, test),
             EvidenceSessions: occasions);
     }
 

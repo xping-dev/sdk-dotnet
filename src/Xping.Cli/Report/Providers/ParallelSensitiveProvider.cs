@@ -397,8 +397,6 @@ internal sealed class ParallelSensitiveProvider : IFindingProvider
             // would hold it there on the strength of a counterexample.
             LastOccurrenceIn: TestIndex.NewestSession(driving.Select(m => m.Reference)),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.ParallelSensitive, test),
-
             // Sessions rather than the executions the trend was measured on, and the same figure
             // the trend publishes. Concurrency genuinely varies between attempts within a run, so
             // the executions are real readings — but they are not separate occasions, and evidence

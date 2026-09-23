@@ -471,7 +471,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.20",
+  "schemaVersion": "1.21",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -513,6 +513,7 @@ are not each other and `tests` is what they add up to:
     "failuresTotal": 1,
     "overflowCommand": null
   },
+  "selection": null,
   "findings": [
     {
       "id": "f_2a91c0de",
@@ -529,10 +530,13 @@ are not each other and `tests` is what they add up to:
       "metrics": [
         { "label": "failed", "value": "7 of 20 executions (35%)" },
         { "label": "runs affected", "value": "5 of 20" },
-        { "label": "failure modes", "value": "3" }
+        { "label": "failure modes", "value": "3" },
+        { "label": "failure mode 1", "value": "System.InvalidOperationException" },
+        { "label": "failure mode 2", "value": "System.TimeoutException" },
+        { "label": "failure mode 3", "value": "not recorded by the adapter" }
       ],
       "evidence": { "…": "…" },
-      "drillDown": "xping report --kind Flaky --format json"
+      "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests"
     }
   ],
   "truncated": { "shown": 3, "total": 3, "command": "xping report --all" }
