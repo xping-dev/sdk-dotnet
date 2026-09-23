@@ -123,6 +123,25 @@ internal static class ReportVocabulary
     ];
 
     /// <summary>
+    /// Gets the words a latest-run status is printed as.
+    /// </summary>
+    /// <param name="status">The status, as the envelope spells it.</param>
+    /// <returns>The status, in lower-case prose.</returns>
+    /// <remarks>
+    /// Words and not markers. A severity marker is fixed-width and upper-case because it is a
+    /// grade the eye scans down a column for; these are observations of one session and are set
+    /// in the same register as the contrast sentence beside them, so that nothing about the row
+    /// borrows the shape of a judgement.
+    /// </remarks>
+    public static string StatusWordsFor(string status) => status switch
+    {
+        "new" => "new",
+        "newTest" => "new test",
+        "seenBefore" => "seen before",
+        _ => status
+    };
+
+    /// <summary>
     /// Gets the fixed-width marker for severity.
     /// </summary>
     /// <param name="severity">The severity, as the envelope spells it.</param>

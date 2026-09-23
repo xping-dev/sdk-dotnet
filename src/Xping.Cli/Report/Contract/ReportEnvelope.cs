@@ -24,6 +24,11 @@ namespace Xping.Cli.Report.Contract;
 /// <param name="Window">Which sessions were analysed, and how they were chosen.</param>
 /// <param name="Context">Where those sessions came from; null when unknown, never invented.</param>
 /// <param name="Summary">Counts describing the run as a whole.</param>
+/// <param name="LatestRun">
+/// The newest session read against the ones before it; null only when the window holds no session.
+/// Positioned before the findings because that is where it renders: the reader ran the command
+/// because something just happened.
+/// </param>
 /// <param name="Findings">The findings, most severe first, after any truncation.</param>
 /// <param name="Truncated">How much of the finding list is shown.</param>
 internal sealed record ReportEnvelope(
@@ -31,6 +36,7 @@ internal sealed record ReportEnvelope(
     WindowDto Window,
     ContextDto? Context,
     SummaryDto Summary,
+    LatestRunDto? LatestRun,
     IReadOnlyList<FindingDto> Findings,
     TruncationDto Truncated)
 {
@@ -55,9 +61,12 @@ internal sealed record ReportEnvelope(
     /// name a test the way its author would; and where the summary gained <c>flagged</c>, the count
     /// <c>healthy</c> had been the complement of without ever saying so. 1.19 also reorders
     /// <c>findings</c> so that two findings about one test are adjacent, and gives the second of
-    /// them an <c>annotation</c> saying which row the first is.
+    /// them an <c>annotation</c> saying which row the first is. 1.20 is where the envelope gained
+    /// <c>latestRun</c>: the newest session read against the sessions before it, which is the one
+    /// question the evidence-gated findings cannot answer and the first thing a reader who just
+    /// watched a build go red wants answered.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.19";
+    public const string CurrentSchemaVersion = "1.20";
 }
 
 /// <summary>
@@ -91,6 +100,89 @@ internal sealed record WindowDto(
 /// <param name="Branch">Branch it ran on.</param>
 /// <param name="Assembly">Test assembly the report covers.</param>
 internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly);
+
+/// <summary>
+/// The newest session, read against the sessions before it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Not a finding and not graded like one. A row here is one session's outcome beside a count of
+/// prior ones: no rate, no threshold, no correction for how many tests were looked at, and
+/// therefore no severity and no population marker. It sits beside the findings so the report can
+/// say what just broke as well as what is chronically unreliable, without lowering the gates that
+/// keep the second claim honest.
+/// </para>
+/// <para>
+/// Always present when the window holds a session, so that a consumer can tell <i>nothing
+/// failed</i> from <i>not itemised</i>: <see cref="Suppressed"/> says the window held one session
+/// and had no history to contrast, <see cref="IsLikelyEnvironmental"/> says the session failed too
+/// widely to list test by test, and <see cref="FailuresTotal"/> against <see cref="FailuresShown"/>
+/// says how many rows the cap withheld.
+/// </para>
+/// </remarks>
+/// <param name="SessionId">The newest analysed session.</param>
+/// <param name="StartedAt">When it started. Rendered, so a stale store is visible.</param>
+/// <param name="Sha">Commit it ran at, when one was recorded. Never invented.</param>
+/// <param name="IsLikelyEnvironmental">Whether the session itself is suspect.</param>
+/// <param name="Suppressed">True when the window holds this session alone.</param>
+/// <param name="TestsExecuted">Tests that recorded a verdict in this session.</param>
+/// <param name="TestsFailed">Tests whose final outcome was a failure.</param>
+/// <param name="NewFailures">
+/// Rows that are <c>new</c> or <c>newTest</c>, counted before the cap — what the heading says and
+/// what a one-line summary reads. Not <paramref name="FailuresTotal"/>: a test that had failed
+/// before is listed, but it is not news.
+/// </param>
+/// <param name="ExplainedByFindings">Failing tests that a finding already accounts for.</param>
+/// <param name="ExplainedByFindingIds">Those findings' ids, in envelope order.</param>
+/// <param name="Failures">The rows, ordered for reading, after the cap.</param>
+/// <param name="FailuresShown">Rows in <paramref name="Failures"/>.</param>
+/// <param name="FailuresTotal">Rows before the cap.</param>
+/// <param name="OverflowCommand">The invocation that shows all of them, when capped.</param>
+internal sealed record LatestRunDto(
+    string SessionId,
+    DateTime StartedAt,
+    string? Sha,
+    bool IsLikelyEnvironmental,
+    bool Suppressed,
+    int TestsExecuted,
+    int TestsFailed,
+    int NewFailures,
+    int ExplainedByFindings,
+    IReadOnlyList<string> ExplainedByFindingIds,
+    IReadOnlyList<LatestRunFailureDto> Failures,
+    int FailuresShown,
+    int FailuresTotal,
+    string? OverflowCommand);
+
+/// <summary>
+/// One test that ended the newest session red and carries no finding.
+/// </summary>
+/// <param name="Status"><c>new</c>, <c>newTest</c> or <c>seenBefore</c>.</param>
+/// <param name="Subject">
+/// The test. Always a single-test subject with its <c>shortName</c> resolved and no cause: a row
+/// is one test's outcome in one session, and there is no group it could be about.
+/// </param>
+/// <param name="Contrast">
+/// The history beside the outcome, as one already-resolved sentence. This is the row's whole
+/// value — the outcome alone is what the test runner printed — and it is composed here and
+/// nowhere else, so that a renderer never phrases it and a stronger statement of the same history
+/// can replace it without a renderer changing.
+/// </param>
+/// <param name="FailureSummary">
+/// What went wrong, in the fewest words that identify it: the exception type with its namespace
+/// stripped, or null when the adapter recorded none. The findings' headline keeps the namespace
+/// because there the type is a failure <i>mode</i> a reader groups on; here it is a label beside a
+/// location, and the namespace is the part that pushes the location off the line.
+/// </param>
+/// <param name="PriorSessions">Sessions before this one in which the test recorded a verdict.</param>
+/// <param name="PriorFailures">Of those, how many it failed in.</param>
+internal sealed record LatestRunFailureDto(
+    string Status,
+    SubjectDto Subject,
+    string Contrast,
+    string? FailureSummary,
+    int PriorSessions,
+    int PriorFailures);
 
 /// <summary>
 /// Counts describing the run as a whole.

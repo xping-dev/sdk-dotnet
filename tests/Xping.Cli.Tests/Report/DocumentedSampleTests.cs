@@ -49,7 +49,7 @@ public sealed class DocumentedSampleTests
     /// in four backticks so that the report's own three-backtick fence survives inside it.
     /// </remarks>
     private static readonly Regex Marker = new(
-        @"<!-- xping:sample (?<fixture>[a-z0-9-]+)(?: (?<extent>rows|summary|trailer))? -->" +
+        @"<!-- xping:sample (?<fixture>[a-z0-9-]+)(?: (?<extent>rows|summary|trailer|latest-run))? -->" +
         @"\r?\n(?<fence>`{3,})[a-z]*\r?\n(?<body>.*?)\r?\n\k<fence>",
         RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
@@ -123,8 +123,8 @@ public sealed class DocumentedSampleTests
     /// <param name="fixture">The fixture key.</param>
     /// <param name="extent">
     /// <c>rows</c> where the page shows finding rows, <c>trailer</c> where it shows a single
-    /// finding's last line, <c>summary</c> where it shows the one-line report, and empty where it
-    /// shows the whole thing.
+    /// finding's last line, <c>summary</c> where it shows the one-line report, <c>latest-run</c>
+    /// where it shows that section alone, and empty where it shows the whole thing.
     /// </param>
     /// <returns>The block, without a trailing newline.</returns>
     private static string Sample(string fixture, string extent)
@@ -143,6 +143,9 @@ public sealed class DocumentedSampleTests
         }
 
         string report = Render(envelope, Drawn(ReportGlyphs.Unicode, color: false));
+
+        if (extent == "latest-run")
+            return Normalise(string.Join("\n", LatestRunSection(report)));
 
         return Normalise(
             extent == "rows" ? string.Join("\n", Rows(report)).TrimEnd('\n') : report.TrimEnd('\n'));

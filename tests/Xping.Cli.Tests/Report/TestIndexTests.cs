@@ -54,6 +54,49 @@ public sealed class TestIndexTests
     }
 
     [Fact]
+    public void VerdictRunsLeaveOutTheSessionsInWhichTheTestWasSkipped()
+    {
+        TestIndex index = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution(Subject, TestOutcome.Skipped)]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution(Subject)]),
+            TestSessionFactory.Session(2, [TestSessionFactory.Execution(Subject, TestOutcome.Inconclusive)]),
+            TestSessionFactory.Session(3, [TestSessionFactory.Execution(Subject, TestOutcome.NotExecuted)]),
+            TestSessionFactory.Session(4, [TestSessionFactory.Execution(Subject, TestOutcome.Failed, errorMessage: "boom")]))
+            .Tests;
+
+        // Every session is an appearance; two of them are verdicts.
+        Assert.Equal(5, index.RunsOf(SubjectFingerprint).Count);
+        Assert.Equal(5, index.SessionsRunIn(SubjectFingerprint));
+        Assert.Equal([0, 3], index.VerdictRunsOf(SubjectFingerprint).Select(r => r.SessionIndex));
+    }
+
+    [Fact]
+    public void AVerdictRunIsJudgedOnItsDecidingAttempt()
+    {
+        // Failed, then skipped on retry: the session did not end red on this test, and a view that
+        // reported the earlier failure would disagree with SessionOutcomes about the session.
+        TestIndex index = TestSessionFactory.Context(
+            TestSessionFactory.Session(
+                0,
+                [
+                    TestSessionFactory.Execution(Subject, TestOutcome.Failed, attempt: 1, maxRetries: 1, errorMessage: "boom"),
+                    TestSessionFactory.Execution(Subject, TestOutcome.Skipped, attempt: 2, maxRetries: 1)
+                ]))
+            .Tests;
+
+        Assert.Single(index.RunsOf(SubjectFingerprint));
+        Assert.Empty(index.VerdictRunsOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void VerdictRunsOfAnUnknownTestIsEmpty()
+    {
+        TestIndex index = TestSessionFactory.Context(TestSessionFactory.Session(0, "Stable")).Tests;
+
+        Assert.Empty(index.VerdictRunsOf("fp-Nobody"));
+    }
+
+    [Fact]
     public void RunFrequencyCountsSessionsRatherThanAttempts()
     {
         // The bug this pins: three attempts in half the sessions is thirty executions over twenty

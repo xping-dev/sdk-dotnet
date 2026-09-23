@@ -4,6 +4,8 @@
  */
 
 using System.Globalization;
+using Xping.Cli.Report;
+using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
@@ -53,7 +55,14 @@ internal static class ReportFixtures
         "docs-source-location",
         "docs-time-sensitive",
         "docs-retry-deepening",
-        "docs-retry-exhausted"
+        "docs-retry-exhausted",
+        "latest-run",
+        "latest-run-known-only",
+        "latest-run-suppressed",
+        "latest-run-environmental",
+        "latest-run-overflow",
+        "latest-run-store",
+        "latest-run-only"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -117,6 +126,42 @@ internal static class ReportFixtures
                 "gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent retrying",
                 "tests/MyApp.Tests/CheckoutTests.cs", 27) with
             { Id = "f_9c14ab63", EvidenceLevel = "high" }),
+
+        // The latest-run spec's §3.1: a regression, a new test, and the failures the findings
+        // already explain, above the format spec's §3 block.
+        "latest-run" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun(
+                [Regression(), FreshFailure()], ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5)
+        },
+
+        // Its §3.3: every failure in the run is one a finding accounts for.
+        "latest-run-known-only" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([], ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5)
+        },
+
+        // A window of one session: the section is absent, and this golden is byte-identical to
+        // spec-section-3's. Pinned so that absence stays a rule and not an accident.
+        "latest-run-suppressed" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([Regression()]) with { Suppressed = true }
+        },
+        "latest-run-environmental" => SpecSection3() with
+        {
+            LatestRun = SpecLatestRun([]) with
+            {
+                IsLikelyEnvironmental = true,
+                TestsExecuted = 210,
+                TestsFailed = 187
+            }
+        },
+        "latest-run-overflow" => LatestRunOverflow(),
+        "latest-run-store" => LatestRunFromStore(),
+
+        // A regression on a window too short for any finding: the section is the whole report, and
+        // the clean bill that would otherwise close it is withheld.
+        "latest-run-only" => Envelope() with { LatestRun = SpecLatestRun([Regression()]) },
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
 
@@ -242,6 +287,169 @@ internal static class ReportFixtures
             },
             Context = new ContextDto("eab9867a1c40", "main", "SampleApp.XUnit"),
             Summary = envelope.Summary with { Tests = 16, Flagged = 6, Healthy = 10 }
+        };
+    }
+
+    /// <summary>
+    /// The row the latest-run spec's §3.1 opens with: a test that had always passed.
+    /// </summary>
+    private static LatestRunFailureDto Regression() =>
+        LatestRunFailure(
+            "new",
+            "Checkout_AppliesDiscount",
+            "passed the previous 19 runs, failed just now",
+            priorSessions: 19) with
+        {
+            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_AppliesDiscount", "CartTests.cs", 112)
+        };
+
+    /// <summary>
+    /// The row the latest-run spec's §3.1 closes with: a test the window had never seen.
+    /// </summary>
+    private static LatestRunFailureDto FreshFailure() =>
+        LatestRunFailure(
+            "newTest",
+            "Checkout_RejectsExpiredCoupon",
+            "first seen this run, failed",
+            failureSummary: "EqualException") with
+        {
+            Subject = SampleSubject("SampleApp.XUnit.CartTests.Checkout_RejectsExpiredCoupon", "CartTests.cs", 140)
+        };
+
+    /// <summary>
+    /// The section as the whole pipeline produces it from sessions, not as a hand-built envelope.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other latest-run fixtures spell the envelope and pin the renderer. This one spells the
+    /// sessions and pins everything downstream of them — the index, the analyzer, the coordinator,
+    /// the builder and the renderer — so that a contrast sentence or a status the builder phrases
+    /// differently from the envelope fixtures surfaces here as a golden diff.
+    /// </para>
+    /// <para>
+    /// Twenty runs of a small suite. One test passed nineteen times and fails in the newest run;
+    /// one appears in the newest run alone and fails; one has failed in every run and is a finding,
+    /// which the section defers to. The rest are stable, and there are enough of them that the
+    /// newest run stays well under the environmental thresholds.
+    /// </para>
+    /// </remarks>
+    private static ReportEnvelope LatestRunFromStore()
+    {
+        const int runs = 20;
+        var sessions = new List<Sdk.Core.Models.TestSession>();
+
+        for (int ordinal = 0; ordinal < runs; ordinal++)
+        {
+            bool newest = ordinal == runs - 1;
+            List<Sdk.Core.Models.Executions.TestExecution> executions =
+            [
+                TestSessionFactory.Execution(
+                    "Checkout_AppliesDiscount",
+                    newest ? Sdk.Core.Models.Executions.TestOutcome.Failed : Sdk.Core.Models.Executions.TestOutcome.Passed,
+                    exceptionType: newest ? "System.NullReferenceException" : null,
+                    errorMessage: newest ? "Object reference not set to an instance of an object." : null),
+                TestSessionFactory.Execution(
+                    "Checkout_RequiresProvisionedDatabase",
+                    Sdk.Core.Models.Executions.TestOutcome.Failed,
+                    exceptionType: "System.InvalidOperationException",
+                    errorMessage: "The database has not been provisioned."),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}"))
+            ];
+
+            if (newest)
+            {
+                executions.Add(TestSessionFactory.Execution(
+                    "Checkout_RejectsExpiredCoupon",
+                    Sdk.Core.Models.Executions.TestOutcome.Failed,
+                    exceptionType: "Xunit.Sdk.EqualException",
+                    errorMessage: "Assert.Equal() Failure: Values differ"));
+            }
+
+            sessions.Add(TestSessionFactory.Session(ordinal, executions, sha: "eab9867a1c40", branch: "main"));
+        }
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+
+        var coordinator = new FindingCoordinator(
+        [
+            new FailureModeProvider(),
+            new RetryProvider(),
+            new DurationProvider(),
+            new VanishedProvider(),
+            new ParallelSensitiveProvider(),
+            new TimeSensitiveProvider()
+        ]);
+
+        AnalysisResult analysis = coordinator.Run(context, kinds: null, TextWriter.Null);
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(context, analysis.Findings);
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            latestRun);
+    }
+
+    /// <summary>
+    /// A latest-run section dated and signed like <see cref="SpecSection3"/>'s newest session.
+    /// </summary>
+    private static LatestRunDto SpecLatestRun(
+        LatestRunFailureDto[] failures, string[]? explainedBy = null, int? explained = null) =>
+        LatestRun(failures, explainedBy, explained, sha: "eab9867a1c40") with
+        {
+            StartedAt = new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc),
+            TestsExecuted = 16
+        };
+
+    /// <summary>
+    /// A single-test subject named the way the builder names one, at a given location.
+    /// </summary>
+    private static SubjectDto SampleSubject(string qualifiedName, string sourceFile, int line) =>
+        new(
+            "test", $"fp-{qualifiedName}", qualifiedName, qualifiedName,
+            SubjectNames.ShortName(qualifiedName, qualifiedName), null,
+            sourceFile, line, "SampleApp.XUnit", null, null, null);
+
+    /// <summary>
+    /// More new failures than the section shows: ten rows, a cap line, and the findings' share.
+    /// </summary>
+    private static ReportEnvelope LatestRunOverflow()
+    {
+        ReportEnvelope envelope = SpecSection3();
+
+        // Descending prior-run counts, as the analyzer orders new rows, so the golden reads as
+        // one the analyzer could have produced.
+        LatestRunFailureDto[] rows =
+        [
+            .. Enumerable.Range(0, LocalAnalysisConstants.LatestRunMaxRows).Select(index =>
+            {
+                int prior = 19 - index;
+                string name = $"SampleApp.XUnit.CartTests.Case{index.ToString("00", CultureInfo.InvariantCulture)}";
+
+                return LatestRunFailure(
+                    "new",
+                    name,
+                    $"passed the previous {prior.ToString(CultureInfo.InvariantCulture)} runs, failed just now",
+                    priorSessions: prior) with
+                {
+                    Subject = SampleSubject(name, "src/SampleApp.XUnit/CartTests.cs", 40 + index)
+                };
+            })
+        ];
+
+        return envelope with
+        {
+            LatestRun = SpecLatestRun(rows, ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5) with
+            {
+                TestsFailed = 28,
+                NewFailures = 23,
+                FailuresTotal = 23,
+                OverflowCommand = "xping report --all"
+            }
         };
     }
 
@@ -628,6 +836,68 @@ internal static class ReportFixtures
     }
 
     /// <summary>
+    /// Builds a latest-run section around the given rows, none of them capped.
+    /// </summary>
+    /// <param name="failures">The rows, in the order the analyzer would have put them.</param>
+    /// <param name="explainedBy">Ids of the findings that account for other failures.</param>
+    /// <param name="explained">How many failing tests those findings account for.</param>
+    /// <param name="sha">Commit the run was at, or null for none recorded.</param>
+    /// <returns>The section.</returns>
+    public static LatestRunDto LatestRun(
+        LatestRunFailureDto[] failures,
+        string[]? explainedBy = null,
+        int? explained = null,
+        string? sha = "eab9867f00d") =>
+        new(
+            "6f9a2f1c-0000-4000-8000-000000000014",
+            new DateTime(2026, 8, 19, 16, 21, 0, DateTimeKind.Utc),
+            sha,
+            IsLikelyEnvironmental: false,
+            Suppressed: false,
+            TestsExecuted: 16,
+            TestsFailed: failures.Length + (explained ?? explainedBy?.Length ?? 0),
+            NewFailures: failures.Count(f => f.Status != "seenBefore"),
+            ExplainedByFindings: explained ?? explainedBy?.Length ?? 0,
+            ExplainedByFindingIds: explainedBy ?? [],
+            Failures: failures,
+            FailuresShown: failures.Length,
+            FailuresTotal: failures.Length,
+            OverflowCommand: null);
+
+    /// <summary>
+    /// Builds one latest-run row, named the way the builder names a single test.
+    /// </summary>
+    /// <param name="status">The status, as the envelope spells it.</param>
+    /// <param name="name">The test's method name; the class is <c>SampleTests</c>.</param>
+    /// <param name="contrast">The already-resolved contrast sentence.</param>
+    /// <param name="failureSummary">The exception type, namespace stripped, or null.</param>
+    /// <param name="priorSessions">Sessions before this one the test recorded a verdict in.</param>
+    /// <param name="priorFailures">Of those, how many it failed in.</param>
+    /// <param name="sourceFile">Where the test lives, or null for none recorded.</param>
+    /// <returns>The row.</returns>
+    public static LatestRunFailureDto LatestRunFailure(
+        string status,
+        string name,
+        string contrast,
+        string? failureSummary = "NullReferenceException",
+        int priorSessions = 0,
+        int priorFailures = 0,
+        string? sourceFile = "SampleTests.cs")
+    {
+        string qualified = $"MyApp.Tests.SampleTests.{name}";
+
+        return new LatestRunFailureDto(
+            status,
+            new SubjectDto(
+                "test", $"fp-{name}", qualified, name, SubjectNames.ShortName(qualified, name), null,
+                sourceFile, sourceFile == null ? null : 42, "MyApp.Tests", null, null, null),
+            contrast,
+            failureSummary,
+            priorSessions,
+            priorFailures);
+    }
+
+    /// <summary>
     /// Builds an envelope around the given findings, none of them truncated away.
     /// </summary>
     /// <param name="findings">The findings.</param>
@@ -719,6 +989,10 @@ internal static class ReportFixtures
                 0,
                 0,
                 []),
+
+            // No latest run yet: the fixtures pin the findings block, and a section that is absent
+            // from the envelope is absent from the page. The latest-run fixtures carry their own.
+            null,
             findings,
             new TruncationDto(shown, total, "xping report --all"));
     }

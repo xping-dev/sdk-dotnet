@@ -57,8 +57,8 @@ xping report [options]
 |---|---|---|
 | `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last` |
 | `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
-| `--top <n>` | `10` | Rows to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
-| `--all` | off | Show **every finding** rather than the top ones |
+| `--top <n>` | `10` | Findings to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
+| `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Scope the report to one test assembly |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
@@ -147,6 +147,34 @@ The legend follows the fence whenever the report printed a finding, and nothing 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
 
 Rows are ordered most severe first, so the top of the block is the part worth reading. The one thing that interrupts that order is a second finding about a test already listed, which sits under the first rather than at its own rank and says so.
+
+### The latest run
+
+The findings answer *what is chronically unreliable*, and they need five runs of history before they will say anything. *What just broke* is a different question — one run's outcome beside the runs before it — and it needs two. When the newest run has failures, a `LATEST RUN` section opens the fence, above the findings:
+
+<!-- xping:sample latest-run latest-run -->
+```
+LATEST RUN  16:21 · eab9867                               2 new failures
+────────────────────────────────────────────────────────────────────────
+
+    new          CartTests.Checkout_AppliesDiscount
+                 passed the previous 19 runs, failed just now
+                 NullReferenceException | CartTests.cs:112
+
+    new test     CartTests.Checkout_RejectsExpiredCoupon
+                 first seen this run, failed
+                 EqualException | CartTests.cs:140
+
+    Also failing: 5 tests explained by findings below (#1, #2, #3).
+```
+
+The heading names the run — when it started, and the commit when one was recorded — and counts what is new. Each row is one test that ended the run red, and its second line is the whole point: the contrast with history, which `dotnet test` cannot print. A test is **new** when it had passed in every earlier run it appeared in, a **new test** when the window had never seen it, and **seen before** when it had failed before — `failed 2 of 4 runs`. That last row states its count and no more: the reasons a failing test carries no finding range from too little history to a comparison that did not survive multiplicity correction, and the row cannot tell them apart. The trailer is the exception type and the source location, and nothing else: no evidence level, no id and no population marker, because a single run's outcome is an observation and not an estimate.
+
+These rows are not findings. They carry no severity, are not ranked against the findings, and never affect [`--fail-on`](#xping-report) — `dotnet test` has already failed the build. A test that a finding already explains is not listed twice; the closing line counts those and names the findings by row number, saying so when `--top` cut some of them. A test that failed and then passed on retry is not listed at all, because the run did not end red on it. Runs that looked environmental are left out of a test's history here exactly as they are left out of every finding's, so one bad afternoon in the window cannot turn a regression into a test that has failed before.
+
+`--kind` narrows what the section defers to rather than what it reports: a test whose only finding was filtered out is listed as a row instead of counted on the closing line, and states its history without claiming why no finding explains it.
+
+The section is absent when the newest run was clean, and on a store holding a single run, where every row would only repeat the test runner. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23 · all: xping report --all` closes a longer list, and `--all` lifts this cap along with the findings'. `--top` does not apply here.
 
 ### The population marker
 
@@ -385,6 +413,13 @@ xping report --summary
 Xping: 3 findings (1 high, 1 medium, 1 low) in 20 runs of Checkout.Tests
 ```
 
+When the newest run has new failures, the line says so on the end — `, 2 new failures` — and says nothing when it has none, so a green build's title stays short:
+
+<!-- xping:sample latest-run summary -->
+```
+Xping: 5 findings (5 high) in 20 runs of SampleApp.XUnit, 2 new failures
+```
+
 ### Scoping
 
 Every test project in a solution shares one store. Without `--assembly`, the report covers one assembly and says so when others exist:
@@ -414,6 +449,15 @@ keeps the rank it earned, the rest follow it, and each of those carries an `anno
 row the first one is. The reordering happens before `--top` cuts the list, so a limit never leaves a
 finding pointing at a row that is not there.
 
+`latestRun` is [the latest run](#the-latest-run) as data: the newest session, its counts, and one
+entry per row with the same `contrast` sentence the rendered block prints and the same single-test
+`subject` a finding carries. It is present whenever the window holds a session, so a consumer can
+tell a clean run (`testsFailed` is zero) from one the report declined to itemise (`suppressed` on a
+store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`failuresShown` against
+`failuresTotal`, with `overflowCommand` naming the invocation that shows the rest).
+`explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
+failures not listed as rows.
+
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
@@ -427,7 +471,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.19",
+  "schemaVersion": "1.20",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
   "summary": {
@@ -443,6 +487,31 @@ are not each other and `tests` is what they add up to:
       "ParallelSensitive": { "awaitingRuns": 0, "unreadable": 108 }
     },
     "partialSessions": 0
+  },
+  "latestRun": {
+    "sessionId": "6f9a2f1c-…",
+    "startedAt": "2026-08-19T16:21:00Z",
+    "sha": "a3f9c2e",
+    "isLikelyEnvironmental": false,
+    "suppressed": false,
+    "testsExecuted": 412,
+    "testsFailed": 3,
+    "newFailures": 1,
+    "explainedByFindings": 2,
+    "explainedByFindingIds": ["f_2a91c0de", "f_8c04b71a"],
+    "failures": [
+      {
+        "status": "new",
+        "subject": { "type": "test", "shortName": "CartTests.Checkout_AppliesDiscount", "…": "…" },
+        "contrast": "passed the previous 19 runs, failed just now",
+        "failureSummary": "NullReferenceException",
+        "priorSessions": 19,
+        "priorFailures": 0
+      }
+    ],
+    "failuresShown": 1,
+    "failuresTotal": 1,
+    "overflowCommand": null
   },
   "findings": [
     {

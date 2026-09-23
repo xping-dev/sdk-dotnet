@@ -326,7 +326,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.19", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.20", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -354,6 +354,298 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         Assert.True(root.TryGetProperty("context", out _));
         Assert.True(root.TryGetProperty("findings", out _));
+
+        JsonElement latestRun = root.GetProperty("latestRun");
+        foreach (string key in (string[])
+        [
+            "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "suppressed", "testsExecuted",
+            "testsFailed", "newFailures", "explainedByFindings", "explainedByFindingIds", "failures",
+            "failuresShown", "failuresTotal", "overflowCommand"
+        ])
+        {
+            Assert.True(latestRun.TryGetProperty(key, out _), $"latestRun.{key} missing");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // latestRun
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes <paramref name="passing"/> green runs of a two-test suite, then one run in which
+    /// <c>Alpha</c> fails: the shape the section exists for, and one no finding can reach.
+    /// </summary>
+    private static void SeedRegression(int passing, string? sha = null)
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < passing; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [TestSessionFactory.Execution("Alpha"), TestSessionFactory.Execution("Stable")],
+                sha: sha));
+        }
+
+        store.Write(TestSessionFactory.Session(
+            passing,
+            [
+                TestSessionFactory.Execution(
+                    "Alpha", TestOutcome.Failed, exceptionType: "System.NullReferenceException", errorMessage: "boom"),
+                TestSessionFactory.Execution("Stable")
+            ],
+            sha: sha));
+    }
+
+    [Fact]
+    public void TheLatestRunSitsBetweenTheSummaryAndTheFindings()
+    {
+        SeedRegression(passing: 3);
+
+        var (_, output, _) = Run("--format", "json");
+
+        // Serialised order is declaration order and is part of the contract: the section renders
+        // above the findings, and a consumer reading the document top to bottom sees it there.
+        int summary = output.IndexOf("\"summary\"", StringComparison.Ordinal);
+        int latestRun = output.IndexOf("\"latestRun\"", StringComparison.Ordinal);
+        // The list, not the summary's count of the same name.
+        int findings = output.IndexOf("\"findings\": [", StringComparison.Ordinal);
+
+        Assert.True(summary < latestRun, "latestRun precedes summary");
+        Assert.True(latestRun < findings, "latestRun follows findings");
+    }
+
+    [Fact]
+    public void ARegressionBelowEveryGateIsReportedAsANewFailure()
+    {
+        // Four sessions: under MinimumSessionsToReport, so the findings list is empty and this is
+        // the only place the report can say anything.
+        SeedRegression(passing: 3, sha: "eab98671234567890");
+
+        JsonElement root = RunJson();
+        JsonElement latestRun = root.GetProperty("latestRun");
+
+        Assert.Empty(root.GetProperty("findings").EnumerateArray());
+
+        Assert.Equal(
+            TestSessionFactory.SessionIdFor(3).ToString("D"),
+            latestRun.GetProperty("sessionId").GetString());
+        Assert.Equal("eab98671234567890", latestRun.GetProperty("sha").GetString());
+        Assert.False(latestRun.GetProperty("suppressed").GetBoolean());
+        Assert.False(latestRun.GetProperty("isLikelyEnvironmental").GetBoolean());
+        Assert.Equal(2, latestRun.GetProperty("testsExecuted").GetInt32());
+        Assert.Equal(1, latestRun.GetProperty("testsFailed").GetInt32());
+        Assert.Equal(1, latestRun.GetProperty("newFailures").GetInt32());
+        Assert.Equal(0, latestRun.GetProperty("explainedByFindings").GetInt32());
+        Assert.Empty(latestRun.GetProperty("explainedByFindingIds").EnumerateArray());
+        Assert.Equal(1, latestRun.GetProperty("failuresShown").GetInt32());
+        Assert.Equal(1, latestRun.GetProperty("failuresTotal").GetInt32());
+        Assert.Equal(JsonValueKind.Null, latestRun.GetProperty("overflowCommand").ValueKind);
+
+        JsonElement failure = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
+        Assert.Equal("new", failure.GetProperty("status").GetString());
+        Assert.Equal("passed the previous 3 runs, failed just now", failure.GetProperty("contrast").GetString());
+        // Namespace stripped: the trailer identifies the failure, and the namespace is the part
+        // that pushes the location off the line.
+        Assert.Equal("NullReferenceException", failure.GetProperty("failureSummary").GetString());
+        Assert.Equal(3, failure.GetProperty("priorSessions").GetInt32());
+        Assert.Equal(0, failure.GetProperty("priorFailures").GetInt32());
+
+        // A single-test subject, named the way every finding's is, and never a group.
+        JsonElement subject = failure.GetProperty("subject");
+        Assert.Equal("test", subject.GetProperty("type").GetString());
+        Assert.Equal("fp-Alpha", subject.GetProperty("fingerprint").GetString());
+        Assert.Equal("SampleTests.Alpha", subject.GetProperty("shortName").GetString());
+        Assert.Equal(JsonValueKind.Null, subject.GetProperty("causeLabel").ValueKind);
+        Assert.Equal("SampleTests.cs", subject.GetProperty("sourceFile").GetString());
+    }
+
+    [Fact]
+    public void ASingleSessionIsSuppressedButStillPublished()
+    {
+        SeedRegression(passing: 0);
+
+        JsonElement latestRun = RunJson().GetProperty("latestRun");
+
+        // Distinguishable from a clean run: the counts say a test failed, and suppressed says why
+        // no row lists it.
+        Assert.True(latestRun.GetProperty("suppressed").GetBoolean());
+        Assert.Equal(1, latestRun.GetProperty("testsFailed").GetInt32());
+        Assert.Empty(latestRun.GetProperty("failures").EnumerateArray());
+        Assert.Equal(0, latestRun.GetProperty("failuresTotal").GetInt32());
+    }
+
+    [Fact]
+    public void ATestAlreadyCarryingAFindingIsExplainedByItsId()
+    {
+        // The vanishing fixture's newest sessions carry no failure, so add one: a test that failed
+        // in every one of eight sessions is `AlwaysFailing`, and the section defers to it.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    TestSessionFactory.Execution("Broken", TestOutcome.Failed, errorMessage: "boom")
+                ]));
+        }
+
+        JsonElement root = RunJson();
+        JsonElement latestRun = root.GetProperty("latestRun");
+
+        string findingId = root.GetProperty("findings")[0].GetProperty("id").GetString()!;
+
+        Assert.Equal(1, latestRun.GetProperty("explainedByFindings").GetInt32());
+        Assert.Equal([findingId], latestRun.GetProperty("explainedByFindingIds").EnumerateArray().Select(e => e.GetString()));
+        Assert.Empty(latestRun.GetProperty("failures").EnumerateArray());
+    }
+
+    [Fact]
+    public void AKindFilterNarrowsWhatTheSectionDefersToAndNotWhatItReports()
+    {
+        // A test that failed in every one of eight runs. Unfiltered, the AlwaysFailing finding
+        // accounts for it and the section counts it on the closing line; under --kind Flaky that
+        // finding is never produced, so the section lists it instead — and the row says what its
+        // history is without claiming why nothing explains it.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    TestSessionFactory.Execution("Broken", TestOutcome.Failed, errorMessage: "boom")
+                ]));
+        }
+
+        JsonElement unfiltered = RunJson().GetProperty("latestRun");
+        Assert.Equal(1, unfiltered.GetProperty("explainedByFindings").GetInt32());
+        Assert.Empty(unfiltered.GetProperty("failures").EnumerateArray());
+
+        JsonElement filtered = RunJson("--kind", "Flaky").GetProperty("latestRun");
+        Assert.Equal(0, filtered.GetProperty("explainedByFindings").GetInt32());
+
+        JsonElement row = Assert.Single(filtered.GetProperty("failures").EnumerateArray());
+        Assert.Equal("seenBefore", row.GetProperty("status").GetString());
+        Assert.Equal("failed 8 of 8 runs", row.GetProperty("contrast").GetString());
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunIsNotCountedAgainstATestsHistory()
+    {
+        // Four runs: an outage, two clean, then one failure. Counting the outage would make the
+        // regression read as a test that has failed before.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
+
+        for (int session = 0; session < 4; session++)
+        {
+            store.Write(TestSessionFactory.Session(
+                session,
+                [
+                    .. names.Select((name, index) =>
+                    {
+                        bool failing = (session == 0 && index < 12) || (session == 3 && index == 0);
+
+                        return TestSessionFactory.Execution(
+                            name,
+                            failing ? TestOutcome.Failed : TestOutcome.Passed,
+                            errorMessage: failing ? "boom" : null);
+                    })
+                ]));
+        }
+
+        JsonElement latestRun = RunJson().GetProperty("latestRun");
+
+        Assert.Equal(1, latestRun.GetProperty("newFailures").GetInt32());
+
+        JsonElement row = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
+        Assert.Equal("new", row.GetProperty("status").GetString());
+        Assert.Equal("passed the previous 2 runs, failed just now", row.GetProperty("contrast").GetString());
+    }
+
+    [Fact]
+    public void ExplainingFindingIdsAreInEnvelopeOrder()
+    {
+        // Two always-failing tests whose fingerprints sort the other way round from their rank:
+        // "Zulu" fails in every run and "Alpha" in most, so Zulu ranks first and Alpha's
+        // fingerprint sorts first. The ids follow the rank, because that is what the row numbers
+        // on the "also failing" line are.
+        ILocalSessionStore store = LocalSessionStore.Create();
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    TestSessionFactory.Execution("Zulu", TestOutcome.Failed, errorMessage: "boom"),
+                    TestSessionFactory.Execution("Alpha", i % 4 == 0 ? TestOutcome.Passed : TestOutcome.Failed, errorMessage: i % 4 == 0 ? null : "boom")
+                ]));
+        }
+
+        JsonElement root = RunJson();
+
+        string[] ranked = [.. root.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("id").GetString()!)];
+        string[] explained = [.. root.GetProperty("latestRun").GetProperty("explainedByFindingIds").EnumerateArray().Select(e => e.GetString()!)];
+
+        Assert.Equal(2, explained.Length);
+        Assert.Equal(ranked.Where(explained.Contains), explained);
+    }
+
+    [Fact]
+    public void TheOverflowCommandIsTheSameOneTheFindingsTruncationPrints()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+        int many = LocalAnalysisConstants.LatestRunMaxRows + 2;
+        string[] names = [.. Enumerable.Range(0, many).Select(i => $"T{i:00}")];
+        string[] padding = [.. Enumerable.Range(0, 60).Select(i => $"P{i:00}")];
+
+        store.Write(TestSessionFactory.Session(0, [.. names.Concat(padding).Select(n => TestSessionFactory.Execution(n))]));
+        store.Write(TestSessionFactory.Session(
+            1,
+            [
+                .. names.Select(n => TestSessionFactory.Execution(n, TestOutcome.Failed, errorMessage: "boom")),
+                .. padding.Select(n => TestSessionFactory.Execution(n))
+            ]));
+
+        JsonElement capped = RunJson().GetProperty("latestRun");
+        Assert.Equal(LocalAnalysisConstants.LatestRunMaxRows, capped.GetProperty("failuresShown").GetInt32());
+        Assert.Equal(many, capped.GetProperty("failuresTotal").GetInt32());
+        Assert.Equal("xping report --all", capped.GetProperty("overflowCommand").GetString());
+
+        JsonElement lifted = RunJson("--all").GetProperty("latestRun");
+        Assert.Equal(many, lifted.GetProperty("failuresShown").GetInt32());
+        Assert.Equal(JsonValueKind.Null, lifted.GetProperty("overflowCommand").ValueKind);
+    }
+
+    [Fact]
+    public void EveryContrastIsAscii()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+        store.Write(TestSessionFactory.Session(0, [TestSessionFactory.Execution("Known", TestOutcome.Failed, errorMessage: "boom"), TestSessionFactory.Execution("Regressed")]));
+        store.Write(TestSessionFactory.Session(1, [TestSessionFactory.Execution("Known"), TestSessionFactory.Execution("Regressed")]));
+        store.Write(TestSessionFactory.Session(
+            2,
+            [
+                TestSessionFactory.Execution("Known", TestOutcome.Failed, errorMessage: "boom"),
+                TestSessionFactory.Execution("Regressed", TestOutcome.Failed, errorMessage: "boom"),
+                TestSessionFactory.Execution("Fresh", TestOutcome.Failed, errorMessage: "boom")
+            ]));
+
+        JsonElement failures = RunJson().GetProperty("latestRun").GetProperty("failures");
+
+        // The glyph set is chosen after the builder runs and never reaches these, so a non-ASCII
+        // character here would survive into piped output whatever --ascii said.
+        string[] contrasts = [.. failures.EnumerateArray().Select(f => f.GetProperty("contrast").GetString()!)];
+        Assert.Equal(
+            [
+                "passed the previous 2 runs, failed just now",
+                "first seen this run, failed",
+                "failed 2 of 3 runs"
+            ],
+            contrasts);
+        Assert.All(contrasts, c => Assert.All(c, ch => Assert.True(ch < 0x80, $"non-ASCII in '{c}'")));
     }
 
     [Fact]
@@ -611,7 +903,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.19", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.20", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

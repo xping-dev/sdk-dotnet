@@ -1769,7 +1769,7 @@ public sealed class DurationProviderTests
             new FindingCoordinator([new DurationProvider()]).Run(context, null, warnings);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null);
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
     }
