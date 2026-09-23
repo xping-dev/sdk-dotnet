@@ -74,7 +74,61 @@ internal static class ReportFixtures
     /// </summary>
     /// <param name="name">The key, as <see cref="Names"/> lists it.</param>
     /// <returns>The envelope.</returns>
-    public static ReportEnvelope Get(string name) => name switch
+    /// <remarks>
+    /// Every finding's drill-down is derived from its id and the envelope's assembly, as the
+    /// coordinator derives it. Fixtures set ids by hand, and a detail line naming an id the row above
+    /// it does not carry would be a golden pinning a command that selects nothing.
+    /// </remarks>
+    public static ReportEnvelope Get(string name)
+    {
+        ReportEnvelope envelope = Build(name);
+
+        return envelope with
+        {
+            Findings =
+            [
+                .. envelope.Findings.Select(finding =>
+                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, envelope.Context?.Assembly) })
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Narrows a full envelope to the detail of one of its rows, as <c>--id</c> would build it.
+    /// </summary>
+    /// <param name="full">The full report, every finding shown.</param>
+    /// <param name="row">The row to select, from 1.</param>
+    /// <returns>The envelope with one finding and its selection.</returns>
+    /// <remarks>
+    /// Siblings are found by the key the builder groups them on — the test's fingerprint — so a
+    /// fixture cannot pin a same-subject line the selector would not have produced.
+    /// </remarks>
+    public static ReportEnvelope Detail(ReportEnvelope full, int row)
+    {
+        ArgumentNullException.ThrowIfNull(full);
+
+        FindingDto finding = full.Findings[row - 1];
+        string? test = finding.Subject.Members == null ? finding.Subject.Fingerprint : null;
+
+        List<SameSubjectDto> siblings =
+        [
+            .. full.Findings
+                .Select((other, index) => (Other: other, Row: index + 1))
+                .Where(pair => test != null && pair.Row != row
+                    && pair.Other.Subject.Members == null
+                    && string.Equals(pair.Other.Subject.Fingerprint, test, StringComparison.Ordinal))
+                .Select(pair => new SameSubjectDto(pair.Other.Id, pair.Other.Kind, pair.Row))
+        ];
+
+        return full with
+        {
+            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings),
+            Findings = [finding],
+            Truncated = full.Truncated with { Shown = 1 }
+        };
+    }
+
+    private static ReportEnvelope Build(string name) => name switch
     {
         "empty" => Envelope(),
         "nothing-reportable" => NothingReportable(),

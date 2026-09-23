@@ -116,6 +116,8 @@ NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests
 ````
 
 The lines above the fence answer separate questions. The first says **what was analysed** — the assembly, how many runs, over what period, at which revision. The second says **what state the suite is in**, in one unit: `tests` is `healthy` plus `flagged`, and they add up because `flagged` counts tests rather than findings. One test can attract findings of several kinds, and one finding about a broken fixture covers every test that fixture took down. Candidates the report saw and withheld are counted on the end of that line: `awaiting more runs` is waiting on data, `not significant` did not clear its kind's bar. A third line appears when some kind could not be measured on part of the suite at all, which is a different statement again — those tests are inside `healthy`, and [`--format json`](#--format-json) below says why.

@@ -1083,11 +1083,21 @@ public sealed class ShareableOutputTests
         // reader just ran, and it names no format, so it cannot be offering a different view either.
         Assert.DoesNotContain("xping report --all", complete, StringComparison.Ordinal);
 
-        // The legend is the last thing a complete report prints — it explains the markers inside the
-        // fence, so it belongs to every report that printed one, truncated or not.
+        // Below the fence the order is legend, truncation line, detail line: what the markers mean,
+        // then see the rest, then go deeper. A complete report has no truncation line, so the detail
+        // line follows the legend after one blank.
+        string detail = "Detail of row 1: " + findings[0].DrillDown + Environment.NewLine;
+
         Assert.EndsWith(
-            ReportVocabulary.PopulationLegend[^1] + Environment.NewLine,
+            ReportVocabulary.PopulationLegend[^1] + Environment.NewLine + Environment.NewLine + detail,
             complete,
+            StringComparison.Ordinal);
+
+        // And a truncated one ends on the two navigation lines, together.
+        Assert.EndsWith(
+            $"Showing 1 of 21 {ReportText.Capabilities(redirected: true).Glyphs.Separator} all: xping report --all" +
+            Environment.NewLine + detail,
+            truncated,
             StringComparison.Ordinal);
     }
 

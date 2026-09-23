@@ -54,6 +54,8 @@ NEEDS ATTENTION (2 high)                               most severe first
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 ````
 
 The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.

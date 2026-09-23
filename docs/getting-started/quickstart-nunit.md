@@ -391,6 +391,8 @@ NEEDS ATTENTION (2 high)                               most severe first
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 ````
 
 `xping report --format json` emits the same findings as a versioned envelope, which is what you
