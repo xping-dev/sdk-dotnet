@@ -726,15 +726,15 @@ rescored. `--id` reads the coordinator's output and adds nothing to its inputs.
 
 ## 5. Open questions — gates
 
-### OQ-1 — Detail heading label. **Blocks P4**
+### OQ-1 — Detail heading label. **Closed**
 
-`FINDING` with annotation `row N of M` is the recommendation. Confirm or replace before P4. The
+**Resolved: `FINDING` with annotation `row N of M`**, as recommended. The
 shape — uppercase label, right-aligned annotation, rule — is the format spec's D5 and is not in
 question.
 
-### OQ-2 — Below-fence detail line wording. **Blocks P4**
+### OQ-2 — Below-fence detail line wording. **Closed**
 
-`Detail of row 1: ` is the recommendation. Confirm or replace before P4. The rule that it is one
+**Resolved: `Detail of row 1: `**, as recommended. The rule that it is one
 real command for row 1, dim, last, and absent under `--id`, is D7 and is not in question.
 
 ---
