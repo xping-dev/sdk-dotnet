@@ -27,7 +27,21 @@ are corrected here so that no phase below inherits them.
 | Was | Now | Where established |
 |---|---|---|
 | "28 golden files" | **50** files: 25 fixtures × 2 glyph sets | `ReportFixtures.Keys` (`tests/Xping.Cli.Tests/Report/ReportFixtures.cs:39-66`), `GoldenReportTests.Modes` (`GoldenReportTests.cs:41-45`), `EveryGoldenOnDiskBelongsToAFixture` (`GoldenReportTests.cs:89-106`) |
-| documented samples in "README, nuspec, command-reference, four quickstart pages, known-limitations" | **ten** documents: `README.md`, `nuspec/README.Cli.md`, `docs/index.md`, `docs/cli/command-reference.md`, three quickstarts, `docs/getting-started/local-first.md`, `docs/known-limitations.md`, `docs/guides/working-with-tests/common-flaky-patterns.md` | `DocumentedSampleTests.Documents` (`tests/Xping.Cli.Tests/Report/DocumentedSampleTests.cs:23-34`) |
+| documented samples in "README, nuspec, command-reference, four quickstart pages, known-limitations" | **ten** documents: `README.md`, `nuspec/README.Cli.md`, `docs/index.md`, `docs/cli/command-reference.md`, three quickstarts, `docs/getting-started/local-first.md`, `docs/known-limitations.md`, `docs/guides/working-with-tests/common-flaky-patterns.md` | `DocumentedSampleTests.Documents` (`tests/Xping.Cli.Tests/Report/DocumentedSampleTests.cs:61-73`) |
+
+### Amendment 1 — from the P0 inventory
+
+P0 read this document against source and found four conflicts. All four are resolved here, and this
+amendment is committed before any code depending on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | thirteen provider call sites for `DrillDown` | **twelve**: `SharedFailure` and `BrokenFixture` share one, `FailureModeProvider.cs:508`. Thirteen kinds is unchanged | §1.1, D7, P2 |
+| B | "no index exposes" a test's name from its fingerprint | `TestIndex.ReferenceFor(fingerprint)` does (`src/Xping.Cli/Report/Indexes/TestIndex.cs:168-169`). The third not-found tier stays out of scope, now as a scope decision rather than a missing capability | D3, §7 |
+| C | five provider tests "deleted with the member they read" | three are: the retry tests read `FindingCandidate.DrillDownCommand`. `VanishedProviderTests.cs:337` and `TimeSensitiveProviderTests.cs:773` read `Finding.DrillDownCommand`, which D7 keeps; their assertions change to `--id`. `FindingCoordinatorTests.cs:658, 697, 706` name the deleted member and drop the argument | §1.2, D7, P2 |
+| D | D7 cited `FailureModeProvider.cs:483` for the cluster's assembly, and took `subject.Tests[0]` | `FailureModeProvider.cs:490`, which guards an empty member list; the coordinator uses `subject.Tests.FirstOrDefault()?.Assembly` for the same reason | D7 |
+
+The inventory table above also moves `DocumentedSampleTests.Documents` from `:23-34` to `:61-73`.
 
 ---
 
@@ -72,7 +86,7 @@ Every claim here was read in source at the cited line.
   source location (`TextReportRenderer.cs:110, 841-859`).
 - **DrillDown** has two shapes: `xping report --kind {kind} --format json[ --assembly X]` from
   `ForTest` and `ForGroup` (`src/Xping.Cli/Report/DrillDown.cs:33-60`) and `xping report --all` from
-  `ForFullReport` (`DrillDown.cs:72`). Thirteen provider call sites hand the string to
+  `ForFullReport` (`DrillDown.cs:72`). Twelve provider call sites hand the string to
   `FindingCandidate.DrillDownCommand` (`IFindingProvider.cs:95`); the coordinator copies it to
   `Finding` (`FindingCoordinator.cs:203`); the builder copies it to `FindingDto.DrillDown`
   (`EnvelopeBuilder.cs:324`). It is serialised by `JsonReportRenderer` and rendered by no text path.
@@ -98,7 +112,8 @@ The inventory left three items unread. All three are now read; none gates anythi
    assert the full string `xping report --kind {Kind} --format json --assembly MyApp.Tests`, with
    `TestSessionFactory.DefaultAssembly = "MyApp.Tests"` (`TestSessionFactory.cs:33`). Together with
    `VanishedProviderTests.cs:337` and `TimeSensitiveProviderTests.cs:773`, five tests pin the old
-   shape. D7 deletes them with the member they read.
+   shape. D7 deletes the three retry tests with the member they read and rewrites the other two
+   assertions, which read `Finding.DrillDownCommand` (Amendment 1C).
 3. **Whether `--id` changes any parse-error test.** No existing test passes `--id`. The parse-error
    tests use `--nonsense` (`ReportCommandTests.cs:206-213`), `--runs banana` (`216-222`), a bare
    `--assembly` (`224-231`), `--dry-run` on `clear` (`ReviewFixesTests.cs:117-126`), and `--nonsense`
@@ -261,7 +276,8 @@ answered on the same screen.
 **Rejected:** a third tier that says *the test is still in the window and carries no finding*, by
 hashing every kind against every fingerprint in `context.Tests.Fingerprints`
 (`EnvelopeBuilder.cs:60`). Cheap, and honest, but it needs a test's name from its fingerprint, and
-no index exposes that in a form this spec has verified. Recorded in §7 as the first thing to add.
+`TestIndex.ReferenceFor` supplies the name (Amendment 1B); it is left out to keep this spec to the
+findings the coordinator produced. Recorded in §7 as the first thing to add.
 
 ### D4 — What the text detail view renders
 
@@ -399,10 +415,10 @@ public static string ForFinding(string id, string? assembly)
 ```
 
 **The string is assigned where the id is.** `FindingCandidate.DrillDownCommand`
-(`IFindingProvider.cs:95`) and its thirteen provider call sites (§1.1) are deleted. The coordinator,
+(`IFindingProvider.cs:95`) and its twelve provider call sites (§1.1) are deleted. The coordinator,
 which computes the id at `FindingCoordinator.cs:192`, computes the command beside it and sets
-`Finding.DrillDownCommand` from `ForFinding(id, subject.Tests[0].Assembly)` — the first test's
-assembly for both subject types, which is what `FailureModeProvider.cs:483` already does for a
+`Finding.DrillDownCommand` from `ForFinding(id, subject.Tests.FirstOrDefault()?.Assembly)` — the first test's
+assembly for both subject types, which is what `FailureModeProvider.cs:490` already does for a
 cluster. A provider was carrying the command only because it was the one place with the kind in
 hand; the id is the coordinator's to assign, and so is the command that names it.
 
@@ -413,8 +429,9 @@ a human who copies the command from a pasted JSON wants the fenced view — and 
 serve both the envelope and the below-fence line without a second variant. This is the one behaviour
 `DrillDown.ForFullReport` and `ForFinding` share, and it is now stated once.
 
-**The five provider tests** that assert the old string (§1.2 item 2) are deleted with the member
-they read. Their replacement is one coordinator test: every finding's `DrillDownCommand` equals
+**The three retry tests** that assert the old string (§1.2 item 2) are deleted with the member
+they read; the Vanished and TimeSensitive assertions, which read `Finding.DrillDownCommand`, assert
+`--id` instead (Amendment 1C). Their replacement is one coordinator test: every finding's `DrillDownCommand` equals
 `ForFinding(finding.Id, firstTestAssembly)`.
 
 **Text gains one line below the fence, only in the full report:**
@@ -757,9 +774,9 @@ hex input matches; row numbers agree with `EnvelopeBuilder`'s numbering on a lis
 ### P2 — Contract
 
 `SelectionDto`, `SameSubjectDto`, `ReportEnvelope.Selection`, the `Build` parameter (§4.4). D7: the
-coordinator assigns `DrillDownCommand`; `FindingCandidate.DrillDownCommand` and the thirteen call
-sites go; `DrillDown.ForTest`/`ForGroup` go; the five provider tests go and the coordinator test
-arrives. D4.1: `Flaky` metrics. Comments at `DrillDown.cs:13-24` and `FindingId.cs:15-22` name
+coordinator assigns `DrillDownCommand`; `FindingCandidate.DrillDownCommand` and the twelve call
+sites go; `DrillDown.ForTest`/`ForGroup` go; the three retry tests go, the two coordinator-output
+assertions move to `--id`, and the coordinator test arrives. D4.1: `Flaky` metrics. Comments at `DrillDown.cs:13-24` and `FindingId.cs:15-22` name
 `xping report --id`. Schema → `1.21`.
 
 **Text output is byte-identical after this phase.** JSON: `selection: null` on every report, new
@@ -823,8 +840,8 @@ and `1.21`. `README.md:183-193` gains one line. `nuspec/README.Cli.md:83-85` gai
   architectural reason given there: they need a builder-resolved `ExemplarDto` and per-kind
   decisions about which fields to show, in their own spec. That spec starts from this one's §4.2.
 - **The third not-found tier**, *the test is in the window and carries no finding*, via
-  `context.Tests.Fingerprints` and a fingerprint-to-name lookup. First thing to add once an index
-  exposes the name; D3 records it.
+  `context.Tests.Fingerprints` and `TestIndex.ReferenceFor`. Both exist; it is a scope decision,
+  and the first thing to add. D3 records it.
 - **`xping test`.** Retired by the format spec's Amendment 2. Not stubbed, not reserved.
 - **Multiple ids** in one invocation, `--id` on `where` or `clear`, and `--fail-on` with `--id`
   (D6).
