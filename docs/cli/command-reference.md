@@ -61,6 +61,7 @@ xping report [options]
 | `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Scope the report to one test assembly |
+| `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
 | `--format <f>` | `text` | `text`, `json` or `summary` |
 | `--json` | off | Alias for `--format json` |
@@ -71,7 +72,7 @@ xping report [options]
 
 > `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
 
-**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error).
+**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error) · `3` with `--id`, the report was produced and that finding is not in it.
 
 The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
 
@@ -144,7 +145,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all` — and a report showing everything ends at the legend.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all`. The last line is always the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed; swap in the id from any other row.
 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
 
@@ -364,6 +365,59 @@ For the numbers themselves, read the `headline` and `metrics` — not the id.
 
 Two findings about the same test carry different ids when they are different claims: a test
 that is both flaky and masked by a retry produces two findings and two ids.
+
+**Pass an id to `--id` to see that finding in detail.** Every finding's `drillDown` in
+`--format json` is that command. The detail view prints the row as the report does, every
+member of a cluster with where it lives, the test's full name and source location, each metric
+behind the headline, and the other findings about the same test:
+
+<!-- xping:sample detail-test -->
+````
+Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867
+16 tests · 10 healthy · 6 flagged
+
+```
+FINDING                                                       row 5 of 5
+────────────────────────────────────────────────────────────────────────
+
+5.  HIGH  flaky                                          same test as #4
+    SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+
+    test      SampleApp.XUnit.SampleTests.
+              FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    assembly  SampleApp.XUnit
+    source    src/SampleApp.XUnit/SampleTests.cs:83
+
+    failed          6 of 20 executions (30%)
+    runs affected   6 of 20
+    failure modes   1
+    failure mode 1  System.InvalidOperationException
+
+    Also about this test: #4 unstable timing (f_66c10ec3)
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 5 · all: xping report --all
+````
+
+Because the kind is half of the id, **an id moves when its claim changes kind.** A shared
+failure that turns out to live in one fixture member becomes a broken fixture, and a slowdown
+that stops clearing its significance bar can be reported as unstable timing instead. Asking for
+the old id then exits `3` and says where the subject is reported now:
+
+```
+Finding f_7c905f05 (shared failure) is not reported in this window (Checkout.Tests, 20 runs). Its subject is reported as f_3ea537e4 (broken fixture, row 3).
+```
+
+The tool does not redirect you to the new id: it is a different claim, and it names it for you to
+ask for. Exit `3` is also what a finding that has healed returns, so a script can ask *is this
+still reported* without reading any output. With `--format json` the envelope is still printed,
+with `findings` empty and `selection.reported` false.
 
 Copy the block, or pipe it:
 

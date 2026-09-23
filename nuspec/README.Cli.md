@@ -85,6 +85,7 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 | `xping report` | Report flakiness from recent local runs |
 | `xping report --all` | Show every finding and every latest-run row, not only the first ten of each |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
+| `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, and the other findings about the same test |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |
 
