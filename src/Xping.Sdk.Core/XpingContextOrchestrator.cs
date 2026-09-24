@@ -93,7 +93,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
     private IReadOnlyDictionary<string, AssemblyStatistics>? _finalizedStatisticsByAssembly;
-    private bool _localHistoryStored;
     private int _disposed;
     private int _finalized;
     private int _firstFlushDone;
@@ -330,7 +329,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         try
         {
-            TestSession session = await BuildSessionAsync(NextBatchState(), cancellationToken).ConfigureAwait(false);
+            TestSession session = await BuildSessionAsync(NextBatchState(), _collector.Drain(), cancellationToken)
+                .ConfigureAwait(false);
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
             // Only mark the first flush as done once data actually reaches the cloud.
@@ -407,6 +407,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         UploadResult uploadResult;
+        List<TestExecution>? storedExecutions;
 
         // Held across the drain, the local write and every upload, so a timer or buffer-full flush
         // cannot slip a batch of its own in between them.
@@ -420,14 +421,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // #126) — and the cheap, sufficient record must not queue behind the expensive one.
             List<TestSession> batches = await DrainRemainingAsync(cancellationToken).ConfigureAwait(false);
 
-            TestSession finalSession =
-                await BuildSessionAsync(TestSessionState.Finalized, cancellationToken).ConfigureAwait(false);
+            TestSession finalSession = await BuildSessionAsync(
+                TestSessionState.Finalized, executions: [], cancellationToken).ConfigureAwait(false);
 
             // Kept for the local store, which rebuilds its own session from the accumulated
             // executions and has no other source for the accumulated statistics.
             _finalizedStatistics = finalSession.QuickStatistics;
             _finalizedStatisticsByAssembly = finalSession.StatisticsByAssembly;
-            _localHistoryStored = WriteLocalHistory();
+            storedExecutions = WriteLocalHistory();
 
             WarnAboutUnattributableExecutions();
 
@@ -443,8 +444,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
-        if (_localHistoryStored)
-            PrintRetryFlakeHint();
+        if (storedExecutions != null)
+            PrintRetryFlakeHint(storedExecutions);
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -618,15 +619,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         while (true)
         {
-            TestSessionState state = initialPending ? TestSessionState.Initial : TestSessionState.Partial;
-            TestSession batch = await BuildSessionAsync(state, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<TestExecution> executions = _collector.Drain();
 
             // The count of *drained* executions is the only reliable measure of remaining work:
             // the no-op uploader of local-only mode never acknowledges any.
-            if (batch.Executions.Count == 0)
+            if (executions.Count == 0)
                 return batches;
 
-            batches.Add(batch);
+            TestSessionState state = initialPending ? TestSessionState.Initial : TestSessionState.Partial;
+            batches.Add(await BuildSessionAsync(state, executions, cancellationToken).ConfigureAwait(false));
             initialPending = false;
         }
     }
@@ -653,7 +654,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
     }
 
-    private async Task<TestSession> BuildSessionAsync(TestSessionState sessionState, CancellationToken cancellationToken)
+    private async Task<TestSession> BuildSessionAsync(
+        TestSessionState sessionState,
+        IReadOnlyList<TestExecution> executions,
+        CancellationToken cancellationToken)
     {
         // A builder per session, not a shared one: Build() hands the session a read-only view of
         // the builder's own lists, and finalization now builds every remaining batch before it
@@ -662,7 +666,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         bool isFinalizing = sessionState == TestSessionState.Finalized;
 
         EnvironmentInfo? environmentInfo = await CreateEnvironmentInfoAsync(cancellationToken).ConfigureAwait(false);
-        IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
         for (int i = 0; i < executions.Count; i++)
@@ -753,11 +756,11 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// it keeps that noise out of the store rather than asking the CLI to explain it.
     /// </para>
     /// </remarks>
-    /// <returns><see langword="true"/> when the session was written.</returns>
-    private bool WriteLocalHistory()
+    /// <returns>The executions that were written, or <see langword="null"/> when the run was not stored.</returns>
+    private List<TestExecution>? WriteLocalHistory()
     {
         if (!IsLocalStoreEnabled)
-            return false;
+            return null;
 
         List<TestExecution> executions;
         lock (_localExecutionsLock)
@@ -766,17 +769,17 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         if (executions.Count == 0)
-            return false;
+            return null;
 
         if (_sessionAssemblies.Count == 0)
         {
             _logger.LogDebug(
                 "Local session not stored: none of its {Count} executions named a test assembly.",
                 executions.Count);
-            return false;
+            return null;
         }
 
-        return WriteLocalSession(executions, _lastEnvironmentInfo, DateTime.UtcNow);
+        return WriteLocalSession(executions, _lastEnvironmentInfo, DateTime.UtcNow) ? executions : null;
     }
 
     /// <summary>
@@ -794,16 +797,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// rather than alongside the write so the terminal reads summary first, pointer second.
     /// </para>
     /// </remarks>
-    private void PrintRetryFlakeHint()
-    {
-        List<TestExecution> executions;
-        lock (_localExecutionsLock)
-        {
-            executions = [.. _localExecutions];
-        }
-
+    private void PrintRetryFlakeHint(List<TestExecution> executions) =>
         WriteRetryFlakeHint(executions, _lastEnvironmentInfo?.IsCIEnvironment ?? false);
-    }
 
     /// <summary>
     /// Persists the run as a complete <see cref="TestSession"/> for local analysis.
@@ -839,10 +834,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
             return _localSessionStore.Write(session);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            // Local history is a side channel. It must never be the reason a test run fails.
-            _logger.LogDebug("Local session not stored: {Message}", ex.Message);
+            // Local history is a side channel. It must never be the reason a test run fails, and
+            // since it now runs ahead of the uploads, never the reason an upload does not start:
+            // a serialization or builder failure here would otherwise abort finalization with
+            // _finalized already set, and every later call would report success for a run the
+            // cloud never received.
+            _logger.LogDebug(ex, "Local session not stored: {Message}", ex.Message);
             return false;
         }
     }

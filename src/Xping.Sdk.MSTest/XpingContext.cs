@@ -184,10 +184,12 @@ public class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Registers a process-exit safety net, once per process, that finalizes an initialized-but-not-yet-
-    /// finalized session. MSTest 3.7.x skips <c>[AssemblyCleanup]</c> under method-level parallelization
-    /// (issue #124; fixed upstream in MSTest 3.8), which otherwise silently discards every buffered
-    /// execution. No-op when a session already finalized normally, since <see cref="ShutdownAsync"/>
-    /// nulls out <see cref="_instance"/> before the process exits.
+    /// finalized session. MSTest runs <c>[AssemblyCleanup]</c> only when the test assembly declares one,
+    /// a hook that throws never reaches the finalize call, and MSTest 3.7.x skipped the hook outright
+    /// under method-level parallelization (issue #124; fixed in 3.8, this package's minimum). In every
+    /// case an unfinalized session would silently discard every buffered execution. No-op when a
+    /// session already finalized normally, since <see cref="ShutdownAsync"/> nulls out
+    /// <see cref="_instance"/> before the process exits.
     /// </summary>
     /// <remarks>
     /// This is a last resort, not a substitute for the cleanup hook. Under <c>dotnet test</c>, vstest
@@ -212,12 +214,13 @@ public class XpingContext : XpingContextOrchestrator
 
         XpingContext context = instance.Value;
         context._logger.LogWarning(
-            "[Xping] Process exiting with session {SessionId} still active: MSTest did not run " +
-            "[AssemblyCleanup] (MSTest 3.7.x skips it under method-level parallelization; 3.8+ fixes " +
-            "this). Finalizing as a safety net. Local history is written first and should survive; " +
-            "the cloud upload may not, because vstest terminates the test host 100 ms after the run. " +
-            "Set VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 in the environment that runs `dotnet test` " +
-            "to give it time.",
+            "[Xping] Process exiting with session {SessionId} still active: no [AssemblyCleanup] " +
+            "finalized Xping. MSTest only runs assembly hooks declared in the test assembly itself, so " +
+            "declare one that calls XpingContext.FinalizeAndShutdownAsync(), and check that yours does " +
+            "not throw before that call. Finalizing as a safety net: local history is written first " +
+            "and should survive; the cloud upload may not, because vstest terminates the test host " +
+            "100 ms after the run. Set VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 in the environment that " +
+            "runs `dotnet test` to give it time.",
             context.SessionId);
 
         try

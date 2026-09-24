@@ -335,7 +335,7 @@ For parameterized tests, the pinned value is automatically combined with a value
 
 ```csharp
 [XpingFingerprint("login-v1")]
-[DataTestMethod]
+[TestMethod]
 [DataRow("admin", true)]
 [DataRow("user", false)]
 public void Login_ShouldSucceed(string role, bool expected) { ... }
@@ -438,7 +438,7 @@ Xping automatically tracks data-driven tests with their data rows:
 [TestClass]
 public class MathTests : XpingTestBase
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(1, 1, 2)]
     [DataRow(2, 3, 5)]
     [DataRow(-1, 1, 0)]
@@ -461,7 +461,7 @@ Use dynamic data sources like CSV files or databases:
 [TestClass]
 public class DataSourceTests : XpingTestBase
 {
-    [DataTestMethod]
+    [TestMethod]
     [DynamicData(nameof(GetTestData), DynamicDataSourceType.Method)]
     public void ProcessData_ValidInput_ReturnsExpected(int input, int expected)
     {

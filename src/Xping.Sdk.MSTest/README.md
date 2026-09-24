@@ -8,7 +8,7 @@ MSTest test framework adapter for Xping SDK. Automatically tracks MSTest test ex
 - **Assembly-Level Initialization**: Simple setup with `XpingAssemblyInitialize`
 - **Rich Metadata Extraction**: Captures test categories, properties, and data rows
 - **Outcome Mapping**: Maps all MSTest outcomes to Xping test outcomes
-- **DataTestMethod Support**: Tracks each data row execution separately
+- **Data-driven test support**: Tracks each `[DataRow]` execution separately
 - **Thread-Safe**: Fully safe for parallel test execution
 
 ## Installation
@@ -41,7 +41,7 @@ public class CalculatorTests : XpingTestBase
         Assert.AreEqual(5, result);
     }
     
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(1, 2, 3)]
     [DataRow(5, 5, 10)]
     [TestCategory("Integration")]
@@ -134,8 +134,7 @@ public static class TestSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 
@@ -185,7 +184,7 @@ Extracted metadata:
 - **Test Context**: Results directory and other context information
 - **Framework**: mstest (automatically added)
 
-## DataTestMethod Support
+## Data-Driven Test Support
 
 Data-driven tests are fully supported:
 
@@ -193,7 +192,7 @@ Data-driven tests are fully supported:
 [TestClass]
 public class StringTests : XpingTestBase
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("hello", 5)]
     [DataRow("world", 5)]
     [DataRow("", 0)]
@@ -266,8 +265,7 @@ public static class CustomTestSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
@@ -364,9 +362,12 @@ If no configuration is found, the adapter will:
 
 ### Session finalized by the process-exit safety net
 
-If the log shows `Process exiting with session ... still active`, MSTest did not run `[AssemblyCleanup]`
-and the SDK finalized the session from an `AppDomain.ProcessExit` handler instead. MSTest 3.7.x does
-this under `[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]`; upgrade to MSTest 3.8 or later.
+If the log shows `Process exiting with session ... still active`, no `[AssemblyCleanup]` finalized the
+session and the SDK did it from an `AppDomain.ProcessExit` handler instead. MSTest only runs assembly
+hooks declared in the test assembly itself, so make sure your test project declares one that calls
+`XpingContext.FinalizeAndShutdownAsync()` (see [Option 2](#option-2-assembly-level-initialization)), and
+that nothing in it throws before that call. (MSTest 3.7.x also skipped the hook under method-level
+parallelization; this package requires 3.8 or later, where that is fixed.)
 
 The safety net writes local history to `.xping/` before it uploads, so `xping report` still sees the
 run. The cloud upload usually does not complete: under `dotnet test`, vstest terminates the test host
@@ -401,10 +402,10 @@ If the endpoint is unreachable, check:
 
 See the complete sample project at `samples/SampleApp.MSTest` for working examples of:
 - Test class inheriting from XpingTestBase
-- TestMethod and DataTestMethod usage
+- TestMethod and DataRow usage
 - TestCategory and TestProperty attributes
 - Skipped test tracking with [Ignore]
-- ExpectedException handling
+- Exception assertions with Assert.ThrowsExactly
 
 ## Comparison with Other Frameworks
 
@@ -413,7 +414,7 @@ See the complete sample project at `samples/SampleApp.MSTest` for working exampl
 | Setup | Base class | Attribute | AssemblyInfo |
 | Tracking | Automatic (base class) | Opt-in (attribute) | Automatic (all tests) |
 | Configuration | Inherit once | Per fixture/test | One-time |
-| Data Tests | DataTestMethod | TestCase | Theory |
+| Data Tests | DataRow | TestCase | Theory |
 | Overhead | Minimal | Minimal | Minimal |
 
 ## License
