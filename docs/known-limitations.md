@@ -338,11 +338,25 @@ bar.
 
 ---
 
-### `Vanished` Cannot Tell A Filtered Run From A Deletion, So It Trusts Neither Below Half A Suite
+### Outside xUnit, `Vanished` Cannot Tell A Filtered Run From A Deletion, So It Trusts Neither Below Half A Suite
 
-**Impact**: a run that covered less than half the suite is counted on neither side of an absence, so
-a deletion that removed more than half a suite is never reported. A `--filter` selecting *more* than
-half the suite still produces one false `stopped running` per unselected test.
+**Impact**: under NUnit and MSTest, a run that covered less than half the suite is counted on neither
+side of an absence, so a deletion that removed more than half a suite is never reported. A `--filter`
+selecting *more* than half the suite still produces one false `stopped running` per unselected test.
+The same applies to xUnit tests run from an IDE, and to runs recorded before the SDK reported test
+cases.
+
+**Not under xUnit with `dotnet test`**: there the SDK records, per assembly, how many test cases the
+framework discovered and how many it was asked to run. A run that selected fewer than it discovered
+was filtered, and one that did not was a run of the whole suite however small it is, so both cases
+above are decided correctly. The threshold below is never consulted for such a run.
+
+**Why only xUnit**: xUnit discovers the whole assembly in the test process before applying the
+filter, and the SDK sees both steps. NUnit tracking is opt-in per `[XpingTrack]` fixture or method,
+so NUnit's own count of the suite includes tests Xping never records. NUnit3TestAdapter's `PreFilter`
+setting can also make that count post-filter, and the SDK cannot detect it. MSTest exposes no
+count at all to anything the SDK can hook. A number that is sometimes the wrong number is worse than
+none here, so neither reports one.
 
 **Reason**: a run under a `dotnet test --filter` did not fail to see the tests it excluded — it never
 looked for them. Counting its silence makes every unselected test look deleted, which is what an
@@ -350,7 +364,7 @@ ordinary inner loop produces in about ten minutes: a handful of full runs, then 
 ones, then a report claiming most of the suite has stopped running. Every statement in it is true of
 the data and false about the world.
 
-So the report classifies each run by how much of the suite it covered — its distinct tests against
+So, where the framework reports nothing, the report classifies each run by how much of the suite it covered — its distinct tests against
 the largest run in the window, which is the best evidence the window holds of how big the suite is,
 and the only anchor a store of mostly filtered runs does not corrupt. The median does not work: four
 full runs and sixteen filtered ones has a median of one test, and every run in it measures as

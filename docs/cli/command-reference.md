@@ -196,7 +196,7 @@ The marker between the evidence level and the finding id — `all runs`, `-env`,
 
 **A clustered failure** is one whose signature is shared by at least three tests *in a single run*, which the report already publishes once as its own `shared failure` or `broken fixture` finding. Two tests failing alike is a coincidence; three at once is a cause. Counting it a second time against each test that was caught by it is what turns one cause into forty findings.
 
-**A partial run** is one whose distinct tests are under half those of the largest run in the window — what a `dotnet test --filter` produces. Only `-partial` sets one aside, and only one kind carries `-partial`, because the asymmetry is real: a filtered run's *outcomes* are as true as any other run's, so a kind reading outcomes counts it in full or throws away real evidence, while its *silences* mean nothing, because it did not fail to see the tests it excluded — it never looked for them. `stopped running` is the only kind that reasons from absence, so it is the only one for which the distinction changes a denominator.
+**A partial run** is one that ran part of the suite — what a `dotnet test --filter` produces. Under xUnit that is a fact the framework reports (fewer test cases selected than discovered); elsewhere it is a run whose distinct tests are under half those of the largest run in the window. Only `-partial` sets one aside, and only one kind carries `-partial`, because the asymmetry is real: a filtered run's *outcomes* are as true as any other run's, so a kind reading outcomes counts it in full or throws away real evidence, while its *silences* mean nothing, because it did not fail to see the tests it excluded — it never looked for them. `stopped running` is the only kind that reasons from absence, so it is the only one for which the distinction changes a denominator.
 
 **Why it is on the page.** The list is ranked, so it invites you to compare rates — and the comparison is only valid where the markers agree. The arithmetic is not small. A test that ran 20 times, was caught by a shared cause 10 times and failed twice on its own reports:
 
@@ -337,15 +337,17 @@ there — see [known limitations](../known-limitations.md).
 
 It also asks only the runs that were in a position to answer. A run under a `dotnet test --filter`
 did not fail to see the tests it excluded; it never looked for them, and counting its silence makes
-every unselected test look deleted. A run whose distinct tests are under half those of the largest
-run in the window is therefore set aside, the rest are re-split into their own earlier and current
+every unselected test look deleted. Such a run is therefore set aside. Under xUnit the test framework
+says so directly: the run selected fewer test cases than it discovered. Under NUnit and MSTest, and
+for xUnit tests started from an IDE, the report falls back to a count, and treats a run whose
+distinct tests are under half those of the largest run in the window as filtered. The rest are re-split into their own earlier and current
 runs, and the finding's denominators count only those — the sentence says `full runs`, a
 `set aside` metric gives the number left out, and the finding is marked `-partial` rather than
 `all runs` so a rate from it is not compared with one taken over every run. The summary line reports
 how many of the window's runs covered part of the suite. Only this kind sets them aside; every other
-kind still counts them in full, because a filtered run's outcomes are as true as any other run's. The cost is that a deletion removing more
-than half a suite is indistinguishable from a filter and is not reported — see
-[known limitations](../known-limitations.md).
+kind still counts them in full, because a filtered run's outcomes are as true as any other run's.
+Where the fallback applies, a deletion removing more than half a suite is indistinguishable from a
+filter and is not reported — see [known limitations](../known-limitations.md).
 
 ### Finding ids
 

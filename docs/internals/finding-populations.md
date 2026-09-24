@@ -33,9 +33,12 @@ A session is *environmental* when at least ten of its tests failed and they are 
 ten of the tests it ran — `SessionView.For`, against `EnvironmentalSessionFailureRate` and
 `EnvironmentalSessionMinFailures`. A failure is *clustered* when its signature is shared across
 enough tests to be reported once as a `SharedFailure` or `BrokenFixture`. A run is *partial* when
-its distinct tests are under `PartialSessionShare` — a half — of the largest run in the window,
-which is what a `dotnet test --filter` produces; `SessionView.IsPartial`, set on the whole window at
-once because the classification is a comparison rather than a measurement.
+its test framework reported selecting fewer test cases than it discovered, which is what a
+`dotnet test --filter` produces — `SessionView.ReportedPartial`, from the assembly's
+`DiscoveredTestCases` and `SelectedTestCases`. Only xUnit reports those. For every other run the
+fallback is a comparison: its distinct tests are under `PartialSessionShare` — a half — of the
+largest run in the window. `SessionView.IsPartial` holds the answer either way, and is set on the
+whole window at once because the fallback needs all of it.
 
 **Only one kind sets a partial run aside, and the asymmetry is the reason.** A filtered run's
 *outcomes* are as true as any other run's — a test that failed in one failed — so a kind reading
