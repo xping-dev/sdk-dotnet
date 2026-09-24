@@ -118,10 +118,9 @@ public static class SessionAssemblies
     /// </para>
     /// <para>
     /// The session's statistics are split the way the counters themselves split.
-    /// <see cref="TestSession.QuickStatistics"/> and <see cref="TestSession.TotalTestsExpected"/> are
-    /// dropped: both describe the whole host process rather than this slice of it, and a
-    /// solution-wide count carried onto one assembly's history would be wrong in exactly the way
-    /// this projection exists to prevent. <see cref="TestSession.StatisticsByAssembly"/> is narrowed
+    /// <see cref="TestSession.QuickStatistics"/> is dropped: it describes the whole host process
+    /// rather than this slice of it, and a solution-wide count carried onto one assembly's history
+    /// would be wrong in exactly the way this projection exists to prevent. <see cref="TestSession.StatisticsByAssembly"/> is narrowed
     /// to the one entry instead of dropped — it already is this slice, counted by the SDK that saw
     /// the run.
     /// </para>
@@ -190,9 +189,8 @@ public static class SessionAssemblies
             SessionState = session.SessionState,
             PullRequestContext = session.PullRequestContext,
             SdkVersion = session.SdkVersion,
-            TotalTestsExpected = null,
             QuickStatistics = null,
-            // Kept, unlike the two above, because it is the one statistic that decomposes: each
+            // Kept, unlike the one above, because it is the one statistic that decomposes: each
             // entry already counts exactly one assembly's executions.
             StatisticsByAssembly = FilterStatistics(session.StatisticsByAssembly, assembly, keepMatches)
         };

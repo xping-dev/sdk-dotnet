@@ -31,6 +31,12 @@ internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccum
     }
 
     /// <inheritdoc/>
+    public void RecordTestCases(string assembly, int? discovered, int selected)
+    {
+        // No-op: discard the counts
+    }
+
+    /// <inheritdoc/>
     public QuickStatistics GetSnapshot() => new();
 
     /// <inheritdoc/>

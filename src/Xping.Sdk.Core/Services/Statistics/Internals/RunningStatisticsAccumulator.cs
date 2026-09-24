@@ -42,6 +42,10 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     // it is what lets the distinct-test counters be grouped by assembly with no extra state.
     private readonly ConcurrentDictionary<(string Assembly, string Test), FinalAttempt> _finalByTest = new();
 
+    // What the framework discovered and selected per assembly. Reported by the framework as a whole
+    // rather than per execution, so it is replaced rather than accumulated.
+    private readonly ConcurrentDictionary<string, TestCaseCounts> _testCasesByAssembly = new(StringComparer.Ordinal);
+
     /// <inheritdoc/>
     public void Record(TestExecution execution)
     {
@@ -58,6 +62,15 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             Tally(_byAssembly.GetOrAdd(assembly, static _ => new Counters()), execution);
 
         RecordFinalAttempt(execution);
+    }
+
+    /// <inheritdoc/>
+    public void RecordTestCases(string assembly, int? discovered, int selected)
+    {
+        if (string.IsNullOrEmpty(assembly))
+            throw new ArgumentException("Assembly name cannot be null or empty.", nameof(assembly));
+
+        _testCasesByAssembly[assembly] = new TestCaseCounts(discovered, selected);
     }
 
     /// <inheritdoc/>
@@ -133,7 +146,13 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             // answer GetSnapshot gives for an execution recorded midway through its own snapshot.
             finalByAssembly.TryGetValue(entry.Key, out FinalCounts? final);
 
-            snapshot[entry.Key] = ToStatistics(entry.Value, final);
+            // Looked up only for assemblies that recorded an execution, so counts for an assembly
+            // the filter selected nothing from never grow an entry of their own.
+            TestCaseCounts? testCases = _testCasesByAssembly.TryGetValue(entry.Key, out TestCaseCounts found)
+                ? found
+                : null;
+
+            snapshot[entry.Key] = ToStatistics(entry.Value, final, testCases);
         }
 
         // Wrapped rather than returned directly: this value is handed to the session and travels to
@@ -148,6 +167,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
         _hostWide.Reset();
         _byAssembly.Clear();
         _finalByTest.Clear();
+        _testCasesByAssembly.Clear();
     }
 
     /// <summary>
@@ -227,7 +247,7 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
     /// <summary>
     /// Reduces one assembly's counters and distinct-test tally to its published statistics.
     /// </summary>
-    private static AssemblyStatistics ToStatistics(Counters counters, FinalCounts? final)
+    private static AssemblyStatistics ToStatistics(Counters counters, FinalCounts? final, TestCaseCounts? testCases)
     {
         long total = Interlocked.Read(ref counters.Total);
         long durationTicks = Interlocked.Read(ref counters.TotalDurationTicks);
@@ -250,6 +270,8 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             FinalInconclusive = final?.Inconclusive ?? 0,
             FinalNotExecuted = final?.NotExecuted ?? 0,
             FinalTimeout = final?.Timeout ?? 0,
+            DiscoveredTestCases = testCases?.Discovered,
+            SelectedTestCases = testCases?.Selected,
             TotalDurationMs = durationTicks / TimeSpan.TicksPerMillisecond,
             SlowestTestName = slowestName,
             SlowestTestDurationMs = slowestTicks / TimeSpan.TicksPerMillisecond
@@ -380,6 +402,11 @@ internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulat
             }
         }
     }
+
+    /// <summary>
+    /// What the framework discovered and selected in one assembly.
+    /// </summary>
+    private readonly record struct TestCaseCounts(int? Discovered, int Selected);
 
     /// <summary>
     /// The outcome of the highest-numbered attempt seen for one test.

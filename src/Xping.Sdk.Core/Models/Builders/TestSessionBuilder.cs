@@ -20,7 +20,6 @@ public sealed class TestSessionBuilder
     private DateTime? _endedAt;
     private EnvironmentInfo _environmentInfo;
     private readonly List<TestExecution> _executions;
-    private int? _totalTestsExpected;
     private TestSessionState _sessionState;
     private PullRequestContext? _pullRequestContext;
     private QuickStatistics? _quickStatistics;
@@ -118,17 +117,6 @@ public sealed class TestSessionBuilder
     }
 
     /// <summary>
-    /// Sets the total number of tests expected in this session.
-    /// </summary>
-    /// <param name="totalTests">The total test count.</param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public TestSessionBuilder WithTotalTestsExpected(int? totalTests)
-    {
-        _totalTestsExpected = totalTests;
-        return this;
-    }
-
-    /// <summary>
     /// Sets the upload state of the session batch.
     /// </summary>
     /// <param name="state">The session state to set.</param>
@@ -218,7 +206,6 @@ public sealed class TestSessionBuilder
             executions: _executions.AsReadOnly(),
             assemblies: _assemblies,
             endedAt: _endedAt,
-            totalTestsExpected: _totalTestsExpected,
             sessionState: _sessionState,
             pullRequestContext: _pullRequestContext,
             quickStatistics: _quickStatistics,
@@ -237,7 +224,6 @@ public sealed class TestSessionBuilder
         _environmentInfo = new EnvironmentInfo();
         _executions.Clear();
         _assemblies.Clear();
-        _totalTestsExpected = null;
         _sessionState = TestSessionState.Initial;
         _pullRequestContext = null;
         _quickStatistics = null;

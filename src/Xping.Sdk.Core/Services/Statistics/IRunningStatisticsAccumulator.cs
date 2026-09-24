@@ -25,6 +25,24 @@ public interface IRunningStatisticsAccumulator
     void Record(TestExecution execution);
 
     /// <summary>
+    /// Records how many test cases the test framework discovered in an assembly and how many of
+    /// them it was asked to run, replacing whatever was recorded for that assembly before.
+    /// </summary>
+    /// <param name="assembly">The test assembly, named as its executions name it.</param>
+    /// <param name="discovered">
+    /// The test cases discovered before any filter, or <see langword="null"/> when discovery was not
+    /// observed in this process.
+    /// </param>
+    /// <param name="selected">The test cases the framework was asked to run.</param>
+    /// <remarks>
+    /// Surfaces as <see cref="AssemblyStatistics.DiscoveredTestCases"/> and
+    /// <see cref="AssemblyStatistics.SelectedTestCases"/>, and only for an assembly that also
+    /// recorded an execution: a breakdown entry with every counter at zero would claim a run of
+    /// that assembly the session does not contain.
+    /// </remarks>
+    void RecordTestCases(string assembly, int? discovered, int selected);
+
+    /// <summary>
     /// Returns an immutable snapshot of the statistics accumulated so far.
     /// Safe to call at any time, including concurrently with <see cref="Record"/>.
     /// </summary>

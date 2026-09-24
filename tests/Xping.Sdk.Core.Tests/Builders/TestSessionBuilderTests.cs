@@ -49,13 +49,6 @@ public sealed class TestSessionBuilderTests
         Assert.Empty(session.Executions);
     }
 
-    [Fact]
-    public void Build_ShouldReturnSession_WithNullTotalTestsExpectedByDefault()
-    {
-        var session = new TestSessionBuilder().Build();
-        Assert.Null(session.TotalTestsExpected);
-    }
-
     // ---------------------------------------------------------------------------
     // WithSessionId
     // ---------------------------------------------------------------------------
@@ -167,24 +160,6 @@ public sealed class TestSessionBuilderTests
     }
 
     // ---------------------------------------------------------------------------
-    // WithTotalTestsExpected
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WithTotalTestsExpected_ShouldSetCount()
-    {
-        var session = new TestSessionBuilder().WithTotalTestsExpected(50).Build();
-        Assert.Equal(50, session.TotalTestsExpected);
-    }
-
-    [Fact]
-    public void WithTotalTestsExpected_Null_ShouldSetNull()
-    {
-        var session = new TestSessionBuilder().WithTotalTestsExpected(10).WithTotalTestsExpected(null).Build();
-        Assert.Null(session.TotalTestsExpected);
-    }
-
-    // ---------------------------------------------------------------------------
     // Reset
     // ---------------------------------------------------------------------------
 
@@ -214,14 +189,6 @@ public sealed class TestSessionBuilderTests
         var builder = new TestSessionBuilder().WithEndedAt(DateTime.UtcNow);
         builder.Reset();
         Assert.Null(builder.Build().EndedAt);
-    }
-
-    [Fact]
-    public void Reset_ShouldClearTotalTestsExpected()
-    {
-        var builder = new TestSessionBuilder().WithTotalTestsExpected(100);
-        builder.Reset();
-        Assert.Null(builder.Build().TotalTestsExpected);
     }
 
     [Fact]
