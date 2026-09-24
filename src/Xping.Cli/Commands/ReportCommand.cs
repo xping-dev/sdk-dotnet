@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Text;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
@@ -73,8 +74,12 @@ internal sealed class ReportCommand(
         var context = new AnalysisContext(
             resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
+        // Never narrowed under --id. The parser rejects --kind beside it, and this holds whatever
+        // built the options: narrowing only ever removes findings — a handover silenced by a filter
+        // on its alternative's kind is one — so a narrowed run could miss a finding the full report
+        // reports, and --id has to answer for the full report.
         IReadOnlySet<FindingKind>? kinds =
-            options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
+            options.Id != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
 
         AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
 
@@ -101,12 +106,29 @@ internal sealed class ReportCommand(
             resolved.UnreadableSessions,
             resolved.SkewedSessions,
             options.Top,
-            latestRun);
+            latestRun,
+            options.Id,
+
+            // What every printed command has to repeat to land on this report again.
+            new ReportScope(assembly, options.Assembly != null, options.Runs, options.Since, options.Directory));
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
         // developer reading JSON through a pipe is exactly the one who will not see the caveat line.
         WriteClockWarning(resolved);
+
+        // The report ran and the finding is not in it. Said on standard error, with the envelope on
+        // standard output only where a script is reading one: a text report of nothing would be a
+        // fence around an absence the message already describes.
+        if (envelope.Selection is { Reported: false } selection)
+        {
+            WriteNotReported(selection, envelope, source, assembly);
+
+            if (options.Format == ReportFormat.Json)
+                new JsonReportRenderer().Render(envelope, io.Output);
+
+            return ExitCodes.FindingNotReported;
+        }
 
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
@@ -135,7 +157,10 @@ internal sealed class ReportCommand(
             io.Output.WriteLine();
         }
 
-        return ExitCodes.ForReport(analysis.Findings, options.FailOn);
+        // --fail-on is rejected beside --id, so a selected finding never fails the command.
+        return envelope.Selection != null
+            ? ExitCodes.Success
+            : ExitCodes.ForReport(analysis.Findings, options.FailOn);
     }
 
     private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>
@@ -143,7 +168,9 @@ internal sealed class ReportCommand(
         {
             ReportFormat.Json => new JsonReportRenderer(),
             ReportFormat.Summary => new SummaryReportRenderer(),
-            _ => new TextReportRenderer(capabilities)
+            // No detail line on a --kind-narrowed report: its rows are numbered against a list the
+            // detail view does not use, and its row 1 is not the detail view's row 1.
+            _ => new TextReportRenderer(capabilities, detailCommand: options.Kinds.Count == 0)
         };
 
     /// <summary>
@@ -241,6 +268,58 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
+    /// Says that the finding <c>--id</c> named is not in this report, and where its subject went.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Not reported in this window", never "not found" or "error": an id that was on screen
+    /// yesterday and is absent today is the report working. The window is named because it is the
+    /// honest boundary — a finding that needs twenty runs is absent from five — and the other
+    /// assemblies are counted because the likeliest reason an id is missing is that the report
+    /// scoped itself to a different suite.
+    /// </para>
+    /// <para>
+    /// Names the current id rather than showing it. A promoted cluster is a different claim, and
+    /// rendering it under the id of the one it replaced would say otherwise.
+    /// </para>
+    /// </remarks>
+    private void WriteNotReported(
+        SelectionDto selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly)
+    {
+        var message = new StringBuilder("Finding ").Append(selection.Id);
+
+        if (selection.Kind is { } kind)
+            message.Append(" (").Append(ReportVocabulary.LabelFor(kind)).Append(')');
+
+        int sessions = envelope.Window.SessionCount;
+        string runs = sessions == 1 ? "1 run" : $"{sessions} runs";
+
+        message.Append(" is not reported in this window (")
+               .Append(assembly == null ? runs : $"{assembly}, {runs}")
+               .Append(").");
+
+        if (selection.SameSubject.Count > 0)
+        {
+            message.Append(" Its subject is reported as ")
+                   .AppendJoin(", ", selection.SameSubject.Select(same =>
+                       $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
+                   .Append('.');
+        }
+
+        int others = OtherAssemblies(source, assembly);
+
+        if (others > 0)
+        {
+            message.Append(' ')
+                   .Append(others)
+                   .Append(others == 1 ? " other assembly" : " other assemblies")
+                   .Append(" in this store (use --assembly to switch).");
+        }
+
+        io.Error.WriteLine(message.ToString());
+    }
+
+    /// <summary>
     /// Says which assembly the report covers when the store holds more than one.
     /// </summary>
     /// <remarks>
@@ -252,8 +331,7 @@ internal sealed class ReportCommand(
         if (assembly == null || explicitlyChosen)
             return;
 
-        int others = source.KnownAssemblies()
-            .Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
+        int others = OtherAssemblies(source, assembly);
 
         if (others == 0)
             return;
@@ -263,6 +341,12 @@ internal sealed class ReportCommand(
             (others == 1 ? "assembly" : "assemblies") +
             " in this store (use --assembly to switch).");
     }
+
+    /// <summary>
+    /// Counts the assemblies in the store other than the one the report covers.
+    /// </summary>
+    private static int OtherAssemblies(LocalSessionSource source, string? assembly) =>
+        source.KnownAssemblies().Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
 
     /// <summary>
     /// Prints the cloud invitation, at most once a day and only when it is relevant.

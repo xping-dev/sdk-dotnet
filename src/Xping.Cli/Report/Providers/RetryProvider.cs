@@ -656,8 +656,6 @@ internal sealed class RetryProvider : IFindingProvider
             // test that ran out of retries a fortnight ago and has been clean since decays.
             LastOccurrenceIn: TestIndex.NewestSession(exhausted.Select(r => r.Final)),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryExhausted, test),
-
             // Every non-environmental run of this test — the population the exhaustion rate is
             // taken over, which is not the runs it appeared in whenever an outage discounted one.
             // Not `retried.Count`: a run that never needed a retry is still an occasion on which
@@ -793,8 +791,6 @@ internal sealed class RetryProvider : IFindingProvider
             Unreliability: Math.Min(1.0, Math.Log2((double)currentTypical / baselineTypical) / 2.0),
 
             LastOccurrenceIn: TestIndex.NewestSession(currentGreen.Select(r => r.Final)),
-
-            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryDeepening, test),
 
             // The runs on both sides of the comparison, which is what a difference between two
             // medians rests on. Runs that failed finally are in neither arm — the two medians are
@@ -973,8 +969,6 @@ internal sealed class RetryProvider : IFindingProvider
             Unreliability: WilsonInterval.LowerBound(masked.Count, considered.Count),
 
             LastOccurrenceIn: newest.Session,
-
-            DrillDownCommand: DrillDown.ForTest(FindingKind.RetryMasked, test),
 
             // Runs rather than the executions the rate above is taken over. Attempts within one run
             // are the very correlation this kind is measuring, so counting them as occasions would

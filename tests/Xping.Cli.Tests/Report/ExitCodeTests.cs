@@ -20,7 +20,6 @@ public sealed class ExitCodeTests
             new FindingSubject.SingleTest(
                 new TestReference("fp-A", "N.C.M", "M", null, null, "A.Tests")),
             new StubEvidence(),
-            "xping report",
             0.5);
 
     // Severities travel as names rather than as the enum itself: the enum is internal to the CLI,

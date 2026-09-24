@@ -57,7 +57,6 @@ public sealed class LatestRunAnalyzerTests
                 ? new FindingSubject.SingleTest(Reference(names[0]))
                 : new FindingSubject.Group(id, [.. names.Select(Reference)]),
             new StubEvidence(),
-            "xping report",
             0.5);
 
     private static TestReference Reference(string name) =>

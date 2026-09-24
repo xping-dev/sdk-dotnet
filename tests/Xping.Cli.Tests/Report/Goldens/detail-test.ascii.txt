@@ -1,0 +1,31 @@
+Xping | SampleApp.XUnit | 20 runs | 2026-09-05 09:00 -> 16:21 | main@eab9867
+16 tests | 10 healthy | 6 flagged
+
+```
+FINDING                                                       row 5 of 5
+------------------------------------------------------------------------
+
+5.  HIGH  flaky                                          same test as #4
+    SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+
+    test      SampleApp.XUnit.SampleTests.
+              FlakyTest_EnvironmentState_FailsBasedOnSystemState
+    assembly  SampleApp.XUnit
+    source    src/SampleApp.XUnit/SampleTests.cs:83
+
+    failed          6 of 20 executions (30%)
+    runs affected   6 of 20
+    failure modes   1
+    failure mode 1  System.InvalidOperationException: Expected <n> but
+                    was <n>
+
+    Also about this test: #4 unstable timing (f_66c10ec3)
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 5 findings | all: xping report --all

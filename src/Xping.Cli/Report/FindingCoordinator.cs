@@ -200,7 +200,6 @@ internal sealed class FindingCoordinator(IEnumerable<IFindingProvider> providers
                 candidate.EvidenceSessions,
                 candidate.Subject,
                 candidate.Evidence,
-                candidate.DrillDownCommand,
                 impact));
         }
 

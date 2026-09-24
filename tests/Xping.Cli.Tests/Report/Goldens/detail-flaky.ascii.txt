@@ -1,0 +1,30 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e
+412 tests | 411 healthy | 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  MED   flaky
+    CheckoutTests.Completes
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+    evidence moderate | -env-cluster | f_89134598 | ...eckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    failed          7 of 20 executions (35%)
+    runs affected   5 of 20
+    failure modes   3
+    failure mode 1  System.InvalidOperationException: Expected <n> but
+                    was <n>
+    failure mode 2  System.TimeoutException: timed out after <n>ms
+    failure mode 3  not recorded by the adapter
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding | all: xping report --all

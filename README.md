@@ -163,6 +163,8 @@ NEEDS ATTENTION (4 high)                               most severe first
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_2b84a621 --assembly SampleApp.MSTest
 ````
 
 No API key, no signup, no network calls. Everything lives in `.xping/` on your machine.
@@ -186,6 +188,7 @@ xping report --summary          # one line, for a chat message or a CI step titl
 xping report --fail-on high     # exit non-zero when a high finding shows up
 xping report --runs 50          # widen the window (or --since <sha|yyyy-MM-dd>)
 xping report --kind flaky       # restrict to one or more finding kinds
+xping report --id f_445c562e    # one finding in detail, by the id on its row
 xping where                     # show where local runs are stored
 xping clear                     # delete recorded runs
 ```
@@ -283,33 +286,7 @@ your suite.
 
 ## How It Works
 
-```
-        Your test project  (xUnit · NUnit · MSTest)
-                        │
-                        ▼
-            Xping.Sdk.<framework> adapter
-                        │
-                        ▼
-                  Xping.Sdk.Core
-         tracking · environment detection
-                        │
-      ┌─────────────────┴─────────────────┐
-      │  no upload key                    │  XPING_APIKEY set
-      ▼                                   ▼
-.xping/ (local store) ─ batched upload ─▶ Xping Cloud
-      │                                   │  scoring · root cause · trends
-      │                                   │
-      │                                   ├──────────────────────┐
-      │                                   │                      │
-      │                            (read: xping login)           ▼
-      │                                   │              app.xping.io
-      ▼                                   ▼            the shared view —
-      └──────────────▶ xping report ◀─────┘            QA, leads, product,
-                            │                          nothing installed
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-        you, in a terminal        your agent, via --format json
-```
+<img src="docs/media/architecture-consumers.svg" width="820" alt="Xping architecture" />
 
 Adapters are thin — they hook the framework's execution pipeline and hand results to
 `Xping.Sdk.Core`, which owns collection, environment detection, and delivery. Overhead is

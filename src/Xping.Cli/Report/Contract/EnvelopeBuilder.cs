@@ -36,6 +36,15 @@ internal static class EnvelopeBuilder
     /// The newest session read against the rest, or <see langword="null"/> when the window holds
     /// no session.
     /// </param>
+    /// <param name="id">
+    /// The finding <c>--id</c> asked for, or <see langword="null"/> for the full report. When
+    /// given, the findings shown are that one alone, or none; everything else is built exactly as
+    /// the full report builds it.
+    /// </param>
+    /// <param name="scope">
+    /// What the report was scoped to, which every command it prints repeats; by default the
+    /// assembly the window covers and nothing the caller typed.
+    /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
         AnalysisContext context,
@@ -44,16 +53,26 @@ internal static class EnvelopeBuilder
         int unreadableSessions,
         int skewedSessions,
         int? top,
-        LatestRunAnalysis? latestRun)
+        LatestRunAnalysis? latestRun,
+        string? id = null,
+        ReportScope? scope = null)
     {
+        scope ??= new ReportScope(context.Revision?.Assembly);
+
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test
         // as #4" in a report whose fourth row is something else.
         IReadOnlyList<Finding> ordered = FindingOrder.WithSiblingsAdjacent(result.Findings);
 
-        IReadOnlyList<Finding> shown = top is { } limit && limit < ordered.Count
-            ? [.. ordered.Take(limit)]
-            : ordered;
+        // Over this list and no other, so the row a selection reports is the row this envelope
+        // numbers, and cannot come from an ordering computed somewhere else.
+        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id);
+
+        IReadOnlyList<Finding> shown = selection != null
+            ? selection.Finding is { } selected ? [selected] : []
+            : top is { } limit && limit < ordered.Count
+                ? [.. ordered.Take(limit)]
+                : ordered;
 
         Dictionary<string, string> annotations = Annotations(ordered);
 
@@ -108,8 +127,9 @@ internal static class EnvelopeBuilder
                 skewedSessions,
                 result.FailedProviders),
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
-            [.. shown.Select(finding => BuildFinding(finding, annotations))],
-            new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
+            selection == null ? null : BuildSelection(selection),
+            [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
+            new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
     }
 
     /// <summary>
@@ -121,7 +141,6 @@ internal static class EnvelopeBuilder
     private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered)
     {
         TestSession session = analysis.Session.Session;
-        bool capped = analysis.FailuresTotal > analysis.Failures.Count;
 
         // In envelope order and not in the order the analyzer met them, which was the order of
         // the tests they explain. The "also failing" line names them by row number, and a reader
@@ -151,12 +170,16 @@ internal static class EnvelopeBuilder
             explainedBy,
             [.. analysis.Failures.Select(BuildLatestRunFailure)],
             analysis.Failures.Count,
-            analysis.FailuresTotal,
-
-            // The same string the findings truncation line prints. --all means everything the
-            // report withheld, whichever cap withheld it, and one string is how the two agree.
-            capped ? DrillDown.ForFullReport() : null);
+            analysis.FailuresTotal);
     }
+
+    private static SelectionDto BuildSelection(FindingSelection selection) =>
+        new(
+            selection.Id,
+            selection.Finding != null,
+            selection.Kind?.ToString(),
+            selection.Row,
+            [.. selection.SameSubject.Select(same => new SameSubjectDto(same.Finding.Id, same.Finding.Kind.ToString(), same.Row))]);
 
     private static LatestRunFailureDto BuildLatestRunFailure(LatestRunFailure failure) =>
         new(
@@ -304,7 +327,7 @@ internal static class EnvelopeBuilder
     }
 
     private static FindingDto BuildFinding(
-        Finding finding, Dictionary<string, string> annotations)
+        Finding finding, Dictionary<string, string> annotations, ReportScope scope)
     {
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(finding.Kind, finding.Evidence);
@@ -321,7 +344,7 @@ internal static class EnvelopeBuilder
             headline,
             metrics,
             BuildEvidence(finding.Evidence),
-            finding.DrillDownCommand);
+            DrillDown.ForFinding(finding.Id, scope));
     }
 
     /// <summary>

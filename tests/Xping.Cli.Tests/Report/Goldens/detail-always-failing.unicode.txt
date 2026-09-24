@@ -1,0 +1,27 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
+412 tests · 411 healthy · 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   always failing
+    CheckoutTests.Completes
+    failed 19 of 20 executions (95%), one failure mode:
+    System.InvalidOperationException
+    evidence moderate | -env-cluster | f_3cf15b1c | ...eckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    failed         19 of 20 executions (95%)
+    runs affected  19 of 20
+    failure mode   System.InvalidOperationException
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding · all: xping report --all

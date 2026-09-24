@@ -34,7 +34,12 @@ namespace Xping.Cli.Report.Rendering;
 /// to go on yet".
 /// </para>
 /// </remarks>
-internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IReportRenderer
+/// <param name="capabilities">What the output stream can draw.</param>
+/// <param name="detailCommand">
+/// Whether the full report closes with the command that opens its first row in detail. Off for a
+/// report narrowed by <c>--kind</c>, whose row numbers the detail view does not share.
+/// </param>
+internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool detailCommand = true) : IReportRenderer
 {
     /// <summary>Widest line the fence may contain.</summary>
     /// <remarks>
@@ -109,6 +114,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     // name rather than by eye.
     private const int MembersShown = 3;
 
+    // What the detail view's heading is called. The row it shows and how many the full report holds
+    // sit opposite it, where the full report's heading says how its rows are ordered.
+    private const string DetailLabel = "FINDING";
+
+    // The labelled pairs under a detail view's row: indented to the row's own continuation, with two
+    // spaces between the longest label in the block and the values.
+    private const int PairIndent = ContinuationIndent;
+
+    private const int PairGap = 2;
+
     /// <inheritdoc/>
     public void Render(ReportEnvelope envelope, TextWriter output)
     {
@@ -124,12 +139,18 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         builder.AppendLine();
         builder.AppendLine(Fence);
 
-        WriteFindings(builder, envelope);
+        if (envelope.Selection is { } selection)
+            WriteDetail(builder, envelope, selection);
+        else
+            WriteFindings(builder, envelope);
 
         builder.AppendLine(Fence);
 
         WriteLegend(builder, envelope);
-        WriteFooter(builder, envelope);
+        bool truncated = WriteFooter(builder, envelope);
+
+        if (envelope.Selection == null && detailCommand)
+            WriteDetailCommand(builder, envelope, truncated);
 
         output.Write(builder.ToString());
     }
@@ -359,6 +380,183 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     }
 
     /// <summary>
+    /// Writes one finding in detail: its row as the full report prints it, then what the row omits.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The report, holding the selected finding alone.</param>
+    /// <param name="selection">What <c>--id</c> resolved to.</param>
+    /// <remarks>
+    /// <para>
+    /// Nothing is phrased for the first time. The row is the full report's row, numbered as the full
+    /// report numbers it, so the reader recognises what they asked about; everything below it is a
+    /// string the envelope already carries.
+    /// </para>
+    /// <para>
+    /// No latest-run section. It is an account of the newest run, and the reader asked about one
+    /// finding; the envelope still carries it for a script.
+    /// </para>
+    /// </remarks>
+    private void WriteDetail(StringBuilder builder, ReportEnvelope envelope, SelectionDto selection)
+    {
+        // The command prints nothing on standard output for this, and says why on standard error.
+        // Rendered anyway, the envelope says the same thing rather than an empty fence.
+        if (envelope.Findings is not [var finding] || selection.Row is not { } row)
+        {
+            builder.Append(selection.Id).AppendLine(" is not reported in this window.");
+            return;
+        }
+
+        WriteHeading(
+            builder,
+            DetailLabel,
+            $"row {row.ToString(CultureInfo.InvariantCulture)} of " +
+            envelope.Summary.Findings.ToString(CultureInfo.InvariantCulture));
+
+        WriteFinding(builder, finding, row, detail: true);
+
+        SubjectDto subject = finding.Subject;
+
+        // A cluster has no block: its cause is the line under the row's header, and its members are
+        // listed above with where each one lives.
+        if (subject.Members == null)
+        {
+            WritePairs(builder,
+            [
+                ("test", subject.FullyQualifiedName),
+                ("assembly", subject.Assembly),
+                ("source", Location(subject))
+            ]);
+        }
+
+        WritePairs(builder, [.. finding.Metrics.Select(metric => (metric.Label, (string?)metric.Value))]);
+
+        if (selection.SameSubject.Count > 0)
+        {
+            string also = "Also about this test: " + string.Join(", ", selection.SameSubject.Select(same =>
+                $"#{same.Row.ToString(CultureInfo.InvariantCulture)} {ReportVocabulary.LabelFor(same.Kind)} ({same.Id})"));
+
+            builder.AppendLine();
+
+            foreach (string text in Wrap(also, ContinuationBudget))
+                builder.Append(' ', ContinuationIndent).AppendLine(text);
+        }
+    }
+
+    /// <summary>
+    /// Writes a block of labelled pairs, after a blank line, omitting any whose value is missing.
+    /// </summary>
+    /// <remarks>
+    /// The label column is the block's longest label and two spaces, so each block aligns on its own
+    /// and a long metric label does not push a short subject block across the page. Values wrap into
+    /// the remaining columns rather than being cut: this is the view a reader asked for in full, and
+    /// <see cref="FitName"/> and <see cref="FitPath"/> exist to cut.
+    /// </remarks>
+    private static void WritePairs(StringBuilder builder, IReadOnlyList<(string Label, string? Value)> pairs)
+    {
+        List<(string Label, string Value)> present =
+            [.. pairs.Where(pair => pair.Value is { Length: > 0 }).Select(pair => (pair.Label, pair.Value!))];
+
+        if (present.Count == 0)
+            return;
+
+        int column = present.Max(pair => pair.Label.Length) + PairGap;
+        int width = FenceWidth - PairIndent - column;
+
+        builder.AppendLine();
+
+        foreach ((string label, string value) in present)
+        {
+            List<string> lines = WrapValue(value, width);
+
+            builder.Append(' ', PairIndent).Append(label).Append(' ', column - label.Length).AppendLine(lines[0]);
+
+            foreach (string continuation in lines.Skip(1))
+                builder.Append(' ', PairIndent + column).AppendLine(continuation);
+        }
+    }
+
+    /// <summary>
+    /// Wraps a value at spaces and, inside a word too long for the line, after a separator.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A qualified name and a path have no spaces, and the full report would cut them. Broken after
+    /// the separator, each line ends on the character that says it continues, and every piece is
+    /// still a searchable segment. Only a single segment wider than the line overflows, which is the
+    /// exemption <see cref="Wrap"/> already makes for one over-long word.
+    /// </para>
+    /// <para>
+    /// Which separator depends on what the word is. A path breaks at its directories and never at a
+    /// dot, which in a path belongs to a file extension or a dotted directory name and leaves a
+    /// fragment nobody can open. A name breaks at its dots, but only before its argument list,
+    /// where a dot is a decimal point.
+    /// </para>
+    /// </remarks>
+    private static List<string> WrapValue(string value, int width)
+    {
+        var lines = new List<string>();
+        var line = new StringBuilder();
+
+        foreach (string word in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > width)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+
+            if (line.Length > 0)
+                line.Append(' ');
+
+            line.Append(word);
+
+            // A word that does not fit a line of its own is broken where it can be, and what is left
+            // of it stays on the line for the words after it to join.
+            while (line.Length > width && Break(line.ToString(), width) is { } cut)
+            {
+                string text = line.ToString();
+
+                lines.Add(text[..(cut + 1)]);
+                line.Clear().Append(text[(cut + 1)..]);
+            }
+        }
+
+        if (line.Length > 0)
+            lines.Add(line.ToString());
+
+        return lines.Count == 0 ? [string.Empty] : lines;
+    }
+
+    /// <summary>
+    /// Finds where a word too long for its line is broken: the last separator in reach, else the
+    /// first one past it.
+    /// </summary>
+    /// <returns>The separator's index, or null where the word has no separator to break after.</returns>
+    private static int? Break(string word, int width)
+    {
+        bool path = word.IndexOfAny(['/', '\\']) >= 0;
+        int paren = word.IndexOf('(', StringComparison.Ordinal);
+        int end = path || paren < 0 ? word.Length - 1 : paren - 1;
+
+        bool IsSeparator(char c) => path ? c is '/' or '\\' : c == '.';
+
+        int? after = null;
+
+        for (int i = 0; i < end; i++)
+        {
+            if (!IsSeparator(word[i]))
+                continue;
+
+            if (i < width)
+                after = i;
+            else
+                return after ?? i;
+        }
+
+        return after;
+    }
+
+    /// <summary>
     /// Writes the heading the finding list sits under.
     /// </summary>
     /// <param name="builder">What the report is being written into.</param>
@@ -456,7 +654,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         // The two closing lines sit together under the rows, the cap first because it is about the
         // rows and the "also failing" line because it is about the run. The cap line is dim like
-        // the footer that says the same thing about the findings; it is navigation, not news.
+        // the footer, and carries no command: the one that lifts it is the footer's, below the
+        // fence, where a long --directory cannot push it past the fence's width.
         bool capped = latest.FailuresShown < latest.FailuresTotal;
 
         if (capped || latest.ExplainedByFindings > 0)
@@ -469,8 +668,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         {
             builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
                 $"Showing {latest.FailuresShown.ToString(CultureInfo.InvariantCulture)} of " +
-                $"{latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)} " +
-                $"{capabilities.Glyphs.Separator} all: {latest.OverflowCommand}"));
+                latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)));
         }
 
         if (latest.ExplainedByFindings > 0)
@@ -554,12 +752,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (failure.FailureSummary is { Length: > 0 } summary)
             trailer.Add(summary);
 
-        if (failure.Subject.SourceFile is { Length: > 0 } file)
+        if (Location(failure.Subject) is { } location)
         {
-            string location = failure.Subject.SourceLineNumber is { } line
-                ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                : file;
-
             // The path absorbs the truncation, for the reason the findings' trailer gives: Fit()
             // cuts from the left, and applied to the joined line it would eat the failure and leave
             // the one segment that can afford to lose its head untouched.
@@ -709,7 +903,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// short of the edge on a terminal and at it in a pipe.
     /// </para>
     /// </remarks>
-    private void WriteFinding(StringBuilder builder, FindingDto finding, int row)
+    /// <param name="detail">
+    /// Whether this is the detail view, which lists every member of a cluster with its location.
+    /// </param>
+    private void WriteFinding(StringBuilder builder, FindingDto finding, int row, bool detail = false)
     {
         string number = row.ToString(CultureInfo.InvariantCulture) + ".";
         string marker = ReportVocabulary.MarkerFor(finding.Severity);
@@ -735,7 +932,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         builder.Append(' ', ContinuationIndent)
                .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
 
-        WriteMembers(builder, finding.Subject);
+        if (detail)
+            WriteAllMembers(builder, finding.Subject);
+        else
+            WriteMembers(builder, finding.Subject);
 
         foreach (string line in Wrap(finding.Headline, ContinuationBudget))
             builder.Append(' ', ContinuationIndent).AppendLine(line);
@@ -753,12 +953,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
-        if (finding.Subject.SourceFile is { Length: > 0 } file)
+        if (Location(finding.Subject) is { } location)
         {
-            string location = finding.Subject.SourceLineNumber is { } line
-                ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                : file;
-
             // The path absorbs the truncation rather than the line as a whole. Fit() cuts from the
             // left, so applied to the joined trailer it would eat "evidence high" and leave the
             // path — the one segment that can afford to lose its head — untouched.
@@ -803,23 +999,81 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// <summary>
     /// Writes the line that says the list was cut short, when it was.
     /// </summary>
+    /// <returns>Whether the line was written.</returns>
     /// <remarks>
-    /// Nothing at all when every finding is shown: the command that would show them all is the one
+    /// <para>
+    /// Nothing at all when nothing was withheld: the command that would show everything is the one
     /// the reader just ran, and a report that ends by suggesting itself trains people to skip the
-    /// last line. One line for the whole report rather than one per finding either way — ten
+    /// last line. One line for the whole report rather than one per list or per finding — ten
     /// near-identical commands are ten lines of noise in anything the report is pasted into.
+    /// </para>
+    /// <para>
+    /// Both caps in one line, because <c>--all</c> lifts both, and each named, because two bare
+    /// counts would leave the reader to guess which is which. Below the fence, so the command can
+    /// be as long as the report's scope makes it and still be pasted whole.
+    /// </para>
+    /// <para>
+    /// Under <c>--id</c> it is always written, even where the report holds one finding: it is the
+    /// way back to the full report from a view that shows one row of it. The latest-run section is
+    /// not shown there, so only the findings are counted.
+    /// </para>
     /// </remarks>
-    private void WriteFooter(StringBuilder builder, ReportEnvelope envelope)
+    private bool WriteFooter(StringBuilder builder, ReportEnvelope envelope)
     {
         TruncationDto truncated = envelope.Truncated;
+        var counts = new List<string>();
 
-        if (truncated.Shown >= truncated.Total)
-            return;
+        if (truncated.Shown < truncated.Total || envelope.Selection != null)
+            counts.Add($"{Count(truncated.Shown)} of {Count(truncated.Total)} {Plural(truncated.Total, "finding")}");
+
+        if (envelope.Selection == null
+            && envelope.LatestRun is { Suppressed: false, IsLikelyEnvironmental: false } latest
+            && latest.FailuresShown < latest.FailuresTotal)
+        {
+            counts.Add($"{Count(latest.FailuresShown)} of {Count(latest.FailuresTotal)} {Plural(latest.FailuresTotal, "failure")}");
+        }
+
+        if (counts.Count == 0)
+            return false;
 
         builder.AppendLine();
         builder.AppendLine(capabilities.Dim(
-            $"Showing {truncated.Shown} of {truncated.Total} " +
-            $"{capabilities.Glyphs.Separator} all: {truncated.Command}"));
+            $"Showing {string.Join(", ", counts)} {capabilities.Glyphs.Separator} all: {truncated.Command}"));
+
+        return true;
+    }
+
+    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
+
+    /// <summary>
+    /// Writes the one command that shows the first row in detail.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The full report.</param>
+    /// <param name="truncated">Whether the truncation line was just written.</param>
+    /// <remarks>
+    /// <para>
+    /// A real command for row 1 rather than a template or a line per row: it runs as printed, shows
+    /// the syntax with an id the reader can see above, and the substitution for any other row is
+    /// obvious. Ten near-identical commands would be the noise the truncation line avoids.
+    /// </para>
+    /// <para>
+    /// Last, after the truncation line and beside it: see the rest, then go deeper. It may run past
+    /// the fence's width when an assembly name forces it, because it is outside the fence and a
+    /// command cut to fit is a command that does not run.
+    /// </para>
+    /// </remarks>
+    private void WriteDetailCommand(StringBuilder builder, ReportEnvelope envelope, bool truncated)
+    {
+        if (envelope.Findings.Count == 0)
+            return;
+
+        if (!truncated)
+            builder.AppendLine();
+
+        builder.AppendLine(capabilities.Dim("Detail of row 1: " + envelope.Findings[0].DrillDown));
     }
 
     /// <summary>
@@ -859,6 +1113,30 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     }
 
     /// <summary>
+    /// Lists every test a cluster covers, each followed by where it lives.
+    /// </summary>
+    /// <remarks>
+    /// The detail view's member list. Uncapped, because a reader who asked for this finding asked for
+    /// all of it; and in place of the full report's three rather than after them, or the first three
+    /// would be printed twice. A location is dim, two columns in from its member, and never cut: a
+    /// path is what a reader opens, and one that does not fit overflows as one token.
+    /// </remarks>
+    private void WriteAllMembers(StringBuilder builder, SubjectDto subject)
+    {
+        if (subject.Members is not { Count: > 0 } members)
+            return;
+
+        foreach (SubjectDto member in members)
+        {
+            builder.Append(' ', MemberIndent)
+                   .AppendLine(FitName(Name(member), FenceWidth - MemberIndent));
+
+            if (Location(member) is { } location)
+                builder.Append(' ', MemberIndent + 2).AppendLine(capabilities.Dim(location));
+        }
+    }
+
+    /// <summary>
     /// Reads the line that says what a finding is about.
     /// </summary>
     /// <param name="subject">The subject, with its names already resolved.</param>
@@ -881,6 +1159,21 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         string cause = subject.CauseLabel is { Length: > 0 } label ? label : "(cause not recorded)";
 
         return subject.MemberCount is { } members ? $"{cause} ({Tests(members)})" : cause;
+    }
+
+    /// <summary>
+    /// Reads where a test is declared, as <c>file:line</c>, or the file alone when no line was
+    /// recorded.
+    /// </summary>
+    /// <returns>The location, or null where the SDK captured none.</returns>
+    private static string? Location(SubjectDto subject)
+    {
+        if (subject.SourceFile is not { Length: > 0 } file)
+            return null;
+
+        return subject.SourceLineNumber is { } line
+            ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
+            : file;
     }
 
     private static string Tests(int count) =>

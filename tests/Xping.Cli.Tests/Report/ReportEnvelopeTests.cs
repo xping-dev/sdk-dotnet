@@ -326,7 +326,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.20", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.21", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -355,12 +355,19 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.True(root.TryGetProperty("context", out _));
         Assert.True(root.TryGetProperty("findings", out _));
 
+        // Written as null rather than left out, so a consumer can tell "no --id" from a build that
+        // stopped emitting the field; and before the findings it qualifies.
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("selection").ValueKind);
+        Assert.Equal(
+            ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "findings", "truncated"],
+            root.EnumerateObject().Select(property => property.Name));
+
         JsonElement latestRun = root.GetProperty("latestRun");
         foreach (string key in (string[])
         [
             "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "suppressed", "testsExecuted",
             "testsFailed", "newFailures", "explainedByFindings", "explainedByFindingIds", "failures",
-            "failuresShown", "failuresTotal", "overflowCommand"
+            "failuresShown", "failuresTotal"
         ])
         {
             Assert.True(latestRun.TryGetProperty(key, out _), $"latestRun.{key} missing");
@@ -440,7 +447,6 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Empty(latestRun.GetProperty("explainedByFindingIds").EnumerateArray());
         Assert.Equal(1, latestRun.GetProperty("failuresShown").GetInt32());
         Assert.Equal(1, latestRun.GetProperty("failuresTotal").GetInt32());
-        Assert.Equal(JsonValueKind.Null, latestRun.GetProperty("overflowCommand").ValueKind);
 
         JsonElement failure = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
         Assert.Equal("new", failure.GetProperty("status").GetString());
@@ -594,7 +600,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
-    public void TheOverflowCommandIsTheSameOneTheFindingsTruncationPrints()
+    public void ACappedLatestRunIsLiftedByTheOneTruncationCommand()
     {
         ILocalSessionStore store = LocalSessionStore.Create();
         int many = LocalAnalysisConstants.LatestRunMaxRows + 2;
@@ -609,14 +615,17 @@ public sealed class ReportEnvelopeTests : IDisposable
                 .. padding.Select(n => TestSessionFactory.Execution(n))
             ]));
 
-        JsonElement capped = RunJson().GetProperty("latestRun");
+        JsonElement root = RunJson();
+        JsonElement capped = root.GetProperty("latestRun");
         Assert.Equal(LocalAnalysisConstants.LatestRunMaxRows, capped.GetProperty("failuresShown").GetInt32());
         Assert.Equal(many, capped.GetProperty("failuresTotal").GetInt32());
-        Assert.Equal("xping report --all", capped.GetProperty("overflowCommand").GetString());
+
+        // One command lifts both caps, and the envelope carries it once.
+        Assert.False(capped.TryGetProperty("overflowCommand", out _));
+        Assert.Equal("xping report --all", root.GetProperty("truncated").GetProperty("command").GetString());
 
         JsonElement lifted = RunJson("--all").GetProperty("latestRun");
         Assert.Equal(many, lifted.GetProperty("failuresShown").GetInt32());
-        Assert.Equal(JsonValueKind.Null, lifted.GetProperty("overflowCommand").ValueKind);
     }
 
     [Fact]
@@ -903,7 +912,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.20", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.21", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

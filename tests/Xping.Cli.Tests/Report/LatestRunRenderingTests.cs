@@ -506,15 +506,14 @@ public sealed class LatestRunRenderingTests
         LatestRunDto capped = LatestRun([Regression, Fresh]) with
         {
             NewFailures = 23,
-            FailuresTotal = 23,
-            OverflowCommand = "xping report --all"
+            FailuresTotal = 23
         };
 
         string[] section = Section(Render(With(capped, ThreeFindings())));
 
         // The section ends on the cap line and the blank that separates it from the next heading.
         Assert.Equal(string.Empty, section[^3]);
-        Assert.Equal("    Showing 2 of 23 | all: xping report --all", section[^2]);
+        Assert.Equal("    Showing 2 of 23", section[^2]);
         Assert.Equal(string.Empty, section[^1]);
     }
 
@@ -523,28 +522,52 @@ public sealed class LatestRunRenderingTests
     {
         LatestRunDto capped = LatestRun([Regression], explainedBy: ["f_alpha"]) with
         {
-            FailuresTotal = 12,
-            OverflowCommand = "xping report --all"
+            FailuresTotal = 12
         };
 
         string[] section = Section(Render(With(capped, ThreeFindings())));
 
-        Assert.Equal("    Showing 1 of 12 | all: xping report --all", section[7]);
+        Assert.Equal("    Showing 1 of 12", section[7]);
         Assert.Equal("    Also failing: 1 test explained by finding below (#1).", section[8]);
     }
 
+    /// <summary>
+    /// However long the scope makes the command, nothing inside the fence carries it.
+    /// </summary>
+    /// <remarks>
+    /// The cap line used to print the command, and a long <c>--directory</c> pushed it past the
+    /// fence. It is printed once, below, and pasted whole.
+    /// </remarks>
     [Fact]
-    public void TheCapLineIsDimAndUsesTheGlyphSeparator()
+    public void ALongScopeNeverReachesInsideTheFence()
+    {
+        const string command =
+            "xping report --all --directory /Users/someone/src/a-rather-deeply/nested/checkout/of-the-repo";
+
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run-overflow");
+        envelope = envelope with { Truncated = envelope.Truncated with { Command = command } };
+
+        string report = Render(envelope);
+
+        Assert.All(Fenced(report), line => Assert.True(line.Length <= 72, line));
+        Assert.Contains(Lines(report), line => line.EndsWith("all: " + command, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheCapLineIsDimAndItsCommandIsBelowTheFence()
     {
         LatestRunDto capped = LatestRun([Regression]) with
         {
-            FailuresTotal = 12,
-            OverflowCommand = "xping report --all"
+            FailuresTotal = 12
         };
 
         string coloured = Render(With(capped, ThreeFindings()), Drawn(ReportGlyphs.Unicode, color: true));
 
-        Assert.Contains(Faint + "Showing 1 of 12 · all: xping report --all" + Reset, coloured, StringComparison.Ordinal);
+        Assert.Contains(Faint + "Showing 1 of 12" + Reset, coloured, StringComparison.Ordinal);
+
+        // The command that lifts the cap is the footer's, which counts the failures it withheld.
+        Assert.Contains(
+            Faint + "Showing 1 of 12 failures · all: xping report --all" + Reset, coloured, StringComparison.Ordinal);
     }
 
     [Fact]

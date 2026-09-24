@@ -252,6 +252,11 @@ public sealed class GoldenReportTests
     {
         ReportEnvelope envelope = ReportFixtures.Get(fixture);
 
+        // A detail view has no findings heading, and --summary is refused beside --id: there is no
+        // one-line report of a selection for the two to disagree about.
+        if (envelope.Selection != null)
+            return;
+
         using var writer = new StringWriter();
         new SummaryReportRenderer().Render(envelope, writer);
 

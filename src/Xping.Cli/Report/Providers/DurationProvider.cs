@@ -692,8 +692,6 @@ internal sealed class DurationProvider : IFindingProvider
 
             LastOccurrenceIn: TestIndex.NewestSession(current),
 
-            DrillDownCommand: DrillDown.ForTest(FindingKind.DurationRegression, test),
-
             // The runs the two-sample test actually read, both arms — the same two figures the
             // evidence publishes as `comparedSessions`. Narrower than the runs the test appeared in
             // twice over: a run whose own median was not positive normalises nothing, and a long
@@ -810,8 +808,6 @@ internal sealed class DurationProvider : IFindingProvider
             Unreliability: Math.Min(1.0, dispersion),
 
             LastOccurrenceIn: TestIndex.NewestSession(all),
-
-            DrillDownCommand: DrillDown.ForTest(FindingKind.DurationUnstable, test),
 
             // The runs behind the normalised readings, which is what the dispersion was computed
             // over. Two normalisable readings of 1 and 10 clear the dispersion floor on their own,

@@ -4,7 +4,8 @@
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/Report/**`
 **Schema:** `1.18` → `1.19`
 **Depends on:** nothing
-**Blocks:** `cli-latest-run-spec.md` (reuses D1 and D5 of this document)
+**Blocks:** `cli-latest-run-spec.md` (reuses D1 and D5 of this document);
+`cli-finding-detail-spec.md` (depends on Amendment 2 of this document, and on D1, D3, D5, D6, D7, D10)
 
 ---
 
@@ -33,6 +34,56 @@ P0 read this document against source and found four conflicts, plus one stale st
 | E | §1.1 listed three population tokens | there are four; `excludesPartialRuns` → `-partial` | §1.1 |
 
 §3 is updated where these reach it. It stays illustrative and is still regenerated in P7 per D10.2.
+
+### Amendment 3 — the truncation line names what it cut
+
+Per `cli-finding-detail-spec.md` Amendment 3, the truncation line below the fence is printed when
+findings or latest-run failures were cut and names each: `Showing 10 of 21 findings, 10 of 23
+failures · all: xping report --all`. It is the only place the report prints that command.
+
+### Amendment 2 — `--id` supersedes D7's rejection; `xping test` is retired
+
+D7 rejected `xping report --id` on the record and said it was "not reserved for later either". That
+rejection rested on a reading of the id that the code contradicts, and it is superseded here. The
+decision that replaces it is `cli-finding-detail-spec.md`, which depends on this amendment and is
+not started until it is committed.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D7: a finding id is the wrong key, because the reader's question is *what else is there about this test* | the id is a stable key, and the same lookup answers that question | D7 |
+| B | D7: `xping test <id>` is the planned drill-down target, per `DrillDown.cs:20-22` and `FindingId.cs:21` | `xping report --id <id>` is the target; `xping test` is retired, not reserved | D7, `DrillDown.cs`, `FindingId.cs` |
+| C | D8: below-fence order is legend, then truncation line | legend, truncation line, then one detail line naming row 1's real command | D8, §3 |
+| D | §3: "There is no details line - D7" | there is one line below the fence, and it is not a template | §3 |
+
+**What was decided.** D7 held that a finding id was the wrong key for a drill-down: that the reader
+wants everything about a *test*, that an id names one claim about one test, and that a planned
+per-test `xping test` verb was therefore the better target. On that reasoning `--id` was refused
+and not reserved.
+
+**What is now known.** `FindingId.Compute` hashes the kind and the subject key — a test's fingerprint
+or a cluster's signature hash — and nothing else (`FindingId.cs:51-64`; the only caller is
+`FindingCoordinator.cs:192`). Neither the window nor any measurement is an input, so an id is
+identical across runs for the same claim about the same subject, which is what
+`docs/cli/command-reference.md:347-364` already promises. Every finding is in hand at the moment an
+id is looked up, so *what else is there about this test* is answered by listing the other findings
+that share the subject key — the same key D6 already groups siblings on. The id is not the wrong
+key; it is the key the report already prints on every row, and the per-test verb would have been a
+second spelling of a lookup the id performs.
+
+**What supersedes it.** `cli-finding-detail-spec.md` D1–D10. In particular: selection is
+post-coordinator and never through `--kind` (its D1); a well-formed id absent from the window exits
+`3` and reads as *not reported* (its D2); an id that moved when its claim changed kind is
+reverse-looked-up and the current id is named (its D3); `DrillDown` emits `--id` and the coordinator
+assigns it (its D7).
+
+**The dangling promises.** `DrillDown.cs:20-22` says a per-test `xping test` verb "is planned and
+would be a better target"; `FindingId.cs:21` names "a future `xping test <id>`". One verb set
+survives: `report`, `where`, `clear`, and `report --id` is the drill-down. Both comments are
+rewritten in the detail spec's P2 to name `xping report --id`, and no spec reserves `xping test`.
+
+**D7's two rejected alternatives still stand.** A per-finding line and a template footer are still
+rejected, for the reasons D7 gives; the detail spec's D7 rejects them again on the same grounds and
+chooses a third thing D7 did not consider — one real command, for row 1, below the fence.
 
 ---
 
@@ -357,6 +408,14 @@ Two alternatives were considered and rejected:
 agent reads it. Text output continues not to surface it. The truncation line continues to carry
 `DrillDown.ForFullReport()`, which is a real command.
 
+**Amendment 2.** The three paragraphs above from "`--id` is not reserved" onward are superseded.
+`FindingId` hashes the kind and the subject key only, so the id is a stable key and the question
+D7 said it could not answer — what else is there about this test — is a lookup over the findings
+already in hand. `xping report --id <id>` exists as of `cli-finding-detail-spec.md`; `xping test`
+is retired. Row numbering, the two rejected alternatives, and the rule that only a real command is
+ever printed are unchanged. The one line the detail spec adds below the fence is a real command for
+row 1 (its D7), not a details line per finding and not a template.
+
 ### D8 — Trailer composition is unchanged except for its indent
 
 One dim line per finding, joined by `" | "`:
@@ -388,6 +447,11 @@ explains what the reader is looking at; the truncation line is the next thing th
 action belongs after its explanation. This is stated here and nowhere else: an earlier draft
 restated it in D7 and again in a phase description, and the three statements disagreed. Where this
 spec and the code already agree, the spec says so once.
+
+**Amendment 2C.** The order becomes **legend, truncation line, detail line**, the third being
+`cli-finding-detail-spec.md` D7's one real command for row 1, printed only in the full report and
+only when a finding was printed. The two actions keep their order — see the rest, then go deeper —
+and the legend still comes first. The statement stays here and nowhere else.
 
 The separator stays `" | "` rather than moving to `ReportGlyphs.Separator`. The header uses `·` for
 a different job — separating provenance facts — and collapsing the two would make the trailer's
@@ -478,6 +542,9 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 The block from the heading through the last trailer is fenced. The legend and, when the report was
 truncated, the truncation line sit below it, in that order - D8. There is no details line - D7.
+**Amendment 2D:** there is now one line after them, `Detail of row 1: xping report --id …`, the
+real command for the first row (D8 as amended; `cli-finding-detail-spec.md` D7 and §3.3). It is not
+a details line per finding, which D7 still rejects.
 
 Measured against the rules: no line inside the fence exceeds 72 columns; the only non-ASCII
 characters are the header's separator and arrow and the heading rule, each of which has an existing

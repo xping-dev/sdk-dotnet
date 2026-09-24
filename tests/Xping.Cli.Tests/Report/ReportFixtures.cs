@@ -62,7 +62,11 @@ internal static class ReportFixtures
         "latest-run-environmental",
         "latest-run-overflow",
         "latest-run-store",
-        "latest-run-only"
+        "latest-run-only",
+        "detail-test",
+        "detail-group",
+        .. Enum.GetValues<FindingKind>().Select(DetailKey),
+        "detail-store"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -74,7 +78,61 @@ internal static class ReportFixtures
     /// </summary>
     /// <param name="name">The key, as <see cref="Names"/> lists it.</param>
     /// <returns>The envelope.</returns>
-    public static ReportEnvelope Get(string name) => name switch
+    /// <remarks>
+    /// Every finding's drill-down is derived from its id and the envelope's assembly, as the
+    /// coordinator derives it. Fixtures set ids by hand, and a detail line naming an id the row above
+    /// it does not carry would be a golden pinning a command that selects nothing.
+    /// </remarks>
+    public static ReportEnvelope Get(string name)
+    {
+        ReportEnvelope envelope = Build(name);
+
+        return envelope with
+        {
+            Findings =
+            [
+                .. envelope.Findings.Select(finding =>
+                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, new ReportScope(envelope.Context?.Assembly)) })
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Narrows a full envelope to the detail of one of its rows, as <c>--id</c> would build it.
+    /// </summary>
+    /// <param name="full">The full report, every finding shown.</param>
+    /// <param name="row">The row to select, from 1.</param>
+    /// <returns>The envelope with one finding and its selection.</returns>
+    /// <remarks>
+    /// Siblings are found by the key the builder groups them on — the test's fingerprint — so a
+    /// fixture cannot pin a same-subject line the selector would not have produced.
+    /// </remarks>
+    public static ReportEnvelope Detail(ReportEnvelope full, int row)
+    {
+        ArgumentNullException.ThrowIfNull(full);
+
+        FindingDto finding = full.Findings[row - 1];
+        string? test = finding.Subject.Members == null ? finding.Subject.Fingerprint : null;
+
+        List<SameSubjectDto> siblings =
+        [
+            .. full.Findings
+                .Select((other, index) => (Other: other, Row: index + 1))
+                .Where(pair => test != null && pair.Row != row
+                    && pair.Other.Subject.Members == null
+                    && string.Equals(pair.Other.Subject.Fingerprint, test, StringComparison.Ordinal))
+                .Select(pair => new SameSubjectDto(pair.Other.Id, pair.Other.Kind, pair.Row))
+        ];
+
+        return full with
+        {
+            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings),
+            Findings = [finding],
+            Truncated = full.Truncated with { Shown = 1 }
+        };
+    }
+
+    private static ReportEnvelope Build(string name) => name switch
     {
         "empty" => Envelope(),
         "nothing-reportable" => NothingReportable(),
@@ -162,6 +220,10 @@ internal static class ReportFixtures
         // A regression on a window too short for any finding: the section is the whole report, and
         // the clean bill that would otherwise close it is withheld.
         "latest-run-only" => Envelope() with { LatestRun = SpecLatestRun([Regression()]) },
+        "detail-test" => Detail(SpecSection3Measured(), 5),
+        "detail-group" => Detail(SpecSection3Measured(), 3),
+        "detail-store" => DetailFromStore(),
+        _ when DetailKind(name) is { } kind => Detail(Envelope(Measured(kind)), 1),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
 
@@ -291,6 +353,130 @@ internal static class ReportFixtures
     }
 
     /// <summary>
+    /// §3's report with rows 3 and 5 measured: their headlines and metrics resolved from evidence.
+    /// </summary>
+    /// <remarks>
+    /// The full report prints a row's headline and nothing else, so <see cref="SpecSection3"/> can
+    /// spell its metrics loosely. A detail view prints them, and the finding-detail spec's §3.1 and
+    /// §3.2 read them against the headline above, so here both come from one payload.
+    /// </remarks>
+    private static ReportEnvelope SpecSection3Measured()
+    {
+        ReportEnvelope envelope = SpecSection3();
+
+        SignatureView signature = new(
+            "abc123", "System.InvalidOperationException", "Expected <n> but was <n>", [],
+            Degraded: false, Unavailable: false, Occurrences: 6,
+            FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
+            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
+
+        FindingDto cluster = envelope.Findings[2];
+        (string clusterHeadline, IReadOnlyList<MetricDto> clusterMetrics) = EvidenceHeadline.For(
+            FindingKind.BrokenFixture,
+            new BrokenFixtureEvidence(
+                nameof(Sdk.Core.Models.Executions.FailureSite.FixtureSetup), "UnprovisionedDatabase..ctor", signature with { Occurrences = 60 },
+                3, [], 60, 20, 20, 3, new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc), "eab9867", []));
+
+        FindingDto flaky = envelope.Findings[4];
+        (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(
+            FindingKind.Flaky,
+            new FlakyEvidence(6, 20, 20, 6, 0.3, 0, 0, 1, [signature], [], null));
+
+        return envelope with
+        {
+            Findings =
+            [
+                envelope.Findings[0],
+                envelope.Findings[1],
+                cluster with
+                {
+                    Headline = clusterHeadline,
+                    Metrics = clusterMetrics,
+                    Subject = cluster.Subject with
+                    {
+                        Members =
+                        [
+                            .. cluster.Subject.Members!.Select((member, i) => member with
+                            {
+                                SourceFile = "tests/SampleApp.XUnit/FixtureTests.cs",
+                                SourceLineNumber = 12 + (7 * i)
+                            })
+                        ]
+                    }
+                },
+                envelope.Findings[3],
+                flaky with { Headline = flakyHeadline, Metrics = flakyMetrics, Subject = flaky.Subject with { Assembly = "SampleApp.XUnit" } },
+                .. envelope.Findings.Skip(5)
+            ]
+        };
+    }
+
+    /// <summary>The fixture key for one kind's detail view: <c>detail-</c> and the kind in kebab case.</summary>
+    private static string DetailKey(FindingKind kind) =>
+        "detail-" + string.Concat(kind.ToString().Select((c, i) =>
+            char.IsUpper(c) ? (i > 0 ? "-" : string.Empty) + char.ToLowerInvariant(c) : c.ToString()));
+
+    private static FindingKind? DetailKind(string name) =>
+        Enum.GetValues<FindingKind>().Where(kind => DetailKey(kind) == name).Select(kind => (FindingKind?)kind).FirstOrDefault();
+
+    /// <summary>
+    /// A finding of one kind whose headline and metrics are resolved from that kind's sample payload.
+    /// </summary>
+    /// <remarks>
+    /// So every kind's metrics block is pinned by a golden, and a label or a value format that moves
+    /// in <c>EvidenceHeadline</c> surfaces as a diff in the view that prints it.
+    /// </remarks>
+    private static FindingDto Measured(FindingKind kind)
+    {
+        FindingEvidence evidence = EvidenceSamples.For(kind);
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(kind, evidence);
+
+        FindingDto finding = evidence is BrokenFixtureEvidence or SharedFailureEvidence
+            ? Cluster(
+                "CheckoutFixture.Setup",
+                headline,
+                ["MyApp.Tests.CheckoutTests.Completes", "MyApp.Tests.CheckoutTests.Refunds", "MyApp.Tests.CartTests.Totals"])
+            : Finding(kind.ToString(), "medium", "MyApp.Tests.CheckoutTests.Completes", headline,
+                "tests/MyApp.Tests/CheckoutTests.cs", 42);
+
+        return finding with
+        {
+            Id = FindingId.Compute(kind, finding.Subject.GroupId ?? finding.Subject.Fingerprint!),
+            Kind = kind.ToString(),
+            Severity = "medium",
+            Population = ToCamelCase(PopulationRules.For(kind).ToString()),
+            Headline = headline,
+            Metrics = metrics
+        };
+    }
+
+    /// <summary>
+    /// A detail view the whole pipeline produced, selected by an id it computed.
+    /// </summary>
+    /// <remarks>
+    /// The store behind <see cref="LatestRunFromStore"/>, run through the coordinator and the
+    /// selector as <c>xping report --id</c> runs them, selecting the first finding. Pins everything
+    /// downstream of the sessions, where the other detail fixtures pin the renderer.
+    /// </remarks>
+    private static ReportEnvelope DetailFromStore()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeStore();
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(context, analysis.Findings);
+
+        IReadOnlyList<Finding> ordered = FindingOrder.WithSiblingsAdjacent(analysis.Findings);
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            latestRun,
+            ordered[0].Id);
+    }
+
+    /// <summary>
     /// The row the latest-run spec's §3.1 opens with: a test that had always passed.
     /// </summary>
     private static LatestRunFailureDto Regression() =>
@@ -334,6 +520,24 @@ internal static class ReportFixtures
     /// </para>
     /// </remarks>
     private static ReportEnvelope LatestRunFromStore()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeStore();
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(context, analysis.Findings);
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            latestRun);
+    }
+
+    /// <summary>
+    /// Writes the twenty runs <see cref="LatestRunFromStore"/> describes and runs every provider.
+    /// </summary>
+    private static (AnalysisContext Context, AnalysisResult Analysis) AnalyzeStore()
     {
         const int runs = 20;
         var sessions = new List<Sdk.Core.Models.TestSession>();
@@ -381,17 +585,7 @@ internal static class ReportFixtures
             new TimeSensitiveProvider()
         ]);
 
-        AnalysisResult analysis = coordinator.Run(context, kinds: null, TextWriter.Null);
-        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(context, analysis.Findings);
-
-        return EnvelopeBuilder.Build(
-            context,
-            analysis,
-            incompleteSessions: 0,
-            unreadableSessions: 0,
-            skewedSessions: 0,
-            LocalAnalysisConstants.DefaultTopFindings,
-            latestRun);
+        return (context, coordinator.Run(context, kinds: null, TextWriter.Null));
     }
 
     /// <summary>
@@ -447,8 +641,7 @@ internal static class ReportFixtures
             {
                 TestsFailed = 28,
                 NewFailures = 23,
-                FailuresTotal = 23,
-                OverflowCommand = "xping report --all"
+                FailuresTotal = 23
             }
         };
     }
@@ -784,7 +977,7 @@ internal static class ReportFixtures
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,
-            "xping report --kind Flaky --format json");
+            "xping report --id f_2a91 --assembly MyApp.Tests");
 
     /// <summary>
     /// A finding about a cluster: no name of its own, a cause, and members beneath it.
@@ -861,8 +1054,7 @@ internal static class ReportFixtures
             ExplainedByFindingIds: explainedBy ?? [],
             Failures: failures,
             FailuresShown: failures.Length,
-            FailuresTotal: failures.Length,
-            OverflowCommand: null);
+            FailuresTotal: failures.Length);
 
     /// <summary>
     /// Builds one latest-run row, named the way the builder names a single test.
@@ -992,6 +1184,7 @@ internal static class ReportFixtures
 
             // No latest run yet: the fixtures pin the findings block, and a section that is absent
             // from the envelope is absent from the page. The latest-run fixtures carry their own.
+            null,
             null,
             findings,
             new TruncationDto(shown, total, "xping report --all"));
