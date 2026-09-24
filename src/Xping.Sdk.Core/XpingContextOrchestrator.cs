@@ -876,7 +876,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </para>
     /// </remarks>
     private void PrintRetryFlakeHint(List<TestExecution> executions) =>
-        WriteRetryFlakeHint(executions, _lastEnvironmentInfo?.IsCIEnvironment ?? false);
+        WriteRetryFlakeHint(executions, _environmentDetector.IsCiEnvironment);
 
     /// <summary>
     /// Persists the run as a complete <see cref="TestSession"/> for local analysis.
