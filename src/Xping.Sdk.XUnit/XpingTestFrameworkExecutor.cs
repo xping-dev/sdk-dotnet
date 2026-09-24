@@ -90,8 +90,7 @@ internal sealed class XpingTestFrameworkExecutor(
         if (_assemblyName.Length == 0)
             return;
 
-        foreach (IXunitTestCase testCase in selected)
-            census.AddSelected(testCase.UniqueID);
+        census.AddSelected(selected.Count);
 
         statisticsAccumulator.RecordTestCases(_assemblyName, census.Discovered, census.Selected);
     }

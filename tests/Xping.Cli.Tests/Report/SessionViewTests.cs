@@ -198,6 +198,36 @@ public sealed class SessionViewTests
         Assert.Equal(0, context.PartialSessionCount);
     }
 
+    [Fact]
+    public void AReportedRunCutShortIsPartial()
+    {
+        // Seventeen discovered, seventeen selected, three recorded: the run was cancelled or killed
+        // before it finished, and the fourteen it never reached were not asked about any more than
+        // a filter's would be.
+        TestSession cutShort = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(3)]), discovered: 17, selected: 17);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), cutShort);
+
+        Assert.True(ViewOf(context, cutShort).IsPartial);
+    }
+
+    [Fact]
+    public void MoreSelectedThanDiscoveredIsNotAFact()
+    {
+        // The two counts came from different discoveries, so they compare nothing. The session is
+        // judged as though it reported neither — here, a run of the whole suite by the threshold.
+        TestSession mismatched = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(17)]), discovered: 5, selected: 17);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), mismatched);
+
+        Assert.Null(ViewOf(context, mismatched).ReportedPartial);
+        Assert.False(ViewOf(context, mismatched).IsPartial);
+    }
+
     [Theory]
     [InlineData(null, 1)]
     [InlineData(17, null)]

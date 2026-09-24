@@ -21,34 +21,39 @@ public sealed class TestCaseCensusTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void Discovered_BeforeDiscoveryCompletes_IsNullNotZero()
+    public void Discovered_BeforeAnyDiscoveryCompletes_IsNullNotZero()
     {
-        var census = new TestCaseCensus();
-        census.AddDiscovered("a");
-
-        Assert.Null(census.Discovered);
+        Assert.Null(new TestCaseCensus().Discovered);
     }
 
     [Fact]
-    public void Discovered_CountsEachUniqueIdOnce()
+    public void Discovered_CompletedWithNothingFound_IsZeroNotNull()
     {
         var census = new TestCaseCensus();
-        census.AddDiscovered("a");
-        census.AddDiscovered("b");
-        census.AddDiscovered("a");
-        census.CompleteDiscovery();
+        census.CompleteDiscovery(0);
 
-        Assert.Equal(2, census.Discovered);
+        Assert.Equal(0, census.Discovered);
     }
 
     [Fact]
-    public void Selected_CountsEachUniqueIdOnce()
+    public void Discovered_ALaterDiscoveryReplacesAnEarlierOne()
+    {
+        // Each search reports every case once, so a second search is a recount, not more cases.
+        var census = new TestCaseCensus();
+        census.CompleteDiscovery(17);
+        census.CompleteDiscovery(17);
+
+        Assert.Equal(17, census.Discovered);
+    }
+
+    [Fact]
+    public void Selected_AddsUpAcrossRuns()
     {
         var census = new TestCaseCensus();
-        census.AddSelected("a");
-        census.AddSelected("a");
+        census.AddSelected(3);
+        census.AddSelected(2);
 
-        Assert.Equal(1, census.Selected);
+        Assert.Equal(5, census.Selected);
     }
 
     // ---------------------------------------------------------------------------
@@ -70,6 +75,21 @@ public sealed class TestCaseCensusTests
         // Assert
         Assert.Equal(3, census.Discovered);
         Assert.Equal(messages, runnerSink.Messages);
+    }
+
+    [Fact]
+    public void Find_StoppedByTheRunner_RecordsNoCount()
+    {
+        // xUnit stops enumerating classes once the runner answers false, but still reports discovery
+        // complete. What it found by then is part of the assembly, and a short count would be read
+        // as a fact where a missing one falls back to the threshold.
+        var census = new TestCaseCensus();
+        using var discoverer = new XpingTestFrameworkDiscoverer(
+            Emitting([Discovered("a"), Discovered("b"), DiscoveryComplete()]), census);
+
+        discoverer.Find(false, new RecordingSink(stopAfter: 1), Mock.Of<ITestFrameworkDiscoveryOptions>());
+
+        Assert.Null(census.Discovered);
     }
 
     [Fact]
@@ -96,10 +116,7 @@ public sealed class TestCaseCensusTests
     {
         // Arrange
         var census = new TestCaseCensus();
-        census.AddDiscovered("a");
-        census.AddDiscovered("b");
-        census.AddDiscovered("c");
-        census.CompleteDiscovery();
+        census.CompleteDiscovery(3);
         var accumulator = new Mock<IRunningStatisticsAccumulator>();
         using XpingTestFrameworkExecutor executor = Executor(accumulator.Object, census);
 
@@ -164,14 +181,14 @@ public sealed class TestCaseCensusTests
 
     private static IDiscoveryCompleteMessage DiscoveryComplete() => Mock.Of<IDiscoveryCompleteMessage>();
 
-    private sealed class RecordingSink : LongLivedMarshalByRefObject, IMessageSink
+    private sealed class RecordingSink(int stopAfter = int.MaxValue) : LongLivedMarshalByRefObject, IMessageSink
     {
         public List<IMessageSinkMessage> Messages { get; } = [];
 
         public bool OnMessage(IMessageSinkMessage message)
         {
             Messages.Add(message);
-            return true;
+            return Messages.Count < stopAfter;
         }
     }
 }

@@ -294,9 +294,9 @@ internal sealed record DurationUnstableEvidence(
 /// <para>
 /// That anchoring is deliberately <i>not</i> expressed through
 /// <see cref="Indexes.SessionView.IsPartial"/>, which is how the report classifies a run elsewhere.
-/// The classification is window-relative and decided against a threshold; this is per test and
-/// needs neither, because "the runs this test appeared in" is exactly the set a filtered run either
-/// joins or does not. Reading the flag instead would also throw away a perfectly good speed reading
+/// The classification is per run — a fact where the test framework reported one, a threshold against
+/// the window where it did not; this is per test and needs neither, because "the runs this test
+/// appeared in" is exactly the set a filtered run either joins or does not. Reading the flag instead would also throw away a perfectly good speed reading
 /// from a filtered run for the test that <i>was</i> selected in it. The flag is read once here, for
 /// the one question it answers better — whether the current slice asked about the test at all.
 /// </para>

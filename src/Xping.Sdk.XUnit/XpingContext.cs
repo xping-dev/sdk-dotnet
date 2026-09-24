@@ -64,7 +64,7 @@ public class XpingContext : XpingContextOrchestrator
     /// <exception cref="InvalidOperationException">
     /// Thrown when <see cref="Initialize()"/> has not been called before this method.
     /// </exception>
-    public static XpingExecutorServices GetExecutorServices()
+    internal static XpingExecutorServices GetExecutorServices()
     {
         if (_instance == null)
             throw new InvalidOperationException(

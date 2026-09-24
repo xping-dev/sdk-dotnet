@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-using System.Collections.Concurrent;
-
 namespace Xping.Sdk.XUnit;
 
 /// <summary>
@@ -18,34 +16,34 @@ namespace Xping.Sdk.XUnit;
 /// run after a deletion does not.
 /// </para>
 /// <para>
-/// Both sides count test cases by <c>UniqueID</c> rather than by message, so a runner that asks
-/// twice counts each case once. Discovery counts only once a whole-assembly search has completed:
-/// a search of one class is not a census of the assembly, and a count taken midway is not a count.
+/// Counts rather than sets of ids, because two integers are all anything reads and an assembly of
+/// pre-enumerated theories can hold a hundred thousand cases. A discovery replaces the one before
+/// it — xUnit already reports each case once per search — and selections add up, since each call to
+/// run hands the executor cases it was not handed before.
 /// </para>
 /// </remarks>
 internal sealed class TestCaseCensus
 {
-    private readonly ConcurrentDictionary<string, byte> _discovered = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, byte> _selected = new(StringComparer.Ordinal);
-    private int _discoveryCompleted;
+    private int _discovered = -1;
+    private int _selected;
 
     /// <summary>
-    /// Gets how many test cases a completed whole-assembly discovery found, or <see langword="null"/>
-    /// when none completed in this process — as when an IDE runs test cases it discovered earlier.
+    /// Gets how many test cases the last complete whole-assembly discovery found, or
+    /// <see langword="null"/> when none completed in this process — as when an IDE runs test cases
+    /// it discovered earlier.
     /// </summary>
-    public int? Discovered => Volatile.Read(ref _discoveryCompleted) == 1 ? _discovered.Count : null;
+    public int? Discovered => Volatile.Read(ref _discovered) is int discovered and >= 0 ? discovered : null;
 
     /// <summary>
     /// Gets how many test cases the framework has been asked to run.
     /// </summary>
-    public int Selected => _selected.Count;
+    public int Selected => Volatile.Read(ref _selected);
 
-    /// <summary>Records one test case found by a whole-assembly discovery.</summary>
-    public void AddDiscovered(string uniqueId) => _discovered.TryAdd(uniqueId, 0);
+    /// <summary>Records a whole-assembly discovery that ran to completion.</summary>
+    /// <param name="count">The test cases it found.</param>
+    public void CompleteDiscovery(int count) => Volatile.Write(ref _discovered, count);
 
-    /// <summary>Marks a whole-assembly discovery as complete.</summary>
-    public void CompleteDiscovery() => Volatile.Write(ref _discoveryCompleted, 1);
-
-    /// <summary>Records one test case the framework was asked to run.</summary>
-    public void AddSelected(string uniqueId) => _selected.TryAdd(uniqueId, 0);
+    /// <summary>Records test cases the framework was asked to run.</summary>
+    /// <param name="count">How many.</param>
+    public void AddSelected(int count) => Interlocked.Add(ref _selected, count);
 }

@@ -16,7 +16,7 @@ namespace Xping.Sdk.XUnit;
 /// Holds the resolved services required to construct <see cref="XpingTestFrameworkExecutor"/>.
 /// Obtained once from the DI container during framework initialization.
 /// </summary>
-public sealed class XpingExecutorServices
+internal sealed class XpingExecutorServices
 {
     /// <summary>Gets the execution tracker.</summary>
     public IExecutionTracker ExecutionTracker { get; }

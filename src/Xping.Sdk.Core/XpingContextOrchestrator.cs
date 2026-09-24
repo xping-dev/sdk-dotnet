@@ -682,12 +682,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         if (isFinalizing)
         {
-            // Prefer the wall-clock-aware overload when the resolved accumulator supports it
-            // (both built-in implementations do); this keeps IRunningStatisticsAccumulator's
-            // public surface unchanged for any external implementers.
-            QuickStatistics stats = _statisticsAccumulator is IWallClockAwareStatisticsAccumulator wallClockAware
-                ? wallClockAware.GetSnapshot(DateTime.UtcNow - StartedAt)
-                : _statisticsAccumulator.GetSnapshot();
+            QuickStatistics stats = _statisticsAccumulator.GetSnapshot(DateTime.UtcNow - StartedAt);
 
             builder
                 .WithQuickStatistics(stats)

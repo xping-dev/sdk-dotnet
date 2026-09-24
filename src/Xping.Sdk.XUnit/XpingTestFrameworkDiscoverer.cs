@@ -49,22 +49,30 @@ internal sealed class XpingTestFrameworkDiscoverer(ITestFrameworkDiscoverer inne
     /// <summary>
     /// Counts each discovered test case on its way to the runner.
     /// </summary>
+    /// <remarks>
+    /// A runner that answers <see langword="false"/> has asked discovery to stop, and xUnit stops
+    /// enumerating classes but still reports discovery complete. What it found by then is a count of
+    /// part of the assembly, so it is not recorded at all — a missing count falls back to the
+    /// report's threshold, where a short one would be trusted as fact.
+    /// </remarks>
     private sealed class CountingSink(IMessageSink inner, TestCaseCensus census)
         : LongLivedMarshalByRefObject, IMessageSink
     {
+        private int _count;
+        private volatile bool _stopped;
+
         public bool OnMessage(IMessageSinkMessage message)
         {
-            switch (message)
-            {
-                case ITestCaseDiscoveryMessage discovered:
-                    census.AddDiscovered(discovered.TestCase.UniqueID);
-                    break;
-                case IDiscoveryCompleteMessage:
-                    census.CompleteDiscovery();
-                    break;
-            }
+            if (message is ITestCaseDiscoveryMessage)
+                Interlocked.Increment(ref _count);
+            else if (message is IDiscoveryCompleteMessage && !_stopped)
+                census.CompleteDiscovery(Volatile.Read(ref _count));
 
-            return inner.OnMessage(message);
+            bool keepGoing = inner.OnMessage(message);
+            if (!keepGoing)
+                _stopped = true;
+
+            return keepGoing;
         }
     }
 }

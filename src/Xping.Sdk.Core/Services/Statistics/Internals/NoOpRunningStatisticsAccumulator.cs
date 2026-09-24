@@ -16,7 +16,7 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// <see cref="GetSnapshot()"/> returns zeroed statistics and
 /// <see cref="GetSnapshotByAssembly"/> an empty breakdown.
 /// </summary>
-internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
+internal sealed class NoOpRunningStatisticsAccumulator : IRunningStatisticsAccumulator
 {
     // One shared instance, so it has to be genuinely read-only: a consumer casting the returned
     // value back to Dictionary would otherwise corrupt every later caller's empty breakdown.

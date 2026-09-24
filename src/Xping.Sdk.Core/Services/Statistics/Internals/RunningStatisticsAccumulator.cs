@@ -24,7 +24,7 @@ namespace Xping.Sdk.Core.Services.Statistics.Internals;
 /// <see cref="Tally"/>, so a <see cref="TestOutcome"/> added without a counter fails the same way in
 /// both rather than balancing in one and silently not in the other.
 /// </remarks>
-internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator, IWallClockAwareStatisticsAccumulator
+internal sealed class RunningStatisticsAccumulator : IRunningStatisticsAccumulator
 {
     // The whole test host process.
     private readonly Counters _hostWide = new();

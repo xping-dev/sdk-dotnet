@@ -49,6 +49,16 @@ public interface IRunningStatisticsAccumulator
     QuickStatistics GetSnapshot();
 
     /// <summary>
+    /// Returns an immutable snapshot of the statistics accumulated so far, including the
+    /// wall-clock time elapsed since the session started.
+    /// </summary>
+    /// <param name="wallClockElapsed">
+    /// The wall-clock time elapsed since the session started, used to populate
+    /// <see cref="QuickStatistics.WallClockDurationMs"/>. Negative values are clamped to zero.
+    /// </param>
+    QuickStatistics GetSnapshot(TimeSpan wallClockElapsed);
+
+    /// <summary>
     /// Returns an immutable snapshot of the statistics accumulated so far, broken down by the test
     /// assembly each execution belongs to. Safe to call at any time, including concurrently with
     /// <see cref="Record"/>.
@@ -59,14 +69,14 @@ public interface IRunningStatisticsAccumulator
     /// </returns>
     /// <remarks>
     /// <para>
-    /// A session records one test host process, not one test assembly, so <see cref="GetSnapshot"/>
+    /// A session records one test host process, not one test assembly, so <see cref="GetSnapshot()"/>
     /// counts every test project a solution-wide <c>dotnet test</c> batched into that host. This is
     /// the same reading attributed to each of them.
     /// </para>
     /// <para>
     /// Only the counters that decompose appear here — see <see cref="AssemblyStatistics"/> for what
     /// is deliberately absent. An execution naming no assembly is counted by
-    /// <see cref="GetSnapshot"/> alone rather than under an empty key.
+    /// <see cref="GetSnapshot()"/> alone rather than under an empty key.
     /// </para>
     /// </remarks>
     IReadOnlyDictionary<string, AssemblyStatistics> GetSnapshotByAssembly();

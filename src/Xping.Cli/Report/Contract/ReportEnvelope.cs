@@ -240,8 +240,10 @@ internal sealed record LatestRunFailureDto(
 /// </param>
 /// <param name="EnvironmentalSessions">Sessions discounted as environment failures.</param>
 /// <param name="PartialSessions">
-/// Sessions that covered only part of the suite — a <c>dotnet test --filter</c> run, or anything
-/// else that ran a fraction of the tests the window's largest run did. An observation and not a
+/// Sessions that covered only part of the suite — a <c>dotnet test --filter</c> run, or one cut short.
+/// Under xUnit that is what the test framework reported: fewer test cases selected than discovered, or
+/// fewer tests recorded than selected. Elsewhere it is a run with under half the tests of the window's
+/// largest run. An observation and not a
 /// discount: only the kinds that read absence set such a session aside, because a filtered run's
 /// outcomes are as true as any other run's and it is only its silences that mean nothing.
 /// </param>
