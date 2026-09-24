@@ -162,6 +162,9 @@ public sealed class MSTestRetryDetectorTests
     /// </summary>
     private sealed class MockTestContext : TestContext
     {
+        // MSTest 3.8 made this abstract; the doubles have no console to display on.
+        public override void DisplayMessage(MessageLevel messageLevel, string message) { }
+
         private readonly string _testName;
         private readonly string? _fullClassName;
 

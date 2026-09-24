@@ -270,6 +270,9 @@ public class XpingTestBaseTests
     private sealed class OutcomeTestContext(
         UnitTestOutcome outcome, System.Threading.CancellationTokenSource? cancellation) : TestContext
     {
+        // MSTest 3.8 made this abstract; the doubles have no console to display on.
+        public override void DisplayMessage(MessageLevel messageLevel, string message) { }
+
 #pragma warning disable CS8609 // Nullability of reference types in return type doesn't match overridden member
         public override System.Collections.IDictionary Properties { get; } = new Dictionary<string, object?>();
 #pragma warning restore CS8609

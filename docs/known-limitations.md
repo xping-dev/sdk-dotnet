@@ -202,6 +202,22 @@ leaves its tests recorded as **passed**
 
 **Workaround**: move the work into `[TestInitialize]`, which is recorded.
 
+### MSTest 3.7.x: `[AssemblyCleanup]` Is Skipped Under Method-Level Parallelization
+
+**Impact**: With `[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]` on MSTest 3.7.x, the
+cleanup hook that finalizes the session may never run. The SDK then finalizes from a process-exit
+safety net: local history is written and `xping report` sees the run, but the **cloud upload is
+usually lost**.
+
+**Reason**: MSTest 3.x runs `[AssemblyCleanup]` as part of whichever test it believes is last, and
+3.7.x loses track of that under method-level parallelization (fixed upstream in 3.8). The safety net
+runs inside `AppDomain.ProcessExit`, and under `dotnet test` vstest terminates the test host 100 ms
+after the run completes. A local file write fits in that window; a network round trip does not.
+
+**Workaround**: upgrade to MSTest 3.8 or later, which is the package's minimum. If you must stay on
+3.7.x, set `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000` in the environment that runs `dotnet test` so the
+upload has time to complete.
+
 ### xUnit: Fixture Disposal Is Not Attributed To A Test
 
 **Impact**: A class or collection fixture whose `Dispose` throws leaves its tests recorded as

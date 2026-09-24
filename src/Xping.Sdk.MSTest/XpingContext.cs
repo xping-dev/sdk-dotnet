@@ -184,11 +184,18 @@ public class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Registers a process-exit safety net, once per process, that finalizes an initialized-but-not-yet-
-    /// finalized session. MSTest skips <c>[AssemblyCleanup]</c> under some configurations (e.g. method-
-    /// level parallelization — see issue #124), which otherwise silently discards every buffered
+    /// finalized session. MSTest 3.7.x skips <c>[AssemblyCleanup]</c> under method-level parallelization
+    /// (issue #124; fixed upstream in MSTest 3.8), which otherwise silently discards every buffered
     /// execution. No-op when a session already finalized normally, since <see cref="ShutdownAsync"/>
     /// nulls out <see cref="_instance"/> before the process exits.
     /// </summary>
+    /// <remarks>
+    /// This is a last resort, not a substitute for the cleanup hook. Under <c>dotnet test</c>, vstest
+    /// terminates the test host 100 ms after the run completes (issue #126), and a network upload rarely
+    /// fits in that window. Finalization writes local history before it uploads, so the run survives on
+    /// disk; the cloud upload needs <c>VSTEST_TESTHOST_SHUTDOWN_TIMEOUT</c> raised in the environment
+    /// that runs <c>dotnet test</c>, which only the parent process reads.
+    /// </remarks>
     private static void EnsureProcessExitSafetyNetRegistered()
     {
         if (Interlocked.CompareExchange(ref _processExitHandlerRegistered, 1, 0) != 0)
@@ -205,9 +212,12 @@ public class XpingContext : XpingContextOrchestrator
 
         XpingContext context = instance.Value;
         context._logger.LogWarning(
-            "[Xping] Process exiting with session {SessionId} still active. The test framework's " +
-            "assembly cleanup hook did not run (e.g. MSTest with method-level parallelization). " +
-            "Finalizing now as a safety net.",
+            "[Xping] Process exiting with session {SessionId} still active: MSTest did not run " +
+            "[AssemblyCleanup] (MSTest 3.7.x skips it under method-level parallelization; 3.8+ fixes " +
+            "this). Finalizing as a safety net. Local history is written first and should survive; " +
+            "the cloud upload may not, because vstest terminates the test host 100 ms after the run. " +
+            "Set VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 in the environment that runs `dotnet test` " +
+            "to give it time.",
             context.SessionId);
 
         try

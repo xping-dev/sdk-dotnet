@@ -105,7 +105,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
         // Nothing here awaits, and nothing observes the token: every field is read from a cached
         // lazy or the local clock, so there is no operation for a cancellation to interrupt. Both
-        // callers already check the token before arriving — FlushOnceAsync and FinalFlushAsync enter
+        // callers already check the token before arriving — FlushOnceAsync and FinalizeSessionAsync enter
         // through _flushLock.WaitAsync(cancellationToken), which throws on an already-cancelled one
         // — so a check here would be unreachable, and throwing during finalization would abandon the
         // run rather than persist it. The interface stays task-returning so a detector that does

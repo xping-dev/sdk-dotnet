@@ -5,8 +5,10 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore.Internals;
@@ -122,6 +124,95 @@ public sealed class LocalHistoryWriteTests : IDisposable
 
         Assert.Single(SessionFiles(exported));
         Assert.Empty(SessionFiles(configured));
+    }
+
+    [Fact]
+    public async Task TheRunIsOnDiskBeforeTheFirstUploadStarts()
+    {
+        // The order matters when finalization runs from a process-exit safety net: under `dotnet
+        // test`, vstest terminates the test host 100 ms after the run, which is less than one
+        // network round trip. A file write fits in that window; the uploads must come after it
+        // (issue #126). Batch size 1 forces several batch uploads ahead of the finalized one, and
+        // every one of them must already find the run on disk.
+        string store = Path.Combine(_temp, "configured");
+        var filesSeenByUploads = new List<int>();
+
+        var uploader = new Mock<IXpingUploader>();
+        uploader
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((_, _) => filesSeenByUploads.Add(SessionFiles(store).Length))
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 1 });
+
+        await using (Harness orchestrator = CreateUploading(store, uploader.Object))
+        {
+            orchestrator.Record(Execution("MyApp.Tests", "First"));
+            orchestrator.Record(Execution("MyApp.Tests", "Second"));
+            await orchestrator.FinalizeAsync();
+        }
+
+        Assert.Equal([1, 1, 1], filesSeenByUploads);
+        Assert.Single(SessionFiles(store));
+    }
+
+    [Fact]
+    public async Task TheBatchesAreUploadedWhole_AndInOrder()
+    {
+        // Building every batch before uploading any is only safe if the batches do not share
+        // state: the first must still carry its executions once the last has been built.
+        string store = Path.Combine(_temp, "configured");
+        var uploaded = new List<TestSession>();
+
+        var uploader = new Mock<IXpingUploader>();
+        uploader
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((session, _) => uploaded.Add(session))
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 1 });
+
+        await using (Harness orchestrator = CreateUploading(store, uploader.Object))
+        {
+            orchestrator.Record(Execution("MyApp.Tests", "First"));
+            orchestrator.Record(Execution("MyApp.Tests", "Second"));
+            await orchestrator.FinalizeAsync();
+        }
+
+        Assert.Equal(3, uploaded.Count);
+        Assert.Equal(["First"], uploaded[0].Executions.Select(e => e.TestName));
+        Assert.Equal(["Second"], uploaded[1].Executions.Select(e => e.TestName));
+        Assert.Equal(
+            [TestSessionState.Initial, TestSessionState.Partial, TestSessionState.Finalized],
+            uploaded.Select(s => s.SessionState));
+        Assert.Empty(uploaded[2].Executions);
+    }
+
+    private static Harness CreateUploading(string storePath, IXpingUploader uploader)
+    {
+        // Composed by hand rather than through AddXping: a zero FlushInterval fails validation
+        // there, and it is what keeps the timer and the buffer-full flush out of this test, so
+        // that the only uploads are the ones finalization itself issues.
+        IHost host = new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.Mode = XpingMode.Cloud;
+                    o.ApiKey = "test-key";
+                    o.BatchSize = 1;
+                    o.FlushInterval = TimeSpan.Zero;
+                    o.LocalStorePath = storePath;
+                });
+                services
+                    .AddXpingInfrastructure()
+                    .AddXpingSerialization()
+                    .AddXpingEnvironment()
+                    .AddXpingCollectors()
+                    .AddXpingPullRequest()
+                    .AddXpingStatistics()
+                    .AddXpingLocalStore(XpingMode.Cloud)
+                    .AddSingleton(uploader);
+            })
+            .Build();
+
+        return new Harness(host);
     }
 
     private static Harness Create(string storePath)

@@ -21,6 +21,10 @@ Add the NuGet package reference to your MSTest test project:
 </ItemGroup>
 ```
 
+Requires **MSTest 3.8 or later** (`MSTest.TestFramework` and `MSTest.TestAdapter`). MSTest 3.7.x skips
+`[AssemblyCleanup]` under method-level parallelization, which is the hook that finalizes the session;
+see [Troubleshooting](#session-finalized-by-the-process-exit-safety-net).
+
 ## Quick Start
 
 ### 1. Inherit from XpingTestBase
@@ -357,6 +361,22 @@ If no configuration is found, the adapter will:
 1. Look for `appsettings.json` with a `"Xping"` section in the current directory
 2. Check environment variables (with `XPING_` prefix)
 3. Fall back to default offline-only mode
+
+### Session finalized by the process-exit safety net
+
+If the log shows `Process exiting with session ... still active`, MSTest did not run `[AssemblyCleanup]`
+and the SDK finalized the session from an `AppDomain.ProcessExit` handler instead. MSTest 3.7.x does
+this under `[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]`; upgrade to MSTest 3.8 or later.
+
+The safety net writes local history to `.xping/` before it uploads, so `xping report` still sees the
+run. The cloud upload usually does not complete: under `dotnet test`, vstest terminates the test host
+100 ms after the run finishes, which is less than one network round trip. To give the upload time, set
+the timeout in the environment that runs `dotnet test` (it is read by the parent process, so the SDK
+cannot set it for you):
+
+```bash
+VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 dotnet test
+```
 
 ### Network Issues
 
