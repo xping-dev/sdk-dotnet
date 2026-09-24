@@ -142,7 +142,7 @@ public class CalculatorTests : XpingTestBase
             "The retry attribute re-runs the test, so the suite still reports green.");
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(2, 3, 5)]
     [DataRow(10, 5, 15)]
     [DataRow(-1, 1, 0)]
@@ -153,7 +153,7 @@ public class CalculatorTests : XpingTestBase
         Assert.AreEqual(expected, result);
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(10, 2, 5)]
     [DataRow(20, 4, 5)]
     [DataRow(100, 10, 10)]
@@ -166,10 +166,9 @@ public class CalculatorTests : XpingTestBase
 
     [TestMethod]
     [TestCategory("Unit")]
-    [ExpectedException(typeof(DivideByZeroException))]
     public void Divide_ByZero_ThrowsException()
     {
-        Calculator.Divide(10, 0);
+        Assert.ThrowsExactly<DivideByZeroException>(() => Calculator.Divide(10, 0));
     }
 }
 
@@ -189,7 +188,7 @@ public class StringTests : XpingTestBase
         Assert.AreEqual("Hello World", result);
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("hello", 5)]
     [DataRow("world", 5)]
     [DataRow("", 0)]

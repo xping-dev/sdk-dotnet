@@ -20,7 +20,8 @@ Before you begin, make sure you have:
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
 - **No Xping account needed.** Without an API key the SDK runs [local-only](local-first.md): every run is recorded to `.xping/` in your repo and no network call is made. An account is required only to upload to Xping Cloud, which is currently invite-only.
-- An existing **MSTest test project** or create a new one
+- An existing **MSTest test project** on **MSTest 3.8 or later**, or create a new one. MSTest 3.7.x skips
+  `[AssemblyCleanup]` under method-level parallelization, and that hook is what finalizes the session.
 
 > **New to MSTest?** Create a test project with: `dotnet new mstest -n MyTestProject`
 
@@ -334,7 +335,7 @@ For parameterized tests, the pinned value is automatically combined with a value
 
 ```csharp
 [XpingFingerprint("login-v1")]
-[DataTestMethod]
+[TestMethod]
 [DataRow("admin", true)]
 [DataRow("user", false)]
 public void Login_ShouldSucceed(string role, bool expected) { ... }
@@ -437,7 +438,7 @@ Xping automatically tracks data-driven tests with their data rows:
 [TestClass]
 public class MathTests : XpingTestBase
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(1, 1, 2)]
     [DataRow(2, 3, 5)]
     [DataRow(-1, 1, 0)]
@@ -460,7 +461,7 @@ Use dynamic data sources like CSV files or databases:
 [TestClass]
 public class DataSourceTests : XpingTestBase
 {
-    [DataTestMethod]
+    [TestMethod]
     [DynamicData(nameof(GetTestData), DynamicDataSourceType.Method)]
     public void ProcessData_ValidInput_ReturnsExpected(int input, int expected)
     {

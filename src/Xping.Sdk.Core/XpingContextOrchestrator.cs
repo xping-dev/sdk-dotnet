@@ -47,7 +47,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 {
     private readonly SemaphoreSlim _flushLock;
     private readonly Timer? _flushTimer;
-    private readonly TestSessionBuilder _builder = new();
     private readonly IHost _host;
     private readonly ILogger<XpingContextOrchestrator> _logger;
 
@@ -82,7 +81,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     // none at all. A per-batch value would be empty on exactly the upload the platform needs it on.
     //
     // Mutated only inside BuildSessionAsync, which both call sites (FlushOnceAsync and
-    // FinalFlushAsync) enter holding _flushLock, so this needs no lock of its own.
+    // FinalizeSessionAsync) enter holding _flushLock, so this needs no lock of its own.
     private readonly SortedSet<string> _sessionAssemblies = new(StringComparer.Ordinal);
     private int _unattributedExecutionCount;
 
@@ -317,29 +316,21 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (!IsCollecting)
             return new UploadResult { Success = true, TotalRecordsCount = 0 };
 
-        (UploadResult result, _) = await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
-        return result;
+        return await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Performs a single drain-and-upload cycle, reporting both the upload result and the number of
-    /// executions actually drained from the collector.
+    /// Performs a single drain-and-upload cycle: one batch, uploaded as it is built.
     /// </summary>
-    /// <remarks>
-    /// The drained count is reported separately because it is the only reliable measure of remaining
-    /// work. <see cref="UploadResult.TotalRecordsCount"/> reflects what the *server* acknowledged, and
-    /// is always zero for <c>NoOpXpingUploader</c> — so a caller that loops on it would drain a single
-    /// batch and silently discard the rest of the buffer in any non-uploading mode.
-    /// </remarks>
-    private async Task<(UploadResult Result, int DrainedCount)> FlushOnceAsync(CancellationToken cancellationToken)
+    private async Task<UploadResult> FlushOnceAsync(CancellationToken cancellationToken)
     {
         // Ensure only one flush happens at a time
         await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            TestSession session = await BuildSessionAsync(isFinalizing: false, cancellationToken).ConfigureAwait(false);
-            int drainedCount = session.Executions.Count;
+            TestSession session = await BuildSessionAsync(NextBatchState(), _collector.Drain(), cancellationToken)
+                .ConfigureAwait(false);
             UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
             // Only mark the first flush as done once data actually reaches the cloud.
@@ -348,7 +339,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             if (result.TotalRecordsCount > 0)
                 Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
 
-            return (result, drainedCount);
+            return result;
         }
         finally { _flushLock.Release(); }
     }
@@ -415,28 +406,46 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
-        // Loop until the buffer is fully drained or an upload fails.
-        // Retries are handled by the Polly resilience pipeline on the HttpClient
-        // (configured via AddResilienceHandler in XpingServiceCollectionExtensions);
-        // if Polly exhausts its budget, we stop immediately rather than re-draining.
-        //
-        // The loop tracks the *drained* count rather than the uploaded count: the two diverge in
-        // local-only mode, where the no-op uploader always acknowledges zero records.
         UploadResult uploadResult;
-        int drainedCount;
-        do
+        List<TestExecution>? storedExecutions;
+
+        // Held across the drain, the local write and every upload, so a timer or buffer-full flush
+        // cannot slip a batch of its own in between them.
+        await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            (uploadResult, drainedCount) = await FlushOnceAsync(cancellationToken).ConfigureAwait(false);
-        } while (drainedCount > 0 && uploadResult.Success);
+            // Everything the run produced is drained and written to disk before the first byte goes
+            // over the network. A file write takes milliseconds; an upload takes at least one round
+            // trip. When finalization runs from a process-exit safety net the host can be killed at
+            // any moment — vstest terminates the test host 100 ms after the run completes (issue
+            // #126) — and the cheap, sufficient record must not queue behind the expensive one.
+            List<TestSession> batches = await DrainRemainingAsync(cancellationToken).ConfigureAwait(false);
 
-        WarnAboutUnattributableExecutions();
+            TestSession finalSession = await BuildSessionAsync(
+                TestSessionState.Finalized, executions: [], cancellationToken).ConfigureAwait(false);
 
-        // Send the finalized session with QuickStatistics so the cloud can post the PR comment.
-        uploadResult = await FinalFlushAsync(cancellationToken).ConfigureAwait(false);
+            // Kept for the local store, which rebuilds its own session from the accumulated
+            // executions and has no other source for the accumulated statistics.
+            _finalizedStatistics = finalSession.QuickStatistics;
+            _finalizedStatisticsByAssembly = finalSession.StatisticsByAssembly;
+            storedExecutions = WriteLocalHistory();
+
+            WarnAboutUnattributableExecutions();
+
+            await UploadBatchesAsync(batches, cancellationToken).ConfigureAwait(false);
+
+            // The finalized session carries QuickStatistics so the cloud can post the PR comment. It
+            // is sent even when a batch failed: it is what closes the run on the platform, and its
+            // result is the one strict mode judges.
+            uploadResult = await UploadSessionAsync(finalSession, cancellationToken).ConfigureAwait(false);
+            uploadResult.QuickStatistics = finalSession.QuickStatistics;
+        }
+        finally { _flushLock.Release(); }
 
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
-        WriteLocalHistory();
+        if (storedExecutions != null)
+            PrintRetryFlakeHint(storedExecutions);
 
         if (!uploadResult.Success && IsStrictModeEnabled(Services))
         {
@@ -587,18 +596,76 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             });
     }
 
-    private async Task<TestSession> BuildSessionAsync(bool isFinalizing, CancellationToken cancellationToken)
-    {
-        _builder.Reset();
+    /// <summary>
+    /// The state of the next batch to upload: <see cref="TestSessionState.Initial"/> until the cloud
+    /// has acknowledged records for this session, <see cref="TestSessionState.Partial"/> afterwards.
+    /// </summary>
+    private TestSessionState NextBatchState() =>
+        _firstFlushDone == 0 ? TestSessionState.Initial : TestSessionState.Partial;
 
-        TestSessionState sessionState = isFinalizing
-            ? TestSessionState.Finalized
-            : (_firstFlushDone == 0
-                ? TestSessionState.Initial
-                : TestSessionState.Partial);
+    /// <summary>
+    /// Drains the collector to empty, one batch per session, without uploading anything.
+    /// </summary>
+    /// <remarks>
+    /// The batches are marked by position rather than by <see cref="_firstFlushDone"/>: that flag
+    /// only advances when an upload is acknowledged, and none happens until every batch is built.
+    /// The first non-empty batch is <see cref="TestSessionState.Initial"/> if nothing has reached the
+    /// cloud yet, and every later one is <see cref="TestSessionState.Partial"/>.
+    /// </remarks>
+    private async Task<List<TestSession>> DrainRemainingAsync(CancellationToken cancellationToken)
+    {
+        var batches = new List<TestSession>();
+        bool initialPending = _firstFlushDone == 0;
+
+        while (true)
+        {
+            IReadOnlyList<TestExecution> executions = _collector.Drain();
+
+            // The count of *drained* executions is the only reliable measure of remaining work:
+            // the no-op uploader of local-only mode never acknowledges any.
+            if (executions.Count == 0)
+                return batches;
+
+            TestSessionState state = initialPending ? TestSessionState.Initial : TestSessionState.Partial;
+            batches.Add(await BuildSessionAsync(state, executions, cancellationToken).ConfigureAwait(false));
+            initialPending = false;
+        }
+    }
+
+    /// <summary>
+    /// Uploads the drained batches in order, stopping at the first failure.
+    /// </summary>
+    /// <remarks>
+    /// Retries are the Polly pipeline's job (see <c>AddResilienceHandler</c> in
+    /// <c>XpingServiceCollectionExtensions</c>). Once it has exhausted its budget on one batch,
+    /// pushing the rest at the same endpoint would only repeat the wait; they are already on disk.
+    /// </remarks>
+    private async Task UploadBatchesAsync(List<TestSession> batches, CancellationToken cancellationToken)
+    {
+        foreach (TestSession batch in batches)
+        {
+            UploadResult result = await UploadSessionAsync(batch, cancellationToken).ConfigureAwait(false);
+
+            if (result.TotalRecordsCount > 0)
+                Interlocked.CompareExchange(ref _firstFlushDone, 1, 0);
+
+            if (!result.Success)
+                return;
+        }
+    }
+
+    private async Task<TestSession> BuildSessionAsync(
+        TestSessionState sessionState,
+        IReadOnlyList<TestExecution> executions,
+        CancellationToken cancellationToken)
+    {
+        // A builder per session, not a shared one: Build() hands the session a read-only view of
+        // the builder's own lists, and finalization now builds every remaining batch before it
+        // uploads any of them. Reusing one builder would empty each batch as the next is built.
+        var builder = new TestSessionBuilder();
+        bool isFinalizing = sessionState == TestSessionState.Finalized;
 
         EnvironmentInfo? environmentInfo = await CreateEnvironmentInfoAsync(cancellationToken).ConfigureAwait(false);
-        IReadOnlyList<TestExecution> executions = _collector.Drain();
         int? totalTestsExpected = GetTotalTestsExpected();
 
         for (int i = 0; i < executions.Count; i++)
@@ -614,7 +681,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         _lastEnvironmentInfo = environmentInfo;
         AccumulateLocalExecutions(executions);
 
-        _builder
+        builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
             .WithEndedAt(DateTime.UtcNow)
@@ -634,31 +701,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 ? wallClockAware.GetSnapshot(DateTime.UtcNow - StartedAt)
                 : _statisticsAccumulator.GetSnapshot();
 
-            _builder
+            builder
                 .WithQuickStatistics(stats)
                 .WithStatisticsByAssembly(_statisticsAccumulator.GetSnapshotByAssembly());
         }
 
-        return _builder.Build();
-    }
-
-    private async Task<UploadResult> FinalFlushAsync(CancellationToken cancellationToken)
-    {
-        await _flushLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            TestSession session = await BuildSessionAsync(isFinalizing: true, cancellationToken).ConfigureAwait(false);
-
-            // Kept for the local store, which rebuilds its own session from the accumulated
-            // executions and has no other source for the accumulated statistics.
-            _finalizedStatistics = session.QuickStatistics;
-            _finalizedStatisticsByAssembly = session.StatisticsByAssembly;
-
-            UploadResult result = await UploadSessionAsync(session, cancellationToken).ConfigureAwait(false);
-            result.QuickStatistics = session.QuickStatistics;
-            return result;
-        }
-        finally { _flushLock.Release(); }
+        return builder.Build();
     }
 
     private Task<UploadResult> UploadSessionAsync(
@@ -676,10 +724,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <see cref="RecordTestExecution"/> would add cost to the per-test hot path, which is the one
     /// place the SDK cannot afford to grow.
     /// <para>
-    /// This buffer is why the local store sees a complete run at all. The session built by
-    /// <c>FinalFlushAsync</c> is assembled <i>after</i> the drain loop has emptied the collector, so
-    /// its own <c>Executions</c> collection is empty; everything the local store writes comes from
-    /// here.
+    /// This buffer is why the local store sees a complete run at all. The finalized session is
+    /// assembled <i>after</i> <c>DrainRemainingAsync</c> has emptied the collector, so its own
+    /// <c>Executions</c> collection is empty; everything the local store writes comes from here.
     /// </para>
     /// </remarks>
     private void AccumulateLocalExecutions(IReadOnlyList<TestExecution> executions)
@@ -695,14 +742,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Persists the finished run to the local store and, when this run produced a retry flake,
-    /// prints a single line pointing at the CLI.
+    /// Persists the finished run to the local store.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The SDK does not analyse history or render reports. It states one fact about the run it just
-    /// observed — how many tests failed and then passed on a retry — which is available from the
-    /// executions already in memory and needs no store read. Everything historical is the CLI's job.
+    /// Called from <see cref="FinalizeSessionAsync"/> before the first upload, so that a run survives
+    /// on disk even when the process does not survive the upload.
     /// </para>
     /// <para>
     /// A run in which no execution named its assembly is not written. Every CLI report scopes by
@@ -711,10 +756,11 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// it keeps that noise out of the store rather than asking the CLI to explain it.
     /// </para>
     /// </remarks>
-    private void WriteLocalHistory()
+    /// <returns>The executions that were written, or <see langword="null"/> when the run was not stored.</returns>
+    private List<TestExecution>? WriteLocalHistory()
     {
         if (!IsLocalStoreEnabled)
-            return;
+            return null;
 
         List<TestExecution> executions;
         lock (_localExecutionsLock)
@@ -723,25 +769,36 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         if (executions.Count == 0)
-            return;
+            return null;
 
         if (_sessionAssemblies.Count == 0)
         {
             _logger.LogDebug(
                 "Local session not stored: none of its {Count} executions named a test assembly.",
                 executions.Count);
-            return;
+            return null;
         }
 
-        EnvironmentInfo? environment = _lastEnvironmentInfo;
-
-        bool stored = WriteLocalSession(executions, environment, DateTime.UtcNow);
-
-        // Gated on the write because the hint points at `xping report`, and a run that was
-        // never stored is a run that report cannot show.
-        if (stored)
-            WriteRetryFlakeHint(executions, environment?.IsCIEnvironment ?? false);
+        return WriteLocalSession(executions, _lastEnvironmentInfo, DateTime.UtcNow) ? executions : null;
     }
+
+    /// <summary>
+    /// Prints a single line pointing at the CLI when this run produced a retry flake.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The SDK does not analyse history or render reports. It states one fact about the run it just
+    /// observed — how many tests failed and then passed on a retry — which is available from the
+    /// executions already in memory and needs no store read. Everything historical is the CLI's job.
+    /// </para>
+    /// <para>
+    /// Only called for a run that was stored, because the hint points at <c>xping report</c>, and a
+    /// run that was never stored is a run that report cannot show. Printed after the session summary
+    /// rather than alongside the write so the terminal reads summary first, pointer second.
+    /// </para>
+    /// </remarks>
+    private void PrintRetryFlakeHint(List<TestExecution> executions) =>
+        WriteRetryFlakeHint(executions, _lastEnvironmentInfo?.IsCIEnvironment ?? false);
 
     /// <summary>
     /// Persists the run as a complete <see cref="TestSession"/> for local analysis.
@@ -777,10 +834,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
             return _localSessionStore.Write(session);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            // Local history is a side channel. It must never be the reason a test run fails.
-            _logger.LogDebug("Local session not stored: {Message}", ex.Message);
+            // Local history is a side channel. It must never be the reason a test run fails, and
+            // since it now runs ahead of the uploads, never the reason an upload does not start:
+            // a serialization or builder failure here would otherwise abort finalization with
+            // _finalized already set, and every later call would report success for a run the
+            // cloud never received.
+            _logger.LogDebug(ex, "Local session not stored: {Message}", ex.Message);
             return false;
         }
     }

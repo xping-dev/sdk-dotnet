@@ -113,6 +113,9 @@ public sealed class XpingTestBaseFailureDetailsTests
     /// </summary>
     private sealed class FailureTestContext : TestContext
     {
+        // MSTest 3.8 made this abstract; the doubles have no console to display on.
+        public override void DisplayMessage(MessageLevel messageLevel, string message) { }
+
         private readonly UnitTestOutcome _outcome;
 
         public FailureTestContext(UnitTestOutcome outcome, Exception? testException)

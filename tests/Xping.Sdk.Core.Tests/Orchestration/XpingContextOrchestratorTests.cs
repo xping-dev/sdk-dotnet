@@ -186,8 +186,9 @@ public sealed class XpingContextOrchestratorTests
     [Fact]
     public async Task FinalizedSession_CarriesAssembliesEvenThoughItCarriesNoExecutions()
     {
-        // Arrange — the load-bearing case. FinalFlushAsync builds its session *after* the drain
-        // loop has emptied the collector, so the finalizing upload has no executions of its own.
+        // Arrange — the load-bearing case. FinalizeSessionAsync builds the finalized session *after*
+        // DrainRemainingAsync has emptied the collector, so the finalizing upload has no executions
+        // of its own.
         // Deriving the assembly list from that session's own executions would leave it empty on
         // exactly the upload that closes the run and carries QuickStatistics.
         var (orchestrator, uploaderMock) = CreateOrchestrator(o => o.ApiKey = "test-key");
@@ -907,7 +908,7 @@ public sealed class XpingContextOrchestratorTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated failure" });
 
-        // Finalized upload (FinalFlushAsync) succeeds
+        // Finalized upload succeeds
         uploaderMock
             .Setup(u => u.UploadAsync(
                 It.Is<TestSession>(s => s.SessionState == TestSessionState.Finalized),

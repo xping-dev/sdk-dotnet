@@ -33,10 +33,12 @@ public static class XpingAssemblyInitialize
     /// Finalizes the session by uploading all buffered executions, then disposes SDK resources.
     /// </summary>
     /// <remarks>
-    /// MSTest does not reliably invoke this hook under some configurations (e.g. method-level
-    /// parallelization — see issue #124). <see cref="XpingContext"/> registers a process-exit safety
-    /// net on <see cref="XpingContext.Initialize()"/> that finalizes the session in that case, so this
-    /// hook is the primary path, not the only one.
+    /// MSTest runs assembly hooks only when the test assembly declares them, so a copy of this class
+    /// belongs in every test project. <see cref="XpingContext"/> also registers a process-exit safety
+    /// net on <see cref="XpingContext.Initialize()"/> that finalizes a session this hook did not, so
+    /// this hook is the primary path, not the only one. The safety net runs inside the 100 ms vstest
+    /// gives the test host before terminating it (issue #126): local history is written first and
+    /// survives; the cloud upload usually does not.
     /// </remarks>
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()

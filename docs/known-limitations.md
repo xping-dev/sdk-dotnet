@@ -135,7 +135,7 @@ instead of N separate failing tests.
 What is reachable differs by framework, and none of the three reports a failure site of its own. The
 tables below record what was observed by running each package, not what its documentation says.
 
-**Affected Versions**: NUnit 3.14 and 4.2, MSTest 3.7, xUnit 2.9
+**Affected Versions**: NUnit 3.14 and 4.2, MSTest 3.8 and later, xUnit 2.9
 
 ### What is recorded
 
@@ -201,6 +201,23 @@ leaves its tests recorded as **passed**
 `[AssemblyInitialize]` and `[AssemblyCleanup]` are unobservable for the same reason.
 
 **Workaround**: move the work into `[TestInitialize]`, which is recorded.
+
+### MSTest: A Session Finalized By The Process-Exit Safety Net Usually Loses Its Upload
+
+**Impact**: When no `[AssemblyCleanup]` finalizes the session, the SDK finalizes it from a
+process-exit safety net. Local history is written and `xping report` sees the run, but the **cloud
+upload is usually lost**.
+
+**Reason**: The safety net runs inside `AppDomain.ProcessExit`, and under `dotnet test` vstest
+terminates the test host 100 ms after the run completes. A local file write fits in that window; a
+network round trip does not. The hook goes missing when the test assembly declares none (MSTest only
+runs assembly hooks declared in the test assembly itself), when it throws before finalizing, or, on
+MSTest 3.7.x, under method-level parallelization (fixed in 3.8, the package's minimum).
+
+**Workaround**: declare an `[AssemblyCleanup]` in the test assembly that calls
+`XpingContext.FinalizeAndShutdownAsync()`. If the safety net still fires, set
+`VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000` in the environment that runs `dotnet test` so the upload has
+time to complete.
 
 ### xUnit: Fixture Disposal Is Not Attributed To A Test
 
