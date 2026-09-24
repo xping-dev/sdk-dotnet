@@ -36,6 +36,14 @@ namespace Xping.Cli.Report.Contract;
 /// </remarks>
 internal static class EvidenceHeadline
 {
+    // Failure modes a flaky finding names before the rest become a count. Five covers the test that
+    // fails a handful of distinct ways, which is the one a reader can act on; past that the list is
+    // usually one mode per failure, from values the normaliser did not recognise.
+    private const int FailureModesListed = 5;
+
+    // Characters of a failure mode's message carried in its metric. The evidence holds the rest.
+    private const int FailureModeMessageLength = 100;
+
     /// <summary>
     /// Resolves the headline and metrics for one finding.
     /// </summary>
@@ -215,19 +223,54 @@ internal static class EvidenceHeadline
         ];
 
         // Which ones, most frequent first: the thing a reader of "3 failure modes" wants next. The
-        // type only — messages and frames are exemplar payload, not a labelled pair — and the same
-        // fallback AlwaysFailing uses where the adapter recorded none.
-        for (int i = 0; i < e.DistinctSignatures.Count; i++)
+        // message as well as the type, because a signature is both and three modes of one type
+        // printed as the type alone would read as one mode listed three times. Capped, because a
+        // test whose messages embed values the normaliser misses can have a mode per failure; the
+        // whole list is in the evidence.
+        int listed = Math.Min(e.DistinctSignatures.Count, FailureModesListed);
+
+        for (int i = 0; i < listed; i++)
         {
             metrics.Add(new MetricDto(
                 $"failure mode {(i + 1).ToString(CultureInfo.InvariantCulture)}",
-                e.DistinctSignatures[i].ExceptionType ?? "not recorded by the adapter"));
+                FailureMode(e.DistinctSignatures[i])));
+        }
+
+        if (e.DistinctSignatures.Count > listed)
+        {
+            metrics.Add(new MetricDto(
+                "more failure modes",
+                $"{(e.DistinctSignatures.Count - listed).ToString(CultureInfo.InvariantCulture)} more"));
         }
 
         return (
             $"failed {e.Failures} of {e.ExecutionsConsidered} executions ({Percent(e.FailureRate)}) " +
             $"in {e.SessionsWithFailures} of {Runs(e.SessionsConsidered)}, {modes}",
             metrics);
+    }
+
+    /// <summary>
+    /// Names one way a test failed: its exception type and normalised message, as far as recorded.
+    /// </summary>
+    /// <remarks>
+    /// The normalised message rather than a raw one, because that is what the signature was taken
+    /// over — two failures that differ only in an id or a timestamp are one mode, and printing the
+    /// raw text of either would make them look like two. Cut at a length a labelled pair can carry;
+    /// the full text is in the evidence.
+    /// </remarks>
+    private static string FailureMode(SignatureView signature)
+    {
+        string message = signature.Message.Length > FailureModeMessageLength
+            ? string.Concat(signature.Message.AsSpan(0, FailureModeMessageLength - 3), "...")
+            : signature.Message;
+
+        return (signature.ExceptionType, message) switch
+        {
+            ({ Length: > 0 } type, { Length: > 0 }) => $"{type}: {message}",
+            ({ Length: > 0 } type, _) => type,
+            (_, { Length: > 0 }) => message,
+            _ => "not recorded by the adapter"
+        };
     }
 
     private static (string, IReadOnlyList<MetricDto>) AlwaysFailing(AlwaysFailingEvidence e)

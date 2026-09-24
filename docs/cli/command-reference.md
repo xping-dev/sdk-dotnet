@@ -145,7 +145,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all`. The last line is always the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed; swap in the id from any other row.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all`. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it.
 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
 
@@ -367,7 +367,8 @@ Two findings about the same test carry different ids when they are different cla
 that is both flaky and masked by a retry produces two findings and two ids.
 
 **Pass an id to `--id` to see that finding in detail.** Every finding's `drillDown` in
-`--format json` is that command. The detail view prints the row as the report does, every
+`--format json` is that command, scoped to the report it came from. The id prefix and digits are
+accepted in either case. The detail view prints the row as the report does, every
 member of a cluster with where it lives, the test's full name and source location, each metric
 behind the headline, and the other findings about the same test:
 
@@ -393,7 +394,8 @@ FINDING                                                       row 5 of 5
     failed          6 of 20 executions (30%)
     runs affected   6 of 20
     failure modes   1
-    failure mode 1  System.InvalidOperationException
+    failure mode 1  System.InvalidOperationException: Expected <n> but
+                    was <n>
 
     Also about this test: #4 unstable timing (f_66c10ec3)
 ```

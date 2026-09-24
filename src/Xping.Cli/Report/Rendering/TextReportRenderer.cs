@@ -34,7 +34,12 @@ namespace Xping.Cli.Report.Rendering;
 /// to go on yet".
 /// </para>
 /// </remarks>
-internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IReportRenderer
+/// <param name="capabilities">What the output stream can draw.</param>
+/// <param name="detailCommand">
+/// Whether the full report closes with the command that opens its first row in detail. Off for a
+/// report narrowed by <c>--kind</c>, whose row numbers the detail view does not share.
+/// </param>
+internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool detailCommand = true) : IReportRenderer
 {
     /// <summary>Widest line the fence may contain.</summary>
     /// <remarks>
@@ -144,7 +149,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         WriteLegend(builder, envelope);
         bool truncated = WriteFooter(builder, envelope);
 
-        if (envelope.Selection == null)
+        if (envelope.Selection == null && detailCommand)
             WriteDetailCommand(builder, envelope, truncated);
 
         output.Write(builder.ToString());
@@ -393,8 +398,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     /// </remarks>
     private void WriteDetail(StringBuilder builder, ReportEnvelope envelope, SelectionDto selection)
     {
+        // The command prints nothing on standard output for this, and says why on standard error.
+        // Rendered anyway, the envelope says the same thing rather than an empty fence.
         if (envelope.Findings is not [var finding] || selection.Row is not { } row)
+        {
+            builder.Append(selection.Id).AppendLine(" is not reported in this window.");
             return;
+        }
 
         WriteHeading(
             builder,
@@ -414,9 +424,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             [
                 ("test", subject.FullyQualifiedName),
                 ("assembly", subject.Assembly),
-                ("source", subject.SourceFile is { Length: > 0 } file
-                    ? subject.SourceLineNumber is { } line ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}" : file
-                    : null)
+                ("source", Location(subject))
             ]);
         }
 
@@ -468,41 +476,84 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
     }
 
     /// <summary>
-    /// Wraps a value at spaces and, inside a word too long for the line, after a dot or a slash.
+    /// Wraps a value at spaces and, inside a word too long for the line, after a separator.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A qualified name and a path have no spaces, and the full report would cut them. Broken after
-    /// the separator, each line ends on the dot or slash that says it continues, and every piece is
+    /// the separator, each line ends on the character that says it continues, and every piece is
     /// still a searchable segment. Only a single segment wider than the line overflows, which is the
     /// exemption <see cref="Wrap"/> already makes for one over-long word.
+    /// </para>
+    /// <para>
+    /// Which separator depends on what the word is. A path breaks at its directories and never at a
+    /// dot, which in a path belongs to a file extension or a dotted directory name and leaves a
+    /// fragment nobody can open. A name breaks at its dots, but only before its argument list,
+    /// where a dot is a decimal point.
+    /// </para>
     /// </remarks>
     private static List<string> WrapValue(string value, int width)
     {
         var lines = new List<string>();
+        var line = new StringBuilder();
 
-        foreach (string line in Wrap(value, width))
+        foreach (string word in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            string rest = line;
-
-            while (rest.Length > width)
+            if (line.Length > 0 && line.Length + 1 + word.Length > width)
             {
-                int cut = rest.LastIndexOfAny(['.', '/'], width - 1);
-
-                // No separator in reach: the first segment is itself too long, and goes whole.
-                if (cut < 0)
-                    cut = rest.IndexOfAny(['.', '/'], width);
-
-                if (cut < 0 || cut == rest.Length - 1)
-                    break;
-
-                lines.Add(rest[..(cut + 1)]);
-                rest = rest[(cut + 1)..];
+                lines.Add(line.ToString());
+                line.Clear();
             }
 
-            lines.Add(rest);
+            if (line.Length > 0)
+                line.Append(' ');
+
+            line.Append(word);
+
+            // A word that does not fit a line of its own is broken where it can be, and what is left
+            // of it stays on the line for the words after it to join.
+            while (line.Length > width && Break(line.ToString(), width) is { } cut)
+            {
+                string text = line.ToString();
+
+                lines.Add(text[..(cut + 1)]);
+                line.Clear().Append(text[(cut + 1)..]);
+            }
         }
 
-        return lines;
+        if (line.Length > 0)
+            lines.Add(line.ToString());
+
+        return lines.Count == 0 ? [string.Empty] : lines;
+    }
+
+    /// <summary>
+    /// Finds where a word too long for its line is broken: the last separator in reach, else the
+    /// first one past it.
+    /// </summary>
+    /// <returns>The separator's index, or null where the word has no separator to break after.</returns>
+    private static int? Break(string word, int width)
+    {
+        bool path = word.IndexOfAny(['/', '\\']) >= 0;
+        int paren = word.IndexOf('(', StringComparison.Ordinal);
+        int end = path || paren < 0 ? word.Length - 1 : paren - 1;
+
+        bool IsSeparator(char c) => path ? c is '/' or '\\' : c == '.';
+
+        int? after = null;
+
+        for (int i = 0; i < end; i++)
+        {
+            if (!IsSeparator(word[i]))
+                continue;
+
+            if (i < width)
+                after = i;
+            else
+                return after ?? i;
+        }
+
+        return after;
     }
 
     /// <summary>
@@ -701,12 +752,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         if (failure.FailureSummary is { Length: > 0 } summary)
             trailer.Add(summary);
 
-        if (failure.Subject.SourceFile is { Length: > 0 } file)
+        if (Location(failure.Subject) is { } location)
         {
-            string location = failure.Subject.SourceLineNumber is { } line
-                ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                : file;
-
             // The path absorbs the truncation, for the reason the findings' trailer gives: Fit()
             // cuts from the left, and applied to the joined line it would eat the failure and leave
             // the one segment that can afford to lose its head untouched.
@@ -906,12 +953,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
-        if (finding.Subject.SourceFile is { Length: > 0 } file)
+        if (Location(finding.Subject) is { } location)
         {
-            string location = finding.Subject.SourceLineNumber is { } line
-                ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                : file;
-
             // The path absorbs the truncation rather than the line as a whole. Fit() cuts from the
             // left, so applied to the joined trailer it would eat "evidence high" and leave the
             // path — the one segment that can afford to lose its head — untouched.
@@ -1066,14 +1109,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
             builder.Append(' ', MemberIndent)
                    .AppendLine(FitName(Name(member), FenceWidth - MemberIndent));
 
-            if (member.SourceFile is { Length: > 0 } file)
-            {
-                string location = member.SourceLineNumber is { } line
-                    ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
-                    : file;
-
+            if (Location(member) is { } location)
                 builder.Append(' ', MemberIndent + 2).AppendLine(capabilities.Dim(location));
-            }
         }
     }
 
@@ -1100,6 +1137,21 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities) : IRep
         string cause = subject.CauseLabel is { Length: > 0 } label ? label : "(cause not recorded)";
 
         return subject.MemberCount is { } members ? $"{cause} ({Tests(members)})" : cause;
+    }
+
+    /// <summary>
+    /// Reads where a test is declared, as <c>file:line</c>, or the file alone when no line was
+    /// recorded.
+    /// </summary>
+    /// <returns>The location, or null where the SDK captured none.</returns>
+    private static string? Location(SubjectDto subject)
+    {
+        if (subject.SourceFile is not { Length: > 0 } file)
+            return null;
+
+        return subject.SourceLineNumber is { } line
+            ? $"{file}:{line.ToString(CultureInfo.InvariantCulture)}"
+            : file;
     }
 
     private static string Tests(int count) =>

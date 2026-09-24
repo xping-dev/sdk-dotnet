@@ -770,7 +770,6 @@ public sealed class TimeSensitiveProviderTests
         Assert.Equal(FindingKind.TimeSensitive, finding.Kind);
         Assert.Empty(result.FailedProviders);
         Assert.StartsWith("f_", finding.Id, StringComparison.Ordinal);
-        Assert.Equal(DrillDown.ForFinding(finding.Id, TestSessionFactory.DefaultAssembly), finding.DrillDownCommand);
     }
 
     [Fact]

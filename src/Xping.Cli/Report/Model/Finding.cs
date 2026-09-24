@@ -102,10 +102,6 @@ internal abstract record FindingEvidence;
 /// </param>
 /// <param name="Subject">The test or group the finding is about.</param>
 /// <param name="Evidence">The kind-specific payload.</param>
-/// <param name="DrillDownCommand">
-/// The exact CLI invocation that expands this finding. Non-optional: it is how both a human and an
-/// agent navigate without documentation.
-/// </param>
 /// <param name="Impact">
 /// The score in [0,1] the severity band came from. Carried so ordering can break severity ties
 /// meaningfully; deliberately not rendered, because a bare number invites false precision.
@@ -118,5 +114,4 @@ internal sealed record Finding(
     int EvidenceSessions,
     FindingSubject Subject,
     FindingEvidence Evidence,
-    string DrillDownCommand,
     double Impact);

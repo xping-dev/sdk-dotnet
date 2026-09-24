@@ -204,6 +204,83 @@ public sealed class DetailRenderingTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A path wraps at its directories, never at the dot of its extension.
+    /// </summary>
+    [Theory]
+    [InlineData("tests/MyApp.Tests/Integration/Checkout/CheckoutServiceTests.cs:1420", "tests/MyApp.Tests/Integration/Checkout/", "CheckoutServiceTests.cs:1420")]
+    [InlineData(@"C:\src\repo\tests\MyApp.Tests\Checkout\CheckoutServiceTests.cs:42", @"C:\src\repo\tests\MyApp.Tests\Checkout\", "CheckoutServiceTests.cs:42")]
+    public void APathWrapsAtADirectory(string source, string first, string second)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        string[] fenced = Fenced(Render(Detail(Envelope(Located(source)), 1)));
+
+        int line = Array.FindIndex(fenced, l => l.StartsWith("    source ", StringComparison.Ordinal));
+
+        Assert.Equal("    source    " + first, fenced[line]);
+        Assert.Equal("              " + second, fenced[line + 1]);
+    }
+
+    /// <summary>
+    /// A parameterised name wraps before its argument list, where a dot is a decimal point.
+    /// </summary>
+    [Fact]
+    public void ANameWrapsBeforeItsArguments()
+    {
+        const string name = "MyApp.Tests.Calculations.SampleTests.AddsTwoNumbersTogether(1.5, 2.25, 3.125)";
+
+        FindingDto finding = Finding("Flaky", "high", name, "failed 7 of 20 executions (35%)");
+        string[] fenced = Fenced(Render(Detail(Envelope(finding), 1)));
+
+        int line = Array.FindIndex(fenced, l => l.StartsWith("    test ", StringComparison.Ordinal));
+
+        Assert.Equal("    test      MyApp.Tests.Calculations.SampleTests.", fenced[line]);
+        Assert.Equal("              AddsTwoNumbersTogether(1.5, 2.25, 3.125)", fenced[line + 1]);
+    }
+
+    [Fact]
+    public void ANotReportedSelectionSaysSoInsteadOfAnEmptyFence()
+    {
+        ReportEnvelope full = Get("spec-section-3");
+        ReportEnvelope absent = full with
+        {
+            Selection = new SelectionDto("f_00000000", false, null, null, []),
+            Findings = [],
+            Truncated = full.Truncated with { Shown = 0 }
+        };
+
+        Assert.Equal(["f_00000000 is not reported in this window."], Fenced(Render(absent)));
+    }
+
+    /// <summary>
+    /// A report narrowed by <c>--kind</c> does not offer its row 1, which is not the detail view's.
+    /// </summary>
+    [Fact]
+    public void ANarrowedReportOffersNoDetailLine()
+    {
+        using var writer = new StringWriter();
+        new TextReportRenderer(Capabilities(redirected: true), detailCommand: false).Render(Get("spec-section-3"), writer);
+
+        Assert.DoesNotContain("Detail of row", writer.ToString(), StringComparison.Ordinal);
+    }
+
+    private static FindingDto Located(string source)
+    {
+        FindingDto finding = Finding("Flaky", "high", "MyApp.Tests.CheckoutTests.Completes", "failed 7 of 20 executions (35%)");
+
+        int colon = source.LastIndexOf(':');
+
+        return finding with
+        {
+            Subject = finding.Subject with
+            {
+                SourceFile = source[..colon],
+                SourceLineNumber = int.Parse(source[(colon + 1)..], CultureInfo.InvariantCulture)
+            }
+        };
+    }
+
     [Fact]
     public void AnEmptyReportHasNoDetailLine()
     {

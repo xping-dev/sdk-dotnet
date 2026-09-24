@@ -518,38 +518,6 @@ public sealed class FindingCoordinatorTests
         Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
-    /// <summary>
-    /// The drill-down names the finding's own id, assigned where the id is.
-    /// </summary>
-    /// <remarks>
-    /// Including across a handover, which is where a provider-built command would have gone wrong:
-    /// the finding reported is the alternative, and its id is the alternative's.
-    /// </remarks>
-    [Fact]
-    public void EveryDrillDownNamesTheFindingsOwnIdAndAssembly()
-    {
-        var coordinator = new FindingCoordinator(
-        [
-            new StubProvider("a", FindingKind.Flaky, "Test0"),
-            new StubProvider("b", FindingKind.RetryMasked, "Test1"),
-            new SupersedingProvider(
-                FindingKind.DurationRegression,
-                FindingKind.DurationUnstable,
-                pValue: 0.04,
-                hypothesesTested: 300)
-        ]);
-
-        using var warnings = new StringWriter();
-        AnalysisResult result = coordinator.Run(Context(testsPerSession: 2), null, warnings);
-
-        Assert.Equal(3, result.Findings.Count);
-        Assert.Contains(result.Findings, f => f.Kind == FindingKind.DurationUnstable);
-
-        Assert.All(result.Findings, finding => Assert.Equal(
-            $"xping report --id {finding.Id} --assembly {TestSessionFactory.DefaultAssembly}",
-            finding.DrillDownCommand));
-    }
-
     [Fact]
     public void AFindingRestingOnFiveRunsNeverOutranksTheSameFindingOnForty()
     {

@@ -3,6 +3,9 @@
  * License: [MIT]
  */
 
+using System.Globalization;
+using System.Text;
+
 namespace Xping.Cli.Report;
 
 /// <summary>
@@ -31,32 +34,56 @@ internal static class DrillDown
     /// Builds the invocation that shows one finding in detail.
     /// </summary>
     /// <param name="id">The finding's id.</param>
-    /// <param name="assembly">
-    /// The assembly its subject belongs to, or <see langword="null"/> when none was recorded.
-    /// </param>
+    /// <param name="scope">What the report was scoped to.</param>
     /// <returns>The command.</returns>
     /// <remarks>
-    /// Scoped to the assembly because an id is a fact about a window, and the window a bare
-    /// <c>xping report</c> picks is the assembly that ran most recently — not necessarily this one.
+    /// Names the assembly whether or not the caller did. An id is a fact about a window, and a bare
+    /// <c>xping report</c> scopes itself to whichever assembly ran most recently; the envelope this
+    /// string lands in outlives the moment that was this one.
     /// </remarks>
-    public static string ForFinding(string id, string? assembly)
+    public static string ForFinding(string id, ReportScope scope)
     {
-        string command = $"xping report --id {id}";
+        ArgumentNullException.ThrowIfNull(scope);
 
-        return string.IsNullOrEmpty(assembly)
-            ? command
-            : $"{command} --assembly {Quote(assembly)}";
+        return Scoped($"xping report --id {id}", scope, scope.Assembly);
     }
 
     /// <summary>
     /// Builds the invocation that shows the untruncated report.
     /// </summary>
+    /// <param name="scope">What the report was scoped to.</param>
     /// <returns>The command.</returns>
     /// <remarks>
     /// This is the "show me the other eleven" affordance, and a reader who wants eleven more of what
-    /// they are already looking at should get exactly that.
+    /// they are already looking at should get exactly that. It repeats only what the caller typed:
+    /// an auto-scoped report's bare <c>--all</c> scopes itself the same way, and one opened from a
+    /// drill-down, which always names the assembly, gets the assembly back.
     /// </remarks>
-    public static string ForFullReport() => "xping report --all";
+    public static string ForFullReport(ReportScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+
+        return Scoped("xping report --all", scope, scope.AssemblyGiven ? scope.Assembly : null);
+    }
+
+    private static string Scoped(string command, ReportScope scope, string? assembly)
+    {
+        var builder = new StringBuilder(command);
+
+        if (!string.IsNullOrEmpty(assembly))
+            builder.Append(" --assembly ").Append(Quote(assembly));
+
+        if (scope.Runs is { } runs)
+            builder.Append(" --runs ").Append(runs.ToString(CultureInfo.InvariantCulture));
+
+        if (!string.IsNullOrEmpty(scope.Since))
+            builder.Append(" --since ").Append(Quote(scope.Since));
+
+        if (!string.IsNullOrEmpty(scope.Directory))
+            builder.Append(" --directory ").Append(Quote(scope.Directory));
+
+        return builder.ToString();
+    }
 
     private static string Quote(string value) =>
         value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;

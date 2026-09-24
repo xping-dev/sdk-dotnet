@@ -92,7 +92,7 @@ internal static class ReportFixtures
             Findings =
             [
                 .. envelope.Findings.Select(finding =>
-                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, envelope.Context?.Assembly) })
+                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, new ReportScope(envelope.Context?.Assembly)) })
             ]
         };
     }
@@ -473,7 +473,7 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun,
-            FindingSelector.Select(ordered, ordered[0].Id));
+            ordered[0].Id);
     }
 
     /// <summary>

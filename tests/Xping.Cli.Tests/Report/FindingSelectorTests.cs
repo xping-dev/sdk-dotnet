@@ -168,7 +168,6 @@ public sealed class FindingSelectorTests
             10,
             subject,
             new StubEvidence(),
-            "xping report",
             0.5);
 
     private static TestReference Reference(string fingerprint) =>

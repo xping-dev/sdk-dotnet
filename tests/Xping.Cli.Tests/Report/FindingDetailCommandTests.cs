@@ -124,6 +124,69 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     [Fact]
+    public void AnUpperCasePrefixIsAccepted()
+    {
+        SeedVanishing();
+
+        string id = FirstId();
+
+        var (code, _, _) = Run("--id", id.ToUpperInvariant());
+
+        Assert.Equal(0, code);
+    }
+
+    /// <summary>
+    /// The printed drill-down lands on the report it was printed from, window included.
+    /// </summary>
+    /// <remarks>
+    /// Asserted on the command and on the window it opens: a drill-down that dropped <c>--runs</c>
+    /// would open the default window, which on a longer store is a different report.
+    /// </remarks>
+    [Fact]
+    public void TheDrillDownRepeatsTheWindowItWasPrintedFrom()
+    {
+        SeedVanishing();
+
+        JsonElement finding = Json("--runs", "8").GetProperty("findings")[0];
+        string drillDown = finding.GetProperty("drillDown").GetString()!;
+
+        Assert.EndsWith(" --assembly MyApp.Tests --runs 8", drillDown, StringComparison.Ordinal);
+
+        var (code, output, _) = Run([.. drillDown.Split(' ')[2..], "--format", "json"]);
+
+        Assert.Equal(0, code);
+
+        using JsonDocument detail = JsonDocument.Parse(output);
+        Assert.Equal(8, detail.RootElement.GetProperty("window").GetProperty("sessionCount").GetInt32());
+    }
+
+    /// <summary>
+    /// The way back from a detail view reached by a drill-down names the assembly the drill-down did.
+    /// </summary>
+    [Fact]
+    public void TheWayBackNamesTheAssemblyTheDetailWasOpenedIn()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        string id = FirstId("--assembly", "MyApp.Tests");
+
+        var (code, output, _) = Run("--id", id, "--assembly", "MyApp.Tests");
+
+        Assert.Equal(0, code);
+        Assert.Contains("all: xping report --all --assembly MyApp.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReportNarrowedByKindOffersNoDetailLine()
+    {
+        SeedVanishing();
+
+        Assert.Contains("Detail of row 1: ", Run().Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Detail of row", Run("--kind", "Vanished").Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ATextReportOfAReportedIdSucceeds()
     {
         SeedVanishing();
@@ -238,6 +301,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
     [Theory]
     [InlineData("f_2a91")]
+    [InlineData("g_2a91c0de")]
     [InlineData("f_2a91c0dez")]
     [InlineData("2a91c0de12")]
     [InlineData("f_2a91c0dg")]

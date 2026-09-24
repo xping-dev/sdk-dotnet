@@ -440,11 +440,47 @@ public sealed class FailureModeProviderTests
         Assert.Equal(
             [
                 ("failure modes", "3"),
-                ("failure mode 1", "System.InvalidOperationException"),
-                ("failure mode 2", "System.TimeoutException"),
+                ("failure mode 1", "System.InvalidOperationException: unexpected null"),
+                ("failure mode 2", "System.TimeoutException: the operation timed out"),
                 ("failure mode 3", "not recorded by the adapter")
             ],
             metrics.Skip(2).Select(m => (m.Label, m.Value)));
+    }
+
+    /// <summary>
+    /// Two modes of one exception type are told apart by their messages.
+    /// </summary>
+    [Fact]
+    public void FailureModesOfOneTypeAreToldApartByTheirMessages()
+    {
+        TestSession[] sessions = RunsFailingWith(passing: 5, "expected apple but was pear", "expected dog but was cat");
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        string[] modes = [.. metrics.Where(m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal)).Select(m => m.Value)];
+
+        Assert.Equal(2, modes.Length);
+        Assert.Equal(2, modes.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(modes, mode => Assert.StartsWith("System.InvalidOperationException: ", mode, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A test with more failure modes than a reader can use names five and counts the rest.
+    /// </summary>
+    [Fact]
+    public void FailureModesPastFiveBecomeACount()
+    {
+        TestSession[] sessions = RunsFailingWith(
+            passing: 10, [.. Enumerable.Range(0, 8).Select(i => $"unexpected {(char)('a' + i)}")]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Equal(5, metrics.Count(m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal)));
+        Assert.Equal(("more failure modes", "3 more"), (metrics[^1].Label, metrics[^1].Value));
     }
 
     [Fact]
@@ -1603,12 +1639,9 @@ public sealed class FailureModeProviderTests
         Assert.True(full.Findings.Count >= 2);
         FindingDto second = full.Findings[1];
 
-        FindingSelection selection = FindingSelector.Select(
-            FindingOrder.WithSiblingsAdjacent(result.Findings), second.Id.ToUpperInvariant());
-
         ReportEnvelope selected = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
-            selection);
+            id: second.Id.ToUpperInvariant());
 
         Assert.Equal(Json(second), Json(Assert.Single(selected.Findings)));
         Assert.Equal(Json(full.Summary), Json(selected.Summary));
@@ -1627,12 +1660,9 @@ public sealed class FailureModeProviderTests
         AnalysisContext context = TestSessionFactory.Context(MixedFixture());
         AnalysisResult result = Run(context);
 
-        FindingSelection selection = FindingSelector.Select(
-            FindingOrder.WithSiblingsAdjacent(result.Findings), FindingId.Compute(FindingKind.Flaky, "fp-Gone"));
-
         ReportEnvelope selected = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
-            selection);
+            id: FindingId.Compute(FindingKind.Flaky, "fp-Gone"));
 
         Assert.Empty(selected.Findings);
         Assert.Equal(0, selected.Truncated.Shown);
@@ -1643,6 +1673,37 @@ public sealed class FailureModeProviderTests
         Assert.Null(dto.Kind);
         Assert.Null(dto.Row);
         Assert.Empty(dto.SameSubject);
+    }
+
+    /// <summary>
+    /// Every command the envelope prints repeats the report's scope, so running it lands on this
+    /// report again.
+    /// </summary>
+    /// <remarks>
+    /// The drill-down names the assembly always, and the finding's own id — the alternative's,
+    /// across a handover. The full-report command repeats only what the caller typed.
+    /// </remarks>
+    [Fact]
+    public void EveryPrintedCommandRepeatsTheReportsScope()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope typed = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
+            scope: new ReportScope("My App.Tests", AssemblyGiven: false, Runs: 7, Directory: "../svc"));
+
+        Assert.NotEmpty(typed.Findings);
+        Assert.All(typed.Findings, finding => Assert.Equal(
+            $"xping report --id {finding.Id} --assembly \"My App.Tests\" --runs 7 --directory ../svc",
+            finding.DrillDown));
+        Assert.Equal("xping report --all --runs 7 --directory ../svc", typed.Truncated.Command);
+
+        ReportEnvelope named = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
+            scope: new ReportScope("MyApp.Tests", AssemblyGiven: true, Since: "2026-08-01"));
+
+        Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
     }
 
     private static string Json<T>(T value) => JsonSerializer.Serialize(value, ReportJsonOptions.Default);

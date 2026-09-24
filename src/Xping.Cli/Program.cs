@@ -358,7 +358,7 @@ internal static class Program
     };
 
     /// <summary>
-    /// Parses a finding id: <c>f_</c> and eight hex digits, in either case.
+    /// Parses a finding id: <c>f_</c> and eight hex digits, the whole of it in either case.
     /// </summary>
     /// <remarks>
     /// Rejected here rather than reported as absent: a mistyped id and one that has moved are
@@ -369,7 +369,7 @@ internal static class Program
     {
         string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
 
-        if (raw.Length != 10 || !raw.StartsWith("f_", StringComparison.Ordinal) || !raw[2..].All(char.IsAsciiHexDigit))
+        if (raw.Length != 10 || !raw.StartsWith("f_", StringComparison.OrdinalIgnoreCase) || !raw[2..].All(char.IsAsciiHexDigit))
         {
             result.AddError($"--id expects a finding id of the form f_ followed by 8 hex digits, got '{raw}'.");
             return null;

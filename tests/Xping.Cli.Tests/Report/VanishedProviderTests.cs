@@ -334,7 +334,6 @@ public sealed class VanishedProviderTests
         Assert.Equal(FindingKind.Vanished, finding.Kind);
         Assert.Empty(result.FailedProviders);
         Assert.StartsWith("f_", finding.Id, StringComparison.Ordinal);
-        Assert.Equal(DrillDown.ForFinding(finding.Id, TestSessionFactory.DefaultAssembly), finding.DrillDownCommand);
     }
 
     /// <summary>

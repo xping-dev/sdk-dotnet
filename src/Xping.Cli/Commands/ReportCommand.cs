@@ -74,11 +74,11 @@ internal sealed class ReportCommand(
         var context = new AnalysisContext(
             resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
-        // Never narrowed under --id, which the parser guarantees by rejecting --kind beside it. An
-        // Instead handover crosses a kind filter in both directions, so a narrowed run could show a
-        // finding the full report does not, or miss one it does.
+        // Never narrowed under --id. The parser rejects --kind beside it, and this holds whatever
+        // built the options: an Instead handover crosses a kind filter in both directions, so a
+        // narrowed run could show a finding the full report does not, or miss one it does.
         IReadOnlySet<FindingKind>? kinds =
-            options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
+            options.Id != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
 
         AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
 
@@ -94,11 +94,6 @@ internal sealed class ReportCommand(
         LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
             context, analysis.Findings, showAll: options.Top == null);
 
-        // Over the list the full report prints, so the row it names is the row the reader saw.
-        FindingSelection? selection = options.Id is { } id
-            ? FindingSelector.Select(FindingOrder.WithSiblingsAdjacent(analysis.Findings), id)
-            : null;
-
         ReportEnvelope envelope = EnvelopeBuilder.Build(
             context,
             analysis,
@@ -111,7 +106,10 @@ internal sealed class ReportCommand(
             resolved.SkewedSessions,
             options.Top,
             latestRun,
-            selection);
+            options.Id,
+
+            // What every printed command has to repeat to land on this report again.
+            new ReportScope(assembly, options.Assembly != null, options.Runs, options.Since, options.Directory));
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -121,7 +119,7 @@ internal sealed class ReportCommand(
         // The report ran and the finding is not in it. Said on standard error, with the envelope on
         // standard output only where a script is reading one: a text report of nothing would be a
         // fence around an absence the message already describes.
-        if (selection is { Finding: null })
+        if (envelope.Selection is { Reported: false } selection)
         {
             WriteNotReported(selection, envelope, source, assembly);
 
@@ -159,7 +157,7 @@ internal sealed class ReportCommand(
         }
 
         // --fail-on is rejected beside --id, so a selected finding never fails the command.
-        return selection != null
+        return envelope.Selection != null
             ? ExitCodes.Success
             : ExitCodes.ForReport(analysis.Findings, options.FailOn);
     }
@@ -169,7 +167,9 @@ internal sealed class ReportCommand(
         {
             ReportFormat.Json => new JsonReportRenderer(),
             ReportFormat.Summary => new SummaryReportRenderer(),
-            _ => new TextReportRenderer(capabilities)
+            // No detail line on a --kind-narrowed report: its rows are numbered against a list the
+            // detail view does not use, and its row 1 is not the detail view's row 1.
+            _ => new TextReportRenderer(capabilities, detailCommand: options.Kinds.Count == 0)
         };
 
     /// <summary>
@@ -283,12 +283,12 @@ internal sealed class ReportCommand(
     /// </para>
     /// </remarks>
     private void WriteNotReported(
-        FindingSelection selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly)
+        SelectionDto selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly)
     {
         var message = new StringBuilder("Finding ").Append(selection.Id);
 
         if (selection.Kind is { } kind)
-            message.Append(" (").Append(ReportVocabulary.LabelFor(kind.ToString())).Append(')');
+            message.Append(" (").Append(ReportVocabulary.LabelFor(kind)).Append(')');
 
         int sessions = envelope.Window.SessionCount;
         string runs = sessions == 1 ? "1 run" : $"{sessions} runs";
@@ -301,12 +301,11 @@ internal sealed class ReportCommand(
         {
             message.Append(" Its subject is reported as ")
                    .AppendJoin(", ", selection.SameSubject.Select(same =>
-                       $"{same.Finding.Id} ({ReportVocabulary.LabelFor(same.Finding.Kind.ToString())}, row {same.Row})"))
+                       $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
                    .Append('.');
         }
 
-        int others = source.KnownAssemblies()
-            .Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
+        int others = OtherAssemblies(source, assembly);
 
         if (others > 0)
         {
@@ -331,8 +330,7 @@ internal sealed class ReportCommand(
         if (assembly == null || explicitlyChosen)
             return;
 
-        int others = source.KnownAssemblies()
-            .Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
+        int others = OtherAssemblies(source, assembly);
 
         if (others == 0)
             return;
@@ -342,6 +340,12 @@ internal sealed class ReportCommand(
             (others == 1 ? "assembly" : "assemblies") +
             " in this store (use --assembly to switch).");
     }
+
+    /// <summary>
+    /// Counts the assemblies in the store other than the one the report covers.
+    /// </summary>
+    private static int OtherAssemblies(LocalSessionSource source, string? assembly) =>
+        source.KnownAssemblies().Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
 
     /// <summary>
     /// Prints the cloud invitation, at most once a day and only when it is relevant.

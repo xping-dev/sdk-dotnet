@@ -90,7 +90,29 @@ internal static class EvidenceSamples
                     [attemptExemplar], attemptExemplar),
 
             FindingKind.Flaky =>
-                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 1, 3, [signature], [exemplar], null),
+                new FlakyEvidence(
+                    7, 20, 20, 5, 0.35, 2, 1, 3,
+                    [
+                        signature with { Occurrences = 4 },
+                        signature with
+                        {
+                            Hash = "def456",
+                            ExceptionType = "System.TimeoutException",
+                            Message = "timed out after <n>ms",
+                            Occurrences = 2
+                        },
+                        signature with
+                        {
+                            Hash = "0a1b2c",
+                            ExceptionType = null,
+                            Message = string.Empty,
+                            Frames = [],
+                            Unavailable = true,
+                            Occurrences = 1
+                        }
+                    ],
+                    [exemplar],
+                    null),
 
             FindingKind.AlwaysFailing =>
                 new AlwaysFailingEvidence(

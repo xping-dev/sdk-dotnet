@@ -25,7 +25,6 @@ public sealed class FindingOrderTests
             new FindingSubject.SingleTest(
                 new TestReference(fingerprint, "N.C.M", "M", null, null, "A.Tests")),
             new StubEvidence(),
-            "xping report",
             impact);
 
     private static List<Finding> Sorted(params Finding[] findings)

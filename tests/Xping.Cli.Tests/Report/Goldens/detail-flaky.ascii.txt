@@ -17,7 +17,10 @@ FINDING                                                       row 1 of 1
     failed          7 of 20 executions (35%)
     runs affected   5 of 20
     failure modes   3
-    failure mode 1  System.InvalidOperationException
+    failure mode 1  System.InvalidOperationException: Expected <n> but
+                    was <n>
+    failure mode 2  System.TimeoutException: timed out after <n>ms
+    failure mode 3  not recorded by the adapter
 ```
 
 rates: the marker on each finding says which runs its percentage was

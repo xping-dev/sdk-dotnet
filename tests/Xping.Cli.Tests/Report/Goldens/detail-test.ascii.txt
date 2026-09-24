@@ -18,7 +18,8 @@ FINDING                                                       row 5 of 5
     failed          6 of 20 executions (30%)
     runs affected   6 of 20
     failure modes   1
-    failure mode 1  System.InvalidOperationException
+    failure mode 1  System.InvalidOperationException: Expected <n> but
+                    was <n>
 
     Also about this test: #4 unstable timing (f_66c10ec3)
 ```

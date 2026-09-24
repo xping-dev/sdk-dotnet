@@ -36,10 +36,14 @@ internal static class EnvelopeBuilder
     /// The newest session read against the rest, or <see langword="null"/> when the window holds
     /// no session.
     /// </param>
-    /// <param name="selection">
-    /// What <c>--id</c> resolved to over the same ordered list, or <see langword="null"/> for the
-    /// full report. When given, the findings shown are the selected one alone, or none; everything
-    /// else is built exactly as the full report builds it.
+    /// <param name="id">
+    /// The finding <c>--id</c> asked for, or <see langword="null"/> for the full report. When
+    /// given, the findings shown are that one alone, or none; everything else is built exactly as
+    /// the full report builds it.
+    /// </param>
+    /// <param name="scope">
+    /// What the report was scoped to, which every command it prints repeats; by default the
+    /// assembly the window covers and nothing the caller typed.
     /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
@@ -50,12 +54,19 @@ internal static class EnvelopeBuilder
         int skewedSessions,
         int? top,
         LatestRunAnalysis? latestRun,
-        FindingSelection? selection = null)
+        string? id = null,
+        ReportScope? scope = null)
     {
+        scope ??= new ReportScope(context.Revision?.Assembly);
+
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test
         // as #4" in a report whose fourth row is something else.
         IReadOnlyList<Finding> ordered = FindingOrder.WithSiblingsAdjacent(result.Findings);
+
+        // Over this list and no other, so the row a selection reports is the row this envelope
+        // numbers, and cannot come from an ordering computed somewhere else.
+        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id);
 
         IReadOnlyList<Finding> shown = selection != null
             ? selection.Finding is { } selected ? [selected] : []
@@ -115,10 +126,10 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
-            latestRun == null ? null : BuildLatestRun(latestRun, ordered),
+            latestRun == null ? null : BuildLatestRun(latestRun, ordered, scope),
             selection == null ? null : BuildSelection(selection),
-            [.. shown.Select(finding => BuildFinding(finding, annotations))],
-            new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport()));
+            [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
+            new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
     }
 
     /// <summary>
@@ -126,8 +137,10 @@ internal static class EnvelopeBuilder
     /// </summary>
     /// <param name="analysis">What the analyzer read from the newest session.</param>
     /// <param name="ordered">Every finding produced, in the order the envelope lists them.</param>
+    /// <param name="scope">What the report was scoped to, for the overflow command.</param>
     /// <returns>The section, as both renderers will read it.</returns>
-    private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered)
+    private static LatestRunDto BuildLatestRun(
+        LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered, ReportScope scope)
     {
         TestSession session = analysis.Session.Session;
         bool capped = analysis.FailuresTotal > analysis.Failures.Count;
@@ -164,7 +177,7 @@ internal static class EnvelopeBuilder
 
             // The same string the findings truncation line prints. --all means everything the
             // report withheld, whichever cap withheld it, and one string is how the two agree.
-            capped ? DrillDown.ForFullReport() : null);
+            capped ? DrillDown.ForFullReport(scope) : null);
     }
 
     private static SelectionDto BuildSelection(FindingSelection selection) =>
@@ -321,7 +334,7 @@ internal static class EnvelopeBuilder
     }
 
     private static FindingDto BuildFinding(
-        Finding finding, Dictionary<string, string> annotations)
+        Finding finding, Dictionary<string, string> annotations, ReportScope scope)
     {
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(finding.Kind, finding.Evidence);
@@ -338,7 +351,7 @@ internal static class EnvelopeBuilder
             headline,
             metrics,
             BuildEvidence(finding.Evidence),
-            finding.DrillDownCommand);
+            DrillDown.ForFinding(finding.Id, scope));
     }
 
     /// <summary>
