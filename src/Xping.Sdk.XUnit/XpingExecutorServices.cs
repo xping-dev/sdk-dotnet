@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.Core.Services.Statistics;
 using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit;
@@ -32,17 +33,22 @@ public sealed class XpingExecutorServices
     /// <summary>Gets a value indicating whether stack traces should be captured.</summary>
     public bool CaptureStackTraces { get; }
 
+    /// <summary>Gets the statistics accumulator the executor reports discovered and selected test cases to.</summary>
+    public IRunningStatisticsAccumulator StatisticsAccumulator { get; }
+
     internal XpingExecutorServices(
         IExecutionTracker executionTracker,
         IRetryDetector<ITest> retryDetector,
         ITestIdentityGenerator identityGenerator,
         ILogger<XpingMessageSink> logger,
-        bool captureStackTraces)
+        bool captureStackTraces,
+        IRunningStatisticsAccumulator statisticsAccumulator)
     {
         ExecutionTracker  = executionTracker;
         RetryDetector     = retryDetector;
         IdentityGenerator = identityGenerator;
         Logger            = logger;
         CaptureStackTraces = captureStackTraces;
+        StatisticsAccumulator = statisticsAccumulator;
     }
 }

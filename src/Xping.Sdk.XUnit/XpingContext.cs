@@ -13,6 +13,7 @@ using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Shared;
 using Xping.Sdk.XUnit.Retry;
@@ -211,6 +212,7 @@ public class XpingContext : XpingContextOrchestrator
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
             identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
             logger: Services.GetRequiredService<ILogger<XpingMessageSink>>(),
-            captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services));
+            captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services),
+            statisticsAccumulator: Services.GetRequiredService<IRunningStatisticsAccumulator>());
     }
 }
