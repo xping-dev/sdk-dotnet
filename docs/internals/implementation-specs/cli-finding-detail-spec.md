@@ -79,6 +79,14 @@ wrapped to fit cannot be pasted, and one cut to fit is the scope bug 2B fixed.
 The below-fence order is unchanged: legend, truncation line, detail line. `--all` already lifts
 both caps (latest-run spec Amendment 2B), so one command serves both lists.
 
+### Amendment 4 — printed values are shell-quoted
+
+Amendment 2A put caller-typed `--since` and `--directory` values into printed commands, where
+`DrillDown.Quote` quoted only a value holding a space. **A value holding anything outside
+`A-Z a-z 0-9 . _ / : @ % + = , -` is single-quoted, with an embedded `'` written `'\''`.**
+Single quotes read literally in POSIX shells and PowerShell alike, which a trailing `\` inside
+double quotes does not. `cmd.exe` is not served; the docs' commands are POSIX.
+
 ---
 
 ## 1. Ground truth
