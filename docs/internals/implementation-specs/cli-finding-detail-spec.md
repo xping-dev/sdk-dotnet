@@ -43,6 +43,27 @@ amendment is committed before any code depending on them.
 
 The inventory table above also moves `DocumentedSampleTests.Documents` from `:23-34` to `:61-73`.
 
+### Amendment 2 — from the review of PR #216
+
+A review of the implementation found that the printed commands do not reproduce the report they
+were printed from, that the failure-mode metrics cannot tell two modes of one type apart, and that
+the detail view's value wrap breaks paths at the wrong separator. All are resolved here, committed
+before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D7: the coordinator assigns `DrillDownCommand` as `--id {id} [--assembly {first test's}]` | **the builder assigns `FindingDto.DrillDown`** from the id and the report's **scope**: `--assembly` always (the resolved scope, not a test's), then `--runs`, `--since` and `--directory` exactly as the caller gave them. `Finding.DrillDownCommand` is deleted; the coordinator no longer knows commands | D7, §4.4, §4.5 |
+| B | `DrillDown.ForFullReport()` is always `xping report --all` | it carries the caller's own `--assembly`, `--runs`, `--since` and `--directory`, and only those. An auto-scoped report's bare `--all` already reproduces its scope; one reached through a drill-down, which always names the assembly, gets it back | D5, D7 |
+| C | D4.1: a `failure mode N` value is the signature's `ExceptionType` | `{type}: {normalised message}`, either alone when the other is empty, `not recorded by the adapter` when both are; the message cut to 100 characters with `...`. At most **5** modes are listed; beyond that one pair `more failure modes` = `{n} more`. The full list stays in `evidence` | D4.1 |
+| D | D4: a value wraps after any `.` or `/` | a value holding `/` or `\` is a path and wraps only after those; any other value wraps only after a `.` before its first `(`. A value with no such break in reach overflows as one token | D4 |
+| E | D2a: `f_` in lower case | the prefix is case-insensitive like the digits: `F_2A91C0DE` is accepted | D2a |
+| F | D1: `ReportCommand` selects and hands the result to `Build` | `Build` takes the requested id and selects over its own ordered list, so the row it reports cannot come from a different ordering. `ReportCommand` forces `kinds: null` whenever an id is given, not only through the parser | D1, §4.4 |
+| G | D7: the detail line is printed on every full report with a finding | not printed when `--kind` narrowed the report: its rows are numbered against a list the detail view does not use, and `row 1` there is not `row 1` in the view it opens | D7 |
+| H | D4: a not-reported selection renders an empty fence | the renderer says so inside the fence, `f_x is not reported in this window.`; `ReportCommand` still prints nothing on stdout for text (D8), so this is the renderer being correct on its own | D4 |
+
+The command-reference sentence *the last line is always the detail command* is corrected to say
+when the line is printed and that a terminal's scope notice and invitation follow it.
+
 ---
 
 ## 1. Ground truth
