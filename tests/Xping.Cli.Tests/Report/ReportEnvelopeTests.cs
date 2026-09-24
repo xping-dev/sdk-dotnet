@@ -367,7 +367,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         [
             "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "suppressed", "testsExecuted",
             "testsFailed", "newFailures", "explainedByFindings", "explainedByFindingIds", "failures",
-            "failuresShown", "failuresTotal", "overflowCommand"
+            "failuresShown", "failuresTotal"
         ])
         {
             Assert.True(latestRun.TryGetProperty(key, out _), $"latestRun.{key} missing");
@@ -447,7 +447,6 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Empty(latestRun.GetProperty("explainedByFindingIds").EnumerateArray());
         Assert.Equal(1, latestRun.GetProperty("failuresShown").GetInt32());
         Assert.Equal(1, latestRun.GetProperty("failuresTotal").GetInt32());
-        Assert.Equal(JsonValueKind.Null, latestRun.GetProperty("overflowCommand").ValueKind);
 
         JsonElement failure = Assert.Single(latestRun.GetProperty("failures").EnumerateArray());
         Assert.Equal("new", failure.GetProperty("status").GetString());
@@ -601,7 +600,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
-    public void TheOverflowCommandIsTheSameOneTheFindingsTruncationPrints()
+    public void ACappedLatestRunIsLiftedByTheOneTruncationCommand()
     {
         ILocalSessionStore store = LocalSessionStore.Create();
         int many = LocalAnalysisConstants.LatestRunMaxRows + 2;
@@ -616,14 +615,17 @@ public sealed class ReportEnvelopeTests : IDisposable
                 .. padding.Select(n => TestSessionFactory.Execution(n))
             ]));
 
-        JsonElement capped = RunJson().GetProperty("latestRun");
+        JsonElement root = RunJson();
+        JsonElement capped = root.GetProperty("latestRun");
         Assert.Equal(LocalAnalysisConstants.LatestRunMaxRows, capped.GetProperty("failuresShown").GetInt32());
         Assert.Equal(many, capped.GetProperty("failuresTotal").GetInt32());
-        Assert.Equal("xping report --all", capped.GetProperty("overflowCommand").GetString());
+
+        // One command lifts both caps, and the envelope carries it once.
+        Assert.False(capped.TryGetProperty("overflowCommand", out _));
+        Assert.Equal("xping report --all", root.GetProperty("truncated").GetProperty("command").GetString());
 
         JsonElement lifted = RunJson("--all").GetProperty("latestRun");
         Assert.Equal(many, lifted.GetProperty("failuresShown").GetInt32());
-        Assert.Equal(JsonValueKind.Null, lifted.GetProperty("overflowCommand").ValueKind);
     }
 
     [Fact]

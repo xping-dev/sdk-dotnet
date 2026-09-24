@@ -126,7 +126,7 @@ internal static class EnvelopeBuilder
                 unreadableSessions,
                 skewedSessions,
                 result.FailedProviders),
-            latestRun == null ? null : BuildLatestRun(latestRun, ordered, scope),
+            latestRun == null ? null : BuildLatestRun(latestRun, ordered),
             selection == null ? null : BuildSelection(selection),
             [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
@@ -137,13 +137,10 @@ internal static class EnvelopeBuilder
     /// </summary>
     /// <param name="analysis">What the analyzer read from the newest session.</param>
     /// <param name="ordered">Every finding produced, in the order the envelope lists them.</param>
-    /// <param name="scope">What the report was scoped to, for the overflow command.</param>
     /// <returns>The section, as both renderers will read it.</returns>
-    private static LatestRunDto BuildLatestRun(
-        LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered, ReportScope scope)
+    private static LatestRunDto BuildLatestRun(LatestRunAnalysis analysis, IReadOnlyList<Finding> ordered)
     {
         TestSession session = analysis.Session.Session;
-        bool capped = analysis.FailuresTotal > analysis.Failures.Count;
 
         // In envelope order and not in the order the analyzer met them, which was the order of
         // the tests they explain. The "also failing" line names them by row number, and a reader
@@ -173,11 +170,7 @@ internal static class EnvelopeBuilder
             explainedBy,
             [.. analysis.Failures.Select(BuildLatestRunFailure)],
             analysis.Failures.Count,
-            analysis.FailuresTotal,
-
-            // The same string the findings truncation line prints. --all means everything the
-            // report withheld, whichever cap withheld it, and one string is how the two agree.
-            capped ? DrillDown.ForFullReport(scope) : null);
+            analysis.FailuresTotal);
     }
 
     private static SelectionDto BuildSelection(FindingSelection selection) =>

@@ -654,7 +654,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // The two closing lines sit together under the rows, the cap first because it is about the
         // rows and the "also failing" line because it is about the run. The cap line is dim like
-        // the footer that says the same thing about the findings; it is navigation, not news.
+        // the footer, and carries no command: the one that lifts it is the footer's, below the
+        // fence, where a long --directory cannot push it past the fence's width.
         bool capped = latest.FailuresShown < latest.FailuresTotal;
 
         if (capped || latest.ExplainedByFindings > 0)
@@ -667,8 +668,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         {
             builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
                 $"Showing {latest.FailuresShown.ToString(CultureInfo.InvariantCulture)} of " +
-                $"{latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)} " +
-                $"{capabilities.Glyphs.Separator} all: {latest.OverflowCommand}"));
+                latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)));
         }
 
         if (latest.ExplainedByFindings > 0)
@@ -999,31 +999,53 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// <summary>
     /// Writes the line that says the list was cut short, when it was.
     /// </summary>
-    /// <remarks>
-    /// Nothing at all when every finding is shown: the command that would show them all is the one
-    /// the reader just ran, and a report that ends by suggesting itself trains people to skip the
-    /// last line. One line for the whole report rather than one per finding either way — ten
-    /// near-identical commands are ten lines of noise in anything the report is pasted into.
-    /// </remarks>
     /// <returns>Whether the line was written.</returns>
     /// <remarks>
+    /// <para>
+    /// Nothing at all when nothing was withheld: the command that would show everything is the one
+    /// the reader just ran, and a report that ends by suggesting itself trains people to skip the
+    /// last line. One line for the whole report rather than one per list or per finding — ten
+    /// near-identical commands are ten lines of noise in anything the report is pasted into.
+    /// </para>
+    /// <para>
+    /// Both caps in one line, because <c>--all</c> lifts both, and each named, because two bare
+    /// counts would leave the reader to guess which is which. Below the fence, so the command can
+    /// be as long as the report's scope makes it and still be pasted whole.
+    /// </para>
+    /// <para>
     /// Under <c>--id</c> it is always written, even where the report holds one finding: it is the
-    /// way back to the full report from a view that shows one row of it.
+    /// way back to the full report from a view that shows one row of it. The latest-run section is
+    /// not shown there, so only the findings are counted.
+    /// </para>
     /// </remarks>
     private bool WriteFooter(StringBuilder builder, ReportEnvelope envelope)
     {
         TruncationDto truncated = envelope.Truncated;
+        var counts = new List<string>();
 
-        if (truncated.Shown >= truncated.Total && envelope.Selection == null)
+        if (truncated.Shown < truncated.Total || envelope.Selection != null)
+            counts.Add($"{Count(truncated.Shown)} of {Count(truncated.Total)} {Plural(truncated.Total, "finding")}");
+
+        if (envelope.Selection == null
+            && envelope.LatestRun is { Suppressed: false, IsLikelyEnvironmental: false } latest
+            && latest.FailuresShown < latest.FailuresTotal)
+        {
+            counts.Add($"{Count(latest.FailuresShown)} of {Count(latest.FailuresTotal)} {Plural(latest.FailuresTotal, "failure")}");
+        }
+
+        if (counts.Count == 0)
             return false;
 
         builder.AppendLine();
         builder.AppendLine(capabilities.Dim(
-            $"Showing {truncated.Shown} of {truncated.Total} " +
-            $"{capabilities.Glyphs.Separator} all: {truncated.Command}"));
+            $"Showing {string.Join(", ", counts)} {capabilities.Glyphs.Separator} all: {truncated.Command}"));
 
         return true;
     }
+
+    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
 
     /// <summary>
     /// Writes the one command that shows the first row in detail.

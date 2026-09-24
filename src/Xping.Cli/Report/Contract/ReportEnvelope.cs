@@ -145,8 +145,11 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly)
 /// <param name="ExplainedByFindingIds">Those findings' ids, in envelope order.</param>
 /// <param name="Failures">The rows, ordered for reading, after the cap.</param>
 /// <param name="FailuresShown">Rows in <paramref name="Failures"/>.</param>
-/// <param name="FailuresTotal">Rows before the cap.</param>
-/// <param name="OverflowCommand">The invocation that shows all of them, when capped.</param>
+/// <param name="FailuresTotal">
+/// Rows before the cap. Where it exceeds <paramref name="FailuresShown"/>, the envelope's
+/// <c>truncated.command</c> is what shows the rest: <c>--all</c> lifts this cap and the findings'
+/// together, and the report prints the one command once.
+/// </param>
 internal sealed record LatestRunDto(
     string SessionId,
     DateTime StartedAt,
@@ -160,8 +163,7 @@ internal sealed record LatestRunDto(
     IReadOnlyList<string> ExplainedByFindingIds,
     IReadOnlyList<LatestRunFailureDto> Failures,
     int FailuresShown,
-    int FailuresTotal,
-    string? OverflowCommand);
+    int FailuresTotal);
 
 /// <summary>
 /// One test that ended the newest session red and carries no finding.

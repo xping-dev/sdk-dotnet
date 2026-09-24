@@ -145,7 +145,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 · all: xping report --all`. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it.
 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal.
 
@@ -177,7 +177,7 @@ These rows are not findings. They carry no severity, are not ranked against the 
 
 `--kind` narrows what the section defers to rather than what it reports: a test whose only finding was filtered out is listed as a row instead of counted on the closing line, and states its history without claiming why no finding explains it.
 
-The section is absent when the newest run was clean, and on a store holding a single run, where every row would only repeat the test runner. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23 · all: xping report --all` closes a longer list, and `--all` lifts this cap along with the findings'. `--top` does not apply here.
+The section is absent when the newest run was clean, and on a store holding a single run, where every row would only repeat the test runner. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23` closes a longer list, and the report's one truncation line below the fence names the command — `--all` lifts this cap along with the findings'. `--top` does not apply here.
 
 ### The population marker
 
@@ -404,7 +404,7 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 1 of 5 · all: xping report --all
+Showing 1 of 5 findings · all: xping report --all
 ````
 
 Because the kind is half of the id, **an id moves when its claim changes kind.** A shared
@@ -512,7 +512,7 @@ entry per row with the same `contrast` sentence the rendered block prints and th
 `subject` a finding carries. It is present whenever the window holds a session, so a consumer can
 tell a clean run (`testsFailed` is zero) from one the report declined to itemise (`suppressed` on a
 store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`failuresShown` against
-`failuresTotal`, with `overflowCommand` naming the invocation that shows the rest).
+`failuresTotal`; `truncated.command` shows the rest, as it does for the findings).
 `explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
 failures not listed as rows.
 
@@ -568,8 +568,7 @@ are not each other and `tests` is what they add up to:
       }
     ],
     "failuresShown": 1,
-    "failuresTotal": 1,
-    "overflowCommand": null
+    "failuresTotal": 1
   },
   "selection": null,
   "findings": [

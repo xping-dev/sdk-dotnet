@@ -187,7 +187,7 @@ public sealed class DetailRenderingTests
 
         Assert.EndsWith(
             ReportVocabulary.PopulationLegend[^1] + Environment.NewLine + Environment.NewLine +
-            "Showing 1 of 1 | all: xping report --all" + Environment.NewLine,
+            "Showing 1 of 1 finding | all: xping report --all" + Environment.NewLine,
             report,
             StringComparison.Ordinal);
         Assert.DoesNotContain("Detail of row", report, StringComparison.Ordinal);

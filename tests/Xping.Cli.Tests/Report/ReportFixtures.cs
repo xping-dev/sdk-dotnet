@@ -641,8 +641,7 @@ internal static class ReportFixtures
             {
                 TestsFailed = 28,
                 NewFailures = 23,
-                FailuresTotal = 23,
-                OverflowCommand = "xping report --all"
+                FailuresTotal = 23
             }
         };
     }
@@ -1055,8 +1054,7 @@ internal static class ReportFixtures
             ExplainedByFindingIds: explainedBy ?? [],
             Failures: failures,
             FailuresShown: failures.Length,
-            FailuresTotal: failures.Length,
-            OverflowCommand: null);
+            FailuresTotal: failures.Length);
 
     /// <summary>
     /// Builds one latest-run row, named the way the builder names a single test.

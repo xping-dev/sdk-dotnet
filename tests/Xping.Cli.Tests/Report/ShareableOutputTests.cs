@@ -933,7 +933,7 @@ public sealed class ShareableOutputTests
         // anything the report is pasted into.
         Assert.Equal(
             1, Lines(truncated).Count(l => l.Contains("xping report --all", StringComparison.Ordinal)));
-        Assert.Contains("Showing 1 of 21", truncated, StringComparison.Ordinal);
+        Assert.Contains("Showing 1 of 21 findings", truncated, StringComparison.Ordinal);
 
         // And no offer at all when there is nothing more to show: the command would be the one the
         // reader just ran, and it names no format, so it cannot be offering a different view either.
@@ -951,7 +951,7 @@ public sealed class ShareableOutputTests
 
         // And a truncated one ends on the two navigation lines, together.
         Assert.EndsWith(
-            $"Showing 1 of 21 {ReportText.Capabilities(redirected: true).Glyphs.Separator} all: xping report --all" +
+            $"Showing 1 of 21 findings {ReportText.Capabilities(redirected: true).Glyphs.Separator} all: xping report --all" +
             Environment.NewLine + detail,
             truncated,
             StringComparison.Ordinal);
