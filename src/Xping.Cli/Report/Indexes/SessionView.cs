@@ -4,6 +4,7 @@
  */
 
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Statistics;
 
 namespace Xping.Cli.Report.Indexes;
 
@@ -23,7 +24,9 @@ namespace Xping.Cli.Report.Indexes;
 /// </para>
 /// <para>
 /// <see cref="IsPartial"/> is the other flag, and it answers a different question: not whether the
-/// session's outcomes can be trusted, but whether its silences can. It is window-relative, so
+/// session's outcomes can be trusted, but whether its silences can. Where the test framework said
+/// what it discovered and what it ran, that is <see cref="ReportedPartial"/> and <see cref="For"/>
+/// knows it. Where it did not, the flag is a guess made against the rest of the window, so
 /// <see cref="For"/> cannot decide it — see <see cref="AnalysisContext.PartialSessionCount"/>.
 /// </para>
 /// </remarks>
@@ -35,13 +38,19 @@ namespace Xping.Cli.Report.Indexes;
 /// <param name="IsLikelyEnvironmental">
 /// Whether the session failed widely enough to be suspected instead of the tests in it.
 /// </param>
+/// <param name="ReportedPartial">
+/// Whether the session's test framework reported running fewer test cases than it discovered, or
+/// <see langword="null"/> when it reported neither count. A fact where present, which is why it
+/// wins over the count <see cref="AnalysisContext"/> otherwise falls back to.
+/// </param>
 internal sealed record SessionView(
     TestSession Session,
     int Index,
     int Tests,
     int Failures,
     double FailureRate,
-    bool IsLikelyEnvironmental)
+    bool IsLikelyEnvironmental,
+    bool? ReportedPartial)
 {
     /// <summary>
     /// Gets a value indicating whether the session covered only part of the suite.
@@ -53,16 +62,18 @@ internal sealed record SessionView(
     /// session aside, or every unselected test looks deleted.
     /// </para>
     /// <para>
-    /// Not a positional member, because it cannot be measured from one session: it is
-    /// <see cref="Tests"/> against <see cref="LocalAnalysisConstants.PartialSessionShare"/> of the
-    /// largest run in the window, and the window is what <see cref="For"/> does not have.
-    /// <see cref="AnalysisContext"/> sets it once the whole window is measured, which is also the
-    /// only place it means anything.
+    /// Decided in two ways, and <see cref="AnalysisContext"/> sets it either way. Where the session
+    /// carries <see cref="ReportedPartial"/> the flag is that fact: a filtered run discovered the
+    /// tests it did not select, and a run after a deletion did not discover them at all. Only xUnit
+    /// reports it today.
     /// </para>
     /// <para>
-    /// A classification against a threshold and not a claim about what happened, in the same way
-    /// <see cref="IsLikelyEnvironmental"/> is. The report says a session covered part of the suite;
-    /// it never says a filter was the reason, because a deletion produces the same count.
+    /// Everywhere else it is <see cref="Tests"/> against
+    /// <see cref="LocalAnalysisConstants.PartialSessionShare"/> of the largest run in the window,
+    /// which one session cannot measure on its own. That is a classification against a threshold
+    /// and not a claim about what happened, in the same way <see cref="IsLikelyEnvironmental"/> is:
+    /// the report says the session covered part of the suite, and never says a filter was the
+    /// reason, because a deletion produces the same count.
     /// </para>
     /// </remarks>
     public bool IsPartial { get; init; }
@@ -86,6 +97,26 @@ internal sealed record SessionView(
             rate >= LocalAnalysisConstants.EnvironmentalSessionFailureRate &&
             failures >= LocalAnalysisConstants.EnvironmentalSessionMinFailures;
 
-        return new SessionView(session, index, tests, failures, rate, environmental);
+        return new SessionView(session, index, tests, failures, rate, environmental, ReportedPartialOf(session));
+    }
+
+    /// <summary>
+    /// Reads whether the session's test framework said it ran part of what it discovered.
+    /// </summary>
+    /// <remarks>
+    /// A window is scoped to one assembly and the store projects each session onto it, so the
+    /// breakdown holds that assembly's entry and no other. More than one entry is a session nobody
+    /// projected, and which of them the question is about is not something to guess at here.
+    /// </remarks>
+    private static bool? ReportedPartialOf(TestSession session)
+    {
+        if (session.StatisticsByAssembly is not { Count: 1 } breakdown)
+            return null;
+
+        AssemblyStatistics statistics = breakdown.Values.First();
+
+        return statistics is { DiscoveredTestCases: int discovered, SelectedTestCases: int selected }
+            ? selected < discovered
+            : null;
     }
 }

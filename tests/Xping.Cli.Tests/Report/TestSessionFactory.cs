@@ -12,6 +12,7 @@ using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Report;
@@ -266,6 +267,32 @@ internal static class TestSessionFactory
             .WithSessionState(TestSessionState.Finalized)
             .Build();
     }
+
+    /// <summary>
+    /// Returns the session as a test framework that reported its test cases would have recorded it.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <param name="discovered">Test cases discovered, or <see langword="null"/> for not observed.</param>
+    /// <param name="selected">Test cases selected, or <see langword="null"/> for not observed.</param>
+    /// <param name="assembly">The assembly the counts belong to.</param>
+    /// <returns>The session, carrying one per-assembly entry with the counts.</returns>
+    public static TestSession Reporting(
+        TestSession session, int? discovered, int? selected, string assembly = DefaultAssembly) =>
+        new()
+        {
+            SessionId = session.SessionId,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            EnvironmentInfo = session.EnvironmentInfo,
+            Executions = session.Executions,
+            Assemblies = session.Assemblies,
+            SessionState = session.SessionState,
+            SdkVersion = session.SdkVersion,
+            StatisticsByAssembly = new Dictionary<string, AssemblyStatistics>
+            {
+                [assembly] = new() { DiscoveredTestCases = discovered, SelectedTestCases = selected }
+            }
+        };
 
     /// <summary>
     /// Builds a window over the given sessions, ordered as the store would return them.
