@@ -64,6 +64,21 @@ before the code that depends on them.
 The command-reference sentence *the last line is always the detail command* is corrected to say
 when the line is printed and that a terminal's scope notice and invitation follow it.
 
+### Amendment 3 — one way-back command, below the fence
+
+Amendment 2B made the full-report command repeat `--directory`, and the latest-run section prints
+that command inside the fence, where a long path pushes its cap line past 72 columns. A command
+wrapped to fit cannot be pasted, and one cut to fit is the scope bug 2B fixed.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | the latest-run cap line is `Showing 10 of 23 · all: {command}`, inside the fence | `Showing 10 of 23`, no command | latest-run spec D7 |
+| B | the truncation line below the fence is printed when findings were cut, and reads `Showing 10 of 21 · all: {command}` | printed when findings **or** latest-run failures were cut (and always under `--id`), naming each list it cut: `Showing 10 of 21 findings, 10 of 23 failures · all: {command}`, or either half alone. Under `--id` the section is not shown and only findings are counted | format spec D8, D5 here |
+| C | `LatestRunDto.OverflowCommand` | **removed**. `truncated.command` is the one command; `latestRun.failuresShown < failuresTotal` says the section was cut. Schema stays `1.21`: this PR introduced it and nothing has shipped against it | latest-run spec §4, D9 here |
+
+The below-fence order is unchanged: legend, truncation line, detail line. `--all` already lifts
+both caps (latest-run spec Amendment 2B), so one command serves both lists.
+
 ---
 
 ## 1. Ground truth

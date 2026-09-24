@@ -35,6 +35,12 @@ P0 read this document against source and found four conflicts, plus one stale st
 
 §3 is updated where these reach it. It stays illustrative and is still regenerated in P7 per D10.2.
 
+### Amendment 3 — the truncation line names what it cut
+
+Per `cli-finding-detail-spec.md` Amendment 3, the truncation line below the fence is printed when
+findings or latest-run failures were cut and names each: `Showing 10 of 21 findings, 10 of 23
+failures · all: xping report --all`. It is the only place the report prints that command.
+
 ### Amendment 2 — `--id` supersedes D7's rejection; `xping test` is retired
 
 D7 rejected `xping report --id` on the record and said it was "not reserved for later either". That

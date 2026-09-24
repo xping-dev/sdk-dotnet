@@ -153,6 +153,13 @@ cleared every gate there is. The row cannot know why no finding exists and must 
 `failed 9 of 21 runs` and nothing more. Counted inclusive of this run, because that is the history
 the reader is being handed.
 
+### Amendment 5 — the cap line carries no command
+
+Superseded by `cli-finding-detail-spec.md` Amendment 3. The cap line inside the fence is
+`Showing 10 of 23`; the command that lifts the cap is the report's one truncation line below the
+fence, which now counts the failures it withheld. `LatestRunDto.OverflowCommand` is removed. D7's
+block and §4's `OverflowCommand` parameter are read accordingly.
+
 ---
 
 ## 1. Ground truth and problem

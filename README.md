@@ -286,33 +286,7 @@ your suite.
 
 ## How It Works
 
-```
-        Your test project  (xUnit · NUnit · MSTest)
-                        │
-                        ▼
-            Xping.Sdk.<framework> adapter
-                        │
-                        ▼
-                  Xping.Sdk.Core
-         tracking · environment detection
-                        │
-      ┌─────────────────┴─────────────────┐
-      │  no upload key                    │  XPING_APIKEY set
-      ▼                                   ▼
-.xping/ (local store) ─ batched upload ─▶ Xping Cloud
-      │                                   │  scoring · root cause · trends
-      │                                   │
-      │                                   ├──────────────────────┐
-      │                                   │                      │
-      │                            (read: xping login)           ▼
-      │                                   │              app.xping.io
-      ▼                                   ▼            the shared view —
-      └──────────────▶ xping report ◀─────┘            QA, leads, product,
-                            │                          nothing installed
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-        you, in a terminal        your agent, via --format json
-```
+<img src="docs/media/architecture-consumers.svg" width="820" alt="Xping architecture" />
 
 Adapters are thin — they hook the framework's execution pipeline and hand results to
 `Xping.Sdk.Core`, which owns collection, environment detection, and delivery. Overhead is
