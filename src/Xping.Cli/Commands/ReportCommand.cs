@@ -75,8 +75,9 @@ internal sealed class ReportCommand(
             resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
 
         // Never narrowed under --id. The parser rejects --kind beside it, and this holds whatever
-        // built the options: an Instead handover crosses a kind filter in both directions, so a
-        // narrowed run could show a finding the full report does not, or miss one it does.
+        // built the options: narrowing only ever removes findings — a handover silenced by a filter
+        // on its alternative's kind is one — so a narrowed run could miss a finding the full report
+        // reports, and --id has to answer for the full report.
         IReadOnlySet<FindingKind>? kinds =
             options.Id != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
 

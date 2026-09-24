@@ -1695,7 +1695,7 @@ public sealed class FailureModeProviderTests
 
         Assert.NotEmpty(typed.Findings);
         Assert.All(typed.Findings, finding => Assert.Equal(
-            $"xping report --id {finding.Id} --assembly \"My App.Tests\" --runs 7 --directory ../svc",
+            $"xping report --id {finding.Id} --assembly 'My App.Tests' --runs 7 --directory ../svc",
             finding.DrillDown));
         Assert.Equal("xping report --all --runs 7 --directory ../svc", typed.Truncated.Command);
 

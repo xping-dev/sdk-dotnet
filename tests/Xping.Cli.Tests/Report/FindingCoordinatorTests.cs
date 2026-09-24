@@ -518,6 +518,47 @@ public sealed class FindingCoordinatorTests
         Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
+    /// <summary>
+    /// Narrowing by kind only ever removes findings, so every id a narrowed report prints is one the
+    /// full report — and therefore <c>--id</c> — can find.
+    /// </summary>
+    /// <remarks>
+    /// The property a narrowed report's <c>drillDown</c> rests on. Asserted across a handover in both
+    /// states, the stronger claim silenced and surviving, and for every kind filter: cutoffs are
+    /// per kind, so a filter cannot move another kind's bar, and an alternative is emitted the same
+    /// way whichever kinds were asked for.
+    /// </remarks>
+    [Theory]
+    [InlineData(0.04)]
+    [InlineData(0.0000001)]
+    public void ANarrowedReportShowsNoFindingTheFullReportDoesNot(double pValue)
+    {
+        IFindingProvider[] providers =
+        [
+            new StubProvider("a", FindingKind.Flaky, "Test1"),
+            new StubProvider("b", FindingKind.TimeSensitive, "Test1", pValue: 0.001, hypothesesTested: 2),
+            new SupersedingProvider(
+                FindingKind.DurationRegression, FindingKind.DurationUnstable, pValue, hypothesesTested: 300)
+        ];
+
+        AnalysisContext context = Context(testsPerSession: 2);
+
+        HashSet<string> full =
+        [
+            .. new FindingCoordinator(providers).Run(context, null, TextWriter.Null).Findings.Select(f => f.Id)
+        ];
+
+        Assert.NotEmpty(full);
+
+        foreach (FindingKind kind in Enum.GetValues<FindingKind>())
+        {
+            AnalysisResult narrowed = new FindingCoordinator(providers)
+                .Run(context, new HashSet<FindingKind> { kind }, TextWriter.Null);
+
+            Assert.All(narrowed.Findings, finding => Assert.Contains(finding.Id, full));
+        }
+    }
+
     [Fact]
     public void AFindingRestingOnFiveRunsNeverOutranksTheSameFindingOnForty()
     {

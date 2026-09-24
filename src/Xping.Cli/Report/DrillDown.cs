@@ -85,6 +85,21 @@ internal static class DrillDown
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Quotes a value for the shell the command is pasted into, when it needs it.
+    /// </summary>
+    /// <remarks>
+    /// Single quotes, because they read literally in POSIX shells and in PowerShell: no <c>$</c>,
+    /// <c>&amp;</c> or <c>;</c> inside them does anything, and a trailing <c>\</c> cannot escape the
+    /// closing quote the way it does inside double quotes. An embedded <c>'</c> closes the quote,
+    /// escapes itself and reopens it. A value made only of characters no shell treats specially is
+    /// left bare, so the common command reads as typed.
+    /// </remarks>
     private static string Quote(string value) =>
-        value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;
+        value.Length > 0 && value.All(IsPlain)
+            ? value
+            : "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static bool IsPlain(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '/' or ':' or '@' or '%' or '+' or '=' or ',' or '-';
 }
