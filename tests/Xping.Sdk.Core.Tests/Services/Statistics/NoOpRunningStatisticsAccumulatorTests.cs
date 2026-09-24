@@ -171,6 +171,7 @@ public sealed class NoOpRunningStatisticsAccumulatorTests
             .WithTestName("Test")
             .WithOutcome(TestOutcome.Passed)
             .Build());
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 1);
 
         // Act & Assert
         Assert.Empty(accumulator.GetSnapshotByAssembly());

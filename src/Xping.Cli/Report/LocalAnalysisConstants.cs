@@ -110,6 +110,12 @@ internal static class LocalAnalysisConstants
     /// </summary>
     /// <remarks>
     /// <para>
+    /// The fallback, not the rule. A session whose test framework reported what it discovered and
+    /// what it ran is partial exactly when it ran less — see <see cref="Indexes.SessionView.ReportedPartial"/>
+    /// — and this threshold is never consulted for it. Only xUnit reports that today, so NUnit and
+    /// MSTest stores, and xUnit runs an IDE started from its own earlier discovery, still land here.
+    /// </para>
+    /// <para>
     /// A <c>dotnet test --filter</c> run is an ordinary thing to find in a local store, and a
     /// session that ran one test of seventeen says nothing whatever about the other sixteen. Absence
     /// is only evidence where the run was in a position to produce a presence, so a session covering
@@ -129,8 +135,9 @@ internal static class LocalAnalysisConstants
     /// of eight tests where the suite has seventeen is the same table whether nine tests were
     /// excluded or removed. So the line is a trade rather than a discovery, and it is placed at a
     /// half — the point at which a run stopped being a run of the suite and became a run of part of
-    /// it. What that costs, in both directions: a filter selecting more than half the suite still
-    /// produces false absences, and a deletion of more than half a suite is never reported at all.
+    /// it. What that costs, in both directions, wherever the fallback applies: a filter selecting more
+    /// than half the suite still produces false absences, and a deletion of more than half a suite is
+    /// never reported at all.
     /// </para>
     /// <para>
     /// Biased towards silence on purpose. <see cref="Model.FindingKind.Vanished"/> is capped at

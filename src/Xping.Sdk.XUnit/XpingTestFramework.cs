@@ -20,6 +20,11 @@ public sealed class XpingTestFramework : XunitTestFramework
     // be sure the context is ready and any configuration issues have been surfaced.
     private readonly XpingExecutorServices _services = null!;
 
+    // Shared by the discoverer and the executor this framework creates. The runner asks for the
+    // executor before it discovers, so the executor cannot be handed a finished count — only the
+    // place where one will be.
+    private readonly TestCaseCensus _census = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="XpingTestFramework"/> class.
     /// </summary>
@@ -51,6 +56,16 @@ public sealed class XpingTestFramework : XunitTestFramework
     }
 
     /// <summary>
+    /// Creates the test framework discoverer, wrapped to count what it discovers.
+    /// </summary>
+    /// <param name="assemblyInfo">The assembly to discover tests in.</param>
+    /// <returns>The test framework discoverer.</returns>
+    protected override ITestFrameworkDiscoverer CreateDiscoverer(IAssemblyInfo assemblyInfo)
+    {
+        return new XpingTestFrameworkDiscoverer(base.CreateDiscoverer(assemblyInfo), _census);
+    }
+
+    /// <summary>
     /// Creates the test framework executor.
     /// </summary>
     /// <param name="assemblyName">The assembly containing the tests.</param>
@@ -65,7 +80,9 @@ public sealed class XpingTestFramework : XunitTestFramework
             _services.RetryDetector,
             _services.IdentityGenerator,
             _services.Logger,
-            _services.CaptureStackTraces);
+            _services.CaptureStackTraces,
+            _services.StatisticsAccumulator,
+            _census);
     }
 
     /// <summary>

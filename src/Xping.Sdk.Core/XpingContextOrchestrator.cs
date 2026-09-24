@@ -533,16 +533,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns the total number of tests expected in this session, used for progress tracking.
-    /// Returns <c>null</c> by default; override to provide a concrete value.
-    /// </summary>
-    /// <returns>The expected test count, or <c>null</c> if unknown.</returns>
-    protected virtual int? GetTotalTestsExpected()
-    {
-        return null;
-    }
-
-    /// <summary>
     /// Called before the session is finalized and flushed. Override to perform pre-finalization work.
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -666,7 +656,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         bool isFinalizing = sessionState == TestSessionState.Finalized;
 
         EnvironmentInfo? environmentInfo = await CreateEnvironmentInfoAsync(cancellationToken).ConfigureAwait(false);
-        int? totalTestsExpected = GetTotalTestsExpected();
 
         for (int i = 0; i < executions.Count; i++)
         {
@@ -688,18 +677,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             .WithEnvironmentInfo(environmentInfo)
             .AddExecutions(executions)
             .WithAssemblies(_sessionAssemblies)
-            .WithTotalTestsExpected(totalTestsExpected)
             .WithSessionState(sessionState)
             .WithPullRequestContext(_pullRequestContext);
 
         if (isFinalizing)
         {
-            // Prefer the wall-clock-aware overload when the resolved accumulator supports it
-            // (both built-in implementations do); this keeps IRunningStatisticsAccumulator's
-            // public surface unchanged for any external implementers.
-            QuickStatistics stats = _statisticsAccumulator is IWallClockAwareStatisticsAccumulator wallClockAware
-                ? wallClockAware.GetSnapshot(DateTime.UtcNow - StartedAt)
-                : _statisticsAccumulator.GetSnapshot();
+            QuickStatistics stats = _statisticsAccumulator.GetSnapshot(DateTime.UtcNow - StartedAt);
 
             builder
                 .WithQuickStatistics(stats)
@@ -825,7 +808,6 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 .WithEnvironmentInfo(WithRecordingMode(environment ?? new EnvironmentInfo()))
                 .AddExecutions(executions)
                 .WithAssemblies(_sessionAssemblies)
-                .WithTotalTestsExpected(GetTotalTestsExpected())
                 .WithSessionState(TestSessionState.Finalized)
                 .WithPullRequestContext(_pullRequestContext)
                 .WithQuickStatistics(_finalizedStatistics)

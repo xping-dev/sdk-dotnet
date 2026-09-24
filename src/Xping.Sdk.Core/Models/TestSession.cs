@@ -45,7 +45,6 @@ public sealed class TestSession
         IReadOnlyCollection<TestExecution> executions,
         IReadOnlyCollection<string> assemblies,
         DateTime? endedAt,
-        int? totalTestsExpected,
         TestSessionState sessionState,
         PullRequestContext? pullRequestContext,
         QuickStatistics? quickStatistics,
@@ -57,7 +56,6 @@ public sealed class TestSession
         Executions = executions.RequireNotNull();
         Assemblies = [.. assemblies.RequireNotNull()];
         EndedAt = endedAt;
-        TotalTestsExpected = totalTestsExpected;
         SessionState = sessionState;
         PullRequestContext = pullRequestContext;
         QuickStatistics = quickStatistics;
@@ -109,12 +107,6 @@ public sealed class TestSession
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> Assemblies { get; init; }
-
-    /// <summary>
-    /// Gets the total number of tests expected in this session.
-    /// Useful for tracking session completion progress.
-    /// </summary>
-    public int? TotalTestsExpected { get; init; }
 
     /// <summary>
     /// Gets the upload state of this session batch.

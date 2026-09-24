@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
+using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.XUnit.Retry;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -18,7 +19,7 @@ namespace Xping.Sdk.XUnit;
 /// Custom xUnit test framework executor that wraps test execution with Xping tracking.
 /// Intercepts test execution messages and records them via XpingMessageSink.
 /// </summary>
-public sealed class XpingTestFrameworkExecutor(
+internal sealed class XpingTestFrameworkExecutor(
     AssemblyName assemblyName,
     ISourceInformationProvider sourceInformationProvider,
     IMessageSink diagnosticMessageSink,
@@ -26,7 +27,9 @@ public sealed class XpingTestFrameworkExecutor(
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
     ILogger<XpingMessageSink> logger,
-    bool captureStackTraces) : XunitTestFrameworkExecutor(
+    bool captureStackTraces,
+    IRunningStatisticsAccumulator statisticsAccumulator,
+    TestCaseCensus census) : XunitTestFrameworkExecutor(
         assemblyName,
         sourceInformationProvider,
         diagnosticMessageSink)
@@ -47,6 +50,11 @@ public sealed class XpingTestFrameworkExecutor(
         IMessageSink executionMessageSink,
         ITestFrameworkExecutionOptions executionOptions)
     {
+        // Materialized once, before anything runs: the census needs the selection, and the runner's
+        // enumerable is not promised to be re-enumerable.
+        List<IXunitTestCase> selected = [.. testCases];
+        RecordSelection(selected);
+
         // Wrap the message sink with our tracking sink
         var trackingSink = new XpingMessageSink(
             executionMessageSink,
@@ -62,10 +70,28 @@ public sealed class XpingTestFrameworkExecutor(
         // from the inside; every other test case is passed through untouched.
         // Materialized so that a re-enumeration downstream cannot hand out a second set of wrappers,
         // each with its own attempt counter, for the same test cases.
-        List<IXunitTestCase> trackedTestCases = [.. testCases
+        List<IXunitTestCase> trackedTestCases = [.. selected
             .Select(testCase => (IXunitTestCase?)XpingRetryTestCase.TryWrap(testCase, trackingSink) ?? testCase)];
 
         // Run tests with tracking enabled
         base.RunTestCases(trackedTestCases, trackingSink, executionOptions);
+    }
+
+    /// <summary>
+    /// Adds a selection to the census and reports it with the discovery that preceded it.
+    /// </summary>
+    /// <remarks>
+    /// Under <c>dotnet test</c> the runner has finished discovering the whole assembly by the time it
+    /// selects, so the census already holds the pre-filter count. An executor asked to run test cases
+    /// discovered elsewhere reports the selection alone, and the discovered count stays unknown.
+    /// </remarks>
+    private void RecordSelection(List<IXunitTestCase> selected)
+    {
+        if (_assemblyName.Length == 0)
+            return;
+
+        census.AddSelected(selected.Count);
+
+        statisticsAccumulator.RecordTestCases(_assemblyName, census.Discovered, census.Selected);
     }
 }

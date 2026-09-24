@@ -1162,4 +1162,115 @@ public sealed class RunningStatisticsAccumulatorTests
             accumulator.GetSnapshot().Total,
             breakdown.Values.Sum(a => a.Total));
     }
+
+    // ---------------------------------------------------------------------------
+    // RecordTestCases
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GetSnapshotByAssembly_WithoutRecordedTestCases_LeavesBothCountsNull()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+
+        // Act
+        AssemblyStatistics entry = accumulator.GetSnapshotByAssembly()["Api.Tests"];
+
+        // Assert — not observed, which is not the same claim as zero
+        Assert.Null(entry.DiscoveredTestCases);
+        Assert.Null(entry.SelectedTestCases);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_WithRecordedTestCases_ReportsThemOnThatAssemblyOnly()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.Record(BuildAttempt("B1", TestOutcome.Passed, assembly: "Billing.Tests"));
+
+        // Act
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 1);
+        IReadOnlyDictionary<string, AssemblyStatistics> breakdown = accumulator.GetSnapshotByAssembly();
+
+        // Assert
+        Assert.Equal(17, breakdown["Api.Tests"].DiscoveredTestCases);
+        Assert.Equal(1, breakdown["Api.Tests"].SelectedTestCases);
+        Assert.Null(breakdown["Billing.Tests"].DiscoveredTestCases);
+        Assert.Null(breakdown["Billing.Tests"].SelectedTestCases);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_SelectionWithoutDiscovery_ReportsSelectedAlone()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+
+        // Act — an IDE running tests it discovered earlier: nothing was discovered in this process
+        accumulator.RecordTestCases("Api.Tests", discovered: null, selected: 3);
+        AssemblyStatistics entry = accumulator.GetSnapshotByAssembly()["Api.Tests"];
+
+        // Assert
+        Assert.Null(entry.DiscoveredTestCases);
+        Assert.Equal(3, entry.SelectedTestCases);
+    }
+
+    [Fact]
+    public void RecordTestCases_CalledAgainForTheSameAssembly_ReplacesRatherThanAdds()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 1);
+
+        // Act
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 4);
+        AssemblyStatistics entry = accumulator.GetSnapshotByAssembly()["Api.Tests"];
+
+        // Assert
+        Assert.Equal(17, entry.DiscoveredTestCases);
+        Assert.Equal(4, entry.SelectedTestCases);
+    }
+
+    [Fact]
+    public void GetSnapshotByAssembly_TestCasesForAnAssemblyWithNoExecutions_CreateNoEntry()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+
+        // Act — a filter that selected nothing from this assembly
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 0);
+
+        // Assert — an entry of zeros would claim a run of Api.Tests the session does not contain
+        Assert.Empty(accumulator.GetSnapshotByAssembly());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void RecordTestCases_WithoutAnAssembly_Throws(string? assembly)
+    {
+        var accumulator = new RunningStatisticsAccumulator();
+
+        Assert.Throws<ArgumentException>(() => accumulator.RecordTestCases(assembly!, 1, 1));
+    }
+
+    [Fact]
+    public void Reset_AfterRecordingTestCases_ClearsThem()
+    {
+        // Arrange
+        var accumulator = new RunningStatisticsAccumulator();
+        accumulator.RecordTestCases("Api.Tests", discovered: 17, selected: 1);
+        accumulator.Reset();
+
+        // Act
+        accumulator.Record(BuildAttempt("A1", TestOutcome.Passed, assembly: "Api.Tests"));
+        AssemblyStatistics entry = accumulator.GetSnapshotByAssembly()["Api.Tests"];
+
+        // Assert
+        Assert.Null(entry.DiscoveredTestCases);
+        Assert.Null(entry.SelectedTestCases);
+    }
 }

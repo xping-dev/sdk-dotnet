@@ -358,6 +358,50 @@ public sealed class VanishedProviderTests
         return TestSessionFactory.Context([.. sessions]);
     }
 
+    /// <summary>
+    /// <see cref="Suite"/> recorded by a framework that reports its test cases: every session
+    /// discovered <paramref name="discovered"/>, and ran what it ran.
+    /// </summary>
+    private static AnalysisContext ReportedSuite(int total, int filtered, int suiteSize, int selected, int discovered)
+    {
+        string[] suite = [.. Enumerable.Range(0, suiteSize).Select(i => $"T{i:00}")];
+
+        var sessions = new List<TestSession>();
+        for (int i = 0; i < total; i++)
+        {
+            bool reduced = i >= total - filtered;
+            string[] ran = reduced ? suite[..selected] : suite;
+            sessions.Add(TestSessionFactory.Reporting(
+                TestSessionFactory.Session(i, ran),
+                discovered: reduced ? discovered : suiteSize,
+                selected: ran.Length));
+        }
+
+        return TestSessionFactory.Context([.. sessions]);
+    }
+
+    [Fact]
+    public void AReportedDeletionOfMostOfASuiteIsReported()
+    {
+        // The case the threshold trades away. Sixteen tests deleted, one left: every later run
+        // discovered one test and ran it, so it was a run of the whole suite that remains, and each
+        // of the sixteen stopped running.
+        IReadOnlyList<FindingCandidate> candidates =
+            Analyze(ReportedSuite(total: 20, filtered: 3, suiteSize: 17, selected: 1, discovered: 1));
+
+        Assert.Equal(16, candidates.Count);
+        Assert.All(candidates, c => Assert.Equal(0, Assert.IsType<VanishedEvidence>(c.Evidence).PartialSessionsSetAside));
+    }
+
+    [Fact]
+    public void AReportedFilterOfMostOfASuiteIsSetAside()
+    {
+        // The case the threshold misses. A filter selecting sixteen of seventeen covers far more
+        // than half the suite, but the framework discovered seventeen, so the seventeenth was not
+        // asked about and its absence says nothing.
+        Assert.Empty(Analyze(ReportedSuite(total: 20, filtered: 3, suiteSize: 17, selected: 16, discovered: 17)));
+    }
+
     [Fact]
     public void AFilteredRunIsNotASessionEveryUnselectedTestVanishedFrom()
     {
@@ -546,9 +590,10 @@ public sealed class VanishedProviderTests
     }
 
     [Fact]
-    public void ADeletionOfMostOfASuiteIsNotReported()
+    public void ADeletionOfMostOfASuiteIsNotReportedWhereNoFrameworkSaidWhatItDiscovered()
     {
-        // The cost of deciding this on counts, pinned rather than left to be discovered. Sixteen of
+        // The cost of deciding this on counts, pinned rather than left to be discovered — and still
+        // paid wherever the framework reports no test cases, which is NUnit and MSTest. Sixteen of
         // seventeen tests removed and one kept is arithmetically indistinguishable from a filter
         // selecting that one, so the report says nothing. Deliberate: the finding is capped at
         // Severity.Low because a disappearance is usually something the developer just did, and the

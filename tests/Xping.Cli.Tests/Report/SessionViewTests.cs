@@ -7,6 +7,7 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Indexes;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Models.Statistics;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -164,6 +165,106 @@ public sealed class SessionViewTests
             TestSessionFactory.Session(0, []), TestSessionFactory.Session(1, []));
 
         Assert.Equal(0, context.PartialSessionCount);
+    }
+
+    [Fact]
+    public void AReportedFilterIsPartialHoweverMuchOfTheSuiteItRan()
+    {
+        // Sixteen of seventeen clears the half-suite threshold by a mile, and the count alone would
+        // call it a run of the suite. The framework said it discovered seventeen and ran sixteen,
+        // so the seventeenth was never asked about.
+        TestSession filtered = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(16)]), discovered: 17, selected: 16);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), filtered);
+
+        Assert.True(ViewOf(context, filtered).IsPartial);
+        Assert.Equal(1, context.PartialSessionCount);
+    }
+
+    [Fact]
+    public void AReportedFullRunIsNotPartialHoweverSmallItIs()
+    {
+        // The deletion the threshold cannot see: one test left of seventeen. The framework
+        // discovered one and ran one, so the sixteen are gone rather than unselected.
+        TestSession afterDeletion = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(1)]), discovered: 1, selected: 1);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), afterDeletion);
+
+        Assert.False(ViewOf(context, afterDeletion).IsPartial);
+        Assert.Equal(0, context.PartialSessionCount);
+    }
+
+    [Fact]
+    public void AReportedRunCutShortIsPartial()
+    {
+        // Seventeen discovered, seventeen selected, three recorded: the run was cancelled or killed
+        // before it finished, and the fourteen it never reached were not asked about any more than
+        // a filter's would be.
+        TestSession cutShort = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(3)]), discovered: 17, selected: 17);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), cutShort);
+
+        Assert.True(ViewOf(context, cutShort).IsPartial);
+    }
+
+    [Fact]
+    public void MoreSelectedThanDiscoveredIsNotAFact()
+    {
+        // The two counts came from different discoveries, so they compare nothing. The session is
+        // judged as though it reported neither — here, a run of the whole suite by the threshold.
+        TestSession mismatched = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(17)]), discovered: 5, selected: 17);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), mismatched);
+
+        Assert.Null(ViewOf(context, mismatched).ReportedPartial);
+        Assert.False(ViewOf(context, mismatched).IsPartial);
+    }
+
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData(17, null)]
+    public void OneCountWithoutTheOtherFallsBackToTheThreshold(int? discovered, int? selected)
+    {
+        // An IDE running tests it discovered earlier reports a selection and no discovery. Half a
+        // fact is no fact, so the session is judged as though it reported nothing.
+        TestSession small = TestSessionFactory.Reporting(
+            TestSessionFactory.Session(1, [.. Names(1)]), discovered, selected);
+
+        AnalysisContext context = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, [.. Names(17)]), small);
+
+        Assert.True(ViewOf(context, small).IsPartial);
+    }
+
+    [Fact]
+    public void ABreakdownOfSeveralAssembliesIsNotReadAsAFact()
+    {
+        // Every session in a window is projected onto one assembly. One that was not carries
+        // several entries, and which of them answers for the window is not something to guess.
+        TestSession unprojected = TestSessionFactory.Session(0, [.. Names(1)]);
+        unprojected = new TestSession
+        {
+            SessionId = unprojected.SessionId,
+            StartedAt = unprojected.StartedAt,
+            EnvironmentInfo = unprojected.EnvironmentInfo,
+            Executions = unprojected.Executions,
+            Assemblies = unprojected.Assemblies,
+            StatisticsByAssembly = new Dictionary<string, AssemblyStatistics>
+            {
+                ["A.Tests"] = new() { DiscoveredTestCases = 1, SelectedTestCases = 1 },
+                ["B.Tests"] = new() { DiscoveredTestCases = 9, SelectedTestCases = 1 }
+            }
+        };
+
+        Assert.Null(SessionView.For(unprojected, index: 0).ReportedPartial);
     }
 
     private static IEnumerable<string> Names(int count) =>

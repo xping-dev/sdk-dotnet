@@ -45,7 +45,6 @@ public sealed class SessionAssembliesTests
             .WithEnvironmentInfo(environment)
             .AddExecutions(executions)
             .WithAssemblies(SessionAssemblies.Of(executions))
-            .WithTotalTestsExpected(executions.Length)
             .WithSessionState(TestSessionState.Finalized)
             .WithQuickStatistics(new QuickStatistics())
             .WithStatisticsByAssembly(StatisticsFor(executions))
@@ -239,7 +238,6 @@ public sealed class SessionAssembliesTests
         TestSession projected = Assert.IsType<TestSession>(
             SessionAssemblies.Project(session, "Alpha.Tests"));
 
-        Assert.Null(projected.TotalTestsExpected);
         Assert.Null(projected.QuickStatistics);
     }
 

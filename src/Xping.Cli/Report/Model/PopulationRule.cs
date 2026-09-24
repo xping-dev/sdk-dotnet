@@ -78,8 +78,10 @@ internal enum PopulationRule
     /// finding's source path needs.
     /// </para>
     /// <para>
-    /// Which runs covered the suite is <see cref="Indexes.SessionView.IsPartial"/>, against
-    /// <see cref="LocalAnalysisConstants.PartialSessionShare"/> of the largest run in the window.
+    /// Which runs covered the suite is <see cref="Indexes.SessionView.IsPartial"/>: what the test
+    /// framework reported, where it did (<see cref="Indexes.SessionView.ReportedPartial"/>), and
+    /// otherwise <see cref="LocalAnalysisConstants.PartialSessionShare"/> of the largest run in the
+    /// window.
     /// </para>
     /// </remarks>
     ExcludesPartialRuns

@@ -44,22 +44,23 @@ internal sealed class AnalysisContext
         for (int position = 0; position < window.Sessions.Count; position++)
             views.Add(SessionView.For(window.Sessions[position], position));
 
-        // Partiality is a comparison and not a measurement, so it needs the whole window before any
-        // one session can be classified. The anchor is the largest run in it: the best evidence the
-        // window holds of how big the suite is, and the only one a store of mostly filtered runs
-        // does not corrupt — see LocalAnalysisConstants.PartialSessionShare.
+        // A session whose test framework said what it discovered and what it ran is partial exactly
+        // when it ran less, and needs nothing from the window. Every other session falls back to a
+        // comparison, which does: the anchor is the largest run in the window, the best evidence it
+        // holds of how big the suite is, and the only one a store of mostly filtered runs does not
+        // corrupt — see LocalAnalysisConstants.PartialSessionShare.
         int suiteSize = 0;
         foreach (SessionView view in views)
             suiteSize = Math.Max(suiteSize, view.Tests);
 
-        if (suiteSize > 0)
+        double floor = LocalAnalysisConstants.PartialSessionShare * suiteSize;
+        for (int position = 0; position < views.Count; position++)
         {
-            double floor = LocalAnalysisConstants.PartialSessionShare * suiteSize;
-            for (int position = 0; position < views.Count; position++)
-            {
-                if (views[position].Tests < floor)
-                    views[position] = views[position] with { IsPartial = true };
-            }
+            SessionView view = views[position];
+            bool partial = view.ReportedPartial ?? (suiteSize > 0 && view.Tests < floor);
+
+            if (partial)
+                views[position] = view with { IsPartial = true };
         }
 
         SessionViews = views;
