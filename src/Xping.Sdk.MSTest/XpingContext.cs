@@ -206,7 +206,8 @@ public class XpingContext : XpingContextOrchestrator
         AppDomain.CurrentDomain.ProcessExit += (_, _) => FinalizeOnProcessExit();
     }
 
-    private static void FinalizeOnProcessExit()
+    // Internal so the adapter's tests can drive the safety net without ending the test process.
+    internal static void FinalizeOnProcessExit()
     {
         Lazy<XpingContext>? instance = _instance;
         if (instance is not { IsValueCreated: true })

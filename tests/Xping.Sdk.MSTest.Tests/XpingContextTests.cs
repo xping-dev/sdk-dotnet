@@ -149,6 +149,40 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
+    public void FinalizeOnProcessExit_WithMaterializedSession_FinalizesAndResetsContext()
+    {
+        // The safety net for a session MSTest never handed to [AssemblyCleanup]: it must run the
+        // whole finalize-and-shutdown sequence itself, so afterwards the context is gone.
+        XpingContext.Initialize(ScratchConfiguration());
+        XpingContext.RecordTest(CreateTestExecution()); // materializes the host
+        Assert.True(XpingContext.IsInitialized);
+
+        XpingContext.FinalizeOnProcessExit();
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public void FinalizeOnProcessExit_WithoutMaterializedSession_LeavesContextAlone()
+    {
+        // Initialize() only registers the lazy wrapper. Nothing ran, so there is nothing to
+        // finalize, and building a host on the way out of the process would be pure cost.
+        XpingContext.Initialize(ScratchConfiguration());
+
+        XpingContext.FinalizeOnProcessExit();
+
+        Assert.True(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public void FinalizeOnProcessExit_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = Record.Exception(XpingContext.FinalizeOnProcessExit);
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
     public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
     {
         var exception = await Record.ExceptionAsync(async () => await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true)).ConfigureAwait(true);
