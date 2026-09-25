@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -146,6 +147,48 @@ public class XpingContext : XpingContextOrchestrator
             return Task.CompletedTask;
 
         return _instance.Value.FinalizeSessionAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Finalizes the session and shuts down the context. Called once, when the test assembly finishes:
+    /// uploads buffered executions, fails the process fast on a strict-mode network error, and always
+    /// releases the underlying host afterward.
+    /// </summary>
+    /// <remarks>
+    /// This is the only place the xUnit adapter can end a session. The runner never reaches a
+    /// <c>Dispose</c> on <see cref="XpingTestFramework"/>: <c>TestFramework.Dispose()</c> is not virtual,
+    /// and the runner disposes through <see cref="IDisposable"/>. A strict-mode network error must be
+    /// acted on here: finalization is idempotent, and a second call reports the failure without
+    /// throwing again.
+    /// </remarks>
+    /// <param name="failFast">
+    /// Terminates the process. <see cref="Environment.FailFast(string, Exception)"/> in production;
+    /// replaced in tests, which cannot survive the real one.
+    /// </param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static async Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    {
+        try
+        {
+            await FinalizeAsync().ConfigureAwait(false);
+        }
+        catch (XpingNetworkException ex)
+        {
+            // xUnit catches and reports exceptions from message sinks without failing the run, so a
+            // re-throw would leave the exit code at zero. FailFast aborts the process with a non-zero
+            // exit code, which is the correct behavior for strict mode.
+            failFast($"[Xping] {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            // Logged here rather than by the caller: the logger lives in the host ShutdownAsync is
+            // about to dispose.
+            _instance?.Value._logger.LogError(ex, "Error finalizing Xping session on assembly finished");
+        }
+        finally
+        {
+            await ShutdownAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>

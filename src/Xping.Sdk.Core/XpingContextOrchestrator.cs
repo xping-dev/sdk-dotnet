@@ -89,6 +89,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     // finalize-time diagnostic below needs it and IOptions is not read again after startup.
     private bool _hasProjectPin;
 
+    // From the validated options, which already carry XPING_STRICTMODE and Xping:StrictMode. The raw
+    // sources IsStrictModeEnabled reads are only for a construction that failed before options existed.
+    private bool _strictMode;
+
     private PullRequestContext? _pullRequestContext;
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
@@ -175,6 +179,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _mode = configuration.ResolveMode();
             _isHealthy = _mode != XpingMode.Disabled;
             _hasProjectPin = configuration.ProjectPin != null;
+            _strictMode = configuration.StrictMode;
 
             // Optional so that hosts composed without the local-store feature still work.
             _localSessionStore = _mode == XpingMode.Disabled
@@ -447,7 +452,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (storedExecutions != null)
             PrintRetryFlakeHint(storedExecutions);
 
-        if (!uploadResult.Success && IsStrictModeEnabled(Services))
+        if (!uploadResult.Success && _strictMode)
         {
             string errorDetail = string.IsNullOrEmpty(uploadResult.ErrorMessage)
                 ? "Upload failed with no additional details"

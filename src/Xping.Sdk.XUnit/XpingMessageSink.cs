@@ -199,18 +199,16 @@ public sealed class XpingMessageSink(
 
     private void HandleTestAssemblyFinished()
     {
-        // Finalize the session when the assembly finishes. FinalizeAsync includes an
-        // internal flush and is idempotent, so it is safe to call here even if
-        // XpingTestFramework.Dispose later calls DisposeAsync (which also finalizes).
-        // This path is the primary safeguard for VSTest adapter runs, where Dispose
-        // is not reliably called on custom frameworks.
+        // The assembly finishing is the end of the session: nothing reaches the framework's Dispose
+        // (see XpingContext.FinalizeAndShutdownAsync). Task.Run keeps the async work off the runner's
+        // message thread, so no continuation can deadlock trying to resume on it.
         try
         {
-            XpingContext.FinalizeAsync().GetAwaiter().GetResult();
+            Task.Run(() => XpingContext.FinalizeAndShutdownAsync(Environment.FailFast)).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error finalizing Xping session on assembly finished");
+            _logger.LogError(ex, "Error shutting down Xping on assembly finished");
         }
     }
 

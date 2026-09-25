@@ -3,9 +3,13 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Moq;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
@@ -89,30 +93,18 @@ public sealed class XpingContextOrchestratorEnvVarTests
     }
 
     [Fact]
-    public async Task FinalizeSessionAsync_WithStrictModeViaEnvVar_AndUploadFailure_ThrowsXpingNetworkException()
+    public void AddXping_WithStrictModeViaEnvVar_SetsStrictModeOnOptions()
     {
-        // Arrange — set XPING_STRICTMODE env var; valid config but upload always fails
+        // The orchestrator judges an upload failure by the resolved options alone, so the env var has
+        // to reach them. The strict-mode finalize tests take it from there.
         System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
         try
         {
-            var uploaderMock = new Mock<IXpingUploader>();
-            var envDetectorMock = new Mock<IEnvironmentDetector>();
-            envDetectorMock
-                .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new EnvironmentInfo());
-            uploaderMock
-                .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Network timeout" });
+            var services = new ServiceCollection();
+            services.AddXping(new XpingConfiguration { ApiKey = "test-key", ProjectId = "test-project" });
+            using ServiceProvider provider = services.BuildServiceProvider();
 
-            var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
-            var orchestrator = new TestOrchestrator(host);
-            orchestrator.RecordExecution(
-                new TestExecutionBuilder().WithTestName("EnvVarNetworkTest").WithOutcome(TestOutcome.Passed).Build());
-
-            // Act & Assert
-            await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
-
-            await orchestrator.DisposeAsync();
+            Assert.True(provider.GetRequiredService<IOptions<XpingConfiguration>>().Value.StrictMode);
         }
         finally
         {
