@@ -255,7 +255,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         {
             string message = $"Xping configuration invalid: {string.Join(", ", ex.Failures)}";
 
-            if (_strictMode || IsStrictModeEnabled(services))
+            // Validation fails on the very first read, before _strictMode could be set.
+            if (IsStrictModeEnabled(services))
             {
                 throw new XpingConfigurationException(message, ex);
             }
@@ -273,6 +274,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // _strictMode already has the answer when the options resolved; the raw sources cover a
+            // failure while resolving them.
             if (_strictMode || IsStrictModeEnabled(services))
             {
                 string message = $"Failed to initialize Xping SDK: {ex.Message}";

@@ -816,6 +816,41 @@ public sealed class XpingContextOrchestratorTests
         Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
     }
 
+    [Fact]
+    public async Task Constructor_WithoutStrictMode_AndFailureAfterOptionsResolve_DegradesInsteadOfThrowing()
+    {
+        var prDetectorMock = new Mock<IPullRequestContextDetector>();
+        prDetectorMock.Setup(d => d.Detect()).Throws(new InvalidOperationException("detector broke"));
+
+        using var store = new ScratchStore();
+        var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            ServiceHelper.CloudConfiguration(store.Path, strictMode: false),
+            new Mock<IXpingUploader>(),
+            new Mock<IEnvironmentDetector>(),
+            configureServices: services => services.AddSingleton(prDetectorMock.Object));
+
+        var orchestrator = new TestOrchestrator(host);
+
+        Assert.False(orchestrator.HealthStatus);
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public void Constructor_WithStrictModeViaIConfiguration_AndFailureWhileResolvingOptions_ThrowsXpingConfigurationException()
+    {
+        // The options never resolve, so only the raw sources can say strict mode was asked for.
+        using var store = new ScratchStore();
+        var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            ServiceHelper.CloudConfiguration(store.Path, strictMode: false),
+            new Mock<IXpingUploader>(),
+            new Mock<IEnvironmentDetector>(),
+            appConfiguration: new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" },
+            configureServices: services => services.Configure<XpingConfiguration>(
+                _ => throw new InvalidOperationException("options broke")));
+
+        Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
+    }
+
     // ---------------------------------------------------------------------------
     // TestSessionState progression
     // ---------------------------------------------------------------------------

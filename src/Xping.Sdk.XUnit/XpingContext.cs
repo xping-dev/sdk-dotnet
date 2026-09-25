@@ -171,11 +171,34 @@ public class XpingContext : XpingContextOrchestrator
     /// replaced in tests, which cannot survive the real one.
     /// </param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    internal static async Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    {
+        // Captured up front: the logger lives in the host that shutting down disposes.
+        ILogger? logger = _instance is { IsValueCreated: true } instance ? instance.Value._logger : null;
+
+        return EndSessionAsync(FinalizeAsync, () => ShutdownAsync().AsTask(), failFast, logger, Console.Error);
+    }
+
+    /// <summary>
+    /// The error handling of <see cref="FinalizeAndShutdownAsync"/>, apart from the static context, so
+    /// that every path through it can be driven.
+    /// </summary>
+    /// <param name="finalize">Finalizes the session.</param>
+    /// <param name="shutdown">Releases the host. Runs whatever <paramref name="finalize"/> did.</param>
+    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
+    /// <param name="logger">Reports any other finalize error, while the host is still alive.</param>
+    /// <param name="shutdownErrors">Reports a shutdown error, once the logger has gone with the host.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static async Task EndSessionAsync(
+        Func<Task> finalize,
+        Func<Task> shutdown,
+        Action<string, Exception> failFast,
+        ILogger? logger,
+        TextWriter shutdownErrors)
     {
         try
         {
-            await FinalizeAsync().ConfigureAwait(false);
+            await finalize().ConfigureAwait(false);
         }
         catch (XpingNetworkException ex)
         {
@@ -186,20 +209,17 @@ public class XpingContext : XpingContextOrchestrator
         }
         catch (Exception ex)
         {
-            // Logged here rather than by the caller: the logger lives in the host ShutdownAsync is
-            // about to dispose.
-            _instance?.Value._logger.LogError(ex, "Error finalizing Xping session on assembly finished");
+            logger?.LogError(ex, "Error finalizing Xping session on assembly finished");
         }
         finally
         {
             try
             {
-                await ShutdownAsync().ConfigureAwait(false);
+                await shutdown().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                // The logger went down with the host, so stderr is all that is left.
-                await Console.Error.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
+                await shutdownErrors.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
             }
         }
     }
