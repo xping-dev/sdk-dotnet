@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using Xping.Sdk.Core.Configuration;
@@ -12,6 +13,7 @@ using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Tests.Helpers;
 
@@ -794,6 +796,26 @@ public sealed class XpingContextOrchestratorTests
         Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
     }
 
+    [Fact]
+    public void Constructor_WithStrictModeInCode_AndFailureAfterOptionsResolve_ThrowsXpingConfigurationException()
+    {
+        // Strict mode set only in code, and a failure after the options are already valid. The raw
+        // sources (env var, IConfiguration) say nothing, so only the options can tell the constructor.
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        var prDetectorMock = new Mock<IPullRequestContextDetector>();
+        prDetectorMock.Setup(d => d.Detect()).Throws(new InvalidOperationException("detector broke"));
+
+        using var store = new ScratchStore();
+        var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            ServiceHelper.CloudConfiguration(store.Path, strictMode: true),
+            uploaderMock,
+            envDetectorMock,
+            configureServices: services => services.AddSingleton(prDetectorMock.Object));
+
+        Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
+    }
+
     // ---------------------------------------------------------------------------
     // TestSessionState progression
     // ---------------------------------------------------------------------------
@@ -1063,6 +1085,34 @@ public sealed class XpingContextOrchestratorTests
         orchestrator.RecordExecution(BuildExecution("StrictModeNetworkTest"));
 
         // Act & Assert
+        await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+        await orchestrator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeSessionAsync_WithConfigurationInstance_AndStrictModeViaIConfiguration_AndUploadFailure_ThrowsXpingNetworkException()
+    {
+        // XpingContext.Initialize(config) registers the instance, so the options never bind the host's
+        // IConfiguration. Xping:StrictMode from appsettings or Xping__StrictMode must still count.
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Simulated network failure" });
+
+        using var store = new ScratchStore();
+        var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            ServiceHelper.CloudConfiguration(store.Path, strictMode: false),
+            uploaderMock,
+            envDetectorMock,
+            appConfiguration: new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" });
+        var orchestrator = new TestOrchestrator(host);
+        orchestrator.RecordExecution(BuildExecution("InstanceStrictModeTest"));
+
         await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
 
         await orchestrator.DisposeAsync();

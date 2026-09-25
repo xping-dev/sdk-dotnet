@@ -46,15 +46,6 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
         Assert.NotNull(services.IdentityGenerator);
     }
 
-    [Fact]
-    public void Logger_ShouldNotBeNull()
-    {
-        XpingContext.Initialize();
-        var services = XpingContext.GetExecutorServices();
-
-        Assert.NotNull(services.Logger);
-    }
-
     // ---------------------------------------------------------------------------
     // Singleton consistency
     // ---------------------------------------------------------------------------
@@ -67,10 +58,9 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
         var s1 = XpingContext.GetExecutorServices();
         var s2 = XpingContext.GetExecutorServices();
 
-        // All four services should be singleton-scoped within the host.
+        // All three services should be singleton-scoped within the host.
         Assert.Same(s1.ExecutionTracker, s2.ExecutionTracker);
         Assert.Same(s1.RetryDetector, s2.RetryDetector);
         Assert.Same(s1.IdentityGenerator, s2.IdentityGenerator);
-        Assert.Same(s1.Logger, s2.Logger);
     }
 }

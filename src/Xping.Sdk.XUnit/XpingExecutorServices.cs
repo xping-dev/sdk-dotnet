@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
@@ -27,9 +26,6 @@ internal sealed class XpingExecutorServices
     /// <summary>Gets the test identity generator.</summary>
     public ITestIdentityGenerator IdentityGenerator { get; }
 
-    /// <summary>Gets the logger for <see cref="XpingMessageSink"/>.</summary>
-    public ILogger<XpingMessageSink> Logger { get; }
-
     /// <summary>Gets a value indicating whether stack traces should be captured.</summary>
     public bool CaptureStackTraces { get; }
 
@@ -40,14 +36,12 @@ internal sealed class XpingExecutorServices
         IExecutionTracker executionTracker,
         IRetryDetector<ITest> retryDetector,
         ITestIdentityGenerator identityGenerator,
-        ILogger<XpingMessageSink> logger,
         bool captureStackTraces,
         IRunningStatisticsAccumulator statisticsAccumulator)
     {
         ExecutionTracker  = executionTracker;
         RetryDetector     = retryDetector;
         IdentityGenerator = identityGenerator;
-        Logger            = logger;
         CaptureStackTraces = captureStackTraces;
         StatisticsAccumulator = statisticsAccumulator;
     }

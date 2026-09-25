@@ -93,10 +93,42 @@ public sealed class XpingContextOrchestratorEnvVarTests
     }
 
     [Fact]
+    public async Task FinalizeSessionAsync_WithStrictModeViaEnvVar_AndUploadFailure_ThrowsXpingNetworkException()
+    {
+        // Through the real registration: XPING_STRICTMODE reaches the options, and the orchestrator
+        // judges the failed upload by them.
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
+        try
+        {
+            var uploaderMock = new Mock<IXpingUploader>();
+            var envDetectorMock = new Mock<IEnvironmentDetector>();
+            envDetectorMock
+                .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new EnvironmentInfo());
+            uploaderMock
+                .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Network timeout" });
+
+            using var store = new ScratchStore();
+            var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+                ServiceHelper.CloudConfiguration(store.Path, strictMode: false), uploaderMock, envDetectorMock);
+            var orchestrator = new TestOrchestrator(host);
+            orchestrator.RecordExecution(
+                new TestExecutionBuilder().WithTestName("EnvVarNetworkTest").WithOutcome(TestOutcome.Passed).Build());
+
+            await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
+
+            await orchestrator.DisposeAsync();
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
+        }
+    }
+
+    [Fact]
     public void AddXping_WithStrictModeViaEnvVar_SetsStrictModeOnOptions()
     {
-        // The orchestrator judges an upload failure by the resolved options alone, so the env var has
-        // to reach them. The strict-mode finalize tests take it from there.
         System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
         try
         {

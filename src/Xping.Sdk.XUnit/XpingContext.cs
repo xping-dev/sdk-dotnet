@@ -155,11 +155,16 @@ public class XpingContext : XpingContextOrchestrator
     /// releases the underlying host afterward.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is the only place the xUnit adapter can end a session. The runner never reaches a
     /// <c>Dispose</c> on <see cref="XpingTestFramework"/>: <c>TestFramework.Dispose()</c> is not virtual,
     /// and the runner disposes through <see cref="IDisposable"/>. A strict-mode network error must be
     /// acted on here: finalization is idempotent, and a second call reports the failure without
     /// throwing again.
+    /// </para>
+    /// <para>
+    /// Never throws, apart from what <paramref name="failFast"/> does: every error is reported here.
+    /// </para>
     /// </remarks>
     /// <param name="failFast">
     /// Terminates the process. <see cref="Environment.FailFast(string, Exception)"/> in production;
@@ -187,7 +192,15 @@ public class XpingContext : XpingContextOrchestrator
         }
         finally
         {
-            await ShutdownAsync().ConfigureAwait(false);
+            try
+            {
+                await ShutdownAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // The logger went down with the host, so stderr is all that is left.
+                await Console.Error.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
+            }
         }
     }
 
@@ -254,7 +267,6 @@ public class XpingContext : XpingContextOrchestrator
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
             identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
-            logger: Services.GetRequiredService<ILogger<XpingMessageSink>>(),
             captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services),
             statisticsAccumulator: Services.GetRequiredService<IRunningStatisticsAccumulator>());
     }

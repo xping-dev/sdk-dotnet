@@ -4,7 +4,6 @@
  */
 
 using System.Reflection;
-using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
@@ -26,7 +25,6 @@ internal sealed class XpingTestFrameworkExecutor(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    ILogger<XpingMessageSink> logger,
     bool captureStackTraces,
     IRunningStatisticsAccumulator statisticsAccumulator,
     TestCaseCensus census) : XunitTestFrameworkExecutor(
@@ -61,7 +59,6 @@ internal sealed class XpingTestFrameworkExecutor(
             executionTracker,
             retryDetector,
             identityGenerator,
-            logger,
             captureStackTraces,
             _assemblyName);
 

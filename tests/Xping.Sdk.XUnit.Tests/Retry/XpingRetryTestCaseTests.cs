@@ -5,7 +5,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models.Executions;
@@ -229,7 +228,6 @@ public sealed class XpingRetryTestCaseTests : IAsyncLifetime
             tracker,
             new XUnitRetryDetector(),
             identity,
-            NullLogger<XpingMessageSink>.Instance,
             captureStackTraces: true,
             assemblyName: "Xping.Sdk.XUnit.Tests");
 

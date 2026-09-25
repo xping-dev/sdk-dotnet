@@ -4,7 +4,6 @@
  */
 
 using System.Reflection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit.Abstractions;
 using Xping.Sdk.Core.Models.Executions;
@@ -54,7 +53,6 @@ public sealed class XpingMessageSinkAssemblyNameTests
             executionTracker.Object,
             retryDetector.Object,
             identityGenerator.Object,
-            NullLogger<XpingMessageSink>.Instance,
             captureStackTraces: true,
             assemblyName: simpleAssemblyName);
 

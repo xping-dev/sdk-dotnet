@@ -4,7 +4,6 @@
  */
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit.Abstractions;
 using Xping.Sdk.Core.Extensions;
@@ -129,7 +128,6 @@ public sealed class XpingMessageSinkConcurrencyTests : IAsyncLifetime
             tracker,
             new Mock<IRetryDetector<ITest>>().Object,
             identityGenerator.Object,
-            NullLogger<XpingMessageSink>.Instance,
             captureStackTraces: true,
             assemblyName: "SampleApp.XUnit");
 
