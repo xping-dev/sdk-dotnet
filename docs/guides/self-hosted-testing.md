@@ -304,7 +304,7 @@ Rename `appsettings.test.json` to `appsettings.json` in test projects, or use en
 
 **Causes**:
 - Multiple `XpingContext.Initialize()` calls
-- Missing `FlushAsync()` or `DisposeAsync()` causing retries
+- Missing `FinalizeAndShutdownAsync()` in teardown causing retries
 
 **Solution**:
 

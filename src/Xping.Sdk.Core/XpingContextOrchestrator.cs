@@ -523,6 +523,69 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
+    /// Ends a session: finalizes it, fails the process fast on a strict-mode network error, and always
+    /// shuts down afterward. Each adapter's <c>FinalizeAndShutdownAsync</c> passes its own static
+    /// <c>FinalizeAsync</c> and <c>ShutdownAsync</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A strict-mode network error has to be acted on here. No framework fails the run on an exception
+    /// from its end-of-run hook: xUnit reports one from a message sink, NUnit one from
+    /// <c>[OneTimeTearDown]</c>, and <c>dotnet test</c> still exits zero. Finalization is idempotent too,
+    /// so a second call reports the failure without throwing again.
+    /// </para>
+    /// <para>
+    /// Never throws, apart from what <paramref name="failFast"/> does: every error is reported here.
+    /// </para>
+    /// </remarks>
+    /// <param name="finalize">Finalizes the session.</param>
+    /// <param name="shutdown">Releases the host. Runs whatever <paramref name="finalize"/> did.</param>
+    /// <param name="failFast">
+    /// Terminates the process on a strict-mode network error.
+    /// <see cref="Environment.FailFast(string, Exception)"/> in production; replaced in tests, which
+    /// cannot survive the real one.
+    /// </param>
+    /// <param name="logger">Reports any other finalize error, while the host is still alive.</param>
+    /// <param name="shutdownErrors">Reports a shutdown error, once the logger has gone with the host.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    protected internal static async Task EndSessionAsync(
+        Func<Task> finalize,
+        Func<Task> shutdown,
+        Action<string, Exception> failFast,
+        ILogger? logger,
+        TextWriter shutdownErrors)
+    {
+        finalize = finalize.RequireNotNull();
+        shutdown = shutdown.RequireNotNull();
+        failFast = failFast.RequireNotNull();
+        shutdownErrors = shutdownErrors.RequireNotNull();
+
+        try
+        {
+            await finalize().ConfigureAwait(false);
+        }
+        catch (XpingNetworkException ex)
+        {
+            failFast($"[Xping] {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error finalizing Xping session");
+        }
+        finally
+        {
+            try
+            {
+                await shutdown().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await shutdownErrors.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
     /// Returns diagnostic statistics from the collector, such as the number of buffered and uploaded executions.
     /// </summary>
     /// <returns>A <see cref="CollectorStats"/> snapshot of current collector metrics.</returns>

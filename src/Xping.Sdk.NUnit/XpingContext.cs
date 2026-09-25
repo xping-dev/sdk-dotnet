@@ -150,6 +150,34 @@ public class XpingContext : XpingContextOrchestrator
     }
 
     /// <summary>
+    /// Finalizes the Xping session and shuts down the context. Call it from the
+    /// <c>[OneTimeTearDown]</c> of a <c>[SetUpFixture]</c> in your test assembly's root namespace:
+    /// uploads buffered executions, fails the process fast on a strict-mode network error, and always
+    /// releases the underlying host afterward.
+    /// </summary>
+    /// <remarks>
+    /// NUnit reports an exception from <c>[OneTimeTearDown]</c> as a teardown failure and still lets
+    /// <c>dotnet test</c> exit zero, so a strict-mode network error terminates the process instead.
+    /// Every other error is logged, and this method never throws.
+    /// </remarks>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public static Task FinalizeAndShutdownAsync() => FinalizeAndShutdownAsync(Environment.FailFast);
+
+    /// <summary>
+    /// <see cref="FinalizeAndShutdownAsync()"/> with the process termination replaced, so tests can
+    /// reach the strict-mode path and survive it.
+    /// </summary>
+    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    {
+        // Captured up front: the logger lives in the host that shutting down disposes.
+        ILogger? logger = _instance is { IsValueCreated: true } instance ? instance.Value._logger : null;
+
+        return EndSessionAsync(FinalizeAsync, () => ShutdownAsync().AsTask(), failFast, logger, Console.Error);
+    }
+
+    /// <summary>
     /// Disposes the singleton context instance, releasing the flush lock, timer, and host,
     /// then resets the context so <see cref="Initialize()"/> can be called again.
     /// Finalization is idempotent, so this is safe to call even when

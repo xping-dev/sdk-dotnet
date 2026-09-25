@@ -34,10 +34,7 @@ public class XpingTestSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        // Flush any pending test executions to Xping Cloud
-        await XpingContext.FlushAsync().ConfigureAwait(true);
-
-        // Dispose of Xping resources
-        await XpingContext.ShutdownAsync().ConfigureAwait(true);
+        // Upload any pending test executions to Xping Cloud and release Xping resources
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
     }
 }

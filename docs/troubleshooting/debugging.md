@@ -571,7 +571,7 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task GlobalTeardown()
     {
-        await XpingContext.FlushAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 

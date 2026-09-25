@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -157,29 +156,24 @@ public class XpingContext : XpingContextOrchestrator
     /// <c>[AssemblyCleanup]</c> hook needs: uploads buffered executions, fails the process fast on a
     /// strict-mode network error, and always releases the underlying host afterward.
     /// </summary>
+    /// <remarks>
+    /// Every error other than a strict-mode network error is logged, and this method never throws.
+    /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static async Task FinalizeAndShutdownAsync()
+    public static Task FinalizeAndShutdownAsync() => FinalizeAndShutdownAsync(Environment.FailFast);
+
+    /// <summary>
+    /// <see cref="FinalizeAndShutdownAsync()"/> with the process termination replaced, so tests can
+    /// reach the strict-mode path and survive it.
+    /// </summary>
+    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
     {
-        try
-        {
-            try
-            {
-                await FinalizeAsync().ConfigureAwait(false);
-            }
-            catch (XpingNetworkException ex)
-            {
-                // FailFast aborts the process immediately, which is the correct behavior for strict mode
-                // where observability must be guaranteed. Re-throwing here may not cause the CI pipeline
-                // to fail with a non-zero exit code.
-                Environment.FailFast($"[Xping] {ex.Message}", ex);
-            }
-        }
-        finally
-        {
-            // Runs even if FinalizeAsync throws something other than XpingNetworkException, so the
-            // "always releases the underlying host" guarantee above actually holds.
-            await ShutdownAsync().ConfigureAwait(false);
-        }
+        // Captured up front: the logger lives in the host that shutting down disposes.
+        ILogger? logger = _instance is { IsValueCreated: true } instance ? instance.Value._logger : null;
+
+        return EndSessionAsync(FinalizeAsync, () => ShutdownAsync().AsTask(), failFast, logger, Console.Error);
     }
 
     /// <summary>
@@ -224,14 +218,7 @@ public class XpingContext : XpingContextOrchestrator
             "runs `dotnet test` to give it time.",
             context.SessionId);
 
-        try
-        {
-            FinalizeAndShutdownAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            context._logger.LogError(ex, "[Xping] Error finalizing Xping session during process-exit safety net");
-        }
+        FinalizeAndShutdownAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>

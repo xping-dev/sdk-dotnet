@@ -7,13 +7,13 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xping.Sdk.Core.Exceptions;
 
-namespace Xping.Sdk.XUnit.Tests;
+namespace Xping.Sdk.Core.Tests.Orchestration;
 
 /// <summary>
-/// Tests for <see cref="XpingContext.EndSessionAsync"/>: every way ending the session can go, without the
+/// Tests for <see cref="XpingContextOrchestrator.EndSessionAsync"/>: every way ending the session can go, without the
 /// static context.
 /// </summary>
-public sealed class XpingContextEndSessionTests : IDisposable
+public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
 {
     private readonly List<Exception> _failFastCalls = [];
     private readonly Mock<ILogger> _logger = new();
@@ -67,7 +67,7 @@ public sealed class XpingContextEndSessionTests : IDisposable
     [Fact]
     public async Task FinalizeThrowsOtherError_WithoutLogger_StillShutsDown()
     {
-        await XpingContext.EndSessionAsync(
+        await XpingContextOrchestrator.EndSessionAsync(
             () => Task.FromException(new InvalidOperationException("finalize broke")),
             Shutdown,
             FailFast,
@@ -81,7 +81,7 @@ public sealed class XpingContextEndSessionTests : IDisposable
     [Fact]
     public async Task ShutdownThrows_WritesItToShutdownErrorsWithoutThrowing()
     {
-        var exception = await Record.ExceptionAsync(() => XpingContext.EndSessionAsync(
+        var exception = await Record.ExceptionAsync(() => XpingContextOrchestrator.EndSessionAsync(
             () => Task.CompletedTask,
             () => Task.FromException(new ObjectDisposedException("host")),
             FailFast,
@@ -94,7 +94,7 @@ public sealed class XpingContextEndSessionTests : IDisposable
     }
 
     private Task EndSessionAsync(Func<Task> finalize) =>
-        XpingContext.EndSessionAsync(finalize, Shutdown, FailFast, _logger.Object, _shutdownErrors);
+        XpingContextOrchestrator.EndSessionAsync(finalize, Shutdown, FailFast, _logger.Object, _shutdownErrors);
 
     private Task Shutdown()
     {
