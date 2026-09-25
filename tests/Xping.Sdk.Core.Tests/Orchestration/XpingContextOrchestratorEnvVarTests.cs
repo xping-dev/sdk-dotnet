@@ -3,9 +3,13 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Moq;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
@@ -91,7 +95,8 @@ public sealed class XpingContextOrchestratorEnvVarTests
     [Fact]
     public async Task FinalizeSessionAsync_WithStrictModeViaEnvVar_AndUploadFailure_ThrowsXpingNetworkException()
     {
-        // Arrange — set XPING_STRICTMODE env var; valid config but upload always fails
+        // Through the real registration: XPING_STRICTMODE reaches the options, and the orchestrator
+        // judges the failed upload by them.
         System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
         try
         {
@@ -104,15 +109,34 @@ public sealed class XpingContextOrchestratorEnvVarTests
                 .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new UploadResult { Success = false, ErrorMessage = "Network timeout" });
 
-            var host = ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock);
+            using var store = new ScratchStore();
+            var host = ServiceHelper.BuildRegisteredOrchestratorHost(
+                ServiceHelper.CloudConfiguration(store.Path, strictMode: false), uploaderMock, envDetectorMock);
             var orchestrator = new TestOrchestrator(host);
             orchestrator.RecordExecution(
                 new TestExecutionBuilder().WithTestName("EnvVarNetworkTest").WithOutcome(TestOutcome.Passed).Build());
 
-            // Act & Assert
             await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
 
             await orchestrator.DisposeAsync();
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
+        }
+    }
+
+    [Fact]
+    public void AddXping_WithStrictModeViaEnvVar_SetsStrictModeOnOptions()
+    {
+        System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", "true");
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddXping(new XpingConfiguration { ApiKey = "test-key", ProjectId = "test-project" });
+            using ServiceProvider provider = services.BuildServiceProvider();
+
+            Assert.True(provider.GetRequiredService<IOptions<XpingConfiguration>>().Value.StrictMode);
         }
         finally
         {

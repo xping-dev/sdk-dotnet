@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -149,6 +150,81 @@ public class XpingContext : XpingContextOrchestrator
     }
 
     /// <summary>
+    /// Finalizes the session and shuts down the context. Called once, when the test assembly finishes:
+    /// uploads buffered executions, fails the process fast on a strict-mode network error, and always
+    /// releases the underlying host afterward.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the only place the xUnit adapter can end a session. The runner never reaches a
+    /// <c>Dispose</c> on <see cref="XpingTestFramework"/>: <c>TestFramework.Dispose()</c> is not virtual,
+    /// and the runner disposes through <see cref="IDisposable"/>. A strict-mode network error must be
+    /// acted on here: finalization is idempotent, and a second call reports the failure without
+    /// throwing again.
+    /// </para>
+    /// <para>
+    /// Never throws, apart from what <paramref name="failFast"/> does: every error is reported here.
+    /// </para>
+    /// </remarks>
+    /// <param name="failFast">
+    /// Terminates the process. <see cref="Environment.FailFast(string, Exception)"/> in production;
+    /// replaced in tests, which cannot survive the real one.
+    /// </param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    {
+        // Captured up front: the logger lives in the host that shutting down disposes.
+        ILogger? logger = _instance is { IsValueCreated: true } instance ? instance.Value._logger : null;
+
+        return EndSessionAsync(FinalizeAsync, () => ShutdownAsync().AsTask(), failFast, logger, Console.Error);
+    }
+
+    /// <summary>
+    /// The error handling of <see cref="FinalizeAndShutdownAsync"/>, apart from the static context, so
+    /// that every path through it can be driven.
+    /// </summary>
+    /// <param name="finalize">Finalizes the session.</param>
+    /// <param name="shutdown">Releases the host. Runs whatever <paramref name="finalize"/> did.</param>
+    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
+    /// <param name="logger">Reports any other finalize error, while the host is still alive.</param>
+    /// <param name="shutdownErrors">Reports a shutdown error, once the logger has gone with the host.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static async Task EndSessionAsync(
+        Func<Task> finalize,
+        Func<Task> shutdown,
+        Action<string, Exception> failFast,
+        ILogger? logger,
+        TextWriter shutdownErrors)
+    {
+        try
+        {
+            await finalize().ConfigureAwait(false);
+        }
+        catch (XpingNetworkException ex)
+        {
+            // xUnit catches and reports exceptions from message sinks without failing the run, so a
+            // re-throw would leave the exit code at zero. FailFast aborts the process with a non-zero
+            // exit code, which is the correct behavior for strict mode.
+            failFast($"[Xping] {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error finalizing Xping session on assembly finished");
+        }
+        finally
+        {
+            try
+            {
+                await shutdown().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await shutdownErrors.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
     /// Disposes the singleton context instance, releasing the flush lock, timer, and host,
     /// then resets the context so <see cref="Initialize()"/> can be called again.
     /// Finalization is idempotent, so this is safe to call even when
@@ -211,7 +287,6 @@ public class XpingContext : XpingContextOrchestrator
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
             identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
-            logger: Services.GetRequiredService<ILogger<XpingMessageSink>>(),
             captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services),
             statisticsAccumulator: Services.GetRequiredService<IRunningStatisticsAccumulator>());
     }

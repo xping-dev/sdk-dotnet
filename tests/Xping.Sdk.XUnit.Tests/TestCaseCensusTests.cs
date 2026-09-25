@@ -4,7 +4,6 @@
  */
 
 using System.Reflection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
@@ -155,7 +154,6 @@ public sealed class TestCaseCensusTests
             Mock.Of<IExecutionTracker>(),
             Mock.Of<IRetryDetector<ITest>>(),
             Mock.Of<ITestIdentityGenerator>(),
-            NullLogger<XpingMessageSink>.Instance,
             captureStackTraces: false,
             accumulator,
             census);

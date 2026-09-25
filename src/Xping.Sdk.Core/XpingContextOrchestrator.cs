@@ -89,6 +89,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     // finalize-time diagnostic below needs it and IOptions is not read again after startup.
     private bool _hasProjectPin;
 
+    // Set as soon as the options resolve, so every later failure - in the constructor or at finalize -
+    // is judged by the same answer. False only while no options have been read.
+    private bool _strictMode;
+
     private PullRequestContext? _pullRequestContext;
     private EnvironmentInfo? _lastEnvironmentInfo;
     private QuickStatistics? _finalizedStatistics;
@@ -162,15 +166,21 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         try
         {
-            // Resolving IXpingUploader triggers HttpClient creation, which in turn accesses
-            // IOptions<XpingConfiguration>.Value and runs the registered Validate delegate.
-            // An OptionsValidationException here means the caller supplied invalid configuration.
+            // Read first, so a failure further down still knows whether strict mode was asked for.
+            // Reading the value runs the registered Validate delegate: an OptionsValidationException
+            // here means the caller supplied invalid configuration.
+            XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+            // The options carry strict mode set in code and XPING_STRICTMODE. They carry Xping:StrictMode
+            // only when they were bound from IConfiguration, not when the caller handed over an
+            // instance, so the raw sources are consulted as well.
+            _strictMode = configuration.StrictMode || IsStrictModeEnabled(services);
+
             _collector = services.GetRequiredService<ITestExecutionCollector>();
             _uploader = services.GetRequiredService<IXpingUploader>();
             _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
             _prDetector = services.GetRequiredService<IPullRequestContextDetector>();
             _statisticsAccumulator = services.GetRequiredService<IRunningStatisticsAccumulator>();
-            XpingConfiguration configuration = services.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
             _mode = configuration.ResolveMode();
             _isHealthy = _mode != XpingMode.Disabled;
@@ -245,6 +255,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         {
             string message = $"Xping configuration invalid: {string.Join(", ", ex.Failures)}";
 
+            // Validation fails on the very first read, before _strictMode could be set.
             if (IsStrictModeEnabled(services))
             {
                 throw new XpingConfigurationException(message, ex);
@@ -263,7 +274,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            if (IsStrictModeEnabled(services))
+            // _strictMode already has the answer when the options resolved; the raw sources cover a
+            // failure while resolving them.
+            if (_strictMode || IsStrictModeEnabled(services))
             {
                 string message = $"Failed to initialize Xping SDK: {ex.Message}";
                 throw new XpingConfigurationException(message, ex);
@@ -286,8 +299,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// Returns <see langword="true"/> when strict mode is enabled via either the <c>XPING_STRICTMODE</c>
     /// environment variable or the <c>Xping:StrictMode</c> configuration key
     /// (e.g. from appsettings.json or the <c>Xping__StrictMode</c> environment variable).
-    /// This is checked at initialization time when configuration validation has already failed
-    /// and <c>IOptions&lt;XpingConfiguration&gt;</c> cannot be used directly.
+    /// Read directly rather than from <c>IOptions&lt;XpingConfiguration&gt;</c>, which is unavailable when
+    /// validation fails and does not bind <c>Xping:StrictMode</c> for a configuration supplied as an
+    /// instance.
     /// </summary>
     private static bool IsStrictModeEnabled(IServiceProvider services)
     {
@@ -447,7 +461,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (storedExecutions != null)
             PrintRetryFlakeHint(storedExecutions);
 
-        if (!uploadResult.Success && IsStrictModeEnabled(Services))
+        if (!uploadResult.Success && _strictMode)
         {
             string errorDetail = string.IsNullOrEmpty(uploadResult.ErrorMessage)
                 ? "Upload failed with no additional details"

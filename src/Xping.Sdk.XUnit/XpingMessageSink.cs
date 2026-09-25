@@ -7,7 +7,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
-using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -31,7 +30,6 @@ public sealed class XpingMessageSink(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    ILogger<XpingMessageSink> logger,
     bool captureStackTraces,
     string assemblyName) : IMessageSink
 {
@@ -39,7 +37,6 @@ public sealed class XpingMessageSink(
     private readonly IExecutionTracker _executionTracker = executionTracker.RequireNotNull();
     private readonly IRetryDetector<ITest> _retryDetector = retryDetector.RequireNotNull();
     private readonly ITestIdentityGenerator _identityGenerator = identityGenerator.RequireNotNull();
-    private readonly ILogger<XpingMessageSink> _logger = logger.RequireNotNull();
     private readonly string _assemblyName = assemblyName.RequireNotNull();
 
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new();
@@ -80,7 +77,8 @@ public sealed class XpingMessageSink(
                 break;
 
             case ITestAssemblyFinished _:
-                // When assembly finishes, flush all recorded test data
+                // Handled before it is forwarded. Once the runner sees the assembly finish it wraps up
+                // the run, and under `dotnet test` the test host exits with the session half written.
                 HandleTestAssemblyFinished();
                 break;
         }
@@ -197,21 +195,13 @@ public sealed class XpingMessageSink(
             collectionName: data.CollectionName);
     }
 
-    private void HandleTestAssemblyFinished()
+    private static void HandleTestAssemblyFinished()
     {
-        // Finalize the session when the assembly finishes. FinalizeAsync includes an
-        // internal flush and is idempotent, so it is safe to call here even if
-        // XpingTestFramework.Dispose later calls DisposeAsync (which also finalizes).
-        // This path is the primary safeguard for VSTest adapter runs, where Dispose
-        // is not reliably called on custom frameworks.
-        try
-        {
-            XpingContext.FinalizeAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error finalizing Xping session on assembly finished");
-        }
+        // The assembly finishing is the end of the session: nothing reaches the framework's Dispose
+        // (see XpingContext.FinalizeAndShutdownAsync), which also does its own error reporting.
+        // Task.Run keeps the async work off the runner's message thread, so no continuation can
+        // deadlock trying to resume on it.
+        Task.Run(() => XpingContext.FinalizeAndShutdownAsync(Environment.FailFast)).GetAwaiter().GetResult();
     }
 
     /// <summary>

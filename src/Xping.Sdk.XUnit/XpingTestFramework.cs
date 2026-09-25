@@ -12,7 +12,8 @@ namespace Xping.Sdk.XUnit;
 
 /// <summary>
 /// Custom xUnit test framework that integrates Xping SDK for automatic test tracking.
-/// Initialize the SDK when the framework is created and cleanup when disposed.
+/// Initializes the SDK when the framework is created. The session ends when the test assembly finishes,
+/// in <see cref="XpingMessageSink"/>: the runner never calls a <c>Dispose</c> declared here.
 /// </summary>
 public sealed class XpingTestFramework : XunitTestFramework
 {
@@ -79,43 +80,8 @@ public sealed class XpingTestFramework : XunitTestFramework
             _services.ExecutionTracker,
             _services.RetryDetector,
             _services.IdentityGenerator,
-            _services.Logger,
             _services.CaptureStackTraces,
             _services.StatisticsAccumulator,
             _census);
-    }
-
-    /// <summary>
-    /// Disposes the test framework and flushes pending test executions.
-    /// </summary>
-    /// <remarks>
-    /// The <c>new</c> modifier is intentional: <c>TestFramework.Dispose()</c> is not virtual and
-    /// the xUnit base class exposes no <c>Dispose(bool)</c> hook, so method hiding is the only
-    /// way to inject disposal logic. In practice xUnit always constructs this type directly, so
-    /// the correct implementation is always called.
-    /// </remarks>
-    public new void Dispose()
-    {
-        try
-        {
-            // Task.Run offloads the async work to a thread-pool thread that has no
-            // synchronization context, which prevents the deadlock that would occur if
-            // any continuation inside ShutdownAsync tried to resume on a single-threaded
-            // context (e.g., the xUnit runner's message-loop thread).
-            Task.Run(async () => await XpingContext
-                    .ShutdownAsync()
-                    .ConfigureAwait(false))
-                .GetAwaiter()
-                .GetResult();
-        }
-        catch (XpingNetworkException ex)
-        {
-            // xUnit runners may catch exceptions thrown from Dispose and suppress them, so the
-            // test run would succeed even when upload failed. FailFast aborts the process
-            // immediately with a non-zero exit code, which is the correct behavior for strict mode.
-            Environment.FailFast($"[Xping] {ex.Message}", ex);
-        }
-
-        base.Dispose();
     }
 }

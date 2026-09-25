@@ -208,9 +208,8 @@ internal static class ServiceHelper
     }
 
     /// <summary>
-    /// Builds an <see cref="IHost"/> with valid configuration, strict mode enabled via
-    /// <c>Xping:StrictMode</c> in <see cref="IConfiguration"/>, and a pre-configured mock uploader.
-    /// Use this to test network-error behavior in strict mode.
+    /// Builds an <see cref="IHost"/> with valid configuration, strict mode enabled in the options, and a
+    /// pre-configured mock uploader. Use this to test network-error behavior in strict mode.
     /// </summary>
     public static IHost BuildOrchestratorHostWithStrictMode(
         Mock<IXpingUploader> uploaderMock,
@@ -218,11 +217,6 @@ internal static class ServiceHelper
         Action<XpingConfiguration>? configure = null)
     {
         return new HostBuilder()
-            .ConfigureAppConfiguration((_, configBuilder) =>
-            {
-                var inMemory = new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" };
-                configBuilder.AddInMemoryCollection(inMemory);
-            })
             .ConfigureServices(services =>
             {
                 services.Configure<XpingConfiguration>(o =>
@@ -232,6 +226,7 @@ internal static class ServiceHelper
                     o.BatchSize = 100;
                     o.Enabled = true;
                     o.FlushInterval = TimeSpan.Zero;
+                    o.StrictMode = true;
                     configure?.Invoke(o);
                 });
                 services.AddXpingCollectors();
@@ -243,4 +238,52 @@ internal static class ServiceHelper
             })
             .Build();
     }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> through the real <c>AddXping(XpingConfiguration)</c> registration,
+    /// with the uploader and environment detector replaced by mocks. Unlike the hand-wired helpers above,
+    /// the options here are exactly what a suite calling <c>XpingContext.Initialize(config)</c> gets,
+    /// <c>XPING_*</c> overrides included.
+    /// </summary>
+    /// <param name="configuration">The instance handed to <c>AddXping</c>.</param>
+    /// <param name="uploaderMock">Replaces the registered uploader.</param>
+    /// <param name="envDetectorMock">Replaces the registered environment detector.</param>
+    /// <param name="appConfiguration">Keys added to the host's <see cref="IConfiguration"/>.</param>
+    /// <param name="configureServices">Further replacements, applied last.</param>
+    public static IHost BuildRegisteredOrchestratorHost(
+        XpingConfiguration configuration,
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock,
+        IDictionary<string, string?>? appConfiguration = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        return new HostBuilder()
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                if (appConfiguration != null)
+                    configBuilder.AddInMemoryCollection(appConfiguration);
+            })
+            .ConfigureServices(services =>
+            {
+                services.AddXping(configuration);
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+                configureServices?.Invoke(services);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// A valid Cloud configuration for <see cref="BuildRegisteredOrchestratorHost"/>, with local history
+    /// kept in <paramref name="storePath"/>. The real registration rejects a zero flush interval, so the
+    /// background flush is pushed out of any test's reach instead.
+    /// </summary>
+    public static XpingConfiguration CloudConfiguration(string storePath, bool strictMode) => new()
+    {
+        ApiKey = "test-key",
+        ProjectId = "test-project",
+        FlushInterval = TimeSpan.FromHours(1),
+        StrictMode = strictMode,
+        LocalStorePath = storePath,
+    };
 }

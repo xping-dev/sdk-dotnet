@@ -3,9 +3,15 @@
  * License: [MIT]
  */
 
+using Moq;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.Retry;
+using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit.Tests;
 
@@ -227,11 +233,101 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------
+    // FinalizeAndShutdownAsync
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsFast()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+        var calls = new List<Exception>();
+
+        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex));
+
+        Assert.IsType<XpingNetworkException>(Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_StillShutsDown()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+
+        await XpingContext.FinalizeAndShutdownAsync((_, _) => { });
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailFast()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
+        XpingContext.RecordTest(CreateTestExecution());
+        var calls = new List<Exception>();
+
+        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex));
+
+        Assert.Empty(calls);
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = await Record.ExceptionAsync(
+            () => XpingContext.FinalizeAndShutdownAsync((_, ex) => throw ex));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void AssemblyFinished_EndsSessionBeforeRunnerIsTold()
+    {
+        // Once the runner sees the assembly finish it wraps up the run, and under `dotnet test` the
+        // test host exits with the session half written. The session has to be over by then.
+        XpingContext.Initialize(ScratchConfiguration());
+        XpingContext.GetExecutorServices(); // builds the host, as the framework constructor does
+
+        bool? initializedWhenForwarded = null;
+        var innerSink = new Mock<IMessageSink>();
+        innerSink
+            .Setup(s => s.OnMessage(It.IsAny<ITestAssemblyFinished>()))
+            .Callback(() => initializedWhenForwarded = XpingContext.IsInitialized)
+            .Returns(true);
+
+        IMessageSink sink = new XpingMessageSink(
+            innerSink.Object,
+            Mock.Of<IExecutionTracker>(),
+            Mock.Of<IRetryDetector<ITest>>(),
+            Mock.Of<ITestIdentityGenerator>(),
+            captureStackTraces: false,
+            assemblyName: "Xping.Sdk.XUnit.Tests");
+
+        sink.OnMessage(Mock.Of<ITestAssemblyFinished>());
+
+        Assert.False(initializedWhenForwarded);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
     private XpingConfiguration ScratchConfiguration() =>
         new() { LocalStorePath = _scratchStore };
+
+    // Port 9 (discard) is closed on loopback, so the upload is refused immediately.
+    private XpingConfiguration UnreachableCloudConfiguration(bool strictMode) => new()
+    {
+        Mode = XpingMode.Cloud,
+        ApiKey = "test-key",
+        ProjectId = "test-project",
+        ApiEndpoint = "http://127.0.0.1:9/v1",
+        MaxRetries = 1,
+        RetryDelay = TimeSpan.FromMilliseconds(1),
+        StrictMode = strictMode,
+        LocalStorePath = _scratchStore,
+    };
 
     private void DeleteScratchStore()
     {
