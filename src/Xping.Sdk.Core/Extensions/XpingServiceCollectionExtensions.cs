@@ -508,9 +508,11 @@ public static class XpingServiceCollectionExtensions
             // Configure base settings
             client.BaseAddress = new Uri(config.ApiEndpoint);
 
-            // UploadTimeout is enforced per attempt by the resilience pipeline below. HttpClient's
-            // own timeout would wrap the whole retry sequence and cancel retries that are still due.
-            client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+            // Caps the whole upload: every attempt, the retry backoff, and reading the response body,
+            // which happens after the resilience pipeline returns. The final upload runs as the test
+            // run ends and the test host can be killed shortly after, so a failing upload must give up
+            // in bounded time. Each attempt is capped separately at UploadTimeout by the pipeline below.
+            client.Timeout = config.TotalUploadTimeout;
 
             // Configure headers
             client.DefaultRequestHeaders.Accept.Add(
@@ -534,13 +536,6 @@ public static class XpingServiceCollectionExtensions
         {
             var config = context.ServiceProvider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-            // Outermost strategy: caps the whole upload, retries and backoff included, at twice the
-            // per-attempt timeout. The final upload runs as the test run ends, and the test host can
-            // be killed shortly after, so a failing upload must give up in bounded time. Clamped to
-            // Polly's 1-day maximum.
-            var totalTimeout = TimeSpan.FromTicks(Math.Min(config.UploadTimeout.Ticks * 2, TimeSpan.TicksPerDay));
-            builder.AddTimeout(totalTimeout);
-
             // Retry strategy with exponential backoff. MaxRetries = 0 means no retries, and Polly
             // rejects MaxRetryAttempts below 1, so the strategy is left out rather than configured.
             if (config.MaxRetries > 0)
@@ -560,6 +555,9 @@ public static class XpingServiceCollectionExtensions
                         })
                         .Handle<HttpRequestException>()
                         .Handle<TimeoutRejectedException>()
+                        // Handler-level cancellations such as a connect timeout. Polly never retries
+                        // once the caller's token or HttpClient.Timeout has fired.
+                        .Handle<TaskCanceledException>()
                 });
             }
 

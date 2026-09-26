@@ -318,7 +318,7 @@ export XPING_BATCHSIZE="200"
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Greater than zero, up to `1.00:00:00` (1 day)  
+**Valid Range:** Must be greater than zero  
 **Environment Variable:** `XPING_FLUSHINTERVAL`
 
 Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
@@ -370,7 +370,7 @@ XpingContext.Initialize(config);
 **Valid Range:** `00:00:01` (1 second) to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_UPLOADTIMEOUT`
 
-Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`, and each retry gets a fresh `UploadTimeout`. The whole upload, retries included, gives up after `2 × UploadTimeout` (60 seconds by default), so a failing upload can't hold up the end of a test run.
+Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`. The whole upload, retries included, gives up after `2 × UploadTimeout` (60 seconds by default), so a failing upload can't hold up the end of a test run. Each retry is cut short if that cap is reached first, and later retries are skipped.
 
 **When to adjust:**
 - **Increase** for slow network connections or large batches
@@ -446,7 +446,7 @@ Base delay for exponential backoff between retry attempts. The delay roughly dou
 
 With `RetryDelay = 2s` and `MaxRetries = 3`, the retries come after delays of roughly 2s, 4s and 8s.
 
-Each attempt, including every retry, gets its own `UploadTimeout`. The whole upload, retries and delays included, is capped at `2 × UploadTimeout`, so retries still due after that are skipped.
+Each attempt is capped at `UploadTimeout`, and the whole upload, retries and delays included, at `2 × UploadTimeout`. Retries still due after that cap are skipped, so a long `RetryDelay` can leave fewer retries than `MaxRetries`.
 
 **Example:**
 

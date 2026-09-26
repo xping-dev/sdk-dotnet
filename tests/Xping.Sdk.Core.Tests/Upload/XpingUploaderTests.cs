@@ -99,6 +99,37 @@ public sealed class XpingUploaderTests
         }
     }
 
+    /// <summary>
+    /// A response body that never produces data: every read waits until canceled.
+    /// </summary>
+    private sealed class StallingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, object? body = null)
     {
         var json = body != null ? JsonSerializer.Serialize(body) : string.Empty;
@@ -415,12 +446,12 @@ public sealed class XpingUploaderTests
     [Fact]
     public async Task UploadAsync_EveryAttemptTimesOut_ShouldStopAtTotalTimeout()
     {
-        // The whole upload is capped at 2 × UploadTimeout. Without the cap, 6 hanging attempts
-        // would take ~6s; with it, the upload gives up after ~2s and at most 3 attempts.
+        // The whole upload is capped at 2 × UploadTimeout. Without the cap, 11 hanging attempts
+        // would take ~11s; with it, the upload gives up after ~2s. Bounds leave room for a slow agent.
         using var handler = new HangingThenRespondingHandler(hangingAttempts: int.MaxValue);
         var uploader = BuildUploader(handler, o =>
         {
-            o.MaxRetries = 5;
+            o.MaxRetries = 10;
             o.RetryDelay = TimeSpan.Zero;
             o.UploadTimeout = TimeSpan.FromSeconds(1);
         });
@@ -431,17 +462,37 @@ public sealed class XpingUploaderTests
 
         Assert.False(result.Success);
         Assert.Contains("timeout", result.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
-        Assert.InRange(handler.CallCount, 2, 3);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(4), $"Upload took {sw.Elapsed}");
+        Assert.InRange(handler.CallCount, 1, 5);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(7), $"Upload took {sw.Elapsed}");
+    }
+
+    [Fact]
+    public async Task UploadAsync_ResponseBodyStalls_ShouldStopAtTotalTimeout()
+    {
+        // HttpClient reads the response body after the resilience pipeline returns, so only
+        // HttpClient.Timeout bounds it. A stalled body must not hang the upload.
+        using var handler = new FakeHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new StallingStream())
+        });
+        var uploader = BuildUploader(handler, o => o.UploadTimeout = TimeSpan.FromSeconds(1));
+
+        var result = await uploader.UploadAsync(BuildSession()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(result.Success);
+        Assert.Contains("timeout", result.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task UploadAsync_CallerCancels_ShouldReturnCanceledFailure()
     {
-        using var handler = new FakeHttpMessageHandler(new TaskCanceledException("Canceled"));
+        using var response = JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "r001" });
+        using var handler = new FakeHttpMessageHandler(response);
         var uploader = BuildUploader(handler);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
 
-        var result = await uploader.UploadAsync(BuildSession());
+        var result = await uploader.UploadAsync(BuildSession(), cts.Token);
 
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);

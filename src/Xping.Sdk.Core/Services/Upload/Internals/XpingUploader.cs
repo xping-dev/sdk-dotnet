@@ -115,6 +115,19 @@ internal sealed class XpingUploader(
                 ErrorMessage = $"Request timeout: {ex.Message}",
             };
         }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout fired: the whole upload ran past TotalUploadTimeout.
+            logger.LogError(
+                ex, message: "Upload timed out after {TimeoutSeconds}s",
+                _configuration.TotalUploadTimeout.TotalSeconds);
+
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Request timeout: upload did not complete within {_configuration.TotalUploadTimeout.TotalSeconds}s",
+            };
+        }
         catch (OperationCanceledException ex)
         {
             logger.LogError(ex, message: "Upload canceled");

@@ -142,6 +142,11 @@ public sealed class XpingConfiguration
     public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// Cap on a whole upload, retries and backoff included: twice <see cref="UploadTimeout"/>.
+    /// </summary>
+    internal TimeSpan TotalUploadTimeout => TimeSpan.FromTicks(UploadTimeout.Ticks * 2);
+
+    /// <summary>
     /// Gets or sets a value indicating whether to detect pull request context from CI/CD environment variables
     /// and include it in session uploads to enable PR comment posting.
     /// </summary>
