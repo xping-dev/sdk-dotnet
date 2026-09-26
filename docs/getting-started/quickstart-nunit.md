@@ -174,7 +174,7 @@ Create a setup fixture to initialize and dispose of the Xping context. This ensu
 
 ```csharp
 using NUnit.Framework;
-using Xping.Sdk.Core;
+using Xping.Sdk.NUnit;
 
 namespace MyTestProject;
 
@@ -191,18 +191,19 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        // Finalize the session (flushes and uploads what is left), then release resources
-        await XpingContext.FinalizeAsync().ConfigureAwait(false);
-        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        // Upload what is left, close the session, then release resources
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
 
 > **Important:** Place this file at the root of your test namespace to ensure it runs once per test assembly.
 
-`FinalizeAsync` closes the session and delivers everything still buffered; `ShutdownAsync` disposes
-the host. Both are required — skipping `FinalizeAsync` loses the last batch. (`FlushAsync` also
-exists, but it flushes mid-session and does not close the run; you rarely need it.)
+`FinalizeAndShutdownAsync` closes the session, delivers everything still buffered, and disposes the
+host. Without it the last batch is lost. In [strict mode](../configuration/configuration-reference.md#strictmode),
+a failed upload terminates the test process so the run fails: NUnit reports an exception from
+`[OneTimeTearDown]` as a teardown failure but still exits with code 0. (`FlushAsync` also exists, but
+it flushes mid-session and does not close the run; you rarely need it.)
 
 ---
 

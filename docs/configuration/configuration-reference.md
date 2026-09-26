@@ -285,7 +285,7 @@ Number of test executions to accumulate before automatically uploading to Xping.
 **Upload triggers:**
 1. When `BatchSize` test executions are collected (e.g., 100 tests)
 2. When `FlushInterval` timer fires (e.g., every 30 seconds)
-3. **When test session completes** (via `FlushAsync()` or `DisposeAsync()`)
+3. **When test session completes** (via `FinalizeAndShutdownAsync()`; automatic under xUnit)
 
 This means even small test suites (e.g., 10 tests) will upload immediately when the test session ends, regardless of batch size.
 
@@ -323,7 +323,7 @@ export XPING_BATCHSIZE="200"
 
 Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
 
-**Important:** At the end of your test session, `FlushAsync()` or `DisposeAsync()` will upload any remaining tests immediately, regardless of this interval.
+**Important:** At the end of your test session, `FinalizeAndShutdownAsync()` will upload any remaining tests immediately, regardless of this interval.
 
 **Format:**
 - JSON: `"HH:MM:SS"` format (e.g., `"00:01:00"` for 1 minute)
@@ -766,6 +766,8 @@ Controls how the SDK responds to errors that prevent proper test observability.
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
 
 > **Note:** The distinction between core behavior (throwing `XpingConfigurationException` or `XpingNetworkException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure failed observability causes a visible CI failure.
+
+> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there: it is what turns the error into `Environment.FailFast`. Neither framework fails the run on an exception from those hooks, so calling `FinalizeAsync()` yourself lets `dotnet test` exit with code 0.
 
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure

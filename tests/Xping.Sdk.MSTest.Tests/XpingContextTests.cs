@@ -4,6 +4,7 @@
  */
 
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 
@@ -190,9 +191,66 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.Null(exception);
     }
 
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsFast()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+        var calls = new List<Exception>();
+
+        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
+
+        Assert.IsType<XpingNetworkException>(Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_StillShutsDown()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+
+        await XpingContext.FinalizeAndShutdownAsync((_, _) => { }).ConfigureAwait(true);
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailFast()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
+        XpingContext.RecordTest(CreateTestExecution());
+        var calls = new List<Exception>();
+
+        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
+
+        Assert.Empty(calls);
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotFailFast()
+    {
+        var exception = await Record.ExceptionAsync(
+            () => XpingContext.FinalizeAndShutdownAsync((_, ex) => throw ex)).ConfigureAwait(true);
+
+        Assert.Null(exception);
+    }
 
     private XpingConfiguration ScratchConfiguration() =>
         new() { LocalStorePath = _scratchStore };
+
+    // Port 9 (discard) is closed on loopback, so the upload is refused immediately.
+    private XpingConfiguration UnreachableCloudConfiguration(bool strictMode) => new()
+    {
+        Mode = XpingMode.Cloud,
+        ApiKey = "test-key",
+        ProjectId = "test-project",
+        ApiEndpoint = "http://127.0.0.1:9/v1",
+        MaxRetries = 1,
+        RetryDelay = TimeSpan.FromMilliseconds(1),
+        StrictMode = strictMode,
+        LocalStorePath = _scratchStore,
+    };
 
     private void DeleteScratchStore()
     {

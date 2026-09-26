@@ -43,8 +43,7 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```

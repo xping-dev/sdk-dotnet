@@ -175,7 +175,7 @@ Create an assembly initialization class to initialize and dispose of the Xping c
 
 ```csharp
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core;
+using Xping.Sdk.MSTest;
 
 namespace MyTestProject;
 
@@ -192,19 +192,19 @@ public static class XpingSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        // Finalize the session (flushes and uploads what is left), then release resources
-        await XpingContext.FinalizeAsync().ConfigureAwait(false);
-        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        // Upload what is left, close the session, then release resources
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
 
 > **Important:** Place this class in your test project. MSTest will automatically discover and execute these methods once per test assembly.
 
-`FinalizeAsync` closes the session and delivers everything still buffered; `ShutdownAsync` disposes
-the host. Both are required — skipping `FinalizeAsync` loses the last batch. `FinalizeAndShutdownAsync()`
-does the pair in one call if you prefer. (`FlushAsync` also exists, but it flushes mid-session and
-does not close the run; you rarely need it.)
+`FinalizeAndShutdownAsync` closes the session, delivers everything still buffered, and disposes the
+host. Without it the last batch is lost. In [strict mode](../configuration/configuration-reference.md#strictmode),
+a failed upload terminates the test process so the run fails: MSTest reports an exception from
+`[AssemblyCleanup]` but still exits with code 0. (`FlushAsync` also exists, but it flushes mid-session
+and does not close the run; you rarely need it.)
 
 ---
 

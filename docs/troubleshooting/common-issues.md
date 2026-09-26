@@ -133,8 +133,7 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task Teardown()
     {
-        await XpingContext.FlushAsync();     // Flush remaining tests
-        await XpingContext.DisposeAsync();   // Cleanup resources
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
@@ -151,8 +150,7 @@ public static class XpingSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync();     // Flush remaining tests
-        await XpingContext.DisposeAsync();   // Cleanup resources
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
@@ -507,10 +505,10 @@ public async Task MyTest()
 
 ✅ **Good:**
 ```csharp
-[OneTimeTearDown]  // Flush once after all tests
+[OneTimeTearDown]  // Upload once, after all tests
 public async Task Cleanup()
 {
-    await XpingContext.FlushAsync();
+    await XpingContext.FinalizeAndShutdownAsync();
 }
 ```
 
@@ -742,8 +740,7 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task Cleanup()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```
@@ -762,8 +759,7 @@ public static class XpingSetup
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
-        await XpingContext.FlushAsync();
-        await XpingContext.DisposeAsync();
+        await XpingContext.FinalizeAndShutdownAsync();
     }
 }
 ```

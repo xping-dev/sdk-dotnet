@@ -24,7 +24,6 @@ public class XpingSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        await XpingContext.FinalizeAsync().ConfigureAwait(false);
-        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(false);
     }
 }
