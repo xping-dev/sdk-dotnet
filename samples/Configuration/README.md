@@ -131,6 +131,6 @@ creating one project per test project. Set it to pin every assembly in the run t
 
 ### Timeout Configuration
 
-- **UploadTimeout** (TimeSpan): Timeout for upload operations
+- **UploadTimeout** (TimeSpan): Timeout for a single upload attempt
   - Default: `00:00:30` (30 seconds)
-  - Valid range: greater than zero, up to `1.00:00:00` (1 day)
+  - Valid range: `00:00:01` (1 second) to `1.00:00:00` (1 day)

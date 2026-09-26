@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
+using Polly.Timeout;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Display;
@@ -506,7 +507,10 @@ public static class XpingServiceCollectionExtensions
 
             // Configure base settings
             client.BaseAddress = new Uri(config.ApiEndpoint);
-            client.Timeout = config.UploadTimeout;
+
+            // UploadTimeout is enforced per attempt by the resilience pipeline below. HttpClient's
+            // own timeout would wrap the whole retry sequence and cancel retries that are still due.
+            client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
 
             // Configure headers
             client.DefaultRequestHeaders.Accept.Add(
@@ -548,7 +552,7 @@ public static class XpingServiceCollectionExtensions
                             return statusCode >= 500 || statusCode == 429;
                         })
                         .Handle<HttpRequestException>()
-                        .Handle<TaskCanceledException>()
+                        .Handle<TimeoutRejectedException>()
                 });
             }
 
@@ -561,7 +565,11 @@ public static class XpingServiceCollectionExtensions
                 ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
                     .HandleResult(response => (int)response.StatusCode >= 500)
                     .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
             });
+
+            // Innermost strategy, so each attempt gets its own UploadTimeout.
+            builder.AddTimeout(config.UploadTimeout);
         });
 
         return services;

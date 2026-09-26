@@ -79,6 +79,26 @@ public sealed class XpingUploaderTests
         return services.BuildServiceProvider().GetRequiredService<IXpingUploader>();
     }
 
+    /// <summary>
+    /// Hangs (until canceled) on the first <c>hangingAttempts</c> calls, then returns 200.
+    /// </summary>
+    private sealed class HangingThenRespondingHandler(int hangingAttempts) : HttpMessageHandler
+    {
+        private int _callCount;
+
+        public int CallCount => _callCount;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _callCount) <= hangingAttempts)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+
+            return JsonResponse(HttpStatusCode.OK, new { totalRecords = 1, receiptId = "r001" });
+        }
+    }
+
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, object? body = null)
     {
         var json = body != null ? JsonSerializer.Serialize(body) : string.Empty;
@@ -361,16 +381,48 @@ public sealed class XpingUploaderTests
     }
 
     [Fact]
-    public async Task UploadAsync_TaskCanceledException_ShouldReturnFailureResult()
+    public async Task UploadAsync_AttemptExceedsUploadTimeout_ShouldReturnTimeoutFailure()
     {
-        using var handler = new FakeHttpMessageHandler(new TaskCanceledException("Timeout"));
-        var uploader = BuildUploader(handler);
+        using var handler = new HangingThenRespondingHandler(hangingAttempts: int.MaxValue);
+        var uploader = BuildUploader(handler, o => o.UploadTimeout = TimeSpan.FromSeconds(1));
 
         var result = await uploader.UploadAsync(BuildSession());
 
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
         Assert.Contains("timeout", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UploadAsync_FirstAttemptTimesOut_ShouldRetryWithFreshTimeout()
+    {
+        // UploadTimeout applies per attempt. If it capped the whole retry sequence (as
+        // HttpClient.Timeout did), the retry would be canceled along with the first attempt.
+        using var handler = new HangingThenRespondingHandler(hangingAttempts: 1);
+        var uploader = BuildUploader(handler, o =>
+        {
+            o.MaxRetries = 1;
+            o.RetryDelay = TimeSpan.Zero;
+            o.UploadTimeout = TimeSpan.FromSeconds(1);
+        });
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_CallerCancels_ShouldReturnCanceledFailure()
+    {
+        using var handler = new FakeHttpMessageHandler(new TaskCanceledException("Canceled"));
+        var uploader = BuildUploader(handler);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("canceled", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

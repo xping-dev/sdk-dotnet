@@ -50,7 +50,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
 | `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
 | `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
-| `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
+| `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
@@ -367,10 +367,10 @@ XpingContext.Initialize(config);
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Greater than zero, up to `1.00:00:00` (1 day)  
+**Valid Range:** `00:00:01` (1 second) to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_UPLOADTIMEOUT`
 
-HTTP request timeout for upload operations. If uploads don't complete within this time, they're retried according to `MaxRetries` and `RetryDelay`.
+Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`, and each retry gets a fresh `UploadTimeout`.
 
 **When to adjust:**
 - **Increase** for slow network connections or large batches
@@ -1018,8 +1018,8 @@ Xping SDK validates configuration on initialization and provides clear error mes
 | `BatchSize` | Must be between 1 and 1000 |
 | `FlushInterval` | Must be greater than zero |
 | `MaxRetries` | Must be between 0 and 10 |
-| `RetryDelay` | Cannot be negative |
-| `UploadTimeout` | Must be greater than zero |
+| `RetryDelay` | Between 0 and 1 day |
+| `UploadTimeout` | Between 1 second and 1 day |
 
 ### Handling Validation Errors
 

@@ -136,7 +136,8 @@ public sealed class XpingConfiguration
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Gets or sets the timeout for upload operations. Cannot exceed 1 day.
+    /// Gets or sets the timeout for a single upload attempt. Each retry gets its own timeout.
+    /// Must be between 1 second and 1 day.
     /// </summary>
     public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -315,9 +316,9 @@ public sealed class XpingConfiguration
             errors.Add("RetryDelay cannot exceed 1 day.");
         }
 
-        if (UploadTimeout <= TimeSpan.Zero)
+        if (UploadTimeout < MinUploadTimeout)
         {
-            errors.Add("UploadTimeout must be greater than zero.");
+            errors.Add("UploadTimeout must be at least 1 second.");
         }
 
         if (UploadTimeout > DurationLimit)
@@ -337,9 +338,10 @@ public sealed class XpingConfiguration
         return Validate().Count == 0;
     }
 
-    // Upper bound for RetryDelay and UploadTimeout. Validation must reject what the upload pipeline
-    // would throw on: Polly caps a retry delay at 1 day, and HttpClient.Timeout caps at ~24.8 days.
+    // Bounds for RetryDelay and UploadTimeout. Validation must reject what the upload pipeline would
+    // throw on: Polly caps a retry delay and a timeout at 1 day, and a timeout below 10ms.
     private static readonly TimeSpan DurationLimit = TimeSpan.FromDays(1);
+    private static readonly TimeSpan MinUploadTimeout = TimeSpan.FromSeconds(1);
 
     private static bool IsDefinedMode(XpingMode mode) =>
         mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;

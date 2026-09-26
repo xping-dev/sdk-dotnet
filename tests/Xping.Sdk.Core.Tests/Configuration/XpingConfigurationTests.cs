@@ -415,21 +415,21 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenUploadTimeoutIsZeroOrNegative()
+    public void ValidateShouldReturnErrorsWhenUploadTimeoutIsBelowMinimum()
     {
         // Arrange
         var config = new XpingConfiguration
         {
             ApiKey = "test-key",
             ProjectId = "test-project",
-            UploadTimeout = TimeSpan.Zero
+            UploadTimeout = TimeSpan.FromMilliseconds(500)
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("UploadTimeout must be greater than zero.", errors);
+        Assert.Contains("UploadTimeout must be at least 1 second.", errors);
     }
 
     [Theory]
