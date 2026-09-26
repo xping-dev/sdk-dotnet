@@ -175,7 +175,7 @@ Create an assembly initialization class to initialize and dispose of the Xping c
 
 ```csharp
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Xping.Sdk.Core;
+using Xping.Sdk.MSTest;
 
 namespace MyTestProject;
 

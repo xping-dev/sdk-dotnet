@@ -552,6 +552,7 @@ Create a minimal test project that reproduces the issue:
 ```csharp
 using NUnit.Framework;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.NUnit;
 
 [SetUpFixture]
 public class XpingSetup

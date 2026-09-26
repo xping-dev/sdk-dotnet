@@ -38,7 +38,13 @@ public class XpingTestSetup
         // strict-mode network error. xUnit tests in this project share the static context and install
         // strict-mode contexts aimed at an unreachable endpoint, and this teardown can run while one of
         // them is live (see docs/known-limitations.md). Here that would crash the test host.
-        await XpingContext.FinalizeAsync().ConfigureAwait(true);
-        await XpingContext.ShutdownAsync().ConfigureAwait(true);
+        try
+        {
+            await XpingContext.FinalizeAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            await XpingContext.ShutdownAsync().ConfigureAwait(true);
+        }
     }
 }
