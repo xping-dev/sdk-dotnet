@@ -50,7 +50,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
 | `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
 | `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
-| `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | HTTP request timeout |
+| `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
@@ -318,7 +318,7 @@ export XPING_BATCHSIZE="200"
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Must be greater than zero  
+**Valid Range:** Greater than zero, up to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_FLUSHINTERVAL`
 
 Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
@@ -367,10 +367,10 @@ XpingContext.Initialize(config);
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Must be greater than zero  
+**Valid Range:** `00:00:01` (1 second) to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_UPLOADTIMEOUT`
 
-HTTP request timeout for upload operations. If uploads don't complete within this time, they're retried according to `MaxRetries` and `RetryDelay`.
+Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`, and each retry gets a fresh `UploadTimeout`. The whole upload, retries included, gives up after `2 × UploadTimeout` (60 seconds by default), so a failing upload can't hold up the end of a test run.
 
 **When to adjust:**
 - **Increase** for slow network connections or large batches
@@ -439,21 +439,14 @@ export XPING_MAXRETRIES="5"
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:02` (2 seconds)  
-**Valid Range:** Cannot be negative  
+**Valid Range:** `00:00:00` to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_RETRYDELAY`
 
-Base delay between retry attempts. Actual delay uses exponential backoff:
-- 1st retry: `RetryDelay`
-- 2nd retry: `RetryDelay * 2`
-- 3rd retry: `RetryDelay * 4`
-- And so on...
+Base delay for exponential backoff between retry attempts. The delay roughly doubles with each retry, and jitter randomizes every delay so parallel runs don't retry in lockstep. Don't rely on exact retry times.
 
-**Example:**
-With `RetryDelay = 2s` and `MaxRetries = 3`:
-- Initial attempt: fails at t=0s
-- 1st retry: after 2s (at t=2s)
-- 2nd retry: after 4s more (at t=6s)
-- 3rd retry: after 8s more (at t=14s)
+With `RetryDelay = 2s` and `MaxRetries = 3`, the retries come after delays of roughly 2s, 4s and 8s.
+
+Each attempt, including every retry, gets its own `UploadTimeout`. The whole upload, retries and delays included, is capped at `2 × UploadTimeout`, so retries still due after that are skipped.
 
 **Example:**
 
@@ -1018,8 +1011,8 @@ Xping SDK validates configuration on initialization and provides clear error mes
 | `BatchSize` | Must be between 1 and 1000 |
 | `FlushInterval` | Must be greater than zero |
 | `MaxRetries` | Must be between 0 and 10 |
-| `RetryDelay` | Cannot be negative |
-| `UploadTimeout` | Must be greater than zero |
+| `RetryDelay` | Between 0 and 1 day |
+| `UploadTimeout` | Between 1 second and 1 day |
 
 ### Handling Validation Errors
 
