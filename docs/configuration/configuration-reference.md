@@ -370,7 +370,7 @@ XpingContext.Initialize(config);
 **Valid Range:** `00:00:01` (1 second) to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_UPLOADTIMEOUT`
 
-Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`, and each retry gets a fresh `UploadTimeout`.
+Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`, and each retry gets a fresh `UploadTimeout`. The whole upload, retries included, gives up after `2 × UploadTimeout` (60 seconds by default), so a failing upload can't hold up the end of a test run.
 
 **When to adjust:**
 - **Increase** for slow network connections or large batches
@@ -446,7 +446,7 @@ Base delay for exponential backoff between retry attempts. The delay roughly dou
 
 With `RetryDelay = 2s` and `MaxRetries = 3`, the retries come after delays of roughly 2s, 4s and 8s.
 
-Each attempt, including every retry, gets its own `UploadTimeout`. The longest a failing upload can take is about `(MaxRetries + 1) × UploadTimeout` plus the backoff delays.
+Each attempt, including every retry, gets its own `UploadTimeout`. The whole upload, retries and delays included, is capped at `2 × UploadTimeout`, so retries still due after that are skipped.
 
 **Example:**
 

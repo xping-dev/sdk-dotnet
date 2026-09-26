@@ -534,6 +534,13 @@ public static class XpingServiceCollectionExtensions
         {
             var config = context.ServiceProvider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
+            // Outermost strategy: caps the whole upload, retries and backoff included, at twice the
+            // per-attempt timeout. The final upload runs as the test run ends, and the test host can
+            // be killed shortly after, so a failing upload must give up in bounded time. Clamped to
+            // Polly's 1-day maximum.
+            var totalTimeout = TimeSpan.FromTicks(Math.Min(config.UploadTimeout.Ticks * 2, TimeSpan.TicksPerDay));
+            builder.AddTimeout(totalTimeout);
+
             // Retry strategy with exponential backoff. MaxRetries = 0 means no retries, and Polly
             // rejects MaxRetryAttempts below 1, so the strategy is left out rather than configured.
             if (config.MaxRetries > 0)

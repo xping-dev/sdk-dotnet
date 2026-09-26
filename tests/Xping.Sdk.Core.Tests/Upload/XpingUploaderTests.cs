@@ -413,6 +413,29 @@ public sealed class XpingUploaderTests
     }
 
     [Fact]
+    public async Task UploadAsync_EveryAttemptTimesOut_ShouldStopAtTotalTimeout()
+    {
+        // The whole upload is capped at 2 × UploadTimeout. Without the cap, 6 hanging attempts
+        // would take ~6s; with it, the upload gives up after ~2s and at most 3 attempts.
+        using var handler = new HangingThenRespondingHandler(hangingAttempts: int.MaxValue);
+        var uploader = BuildUploader(handler, o =>
+        {
+            o.MaxRetries = 5;
+            o.RetryDelay = TimeSpan.Zero;
+            o.UploadTimeout = TimeSpan.FromSeconds(1);
+        });
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await uploader.UploadAsync(BuildSession());
+        sw.Stop();
+
+        Assert.False(result.Success);
+        Assert.Contains("timeout", result.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.InRange(handler.CallCount, 2, 3);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(4), $"Upload took {sw.Elapsed}");
+    }
+
+    [Fact]
     public async Task UploadAsync_CallerCancels_ShouldReturnCanceledFailure()
     {
         using var handler = new FakeHttpMessageHandler(new TaskCanceledException("Canceled"));
