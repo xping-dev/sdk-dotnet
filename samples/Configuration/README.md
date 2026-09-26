@@ -127,8 +127,10 @@ creating one project per test project. Set it to pin every assembly in the run t
   
 - **RetryDelay** (TimeSpan): Delay between retry attempts
   - Default: `00:00:02` (2 seconds)
+  - Valid range: `00:00:00` to `1.00:00:00` (1 day)
 
 ### Timeout Configuration
 
 - **UploadTimeout** (TimeSpan): Timeout for upload operations
   - Default: `00:00:30` (30 seconds)
+  - Valid range: greater than zero, up to `1.00:00:00` (1 day)

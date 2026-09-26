@@ -318,7 +318,7 @@ export XPING_BATCHSIZE="200"
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Must be greater than zero  
+**Valid Range:** Greater than zero, up to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_FLUSHINTERVAL`
 
 Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
@@ -367,7 +367,7 @@ XpingContext.Initialize(config);
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Must be greater than zero  
+**Valid Range:** Greater than zero, up to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_UPLOADTIMEOUT`
 
 HTTP request timeout for upload operations. If uploads don't complete within this time, they're retried according to `MaxRetries` and `RetryDelay`.
@@ -439,7 +439,7 @@ export XPING_MAXRETRIES="5"
 
 **Type:** `TimeSpan`  
 **Default:** `00:00:02` (2 seconds)  
-**Valid Range:** Cannot be negative  
+**Valid Range:** `00:00:00` to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_RETRYDELAY`
 
 Base delay between retry attempts. Actual delay uses exponential backoff:

@@ -53,7 +53,7 @@ public sealed class XpingUploaderTests
 
     /// <summary>
     /// Builds a real IXpingUploader via DI, injecting a custom primary handler.
-    /// MaxRetries = 1 is the minimum valid value accepted by Polly.
+    /// MaxRetries = 0 keeps retryable failures from waiting out the retry backoff.
     /// </summary>
     private static IXpingUploader BuildUploader(
         HttpMessageHandler fakeHandler,
@@ -64,7 +64,7 @@ public sealed class XpingUploaderTests
         {
             o.ApiKey = "test-key";
             o.ProjectId = "test-project";
-            o.MaxRetries = 1;
+            o.MaxRetries = 0;
             configure?.Invoke(o);
         });
         services.AddXpingSerialization();
@@ -288,6 +288,46 @@ public sealed class XpingUploaderTests
 
         Assert.False(result.Success);
         Assert.Contains("500", result.ErrorMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UploadAsync_MaxRetriesZero_ShouldMakeExactlyOneAttempt()
+    {
+        // MaxRetries = 0 must build a working pipeline (Polly rejects MaxRetryAttempts = 0)
+        // and must not retry a retryable status.
+        int callCount = 0;
+        using var handler = new FakeHttpMessageHandler(() =>
+        {
+            callCount++;
+            return JsonResponse(HttpStatusCode.ServiceUnavailable);
+        });
+        var uploader = BuildUploader(handler, o => o.MaxRetries = 0);
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_MaxRetriesOne_ShouldRetryOnce()
+    {
+        int callCount = 0;
+        using var handler = new FakeHttpMessageHandler(() =>
+        {
+            callCount++;
+            return JsonResponse(HttpStatusCode.ServiceUnavailable);
+        });
+        var uploader = BuildUploader(handler, o =>
+        {
+            o.MaxRetries = 1;
+            o.RetryDelay = TimeSpan.Zero;
+        });
+
+        var result = await uploader.UploadAsync(BuildSession());
+
+        Assert.False(result.Success);
+        Assert.Equal(2, callCount);
     }
 
     [Fact]

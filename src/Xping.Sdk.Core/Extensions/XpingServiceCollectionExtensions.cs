@@ -530,23 +530,27 @@ public static class XpingServiceCollectionExtensions
         {
             var config = context.ServiceProvider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-            // Retry strategy with exponential backoff
-            builder.AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            // Retry strategy with exponential backoff. MaxRetries = 0 means no retries, and Polly
+            // rejects MaxRetryAttempts below 1, so the strategy is left out rather than configured.
+            if (config.MaxRetries > 0)
             {
-                MaxRetryAttempts = config.MaxRetries,
-                Delay = config.RetryDelay,
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true,
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .HandleResult(response =>
-                    {
-                        // Retry on 5xx errors and 429 (Too Many Requests)
-                        var statusCode = (int)response.StatusCode;
-                        return statusCode >= 500 || statusCode == 429;
-                    })
-                    .Handle<HttpRequestException>()
-                    .Handle<TaskCanceledException>()
-            });
+                builder.AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+                {
+                    MaxRetryAttempts = config.MaxRetries,
+                    Delay = config.RetryDelay,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                        .HandleResult(response =>
+                        {
+                            // Retry on 5xx errors and 429 (Too Many Requests)
+                            var statusCode = (int)response.StatusCode;
+                            return statusCode >= 500 || statusCode == 429;
+                        })
+                        .Handle<HttpRequestException>()
+                        .Handle<TaskCanceledException>()
+                });
+            }
 
             // Circuit breaker to prevent cascading failures
             builder.AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
