@@ -442,18 +442,11 @@ export XPING_MAXRETRIES="5"
 **Valid Range:** `00:00:00` to `1.00:00:00` (1 day)  
 **Environment Variable:** `XPING_RETRYDELAY`
 
-Base delay between retry attempts. Actual delay uses exponential backoff:
-- 1st retry: `RetryDelay`
-- 2nd retry: `RetryDelay * 2`
-- 3rd retry: `RetryDelay * 4`
-- And so on...
+Base delay for exponential backoff between retry attempts. The delay roughly doubles with each retry, and jitter randomizes every delay so parallel runs don't retry in lockstep. Don't rely on exact retry times.
 
-**Example:**
-With `RetryDelay = 2s` and `MaxRetries = 3`:
-- Initial attempt: fails at t=0s
-- 1st retry: after 2s (at t=2s)
-- 2nd retry: after 4s more (at t=6s)
-- 3rd retry: after 8s more (at t=14s)
+With `RetryDelay = 2s` and `MaxRetries = 3`, the retries come after delays of roughly 2s, 4s and 8s.
+
+Each attempt, including every retry, gets its own `UploadTimeout`. The longest a failing upload can take is about `(MaxRetries + 1) × UploadTimeout` plus the backoff delays.
 
 **Example:**
 
