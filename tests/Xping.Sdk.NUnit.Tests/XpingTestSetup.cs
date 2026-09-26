@@ -34,7 +34,11 @@ public class XpingTestSetup
     [OneTimeTearDown]
     public async Task AfterAllTests()
     {
-        // Upload any pending test executions to Xping Cloud and release Xping resources
-        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+        // Not FinalizeAndShutdownAsync(), which user fixtures should call: it fails the process fast on a
+        // strict-mode network error. xUnit tests in this project share the static context and install
+        // strict-mode contexts aimed at an unreachable endpoint, and this teardown can run while one of
+        // them is live (see docs/known-limitations.md). Here that would crash the test host.
+        await XpingContext.FinalizeAsync().ConfigureAwait(true);
+        await XpingContext.ShutdownAsync().ConfigureAwait(true);
     }
 }

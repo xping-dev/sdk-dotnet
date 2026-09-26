@@ -171,10 +171,11 @@ public class XpingContext : XpingContextOrchestrator
     /// <returns>A task representing the asynchronous operation.</returns>
     internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
     {
-        // Captured up front: the logger lives in the host that shutting down disposes.
-        ILogger? logger = _instance is { IsValueCreated: true } instance ? instance.Value._logger : null;
+        // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
+        // installs a new one in between.
+        Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
 
-        return EndSessionAsync(FinalizeAsync, () => ShutdownAsync().AsTask(), failFast, logger, Console.Error);
+        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null, failFast);
     }
 
     /// <summary>

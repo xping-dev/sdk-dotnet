@@ -525,7 +525,7 @@ Still stuck? Reach out through our support channels listed in the "Need Help?" s
 Now explore more features:
 
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
-- **[Configuration Reference](../configuration/configuration-reference.md#strictmode)** - Advanced configuration options
+- **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
 - **[Understanding Confidence Scores](../guides/getting-started/understanding-confidence-scores.md)** - Learn about test reliability scoring
 - **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
 - **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and workarounds

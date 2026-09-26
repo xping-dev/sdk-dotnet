@@ -10,8 +10,8 @@ using Xping.Sdk.Core.Exceptions;
 namespace Xping.Sdk.Core.Tests.Orchestration;
 
 /// <summary>
-/// Tests for <see cref="XpingContextOrchestrator.EndSessionAsync"/>: every way ending the session can go, without the
-/// static context.
+/// Tests for the error handling of <c>XpingContextOrchestrator.EndSessionAsync</c>: every way ending the
+/// session can go, without a live context.
 /// </summary>
 public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
 {

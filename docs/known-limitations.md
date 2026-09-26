@@ -603,7 +603,7 @@ Actual:   System.ArgumentNullException: Argument is null. (Parameter '_instance'
 
 The `Xping.Sdk.NUnit.Tests` project runs tests under **xUnit** as its primary runner, but also contains a NUnit `[SetUpFixture]` (`XpingTestSetup.cs`) for self-hosted telemetry. This creates two independent owners of the same static `XpingContext._instance` field operating concurrently:
 
-1. **NUnit `[SetUpFixture]` teardown** (`AfterAllTests`) calls `XpingContext.ShutdownAsync()`, which atomically sets `_instance = null` via `Interlocked.Exchange`.
+1. **NUnit `[SetUpFixture]` teardown** (`AfterAllTests`) calls `XpingContext.FinalizeAsync()` and then `XpingContext.ShutdownAsync()`, which atomically sets `_instance = null` via `Interlocked.Exchange`. It deliberately avoids `FinalizeAndShutdownAsync()`: the context it finalizes may be a strict-mode one an xUnit test installed, aimed at an unreachable endpoint, and the resulting `Environment.FailFast` would crash the test host.
 2. **xUnit `IAsyncLifetime`** (`InitializeAsync`/`DisposeAsync`) resets `_instance` around each test via `ShutdownAsync`, expecting exclusive ownership.
 
 The race window opens when:
