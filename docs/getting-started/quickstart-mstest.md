@@ -202,8 +202,8 @@ public static class XpingSetup
 
 `FinalizeAndShutdownAsync` closes the session, delivers everything still buffered, and disposes the
 host. Without it the last batch is lost. In [strict mode](../configuration/configuration-reference.md#strictmode),
-a failed upload terminates the test process so the run fails: MSTest reports an exception from
-`[AssemblyCleanup]` but still exits with code 0. (`FlushAsync` also exists, but it flushes mid-session
+a failed upload makes it throw, and MSTest fails the run, reporting the error on the last test
+result. (`FlushAsync` also exists, but it flushes mid-session
 and does not close the run; you rarely need it.)
 
 ---

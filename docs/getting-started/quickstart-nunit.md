@@ -202,7 +202,8 @@ public class XpingSetup
 `FinalizeAndShutdownAsync` closes the session, delivers everything still buffered, and disposes the
 host. Without it the last batch is lost. In [strict mode](../configuration/configuration-reference.md#strictmode),
 a failed upload terminates the test process so the run fails: NUnit reports an exception from
-`[OneTimeTearDown]` as a teardown failure but still exits with code 0. (`FlushAsync` also exists, but
+`[OneTimeTearDown]` as a warning and still exits with code 0. It waits about two seconds first, so
+every test result reaches `dotnet test` and its reports. (`FlushAsync` also exists, but
 it flushes mid-session and does not close the run; you rarely need it.)
 
 ---

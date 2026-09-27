@@ -754,13 +754,22 @@ XpingContext.Initialize(config);
 Controls how the SDK responds to errors that prevent proper test observability.
 
 - **`false` (default — resilient mode):** Configuration and network errors are logged and the SDK silently continues or is disabled. Tests always run without interruption.
-- **`true` (strict mode):** In the core SDK, any error that prevents test data from being collected or uploaded is surfaced by throwing `XpingConfigurationException` or `XpingNetworkException`. When you use the provided NUnit, xUnit, or MSTest adapters, these exceptions are treated as fatal and translated into `Environment.FailFast`, ensuring CI pipelines fail fast when observability cannot be guaranteed.
+- **`true` (strict mode):** In the core SDK, any error that prevents test data from being collected or uploaded is surfaced by throwing `XpingConfigurationException` or `XpingNetworkException`. The provided NUnit, xUnit, and MSTest adapters turn them into a failed run, so CI pipelines fail when observability cannot be guaranteed.
 
 Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
 
-> **Note:** The distinction between core behavior (throwing `XpingConfigurationException` or `XpingNetworkException`) and adapter behavior (`Environment.FailFast`) means that in most test runs you will observe process termination rather than a catchable exception. This is by design to ensure failed observability causes a visible CI failure.
+How the run fails:
 
-> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there: it is what turns the error into `Environment.FailFast`. Neither framework fails the run on an exception from those hooks, so calling `FinalizeAsync()` yourself lets `dotnet test` exit with code 0.
+| Error | Adapter | What you see |
+|---|---|---|
+| Configuration error, at startup | all | The test process terminates (`Environment.FailFast`) before any test runs. |
+| Upload error, at the end of the run | xUnit | An error from the runner (`Catastrophic failure: XpingNetworkException`). |
+| | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result. |
+| | NUnit | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
+
+In every case `dotnet test` exits non-zero, and TRX and other reports keep every test result.
+
+> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there: it is what fails the run. `FinalizeAsync()` does not, so calling it yourself lets `dotnet test` exit with code 0.
 
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure

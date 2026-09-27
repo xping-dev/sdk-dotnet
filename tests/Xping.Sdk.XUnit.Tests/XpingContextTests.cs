@@ -237,15 +237,14 @@ public sealed class XpingContextTests : IAsyncLifetime
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsFast()
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_ReturnsNetworkError()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex));
+        var runFailure = await XpingContext.FinalizeAndShutdownAsync();
 
-        Assert.IsType<XpingNetworkException>(Assert.Single(calls));
+        Assert.IsType<XpingNetworkException>(runFailure);
     }
 
     [Fact]
@@ -254,31 +253,29 @@ public sealed class XpingContextTests : IAsyncLifetime
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
 
-        await XpingContext.FinalizeAndShutdownAsync((_, _) => { });
+        await XpingContext.FinalizeAndShutdownAsync();
 
         Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailFast()
+    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_ReturnsNoError()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex));
+        var runFailure = await XpingContext.FinalizeAndShutdownAsync();
 
-        Assert.Empty(calls);
+        Assert.Null(runFailure);
         Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
+    public async Task FinalizeAndShutdownAsync_BeforeInitialize_ReturnsNoError()
     {
-        var exception = await Record.ExceptionAsync(
-            () => XpingContext.FinalizeAndShutdownAsync((_, ex) => throw ex));
+        var runFailure = await XpingContext.FinalizeAndShutdownAsync();
 
-        Assert.Null(exception);
+        Assert.Null(runFailure);
     }
 
     [Fact]
@@ -309,9 +306,61 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.False(initializedWhenForwarded);
     }
 
+    [Fact]
+    public void AssemblyFinished_StrictModeUploadFails_ReportsErrorBeforeAssemblyFinishes()
+    {
+        // The runner fails the run on an error message, and keeps every result it already has. The
+        // message has to arrive before the assembly finishes, or the runner has already wrapped up.
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+
+        var received = new List<IMessageSinkMessage>();
+        IMessageSink sink = CreateSink(received);
+
+        sink.OnMessage(Mock.Of<ITestAssemblyFinished>(m => m.TestCases == Array.Empty<ITestCase>()));
+
+        Assert.Collection(
+            received,
+            m => Assert.Equal(
+                typeof(XpingNetworkException).FullName,
+                Assert.IsAssignableFrom<IErrorMessage>(m).ExceptionTypes[0]),
+            m => Assert.IsAssignableFrom<ITestAssemblyFinished>(m));
+    }
+
+    [Fact]
+    public void AssemblyFinished_UploadFailsOutsideStrictMode_ReportsNoError()
+    {
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
+        XpingContext.RecordTest(CreateTestExecution());
+
+        var received = new List<IMessageSinkMessage>();
+        IMessageSink sink = CreateSink(received);
+
+        sink.OnMessage(Mock.Of<ITestAssemblyFinished>(m => m.TestCases == Array.Empty<ITestCase>()));
+
+        Assert.IsAssignableFrom<ITestAssemblyFinished>(Assert.Single(received));
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
+
+    private static XpingMessageSink CreateSink(List<IMessageSinkMessage> received)
+    {
+        var innerSink = new Mock<IMessageSink>();
+        innerSink
+            .Setup(s => s.OnMessage(It.IsAny<IMessageSinkMessage>()))
+            .Callback<IMessageSinkMessage>(received.Add)
+            .Returns(true);
+
+        return new XpingMessageSink(
+            innerSink.Object,
+            Mock.Of<IExecutionTracker>(),
+            Mock.Of<IRetryDetector<ITest>>(),
+            Mock.Of<ITestIdentityGenerator>(),
+            captureStackTraces: false,
+            assemblyName: "Xping.Sdk.XUnit.Tests");
+    }
 
     private XpingConfiguration ScratchConfiguration() =>
         new() { LocalStorePath = _scratchStore };

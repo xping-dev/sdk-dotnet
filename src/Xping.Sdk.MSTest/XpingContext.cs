@@ -3,12 +3,14 @@
  * License: [MIT]
  */
 
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -153,28 +155,37 @@ public class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Finalizes the Xping session and shuts down the context, matching the behavior MSTest's
-    /// <c>[AssemblyCleanup]</c> hook needs: uploads buffered executions, fails the process fast on a
-    /// strict-mode network error, and always releases the underlying host afterward.
+    /// <c>[AssemblyCleanup]</c> hook needs: uploads buffered executions, always releases the underlying
+    /// host, and then throws a strict-mode network error.
     /// </summary>
     /// <remarks>
-    /// Every error other than a strict-mode network error is logged, and this method never throws.
+    /// MSTest fails the run on an exception from <c>[AssemblyCleanup]</c>: it reports the exception on
+    /// the last test result, and <c>dotnet test</c> exits non-zero with every result intact. Every other
+    /// error is logged and not thrown.
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FinalizeAndShutdownAsync() => FinalizeAndShutdownAsync(Environment.FailFast);
+    /// <exception cref="XpingNetworkException">Strict mode is on and the upload failed.</exception>
+    public static async Task FinalizeAndShutdownAsync()
+    {
+        XpingNetworkException? runFailure = await FinalizeAndShutdownCoreAsync().ConfigureAwait(false);
+        if (runFailure is not null)
+            ExceptionDispatchInfo.Capture(runFailure).Throw();
+    }
 
     /// <summary>
-    /// <see cref="FinalizeAndShutdownAsync()"/> with the process termination replaced, so tests can
-    /// reach the strict-mode path and survive it.
+    /// <see cref="FinalizeAndShutdownAsync()"/> up to failing the run: returns the strict-mode network
+    /// error instead of throwing it, so each caller can fail the run its own way.
     /// </summary>
-    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    /// <returns>
+    /// The strict-mode network error the run must fail on, or <see langword="null"/> when there is none.
+    /// </returns>
+    internal static Task<XpingNetworkException?> FinalizeAndShutdownCoreAsync()
     {
         // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
         // installs a new one in between.
         Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
 
-        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null, failFast);
+        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null);
     }
 
     /// <summary>
@@ -219,16 +230,23 @@ public class XpingContext : XpingContextOrchestrator
             "runs `dotnet test` to give it time.",
             context.SessionId);
 
-        // FinalizeAndShutdownAsync reports its own errors, but an exception out of a ProcessExit handler
-        // crashes the host with a stack dump - including one from reporting an error at this late stage.
+        // FinalizeAndShutdownCoreAsync reports its own errors, but an exception out of a ProcessExit
+        // handler crashes the host with a stack dump - including one from reporting an error at this late
+        // stage.
+        XpingNetworkException? runFailure = null;
         try
         {
-            FinalizeAndShutdownAsync().GetAwaiter().GetResult();
+            runFailure = FinalizeAndShutdownCoreAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[Xping] Error finalizing Xping session during process-exit safety net: {ex}");
         }
+
+        // The run is over, so no framework is left to fail it through: a strict-mode network error
+        // terminates the process.
+        if (runFailure is not null)
+            Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
     }
 
     /// <summary>

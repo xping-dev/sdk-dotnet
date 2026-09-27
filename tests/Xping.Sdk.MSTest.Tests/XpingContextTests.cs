@@ -192,48 +192,35 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsFast()
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_ThrowsNetworkError()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
-
-        Assert.IsType<XpingNetworkException>(Assert.Single(calls));
+        await Assert.ThrowsAsync<XpingNetworkException>(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_StillShutsDown()
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_ShutsDownBeforeThrowing()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
 
-        await XpingContext.FinalizeAndShutdownAsync((_, _) => { }).ConfigureAwait(true);
+        await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
 
         Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailFast()
+    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotThrow()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
-
-        Assert.Empty(calls);
-        Assert.False(XpingContext.IsInitialized);
-    }
-
-    [Fact]
-    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotFailFast()
-    {
-        var exception = await Record.ExceptionAsync(
-            () => XpingContext.FinalizeAndShutdownAsync((_, ex) => throw ex)).ConfigureAwait(true);
+        var exception = await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
 
         Assert.Null(exception);
+        Assert.False(XpingContext.IsInitialized);
     }
 
     private XpingConfiguration ScratchConfiguration() =>

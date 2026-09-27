@@ -15,7 +15,6 @@ namespace Xping.Sdk.Core.Tests.Orchestration;
 /// </summary>
 public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
 {
-    private readonly List<Exception> _failFastCalls = [];
     private readonly Mock<ILogger> _logger = new();
     private readonly StringWriter _shutdownErrors = new();
     private int _shutdownCalls;
@@ -25,22 +24,22 @@ public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
     [Fact]
     public async Task FinalizeSucceeds_ShutsDownWithoutReportingAnything()
     {
-        await EndSessionAsync(finalize: () => Task.CompletedTask);
+        var runFailure = await EndSessionAsync(finalize: () => Task.CompletedTask);
 
+        Assert.Null(runFailure);
         Assert.Equal(1, _shutdownCalls);
-        Assert.Empty(_failFastCalls);
         _logger.VerifyNoOtherCalls();
         Assert.Empty(_shutdownErrors.ToString());
     }
 
     [Fact]
-    public async Task FinalizeThrowsNetworkError_FailsFastThenShutsDown()
+    public async Task FinalizeThrowsNetworkError_ShutsDownThenReturnsIt()
     {
         var error = new XpingNetworkException("upload refused");
 
-        await EndSessionAsync(finalize: () => Task.FromException(error));
+        var runFailure = await EndSessionAsync(finalize: () => Task.FromException(error));
 
-        Assert.Same(error, Assert.Single(_failFastCalls));
+        Assert.Same(error, runFailure);
         Assert.Equal(1, _shutdownCalls);
         _logger.VerifyNoOtherCalls();
     }
@@ -50,7 +49,7 @@ public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
     {
         var error = new InvalidOperationException("finalize broke");
 
-        await EndSessionAsync(finalize: () => Task.FromException(error));
+        var runFailure = await EndSessionAsync(finalize: () => Task.FromException(error));
 
         _logger.Verify(
             l => l.Log(
@@ -60,22 +59,21 @@ public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
                 error,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
-        Assert.Empty(_failFastCalls);
+        Assert.Null(runFailure);
         Assert.Equal(1, _shutdownCalls);
     }
 
     [Fact]
     public async Task FinalizeThrowsOtherError_WithoutLogger_StillShutsDown()
     {
-        await XpingContextOrchestrator.EndSessionAsync(
+        var runFailure = await XpingContextOrchestrator.EndSessionAsync(
             () => Task.FromException(new InvalidOperationException("finalize broke")),
             Shutdown,
-            FailFast,
             logger: null,
             _shutdownErrors);
 
         Assert.Equal(1, _shutdownCalls);
-        Assert.Empty(_failFastCalls);
+        Assert.Null(runFailure);
     }
 
     [Fact]
@@ -84,7 +82,6 @@ public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
         var exception = await Record.ExceptionAsync(() => XpingContextOrchestrator.EndSessionAsync(
             () => Task.CompletedTask,
             () => Task.FromException(new ObjectDisposedException("host")),
-            FailFast,
             _logger.Object,
             _shutdownErrors));
 
@@ -93,14 +90,12 @@ public sealed class XpingContextOrchestratorEndSessionTests : IDisposable
         Assert.Contains(nameof(ObjectDisposedException), _shutdownErrors.ToString(), StringComparison.Ordinal);
     }
 
-    private Task EndSessionAsync(Func<Task> finalize) =>
-        XpingContextOrchestrator.EndSessionAsync(finalize, Shutdown, FailFast, _logger.Object, _shutdownErrors);
+    private Task<XpingNetworkException?> EndSessionAsync(Func<Task> finalize) =>
+        XpingContextOrchestrator.EndSessionAsync(finalize, Shutdown, _logger.Object, _shutdownErrors);
 
     private Task Shutdown()
     {
         _shutdownCalls++;
         return Task.CompletedTask;
     }
-
-    private void FailFast(string message, Exception exception) => _failFastCalls.Add(exception);
 }

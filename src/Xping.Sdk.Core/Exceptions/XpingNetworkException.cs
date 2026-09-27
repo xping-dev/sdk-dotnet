@@ -12,8 +12,10 @@ namespace Xping.Sdk.Core.Exceptions;
 /// This exception is thrown instead of silently ignoring upload failures when
 /// <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.StrictMode"/> is <see langword="true"/>
 /// or the <c>XPING_STRICTMODE</c> environment variable is set to <c>true</c>.
-/// The provided test framework adapters (NUnit, xUnit, MSTest) treat this as a fatal error
-/// and invoke <c>Environment.FailFast</c>, terminating the test process with a clear error message.
+/// The provided test framework adapters fail the test run on it, keeping every test result in the
+/// run's reports: xUnit reports it to the runner as an error, MSTest throws it from
+/// <c>[AssemblyCleanup]</c>, and NUnit terminates the test process once the test host has sent its
+/// results.
 /// </remarks>
 public sealed class XpingNetworkException : Exception
 {

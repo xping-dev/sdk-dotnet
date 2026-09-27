@@ -180,6 +180,13 @@ public sealed class XpingConfiguration
     /// environments.
     /// </para>
     /// <para>
+    /// An upload error at the end of the run surfaces as
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingNetworkException"/>, and the adapters fail the run on it
+    /// with every test result kept in its reports: xUnit reports it to the runner as an error, MSTest
+    /// throws it from <c>[AssemblyCleanup]</c>, and NUnit, which fails no run from
+    /// <c>[OneTimeTearDown]</c>, terminates the process once the test host has sent its results.
+    /// </para>
+    /// <para>
     /// Strict mode can also be enabled via the <c>XPING_STRICTMODE</c> environment variable.
     /// This is recommended for production CI/CD pipelines where observability must be guaranteed.
     /// </para>
