@@ -13,6 +13,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly.CircuitBreaker;
+using Polly.Timeout;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.Serialization;
@@ -103,7 +104,7 @@ internal sealed class XpingUploader(
                 ErrorMessage = $"HTTP request failed: {ex.Message}",
             };
         }
-        catch (TaskCanceledException ex)
+        catch (TimeoutRejectedException ex)
         {
             logger.LogError(
                 ex, message: "Request timeout after {TimeoutSeconds}s", _configuration.UploadTimeout.TotalSeconds);
@@ -112,6 +113,29 @@ internal sealed class XpingUploader(
             {
                 Success = false,
                 ErrorMessage = $"Request timeout: {ex.Message}",
+            };
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout fired: the whole upload ran past TotalUploadTimeout.
+            logger.LogError(
+                ex, message: "Upload timed out after {TimeoutSeconds}s",
+                _configuration.TotalUploadTimeout.TotalSeconds);
+
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Request timeout: upload did not complete within {_configuration.TotalUploadTimeout.TotalSeconds}s",
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            logger.LogError(ex, message: "Upload canceled");
+
+            return new UploadResult
+            {
+                Success = false,
+                ErrorMessage = $"Upload canceled: {ex.Message}",
             };
         }
         catch (Exception ex)

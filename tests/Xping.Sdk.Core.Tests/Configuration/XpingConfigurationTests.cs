@@ -291,6 +291,42 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
+    public void ValidateShouldReturnErrorsWhenRetryDelayExceedsMaximum()
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            RetryDelay = TimeSpan.FromHours(25)
+        };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Contains("RetryDelay cannot exceed 1 day.", errors);
+    }
+
+    [Fact]
+    public void ValidateShouldReturnErrorsWhenUploadTimeoutExceedsMaximum()
+    {
+        // Arrange
+        var config = new XpingConfiguration
+        {
+            ApiKey = "test-key",
+            ProjectId = "test-project",
+            UploadTimeout = TimeSpan.FromDays(30)
+        };
+
+        // Act
+        var errors = config.Validate();
+
+        // Assert
+        Assert.Contains("UploadTimeout cannot exceed 1 day.", errors);
+    }
+
+    [Fact]
     public void ValidateShouldReturnNoErrorsForValidConfiguration()
     {
         // Arrange
@@ -379,21 +415,21 @@ public sealed class XpingConfigurationTests
     }
 
     [Fact]
-    public void ValidateShouldReturnErrorsWhenUploadTimeoutIsZeroOrNegative()
+    public void ValidateShouldReturnErrorsWhenUploadTimeoutIsBelowMinimum()
     {
         // Arrange
         var config = new XpingConfiguration
         {
             ApiKey = "test-key",
             ProjectId = "test-project",
-            UploadTimeout = TimeSpan.Zero
+            UploadTimeout = TimeSpan.FromMilliseconds(500)
         };
 
         // Act
         var errors = config.Validate();
 
         // Assert
-        Assert.Contains("UploadTimeout must be greater than zero.", errors);
+        Assert.Contains("UploadTimeout must be at least 1 second.", errors);
     }
 
     [Theory]

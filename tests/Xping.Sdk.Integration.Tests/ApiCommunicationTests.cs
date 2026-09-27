@@ -183,7 +183,7 @@ public sealed class ApiCommunicationTests : IAsyncLifetime, IDisposable
         _mockServer.ReceivedRequests.Should().HaveCountGreaterThan(0);
     }
 
-    private XpingConfiguration CreateConfig(int batchSize = 100, int maxRetries = 1)
+    private XpingConfiguration CreateConfig(int batchSize = 100, int maxRetries = 0)
     {
         return new XpingConfiguration
         {

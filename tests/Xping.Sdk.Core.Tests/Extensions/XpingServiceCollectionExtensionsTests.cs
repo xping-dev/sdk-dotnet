@@ -346,6 +346,22 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.Equal(XpingMode.Cloud, options.ResolveMode());
     }
 
+    [Fact]
+    public void AddXping_WithMaxRetriesZero_ShouldRegisterHttpUploader()
+    {
+        // Arrange — MaxRetries = 0 means "no retries". Polly rejects MaxRetryAttempts = 0, so the
+        // retry strategy must be left out of the pipeline rather than configured with it (#220).
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddXping(new XpingConfiguration { ApiKey = "key", MaxRetries = 0 });
+        var provider = services.BuildServiceProvider();
+        var uploader = provider.GetRequiredService<IXpingUploader>();
+
+        // Assert
+        Assert.Equal("XpingUploader", uploader.GetType().Name);
+    }
+
     // ---------------------------------------------------------------------------
     // AddXping(Action<XpingConfigurationBuilder>)
     // ---------------------------------------------------------------------------

@@ -240,7 +240,7 @@ public sealed class XpingConfigurationBuilderTests
 
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
-        Assert.Contains("UploadTimeout must be greater than zero", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("UploadTimeout must be at least 1 second", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

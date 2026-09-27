@@ -131,14 +131,20 @@ public sealed class XpingConfiguration
     public int MaxRetries { get; set; } = 3;
 
     /// <summary>
-    /// Gets or sets the delay between retry attempts.
+    /// Gets or sets the delay between retry attempts. Cannot exceed 1 day.
     /// </summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Gets or sets the timeout for upload operations.
+    /// Gets or sets the timeout for a single upload attempt. Each retry gets its own timeout.
+    /// Must be between 1 second and 1 day.
     /// </summary>
     public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Cap on a whole upload, retries and backoff included: twice <see cref="UploadTimeout"/>.
+    /// </summary>
+    internal TimeSpan TotalUploadTimeout => TimeSpan.FromTicks(UploadTimeout.Ticks * 2);
 
     /// <summary>
     /// Gets or sets a value indicating whether to detect pull request context from CI/CD environment variables
@@ -310,9 +316,19 @@ public sealed class XpingConfiguration
             errors.Add("RetryDelay cannot be negative.");
         }
 
-        if (UploadTimeout <= TimeSpan.Zero)
+        if (RetryDelay > DurationLimit)
         {
-            errors.Add("UploadTimeout must be greater than zero.");
+            errors.Add("RetryDelay cannot exceed 1 day.");
+        }
+
+        if (UploadTimeout < MinUploadTimeout)
+        {
+            errors.Add("UploadTimeout must be at least 1 second.");
+        }
+
+        if (UploadTimeout > DurationLimit)
+        {
+            errors.Add("UploadTimeout cannot exceed 1 day.");
         }
 
         return errors;
@@ -326,6 +342,11 @@ public sealed class XpingConfiguration
     {
         return Validate().Count == 0;
     }
+
+    // Bounds for RetryDelay and UploadTimeout. Validation must reject what the upload pipeline would
+    // throw on: Polly caps a retry delay and a timeout at 1 day, and a timeout below 10ms.
+    private static readonly TimeSpan DurationLimit = TimeSpan.FromDays(1);
+    private static readonly TimeSpan MinUploadTimeout = TimeSpan.FromSeconds(1);
 
     private static bool IsDefinedMode(XpingMode mode) =>
         mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;

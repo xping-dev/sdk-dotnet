@@ -222,8 +222,7 @@ public sealed class XpingContextTests : IAsyncLifetime
         ApiKey = "test-key",
         ProjectId = "test-project",
         ApiEndpoint = "http://127.0.0.1:9/v1",
-        MaxRetries = 1,
-        RetryDelay = TimeSpan.FromMilliseconds(1),
+        MaxRetries = 0,
         StrictMode = strictMode,
         LocalStorePath = _scratchStore,
     };

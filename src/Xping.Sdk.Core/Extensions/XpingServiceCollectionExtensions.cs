@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
+using Polly.Timeout;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Display;
@@ -506,7 +507,12 @@ public static class XpingServiceCollectionExtensions
 
             // Configure base settings
             client.BaseAddress = new Uri(config.ApiEndpoint);
-            client.Timeout = config.UploadTimeout;
+
+            // Caps the whole upload: every attempt, the retry backoff, and reading the response body,
+            // which happens after the resilience pipeline returns. The final upload runs as the test
+            // run ends and the test host can be killed shortly after, so a failing upload must give up
+            // in bounded time. Each attempt is capped separately at UploadTimeout by the pipeline below.
+            client.Timeout = config.TotalUploadTimeout;
 
             // Configure headers
             client.DefaultRequestHeaders.Accept.Add(
@@ -530,23 +536,30 @@ public static class XpingServiceCollectionExtensions
         {
             var config = context.ServiceProvider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-            // Retry strategy with exponential backoff
-            builder.AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            // Retry strategy with exponential backoff. MaxRetries = 0 means no retries, and Polly
+            // rejects MaxRetryAttempts below 1, so the strategy is left out rather than configured.
+            if (config.MaxRetries > 0)
             {
-                MaxRetryAttempts = config.MaxRetries,
-                Delay = config.RetryDelay,
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true,
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .HandleResult(response =>
-                    {
-                        // Retry on 5xx errors and 429 (Too Many Requests)
-                        var statusCode = (int)response.StatusCode;
-                        return statusCode >= 500 || statusCode == 429;
-                    })
-                    .Handle<HttpRequestException>()
-                    .Handle<TaskCanceledException>()
-            });
+                builder.AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+                {
+                    MaxRetryAttempts = config.MaxRetries,
+                    Delay = config.RetryDelay,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                        .HandleResult(response =>
+                        {
+                            // Retry on 5xx errors and 429 (Too Many Requests)
+                            var statusCode = (int)response.StatusCode;
+                            return statusCode >= 500 || statusCode == 429;
+                        })
+                        .Handle<HttpRequestException>()
+                        .Handle<TimeoutRejectedException>()
+                        // Handler-level cancellations such as a connect timeout. Polly never retries
+                        // once the caller's token or HttpClient.Timeout has fired.
+                        .Handle<TaskCanceledException>()
+                });
+            }
 
             // Circuit breaker to prevent cascading failures
             builder.AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
@@ -557,7 +570,11 @@ public static class XpingServiceCollectionExtensions
                 ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
                     .HandleResult(response => (int)response.StatusCode >= 500)
                     .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
             });
+
+            // Innermost strategy, so each attempt gets its own UploadTimeout.
+            builder.AddTimeout(config.UploadTimeout);
         });
 
         return services;
