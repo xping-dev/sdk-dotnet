@@ -764,12 +764,12 @@ How the run fails:
 |---|---|---|
 | Configuration error, at startup | all | The test process terminates (`Environment.FailFast`) before any test runs. |
 | Upload error, at the end of the run | xUnit | An error from the runner (`Catastrophic failure: XpingNetworkException`). |
-| | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result. |
+| | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result, so that test shows as failed. |
 | | NUnit | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
 
-In every case `dotnet test` exits non-zero, and TRX and other reports keep every test result.
+In every case `dotnet test` exits non-zero, and every test that ran stays in TRX and other reports.
 
-> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there: it is what fails the run. `FinalizeAsync()` does not, so calling it yourself lets `dotnet test` exit with code 0.
+> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there. Under NUnit it is what fails the run: `FinalizeAsync()` only throws, NUnit logs that as a warning, and `dotnet test` exits with code 0. Under MSTest an exception from `FinalizeAsync()` fails the run too, but it leaves the host running.
 
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure

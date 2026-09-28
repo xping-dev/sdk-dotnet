@@ -199,8 +199,8 @@ public sealed class XpingMessageSink(
     private void HandleTestAssemblyFinished(ITestAssemblyFinished testAssemblyFinished)
     {
         // The assembly finishing is the end of the session: nothing reaches the framework's Dispose
-        // (see XpingContext.FinalizeAndShutdownAsync), which also does its own error reporting.
-        // Task.Run keeps the async work off the runner's message thread, so no continuation can
+        // (see XpingContext.FinalizeAndShutdownAsync). It logs every error but a strict-mode network
+        // error, which it returns for this sink to fail the run on. Task.Run keeps the async work off the runner's message thread, so no continuation can
         // deadlock trying to resume on it.
         XpingNetworkException? runFailure =
             Task.Run(XpingContext.FinalizeAndShutdownAsync).GetAwaiter().GetResult();

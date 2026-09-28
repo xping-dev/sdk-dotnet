@@ -400,18 +400,18 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <returns>The result of the upload operation.</returns>
     /// <exception cref="XpingNetworkException">
     /// Thrown when the final upload fails and strict mode is enabled, to ensure CI pipelines fail fast
-    /// when test observability data cannot be transmitted.
+    /// when test observability data cannot be transmitted. Thrown again by every later call.
     /// </exception>
     protected async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
     {
         // Idempotent: lifecycle hooks and upload run exactly once even if called multiple times.
-        // If the previous attempt failed in strict mode, surface that failure to the caller
-        // rather than masking it with Success=true.
+        // A strict-mode failure is thrown again on every later call: whichever call ends the session
+        // has to see it, or the run it should fail passes.
         if (Interlocked.Exchange(ref _finalized, 1) != 0)
         {
             string? previousError = _strictModeNetworkError;
             if (previousError != null)
-                return new UploadResult { Success = false, ErrorMessage = previousError };
+                throw new XpingNetworkException(previousError);
             return new UploadResult { Success = true };
         }
 
@@ -532,8 +532,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// A strict-mode network error is returned, not thrown, once the context is shut down. The run has to
     /// fail on it, and how depends on the framework: xUnit reports it to the runner, MSTest throws it from
     /// <c>[AssemblyCleanup]</c>, and NUnit, which fails no run from <c>[OneTimeTearDown]</c>, terminates
-    /// the process. Finalization is idempotent too, so a second call reports the failure without
-    /// throwing again.
+    /// the process. The error is returned even when the session was finalized before, since a repeated
+    /// finalization throws it again.
     /// </para>
     /// <para>
     /// Never throws: every other error is reported here.
@@ -555,6 +555,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             context._logger,
             Console.Error);
     }
+
+    /// <summary>
+    /// Terminates the process on a strict-mode network error, for an adapter with no way left to fail
+    /// the run through its test framework.
+    /// </summary>
+    /// <param name="runFailure">The error <see cref="EndSessionAsync(XpingContextOrchestrator?)"/> returned.</param>
+    internal static void FailProcess(XpingNetworkException runFailure) =>
+        Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
 
     /// <summary>
     /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live
@@ -989,7 +997,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // drain an already-empty buffer once FinalizeSessionAsync releases it.
             _flushTimer?.Dispose();
 
-            await FinalizeSessionAsync().ConfigureAwait(false);
+            // A session finalized already has nothing left to upload, and a strict-mode failure it
+            // ended with was reported by that call, so disposing does not throw it again.
+            if (Volatile.Read(ref _finalized) == 0)
+                await FinalizeSessionAsync().ConfigureAwait(false);
         }
         finally
         {

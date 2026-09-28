@@ -175,7 +175,7 @@ public class XpingContext : XpingContextOrchestrator
             return;
 
         await Task.Delay(TestHostResultFlushDelay).ConfigureAwait(false);
-        Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
+        FailProcess(runFailure);
     }
 
     /// <summary>

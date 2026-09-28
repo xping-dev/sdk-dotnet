@@ -182,8 +182,9 @@ public sealed class XpingConfiguration
     /// <para>
     /// An upload error at the end of the run surfaces as
     /// <see cref="Xping.Sdk.Core.Exceptions.XpingNetworkException"/>, and the adapters fail the run on it
-    /// with every test result kept in its reports: xUnit reports it to the runner as an error, MSTest
-    /// throws it from <c>[AssemblyCleanup]</c>, and NUnit, which fails no run from
+    /// with every test that ran kept in its reports: xUnit reports it to the runner as an error, MSTest
+    /// throws it from <c>[AssemblyCleanup]</c> (reported on the last test, which then shows as failed),
+    /// and NUnit, which fails no run from
     /// <c>[OneTimeTearDown]</c>, terminates the process once the test host has sent its results.
     /// </para>
     /// <para>

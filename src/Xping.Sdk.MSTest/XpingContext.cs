@@ -160,8 +160,8 @@ public class XpingContext : XpingContextOrchestrator
     /// </summary>
     /// <remarks>
     /// MSTest fails the run on an exception from <c>[AssemblyCleanup]</c>: it reports the exception on
-    /// the last test result, and <c>dotnet test</c> exits non-zero with every result intact. Every other
-    /// error is logged and not thrown.
+    /// the last test result, which then shows as failed, and <c>dotnet test</c> exits non-zero with every
+    /// test that ran still in its reports. Every other error is logged and not thrown.
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="XpingNetworkException">Strict mode is on and the upload failed.</exception>
@@ -246,7 +246,7 @@ public class XpingContext : XpingContextOrchestrator
         // The run is over, so no framework is left to fail it through: a strict-mode network error
         // terminates the process.
         if (runFailure is not null)
-            Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
+            FailProcess(runFailure);
     }
 
     /// <summary>

@@ -190,6 +190,19 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FinalizeAndShutdownCoreAsync_AfterFinalizeAsyncThrew_StillReturnsNetworkError()
+    {
+        // A teardown that finalizes on its own first must not swallow the failure the run ends on.
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+        await Assert.ThrowsAsync<XpingNetworkException>(XpingContext.FinalizeAsync).ConfigureAwait(true);
+
+        var runFailure = await XpingContext.FinalizeAndShutdownCoreAsync().ConfigureAwait(true);
+
+        Assert.IsType<XpingNetworkException>(runFailure);
+    }
+
+    [Fact]
     public async Task FinalizeAndShutdownCoreAsync_UploadFailsOutsideStrictMode_ReturnsNoError()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));

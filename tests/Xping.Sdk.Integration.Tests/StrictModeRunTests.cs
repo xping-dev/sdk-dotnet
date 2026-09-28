@@ -8,6 +8,7 @@ namespace Xping.Integration.Tests;
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -37,11 +38,14 @@ public sealed class StrictModeRunTests : IDisposable
             Directory.Delete(_scratch, recursive: true);
     }
 
+    // Each filter selects two passing tests. MSTest reports an [AssemblyCleanup] failure on the last
+    // test result, so one of them shows as failed there; the others report the failure on their own.
     [Theory]
-    [InlineData("SampleApp.XUnit", "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest")]
-    [InlineData("SampleApp.NUnit", "Name~Passing")]
-    [InlineData("SampleApp.MSTest", "Name~Add_TwoNumbers|Name~Subtract_TwoNumbers")]
-    public async Task StrictModeUploadFails_FailsRunAndKeepsEveryResult(string sample, string filter)
+    [InlineData("SampleApp.XUnit", "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest", 2, 0)]
+    [InlineData("SampleApp.NUnit", "Name~Passing", 2, 0)]
+    [InlineData("SampleApp.MSTest", "Name~Add_TwoNumbers|Name~Subtract_TwoNumbers", 1, 1)]
+    public async Task StrictModeUploadFails_FailsRunAndKeepsEveryResult(
+        string sample, string filter, int expectedPassed, int expectedFailed)
     {
         (int exitCode, string output) = await RunSampleAsync(sample, filter).ConfigureAwait(true);
 
@@ -49,6 +53,8 @@ public sealed class StrictModeRunTests : IDisposable
 
         XElement counters = ReadCounters();
         counters.Attribute("total")!.Value.Should().Be("2", "every test that ran stays in the report. Output:\n{0}", output);
+        counters.Attribute("passed")!.Value.Should().Be(expectedPassed.ToString(CultureInfo.InvariantCulture), "Output:\n{0}", output);
+        counters.Attribute("failed")!.Value.Should().Be(expectedFailed.ToString(CultureInfo.InvariantCulture), "Output:\n{0}", output);
         output.Should().Contain("Xping network error in strict mode");
     }
 
@@ -66,6 +72,8 @@ public sealed class StrictModeRunTests : IDisposable
         foreach (string argument in new[]
         {
             "test", Path.Combine(repositoryRoot, "samples", sample),
+            // Release, as CI builds the solution: the nested build then finds the SDK already built.
+            "--configuration", "Release",
             "--filter", filter,
             "--logger", "trx",
             "--results-directory", Path.Combine(_scratch, "results"),

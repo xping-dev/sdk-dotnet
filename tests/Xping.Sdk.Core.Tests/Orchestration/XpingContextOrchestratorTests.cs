@@ -1248,11 +1248,11 @@ public sealed class XpingContextOrchestratorTests
     }
 
     [Fact]
-    public async Task FinalizeSessionAsync_WithStrictMode_AndUploadFailure_SecondCallReturnsFailed()
+    public async Task FinalizeSessionAsync_WithStrictMode_AndUploadFailure_SecondCallThrowsAgain()
     {
-        // Arrange — after the first finalization throws XpingNetworkException, a subsequent call
-        // (e.g. from DisposeAsync during test teardown) should return the stored failure rather
-        // than masking it with Success=true.
+        // Arrange — after the first finalization throws XpingNetworkException, a later call (e.g. an
+        // adapter ending the session after the user's own FinalizeAsync) has to see the failure too,
+        // or the run it should fail passes.
         var uploaderMock = new Mock<IXpingUploader>();
         var envDetectorMock = new Mock<IEnvironmentDetector>();
         envDetectorMock
@@ -1270,13 +1270,10 @@ public sealed class XpingContextOrchestratorTests
         await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
 
         // Act — second call (simulates a redundant finalization attempt after the exception)
-        var secondResult = await orchestrator.FinalizeAsync();
+        var secondError = await Assert.ThrowsAsync<XpingNetworkException>(() => orchestrator.FinalizeAsync());
 
-        // Assert — failure is surfaced, not masked with Success=true
-        Assert.False(secondResult.Success);
-        Assert.NotNull(secondResult.ErrorMessage);
-        Assert.Contains("Simulated failure", secondResult.ErrorMessage, StringComparison.Ordinal);
-
+        // Assert — failure is surfaced again, and disposing does not throw it a third time
+        Assert.Contains("Simulated failure", secondError.Message, StringComparison.Ordinal);
         await orchestrator.DisposeAsync();
     }
 
