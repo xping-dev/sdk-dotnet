@@ -400,18 +400,18 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <returns>The result of the upload operation.</returns>
     /// <exception cref="XpingNetworkException">
     /// Thrown when the final upload fails and strict mode is enabled, to ensure CI pipelines fail fast
-    /// when test observability data cannot be transmitted.
+    /// when test observability data cannot be transmitted. Thrown again by every later call.
     /// </exception>
     protected async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
     {
         // Idempotent: lifecycle hooks and upload run exactly once even if called multiple times.
-        // If the previous attempt failed in strict mode, surface that failure to the caller
-        // rather than masking it with Success=true.
+        // A strict-mode failure is thrown again on every later call: whichever call ends the session
+        // has to see it, or the run it should fail passes.
         if (Interlocked.Exchange(ref _finalized, 1) != 0)
         {
             string? previousError = _strictModeNetworkError;
             if (previousError != null)
-                return new UploadResult { Success = false, ErrorMessage = previousError };
+                throw new XpingNetworkException(previousError);
             return new UploadResult { Success = true };
         }
 
@@ -523,68 +523,72 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Ends a session: finalizes <paramref name="context"/>, fails the process fast on a strict-mode
-    /// network error, and always disposes it afterward. Backs each adapter's
-    /// <c>FinalizeAndShutdownAsync</c>, which claims its static instance first and passes it here, so
-    /// the context that is finalized is the one that is shut down.
+    /// Ends a session: finalizes <paramref name="context"/> and always disposes it afterward. Backs each
+    /// adapter's <c>FinalizeAndShutdownAsync</c>, which claims its static instance first and passes it
+    /// here, so the context that is finalized is the one that is shut down.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A strict-mode network error has to be acted on here. No framework fails the run on an exception
-    /// from its end-of-run hook: xUnit reports one from a message sink, NUnit one from
-    /// <c>[OneTimeTearDown]</c>, MSTest one from <c>[AssemblyCleanup]</c>, and <c>dotnet test</c> still
-    /// exits zero. Finalization is idempotent too, so a second call reports the failure without
-    /// throwing again.
+    /// A strict-mode network error is returned, not thrown, once the context is shut down. The run has to
+    /// fail on it, and how depends on the framework: xUnit reports it to the runner, MSTest throws it from
+    /// <c>[AssemblyCleanup]</c>, and NUnit, which fails no run from <c>[OneTimeTearDown]</c>, terminates
+    /// the process. The error is returned even when the session was finalized before, since a repeated
+    /// finalization throws it again.
     /// </para>
     /// <para>
-    /// Never throws, apart from what <paramref name="failFast"/> does: every error is reported here.
+    /// Never throws: every other error is reported here.
     /// </para>
     /// </remarks>
     /// <param name="context">The claimed context, or <see langword="null"/> when there is none to end.</param>
-    /// <param name="failFast">
-    /// Terminates the process on a strict-mode network error.
-    /// <see cref="Environment.FailFast(string, Exception)"/> in production; replaced in tests, which
-    /// cannot survive the real one.
-    /// </param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    internal static Task EndSessionAsync(XpingContextOrchestrator? context, Action<string, Exception> failFast)
+    /// <returns>
+    /// The strict-mode network error the run must fail on, or <see langword="null"/> when there is none.
+    /// </returns>
+    internal static Task<XpingNetworkException?> EndSessionAsync(XpingContextOrchestrator? context)
     {
         if (context is null)
-            return Task.CompletedTask;
+            return Task.FromResult<XpingNetworkException?>(null);
 
         // Captured up front: the logger lives in the host that disposing the context tears down.
         return EndSessionAsync(
             () => context.FinalizeSessionAsync(CancellationToken.None),
             () => context.DisposeAsync().AsTask(),
-            failFast,
             context._logger,
             Console.Error);
     }
 
     /// <summary>
-    /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?, Action{string, Exception})"/>,
-    /// apart from a live context, so that every path through it can be driven.
+    /// Terminates the process on a strict-mode network error, for an adapter with no way left to fail
+    /// the run through its test framework.
+    /// </summary>
+    /// <param name="runFailure">The error <see cref="EndSessionAsync(XpingContextOrchestrator?)"/> returned.</param>
+    internal static void FailProcess(XpingNetworkException runFailure) =>
+        Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
+
+    /// <summary>
+    /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live
+    /// context, so that every path through it can be driven.
     /// </summary>
     /// <param name="finalize">Finalizes the session.</param>
     /// <param name="shutdown">Releases the host. Runs whatever <paramref name="finalize"/> did.</param>
-    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
     /// <param name="logger">Reports any other finalize error, while the host is still alive.</param>
     /// <param name="shutdownErrors">Reports a shutdown error, once the logger has gone with the host.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    internal static async Task EndSessionAsync(
+    /// <returns>
+    /// The strict-mode network error the run must fail on, or <see langword="null"/> when there is none.
+    /// </returns>
+    internal static async Task<XpingNetworkException?> EndSessionAsync(
         Func<Task> finalize,
         Func<Task> shutdown,
-        Action<string, Exception> failFast,
         ILogger? logger,
         TextWriter shutdownErrors)
     {
+        XpingNetworkException? runFailure = null;
         try
         {
             await finalize().ConfigureAwait(false);
         }
         catch (XpingNetworkException ex)
         {
-            failFast($"[Xping] {ex.Message}", ex);
+            runFailure = ex;
         }
         catch (Exception ex)
         {
@@ -601,6 +605,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 await shutdownErrors.WriteLineAsync($"[Xping] Error shutting down Xping: {ex}").ConfigureAwait(false);
             }
         }
+
+        return runFailure;
     }
 
     /// <summary>
@@ -991,7 +997,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // drain an already-empty buffer once FinalizeSessionAsync releases it.
             _flushTimer?.Dispose();
 
-            await FinalizeSessionAsync().ConfigureAwait(false);
+            // A session finalized already has nothing left to upload, and a strict-mode failure it
+            // ended with was reported by that call, so disposing does not throw it again.
+            if (Volatile.Read(ref _finalized) == 0)
+                await FinalizeSessionAsync().ConfigureAwait(false);
         }
         finally
         {

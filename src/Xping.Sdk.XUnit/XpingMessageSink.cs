@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -76,10 +77,10 @@ public sealed class XpingMessageSink(
                 HandleTestSkipped(testSkipped);
                 break;
 
-            case ITestAssemblyFinished _:
+            case ITestAssemblyFinished testAssemblyFinished:
                 // Handled before it is forwarded. Once the runner sees the assembly finish it wraps up
                 // the run, and under `dotnet test` the test host exits with the session half written.
-                HandleTestAssemblyFinished();
+                HandleTestAssemblyFinished(testAssemblyFinished);
                 break;
         }
 
@@ -195,13 +196,20 @@ public sealed class XpingMessageSink(
             collectionName: data.CollectionName);
     }
 
-    private static void HandleTestAssemblyFinished()
+    private void HandleTestAssemblyFinished(ITestAssemblyFinished testAssemblyFinished)
     {
         // The assembly finishing is the end of the session: nothing reaches the framework's Dispose
-        // (see XpingContext.FinalizeAndShutdownAsync), which also does its own error reporting.
-        // Task.Run keeps the async work off the runner's message thread, so no continuation can
+        // (see XpingContext.FinalizeAndShutdownAsync). It logs every error but a strict-mode network
+        // error, which it returns for this sink to fail the run on. Task.Run keeps the async work off the runner's message thread, so no continuation can
         // deadlock trying to resume on it.
-        Task.Run(() => XpingContext.FinalizeAndShutdownAsync(Environment.FailFast)).GetAwaiter().GetResult();
+        XpingNetworkException? runFailure =
+            Task.Run(XpingContext.FinalizeAndShutdownAsync).GetAwaiter().GetResult();
+
+        // A strict-mode upload failure fails the run as an error message the runner reports on its own:
+        // `dotnet test` exits non-zero and every test result already reported is kept. It has to arrive
+        // before the assembly finishes, or the runner has already wrapped up.
+        if (runFailure is not null)
+            _innerSink.OnMessage(new ErrorMessage(testAssemblyFinished.TestCases, runFailure));
     }
 
     /// <summary>

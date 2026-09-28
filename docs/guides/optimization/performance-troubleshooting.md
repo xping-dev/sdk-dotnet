@@ -160,7 +160,7 @@ dotnet-counters monitor --process-id <pid> --counters System.Runtime
 
 - SDK retries automatically with exponential backoff
 - **Resilient mode:** Tests complete normally even if retries are exhausted
-- **Strict mode:** If all retries fail, the test run is terminated via `Environment.FailFast`
+- **Strict mode:** If all retries fail, the test run fails, and every test that ran stays in its reports
 
 #### 2. Firewall or Proxy Blocking Requests
 

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -150,8 +151,7 @@ public class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Finalizes the session and shuts down the context. Called once, when the test assembly finishes:
-    /// uploads buffered executions, fails the process fast on a strict-mode network error, and always
-    /// releases the underlying host afterward.
+    /// uploads buffered executions and always releases the underlying host afterward.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -160,22 +160,19 @@ public class XpingContext : XpingContextOrchestrator
     /// and the runner disposes through <see cref="IDisposable"/>.
     /// </para>
     /// <para>
-    /// Never throws, apart from what <paramref name="failFast"/> does. See
-    /// <see cref="XpingContextOrchestrator.EndSessionAsync(XpingContextOrchestrator?, Action{string, Exception})"/>.
+    /// Never throws. See <see cref="XpingContextOrchestrator.EndSessionAsync(XpingContextOrchestrator?)"/>.
     /// </para>
     /// </remarks>
-    /// <param name="failFast">
-    /// Terminates the process. <see cref="Environment.FailFast(string, Exception)"/> in production;
-    /// replaced in tests, which cannot survive the real one.
-    /// </param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    /// <returns>
+    /// The strict-mode network error the run must fail on, or <see langword="null"/> when there is none.
+    /// </returns>
+    internal static Task<XpingNetworkException?> FinalizeAndShutdownAsync()
     {
         // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
         // installs a new one in between.
         Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
 
-        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null, failFast);
+        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null);
     }
 
     /// <summary>

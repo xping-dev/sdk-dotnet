@@ -168,46 +168,73 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsFast()
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_FailsProcessWithNetworkError()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
+        var failures = new List<XpingNetworkException>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
+        await XpingContext.FinalizeAndShutdownAsync(TimeSpan.Zero, failures.Add).ConfigureAwait(true);
 
-        Assert.IsType<XpingNetworkException>(Assert.Single(calls));
+        Assert.Single(failures);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_StillShutsDown()
+    public async Task FinalizeAndShutdownAsync_StrictModeUploadFails_ShutsDownBeforeFailingProcess()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
         XpingContext.RecordTest(CreateTestExecution());
+        bool? initializedWhenFailed = null;
 
-        await XpingContext.FinalizeAndShutdownAsync((_, _) => { }).ConfigureAwait(true);
+        await XpingContext.FinalizeAndShutdownAsync(
+            TimeSpan.Zero, _ => initializedWhenFailed = XpingContext.IsInitialized).ConfigureAwait(true);
 
-        Assert.False(XpingContext.IsInitialized);
+        Assert.False(initializedWhenFailed);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailFast()
+    public async Task FinalizeAndShutdownAsync_AfterFinalizeAsyncThrew_StillFailsProcess()
+    {
+        // A teardown that finalizes on its own first must not swallow the failure the run ends on.
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+        await Assert.ThrowsAsync<XpingNetworkException>(XpingContext.FinalizeAsync).ConfigureAwait(true);
+        var failures = new List<XpingNetworkException>();
+
+        await XpingContext.FinalizeAndShutdownAsync(TimeSpan.Zero, failures.Add).ConfigureAwait(true);
+
+        Assert.Single(failures);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_UploadFailsOutsideStrictMode_DoesNotFailProcess()
     {
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
         XpingContext.RecordTest(CreateTestExecution());
-        var calls = new List<Exception>();
+        var failures = new List<XpingNetworkException>();
 
-        await XpingContext.FinalizeAndShutdownAsync((_, ex) => calls.Add(ex)).ConfigureAwait(true);
+        await XpingContext.FinalizeAndShutdownAsync(TimeSpan.Zero, failures.Add).ConfigureAwait(true);
 
-        Assert.Empty(calls);
+        Assert.Empty(failures);
         Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
-    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotFailFast()
+    public async Task FinalizeAndShutdownAsync_Public_UploadFailsOutsideStrictMode_ShutsDown()
     {
-        var exception = await Record.ExceptionAsync(
-            () => XpingContext.FinalizeAndShutdownAsync((_, ex) => throw ex)).ConfigureAwait(true);
+        // The public entry point, on the paths that do not end the test process.
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: false));
+        XpingContext.RecordTest(CreateTestExecution());
+
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
+    {
+        var exception = await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
 
         Assert.Null(exception);
     }

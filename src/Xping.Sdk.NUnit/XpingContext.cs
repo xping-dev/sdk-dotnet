@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using NUnit.Framework.Interfaces;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
@@ -152,30 +153,52 @@ public class XpingContext : XpingContextOrchestrator
     /// <summary>
     /// Finalizes the Xping session and shuts down the context. Call it from the
     /// <c>[OneTimeTearDown]</c> of a <c>[SetUpFixture]</c> in your test assembly's root namespace:
-    /// uploads buffered executions, fails the process fast on a strict-mode network error, and always
-    /// releases the underlying host afterward.
+    /// uploads buffered executions, fails the run on a strict-mode network error, and always releases
+    /// the underlying host afterward.
     /// </summary>
     /// <remarks>
-    /// NUnit reports an exception from <c>[OneTimeTearDown]</c> as a teardown failure and still lets
-    /// <c>dotnet test</c> exit zero, so a strict-mode network error terminates the process instead.
+    /// <para>
+    /// NUnit reports an exception from <c>[OneTimeTearDown]</c> as a warning and still lets
+    /// <c>dotnet test</c> exit zero, so a strict-mode network error terminates the process instead. It
+    /// first waits <see cref="TestHostResultFlushDelay"/>, so the test results the test host still
+    /// holds reach <c>dotnet test</c> and stay in its reports.
+    /// </para>
+    /// <para>
     /// Every other error is logged, and this method never throws.
+    /// </para>
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FinalizeAndShutdownAsync() => FinalizeAndShutdownAsync(Environment.FailFast);
+    public static Task FinalizeAndShutdownAsync() =>
+        FinalizeAndShutdownAsync(TestHostResultFlushDelay, FailProcess);
 
     /// <summary>
-    /// <see cref="FinalizeAndShutdownAsync()"/> with the process termination replaced, so tests can
-    /// reach the strict-mode path and survive it.
+    /// How long a strict-mode failure waits before it terminates the process. The vstest test host
+    /// sends results in batches of ten, or 1.5 s after the last batch, and results it still holds when
+    /// the process dies never reach TRX or any other report.
     /// </summary>
-    /// <param name="failFast">Terminates the process on a strict-mode network error.</param>
+    internal static readonly TimeSpan TestHostResultFlushDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// <see cref="FinalizeAndShutdownAsync()"/> with the wait and the process termination replaced, so
+    /// tests can reach the strict-mode path and survive it.
+    /// </summary>
+    /// <param name="resultFlushDelay">How long to wait before failing the process.</param>
+    /// <param name="failProcess">Terminates the process on a strict-mode network error.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    internal static Task FinalizeAndShutdownAsync(Action<string, Exception> failFast)
+    internal static async Task FinalizeAndShutdownAsync(
+        TimeSpan resultFlushDelay, Action<XpingNetworkException> failProcess)
     {
         // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
         // installs a new one in between.
         Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
 
-        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null, failFast);
+        XpingNetworkException? runFailure = await EndSessionAsync(
+            instance is { IsValueCreated: true } ? instance.Value : null).ConfigureAwait(false);
+        if (runFailure is null)
+            return;
+
+        await Task.Delay(resultFlushDelay).ConfigureAwait(false);
+        failProcess(runFailure);
     }
 
     /// <summary>
