@@ -209,11 +209,12 @@ public class XpingContext : XpingContextOrchestrator
         if (Interlocked.CompareExchange(ref _processExitHandlerRegistered, 1, 0) != 0)
             return;
 
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => FinalizeOnProcessExit();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => FinalizeOnProcessExit(FailProcess);
     }
 
-    // Internal so the adapter's tests can drive the safety net without ending the test process.
-    internal static void FinalizeOnProcessExit()
+    // Internal, with the process termination replaced, so the adapter's tests can drive the safety net
+    // without ending the test process.
+    internal static void FinalizeOnProcessExit(Action<XpingNetworkException> failProcess)
     {
         Lazy<XpingContext>? instance = _instance;
         if (instance is not { IsValueCreated: true })
@@ -246,7 +247,7 @@ public class XpingContext : XpingContextOrchestrator
         // The run is over, so no framework is left to fail it through: a strict-mode network error
         // terminates the process.
         if (runFailure is not null)
-            FailProcess(runFailure);
+            failProcess(runFailure);
     }
 
     /// <summary>

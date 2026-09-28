@@ -158,7 +158,7 @@ public sealed class XpingContextTests : IAsyncLifetime
         XpingContext.RecordTest(CreateTestExecution()); // materializes the host
         Assert.True(XpingContext.IsInitialized);
 
-        XpingContext.FinalizeOnProcessExit();
+        XpingContext.FinalizeOnProcessExit(_ => throw new InvalidOperationException("unexpected process failure"));
 
         Assert.False(XpingContext.IsInitialized);
     }
@@ -170,15 +170,35 @@ public sealed class XpingContextTests : IAsyncLifetime
         // finalize, and building a host on the way out of the process would be pure cost.
         XpingContext.Initialize(ScratchConfiguration());
 
-        XpingContext.FinalizeOnProcessExit();
+        XpingContext.FinalizeOnProcessExit(_ => throw new InvalidOperationException("unexpected process failure"));
 
         Assert.True(XpingContext.IsInitialized);
     }
 
     [Fact]
+    public void FinalizeOnProcessExit_StrictModeUploadFails_FailsProcessAfterShuttingDown()
+    {
+        // The run is over by the time the process exits, so nothing is left to fail it through but the
+        // process itself.
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+        XpingContext.RecordTest(CreateTestExecution());
+        var failures = new List<XpingNetworkException>();
+        bool? initializedWhenFailed = null;
+
+        XpingContext.FinalizeOnProcessExit(ex =>
+        {
+            failures.Add(ex);
+            initializedWhenFailed = XpingContext.IsInitialized;
+        });
+
+        Assert.Single(failures);
+        Assert.False(initializedWhenFailed);
+    }
+
+    [Fact]
     public void FinalizeOnProcessExit_BeforeInitialize_DoesNotThrow()
     {
-        var exception = Record.Exception(XpingContext.FinalizeOnProcessExit);
+        var exception = Record.Exception(() => XpingContext.FinalizeOnProcessExit(_ => { }));
 
         Assert.Null(exception);
     }

@@ -168,15 +168,8 @@ public class XpingContext : XpingContextOrchestrator
     /// </para>
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static async Task FinalizeAndShutdownAsync()
-    {
-        XpingNetworkException? runFailure = await FinalizeAndShutdownCoreAsync().ConfigureAwait(false);
-        if (runFailure is null)
-            return;
-
-        await Task.Delay(TestHostResultFlushDelay).ConfigureAwait(false);
-        FailProcess(runFailure);
-    }
+    public static Task FinalizeAndShutdownAsync() =>
+        FinalizeAndShutdownAsync(TestHostResultFlushDelay, FailProcess);
 
     /// <summary>
     /// How long a strict-mode failure waits before it terminates the process. The vstest test host
@@ -186,19 +179,26 @@ public class XpingContext : XpingContextOrchestrator
     internal static readonly TimeSpan TestHostResultFlushDelay = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// <see cref="FinalizeAndShutdownAsync()"/> up to failing the run, so tests can reach the
-    /// strict-mode path and survive it.
+    /// <see cref="FinalizeAndShutdownAsync()"/> with the wait and the process termination replaced, so
+    /// tests can reach the strict-mode path and survive it.
     /// </summary>
-    /// <returns>
-    /// The strict-mode network error the run must fail on, or <see langword="null"/> when there is none.
-    /// </returns>
-    internal static Task<XpingNetworkException?> FinalizeAndShutdownCoreAsync()
+    /// <param name="resultFlushDelay">How long to wait before failing the process.</param>
+    /// <param name="failProcess">Terminates the process on a strict-mode network error.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal static async Task FinalizeAndShutdownAsync(
+        TimeSpan resultFlushDelay, Action<XpingNetworkException> failProcess)
     {
         // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
         // installs a new one in between.
         Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
 
-        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null);
+        XpingNetworkException? runFailure = await EndSessionAsync(
+            instance is { IsValueCreated: true } ? instance.Value : null).ConfigureAwait(false);
+        if (runFailure is null)
+            return;
+
+        await Task.Delay(resultFlushDelay).ConfigureAwait(false);
+        failProcess(runFailure);
     }
 
     /// <summary>
