@@ -266,7 +266,7 @@ If it does not open, use this link:
 
 Waiting for you to finish in the browser (up to 5 minutes)...
 ✓ Signed in as jane@example.com
-  Workspace  Acme Payments (01J8K...)
+  Workspace  01J8K2V6XN7Y0Q4R5S6T7U8V9X
   Session    ...A7F2Q9   (shown on Settings → Security → CLI sessions)
   Stored in  macOS Keychain
 ```
@@ -318,10 +318,9 @@ On failure (`--json`, stdout, non-zero exit):
 `cloud_unreachable`, `version_mismatch`, `credential_store`, `oauth_error` (with the server's
 `error` code in `oauthError`), `cancelled`.
 
-The workspace **name** is not in any token claim and not returned by the token endpoint. The success
-block shows the name only when `GET {gateway}/v1/projects?pageSize=1` succeeds within 3 s and
-returns a project with a workspace name; otherwise it shows the workspace id only. This lookup is
-best effort and never fails the login. (Open question §20 Q-2.)
+The workspace **name** is not in any token claim and not returned by the token endpoint. The
+success block shows the workspace id only (it is in the token and costs nothing); there is no
+name lookup and no extra request during `login` (Q-2, answered).
 
 ### 3.3 `xping logout`
 
@@ -963,11 +962,13 @@ version mismatch, timeout, store refused, project not resolved) results in:
 
 - the local report exactly as today: same text, same JSON except the additive `cloud` fields
   (§11.4), same exit code;
-- **one** line on stderr, only when stderr is a terminal or `--verbose` is set, chosen from
-  §11.6.
+- **one** line on stderr, chosen from §11.6. The `login-required` line is always printed, even
+  when stderr is redirected, because a human reading a CI or agent log needs to know that a
+  sign-in is the fix (Q-9, answered). Every other hint is printed only when stderr is a terminal
+  or `--verbose` is set.
 
-`report --json` in a pipe stays silent on stderr unless `--verbose`, so existing consumers see no
-change.
+`report --json` in a pipe therefore stays silent on stderr in every case except an expired or
+revoked login.
 
 ---
 
@@ -1053,7 +1054,7 @@ requests.
 | Condition | Line |
 |---|---|
 | no credential | none (local mode is the default; the existing cloud invitation already covers discovery) |
-| login required (§9.6) | `Cloud data unavailable: your sign-in is no longer valid. Run xping login.` |
+| login required (§9.6) | `Cloud data unavailable: your sign-in is no longer valid. Run xping login.` — always printed (§10.4) |
 | unreachable, TLS, timeout, 5xx | `Cloud data unavailable: could not reach https://api.xping.io ({category}). Showing local results only.` |
 | version mismatch | `Cloud data unavailable: {§2.3 message}` |
 | project not resolved for some assembly | `Cloud data unavailable for {assembly}: no matching Cloud project. Use --project <key>.` |
@@ -1132,7 +1133,7 @@ a `report` meaning and are easy to recognise in scripts:
 
 Validation (parse-time, exit 2): absolute URI; scheme `https`, or `http` only when the host is
 `localhost` or `127.0.0.1` (contract §10.1; `[::1]` is not in the contract's list and is refused,
-Q-5); no user info, query or fragment; a path is allowed only as `/` (the issuer must equal the URL
+Q-5, answered); no user info, query or fragment; a path is allowed only as `/` (the issuer must equal the URL
 exactly, and the Portal issuer has no path). Normalization: lowercase scheme and host, default port
 removed, trailing slash removed. The normalized string is the key for the credential store, the
 discovery cache and the project cache. `https://App.Xping.io/` and `https://app.xping.io` are the
@@ -1278,9 +1279,10 @@ The Xping skill and the MCP server run the CLI as a child process. Rules:
     session bus asserts the fallback.
   The job has `timeout-minutes: 15` and `concurrency` cancel-in-progress. Expected cost:
   under 5 runner minutes on Linux, ~3 on Windows (×2 billing), ~3 on macOS (×10 billing), so
-  roughly 40 billed minutes per night, about 1200 per month if run daily. **Recommendation: run
-  it weekly** (`'0 3 * * 1'`) unless a keychain backend changed, which keeps it near 160 billed
-  minutes per month. Developers run the same filter locally before touching a backend.
+  roughly 40 billed minutes per run, about 1200 per month if run daily. **Decision (Q-7,
+  answered): it runs weekly**, `'0 3 * * 1'`, about 160 billed minutes per month, plus
+  `workflow_dispatch` for a manual run after a backend change. Developers run the same filter
+  locally before touching a backend.
 - Tests use the service/target name `xping-cli-tests` and a Cloud URL of
   `https://tests.invalid`, and delete what they create in `finally`, so a developer's real login
   is never touched.
@@ -1431,15 +1433,15 @@ finds a contract or spec conflict stops and reports.
 
 | # | Question | Needed by |
 |---|---|---|
-| Q-1 | **DataGateway additive change.** May `ProjectResponse` gain `displayName` and `slug` (A-3 said yes if it helps; it does, it is the only way to do §11.2 step 4)? Who files and schedules the Cloud issue? | phase 7 step 4; steps 1–3 do not depend on it |
-| Q-2 | **Workspace name.** No claim or token response carries the workspace name. `login` shows the id only, unless the best-effort lookup of §3.2 can find a name. Is a `workspace_name` claim, or a `name` on some DataGateway response, worth adding? Or is the id enough for the MVP? | phase 3 text; harmless to leave |
+| Q-1 | *Answered 2026-09-29.* Filed as [xping-dev/dashboard#333](https://github.com/xping-dev/dashboard/issues/333): `displayName` and `slug` on `ProjectResponse`. Phase 7 step 4 waits for it; steps 1–3 do not. | — |
+| Q-2 | *Answered 2026-09-29.* The id is enough for the MVP. `login` shows the workspace id and makes no name lookup (§3.2). | — |
 | Q-3 | **Which score field.** `TestResponse.confidenceScore` and `scoreCategory` are what §11.3 renders. The report-format spec's example is `confidence 0.62 · moderate`; is `scoreCategory` the right source for "moderate", or should it be `evidenceLevel`? | phase 7 |
 | Q-4 | **Latest-run contrast.** The reserved sentence includes "failed on this branch"; `TestResponse` has no per-branch data. Leave the clause out for the MVP (this draft) or call the sessions endpoint with `branch=`? | phase 7 |
-| Q-5 | **`http://[::1]` Cloud URL.** Contract §10.1 lists `localhost` and `127.0.0.1` only. Is refusing `http://[::1]:port` acceptable for local development? | phase 0 validation |
+| Q-5 | *Answered 2026-09-29.* Yes: `http://[::1]` Cloud URLs are refused (§14.1). | — |
 | Q-6 | **`login` when an API key is set.** This draft warns and proceeds (§3.2). Should it instead refuse, to avoid a stored login that is never used? | phase 3 |
-| Q-7 | **Weekly or nightly** for the credential-store workflow (§17.2). This draft recommends weekly. | phase 5 |
+| Q-7 | *Answered 2026-09-29.* Weekly (§17.2). The owner may raise the frequency later. | — |
 | Q-8 | **`--api-key` flag.** It exists per the fixed decision, but a key on the command line lands in shell history. Keep it (this draft, with a hint), or env only? | phase 0 |
-| Q-9 | **Hint lines in a redirected `report`.** This draft hides Cloud hints on stderr when stderr is not a terminal unless `--verbose`, so pipelines stay quiet. Should `login-required` always be printed, since a human may be reading a CI log? | phase 7 |
+| Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
 
 ### Contract observations recorded while writing (no conflict found)
 
