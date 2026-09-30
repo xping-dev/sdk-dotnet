@@ -1015,9 +1015,9 @@ amends each spec with an "Amendment — Cloud data" section that quotes this sec
 | Slot | Spec | Content |
 |---|---|---|
 | Header line 1 | report-format §8 | `· cloud` appended when at least one finding was enriched; `· cloud unavailable` is **not** shown (the hint line covers it) |
-| Row trailer | report-format §8 | `confidence 0.62 · moderate` from `confidenceScore` (two decimals) and `scoreCategory` lowercased, inserted between the evidence level and the id, exactly as reserved |
+| Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` lowercased (`highly reliable`, `reliable`, `moderately reliable`, `unreliable`, `highly unreliable`; `insufficient data` shows no trailer), inserted between the evidence level and the id, exactly as reserved. The Cloud `evidenceLevel` is not on the row: the row already carries the local evidence level, and two evidence words would collide (Q-3, answered) |
 | Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4) |
-| Detail metrics block | finding-detail §8 | a labelled pair `cloud confidence  0.62 (moderate, trend rising, 812 runs)` built in `EnvelopeBuilder`, rendered as any other metric |
+| Detail metrics block | finding-detail §8 | labelled pairs built in `EnvelopeBuilder`, rendered as any other metric: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
 
 Every Cloud value is labelled "cloud" or "confidence" in text, and lives under a `cloud` object in
 JSON, so it can never be mistaken for a local statistic. Local analysis computes no confidence score
@@ -1435,12 +1435,12 @@ finds a contract or spec conflict stops and reports.
 |---|---|---|
 | Q-1 | *Answered 2026-09-29.* Filed as [xping-dev/dashboard#333](https://github.com/xping-dev/dashboard/issues/333): `displayName` and `slug` on `ProjectResponse`. Phase 7 step 4 waits for it; steps 1–3 do not. | — |
 | Q-2 | *Answered 2026-09-29.* The id is enough for the MVP. `login` shows the workspace id and makes no name lookup (§3.2). | — |
-| Q-3 | **Which score field.** `TestResponse.confidenceScore` and `scoreCategory` are what §11.3 renders. The report-format spec's example is `confidence 0.62 · moderate`; is `scoreCategory` the right source for "moderate", or should it be `evidenceLevel`? | phase 7 |
+| Q-3 | *Answered 2026-09-30.* Option A: the row trailer uses `scoreCategory`; `evidenceLevel` appears only in the detail block and in JSON (§11.3). | — |
 | Q-4 | **Latest-run contrast.** The reserved sentence includes "failed on this branch"; `TestResponse` has no per-branch data. Leave the clause out for the MVP (this draft) or call the sessions endpoint with `branch=`? | phase 7 |
 | Q-5 | *Answered 2026-09-29.* Yes: `http://[::1]` Cloud URLs are refused (§14.1). | — |
 | Q-6 | **`login` when an API key is set.** This draft warns and proceeds (§3.2). Should it instead refuse, to avoid a stored login that is never used? | phase 3 |
 | Q-7 | *Answered 2026-09-29.* Weekly (§17.2). The owner may raise the frequency later. | — |
-| Q-8 | **`--api-key` flag.** It exists per the fixed decision, but a key on the command line lands in shell history. Keep it (this draft, with a hint), or env only? | phase 0 |
+| Q-8 | *Answered 2026-09-30.* Keep the flag, with the `--help` hint to prefer `XPING_APIKEY` (§14.2). | — |
 | Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
 
 ### Contract observations recorded while writing (no conflict found)
