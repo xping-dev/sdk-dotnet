@@ -29,7 +29,8 @@ Decisions confirmed by the owner on 2026-09-29, before this draft:
 | A-4 | There is no staging environment. Manual verification runs against production with a test account and a test workspace (Cloud spec §14.4). |
 | A-5 | `xping auth status` is the CLI name for what the contract calls `xping whoami` (contract §1.3, §6.1, §9.1). Same output, different name. |
 | A-6 | Contract §3.1 step 8 and §10.2 ("exactly one request", "one callback and then close") mean **one successful callback**. Requests that fail the `state` check or are not `GET /callback` are answered and the listener keeps waiting (contract §3.1 failure table). |
-| A-7 | Cross-platform credential-store tests do not run on every PR. They run in a separate workflow, nightly on `main` only (§17.3), to protect the free CI minutes. |
+| A-7 | Cross-platform credential-store tests do not run on every PR. They run in a separate workflow, weekly on `main` only (§17.2), to protect the free CI minutes. |
+| A-8 | Credential precedence (revised 2026-09-30, replaces the brief's order): `--api-key` flag, then the stored login, then `XPING_APIKEY` / `Xping:ApiKey`. The explicit flag wins because it was typed for this command; the ambient key comes last because on a developer machine it is almost always the SDK's upload key, and trying it first would waste a request per command. CI has no stored login, so it still uses the key. Fallback rules in §8.1. |
 
 ---
 
@@ -48,7 +49,7 @@ mode, the credential store per operating system, the HTTP pipeline, and the orde
 - The loopback PKCE flow (primary) and the device flow (fallback), as contract §3.1 and §3.2.
 - Refresh, rotation, reuse detection, revocation and logout, as contract §3.3 and §3.4.
 - Credential storage per operating system with a file fallback, as contract §10.4.
-- Credential precedence: `--api-key`, then `XPING_APIKEY`, then the stored login.
+- Credential precedence: `--api-key`, then the stored login, then `XPING_APIKEY` (A-8).
 - The authenticated HTTP pipeline and the Cloud API client.
 - Enrichment of `xping report` with Cloud data, additive and never required (§11).
 - `--cloud-url` and its configuration equivalents.
@@ -251,8 +252,9 @@ browser), `--workspace <ulid>` (sent as `xping_workspace_id`, contract §4.2; pr
    written.
 2. A credential store is available or the file fallback can be created (§7.4). Otherwise exit code
    `CredentialStoreError`.
-3. `--api-key` or `XPING_APIKEY` present: not an error, but a warning on stderr: "An API key is
-   set; commands will use it instead of this login until you unset it (§8)."
+3. `XPING_APIKEY` or `Xping:ApiKey` present: no warning; the stored login takes precedence over
+   the ambient key (A-8). Under `--verbose` one line notes that a key is also set and will be
+   used only when no login is available.
 
 Then discovery (§2.3), then the flow (§4 or §6), then storage, then the result.
 
@@ -357,11 +359,14 @@ Session     ...A7F2Q9
 Access token  expires in 12 minutes (refreshed automatically)
 ```
 
-With an API key active: `Credential  API key (--api-key)` or `API key (XPING_APIKEY)`, plus a
-line "A stored login also exists for this Cloud URL and is not used while the key is set." when
-both exist. Not logged in: `Credential  none` and "Run `xping login` to sign in." Exit code
-`AuthRequired` when no credential of any kind is available; `0` otherwise, including when only an
-API key is set (the CLI cannot verify a key without a network call, and `status` makes none).
+With a stored login and an ambient key both present: the `Credential` line shows the login and a
+second line reads "API key (XPING_APIKEY) also set; used only when no login is available."
+With `--api-key` given: `Credential  API key (--api-key)` and, when a login exists, "A stored
+login also exists and is not used while --api-key is given." With only a key:
+`Credential  API key (XPING_APIKEY)`. Not logged in and no key: `Credential  none` and "Run
+`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available;
+`0` otherwise, including when only an API key is set (the CLI cannot verify a key without a
+network call, and `status` makes none).
 
 JSON:
 
@@ -378,13 +383,16 @@ JSON:
   "sessionId": "...",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z" | null,
   "storedAt": "2026-09-01T08:00:00Z",
+  "fallbackApiKey": "env" | "config" | null,
   "shadowedLogin": false,
   "warnings": []
 }
 ```
 
-`warnings` carries the file-fallback notice and a corrupt-entry notice (§7.7) as strings so an agent
-can surface them.
+`fallbackApiKey` names an ambient key that would be used if the login became invalid;
+`shadowedLogin` is `true` only when `--api-key` was given and a login exists. `warnings` carries
+the file-fallback notice and a corrupt-entry notice (§7.7) as strings so an agent can surface
+them.
 
 ### 3.5 Prompts
 
@@ -777,26 +785,45 @@ mode check is skipped; the ACL is set on write only.
 | Order | Source | `CredentialSource` | Header used |
 |---|---|---|---|
 | 1 | `--api-key <key>` | `ApiKeyFlag` | `X-API-Key` |
-| 2 | `XPING_APIKEY` (env), then `Xping:ApiKey` in `appsettings*.json` of the working directory (§14) | `ApiKeyEnv` / `ApiKeyConfig` | `X-API-Key` |
-| 3 | stored login for this Cloud URL (§7.4 read order) | `StoredLogin` with `Store = Keychain \| File` | `Authorization: Bearer` |
+| 2 | stored login for this Cloud URL (§7.4 read order) | `StoredLogin` with `Store = Keychain \| File` | `Authorization: Bearer` |
+| 3 | `XPING_APIKEY` (env), then `Xping:ApiKey` in `appsettings*.json` of the working directory (§14) | `ApiKeyEnv` / `ApiKeyConfig` | `X-API-Key` |
 | 4 | none | `None` | no request is made |
 
-Exactly one header is ever set (contract §7.1). The resolver chooses the handler for
-`"xping-cloud"` at host construction; the two handlers are never both in the pipeline. An API key
-is used as-is; the CLI does not validate its scope or plan. Contract §7.4 means a `read` key needs
-the `ApiAccess` feature (Team plan or higher); a 403 `Error.ApiKey.FeatureNotAvailable` is reported
-as "This API key's plan does not include API read access. Sign in with `xping login` instead."
+Why this order (A-8): the flag is explicit input for this one command and must not be overridden
+by stored state. The ambient key is almost always the SDK's upload key on a developer machine;
+trying it first would cost one request per command to learn it has no read scope. The login costs
+at most one refresh every 15 minutes. CI has no stored login and therefore still uses the key.
+
+**Fallback rules.** The resolver picks one credential per command; the handler for `"xping-cloud"`
+is chosen from it, and the two handlers are never both in the pipeline. Exactly one header is ever
+set on any request (contract §7.1). The resolver moves to the next row only on a **definitive**
+authentication outcome, never on a network error, timeout or 5xx (Cloud down for one credential
+is Cloud down for all, and a second try only doubles the wait):
+
+| Outcome with the current credential | Next step |
+|---|---|
+| No stored login | row 3 |
+| Stored login: refresh answers `invalid_grant`, or a second 401 after refresh (§9.6) | tokens deleted per contract §3.3; the `login-required` hint is printed (§11.6); then row 3 if a key exists |
+| API key: 403 `Error.ApiKey.InsufficientScope` (upload-only key) or `Error.ApiKey.FeatureNotAvailable` (plan without `ApiAccess`, contract §7.4) | nothing left to try; hint "This API key cannot read Cloud data ({scope or plan}). Sign in with `xping login` instead." |
+| API key: any other 401/403 | nothing left; hint with `title` |
+| Network error, timeout, 5xx, version mismatch | stop; `Cloud data unavailable` hint; no fallback |
+
+The fallback happens at most once per command, and a rebuilt `HttpClient` pipeline is used for
+the second credential so no header from the first can leak into it. An API key is used as-is; the
+CLI does not validate its scope or plan before sending.
 
 CI behaviour is unchanged: CI does not run the CLI with Cloud today, and when it does with an API
-key, no login is consulted and no refresh happens.
+key, no login exists, so the key is used directly and no refresh happens.
 
 ### 8.2 Reporting the active source
 
 - `auth status` (§3.4) is the canonical report.
 - `--verbose` on any command prints one line to stderr at startup:
   `credential: stored login (macOS Keychain), workspace 01J8…, expires in 12 min` or
-  `credential: API key (XPING_APIKEY)` or `credential: none (local only)`. Never the key or
-  token (§15).
+  `credential: API key (--api-key)` or `credential: API key (XPING_APIKEY)` or
+  `credential: none (local only)`. When a fallback happened, a second line says
+  `credential: fell back to API key (XPING_APIKEY) because the stored login is no longer valid`.
+  Never the key or token (§15).
 - `report --json` records the source in `context.cloud.credential` (§11.4), because an agent that
   reads the envelope needs to know whether Cloud data was even attempted.
 
@@ -1154,7 +1181,7 @@ a "CLI only" marker in the description, and one section each in the same format 
 | Setting | Type | Default | Environment Variable | Description |
 |---|---|---|---|---|
 | `CloudUrl` | string | `https://app.xping.io` | `XPING_CLOUDURL` | CLI only. Xping Cloud (Portal) URL used by `xping login` and Cloud-enriched reports |
-| `ApiKey` | (existing row) | | `XPING_APIKEY` | add: "The CLI uses it for Cloud reads when set; it takes precedence over a stored login." |
+| `ApiKey` | (existing row) | | `XPING_APIKEY` | add: "The CLI uses it for Cloud reads when no stored login is available. `--api-key` on the command line takes precedence over a stored login; the environment variable does not." |
 | `ProjectId` | (existing row) | | `XPING_PROJECTID` | add: "The CLI uses it to bind local runs to a Cloud project." |
 
 `CloudUrl` is **not** added to `XpingConfiguration` in Core: the SDK never needs it, and an unused
@@ -1311,7 +1338,7 @@ by the fake-server tests with the environment providers stubbed.
 | `CredentialRecordTests`, `FileCredentialStoreTests` | round trip, atomic write, mode 0600/0700 (the mode assertions are skipped on Windows through a trait), refusal of group/world-readable file, corrupt record, multi-cloud file |
 | `CredentialStoreSelectorTests` | selection with fake availability probes; read order keychain → file |
 | `WindowsCredentialStoreTests`, `MacOsKeychainStoreTests`, `LibSecretStoreTests` | `Category=CredentialStore` (§17.2); on other OSes they are skipped, not failed |
-| `CredentialResolverTests` | precedence table of §8.1, shadowed-login warning |
+| `CredentialResolverTests` | precedence table of §8.1, both fallback rows (no login → key; login invalid → key), no fallback on network error, shadowed-login and fallback-key reporting |
 | `TokenRefresherTests` | proactive margin, single-flight (N concurrent callers, one refresh), re-read under lock adopts a fresher record, `invalid_grant` with a rotated stored token retries once, `invalid_grant` otherwise deletes and throws, store write failure keeps in-memory tokens |
 | `BearerTokenHandlerTests` | host guard, header set, 401 `invalid_token` → one refresh and retry, second 401 passes through, 403 not retried, no `X-API-Key` |
 | `CloudApiClientTests` | DTO mapping, 404 → null, status-then-title mapping table of §9.7, 429 `Retry-After` |
@@ -1361,13 +1388,16 @@ with `FakeTimeProvider`, and `CredentialStoreSelector` with the file backend. Sc
 | `Login_Discovery_IssuerMismatch`, `_ContractVersion`, `_MinCliVersion` | exit 16/15 before any authorize request (asserted by the request log) |
 | `Login_Device_Success`, `_SlowDown`, `_Denied`, `_Expired` | polling scripts |
 | `Login_NoTty` | `isTerminal: false` → exit 13, no request made |
-| `Login_WithApiKeySet_Warns` | warning present, login proceeds |
+| `Login_WithApiKeySet_Proceeds` | no warning, login proceeds, `auth status` then reports the login as active and the key as fallback |
 | `Report_Enriched` | stored login → envelope has `cloud` fields, header `· cloud`, trailer text |
 | `Report_Refresh_Rotation` | access token expired → refresh → new pair stored → report enriched |
 | `Report_ReuseDetected` | fake revokes on reuse → `invalid_grant` → record deleted → local report, hint line, exit code unchanged |
 | `Report_TwoProcesses_Refresh` | two `TokenRefresher` instances over the same file store refresh concurrently → both succeed, one refresh request or two inside leeway, store holds a valid pair |
 | `Report_CloudDown` | 5xx/timeouts → local report, one hint, same exit code and stdout as without credential (except schema fields) |
-| `Report_ApiKey_Precedence` | key flag + env + stored login → `X-API-Key` only, `credential: api-key` |
+| `Report_ApiKey_Precedence` | flag + env + stored login → `X-API-Key` (flag value) only, `credential: api-key`; env + stored login → `Bearer` only, `credential: stored-login`; env only → `X-API-Key` |
+| `Report_Fallback_LoginInvalid_ThenKey` | stored login revoked on the fake → `invalid_grant` → tokens deleted, hint printed, then the env key is used and the report is enriched; the request log shows no request with both headers |
+| `Report_Fallback_UploadOnlyKey` | env key answers 403 `InsufficientScope` → local report, scope hint, exit code unchanged |
+| `Report_NoFallback_OnNetworkError` | stored login refresh times out → local report, one hint, no key request made |
 | `Report_BothHeadersNever` | request log shows never both headers in any test (asserted in the fake's dispose) |
 | `Logout_Revokes_ThenDeletes`, `Logout_Offline_DeletesAndWarns`, `Logout_NotSignedIn` | §12 |
 | `AuthStatus_*` | each credential state, no request made (asserted) |
@@ -1438,7 +1468,7 @@ finds a contract or spec conflict stops and reports.
 | Q-3 | *Answered 2026-09-30.* Option A: the row trailer uses `scoreCategory`; `evidenceLevel` appears only in the detail block and in JSON (§11.3). | — |
 | Q-4 | **Latest-run contrast.** The reserved sentence includes "failed on this branch"; `TestResponse` has no per-branch data. Leave the clause out for the MVP (this draft) or call the sessions endpoint with `branch=`? | phase 7 |
 | Q-5 | *Answered 2026-09-29.* Yes: `http://[::1]` Cloud URLs are refused (§14.1). | — |
-| Q-6 | **`login` when an API key is set.** This draft warns and proceeds (§3.2). Should it instead refuse, to avoid a stored login that is never used? | phase 3 |
+| Q-6 | *Answered 2026-09-30.* Superseded by A-8: the stored login now takes precedence over the ambient key, so `login` proceeds without a warning (§3.2) and `auth status` reports the key as a fallback (§3.4). | — |
 | Q-7 | *Answered 2026-09-29.* Weekly (§17.2). The owner may raise the frequency later. | — |
 | Q-8 | *Answered 2026-09-30.* Keep the flag, with the `--help` hint to prefer `XPING_APIKEY` (§14.2). | — |
 | Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
