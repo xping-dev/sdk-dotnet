@@ -14,6 +14,9 @@ namespace Xping.Sdk.Core.Tests.Services.Environment;
 [Collection("Sequential")]
 public sealed class EnvironmentDetectorTests
 {
+    private static readonly HashSet<string> _platformSpecificCommitKeys =
+        ["CI.SHA", "CI.SourceVersion", "CI.GitCommit", "CI.CommitSHA", "CI.Commit"];
+
     private static readonly string[] _environmentVariables =
     [
         "CI",
@@ -26,6 +29,24 @@ public sealed class EnvironmentDetectorTests
         "TEAMCITY_VERSION",
         "BITBUCKET_PIPELINE_UUID",
         "APPVEYOR",
+        "GITHUB_SHA",
+        "GITHUB_EVENT_NAME",
+        "BUILD_SOURCEVERSION",
+        "BUILD_REASON",
+        "GIT_COMMIT",
+        "CHANGE_ID",
+        "ghprbPullId",
+        "CI_COMMIT_SHA",
+        "CI_MERGE_REQUEST_IID",
+        "CIRCLE_SHA1",
+        "CIRCLE_PULL_REQUEST",
+        "TRAVIS_COMMIT",
+        "TRAVIS_PULL_REQUEST",
+        "BUILD_VCS_NUMBER",
+        "BITBUCKET_COMMIT",
+        "BITBUCKET_PR_ID",
+        "APPVEYOR_REPO_COMMIT",
+        "APPVEYOR_PULL_REQUEST_NUMBER",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -272,6 +293,7 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithCIEnvironment_CIBranchPopulatedFromEnvVarNotGit()
     {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
         using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/ci-branch");
         using var githubSha = new EnvRestorer("GITHUB_SHA", "cafebabe");
@@ -281,7 +303,114 @@ public sealed class EnvironmentDetectorTests
 
         Assert.True(info.IsCIEnvironment);
         Assert.Equal("feature/ci-branch", info.CustomProperties["CI.Branch"]);
-        Assert.Equal("cafebabe", info.CustomProperties["CI.SHA"]);
+        Assert.Equal("cafebabe", info.CustomProperties["CI.CommitSha"]);
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SHA")]
+    [InlineData("TF_BUILD", "True", "BUILD_SOURCEVERSION")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "GIT_COMMIT")]
+    [InlineData("GITLAB_CI", "true", "CI_COMMIT_SHA")]
+    [InlineData("CIRCLECI", "true", "CIRCLE_SHA1")]
+    [InlineData("TRAVIS", "true", "TRAVIS_COMMIT")]
+    [InlineData("TEAMCITY_VERSION", "2025.07", "BUILD_VCS_NUMBER")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", "BITBUCKET_COMMIT")]
+    [InlineData("APPVEYOR", "True", "APPVEYOR_REPO_COMMIT")]
+    public async Task CommitShaIsReadFromThePlatformsCommitVariable(
+        string platformVariable, string platformValue, string shaVariable)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var sha = new EnvRestorer(shaVariable, "0123abcd");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
+        Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "pull_request")]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "pull_request_target")]
+    [InlineData("TF_BUILD", "True", "BUILD_REASON", "PullRequest")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "CHANGE_ID", "17")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "ghprbPullId", "17")]
+    [InlineData("GITLAB_CI", "true", "CI_MERGE_REQUEST_IID", "17")]
+    [InlineData("CIRCLECI", "true", "CIRCLE_PULL_REQUEST", "https://github.com/o/r/pull/17")]
+    [InlineData("TRAVIS", "true", "TRAVIS_PULL_REQUEST", "42")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", "BITBUCKET_PR_ID", "17")]
+    [InlineData("APPVEYOR", "True", "APPVEYOR_PULL_REQUEST_NUMBER", "17")]
+    public async Task IsPullRequestIsTrueForAPullRequestBuild(
+        string platformVariable, string platformValue, string markerVariable, string markerValue)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var marker = new EnvRestorer(markerVariable, markerValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", null, null)]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "push")]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "schedule")]
+    [InlineData("TF_BUILD", "True", null, null)]
+    [InlineData("TF_BUILD", "True", "BUILD_REASON", "IndividualCI")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", null, null)]
+    [InlineData("GITLAB_CI", "true", null, null)]
+    [InlineData("CIRCLECI", "true", null, null)]
+    [InlineData("TRAVIS", "true", null, null)]
+    [InlineData("TRAVIS", "true", "TRAVIS_PULL_REQUEST", "false")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", null, null)]
+    [InlineData("APPVEYOR", "True", null, null)]
+    public async Task IsPullRequestIsFalseForAPushBuild(
+        string platformVariable, string platformValue, string? markerVariable, string? markerValue)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var marker = markerVariable is null ? null : new EnvRestorer(markerVariable, markerValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("false", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Fact]
+    public async Task TeamCityOmitsThePullRequestFlag()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var teamCity = new EnvRestorer("TEAMCITY_VERSION", "2025.07");
+        using var sha = new EnvRestorer("BUILD_VCS_NUMBER", "0123abcd");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("TeamCity", info.CustomProperties["CIPlatform"]);
+        Assert.False(info.CustomProperties.ContainsKey("CI.IsPullRequest"));
+    }
+
+    [Fact]
+    public async Task GenericCiEmitsNeitherCommitShaNorPullRequestFlag()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var ci = new EnvRestorer("CI", "true");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("Generic", info.CustomProperties["CIPlatform"]);
+        Assert.False(info.CustomProperties.ContainsKey("CI.CommitSha"));
+        Assert.False(info.CustomProperties.ContainsKey("CI.IsPullRequest"));
     }
 
     [Fact]
