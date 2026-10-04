@@ -267,7 +267,7 @@ public static class XpingServiceCollectionExtensions
     public static IServiceCollection AddXpingSerialization(this IServiceCollection services)
     {
         // Register JSON serializer with API options (compact, camelCase)
-        services.AddSingleton<IXpingSerializer>(_ => new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
+        services.TryAddSingleton<IXpingSerializer>(_ => new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
         return services;
     }
 
@@ -400,13 +400,15 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Adds pull request context detection services.
-    /// Registers the environment variable provider abstraction and the GitHub Actions detector.
+    /// Registers the environment variable provider abstraction, the serializer the GitHub Actions
+    /// detector reads the event payload with, and the GitHub Actions detector.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingPullRequest(this IServiceCollection services)
     {
         services.AddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
+        services.AddXpingSerialization();
         services.AddSingleton<IPlatformPullRequestDetector, GitHubPullRequestDetector>();
         services.AddSingleton<IPullRequestContextDetector, CompositePullRequestContextDetector>();
         return services;

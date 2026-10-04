@@ -671,7 +671,7 @@ export XPING_ENABLECOMPRESSION="false"
 Detect pull request context from CI/CD environment variables and include it in session uploads. When enabled, Xping reads PR metadata (PR number, branch, platform) from the CI environment to enable automatic PR comment posting with test results.
 
 **Supported platforms:**
-- GitHub Actions (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.)
+- GitHub Actions (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.). The commit is the PR head, read from `pull_request.head.sha` in the event payload at `GITHUB_EVENT_PATH`.
 
 **When to disable:**
 - You don't use PR comment posting and want to skip the detection overhead
