@@ -94,7 +94,8 @@ Xping automatically captures:
 - `GITHUB_ACTIONS` - CI environment indicator
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
-- `GITHUB_SHA` - Commit SHA
+- `GITHUB_SHA` - Normalized into `CI.CommitSha` (omitted on `pull_request_target`, where it is the base branch's tip)
+- `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
@@ -162,7 +163,8 @@ Xping automatically captures:
 - `TF_BUILD` - CI environment indicator
 - `BUILD_BUILDID` - Unique build ID
 - `BUILD_BUILDNUMBER` - Build number
-- `BUILD_SOURCEVERSION` - Commit SHA
+- `BUILD_SOURCEVERSION` - Normalized into `CI.CommitSha`
+- `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` - Branch name
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `BUILD_REQUESTEDFOR` - User who triggered the build
@@ -221,7 +223,8 @@ Xping automatically captures:
 - `GITLAB_CI` - CI environment indicator
 - `CI_PIPELINE_ID` - Unique pipeline ID
 - `CI_JOB_ID` - Job ID
-- `CI_COMMIT_SHA` - Commit SHA
+- `CI_COMMIT_SHA` - Normalized into `CI.CommitSha`
+- `CI_MERGE_REQUEST_IID` - Normalized into `CI.IsPullRequest` (`true` in merge request pipelines)
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
 - `CI_PROJECT_PATH` - Repository path
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
@@ -287,7 +290,8 @@ Xping automatically captures:
 - `JENKINS_URL` - CI environment indicator
 - `BUILD_ID` - Unique build ID
 - `BUILD_NUMBER` - Build number
-- `GIT_COMMIT` - Commit SHA (if using Git)
+- `GIT_COMMIT` - Normalized into `CI.CommitSha` (if using Git)
+- `CHANGE_ID` / `ghprbPullId` - Normalized into `CI.IsPullRequest` (`true` when either is set)
 - `GIT_BRANCH` - Branch name
 - `JOB_NAME` - Job name
 - `BUILD_USER` - User who triggered the build (if available)
@@ -348,7 +352,8 @@ workflows:
 Xping automatically captures:
 - `CIRCLECI` - CI environment indicator
 - `CIRCLE_BUILD_NUM` - Build number
-- `CIRCLE_SHA1` - Commit SHA
+- `CIRCLE_SHA1` - Normalized into `CI.CommitSha`
+- `CIRCLE_PULL_REQUEST` - Normalized into `CI.IsPullRequest` (`true` whenever the branch has an open PR)
 - `CIRCLE_BRANCH` - Branch name
 - `CIRCLE_PROJECT_REPONAME` - Repository name
 - `CIRCLE_USERNAME` - User who triggered the build
@@ -415,6 +420,11 @@ env:
 
 Nothing needs enabling. Every run detects its CI platform and records the branch, commit SHA, run
 ID, actor and `IsCIEnvironment` flag on its own.
+
+Whatever the platform, the commit lands in `CI.CommitSha` and the pull request flag in
+`CI.IsPullRequest` (`"true"` or `"false"`). The flag is left out where the platform gives no
+reliable pull request marker (TeamCity, or a generic `CI=true` runner), and Xping Cloud then treats
+the run as possibly a pull request.
 
 ### 3. Name Environments After Deployments, Not After Runs
 
