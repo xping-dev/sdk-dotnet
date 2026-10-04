@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Services.PullRequest.Internals;
 
 namespace Xping.Sdk.Core.Services.Environment.Internals;
 
@@ -458,7 +459,19 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         ExtractBranchName(GetEnvironmentVariable("GITHUB_REF"))));
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
-                    AddIfNotNull(properties, "CI.SHA", GetEnvironmentVariable("GITHUB_SHA"));
+                    string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+                    // On pull_request_target, GITHUB_SHA is the base branch's tip, not the PR's code, so
+                    // sending it would file PR results under a commit that is already on main.
+                    if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));
+                    }
+
+                    // The event set misses other PR-triggered events (pull_request_review, …), which run
+                    // on refs/pull/N/merge. pull_request_target runs on the base ref, so both are needed.
+                    AddPullRequestFlag(properties,
+                        GitHubPullRequestDetector.PullRequestEventNames.Contains(githubEventName) ||
+                        (GetEnvironmentVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false));
                     AddIfNotNull(properties, "CI.Actor", GetEnvironmentVariable("GITHUB_ACTOR"));
                     AddIfNotNull(properties, "CI.Workflow", GetEnvironmentVariable("GITHUB_WORKFLOW"));
                     break;
@@ -471,7 +484,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
                         ExtractBranchName(GetEnvironmentVariable("BUILD_SOURCEBRANCH"))));
-                    AddIfNotNull(properties, "CI.SourceVersion", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
+                    AddPullRequestFlag(properties, string.Equals(
+                        GetEnvironmentVariable("BUILD_REASON"), "PullRequest", StringComparison.OrdinalIgnoreCase));
                     AddIfNotNull(properties, "CI.RequestedFor", GetEnvironmentVariable("BUILD_REQUESTEDFOR"));
                     break;
 
@@ -479,7 +494,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_NUMBER"));
                     AddIfNotNull(properties, "CI.JobName", GetEnvironmentVariable("JOB_NAME"));
                     AddIfNotNull(properties, "CI.BuildUrl", GetEnvironmentVariable("BUILD_URL"));
-                    AddIfNotNull(properties, "CI.GitCommit", GetEnvironmentVariable("GIT_COMMIT"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GIT_COMMIT"));
+                    // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB. A job built by any
+                    // other PR plugin reads as a push build.
+                    AddPullRequestFlag(properties, HasValue("CHANGE_ID") || HasValue("ghprbPullId"));
                     AddIfNotNull(properties, "CI.GitBranch", GetEnvironmentVariable("GIT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("GIT_BRANCH"));
                     break;
@@ -488,7 +506,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.JobId", GetEnvironmentVariable("CI_JOB_ID"));
                     AddIfNotNull(properties, "CI.PipelineId", GetEnvironmentVariable("CI_PIPELINE_ID"));
                     AddIfNotNull(properties, "CI.ProjectPath", GetEnvironmentVariable("CI_PROJECT_PATH"));
-                    AddIfNotNull(properties, "CI.CommitSHA", GetEnvironmentVariable("CI_COMMIT_SHA"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CI_COMMIT_SHA"));
+                    AddPullRequestFlag(properties, HasValue("CI_MERGE_REQUEST_IID"));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("CI_COMMIT_BRANCH"),
@@ -502,7 +521,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.WorkflowId", GetEnvironmentVariable("CIRCLE_WORKFLOW_ID"));
                     AddIfNotNull(properties, "CI.ProjectName", GetEnvironmentVariable("CIRCLE_PROJECT_REPONAME"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("CIRCLE_BRANCH"));
-                    AddIfNotNull(properties, "CI.SHA", GetEnvironmentVariable("CIRCLE_SHA1"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CIRCLE_SHA1"));
+                    // CircleCI also sets this on a plain branch build whenever the branch has an open PR. That
+                    // commit is still unmerged PR code, so counting it as a PR is correct.
+                    AddPullRequestFlag(properties, HasValue("CIRCLE_PULL_REQUEST"));
                     AddIfNotNull(properties, "CI.Username", GetEnvironmentVariable("CIRCLE_USERNAME"));
                     break;
 
@@ -511,20 +533,27 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.JobNumber", GetEnvironmentVariable("TRAVIS_JOB_NUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("TRAVIS_REPO_SLUG"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("TRAVIS_BRANCH"));
-                    AddIfNotNull(properties, "CI.Commit", GetEnvironmentVariable("TRAVIS_COMMIT"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("TRAVIS_COMMIT"));
+                    // Travis sets TRAVIS_PULL_REQUEST to the PR number, or to the literal "false" on a push build.
+                    AddPullRequestFlag(properties, HasValue("TRAVIS_PULL_REQUEST") && !string.Equals(
+                        GetEnvironmentVariable("TRAVIS_PULL_REQUEST"), "false", StringComparison.OrdinalIgnoreCase));
                     break;
 
                 case CIPlatform.TeamCity:
                     AddIfNotNull(properties, "CI.BuildId", GetEnvironmentVariable("TEAMCITY_BUILD_ID"));
                     AddIfNotNull(properties, "CI.Version", GetEnvironmentVariable("TEAMCITY_VERSION"));
                     AddIfNotNull(properties, "CI.ProjectName", GetEnvironmentVariable("TEAMCITY_PROJECT_NAME"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_VCS_NUMBER"));
+                    // TeamCity has no reliable PR marker. Omitting the flag means "unknown", which Xping Cloud
+                    // treats as possibly a PR; "false" would wrongly vouch for the commit.
                     break;
 
                 case CIPlatform.BitbucketPipelines:
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BITBUCKET_BUILD_NUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BITBUCKET_REPO_FULL_NAME"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("BITBUCKET_BRANCH"));
-                    AddIfNotNull(properties, "CI.Commit", GetEnvironmentVariable("BITBUCKET_COMMIT"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BITBUCKET_COMMIT"));
+                    AddPullRequestFlag(properties, HasValue("BITBUCKET_PR_ID"));
                     break;
 
                 case CIPlatform.AppVeyor:
@@ -532,7 +561,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildVersion", GetEnvironmentVariable("APPVEYOR_BUILD_VERSION"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("APPVEYOR_REPO_NAME"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("APPVEYOR_REPO_BRANCH"));
-                    AddIfNotNull(properties, "CI.Commit", GetEnvironmentVariable("APPVEYOR_REPO_COMMIT"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("APPVEYOR_REPO_COMMIT"));
+                    AddPullRequestFlag(properties, HasValue("APPVEYOR_PULL_REQUEST_NUMBER"));
                     break;
             }
         }
@@ -822,6 +852,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             dictionary[key] = value!;
         }
     }
+
+    private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>
+        dictionary["CI.IsPullRequest"] = isPullRequest ? "true" : "false";
+
+    private static bool HasValue(string variable) =>
+        !string.IsNullOrEmpty(GetEnvironmentVariable(variable));
 
     private static string? GetFirstNonEmptyValue(params string?[] values)
     {

@@ -24,7 +24,7 @@ internal sealed class GitHubPullRequestDetector(
     IEnvironmentVariableProvider env,
     ILogger<GitHubPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
-    private static readonly HashSet<string> _prEventNames =
+    internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
 
     private static readonly Regex _prRefPattern =
@@ -48,7 +48,7 @@ internal sealed class GitHubPullRequestDetector(
     {
         // Must be a PR-triggered workflow
         string? eventName = env.GetVariable("GITHUB_EVENT_NAME");
-        if (string.IsNullOrEmpty(eventName) || !_prEventNames.Contains(eventName!))
+        if (string.IsNullOrEmpty(eventName) || !PullRequestEventNames.Contains(eventName!))
         {
             logger.LogDebug(
                 "GitHub PR detection skipped: GITHUB_EVENT_NAME='{EventName}' " +
