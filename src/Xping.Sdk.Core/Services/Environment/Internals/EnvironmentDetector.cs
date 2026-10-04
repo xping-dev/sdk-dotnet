@@ -459,9 +459,19 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         ExtractBranchName(GetEnvironmentVariable("GITHUB_REF"))));
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
-                    AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));
-                    AddPullRequestFlag(properties, GitHubPullRequestDetector.PullRequestEventNames.Contains(
-                        GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty));
+                    string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+                    // On pull_request_target, GITHUB_SHA is the base branch's tip, not the PR's code, so
+                    // sending it would file PR results under a commit that is already on main.
+                    if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));
+                    }
+
+                    // The event set misses other PR-triggered events (pull_request_review, …), which run
+                    // on refs/pull/N/merge. pull_request_target runs on the base ref, so both are needed.
+                    AddPullRequestFlag(properties,
+                        GitHubPullRequestDetector.PullRequestEventNames.Contains(githubEventName) ||
+                        (GetEnvironmentVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false));
                     AddIfNotNull(properties, "CI.Actor", GetEnvironmentVariable("GITHUB_ACTOR"));
                     AddIfNotNull(properties, "CI.Workflow", GetEnvironmentVariable("GITHUB_WORKFLOW"));
                     break;

@@ -31,6 +31,7 @@ public sealed class EnvironmentDetectorTests
         "APPVEYOR",
         "GITHUB_SHA",
         "GITHUB_EVENT_NAME",
+        "GITHUB_REF",
         "BUILD_SOURCEVERSION",
         "BUILD_REASON",
         "GIT_COMMIT",
@@ -381,6 +382,38 @@ public sealed class EnvironmentDetectorTests
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("false", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Theory]
+    [InlineData("pull_request_review")]
+    [InlineData("pull_request_review_comment")]
+    public async Task GitHubEventsRunningOnAPullRequestMergeRefAreFlaggedAsPullRequests(string eventName)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
+        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/pull/17/merge");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Fact]
+    public async Task GitHubPullRequestTargetOmitsCommitShaBecauseItIsTheBaseBranchTip()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "pull_request_target");
+        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
+        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.False(info.CustomProperties.ContainsKey("CI.CommitSha"));
+        Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
     }
 
     [Fact]
