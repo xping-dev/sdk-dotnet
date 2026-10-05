@@ -1014,7 +1014,7 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void AddXpingPullRequest_RegistersTheGitHubGitLabAndAzurePipelinesDetectorsInOrder()
+    public void AddXpingPullRequest_RegistersTheGitHubGitLabAzurePipelinesAndJenkinsDetectorsInOrder()
     {
         using ServiceProvider provider = new ServiceCollection()
             .AddLogging()
@@ -1026,7 +1026,8 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
             .ToArray();
 
         Assert.Equal(
-            [typeof(GitHubPullRequestDetector), typeof(GitLabPullRequestDetector), typeof(AzureDevOpsPullRequestDetector)],
+            [typeof(GitHubPullRequestDetector), typeof(GitLabPullRequestDetector), typeof(AzureDevOpsPullRequestDetector),
+             typeof(JenkinsPullRequestDetector)],
             detectorTypes);
     }
 
