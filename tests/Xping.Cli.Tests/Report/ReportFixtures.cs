@@ -155,7 +155,8 @@ internal static class ReportFixtures
                     "Checkout.Tests.FixtureTests.FirstTestNeedingTheDatabase",
                     "Checkout.Tests.FixtureTests.SecondTestNeedingTheDatabase",
                     "Checkout.Tests.FixtureTests.ThirdTestNeedingTheDatabase"
-                ]) with { Id = "f_7c905f05", EvidenceLevel = "high" }),
+                ]) with
+            { Id = "f_7c905f05", EvidenceLevel = "high" }),
         "docs-location" => DocsLocation(),
 
         // One finding, whose trailer has room for its path whole: the section this feeds is about
@@ -172,12 +173,14 @@ internal static class ReportFixtures
                 "MyApp.Tests.SchedulerTests.ScheduleEvent_CreatesEventForToday",
                 "failed 100% in 00:00-06:00 local against 0% in the rest of the day, " +
                 "gap 100 pts across 4 days",
-                "tests/MyApp.Tests/SchedulerTests.cs", 18) with { Id = "f_3b0e91c4" }),
+                "tests/MyApp.Tests/SchedulerTests.cs", 18) with
+            { Id = "f_3b0e91c4" }),
         "docs-retry-deepening" => Envelope(
             Finding(nameof(FindingKind.RetryDeepening), "medium",
                 "MyApp.Tests.CheckoutTests.Checkout_CompletesWithinTheServiceBudget",
                 "attempts to pass 1 -> 3 (+2) over 3 runs against 14 before, 2.4s spent retrying",
-                "tests/MyApp.Tests/CheckoutTests.cs", 27) with { Id = "f_5da7c018" }),
+                "tests/MyApp.Tests/CheckoutTests.cs", 27) with
+            { Id = "f_5da7c018" }),
         "docs-retry-exhausted" => Envelope(
             Finding(nameof(FindingKind.RetryExhausted), "high",
                 "MyApp.Tests.CheckoutTests.Checkout_CompletesWithinTheServiceBudget",
@@ -785,7 +788,8 @@ internal static class ReportFixtures
         ReportEnvelope envelope = Envelope(
             Finding(nameof(FindingKind.Flaky), "high", passesOnRetry,
                 "failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode",
-                "samples/SampleApp.MSTest/SampleTests.cs", 96) with { Id = "f_2b84a621" },
+                "samples/SampleApp.MSTest/SampleTests.cs", 96) with
+            { Id = "f_2b84a621" },
 
             Finding(nameof(FindingKind.RetryMasked), "high", passesOnRetry,
                 "passed on retry 9 times in 9 of 9 runs, up to attempt 2",
@@ -829,7 +833,8 @@ internal static class ReportFixtures
             Finding(nameof(FindingKind.Flaky), "high",
                 "MyTestProject.SampleTests.FlakyTest_PassesOnRetry",
                 "failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode",
-                "tests/MyTestProject/SampleTests.cs", 96) with { Id = "f_2b84a621" },
+                "tests/MyTestProject/SampleTests.cs", 96) with
+            { Id = "f_2b84a621" },
 
             Finding(nameof(FindingKind.AlwaysFailing), "high",
                 "MyTestProject.SampleTests.ThrowingTestIsTracked",

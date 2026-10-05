@@ -462,7 +462,7 @@ public abstract class XpingTestBase
         builder.AddTag("framework:MSTest");
 
         // Extract properties
-        if (context.Properties.Keys is { Count: > 0})
+        if (context.Properties.Keys is { Count: > 0 })
         {
             var hasDataRow = context.Properties.Contains("DataRow");
 
