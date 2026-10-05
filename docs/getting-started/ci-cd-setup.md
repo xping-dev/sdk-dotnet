@@ -61,7 +61,7 @@ A pull request build can carry two different commits, and Xping records both on 
 
 Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
 only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example a
-Jenkins GHPRB job or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
+Jenkins GHPRB job, GitHub Enterprise Server or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
 main branch.
 ---
 
@@ -123,6 +123,7 @@ Xping automatically captures:
 - `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
 - `GITHUB_REF` - Branch or tag ref
+- `GITHUB_SERVER_URL` - Only `https://github.com` gets PR context; runs on GitHub Enterprise Server or GHE.com are still flagged as pull request builds
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
 - `GITHUB_ACTOR` - User who triggered the workflow

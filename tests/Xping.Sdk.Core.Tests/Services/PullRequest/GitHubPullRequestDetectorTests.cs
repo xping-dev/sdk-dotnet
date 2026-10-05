@@ -58,10 +58,12 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
         string? eventPath = null,
         string baseRef = "main",
         string headRef = "feature/new-feature",
-        string? actor = "devuser")
+        string? actor = "devuser",
+        string? serverUrl = "https://github.com")
     {
         var mock = new Mock<IEnvironmentVariableProvider>();
         mock.Setup(e => e.GetVariable("GITHUB_EVENT_NAME")).Returns(eventName);
+        mock.Setup(e => e.GetVariable("GITHUB_SERVER_URL")).Returns(serverUrl);
         mock.Setup(e => e.GetVariable("GITHUB_REF")).Returns(githubRef);
         mock.Setup(e => e.GetVariable("GITHUB_REPOSITORY")).Returns(repository);
         mock.Setup(e => e.GetVariable("GITHUB_SHA")).Returns(MergeSha);
@@ -295,6 +297,47 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
 
         // Assert — case-insensitive match should succeed
         Assert.NotNull(result);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Detect — GITHUB_SERVER_URL must be github.com
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("https://github.com")]
+    [InlineData("https://github.com/")]
+    [InlineData("https://GitHub.com")]
+    public void Detect_GitHubComServerUrl_ReturnsContext(string serverValue)
+    {
+        // Arrange
+        var env = BuildValidEnvMock(serverUrl: serverValue);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.NotNull(result);
+    }
+
+    // The context names no host, so Xping Cloud would file these repositories under github.com.
+    [Theory]
+    [InlineData("https://ghes.acme.com")]
+    [InlineData("https://acme.ghe.com")]
+    [InlineData("https://github.com.example.org")]
+    [InlineData("github.com")]
+    [InlineData(null)]
+    public void Detect_ServerUrlNotGitHubCom_ReturnsNull(string? serverValue)
+    {
+        // Arrange
+        var env = BuildValidEnvMock(serverUrl: serverValue);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
     }
 
     // ---------------------------------------------------------------------------

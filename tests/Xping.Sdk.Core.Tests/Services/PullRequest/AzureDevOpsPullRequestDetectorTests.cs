@@ -216,6 +216,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
 
     [Theory]
     [InlineData("Bitbucket")]
+    [InlineData("GitHubEnterprise")]
     [InlineData("Git")]
     [InlineData(" ")]
     public void Detect_UnsupportedRepositoryProvider_ReturnsNull(string provider)

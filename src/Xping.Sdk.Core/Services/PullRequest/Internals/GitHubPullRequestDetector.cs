@@ -23,6 +23,11 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// Returns <c>null</c> for any non-PR trigger or when required variables are absent.
 /// All failures are silently absorbed — detection never throws.
 /// <para>
+/// Only github.com carries PR context. GitHub Enterprise Server and GHE.com (<c>*.ghe.com</c>)
+/// return <c>null</c>: the context names no host, so Xping Cloud would attribute their
+/// repositories to github.com. Their runs are still flagged by <c>CI.IsPullRequest</c>.
+/// </para>
+/// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the PR head commit, read from
 /// <c>pull_request.head.sha</c> in the event payload at <c>GITHUB_EVENT_PATH</c>.
 /// <c>GITHUB_SHA</c> is not used: it is the synthetic merge commit on <c>pull_request</c>
@@ -40,6 +45,7 @@ internal sealed class GitHubPullRequestDetector(
     ILogger<GitHubPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
     private const string Platform = "GitHub";
+    private const string GitHubComHost = "github.com";
 
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
@@ -74,6 +80,21 @@ internal sealed class GitHubPullRequestDetector(
                 "GitHub PR detection skipped: GITHUB_EVENT_NAME='{EventName}' " +
                 "(expected 'pull_request' or 'pull_request_target').",
                 eventName);
+            return null;
+        }
+
+        if (!TryGetRequired("GITHUB_SERVER_URL", out string? serverUrl))
+            return null;
+
+        // Comparing the parsed host ignores a trailing '/' and rejects lookalikes such as
+        // github.com.example.org.
+        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out Uri? serverUri) ||
+            !string.Equals(serverUri.Host, GitHubComHost, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not github.com; " +
+                "GitHub Enterprise Server and GHE.com are not supported.",
+                serverUrl);
             return null;
         }
 

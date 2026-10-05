@@ -671,7 +671,7 @@ export XPING_ENABLECOMPRESSION="false"
 Detect pull request context from CI/CD environment variables and include it in session uploads. When enabled, Xping reads PR metadata (PR number, branch, platform) from the CI environment to enable automatic PR comment posting with test results.
 
 **Supported platforms:**
-- GitHub Actions (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.). The commit is the PR head, read from `pull_request.head.sha` in the event payload at `GITHUB_EVENT_PATH`.
+- GitHub Actions on github.com (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc., with `GITHUB_SERVER_URL=https://github.com`; GitHub Enterprise Server and GHE.com aren't supported yet). The commit is the PR head, read from `pull_request.head.sha` in the event payload at `GITHUB_EVENT_PATH`.
 - GitLab CI merge request pipelines on gitlab.com (`CI_MERGE_REQUEST_IID` set, `CI_SERVER_HOST=gitlab.com`; self-managed instances aren't supported yet). The commit is `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` in merged-results pipelines, otherwise `CI_COMMIT_SHA`.
 - Azure Pipelines PR builds (`BUILD_REASON=PullRequest`) for Azure Repos and GitHub repositories. The commit is `SYSTEM_PULLREQUEST_SOURCECOMMITID`.
 - Jenkins multibranch (Branch Source) PR builds (`CHANGE_ID` set) for github.com, gitlab.com and Azure DevOps Services repositories, identified from `CHANGE_URL`. The commit is the PR head, read from `refs/remotes/origin/$BRANCH_NAME` in the workspace's `.git` directory and used only when it is `GIT_COMMIT` or its first parent, so both the merge and head strategies are supported. GHPRB jobs aren't supported.
