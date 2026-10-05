@@ -4,6 +4,8 @@
  */
 
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Text;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
 
 namespace Xping.Sdk.Core.Tests.Services.PullRequest;
@@ -82,6 +84,35 @@ public sealed class GitRepositoryReaderTests : IDisposable
         return (head, Git("rev-parse HEAD"));
     }
 
+    private const string UnknownSha = "0123456789abcdef0123456789abcdef01234567";
+
+    /// <summary>Writes a loose object file with arbitrary (possibly malformed) content.</summary>
+    private void WriteLooseObject(string sha, string content)
+    {
+        string directory = Path.Combine(_root, ".git", "objects", sha.Substring(0, 2));
+        Directory.CreateDirectory(directory);
+        using var file = File.Create(Path.Combine(directory, sha.Substring(2)));
+        using var zlib = new ZLibStream(file, CompressionLevel.Fastest);
+        zlib.Write(Encoding.UTF8.GetBytes(content));
+    }
+
+    private void WriteRef(string refName, string content)
+    {
+        string path = Path.Combine(_root, ".git", refName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+    }
+
+    /// <summary>A stand-in for git: a shell script with the given body. Unix only, like CI.</summary>
+    private string FakeGit(string body)
+    {
+        string path = Path.Combine(_root, "fake-git");
+        File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return path;
+    }
+
     // ---------------------------------------------------------------------------
     // ResolveRef
     // ---------------------------------------------------------------------------
@@ -120,6 +151,41 @@ public sealed class GitRepositoryReaderTests : IDisposable
         Assert.True(File.Exists(looseRef));
 
         Assert.Equal(head, _reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
+    }
+
+    [Fact]
+    public void ResolveRef_SymbolicLooseRef_ReturnsNull()
+    {
+        WriteRef("refs/remotes/origin/PR-17", "ref: refs/heads/main\n");
+
+        Assert.Null(_reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
+    }
+
+    [Fact]
+    public void ResolveRef_RefNotInPackedRefs_ReturnsNull()
+    {
+        Git("pack-refs --all");
+
+        Assert.Null(_reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
+    }
+
+    [Fact]
+    public void ResolveRef_PackedRefsSkipsHeaderAndPeeledLines()
+    {
+        string head = Git("rev-parse HEAD");
+        File.WriteAllText(
+            Path.Combine(_root, ".git", "packed-refs"),
+            $"# pack-refs with: peeled fully-peeled sorted\n\n{UnknownSha} refs/tags/v1\n^{head}\n{head} refs/remotes/origin/PR-17\n");
+
+        Assert.Equal(head, _reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
+    }
+
+    [Fact]
+    public void ResolveRef_PackedRefWithMalformedSha_ReturnsNull()
+    {
+        File.WriteAllText(Path.Combine(_root, ".git", "packed-refs"), "not-a-sha refs/remotes/origin/PR-17\n");
+
+        Assert.Null(_reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
     }
 
     [Fact]
@@ -192,7 +258,7 @@ public sealed class GitRepositoryReaderTests : IDisposable
     {
         var (_, merge) = PullRequestMergedWithTarget();
         Git("gc -q");
-        var reader = new GitRepositoryReader("xping-no-such-git");
+        var reader = new GitRepositoryReader("xping-no-such-git", TimeSpan.FromSeconds(5));
 
         Assert.Null(reader.GetFirstParent(_root, merge));
     }
@@ -204,6 +270,59 @@ public sealed class GitRepositoryReaderTests : IDisposable
         Git("gc -q");
 
         Assert.Null(_reader.GetFirstParent(_root, root));
+    }
+
+    [Fact]
+    public void GetFirstParent_LooseObjectDeletedMidRead_FallsBackToGit()
+    {
+        // gc packs and prunes the merge commit while we open it. A dangling symlink reproduces that:
+        // the path is there, opening it finds nothing.
+        var (head, merge) = PullRequestMergedWithTarget();
+        Git("gc -q");
+        string looseObject = Path.Combine(_root, ".git", "objects", merge.Substring(0, 2), merge.Substring(2));
+        Directory.CreateDirectory(Path.GetDirectoryName(looseObject)!);
+        File.CreateSymbolicLink(looseObject, Path.Combine(_root, "pruned-by-gc"));
+
+        Assert.Equal(head, _reader.GetFirstParent(_root, merge));
+    }
+
+    [Fact]
+    public void GetFirstParent_EmptyObjectFile_ReturnsNull()
+    {
+        string directory = Path.Combine(_root, ".git", "objects", UnknownSha.Substring(0, 2));
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(Path.Combine(directory, UnknownSha.Substring(2)), []);
+
+        Assert.Null(_reader.GetFirstParent(_root, UnknownSha));
+    }
+
+    [Theory]
+    [InlineData("commit 12 without a nul")]
+    [InlineData("blob 4\0data")]
+    [InlineData("commit 40\0tree abc\nparent not-a-sha\n\nmessage")]
+    public void GetFirstParent_MalformedLooseObject_ReturnsNull(string content)
+    {
+        WriteLooseObject(UnknownSha, content);
+
+        Assert.Null(_reader.GetFirstParent(_root, UnknownSha));
+    }
+
+    [Fact]
+    public void GetFirstParent_GitPrintsSomethingOtherThanASha_ReturnsNull()
+    {
+        var reader = new GitRepositoryReader(FakeGit("echo not-a-sha"), TimeSpan.FromSeconds(5));
+
+        Assert.Null(reader.GetFirstParent(_root, UnknownSha));
+    }
+
+    [Fact]
+    public void GetFirstParent_GitHangs_GivesUpAfterTheTimeout()
+    {
+        var reader = new GitRepositoryReader(FakeGit("exec sleep 30"), TimeSpan.FromMilliseconds(200));
+        var stopwatch = Stopwatch.StartNew();
+
+        Assert.Null(reader.GetFirstParent(_root, UnknownSha));
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
     }
 
     [Fact]
@@ -219,6 +338,26 @@ public sealed class GitRepositoryReaderTests : IDisposable
     public void GetFirstParent_NotASha_ReturnsNull(string commitSha)
     {
         Assert.Null(_reader.GetFirstParent(_root, commitSha));
+    }
+
+    // ---------------------------------------------------------------------------
+    // IsSha
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("0123456789abcdef0123456789abcdef01234567", true)]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF01234567", true)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", true)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456g", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456G", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456/", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456:", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456`", false)]
+    [InlineData("0123456789abcdef0123456789abcdef0123456@", false)]
+    public void IsSha_AcceptsOnlyFullHexObjectNames(string value, bool expected)
+    {
+        Assert.Equal(expected, GitRepositoryReader.IsSha(value));
     }
 
     [Fact]

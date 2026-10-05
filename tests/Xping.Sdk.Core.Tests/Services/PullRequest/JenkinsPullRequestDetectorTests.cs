@@ -198,6 +198,13 @@ public sealed class JenkinsPullRequestDetectorTests
     [InlineData("https://github.com/acme/pull/17")]
     [InlineData("https://gitlab.com/project/-/merge_requests/17")]
     [InlineData("https://dev.azure.com/fabrikam/Payments/api-service/pullrequest/17")]
+    [InlineData("https://github.com/acme//pull/17")]
+    [InlineData("https://github.com/acme/api-service/pull/abc")]
+    [InlineData("https://gitlab.com/group//-/merge_requests/17")]
+    [InlineData("https://gitlab.com/acme/api-service/-/issues/17")]
+    [InlineData("https://dev.azure.com/fabrikam/Payments/_git/api-service/pulls/17")]
+    [InlineData("https://fabrikam.visualstudio.com/Payments/_git/api-service/pullrequest")]
+    [InlineData("https://eu.fabrikam.visualstudio.com/Payments/_git/api-service/pullrequest/17")]
     [InlineData("not a url")]
     public void Detect_ChangeUrlNotASupportedPullRequestUrl_ReturnsNull(string changeValue)
     {

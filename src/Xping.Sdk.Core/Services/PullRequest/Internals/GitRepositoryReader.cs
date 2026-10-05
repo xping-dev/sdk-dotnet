@@ -32,20 +32,22 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
     private const int MaxCommitBytes = 64 * 1024;
 
     // rev-parse answers in milliseconds; this only bounds a hung git (credential prompt, locked repo).
-    private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultGitTimeout = TimeSpan.FromSeconds(5);
 
     private readonly string _gitExecutable;
+    private readonly TimeSpan _gitTimeout;
 
     /// <summary>Creates a reader that falls back to the <c>git</c> on <c>PATH</c>.</summary>
     public GitRepositoryReader()
-        : this("git")
+        : this("git", DefaultGitTimeout)
     {
     }
 
     /// <summary>Creates a reader that falls back to the given git executable.</summary>
-    internal GitRepositoryReader(string gitExecutable)
+    internal GitRepositoryReader(string gitExecutable, TimeSpan gitTimeout)
     {
         _gitExecutable = gitExecutable;
+        _gitTimeout = gitTimeout;
     }
 
     /// <inheritdoc/>
@@ -101,16 +103,17 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
         string? content;
         try
         {
-            content = File.Exists(objectPath) ? ReadCommitObject(objectPath) : null;
+            content = ReadCommitObject(objectPath);
         }
         catch (IOException)
         {
-            // Packed and pruned between the existence check and the read by a background gc.
-            content = null;
+            // Not a loose object: never was, or a background gc packed and pruned it. Not checked with
+            // File.Exists first, because gc can delete it between the check and the read.
+            return GetFirstParentFromGit(repositoryRoot, commitSha);
         }
 
         if (content is null)
-            return File.Exists(objectPath) ? null : GetFirstParentFromGit(repositoryRoot, commitSha);
+            return null;
 
         // Header lines are "tree <sha>", then one "parent <sha>" per parent, in order.
         foreach (string line in content.Split('\n'))
@@ -154,7 +157,7 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
             process.BeginOutputReadLine();
             process.BeginErrorReadLine(); // Drained so a chatty git can't fill the pipe and stall.
 
-            if (!process.WaitForExit((int)GitTimeout.TotalMilliseconds))
+            if (!process.WaitForExit((int)_gitTimeout.TotalMilliseconds))
             {
                 try
                 {
