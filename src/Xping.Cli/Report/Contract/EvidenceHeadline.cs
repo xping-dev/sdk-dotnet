@@ -52,25 +52,25 @@ internal static class EvidenceHeadline
     /// <returns>The sentence and the pairs behind it.</returns>
     public static (string Headline, IReadOnlyList<MetricDto> Metrics) For(
         FindingKind kind, FindingEvidence evidence) => evidence switch
-    {
-        RetryMaskedEvidence retry => RetryMasked(retry),
-        RetryDeepeningEvidence deepening => RetryDeepening(deepening),
-        RetryExhaustedEvidence exhausted => RetryExhausted(exhausted),
-        FlakyEvidence flaky => Flaky(flaky),
-        AlwaysFailingEvidence always => AlwaysFailing(always),
-        TimingOutEvidence timingOut => TimingOut(timingOut),
-        BrokenFixtureEvidence fixture => BrokenFixture(fixture),
-        SharedFailureEvidence shared => SharedFailure(shared),
-        DurationRegressionEvidence regression => DurationRegression(regression),
-        DurationUnstableEvidence unstable => DurationUnstable(unstable),
-        ParallelSensitiveEvidence parallel => ParallelSensitive(parallel),
-        TimeSensitiveEvidence time => TimeSensitive(time),
-        VanishedEvidence vanished => Vanished(vanished),
+        {
+            RetryMaskedEvidence retry => RetryMasked(retry),
+            RetryDeepeningEvidence deepening => RetryDeepening(deepening),
+            RetryExhaustedEvidence exhausted => RetryExhausted(exhausted),
+            FlakyEvidence flaky => Flaky(flaky),
+            AlwaysFailingEvidence always => AlwaysFailing(always),
+            TimingOutEvidence timingOut => TimingOut(timingOut),
+            BrokenFixtureEvidence fixture => BrokenFixture(fixture),
+            SharedFailureEvidence shared => SharedFailure(shared),
+            DurationRegressionEvidence regression => DurationRegression(regression),
+            DurationUnstableEvidence unstable => DurationUnstable(unstable),
+            ParallelSensitiveEvidence parallel => ParallelSensitive(parallel),
+            TimeSensitiveEvidence time => TimeSensitive(time),
+            VanishedEvidence vanished => Vanished(vanished),
 
-        // A kind whose provider ships later. Naming the kind is honest and useless in equal measure,
-        // which is better than a renderer printing an empty line where a number belongs.
-        _ => ($"see evidence for details ({kind})", [])
-    };
+            // A kind whose provider ships later. Naming the kind is honest and useless in equal measure,
+            // which is better than a renderer printing an empty line where a number belongs.
+            _ => ($"see evidence for details ({kind})", [])
+        };
 
     private static (string, IReadOnlyList<MetricDto>) RetryMasked(RetryMaskedEvidence e)
     {

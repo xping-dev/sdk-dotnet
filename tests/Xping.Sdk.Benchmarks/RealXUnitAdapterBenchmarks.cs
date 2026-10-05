@@ -11,13 +11,13 @@
 
 namespace Xping.Sdk.Benchmarks;
 
+using System;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.XUnit;
-using System;
-using System.Threading.Tasks;
 
 /// <summary>
 /// Real xUnit adapter benchmarks testing actual framework integration.

@@ -5,12 +5,12 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Xunit.Abstractions;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
+using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit.Tests;
 

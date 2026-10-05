@@ -12,9 +12,9 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.XUnit.Retry;
+using xRetry;
 using Xunit.Abstractions;
 using Xunit.Sdk;
-using xRetry;
 
 namespace Xping.Sdk.XUnit.Tests.Retry;
 

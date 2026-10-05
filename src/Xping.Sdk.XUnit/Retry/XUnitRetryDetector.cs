@@ -6,9 +6,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Xping.Sdk.Core.Models.Builders;
-using Xunit.Abstractions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
+using Xunit.Abstractions;
 
 namespace Xping.Sdk.XUnit.Retry;
 

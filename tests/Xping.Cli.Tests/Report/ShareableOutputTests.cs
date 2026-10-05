@@ -617,7 +617,8 @@ public sealed class ShareableOutputTests
         string report = Render(Envelope(
             Finding("DurationUnstable", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "p50 820ms"),
             Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
-                with { Annotation = "same test as #1" }));
+                with
+            { Annotation = "same test as #1" }));
 
         // Four lines for the first finding, then the blank line between rows.
         string header = Rows(report)[5];
@@ -652,7 +653,8 @@ public sealed class ShareableOutputTests
     {
         ReportEnvelope envelope = Envelope(
             Finding("Flaky", "high", "MyApp.Tests.CartTests.PlacesAnOrder", "failed 7 of 20")
-                with { Annotation = "same test as #1" });
+                with
+            { Annotation = "same test as #1" });
 
         string terminal = Render(envelope, Capabilities(redirected: false));
 
@@ -1470,5 +1472,6 @@ public sealed class ShareableOutputTests
     /// </summary>
     private static FindingDto FindingWith(string evidence, string? sourceFile, int? sourceLineNumber) =>
         Finding("Flaky", "high", "CartTests.Checkout", "failed 7 of 20", sourceFile, sourceLineNumber)
-            with { EvidenceLevel = evidence };
+            with
+        { EvidenceLevel = evidence };
 }

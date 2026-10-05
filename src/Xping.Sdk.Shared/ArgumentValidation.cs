@@ -1,4 +1,4 @@
-﻿/*
+/*
  * © 2024 Xping.io. All Rights Reserved.
  *
  * This file is part of the Xping Solution.

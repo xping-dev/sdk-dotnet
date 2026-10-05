@@ -34,8 +34,8 @@ public sealed class XpingAttributeServices
         ITestIdentityGenerator identityGenerator,
         bool captureStackTraces)
     {
-        ExecutionTracker  = executionTracker;
-        RetryDetector     = retryDetector;
+        ExecutionTracker = executionTracker;
+        RetryDetector = retryDetector;
         IdentityGenerator = identityGenerator;
         CaptureStackTraces = captureStackTraces;
     }

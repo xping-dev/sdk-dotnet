@@ -6,9 +6,9 @@
 using System.Diagnostics;
 using System.Reflection;
 using Moq;
+using Xping.Sdk.Core.Models.Executions;
 using Xunit.Abstractions;
 using Xunit.Sdk;
-using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.XUnit.Tests;
 

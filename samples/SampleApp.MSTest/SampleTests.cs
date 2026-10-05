@@ -109,7 +109,7 @@ public class CalculatorTests : XpingTestBase
         var watchdogMs = nominalTimeoutMs + rng.Next(-15, 15);
 
         var serviceCall = Task.Delay(simulatedLatencyMs);
-        var watchdog    = Task.Delay(watchdogMs);
+        var watchdog = Task.Delay(watchdogMs);
 
         var winner = await Task.WhenAny(serviceCall, watchdog);
 

@@ -6,9 +6,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
+using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.LocalStore.Internals;
 using Xunit.Abstractions;

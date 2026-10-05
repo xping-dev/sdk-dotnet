@@ -115,11 +115,11 @@ public sealed class SessionSummary
 
         var outcomes = new StringBuilder();
         outcomes.Append($"{passed} passed");
-        if (failed > 0)        outcomes.Append($", {failed} failed");
-        if (timedOut > 0)      outcomes.Append($", {timedOut} timed out");
-        if (skipped > 0)       outcomes.Append($", {skipped} skipped");
-        if (inconclusive > 0)  outcomes.Append($", {inconclusive} inconclusive");
-        if (notExecuted > 0)   outcomes.Append($", {notExecuted} not executed");
+        if (failed > 0) outcomes.Append($", {failed} failed");
+        if (timedOut > 0) outcomes.Append($", {timedOut} timed out");
+        if (skipped > 0) outcomes.Append($", {skipped} skipped");
+        if (inconclusive > 0) outcomes.Append($", {inconclusive} inconclusive");
+        if (notExecuted > 0) outcomes.Append($", {notExecuted} not executed");
 
         // TotalDurationMs sums each test's own execution time; WallClockDurationMs is the elapsed
         // time for the whole session (includes fixture setup/teardown, discovery, etc.). The gap

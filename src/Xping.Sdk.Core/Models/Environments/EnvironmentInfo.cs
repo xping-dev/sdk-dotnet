@@ -120,5 +120,18 @@ public sealed class EnvironmentInfo
     /// <summary>
     /// Gets the custom properties for additional environment information.
     /// </summary>
+    /// <remarks>
+    /// On a CI run, two entries describe the revision:
+    /// <list type="bullet">
+    /// <item><description><c>CI.CommitSha</c>: the commit the build checked out and tested. On a pull
+    /// request build this is often a merge commit that exists nowhere else. It is omitted when the
+    /// platform doesn't say which commit was built (GitHub <c>pull_request_target</c>).</description></item>
+    /// <item><description><c>CI.IsPullRequest</c>: <c>true</c> or <c>false</c> from the platform's
+    /// pull request marker; omitted on a platform that has none.</description></item>
+    /// </list>
+    /// The pull request's head commit is <see cref="PullRequests.PullRequestContext.CommitSha"/>.
+    /// When a pull request context is present it identifies the run; <c>CI.CommitSha</c> does so
+    /// only when <c>CI.IsPullRequest</c> is <c>false</c>.
+    /// </remarks>
     public IReadOnlyDictionary<string, string> CustomProperties { get; init; }
 }

@@ -5,11 +5,11 @@
 
 namespace Xping.Sdk.NUnit.Tests;
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
 using global::NUnit.Framework.Internal;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Xunit;
 using Assert = Xunit.Assert;
 using FailureSite = Xping.Sdk.Core.Models.Executions.FailureSite;

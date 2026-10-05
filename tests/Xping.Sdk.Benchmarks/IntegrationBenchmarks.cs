@@ -11,6 +11,8 @@
 
 namespace Xping.Sdk.Benchmarks;
 
+using System;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
@@ -18,8 +20,6 @@ using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
-using System;
-using System.Threading.Tasks;
 
 /// <summary>
 /// Benchmarks for end-to-end integration scenarios combining multiple SDK components.

@@ -39,8 +39,8 @@ internal sealed class XpingExecutorServices
         bool captureStackTraces,
         IRunningStatisticsAccumulator statisticsAccumulator)
     {
-        ExecutionTracker  = executionTracker;
-        RetryDetector     = retryDetector;
+        ExecutionTracker = executionTracker;
+        RetryDetector = retryDetector;
         IdentityGenerator = identityGenerator;
         CaptureStackTraces = captureStackTraces;
         StatisticsAccumulator = statisticsAccumulator;
