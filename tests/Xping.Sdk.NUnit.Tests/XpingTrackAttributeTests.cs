@@ -5,11 +5,11 @@
 
 namespace Xping.Sdk.NUnit.Tests;
 
-using global::NUnit.Framework;
-using global::NUnit.Framework.Interfaces;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
+using global::NUnit.Framework;
+using global::NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Models.Executions;
 using Xunit;
 using Assert = Xunit.Assert;

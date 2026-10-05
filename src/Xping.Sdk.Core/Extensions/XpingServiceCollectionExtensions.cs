@@ -3,8 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Extensions.Internals;
-
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,25 +17,26 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Display;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Extensions.Internals;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.Identity.Internals;
-using Xping.Sdk.Core.Services.Serialization;
-using Xping.Sdk.Core.Services.Serialization.Internals;
+using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Sdk.Core.Services.LocalStore.Internals;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.Reporting;
+using Xping.Sdk.Core.Services.Reporting.Internals;
+using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Core.Services.Serialization.Internals;
 using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Core.Services.Upload.Internals;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
-using Xping.Sdk.Core.Services.Reporting;
-using Xping.Sdk.Core.Services.Reporting.Internals;
-using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core.Extensions;

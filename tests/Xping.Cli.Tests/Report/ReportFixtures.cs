@@ -5,9 +5,9 @@
 
 using System.Globalization;
 using Xping.Cli.Report;
-using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Rendering;
 
 namespace Xping.Cli.Tests.Report;

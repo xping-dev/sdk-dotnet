@@ -5,10 +5,10 @@
 
 namespace Xping.Sdk.NUnit.Tests;
 
-using global::NUnit.Framework.Interfaces;
-using global::NUnit.Framework.Internal;
 using System;
 using System.Reflection;
+using global::NUnit.Framework.Interfaces;
+using global::NUnit.Framework.Internal;
 using Moq;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Collector;

@@ -5,9 +5,9 @@
 
 namespace Xping.Sdk.MSTest.Tests;
 
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xunit;
 using Assert = Xunit.Assert;
 using FailureSite = Xping.Sdk.Core.Models.Executions.FailureSite;

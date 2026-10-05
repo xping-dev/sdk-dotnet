@@ -14,11 +14,11 @@ using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Sdk.Benchmarks;
 
+using System;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.MSTest;
-using System;
-using System.Threading.Tasks;
 
 /// <summary>
 /// Real MSTest adapter benchmarks testing actual framework integration.

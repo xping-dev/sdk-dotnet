@@ -3,13 +3,13 @@
  * License: [MIT]
  */
 
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
-using System.Collections.ObjectModel;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Extensions;
@@ -23,9 +23,9 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.PullRequest;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
-using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Reporting.Internals;
 using Xping.Sdk.Core.Services.Statistics;
 using Xping.Sdk.Core.Services.Statistics.Internals;
