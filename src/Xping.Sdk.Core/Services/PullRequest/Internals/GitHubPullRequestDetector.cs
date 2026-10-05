@@ -5,7 +5,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -16,7 +15,8 @@ using Xping.Sdk.Core.Services.Serialization;
 namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 
 /// <summary>
-/// Detects GitHub pull request context from GitHub Actions environment variables.
+/// Detects GitHub pull request context from GitHub Actions environment variables and the
+/// workflow event payload.
 /// </summary>
 /// <remarks>
 /// Supports <c>pull_request</c> and <c>pull_request_target</c> event triggers.
@@ -28,6 +28,11 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// <c>GITHUB_SHA</c> is not used: it is the synthetic merge commit on <c>pull_request</c>
 /// and the base branch tip on <c>pull_request_target</c>.
 /// </para>
+/// <para>
+/// A missing or unreadable payload on a PR event is logged as a warning: it usually means the
+/// tests run in a container that was given the <c>GITHUB_*</c> variables but not the runner's
+/// temp directory, and PR integration would otherwise vanish without a trace.
+/// </para>
 /// </remarks>
 internal sealed class GitHubPullRequestDetector(
     IEnvironmentVariableProvider env,
@@ -36,6 +41,9 @@ internal sealed class GitHubPullRequestDetector(
 {
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
+
+    // ReadOnlySpan<byte> deserialization doesn't skip a BOM the way the stream overloads do.
+    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
     private static readonly Regex _prRefPattern =
         new(@"^refs/pull/(\d+)/", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -123,19 +131,29 @@ internal sealed class GitHubPullRequestDetector(
     private bool TryReadHeadSha([NotNullWhen(true)] out string? sha)
     {
         sha = null;
-        if (!TryGetRequired("GITHUB_EVENT_PATH", out string? eventPath))
+        string? eventPath = env.GetVariable("GITHUB_EVENT_PATH");
+        if (string.IsNullOrWhiteSpace(eventPath))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: GITHUB_EVENT_PATH is not set, so the PR head commit is unknown.");
             return false;
+        }
 
         GitHubEventPayload? payload;
         try
         {
-            payload = serializer.Deserialize<GitHubEventPayload>(File.ReadAllBytes(eventPath));
+            ReadOnlySpan<byte> json = File.ReadAllBytes(eventPath);
+            if (json.StartsWith(Utf8Bom))
+                json = json.Slice(Utf8Bom.Length);
+
+            payload = serializer.Deserialize<GitHubEventPayload>(json);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex)
         {
-            logger.LogDebug(
+            logger.LogWarning(
                 ex,
-                "GitHub PR detection skipped: event payload at '{EventPath}' could not be read.",
+                "GitHub PR detection skipped: event payload at '{EventPath}' could not be read. " +
+                "If tests run in a container, mount the runner's temp directory.",
                 eventPath);
             return false;
         }
@@ -143,7 +161,7 @@ internal sealed class GitHubPullRequestDetector(
         string? headSha = payload?.PullRequest?.Head?.Sha;
         if (string.IsNullOrWhiteSpace(headSha))
         {
-            logger.LogDebug(
+            logger.LogWarning(
                 "GitHub PR detection skipped: event payload at '{EventPath}' has no pull_request.head.sha.",
                 eventPath);
             return false;

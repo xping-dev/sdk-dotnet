@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -420,6 +421,38 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
 
         // Assert
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void Detect_EventPathNotSet_ReturnsNull()
+    {
+        // Arrange
+        var env = BuildValidEnvMock();
+        env.Setup(e => e.GetVariable("GITHUB_EVENT_PATH")).Returns((string?)null);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Detect_EventPayloadStartsWithUtf8Bom_ReadsHeadSha()
+    {
+        // Arrange
+        string path = Path.Combine(_tempDir, "bom.json");
+        File.WriteAllText(path, """{ "pull_request": { "head": { "sha": "bom123" } } }""", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        var env = BuildValidEnvMock(eventPath: path);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("bom123", result.CommitSha);
     }
 
     [Fact]
