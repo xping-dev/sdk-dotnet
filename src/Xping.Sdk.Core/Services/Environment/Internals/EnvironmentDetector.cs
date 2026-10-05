@@ -460,8 +460,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
-                    // On pull_request_target, GITHUB_SHA is the base branch's tip, not the PR's code, so
-                    // sending it would file PR results under a commit that is already on main.
+                    // CI.CommitSha is the commit the build tested. On pull_request_target GITHUB_SHA is the
+                    // base branch's tip, but such workflows usually check out the PR head, so the built
+                    // commit is unknown and sending the base tip would tie PR results to main.
                     if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
                     {
                         AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));

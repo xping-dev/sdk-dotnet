@@ -40,6 +40,30 @@ That is the whole setup. One secret, one environment variable.
 
 ---
 
+## Which Commit Is Recorded
+
+A pull request build can carry two different commits, and Xping records both on purpose:
+
+- **`CI.CommitSha`** is the commit the build checked out and tested. On a push build that is the
+  pushed commit. On a pull request build it is often a merge commit the platform made for the run,
+  which exists nowhere else.
+- **The PR context's commit** is the head commit the author pushed. It stays the same when the build
+  is re-run, and it is the commit your code host shows on the PR.
+
+| Build | PR context commit | `CI.CommitSha` |
+|---|---|---|
+| GitHub `push` | — | `GITHUB_SHA` (the pushed commit) |
+| GitHub `pull_request` | `pull_request.head.sha` | `GITHUB_SHA` (merge commit) |
+| GitHub `pull_request_target` | `pull_request.head.sha` | not sent (`GITHUB_SHA` is the base branch's tip) |
+| Azure Pipelines PR | `SYSTEM_PULLREQUEST_SOURCECOMMITID` | `BUILD_SOURCEVERSION` (merge commit) |
+| GitLab merged-results / merge train | `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | `CI_COMMIT_SHA` (merge result) |
+
+Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
+only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example on
+Jenkins or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
+main branch.
+---
+
 ## GitHub Actions
 
 ### Configuration
@@ -94,7 +118,7 @@ Xping automatically captures:
 - `GITHUB_ACTIONS` - CI environment indicator
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
-- `GITHUB_SHA` - Normalized into `CI.CommitSha` (omitted on `pull_request_target`, where it is the base branch's tip)
+- `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
 - `GITHUB_REF` - Branch or tag ref
@@ -168,7 +192,7 @@ Xping automatically captures:
 - `TF_BUILD` - CI environment indicator
 - `BUILD_BUILDID` - Unique build ID
 - `BUILD_BUILDNUMBER` - Build number
-- `BUILD_SOURCEVERSION` - Normalized into `CI.CommitSha`
+- `BUILD_SOURCEVERSION` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` - Branch name
 - `BUILD_REPOSITORY_NAME` - Repository name
@@ -239,7 +263,7 @@ Xping automatically captures:
 - `GITLAB_CI` - CI environment indicator
 - `CI_PIPELINE_ID` - Unique pipeline ID
 - `CI_JOB_ID` - Job ID
-- `CI_COMMIT_SHA` - Normalized into `CI.CommitSha`
+- `CI_COMMIT_SHA` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `CI_MERGE_REQUEST_IID` - Normalized into `CI.IsPullRequest` (`true` in merge request pipelines)
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
 - `CI_PROJECT_PATH` - Repository path

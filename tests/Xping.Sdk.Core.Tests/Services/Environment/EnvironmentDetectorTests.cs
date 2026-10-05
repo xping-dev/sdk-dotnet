@@ -37,11 +37,13 @@ public sealed class EnvironmentDetectorTests
         "GITHUB_BASE_REF",
         "BUILD_SOURCEVERSION",
         "BUILD_REASON",
+        "SYSTEM_PULLREQUEST_SOURCECOMMITID",
         "GIT_COMMIT",
         "CHANGE_ID",
         "ghprbPullId",
         "CI_COMMIT_SHA",
         "CI_MERGE_REQUEST_IID",
+        "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
         "CIRCLE_SHA1",
         "CIRCLE_PULL_REQUEST",
         "TRAVIS_COMMIT",
@@ -401,6 +403,46 @@ public sealed class EnvironmentDetectorTests
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    // CI.CommitSha is the commit the build tested. On these PR builds that is a merge result, and the
+    // PR head belongs to PullRequestContext.CommitSha alone. Where the head is an env var, it is set to
+    // prove it's ignored (GitHub has the head only in the event payload).
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "pull_request", "GITHUB_SHA", null)]
+    [InlineData("TF_BUILD", "True", "BUILD_REASON", "PullRequest", "BUILD_SOURCEVERSION", "SYSTEM_PULLREQUEST_SOURCECOMMITID")]
+    [InlineData("GITLAB_CI", "true", "CI_MERGE_REQUEST_IID", "17", "CI_COMMIT_SHA", "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA")]
+    public async Task OnAPullRequestBuildCommitShaIsTheBuiltCommitNotThePullRequestHead(
+        string platformVariable, string platformValue, string markerVariable, string markerValue,
+        string builtShaVariable, string? headVariable)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var marker = new EnvRestorer(markerVariable, markerValue);
+        using var builtSha = new EnvRestorer(builtShaVariable, "merge0123");
+        using var head = headVariable is null ? null : new EnvRestorer(headVariable, "head4567");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("merge0123", info.CustomProperties["CI.CommitSha"]);
+        Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Fact]
+    public async Task GitHubPushSendsThePushedCommit()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "push");
+        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
+        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
+        Assert.Equal("false", info.CustomProperties["CI.IsPullRequest"]);
     }
 
     [Fact]

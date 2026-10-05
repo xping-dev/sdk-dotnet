@@ -80,8 +80,14 @@ public sealed class PullRequestContext
     public int PullRequestNumber { get; init; }
 
     /// <summary>
-    /// Gets the full SHA of the head commit that triggered the pull request build.
+    /// Gets the full SHA of the pull request's head commit: the commit the author pushed.
     /// </summary>
+    /// <remarks>
+    /// This is not always the commit the build tested. GitHub <c>pull_request</c>, Azure Pipelines PR
+    /// builds and GitLab merged-results pipelines build a merge commit, which the <c>CI.CommitSha</c>
+    /// entry of <see cref="Environments.EnvironmentInfo.CustomProperties"/> carries. When a pull
+    /// request context is present, consumers key the run by this commit, not by <c>CI.CommitSha</c>.
+    /// </remarks>
     public string CommitSha { get; init; }
 
     /// <summary>
