@@ -23,6 +23,7 @@ public sealed class GitLabPullRequestDetectorTests
     /// </summary>
     private static Dictionary<string, string?> ValidVariables() => new()
     {
+        ["CI_SERVER_HOST"] = "gitlab.com",
         ["CI_MERGE_REQUEST_IID"] = "17",
         ["CI_MERGE_REQUEST_PROJECT_PATH"] = "acme/api-service",
         ["CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"] = "feature/login",
@@ -130,6 +131,30 @@ public sealed class GitLabPullRequestDetectorTests
     // Detect — not a merge request pipeline, or incomplete
     // ---------------------------------------------------------------------------
 
+    [Theory]
+    [InlineData("gitlab.example.com")]
+    [InlineData("gitlab.com.example.org")]
+    public void Detect_SelfManagedInstance_ReturnsNull(string serverHost)
+    {
+        // Arrange — the context names no host, so a self-managed project would be read as gitlab.com
+        var variables = ValidVariables();
+        variables["CI_SERVER_HOST"] = serverHost;
+
+        // Act & Assert
+        Assert.Null(Detect(variables));
+    }
+
+    [Fact]
+    public void Detect_GitLabComHostInAnyCase_ReturnsContext()
+    {
+        // Arrange
+        var variables = ValidVariables();
+        variables["CI_SERVER_HOST"] = "GitLab.com";
+
+        // Act & Assert
+        Assert.NotNull(Detect(variables));
+    }
+
     [Fact]
     public void Detect_BranchPipeline_ReturnsNull()
     {
@@ -141,6 +166,7 @@ public sealed class GitLabPullRequestDetectorTests
     }
 
     [Theory]
+    [InlineData("CI_SERVER_HOST")]
     [InlineData("CI_MERGE_REQUEST_PROJECT_PATH")]
     [InlineData("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")]
     [InlineData("CI_MERGE_REQUEST_TARGET_BRANCH_NAME")]

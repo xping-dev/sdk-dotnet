@@ -245,7 +245,9 @@ Xping automatically captures:
 - `CI_PROJECT_PATH` - Repository path
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
 
-In a merge request pipeline, Xping also records the MR context (number, branches, head commit):
+In a merge request pipeline on gitlab.com (`CI_SERVER_HOST`), Xping also records the MR context
+(number, branches, head commit). Self-managed GitLab instances get no MR context yet; their
+pipelines are still flagged by `CI.IsPullRequest`. The MR context comes from:
 - `CI_MERGE_REQUEST_IID` - MR number
 - `CI_MERGE_REQUEST_PROJECT_PATH` - Owner and project (nested groups stay in the owner: `group/sub`)
 - `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME` / `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` - Head and base branch

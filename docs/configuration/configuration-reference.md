@@ -672,7 +672,7 @@ Detect pull request context from CI/CD environment variables and include it in s
 
 **Supported platforms:**
 - GitHub Actions (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.). The commit is the PR head, read from `pull_request.head.sha` in the event payload at `GITHUB_EVENT_PATH`.
-- GitLab CI merge request pipelines (`CI_MERGE_REQUEST_IID` set). The commit is `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` in merged-results pipelines, otherwise `CI_COMMIT_SHA`.
+- GitLab CI merge request pipelines on gitlab.com (`CI_MERGE_REQUEST_IID` set, `CI_SERVER_HOST=gitlab.com`; self-managed instances aren't supported yet). The commit is `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` in merged-results pipelines, otherwise `CI_COMMIT_SHA`.
 - Azure Pipelines PR builds (`BUILD_REASON=PullRequest`) for Azure Repos and GitHub repositories. The commit is `SYSTEM_PULLREQUEST_SOURCECOMMITID`.
 
 Jenkins is not supported yet: it doesn't expose the PR head commit when it merges the PR into the target branch.

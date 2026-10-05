@@ -14,8 +14,10 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// Detects GitLab merge request context from GitLab CI/CD environment variables.
 /// </summary>
 /// <remarks>
-/// Only merge request pipelines carry MR context; branch and tag pipelines return <c>null</c>.
-/// Returns <c>null</c> when required variables are absent. Detection never throws.
+/// Only merge request pipelines on gitlab.com carry MR context; branch and tag pipelines return
+/// <c>null</c>. Self-managed instances return <c>null</c> too: the context names no host, so
+/// Xping Cloud would attribute their projects to gitlab.com. Their pipelines are still flagged by
+/// <c>CI.IsPullRequest</c>. Returns <c>null</c> when required variables are absent. Detection never throws.
 /// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the MR head commit. In merged-results and
 /// merge-train pipelines <c>CI_COMMIT_SHA</c> is the merge result GitLab built, so
@@ -28,6 +30,7 @@ internal sealed class GitLabPullRequestDetector(
     ILogger<GitLabPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
     private const string Platform = "GitLab";
+    private const string GitLabComHost = "gitlab.com";
 
     /// <summary>
     /// Whether the environment is a GitLab merge request pipeline. <c>EnvironmentDetector</c> uses the
@@ -55,6 +58,18 @@ internal sealed class GitLabPullRequestDetector(
         if (!IsPullRequestBuild(env.GetVariable))
         {
             logger.LogDebug("GitLab PR detection skipped: CI_MERGE_REQUEST_IID is not set (not an MR pipeline).");
+            return null;
+        }
+
+        if (!TryGetRequired("CI_SERVER_HOST", out string? serverHost))
+            return null;
+
+        if (!string.Equals(serverHost, GitLabComHost, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogDebug(
+                "GitLab PR detection skipped: CI_SERVER_HOST='{ServerHost}' is a self-managed instance; " +
+                "only gitlab.com is supported.",
+                serverHost);
             return null;
         }
 
