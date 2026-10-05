@@ -23,15 +23,21 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// Returns <c>null</c> for any non-PR trigger or when required variables are absent.
 /// All failures are silently absorbed — detection never throws.
 /// <para>
+/// Only github.com carries PR context. GitHub Enterprise Server and GHE.com (<c>*.ghe.com</c>)
+/// return <c>null</c>: the context names no host, so Xping Cloud would attribute their
+/// repositories to github.com. Their runs are still flagged by <c>CI.IsPullRequest</c>.
+/// </para>
+/// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the PR head commit, read from
 /// <c>pull_request.head.sha</c> in the event payload at <c>GITHUB_EVENT_PATH</c>.
 /// <c>GITHUB_SHA</c> is not used: it is the synthetic merge commit on <c>pull_request</c>
 /// and the base branch tip on <c>pull_request_target</c>.
 /// </para>
 /// <para>
-/// A missing or unreadable payload on a PR event is logged as a warning: it usually means the
-/// tests run in a container that was given the <c>GITHUB_*</c> variables but not the runner's
-/// temp directory, and PR integration would otherwise vanish without a trace.
+/// A missing or unreadable payload, or a missing <c>GITHUB_SERVER_URL</c>, on a PR event is logged
+/// as a warning: it usually means the tests run in a container that was given only some of the
+/// <c>GITHUB_*</c> variables or not the runner's temp directory, and PR integration would otherwise
+/// vanish without a trace.
 /// </para>
 /// </remarks>
 internal sealed class GitHubPullRequestDetector(
@@ -40,6 +46,7 @@ internal sealed class GitHubPullRequestDetector(
     ILogger<GitHubPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
     private const string Platform = "GitHub";
+    private const string GitHubComHost = "github.com";
 
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
@@ -76,6 +83,9 @@ internal sealed class GitHubPullRequestDetector(
                 eventName);
             return null;
         }
+
+        if (!IsGitHubCom())
+            return null;
 
         // Extract PR number from GITHUB_REF: refs/pull/123/merge
         if (!TryGetRequired("GITHUB_REF", out string? githubRef))
@@ -124,6 +134,41 @@ internal sealed class GitHubPullRequestDetector(
             baseBranch: baseBranch,
             headBranch: headBranch,
             author: author);
+    }
+
+    private bool IsGitHubCom()
+    {
+        // Actions always sets GITHUB_SERVER_URL, so an unset value means a container was given only
+        // some GITHUB_* variables. Warn: PR integration would otherwise vanish without a trace.
+        string? serverUrl = env.GetVariable("GITHUB_SERVER_URL");
+        if (string.IsNullOrWhiteSpace(serverUrl))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL is not set, so the GitHub host is unknown. " +
+                "If tests run in a container, pass GITHUB_SERVER_URL along with the other GITHUB_* variables.");
+            return false;
+        }
+
+        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out Uri? serverUri))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not an absolute URL.",
+                serverUrl);
+            return false;
+        }
+
+        // Comparing the parsed host ignores a trailing '/' and rejects lookalikes such as
+        // github.com.example.org.
+        if (!string.Equals(serverUri.Host, GitHubComHost, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not github.com; " +
+                "GitHub Enterprise Server and GHE.com are not supported.",
+                serverUrl);
+            return false;
+        }
+
+        return true;
     }
 
     private bool TryReadHeadSha([NotNullWhen(true)] out string? sha)

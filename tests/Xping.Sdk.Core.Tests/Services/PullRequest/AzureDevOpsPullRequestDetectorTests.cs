@@ -39,6 +39,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
         ["BUILD_REASON"] = "PullRequest",
         ["BUILD_REPOSITORY_PROVIDER"] = "GitHub",
         ["BUILD_REPOSITORY_NAME"] = "acme/api-service",
+        ["BUILD_REPOSITORY_URI"] = "https://github.com/acme/api-service",
         ["SYSTEM_COLLECTIONURI"] = "https://dev.azure.com/fabrikam/",
         ["SYSTEM_TEAMPROJECT"] = "Payments",
         ["SYSTEM_PULLREQUEST_PULLREQUESTID"] = "1234567890",
@@ -196,6 +197,36 @@ public sealed class AzureDevOpsPullRequestDetectorTests
         Assert.Null(Detect(variables));
     }
 
+    [Theory]
+    [InlineData("https://github.com/acme/api-service.git")]
+    [InlineData("https://GitHub.com/acme/api-service")]
+    public void Detect_GitHubComRepositoryUri_ReturnsContext(string repositoryValue)
+    {
+        // Arrange
+        var variables = GitHubRepoVariables();
+        variables["BUILD_REPOSITORY_URI"] = repositoryValue;
+
+        // Act & Assert
+        Assert.NotNull(Detect(variables));
+    }
+
+    // The context names no host, so Xping Cloud would file these repositories under github.com.
+    [Theory]
+    [InlineData("https://acme.ghe.com/acme/api-service")]
+    [InlineData("https://ghes.acme.com/acme/api-service")]
+    [InlineData("https://github.com.example.org/acme/api-service")]
+    [InlineData("acme/api-service")]
+    [InlineData(null)]
+    public void Detect_GitHubRepositoryUriNotGitHubCom_ReturnsNull(string? repositoryValue)
+    {
+        // Arrange
+        var variables = GitHubRepoVariables();
+        variables["BUILD_REPOSITORY_URI"] = repositoryValue;
+
+        // Act & Assert
+        Assert.Null(Detect(variables));
+    }
+
     // ---------------------------------------------------------------------------
     // Detect — not a supported PR build
     // ---------------------------------------------------------------------------
@@ -216,6 +247,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
 
     [Theory]
     [InlineData("Bitbucket")]
+    [InlineData("GitHubEnterprise")]
     [InlineData("Git")]
     [InlineData(" ")]
     public void Detect_UnsupportedRepositoryProvider_ReturnsNull(string provider)
