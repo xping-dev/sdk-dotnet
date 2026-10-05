@@ -401,7 +401,8 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds pull request context detection services.
     /// Registers the environment variable provider abstraction, the serializer the GitHub Actions
-    /// detector reads the event payload with, and the GitHub Actions detector.
+    /// detector reads the event payload with, and the GitHub Actions, GitLab CI and Azure Pipelines
+    /// detectors.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
@@ -410,6 +411,8 @@ public static class XpingServiceCollectionExtensions
         services.AddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
         services.AddXpingSerialization();
         services.AddSingleton<IPlatformPullRequestDetector, GitHubPullRequestDetector>();
+        services.AddSingleton<IPlatformPullRequestDetector, GitLabPullRequestDetector>();
+        services.AddSingleton<IPlatformPullRequestDetector, AzureDevOpsPullRequestDetector>();
         services.AddSingleton<IPullRequestContextDetector, CompositePullRequestContextDetector>();
         return services;
     }

@@ -6,11 +6,14 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.PullRequest;
+using Xping.Sdk.Core.Services.PullRequest.Internals;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Upload;
 
@@ -1008,5 +1011,37 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.Equal("my-proj", bound.ProjectId);
+    }
+
+    [Fact]
+    public void AddXpingPullRequest_RegistersTheGitHubGitLabAndAzurePipelinesDetectorsInOrder()
+    {
+        using ServiceProvider provider = new ServiceCollection()
+            .AddLogging()
+            .AddXpingPullRequest()
+            .BuildServiceProvider();
+
+        Type[] detectorTypes = provider.GetServices<IPlatformPullRequestDetector>()
+            .Select(detector => detector.GetType())
+            .ToArray();
+
+        Assert.Equal(
+            [typeof(GitHubPullRequestDetector), typeof(GitLabPullRequestDetector), typeof(AzureDevOpsPullRequestDetector)],
+            detectorTypes);
+    }
+
+    [Fact]
+    public void AddXpingPullRequest_EnvironmentMatchingNoPlatform_DetectsNoPullRequest()
+    {
+        var env = new Mock<IEnvironmentVariableProvider>();
+        env.Setup(e => e.GetVariable(It.IsAny<string>())).Returns((string?)null);
+
+        using ServiceProvider provider = new ServiceCollection()
+            .AddLogging()
+            .AddXpingPullRequest()
+            .AddSingleton(env.Object)
+            .BuildServiceProvider();
+
+        Assert.Null(provider.GetRequiredService<IPullRequestContextDetector>().Detect());
     }
 }

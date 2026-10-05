@@ -485,8 +485,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
                         ExtractBranchName(GetEnvironmentVariable("BUILD_SOURCEBRANCH"))));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
-                    AddPullRequestFlag(properties, string.Equals(
-                        GetEnvironmentVariable("BUILD_REASON"), "PullRequest", StringComparison.OrdinalIgnoreCase));
+                    AddPullRequestFlag(properties, AzureDevOpsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
                     AddIfNotNull(properties, "CI.RequestedFor", GetEnvironmentVariable("BUILD_REQUESTEDFOR"));
                     break;
 
@@ -507,7 +506,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.PipelineId", GetEnvironmentVariable("CI_PIPELINE_ID"));
                     AddIfNotNull(properties, "CI.ProjectPath", GetEnvironmentVariable("CI_PROJECT_PATH"));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CI_COMMIT_SHA"));
-                    AddPullRequestFlag(properties, HasValue("CI_MERGE_REQUEST_IID"));
+                    AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("CI_COMMIT_BRANCH"),
