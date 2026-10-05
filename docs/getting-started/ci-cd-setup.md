@@ -57,10 +57,11 @@ A pull request build can carry two different commits, and Xping records both on 
 | GitHub `pull_request_target` | `pull_request.head.sha` | not sent (`GITHUB_SHA` is the base branch's tip) |
 | Azure Pipelines PR | `SYSTEM_PULLREQUEST_SOURCECOMMITID` | `BUILD_SOURCEVERSION` (merge commit) |
 | GitLab merged-results / merge train | `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | `CI_COMMIT_SHA` (merge result) |
+| Jenkins Branch Source PR | `refs/remotes/origin/$BRANCH_NAME`, checked against `GIT_COMMIT` | `GIT_COMMIT` (merge commit under the merge strategy) |
 
 Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
-only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example on
-Jenkins or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
+only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example a
+Jenkins GHPRB job or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
 main branch.
 ---
 
@@ -335,6 +336,19 @@ pipeline {
 }
 ```
 
+### Pull Request Builds
+
+On a multibranch pipeline, Xping attaches the PR context to PR builds with both the merge strategy
+(the default) and the head strategy. No Jenkins variable holds the PR head commit when Jenkins merges
+the PR into its target, so Xping reads it from the workspace's `.git` directory: the
+`refs/remotes/origin/$BRANCH_NAME` ref, used only when it is `GIT_COMMIT` or `GIT_COMMIT`'s first
+parent. The tests must therefore run in the checked-out workspace (`WORKSPACE`). If you use
+`skipDefaultCheckout`, check out with `checkout scm` before the test stage. Shallow clones work.
+If `git gc` has packed the merge commit (common on long-lived workspaces), Xping runs
+`git rev-parse` to read it, so keep `git` on the agent's `PATH`.
+
+GitHub Pull Request Builder (GHPRB) jobs are marked as PR builds but get no PR context.
+
 ### Captured Metadata
 
 Xping automatically captures:
@@ -343,6 +357,8 @@ Xping automatically captures:
 - `BUILD_NUMBER` - Build number
 - `GIT_COMMIT` - Normalized into `CI.CommitSha` (if using Git)
 - `CHANGE_ID` / `ghprbPullId` - Normalized into `CI.IsPullRequest` (`true` when either is set)
+- `CHANGE_ID`, `CHANGE_URL`, `CHANGE_BRANCH`, `CHANGE_TARGET`, `CHANGE_AUTHOR` - PR context on
+  multibranch (Branch Source) builds of github.com, gitlab.com and Azure DevOps Services repositories
 - `GIT_BRANCH` - Branch name
 - `JOB_NAME` - Job name
 - `BUILD_USER` - User who triggered the build (if available)

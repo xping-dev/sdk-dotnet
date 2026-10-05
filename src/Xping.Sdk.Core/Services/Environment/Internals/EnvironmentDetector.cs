@@ -495,9 +495,11 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.JobName", GetEnvironmentVariable("JOB_NAME"));
                     AddIfNotNull(properties, "CI.BuildUrl", GetEnvironmentVariable("BUILD_URL"));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GIT_COMMIT"));
-                    // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB. A job built by any
-                    // other PR plugin reads as a push build.
-                    AddPullRequestFlag(properties, HasValue("CHANGE_ID") || HasValue("ghprbPullId"));
+                    // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB (flagged, but no PR
+                    // context is detected for it). A job built by any other PR plugin reads as a push build.
+                    AddPullRequestFlag(
+                        properties,
+                        JenkinsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable) || HasValue("ghprbPullId"));
                     AddIfNotNull(properties, "CI.GitBranch", GetEnvironmentVariable("GIT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("GIT_BRANCH"));
                     break;
