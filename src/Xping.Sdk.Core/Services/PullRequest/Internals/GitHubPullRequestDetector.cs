@@ -39,6 +39,8 @@ internal sealed class GitHubPullRequestDetector(
     IXpingSerializer serializer,
     ILogger<GitHubPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
+    private const string Platform = "GitHub";
+
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
 
@@ -93,17 +95,13 @@ internal sealed class GitHubPullRequestDetector(
         if (!TryGetRequired("GITHUB_REPOSITORY", out string? repository))
             return null;
 
-        int slashIndex = repository.IndexOf('/');
-        if (slashIndex <= 0 || slashIndex == repository.Length - 1)
+        if (!PullRequestEnvironment.TrySplitAtLastSlash(repository, out string? owner, out string? repoName))
         {
             logger.LogDebug(
                 "GitHub PR detection skipped: GITHUB_REPOSITORY='{Repository}' is not in 'owner/name' format.",
                 repository);
             return null;
         }
-
-        string owner = repository.Substring(0, slashIndex);
-        string repoName = repository.Substring(slashIndex + 1);
 
         // Required fields
         if (!TryGetRequired("GITHUB_BASE_REF", out string? baseBranch)) return null;
@@ -171,19 +169,8 @@ internal sealed class GitHubPullRequestDetector(
         return true;
     }
 
-    private bool TryGetRequired(string variable, [NotNullWhen(true)] out string? value)
-    {
-        string? raw = env.GetVariable(variable);
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            logger.LogDebug("GitHub PR detection skipped: {Variable} is not set.", variable);
-            value = null;
-            return false;
-        }
-
-        value = raw!; // IsNullOrWhiteSpace guarantees non-null; ! informs the compiler
-        return true;
-    }
+    private bool TryGetRequired(string variable, [NotNullWhen(true)] out string? value) =>
+        PullRequestEnvironment.TryGetRequired(env, logger, Platform, variable, out value);
 
     // The serializer's camelCase policy would look for "pullRequest", so the snake_case
     // payload names are spelled out.

@@ -174,6 +174,17 @@ Xping automatically captures:
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `BUILD_REQUESTEDFOR` - User who triggered the build
 
+On a pull request build, Xping also records the PR context (number, branches, head commit) for
+repositories in Azure Repos or on GitHub:
+- `BUILD_REPOSITORY_PROVIDER` - `TfsGit` (Azure Repos) or `GitHub`; other providers get no PR context
+- `SYSTEM_PULLREQUEST_PULLREQUESTID` (Azure Repos) / `SYSTEM_PULLREQUEST_PULLREQUESTNUMBER` (GitHub) - PR number
+- `SYSTEM_PULLREQUEST_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_TARGETBRANCH` - Head and base branch
+- `SYSTEM_PULLREQUEST_SOURCECOMMITID` - PR head commit (`BUILD_SOURCEVERSION` is the merge commit)
+- `SYSTEM_COLLECTIONURI` / `SYSTEM_TEAMPROJECT` - Azure Repos owner, recorded as `{organization}/{project}`
+
+Azure DevOps Server (on-premises) collections get no PR context. Xping Cloud doesn't post PR
+comments on Azure Repos yet; the PR context still drives PR insights.
+
 ---
 
 ## GitLab CI/CD
@@ -233,6 +244,15 @@ Xping automatically captures:
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
 - `CI_PROJECT_PATH` - Repository path
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
+
+In a merge request pipeline, Xping also records the MR context (number, branches, head commit):
+- `CI_MERGE_REQUEST_IID` - MR number
+- `CI_MERGE_REQUEST_PROJECT_PATH` - Owner and project (nested groups stay in the owner: `group/sub`)
+- `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME` / `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` - Head and base branch
+- `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` - MR head commit in merged-results pipelines, where
+  `CI_COMMIT_SHA` is the merge result; otherwise `CI_COMMIT_SHA`
+
+Xping Cloud doesn't post MR comments on GitLab yet; the MR context still drives PR insights.
 
 ---
 
