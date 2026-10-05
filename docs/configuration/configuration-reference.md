@@ -39,8 +39,8 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | Setting | Type | Default | Environment Variable | Description |
 |---------|------|---------|---------------------|-------------|
 | `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
-| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in Cloud mode; omit it to run [local-only](local-store.md). |
-| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | Optional. Pins the whole session to one project; omit it to get one project per test assembly. |
+| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in Cloud mode; omit it to run [local-only](local-store.md). The CLI uses it for Cloud reads when no stored login is available. `--api-key` on the command line takes precedence over a stored login; the environment variable does not. |
+| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | Optional. Pins the whole session to one project; omit it to get one project per test assembly. The CLI uses it to bind local runs to a Cloud project. |
 | `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud`, or `Disabled` |
 | `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
@@ -55,6 +55,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 | `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
+| `CloudUrl` | string | `https://app.xping.io` | `XPING_CLOUDURL` | CLI only. Xping Cloud (Portal) URL used by `xping login` and Cloud-enriched reports |
 | *(banner)* | string | *(unset)* | `XPING_NO_BANNER` | Suppresses the SDK's retry hint and the CLI's invitation |
 
 ---
@@ -190,6 +191,8 @@ Omitting it is a supported configuration: the SDK resolves to [`LocalOnly`](#ope
 export XPING_APIKEY="xpg_live_productionkey"
 ```
 
+**In the `xping` CLI:** the CLI uses the key to read Cloud data when no stored login (`xping login`) is available. `--api-key` on the command line takes precedence over a stored login; the environment variable and `appsettings.json` do not, because on a developer machine they usually hold the SDK's upload key. Prefer `XPING_APIKEY` to `--api-key`, so the key does not land in shell history.
+
 ```csharp
 // Not recommended: Hard-coding in source
 var config = new XpingConfiguration
@@ -263,6 +266,8 @@ var config = new XpingConfiguration
 };
 XpingContext.Initialize(config);
 ```
+
+**In the `xping` CLI:** the CLI uses the same value to bind local runs to a Cloud project when it adds Cloud data to `xping report`.
 
 **Project organization strategies:**
 - **Monorepo:** Use separate project IDs per component (`"web-api"`, `"web-ui"`, `"worker"`)
@@ -855,6 +860,22 @@ XpingContext.Initialize(config);
 
 ## Configuration Examples
 
+
+### CloudUrl
+
+**Type:** `string`  
+**Default:** `https://app.xping.io`  
+**Environment Variable:** `XPING_CLOUDURL`
+
+CLI only; the SDK does not read it. The Xping Cloud (Portal) URL that `xping login` signs in to and that `xping report` reads Cloud data from. Leave it unset unless you were given another Xping Cloud address.
+
+Precedence, highest first: the `--cloud-url` option, `XPING_CLOUDURL`, `Xping__CloudUrl`, then `Xping:CloudUrl` in `appsettings.{environment}.json` and `appsettings.json` of the working directory.
+
+The value must be an absolute `https` URL with no path, query or fragment; `http` is accepted only for `localhost` and `127.0.0.1`. Case, a default port and a trailing slash are ignored, so `https://App.Xping.io/` and `https://app.xping.io` are the same sign-in.
+
+```bash
+export XPING_CLOUDURL="https://app.xping.io"
+```
 
 ### LocalStorePath
 

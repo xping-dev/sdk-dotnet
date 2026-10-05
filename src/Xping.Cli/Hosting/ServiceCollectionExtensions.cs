@@ -5,6 +5,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Commands;
+using Xping.Cli.Commands.Auth;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
@@ -25,6 +26,7 @@ internal static class ServiceCollectionExtensions
         bool isTerminal)
     {
         services.AddSingleton(new ConsoleIO(output, error, input, isTerminal));
+        services.AddSingleton<GlobalOptions>();
         services.AddSingleton<ILocalSessionStoreFactory, LocalSessionStoreFactory>();
 
         services.AddXpingLocalAnalysis();
@@ -33,12 +35,23 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<WhereCommand>();
         services.AddTransient<ClearCommand>();
 
-        // Extension point for the Xping Cloud work: an authenticated HTTP client with Polly
-        // resilience (mirroring XpingServiceCollectionExtensions.AddXpingUploader in
-        // Xping.Sdk.Core) and token-storage services will register here, e.g.:
-        //   services.AddHttpClient<ICloudClient, CloudClient>((sp, client) => { ... })
-        //       .AddResilienceHandler("xping-cloud-resilience", (builder, context) => { ... });
-        //   services.AddXpingCloudAuth();
+        services.AddXpingCliAuth();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <c>login</c>, <c>logout</c> and <c>auth status</c>, and the services behind them.
+    /// </summary>
+    /// <remarks>
+    /// The OAuth and Cloud HTTP clients, the credential stores and the token refresher register here
+    /// as they are built (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
+    /// </remarks>
+    private static IServiceCollection AddXpingCliAuth(this IServiceCollection services)
+    {
+        services.AddTransient<LoginCommand>();
+        services.AddTransient<LogoutCommand>();
+        services.AddTransient<AuthStatusCommand>();
 
         return services;
     }
