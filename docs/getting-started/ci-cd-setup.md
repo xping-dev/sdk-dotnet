@@ -61,8 +61,9 @@ A pull request build can carry two different commits, and Xping records both on 
 
 Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
 only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example a
-Jenkins GHPRB job, GitHub Enterprise Server or self-managed GitLab) is filed under no commit, so it is never mistaken for a run on your
-main branch.
+Jenkins GHPRB job, GitHub Enterprise Server or self-managed GitLab) is filed under no commit, so it
+is never mistaken for a run on your main branch.
+
 ---
 
 ## GitHub Actions
@@ -128,9 +129,10 @@ Xping automatically captures:
 - `GITHUB_REPOSITORY` - Repository name
 - `GITHUB_ACTOR` - User who triggered the workflow
 
-If tests run inside a container (`docker run`), pass the `GITHUB_*` variables **and** mount the
-runner's temp directory so the file at `GITHUB_EVENT_PATH` is readable. Without it, the run is
-still recorded, but PR context (PR number, branches, PR comment) is skipped and a warning is logged.
+If tests run inside a container (`docker run`), pass the `GITHUB_*` variables, including
+`GITHUB_SERVER_URL`, **and** mount the runner's temp directory so the file at `GITHUB_EVENT_PATH`
+is readable. Without them, the run is still recorded, but PR context (PR number, branches, PR
+comment) is skipped and a warning is logged.
 
 ---
 
@@ -201,14 +203,16 @@ Xping automatically captures:
 - `BUILD_REQUESTEDFOR` - User who triggered the build
 
 On a pull request build, Xping also records the PR context (number, branches, head commit) for
-repositories in Azure Repos or on GitHub:
+repositories in Azure Repos or on github.com:
 - `BUILD_REPOSITORY_PROVIDER` - `TfsGit` (Azure Repos) or `GitHub`; other providers get no PR context
+- `BUILD_REPOSITORY_URI` - For `GitHub`, must be a github.com repository
 - `SYSTEM_PULLREQUEST_PULLREQUESTID` (Azure Repos) / `SYSTEM_PULLREQUEST_PULLREQUESTNUMBER` (GitHub) - PR number
 - `SYSTEM_PULLREQUEST_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_TARGETBRANCH` - Head and base branch
 - `SYSTEM_PULLREQUEST_SOURCECOMMITID` - PR head commit (`BUILD_SOURCEVERSION` is the merge commit)
 - `SYSTEM_COLLECTIONURI` / `SYSTEM_TEAMPROJECT` - Azure Repos owner, recorded as `{organization}/{project}`
 
-Azure DevOps Server (on-premises) collections get no PR context. Xping Cloud doesn't post PR
+Azure DevOps Server (on-premises) collections and GitHub repositories outside github.com (GitHub
+Enterprise Server, GHE.com) get no PR context. Xping Cloud doesn't post PR
 comments on Azure Repos yet; the PR context still drives PR insights.
 
 ---

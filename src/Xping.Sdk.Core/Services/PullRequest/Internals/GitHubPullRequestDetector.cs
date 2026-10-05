@@ -34,9 +34,10 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// and the base branch tip on <c>pull_request_target</c>.
 /// </para>
 /// <para>
-/// A missing or unreadable payload on a PR event is logged as a warning: it usually means the
-/// tests run in a container that was given the <c>GITHUB_*</c> variables but not the runner's
-/// temp directory, and PR integration would otherwise vanish without a trace.
+/// A missing or unreadable payload, or a missing <c>GITHUB_SERVER_URL</c>, on a PR event is logged
+/// as a warning: it usually means the tests run in a container that was given only some of the
+/// <c>GITHUB_*</c> variables or not the runner's temp directory, and PR integration would otherwise
+/// vanish without a trace.
 /// </para>
 /// </remarks>
 internal sealed class GitHubPullRequestDetector(
@@ -83,20 +84,8 @@ internal sealed class GitHubPullRequestDetector(
             return null;
         }
 
-        if (!TryGetRequired("GITHUB_SERVER_URL", out string? serverUrl))
+        if (!IsGitHubCom())
             return null;
-
-        // Comparing the parsed host ignores a trailing '/' and rejects lookalikes such as
-        // github.com.example.org.
-        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out Uri? serverUri) ||
-            !string.Equals(serverUri.Host, GitHubComHost, StringComparison.OrdinalIgnoreCase))
-        {
-            logger.LogDebug(
-                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not github.com; " +
-                "GitHub Enterprise Server and GHE.com are not supported.",
-                serverUrl);
-            return null;
-        }
 
         // Extract PR number from GITHUB_REF: refs/pull/123/merge
         if (!TryGetRequired("GITHUB_REF", out string? githubRef))
@@ -145,6 +134,41 @@ internal sealed class GitHubPullRequestDetector(
             baseBranch: baseBranch,
             headBranch: headBranch,
             author: author);
+    }
+
+    private bool IsGitHubCom()
+    {
+        // Actions always sets GITHUB_SERVER_URL, so an unset value means a container was given only
+        // some GITHUB_* variables. Warn: PR integration would otherwise vanish without a trace.
+        string? serverUrl = env.GetVariable("GITHUB_SERVER_URL");
+        if (string.IsNullOrWhiteSpace(serverUrl))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL is not set, so the GitHub host is unknown. " +
+                "If tests run in a container, pass GITHUB_SERVER_URL along with the other GITHUB_* variables.");
+            return false;
+        }
+
+        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out Uri? serverUri))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not an absolute URL.",
+                serverUrl);
+            return false;
+        }
+
+        // Comparing the parsed host ignores a trailing '/' and rejects lookalikes such as
+        // github.com.example.org.
+        if (!string.Equals(serverUri.Host, GitHubComHost, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not github.com; " +
+                "GitHub Enterprise Server and GHE.com are not supported.",
+                serverUrl);
+            return false;
+        }
+
+        return true;
     }
 
     private bool TryReadHeadSha([NotNullWhen(true)] out string? sha)

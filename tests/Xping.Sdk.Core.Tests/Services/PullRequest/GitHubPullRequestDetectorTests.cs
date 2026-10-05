@@ -4,6 +4,7 @@
  */
 
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -74,11 +75,13 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
         return mock;
     }
 
-    private static GitHubPullRequestDetector CreateDetector(IEnvironmentVariableProvider env)
+    private static GitHubPullRequestDetector CreateDetector(
+        IEnvironmentVariableProvider env,
+        ILogger<GitHubPullRequestDetector>? logger = null)
         => new(
             env,
             new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
-            NullLogger<GitHubPullRequestDetector>.Instance);
+            logger ?? NullLogger<GitHubPullRequestDetector>.Instance);
 
     // ---------------------------------------------------------------------------
     // Detect — full valid pull_request event
@@ -327,6 +330,8 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
     [InlineData("https://github.com.example.org")]
     [InlineData("github.com")]
     [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
     public void Detect_ServerUrlNotGitHubCom_ReturnsNull(string? serverValue)
     {
         // Arrange
@@ -338,6 +343,57 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
 
         // Assert
         Assert.Null(result);
+    }
+
+    // Actions always sets it, so an unset value is a container given only some GITHUB_* variables.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Detect_ServerUrlNotSet_LogsWarning(string? serverValue)
+    {
+        // Arrange
+        var logger = new LevelRecordingLogger();
+        var detector = CreateDetector(BuildValidEnvMock(serverUrl: serverValue).Object, logger);
+
+        // Act
+        detector.Detect();
+
+        // Assert
+        Assert.Contains(LogLevel.Warning, logger.Levels);
+    }
+
+    [Theory]
+    [InlineData("https://ghes.acme.com")]
+    [InlineData("github.com")]
+    public void Detect_ServerUrlSetButNotGitHubCom_DoesNotWarn(string serverValue)
+    {
+        // Arrange
+        var logger = new LevelRecordingLogger();
+        var detector = CreateDetector(BuildValidEnvMock(serverUrl: serverValue).Object, logger);
+
+        // Act
+        detector.Detect();
+
+        // Assert
+        Assert.DoesNotContain(LogLevel.Warning, logger.Levels);
+    }
+
+    // Moq can't proxy ILogger<T> for an internal T: Logging.Abstractions is strong-named.
+    private sealed class LevelRecordingLogger : ILogger<GitHubPullRequestDetector>
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 
     // ---------------------------------------------------------------------------

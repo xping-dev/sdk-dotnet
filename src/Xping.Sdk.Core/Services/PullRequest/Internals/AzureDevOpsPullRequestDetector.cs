@@ -12,11 +12,12 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 
 /// <summary>
 /// Detects pull request context from Azure Pipelines environment variables, for repositories
-/// hosted in Azure Repos or on GitHub.
+/// hosted in Azure Repos or on github.com.
 /// </summary>
 /// <remarks>
 /// Returns <c>null</c> for non-PR builds, other repository providers (Bitbucket, external Git, …),
-/// Azure DevOps Server collections, or when required variables are absent. Detection never throws.
+/// Azure DevOps Server collections, GitHub repositories outside github.com (GitHub Enterprise
+/// Server, GHE.com), or when required variables are absent. Detection never throws.
 /// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the PR head commit, from
 /// <c>SYSTEM_PULLREQUEST_SOURCECOMMITID</c>. <c>BUILD_SOURCEVERSION</c> is not used: on a PR build
@@ -83,6 +84,8 @@ internal sealed class AzureDevOpsPullRequestDetector(
         else if (string.Equals(provider, "GitHub", StringComparison.OrdinalIgnoreCase))
         {
             platform = PullRequestPlatform.GitHub;
+            if (!IsGitHubComRepository()) return null;
+
             if (!PullRequestEnvironment.TrySplitAtLastSlash(repositoryName, out owner, out repoName))
             {
                 logger.LogDebug(
@@ -121,6 +124,24 @@ internal sealed class AzureDevOpsPullRequestDetector(
             baseBranch: baseBranch,
             headBranch: headBranch,
             author: author);
+    }
+
+    // The context names no host, so a GitHub repository elsewhere (GHE.com, or GHES behind a
+    // connection reporting provider GitHub) would be filed under github.com. GHES normally comes
+    // through as provider GitHubEnterprise, which is rejected as unsupported.
+    private bool IsGitHubComRepository()
+    {
+        if (!TryGetRequired("BUILD_REPOSITORY_URI", out string? repositoryUri)) return false;
+
+        if (Uri.TryCreate(repositoryUri, UriKind.Absolute, out Uri? uri) &&
+            string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        logger.LogDebug(
+            "Azure Pipelines PR detection skipped: BUILD_REPOSITORY_URI='{RepositoryUri}' is not a github.com " +
+            "repository; GitHub Enterprise Server and GHE.com are not supported.",
+            repositoryUri);
+        return false;
     }
 
     private bool TryGetAzureReposOwner([NotNullWhen(true)] out string? owner)
