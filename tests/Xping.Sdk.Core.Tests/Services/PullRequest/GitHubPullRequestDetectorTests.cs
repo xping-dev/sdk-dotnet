@@ -3,29 +3,59 @@
  * License: [MIT]
  */
 
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xping.Sdk.Core.Models.PullRequests;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Core.Services.Serialization.Internals;
 
 namespace Xping.Sdk.Core.Tests.Services.PullRequest;
 
-public sealed class GitHubPullRequestDetectorTests
+public sealed class GitHubPullRequestDetectorTests : IDisposable
 {
+    private const string HeadSha = "abc123def456";
+
+    // GITHUB_SHA is deliberately different from the payload's head SHA so every test shows it's ignored.
+    private const string MergeSha = "0000merge0000";
+
+    private readonly string _tempDir = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
+    public GitHubPullRequestDetectorTests() => Directory.CreateDirectory(_tempDir);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
+    private string WritePayload(string json)
+    {
+        string path = Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, json);
+        return path;
+    }
+
+    private string WriteHeadShaPayload(string sha) =>
+        WritePayload($$"""{ "number": 42, "pull_request": { "head": { "sha": "{{sha}}", "ref": "feature" } } }""");
+
     /// <summary>
     /// Builds a mock IEnvironmentVariableProvider with all GitHub PR variables set to valid values.
-    /// Tests override specific variables as needed.
+    /// Tests override specific variables as needed. A null <paramref name="eventPath"/> writes a
+    /// valid payload whose head SHA is <see cref="HeadSha"/>.
     /// </summary>
-    private static Mock<IEnvironmentVariableProvider> BuildValidEnvMock(
+    private Mock<IEnvironmentVariableProvider> BuildValidEnvMock(
         string eventName = "pull_request",
         string githubRef = "refs/pull/42/merge",
         string repository = "myorg/myrepo",
-        string sha = "abc123def456",
+        string? eventPath = null,
         string baseRef = "main",
         string headRef = "feature/new-feature",
         string? actor = "devuser")
@@ -34,7 +64,8 @@ public sealed class GitHubPullRequestDetectorTests
         mock.Setup(e => e.GetVariable("GITHUB_EVENT_NAME")).Returns(eventName);
         mock.Setup(e => e.GetVariable("GITHUB_REF")).Returns(githubRef);
         mock.Setup(e => e.GetVariable("GITHUB_REPOSITORY")).Returns(repository);
-        mock.Setup(e => e.GetVariable("GITHUB_SHA")).Returns(sha);
+        mock.Setup(e => e.GetVariable("GITHUB_SHA")).Returns(MergeSha);
+        mock.Setup(e => e.GetVariable("GITHUB_EVENT_PATH")).Returns(eventPath ?? WriteHeadShaPayload(HeadSha));
         mock.Setup(e => e.GetVariable("GITHUB_BASE_REF")).Returns(baseRef);
         mock.Setup(e => e.GetVariable("GITHUB_HEAD_REF")).Returns(headRef);
         mock.Setup(e => e.GetVariable("GITHUB_ACTOR")).Returns(actor);
@@ -42,7 +73,10 @@ public sealed class GitHubPullRequestDetectorTests
     }
 
     private static GitHubPullRequestDetector CreateDetector(IEnvironmentVariableProvider env)
-        => new(env, NullLogger<GitHubPullRequestDetector>.Instance);
+        => new(
+            env,
+            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
+            NullLogger<GitHubPullRequestDetector>.Instance);
 
     // ---------------------------------------------------------------------------
     // Detect — full valid pull_request event
@@ -122,11 +156,13 @@ public sealed class GitHubPullRequestDetectorTests
         Assert.Equal(99, result.PullRequestNumber);
     }
 
-    [Fact]
-    public void Detect_ValidPullRequestEvent_SetsCommitSha()
+    [Theory]
+    [InlineData("pull_request")]
+    [InlineData("pull_request_target")]
+    public void Detect_PullRequestEvent_SetsCommitShaToPayloadHeadNotGitHubSha(string eventName)
     {
-        // Arrange
-        var env = BuildValidEnvMock(sha: "deadbeef1234");
+        // Arrange — GITHUB_SHA is the merge commit (pull_request) or the base tip (pull_request_target)
+        var env = BuildValidEnvMock(eventName: eventName, eventPath: WriteHeadShaPayload("deadbeef1234"));
         var detector = CreateDetector(env.Object);
 
         // Act
@@ -371,11 +407,92 @@ public sealed class GitHubPullRequestDetectorTests
     // Detect — required variable missing scenarios
     // ---------------------------------------------------------------------------
 
-    [Fact]
-    public void Detect_MissingGitHubSha_ReturnsNull()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Detect_MissingEventPath_ReturnsNull(string eventPath)
     {
         // Arrange
-        var env = BuildValidEnvMock(sha: "   ");
+        var env = BuildValidEnvMock(eventPath: eventPath);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Detect_EventPathNotSet_ReturnsNull()
+    {
+        // Arrange
+        var env = BuildValidEnvMock();
+        env.Setup(e => e.GetVariable("GITHUB_EVENT_PATH")).Returns((string?)null);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Detect_EventPayloadStartsWithUtf8Bom_ReadsHeadSha()
+    {
+        // Arrange
+        string path = Path.Combine(_tempDir, "bom.json");
+        File.WriteAllText(path, """{ "pull_request": { "head": { "sha": "bom123" } } }""", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        var env = BuildValidEnvMock(eventPath: path);
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("bom123", result.CommitSha);
+    }
+
+    [Fact]
+    public void Detect_EventPayloadFileDoesNotExist_ReturnsNull()
+    {
+        // Arrange
+        var env = BuildValidEnvMock(eventPath: Path.Combine(_tempDir, "missing.json"));
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Detect_EventPayloadIsMalformedJson_ReturnsNull()
+    {
+        // Arrange
+        var env = BuildValidEnvMock(eventPath: WritePayload("{ not json"));
+        var detector = CreateDetector(env.Object);
+
+        // Act
+        var result = detector.Detect();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"pull_request":null}""")]
+    [InlineData("""{"pull_request":{}}""")]
+    [InlineData("""{"pull_request":{"head":{}}}""")]
+    [InlineData("""{"pull_request":{"head":{"sha":"  "}}}""")]
+    public void Detect_EventPayloadHasNoHeadSha_ReturnsNull(string json)
+    {
+        // Arrange
+        var env = BuildValidEnvMock(eventPath: WritePayload(json));
         var detector = CreateDetector(env.Object);
 
         // Act

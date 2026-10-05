@@ -95,11 +95,16 @@ Xping automatically captures:
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
 - `GITHUB_SHA` - Normalized into `CI.CommitSha` (omitted on `pull_request_target`, where it is the base branch's tip)
+- `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
 - `GITHUB_ACTOR` - User who triggered the workflow
+
+If tests run inside a container (`docker run`), pass the `GITHUB_*` variables **and** mount the
+runner's temp directory so the file at `GITHUB_EVENT_PATH` is readable. Without it, the run is
+still recorded, but PR context (PR number, branches, PR comment) is skipped and a warning is logged.
 
 ---
 
