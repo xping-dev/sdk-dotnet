@@ -107,6 +107,22 @@ public sealed class GitRepositoryReaderTests : IDisposable
     }
 
     [Fact]
+    public void ResolveRef_LooseRefDeletedAfterTheExistenceCheck_ReadsPackedRefs()
+    {
+        // gc --auto packs the ref and deletes the loose file while we read it. A dangling symlink
+        // reproduces that deterministically: File.Exists says yes, the read finds nothing.
+        string head = Git("rev-parse HEAD");
+        Git($"update-ref refs/remotes/origin/PR-17 {head}");
+        Git("pack-refs --all");
+        string looseRef = Path.Combine(_root, ".git", "refs", "remotes", "origin", "PR-17");
+        Directory.CreateDirectory(Path.GetDirectoryName(looseRef)!);
+        File.CreateSymbolicLink(looseRef, Path.Combine(_root, "deleted-by-gc"));
+        Assert.True(File.Exists(looseRef));
+
+        Assert.Equal(head, _reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));
+    }
+
+    [Fact]
     public void ResolveRef_RefMissing_ReturnsNull()
     {
         Assert.Null(_reader.ResolveRef(_root, "refs/remotes/origin/PR-17"));

@@ -57,8 +57,16 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
         string looseRefPath = Path.Combine(gitDirectory, refName.Replace('/', Path.DirectorySeparatorChar));
         if (File.Exists(looseRefPath))
         {
-            string sha = File.ReadAllText(looseRefPath).Trim();
-            return IsSha(sha) ? sha : null;
+            try
+            {
+                string sha = File.ReadAllText(looseRefPath).Trim();
+                return IsSha(sha) ? sha : null;
+            }
+            catch (IOException)
+            {
+                // A background gc packed the ref and deleted the loose file after the existence check.
+                // pack-refs writes packed-refs before deleting, so the ref is there now.
+            }
         }
 
         string packedRefsPath = Path.Combine(gitDirectory, "packed-refs");
