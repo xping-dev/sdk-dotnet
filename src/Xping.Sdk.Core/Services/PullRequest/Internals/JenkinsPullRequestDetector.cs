@@ -33,8 +33,9 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// </para>
 /// <para>
 /// An opt-in variable naming the head was rejected because it needs pipeline changes few users
-/// would make. The merge commit is created on the agent by <c>git merge</c>, so it is always a loose
-/// object and no pack file has to be read.
+/// would make. The merge commit is created on the agent by <c>git merge</c>, so it is usually a
+/// loose object; when <c>git gc --auto</c> has packed it, <see cref="IGitRepositoryReader"/> falls
+/// back to the <c>git</c> CLI.
 /// </para>
 /// </remarks>
 internal sealed class JenkinsPullRequestDetector(

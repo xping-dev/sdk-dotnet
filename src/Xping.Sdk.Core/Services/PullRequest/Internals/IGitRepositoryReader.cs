@@ -18,8 +18,8 @@ internal interface IGitRepositoryReader
     string? ResolveRef(string repositoryRoot, string refName);
 
     /// <summary>
-    /// Returns the first parent of a commit stored as a loose object. Returns <c>null</c> for a root
-    /// commit, a packed object, or anything that can't be read.
+    /// Returns the first parent of a commit. Returns <c>null</c> for a root commit, or when the commit
+    /// can't be read.
     /// </summary>
     string? GetFirstParent(string repositoryRoot, string commitSha);
 }

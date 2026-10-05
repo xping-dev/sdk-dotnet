@@ -344,6 +344,8 @@ the PR into its target, so Xping reads it from the workspace's `.git` directory:
 `refs/remotes/origin/$BRANCH_NAME` ref, used only when it is `GIT_COMMIT` or `GIT_COMMIT`'s first
 parent. The tests must therefore run in the checked-out workspace (`WORKSPACE`). If you use
 `skipDefaultCheckout`, check out with `checkout scm` before the test stage. Shallow clones work.
+If `git gc` has packed the merge commit (common on long-lived workspaces), Xping runs
+`git rev-parse` to read it, so keep `git` on the agent's `PATH`.
 
 GitHub Pull Request Builder (GHPRB) jobs are marked as PR builds but get no PR context.
 

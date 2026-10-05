@@ -161,12 +161,39 @@ public sealed class GitRepositoryReaderTests : IDisposable
     }
 
     [Fact]
-    public void GetFirstParent_PackedObject_ReturnsNull()
+    public void GetFirstParent_MergeCommitPackedByGc_FallsBackToGit()
+    {
+        // A long-lived Jenkins workspace crosses gc.auto's threshold and the merge commit gets packed.
+        var (head, merge) = PullRequestMergedWithTarget();
+        Git("gc -q");
+        Assert.False(File.Exists(Path.Combine(_root, ".git", "objects", merge.Substring(0, 2), merge.Substring(2))));
+
+        Assert.Equal(head, _reader.GetFirstParent(_root, merge));
+    }
+
+    [Fact]
+    public void GetFirstParent_PackedObjectAndNoGitOnPath_ReturnsNull()
     {
         var (_, merge) = PullRequestMergedWithTarget();
         Git("gc -q");
+        var reader = new GitRepositoryReader("xping-no-such-git");
 
-        Assert.Null(_reader.GetFirstParent(_root, merge));
+        Assert.Null(reader.GetFirstParent(_root, merge));
+    }
+
+    [Fact]
+    public void GetFirstParent_PackedRootCommit_ReturnsNull()
+    {
+        string root = Git("rev-parse HEAD");
+        Git("gc -q");
+
+        Assert.Null(_reader.GetFirstParent(_root, root));
+    }
+
+    [Fact]
+    public void GetFirstParent_CommitNotInTheRepository_ReturnsNull()
+    {
+        Assert.Null(_reader.GetFirstParent(_root, "0123456789abcdef0123456789abcdef01234567"));
     }
 
     [Theory]
