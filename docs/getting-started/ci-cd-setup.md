@@ -61,8 +61,12 @@ A pull request build can carry two different commits, and Xping records both on 
 
 Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
 only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example a
-Jenkins GHPRB job, GitHub Enterprise Server or self-managed GitLab) is filed under no commit, so it
-is never mistaken for a run on your main branch.
+Jenkins GHPRB job) is filed under no commit, so it is never mistaken for a run on your main branch.
+
+PR context and `CI.ServerUrl` both name the server the repository lives on (`https://github.com`,
+`https://ghes.example.com`, `https://gitlab.example.com:8443`, …), so GitHub Enterprise, GHE.com,
+self-managed GitLab and Azure DevOps Server are supported like their cloud counterparts. Xping
+Cloud posts PR comments only for github.com repositories.
 
 ---
 
@@ -124,7 +128,7 @@ Xping automatically captures:
 - `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
 - `GITHUB_REF` - Branch or tag ref
-- `GITHUB_SERVER_URL` - Only `https://github.com` gets PR context; runs on GitHub Enterprise Server or GHE.com are still flagged as pull request builds
+- `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
 - `GITHUB_ACTOR` - User who triggered the workflow
@@ -200,20 +204,23 @@ Xping automatically captures:
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` - Branch name
 - `BUILD_REPOSITORY_NAME` - Repository name
+- `BUILD_REPOSITORY_URI` - Its scheme, host and port are normalized into `CI.ServerUrl`
 - `BUILD_REQUESTEDFOR` - User who triggered the build
 
 On a pull request build, Xping also records the PR context (number, branches, head commit) for
-repositories in Azure Repos or on github.com:
-- `BUILD_REPOSITORY_PROVIDER` - `TfsGit` (Azure Repos) or `GitHub`; other providers get no PR context
-- `BUILD_REPOSITORY_URI` - For `GitHub`, must be a github.com repository
+repositories in Azure Repos or on GitHub:
+- `BUILD_REPOSITORY_PROVIDER` - `TfsGit` (Azure Repos), `GitHub` or `GitHubEnterprise`; other providers get no PR context
+- `BUILD_REPOSITORY_URI` - For GitHub, the server (github.com, GHE.com or GitHub Enterprise Server)
 - `SYSTEM_PULLREQUEST_PULLREQUESTID` (Azure Repos) / `SYSTEM_PULLREQUEST_PULLREQUESTNUMBER` (GitHub) - PR number
 - `SYSTEM_PULLREQUEST_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_TARGETBRANCH` - Head and base branch
 - `SYSTEM_PULLREQUEST_SOURCECOMMITID` - PR head commit (`BUILD_SOURCEVERSION` is the merge commit)
-- `SYSTEM_COLLECTIONURI` / `SYSTEM_TEAMPROJECT` - Azure Repos owner, recorded as `{organization}/{project}`
+- `SYSTEM_COLLECTIONURI` / `SYSTEM_TEAMPROJECT` - Azure Repos server and owner. On Azure DevOps
+  Services the owner is `{organization}/{project}` and the server `https://dev.azure.com`, whichever
+  URL form the organization uses. On Azure DevOps Server the owner is `{collection}/{project}` and
+  the server is the collection URL without the collection (`https://tfs.example.com/tfs`).
 
-Azure DevOps Server (on-premises) collections and GitHub repositories outside github.com (GitHub
-Enterprise Server, GHE.com) get no PR context. Xping Cloud doesn't post PR
-comments on Azure Repos yet; the PR context still drives PR insights.
+Xping Cloud doesn't post PR comments on Azure Repos or GitHub Enterprise yet; the PR context still
+drives PR insights.
 
 ---
 
@@ -273,11 +280,12 @@ Xping automatically captures:
 - `CI_MERGE_REQUEST_IID` - Normalized into `CI.IsPullRequest` (`true` in merge request pipelines)
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
 - `CI_PROJECT_PATH` - Repository path
+- `CI_SERVER_URL` - Normalized into `CI.ServerUrl`
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
 
-In a merge request pipeline on gitlab.com (`CI_SERVER_HOST`), Xping also records the MR context
-(number, branches, head commit). Self-managed GitLab instances get no MR context yet; their
-pipelines are still flagged by `CI.IsPullRequest`. The MR context comes from:
+In a merge request pipeline, on gitlab.com or a self-managed instance, Xping also records the MR
+context (number, branches, head commit). The MR context comes from:
+- `CI_SERVER_URL` - Server, including the port and any relative URL root
 - `CI_MERGE_REQUEST_IID` - MR number
 - `CI_MERGE_REQUEST_PROJECT_PATH` - Owner and project (nested groups stay in the owner: `group/sub`)
 - `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME` / `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` - Head and base branch
@@ -363,7 +371,9 @@ Xping automatically captures:
 - `GIT_COMMIT` - Normalized into `CI.CommitSha` (if using Git)
 - `CHANGE_ID` / `ghprbPullId` - Normalized into `CI.IsPullRequest` (`true` when either is set)
 - `CHANGE_ID`, `CHANGE_URL`, `CHANGE_BRANCH`, `CHANGE_TARGET`, `CHANGE_AUTHOR` - PR context on
-  multibranch (Branch Source) builds of github.com, gitlab.com and Azure DevOps Services repositories
+  multibranch (Branch Source) builds of GitHub, GitLab and Azure DevOps repositories on any server.
+  The platform is read from the shape of `CHANGE_URL`. For a GitLab instance under a relative URL
+  root, the root ends up in the owner rather than the server.
 - `GIT_BRANCH` - Branch name
 - `JOB_NAME` - Job name
 - `BUILD_USER` - User who triggered the build (if available)

@@ -53,6 +53,10 @@ public sealed class EnvironmentDetectorTests
         "BITBUCKET_PR_ID",
         "APPVEYOR_REPO_COMMIT",
         "APPVEYOR_PULL_REQUEST_NUMBER",
+        "GITHUB_SERVER_URL",
+        "CI_SERVER_URL",
+        "BUILD_REPOSITORY_URI",
+        "BITBUCKET_GIT_HTTP_ORIGIN",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -335,6 +339,41 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
         Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SERVER_URL", "https://GHES.acme.com/", "https://ghes.acme.com")]
+    [InlineData("GITLAB_CI", "true", "CI_SERVER_URL", "https://gitlab.acme.com:8443/gitlab", "https://gitlab.acme.com:8443/gitlab")]
+    [InlineData("TF_BUILD", "True", "BUILD_REPOSITORY_URI", "https://fabrikam@dev.azure.com/fabrikam/Payments/_git/api", "https://dev.azure.com")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", "BITBUCKET_GIT_HTTP_ORIGIN", "http://bitbucket.org/acme/api", "http://bitbucket.org")]
+    public async Task ServerUrlIsReadFromThePlatformsServerVariable(
+        string platformVariable, string platformValue, string serverVariable, string serverValue, string expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var server = new EnvRestorer(serverVariable, serverValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.ServerUrl"]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("ghes.acme.com")]
+    public async Task ServerUrlIsLeftOutWhenThePlatformNamesNoUsableServer(string? serverValue)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var server = new EnvRestorer("GITHUB_SERVER_URL", serverValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.ServerUrl", info.CustomProperties.Keys);
     }
 
     [Theory]

@@ -23,7 +23,7 @@ public sealed class GitLabPullRequestDetectorTests
     /// </summary>
     private static Dictionary<string, string?> ValidVariables() => new()
     {
-        ["CI_SERVER_HOST"] = "gitlab.com",
+        ["CI_SERVER_URL"] = "https://gitlab.com",
         ["CI_MERGE_REQUEST_IID"] = "17",
         ["CI_MERGE_REQUEST_PROJECT_PATH"] = "acme/api-service",
         ["CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"] = "feature/login",
@@ -56,6 +56,7 @@ public sealed class GitLabPullRequestDetectorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(PullRequestPlatform.GitLab, result.Platform);
+        Assert.Equal("https://gitlab.com", result.ServerUrl);
         Assert.Equal("acme", result.RepositoryOwner);
         Assert.Equal("api-service", result.RepositoryName);
         Assert.Equal(17, result.PullRequestNumber);
@@ -132,27 +133,35 @@ public sealed class GitLabPullRequestDetectorTests
     // ---------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("gitlab.example.com")]
-    [InlineData("gitlab.com.example.org")]
-    public void Detect_SelfManagedInstance_ReturnsNull(string serverHost)
-    {
-        // Arrange — the context names no host, so a self-managed project would be read as gitlab.com
-        var variables = ValidVariables();
-        variables["CI_SERVER_HOST"] = serverHost;
-
-        // Act & Assert
-        Assert.Null(Detect(variables));
-    }
-
-    [Fact]
-    public void Detect_GitLabComHostInAnyCase_ReturnsContext()
+    [InlineData("https://GitLab.com", "https://gitlab.com")]
+    [InlineData("https://gitlab.example.com", "https://gitlab.example.com")]
+    [InlineData("https://gitlab.example.com:8443", "https://gitlab.example.com:8443")]
+    [InlineData("https://example.com/gitlab/", "https://example.com/gitlab")]
+    public void Detect_AnyGitLabServer_ReturnsContextWithNormalizedServerUrl(string serverValue, string expected)
     {
         // Arrange
         var variables = ValidVariables();
-        variables["CI_SERVER_HOST"] = "GitLab.com";
+        variables["CI_SERVER_URL"] = serverValue;
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(expected, result.ServerUrl);
+    }
+
+    [Theory]
+    [InlineData("gitlab.example.com")]
+    [InlineData("ftp://gitlab.example.com")]
+    public void Detect_ServerUrlNotAnAbsoluteHttpUrl_ReturnsNull(string serverValue)
+    {
+        // Arrange
+        var variables = ValidVariables();
+        variables["CI_SERVER_URL"] = serverValue;
 
         // Act & Assert
-        Assert.NotNull(Detect(variables));
+        Assert.Null(Detect(variables));
     }
 
     [Fact]
@@ -166,7 +175,7 @@ public sealed class GitLabPullRequestDetectorTests
     }
 
     [Theory]
-    [InlineData("CI_SERVER_HOST")]
+    [InlineData("CI_SERVER_URL")]
     [InlineData("CI_MERGE_REQUEST_PROJECT_PATH")]
     [InlineData("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")]
     [InlineData("CI_MERGE_REQUEST_TARGET_BRANCH_NAME")]

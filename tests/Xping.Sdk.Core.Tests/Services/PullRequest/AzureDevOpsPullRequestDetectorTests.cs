@@ -73,6 +73,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(PullRequestPlatform.AzureDevOps, result.Platform);
+        Assert.Equal("https://dev.azure.com", result.ServerUrl);
         Assert.Equal("fabrikam/Payments", result.RepositoryOwner);
         Assert.Equal("api-service", result.RepositoryName);
         Assert.Equal(17, result.PullRequestNumber);
@@ -86,7 +87,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
     [InlineData("https://dev.azure.com/fabrikam/")]
     [InlineData("https://dev.azure.com/fabrikam")]
     [InlineData("https://fabrikam.visualstudio.com/")]
-    public void Detect_EitherAzureDevOpsServicesUrlForm_GivesTheSameOwner(string collectionValue)
+    public void Detect_EitherAzureDevOpsServicesUrlForm_GivesTheSameServerAndOwner(string collectionValue)
     {
         // Arrange
         var variables = AzureReposVariables();
@@ -97,14 +98,39 @@ public sealed class AzureDevOpsPullRequestDetectorTests
 
         // Assert
         Assert.NotNull(result);
+        Assert.Equal("https://dev.azure.com", result.ServerUrl);
         Assert.Equal("fabrikam/Payments", result.RepositoryOwner);
     }
 
     [Theory]
-    [InlineData("https://tfs.contoso.local/DefaultCollection/")]
+    [InlineData("https://tfs.contoso.local/tfs/DefaultCollection/", "https://tfs.contoso.local/tfs", "DefaultCollection/Payments")]
+    [InlineData("https://tfs.contoso.local/DefaultCollection/", "https://tfs.contoso.local", "DefaultCollection/Payments")]
+    [InlineData("http://TFS.contoso.local:8080/tfs/Fabrikam%20Fiber", "http://tfs.contoso.local:8080/tfs", "Fabrikam Fiber/Payments")]
+    public void Detect_AzureDevOpsServerCollection_SplitsServerAndCollection(
+        string collectionValue,
+        string expectedServer,
+        string expectedOwner)
+    {
+        // Arrange
+        var variables = AzureReposVariables();
+        variables["SYSTEM_COLLECTIONURI"] = collectionValue;
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(PullRequestPlatform.AzureDevOps, result.Platform);
+        Assert.Equal(expectedServer, result.ServerUrl);
+        Assert.Equal(expectedOwner, result.RepositoryOwner);
+    }
+
+    [Theory]
+    [InlineData("https://tfs.contoso.local/")]
     [InlineData("https://dev.azure.com/")]
+    [InlineData("ftp://tfs.contoso.local/DefaultCollection/")]
     [InlineData("not a url")]
-    public void Detect_CollectionUriNotAnAzureDevOpsServicesOrganization_ReturnsNull(string collectionValue)
+    public void Detect_CollectionUriNamesNoOrganizationOrCollection_ReturnsNull(string collectionValue)
     {
         // Arrange
         var variables = AzureReposVariables();
@@ -167,6 +193,7 @@ public sealed class AzureDevOpsPullRequestDetectorTests
         // Assert — PULLREQUESTID is GitHub's internal ID, not the number users see
         Assert.NotNull(result);
         Assert.Equal(PullRequestPlatform.GitHub, result.Platform);
+        Assert.Equal("https://github.com", result.ServerUrl);
         Assert.Equal("acme", result.RepositoryOwner);
         Assert.Equal("api-service", result.RepositoryName);
         Assert.Equal(42, result.PullRequestNumber);
@@ -198,26 +225,47 @@ public sealed class AzureDevOpsPullRequestDetectorTests
     }
 
     [Theory]
-    [InlineData("https://github.com/acme/api-service.git")]
-    [InlineData("https://GitHub.com/acme/api-service")]
-    public void Detect_GitHubComRepositoryUri_ReturnsContext(string repositoryValue)
+    [InlineData("https://github.com/acme/api-service.git", "https://github.com")]
+    [InlineData("https://GitHub.com/acme/api-service", "https://github.com")]
+    [InlineData("https://acme.ghe.com/acme/api-service", "https://acme.ghe.com")]
+    [InlineData("https://ghes.acme.com/acme/api-service", "https://ghes.acme.com")]
+    public void Detect_GitHubRepository_TakesTheServerFromTheRepositoryUri(string repositoryValue, string expected)
     {
         // Arrange
         var variables = GitHubRepoVariables();
         variables["BUILD_REPOSITORY_URI"] = repositoryValue;
 
-        // Act & Assert
-        Assert.NotNull(Detect(variables));
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(expected, result.ServerUrl);
     }
 
-    // The context names no host, so Xping Cloud would file these repositories under github.com.
+    [Fact]
+    public void Detect_GitHubEnterpriseProvider_MapsToGitHubOnThatServer()
+    {
+        // Arrange
+        var variables = GitHubRepoVariables();
+        variables["BUILD_REPOSITORY_PROVIDER"] = "GitHubEnterprise";
+        variables["BUILD_REPOSITORY_URI"] = "https://ghes.acme.com/acme/api-service";
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(PullRequestPlatform.GitHub, result.Platform);
+        Assert.Equal("https://ghes.acme.com", result.ServerUrl);
+        Assert.Equal("acme", result.RepositoryOwner);
+        Assert.Equal(42, result.PullRequestNumber);
+    }
+
     [Theory]
-    [InlineData("https://acme.ghe.com/acme/api-service")]
-    [InlineData("https://ghes.acme.com/acme/api-service")]
-    [InlineData("https://github.com.example.org/acme/api-service")]
     [InlineData("acme/api-service")]
     [InlineData(null)]
-    public void Detect_GitHubRepositoryUriNotGitHubCom_ReturnsNull(string? repositoryValue)
+    public void Detect_GitHubRepositoryUriNotAnAbsoluteUrl_ReturnsNull(string? repositoryValue)
     {
         // Arrange
         var variables = GitHubRepoVariables();
@@ -247,7 +295,6 @@ public sealed class AzureDevOpsPullRequestDetectorTests
 
     [Theory]
     [InlineData("Bitbucket")]
-    [InlineData("GitHubEnterprise")]
     [InlineData("Git")]
     [InlineData(" ")]
     public void Detect_UnsupportedRepositoryProvider_ReturnsNull(string provider)

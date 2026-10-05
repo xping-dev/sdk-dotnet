@@ -12,12 +12,12 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 
 /// <summary>
 /// Detects pull request context from Azure Pipelines environment variables, for repositories
-/// hosted in Azure Repos or on github.com.
+/// hosted in Azure Repos (Azure DevOps Services or Server) or on GitHub (github.com, GHE.com or
+/// GitHub Enterprise Server).
 /// </summary>
 /// <remarks>
 /// Returns <c>null</c> for non-PR builds, other repository providers (Bitbucket, external Git, …),
-/// Azure DevOps Server collections, GitHub repositories outside github.com (GitHub Enterprise
-/// Server, GHE.com), or when required variables are absent. Detection never throws.
+/// or when required variables are absent. Detection never throws.
 /// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the PR head commit, from
 /// <c>SYSTEM_PULLREQUEST_SOURCECOMMITID</c>. <c>BUILD_SOURCEVERSION</c> is not used: on a PR build
@@ -26,7 +26,7 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// <para>
 /// An Azure Repos repository is addressed by organization, project and repository, so its owner is
 /// <c>{organization}/{project}</c> and its name is the repository. Xping Cloud parses the owner back
-/// in that shape.
+/// in that shape. On Azure DevOps Server the collection takes the organization's place.
 /// </para>
 /// </remarks>
 internal sealed class AzureDevOpsPullRequestDetector(
@@ -34,6 +34,7 @@ internal sealed class AzureDevOpsPullRequestDetector(
     ILogger<AzureDevOpsPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
     private const string Platform = "Azure Pipelines";
+    private const string AzureDevOpsServicesUrl = "https://dev.azure.com";
 
     /// <summary>
     /// Whether the environment is an Azure Pipelines PR build. <c>EnvironmentDetector</c> uses the
@@ -73,18 +74,20 @@ internal sealed class AzureDevOpsPullRequestDetector(
         string? owner;
         string? repoName;
         int prNumber;
+        string? serverUrl;
 
         if (string.Equals(provider, "TfsGit", StringComparison.OrdinalIgnoreCase))
         {
             platform = PullRequestPlatform.AzureDevOps;
-            if (!TryGetAzureReposOwner(out owner)) return null;
+            if (!TryGetAzureReposOwner(out serverUrl, out owner)) return null;
             repoName = repositoryName;
             if (!TryGetRequiredNumber("SYSTEM_PULLREQUEST_PULLREQUESTID", out prNumber)) return null;
         }
-        else if (string.Equals(provider, "GitHub", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(provider, "GitHub", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(provider, "GitHubEnterprise", StringComparison.OrdinalIgnoreCase))
         {
             platform = PullRequestPlatform.GitHub;
-            if (!IsGitHubComRepository()) return null;
+            if (!TryGetGitHubServerUrl(out serverUrl)) return null;
 
             if (!PullRequestEnvironment.TrySplitAtLastSlash(repositoryName, out owner, out repoName))
             {
@@ -117,6 +120,7 @@ internal sealed class AzureDevOpsPullRequestDetector(
 
         return new PullRequestContext(
             platform: platform,
+            serverUrl: serverUrl,
             repositoryOwner: owner,
             repositoryName: repoName,
             pullRequestNumber: prNumber,
@@ -126,49 +130,53 @@ internal sealed class AzureDevOpsPullRequestDetector(
             author: author);
     }
 
-    // The context names no host, so a GitHub repository elsewhere (GHE.com, or GHES behind a
-    // connection reporting provider GitHub) would be filed under github.com. GHES normally comes
-    // through as provider GitHubEnterprise, which is rejected as unsupported.
-    private bool IsGitHubComRepository()
+    // GHE.com repositories and GitHub Enterprise Server behind a "GitHub" service connection report
+    // provider GitHub too, so the host always comes from the repository URI, never from the provider.
+    private bool TryGetGitHubServerUrl([NotNullWhen(true)] out string? serverUrl)
     {
+        serverUrl = null;
         if (!TryGetRequired("BUILD_REPOSITORY_URI", out string? repositoryUri)) return false;
 
-        if (Uri.TryCreate(repositoryUri, UriKind.Absolute, out Uri? uri) &&
-            string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        if (PullRequestEnvironment.TryGetServerRoot(repositoryUri, out serverUrl))
             return true;
 
         logger.LogDebug(
-            "Azure Pipelines PR detection skipped: BUILD_REPOSITORY_URI='{RepositoryUri}' is not a github.com " +
-            "repository; GitHub Enterprise Server and GHE.com are not supported.",
+            "Azure Pipelines PR detection skipped: BUILD_REPOSITORY_URI='{RepositoryUri}' is not an absolute http(s) URL.",
             repositoryUri);
         return false;
     }
 
-    private bool TryGetAzureReposOwner([NotNullWhen(true)] out string? owner)
+    private bool TryGetAzureReposOwner([NotNullWhen(true)] out string? serverUrl, [NotNullWhen(true)] out string? owner)
     {
+        serverUrl = null;
         owner = null;
         if (!TryGetRequired("SYSTEM_COLLECTIONURI", out string? collectionUri)) return false;
         if (!TryGetRequired("SYSTEM_TEAMPROJECT", out string? project)) return false;
 
-        string? organization = ParseOrganization(collectionUri);
-        if (organization is null)
+        AzureCollection? collection = ParseCollection(collectionUri);
+        if (collection is null)
         {
             logger.LogDebug(
                 "Azure Pipelines PR detection skipped: SYSTEM_COLLECTIONURI='{CollectionUri}' is not an " +
-                "Azure DevOps Services organization URL.",
+                "Azure DevOps organization or collection URL.",
                 collectionUri);
             return false;
         }
 
-        owner = organization + "/" + project;
+        serverUrl = collection.ServerUrl;
+        owner = collection.Name + "/" + project;
         return true;
     }
 
     /// <summary>
-    /// Extracts the organization from <c>https://dev.azure.com/{org}/</c> or the older
-    /// <c>https://{org}.visualstudio.com/</c>. Any other host (Azure DevOps Server) yields <c>null</c>.
+    /// Splits a collection URL into the server and the organization or collection name.
+    /// <c>https://dev.azure.com/{org}/</c> and the older <c>https://{org}.visualstudio.com/</c> both
+    /// yield <c>https://dev.azure.com</c>, so a repository keeps one identity whichever form a build
+    /// reports. On Azure DevOps Server the last path segment is the collection and the rest is the
+    /// server: <c>https://tfs.example.com/tfs/DefaultCollection/</c> yields
+    /// <c>https://tfs.example.com/tfs</c> and <c>DefaultCollection</c>.
     /// </summary>
-    internal static string? ParseOrganization(string collectionUri)
+    internal static AzureCollection? ParseCollection(string collectionUri)
     {
         if (!Uri.TryCreate(collectionUri, UriKind.Absolute, out Uri? uri))
             return null;
@@ -176,17 +184,29 @@ internal sealed class AzureDevOpsPullRequestDetector(
         if (string.Equals(uri.Host, "dev.azure.com", StringComparison.OrdinalIgnoreCase))
         {
             string organization = uri.AbsolutePath.Trim('/');
-            return organization.Length == 0 || organization.IndexOf('/') >= 0 ? null : Uri.UnescapeDataString(organization);
+            return organization.Length == 0 || organization.IndexOf('/') >= 0
+                ? null
+                : new AzureCollection(AzureDevOpsServicesUrl, Uri.UnescapeDataString(organization));
         }
 
         const string legacySuffix = ".visualstudio.com";
         if (uri.Host.EndsWith(legacySuffix, StringComparison.OrdinalIgnoreCase))
         {
             string organization = uri.Host.Substring(0, uri.Host.Length - legacySuffix.Length);
-            return organization.Length == 0 || organization.IndexOf('.') >= 0 ? null : organization;
+            return organization.Length == 0 || organization.IndexOf('.') >= 0
+                ? null
+                : new AzureCollection(AzureDevOpsServicesUrl, organization);
         }
 
-        return null;
+        string path = uri.AbsolutePath.Trim('/');
+        int lastSlash = path.LastIndexOf('/');
+        string name = Uri.UnescapeDataString(path.Substring(lastSlash + 1));
+        string serverPath = lastSlash < 0 ? string.Empty : "/" + path.Substring(0, lastSlash);
+        if (name.Length == 0
+            || !PullRequestEnvironment.TryGetServerRoot(collectionUri, out string? serverRoot))
+            return null;
+
+        return new AzureCollection(serverRoot + serverPath, name);
     }
 
     private bool TryGetRequiredBranch(string variable, [NotNullWhen(true)] out string? branch)
@@ -212,4 +232,7 @@ internal sealed class AzureDevOpsPullRequestDetector(
 
     private bool TryGetRequiredNumber(string variable, out int number) =>
         PullRequestEnvironment.TryGetRequiredNumber(env, logger, Platform, variable, out number);
+
+    /// <summary>An Azure DevOps server and the organization or collection on it.</summary>
+    internal sealed record AzureCollection(string ServerUrl, string Name);
 }

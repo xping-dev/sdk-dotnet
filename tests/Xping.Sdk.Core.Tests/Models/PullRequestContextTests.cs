@@ -24,6 +24,16 @@ public sealed class PullRequestContextTests
     }
 
     [Fact]
+    public void DefaultConstructor_SetsServerUrlToEmptyString()
+    {
+        // Act
+        var ctx = new PullRequestContext();
+
+        // Assert
+        Assert.Equal(string.Empty, ctx.ServerUrl);
+    }
+
+    [Fact]
     public void DefaultConstructor_SetsRepositoryOwnerToEmptyString()
     {
         // Act
@@ -105,6 +115,16 @@ public sealed class PullRequestContextTests
 
         // Assert
         Assert.Equal(PullRequestPlatform.GitHub, ctx.Platform);
+    }
+
+    [Fact]
+    public void InternalConstructor_WithValidArguments_SetsServerUrl()
+    {
+        // Act
+        var ctx = BuildValidContext(serverUrl: "https://ghes.example.com");
+
+        // Assert
+        Assert.Equal("https://ghes.example.com", ctx.ServerUrl);
     }
 
     [Fact]
@@ -194,6 +214,15 @@ public sealed class PullRequestContextTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
+    public void InternalConstructor_EmptyOrWhitespaceServerUrl_ThrowsArgumentException(string value)
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => BuildValidContext(serverUrl: value));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
     public void InternalConstructor_EmptyOrWhitespaceRepositoryOwner_ThrowsArgumentException(string value)
     {
         // Act & Assert
@@ -270,6 +299,7 @@ public sealed class PullRequestContextTests
 
     private static PullRequestContext BuildValidContext(
         PullRequestPlatform platform = PullRequestPlatform.GitHub,
+        string serverUrl = "https://github.com",
         string repositoryOwner = "myorg",
         string repositoryName = "myrepo",
         int pullRequestNumber = 1,
@@ -280,6 +310,7 @@ public sealed class PullRequestContextTests
     {
         return new PullRequestContext(
             platform,
+            serverUrl,
             repositoryOwner,
             repositoryName,
             pullRequestNumber,

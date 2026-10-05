@@ -450,6 +450,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             {
                 case CIPlatform.GitHubActions:
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("GITHUB_REPOSITORY"));
+                    AddServerUrl(properties, ServerUrlOf(GetEnvironmentVariable("GITHUB_SERVER_URL")));
                     AddIfNotNull(properties, "CI.RunId", GetEnvironmentVariable("GITHUB_RUN_ID"));
                     AddIfNotNull(properties, "CI.RunNumber", GetEnvironmentVariable("GITHUB_RUN_NUMBER"));
                     AddIfNotNull(properties, "CI.Ref", GetEnvironmentVariable("GITHUB_REF"));
@@ -481,6 +482,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildId", GetEnvironmentVariable("BUILD_BUILDID"));
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_BUILDNUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BUILD_REPOSITORY_NAME"));
+                    AddServerUrl(properties, ServerRootOf(GetEnvironmentVariable("BUILD_REPOSITORY_URI")));
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
@@ -508,6 +510,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.JobId", GetEnvironmentVariable("CI_JOB_ID"));
                     AddIfNotNull(properties, "CI.PipelineId", GetEnvironmentVariable("CI_PIPELINE_ID"));
                     AddIfNotNull(properties, "CI.ProjectPath", GetEnvironmentVariable("CI_PROJECT_PATH"));
+                    AddServerUrl(properties, ServerUrlOf(GetEnvironmentVariable("CI_SERVER_URL")));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CI_COMMIT_SHA"));
                     AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
@@ -553,6 +556,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 case CIPlatform.BitbucketPipelines:
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BITBUCKET_BUILD_NUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BITBUCKET_REPO_FULL_NAME"));
+                    AddServerUrl(properties, ServerRootOf(GetEnvironmentVariable("BITBUCKET_GIT_HTTP_ORIGIN")));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("BITBUCKET_BRANCH"));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BITBUCKET_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("BITBUCKET_PR_ID"));
@@ -854,6 +858,20 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             dictionary[key] = value!;
         }
     }
+
+    // CI.Repository is owner/name only, so the server is what tells GitHub Enterprise's acme/api apart
+    // from github.com's. It is normalized the way PullRequestContext.ServerUrl is, so the two compare.
+    private static void AddServerUrl(Dictionary<string, string> dictionary, string? serverUrl)
+    {
+        if (serverUrl is not null)
+            dictionary["CI.ServerUrl"] = serverUrl;
+    }
+
+    private static string? ServerUrlOf(string? raw) =>
+        PullRequestEnvironment.TryNormalizeServerUrl(raw, out string? serverUrl) ? serverUrl : null;
+
+    private static string? ServerRootOf(string? raw) =>
+        PullRequestEnvironment.TryGetServerRoot(raw, out string? serverUrl) ? serverUrl : null;
 
     private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>
         dictionary["CI.IsPullRequest"] = isPullRequest ? "true" : "false";

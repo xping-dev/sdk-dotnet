@@ -85,6 +85,38 @@ internal static class PullRequestEnvironment
     }
 
     /// <summary>
+    /// Normalizes a server URL to scheme, lowercase host, non-default port and path, with no trailing
+    /// <c>/</c>. Query, fragment and credentials are dropped. Only absolute http(s) URLs are accepted.
+    /// </summary>
+    public static bool TryNormalizeServerUrl(string? raw, [NotNullWhen(true)] out string? serverUrl) =>
+        TryNormalize(raw, keepPath: true, out serverUrl);
+
+    /// <summary>
+    /// Like <see cref="TryNormalizeServerUrl"/>, but keeps only the scheme, host and port of a URL that
+    /// points into the server, such as a repository URL.
+    /// </summary>
+    public static bool TryGetServerRoot(string? raw, [NotNullWhen(true)] out string? serverUrl) =>
+        TryNormalize(raw, keepPath: false, out serverUrl);
+
+    private static bool TryNormalize(string? raw, bool keepPath, [NotNullWhen(true)] out string? serverUrl)
+    {
+        serverUrl = null;
+        if (string.IsNullOrWhiteSpace(raw)
+            || !Uri.TryCreate(raw!.Trim(), UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || uri.Host.Length == 0)
+            return false;
+
+        // Built by hand rather than with GetLeftPart: Azure repository URIs carry the organization as
+        // user info (https://org@dev.azure.com/...), which must not become part of the identity.
+        // Uri already lowercases the scheme and host.
+        string port = uri.IsDefaultPort ? string.Empty : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+        string path = keepPath ? uri.AbsolutePath.TrimEnd('/') : string.Empty;
+        serverUrl = uri.Scheme + "://" + uri.Host + port + path;
+        return true;
+    }
+
+    /// <summary>
     /// Removes a leading <c>refs/heads/</c>; branch names without it are returned unchanged.
     /// </summary>
     public static string StripHeadsPrefix(string branch) =>

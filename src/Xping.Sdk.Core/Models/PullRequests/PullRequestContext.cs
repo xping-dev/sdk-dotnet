@@ -16,6 +16,7 @@ public sealed class PullRequestContext
     public PullRequestContext()
     {
         Platform = PullRequestPlatform.Unknown;
+        ServerUrl = string.Empty;
         RepositoryOwner = string.Empty;
         RepositoryName = string.Empty;
         PullRequestNumber = 0;
@@ -30,6 +31,7 @@ public sealed class PullRequestContext
     /// </summary>
     internal PullRequestContext(
         PullRequestPlatform platform,
+        string serverUrl,
         string repositoryOwner,
         string repositoryName,
         int pullRequestNumber,
@@ -38,6 +40,8 @@ public sealed class PullRequestContext
         string headBranch,
         string? author)
     {
+        if (string.IsNullOrWhiteSpace(serverUrl))
+            throw new ArgumentException("Server URL must not be empty.", nameof(serverUrl));
         if (string.IsNullOrWhiteSpace(repositoryOwner))
             throw new ArgumentException("Repository owner must not be empty.", nameof(repositoryOwner));
         if (string.IsNullOrWhiteSpace(repositoryName))
@@ -50,6 +54,7 @@ public sealed class PullRequestContext
             throw new ArgumentException("Head branch must not be empty.", nameof(headBranch));
 
         Platform = platform;
+        ServerUrl = serverUrl;
         RepositoryOwner = repositoryOwner;
         RepositoryName = repositoryName;
         PullRequestNumber = pullRequestNumber;
@@ -63,6 +68,19 @@ public sealed class PullRequestContext
     /// Gets the source control platform (GitHub, GitLab, Azure DevOps).
     /// </summary>
     public PullRequestPlatform Platform { get; init; }
+
+    /// <summary>
+    /// Gets the web root of the server hosting the repository, e.g. <c>https://github.com</c>,
+    /// <c>https://ghes.example.com</c>, <c>https://gitlab.example.com:8443/gitlab</c>,
+    /// <c>https://dev.azure.com</c> or <c>https://tfs.example.com/tfs</c>.
+    /// </summary>
+    /// <remarks>
+    /// Normalized to scheme, lowercase host, non-default port and path, with no trailing <c>/</c>, so
+    /// every detector reports the same value for the same server. A repository is identified by this
+    /// URL together with <see cref="RepositoryOwner"/> and <see cref="RepositoryName"/>: the same
+    /// <c>owner/name</c> on GitHub Enterprise and on github.com are different repositories.
+    /// </remarks>
+    public string ServerUrl { get; init; }
 
     /// <summary>
     /// Gets the repository owner (organization or user login).

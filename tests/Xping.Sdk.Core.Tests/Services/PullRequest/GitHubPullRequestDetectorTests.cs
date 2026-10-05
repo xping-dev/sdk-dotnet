@@ -303,14 +303,17 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
     }
 
     // ---------------------------------------------------------------------------
-    // Detect — GITHUB_SERVER_URL must be github.com
+    // Detect — GITHUB_SERVER_URL names the server
     // ---------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("https://github.com")]
-    [InlineData("https://github.com/")]
-    [InlineData("https://GitHub.com")]
-    public void Detect_GitHubComServerUrl_ReturnsContext(string serverValue)
+    [InlineData("https://github.com", "https://github.com")]
+    [InlineData("https://github.com/", "https://github.com")]
+    [InlineData("https://GitHub.com", "https://github.com")]
+    [InlineData("https://acme.ghe.com", "https://acme.ghe.com")]
+    [InlineData("https://GHES.acme.com/", "https://ghes.acme.com")]
+    [InlineData("http://ghes.acme.local:8080", "http://ghes.acme.local:8080")]
+    public void Detect_AnyGitHubServer_ReturnsContextWithNormalizedServerUrl(string serverValue, string expected)
     {
         // Arrange
         var env = BuildValidEnvMock(serverUrl: serverValue);
@@ -321,18 +324,16 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
 
         // Assert
         Assert.NotNull(result);
+        Assert.Equal(expected, result.ServerUrl);
     }
 
-    // The context names no host, so Xping Cloud would file these repositories under github.com.
     [Theory]
-    [InlineData("https://ghes.acme.com")]
-    [InlineData("https://acme.ghe.com")]
-    [InlineData("https://github.com.example.org")]
     [InlineData("github.com")]
+    [InlineData("ftp://ghes.acme.com")]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  ")]
-    public void Detect_ServerUrlNotGitHubCom_ReturnsNull(string? serverValue)
+    public void Detect_ServerUrlNotAnAbsoluteHttpUrl_ReturnsNull(string? serverValue)
     {
         // Arrange
         var env = BuildValidEnvMock(serverUrl: serverValue);
@@ -363,14 +364,12 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
         Assert.Contains(LogLevel.Warning, logger.Levels);
     }
 
-    [Theory]
-    [InlineData("https://ghes.acme.com")]
-    [InlineData("github.com")]
-    public void Detect_ServerUrlSetButNotGitHubCom_DoesNotWarn(string serverValue)
+    [Fact]
+    public void Detect_MalformedServerUrl_DoesNotWarn()
     {
         // Arrange
         var logger = new LevelRecordingLogger();
-        var detector = CreateDetector(BuildValidEnvMock(serverUrl: serverValue).Object, logger);
+        var detector = CreateDetector(BuildValidEnvMock(serverUrl: "github.com").Object, logger);
 
         // Act
         detector.Detect();
