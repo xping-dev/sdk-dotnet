@@ -215,8 +215,9 @@ delays from an injected `TimeProvider` so tests do not wait:
   redeemed it; a retry would answer `invalid_grant` and hide the network failure. A 5xx answer
   means the code was not redeemed, so that is still retried.
 - `PollDeviceAsync` makes none of these retries: a network failure, `server_error`,
-  `temporarily_unavailable` or another 5xx comes back as a transient result, and the device flow
-  polls again at the next interval (contract §3.2, §6.3). An immediate retry would poll faster
+  `temporarily_unavailable`, another 5xx, or a `429` without an OAuth body (a rate limiter in
+  front of the Portal) comes back as a transient result, and the device flow polls again at the
+  next interval (contract §3.2, §6.3). An immediate retry would poll faster
   than `interval`.
 - When the retries are spent, the failure is `AuthFailureException` with `CloudUnreachable`
   (§9.6).
@@ -307,7 +308,9 @@ and enter the code  ABCD-EFGH
 Waiting for you to approve in the browser (up to 10 minutes)...
 ```
 
-followed by the same success block. The code is printed in bold on a terminal, plain otherwise.
+followed by the same success block. The code is printed in bold on a terminal, plain otherwise. The
+waiting line names `expires_in` in whole minutes, or in seconds when it is not a whole number of
+minutes, so a short lifetime never reads "up to 0 minutes".
 
 **JSON result** (`--json`, stdout, exit 0):
 
@@ -615,7 +618,9 @@ providers, so tests cover every row (§18.1).
 
 After discovery, `OAuthClient.StartDeviceAsync(workspaceId)` (contract §4.5). The response DTO:
 `DeviceAuthorization(DeviceCode, UserCode, VerificationUri, VerificationUriComplete, ExpiresIn,
-Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required.
+Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required. A `user_code` with a
+control character is an incomplete response (`CloudUnreachable`): it is printed as sent, and
+nobody could type it. Errors are mapped as §4.8.
 
 ### 6.2 Prompt
 
@@ -629,7 +634,7 @@ and `--no-browser` is absent; failure to open changes nothing (contract §3.2 st
 interval = response.interval
 deadline = now + response.expires_in
 loop:
-  wait interval (TimeProvider-based delay; cancellable)
+  wait min(interval, deadline - now) (TimeProvider-based delay; cancellable)
   if now >= deadline: fail LoginTimedOut ("The sign-in code expired. Run xping login --device again.")
   r = PollDeviceAsync(device_code)
   success            → store (§7), print success block, exit 0
@@ -638,9 +643,16 @@ loop:
   access_denied      → LoginDeclined
   expired_token      → LoginTimedOut, same message as the deadline
   invalid_grant      → LoginFailed ("The device code was rejected. Run xping login --device again.")
-  network error / 5xx → continue at the next interval (never faster; contract §3.2)
-  any other error    → LoginFailed with error and error_description verbatim
+  network error / 5xx / 429 → continue at the next interval (never faster; contract §3.2);
+                       the first one prints a warning on stderr
+  any other error    → as §4.8 (invalid_client → CloudUnreachable; invalid_request and the
+                       other client-bug codes → LoginFailed "please report it"); otherwise
+                       LoginFailed with error and error_description, control characters dropped
 ```
+
+The warning reads "! Could not reach Xping Cloud ({reason}). Still waiting; an approval made in
+the meantime is not lost." Without it a user whose network dropped waits out the code's lifetime
+with no sign of trouble.
 
 The CLI MUST NOT poll faster than `interval`, including after a network error; the delay is
 always waited before the next request. `device_code` is held in memory only and cleared after
