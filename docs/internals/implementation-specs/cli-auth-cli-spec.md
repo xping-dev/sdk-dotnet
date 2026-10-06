@@ -236,8 +236,10 @@ delays from an injected `TimeProvider` so tests do not wait:
 - Human text goes to stderr in every mode, including success messages. Stdout carries only the
   `--json` document. This follows the finding-detail spec D8 rule that stdout is data.
 - Decoration follows `OutputCapabilities.Resolve(ascii: false, noColor: false, redirected:
-  !io.IsTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
-  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1).
+  !io.IsErrorTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
+  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1). `ConsoleIO` carries one
+  terminal flag per stream (`IsInputTerminal`, `IsTerminal` for stdout, `IsErrorTerminal`); the
+  auth commands write their text to stderr, so stderr's flag decides.
 - Every JSON document has `"schemaVersion": "1"` (the auth JSON schema, independent of the report
   envelope) and `"cloudUrl"`. Field names are camelCase. Enum values are lowercase strings.
 - JSON output MUST NOT contain a token, code, verifier or `state` (§15). It MAY contain `sid`,
@@ -330,7 +332,11 @@ On failure (`--json`, stdout, non-zero exit):
 
 `error` is one of: `access_denied`, `timeout`, `state_mismatch`, `interactive_required`,
 `cloud_unreachable`, `version_mismatch`, `credential_store`, `oauth_error` (with the server's
-`error` code in `oauthError`), `cancelled`.
+`error` code in `oauthError`), `cancelled`, `configuration` (an invalid `XPING_CLOUDURL` or
+settings file; exit 2), `local_listener` (no loopback port could be opened, or the listener
+stopped; exit 14). The failure document is the same for all three commands, and every failure
+under `--json` writes one, including `configuration`. Its `message` is scrubbed (§15.2) like the
+stderr text.
 
 The workspace **name** is not in any token claim and not returned by the token endpoint. The
 success block shows the workspace id only (it is in the token and costs nothing); there is no
@@ -388,7 +394,7 @@ JSON:
   "schemaVersion": "1",
   "cloudUrl": "https://app.xping.io",
   "credential": "stored-login" | "api-key" | "none",
-  "credentialSource": "keychain" | "file" | "flag" | "env" | null,
+  "credentialSource": "keychain" | "file" | "flag" | "env" | "config" | null,
   "loggedIn": true,
   "email": "jane@example.com",
   "sub": "...",
@@ -473,6 +479,12 @@ Binding rules (contract §10.2):
    Cloud one.
 
 The prefix is never `localhost`, `+`, `*`, `0.0.0.0` or `::`.
+
+Platform note (found in phase 3): the managed `HttpListener` of macOS and Linux rejects a bracketed
+IPv6 prefix (`HttpListenerException`: "Invalid port in prefix"), so step 2 binds only on Windows,
+where `http.sys` accepts it. Elsewhere step 2 fails and step 3 applies. The attempt is kept so the
+order is the same on every OS; the `TcpListener` responder would lift the limit, and is not worth
+its parser while `127.0.0.1` is always present on a loopback interface.
 
 ### 4.4 Callback validation and responses
 
@@ -561,7 +573,11 @@ never inserted into a shell command line.
 | Linux | `xdg-open <url>`; if it is not on `PATH`, try `gio open <url>`, then `sensible-browser <url>`; then give up |
 | WSL (§5.2) | `wslview <url>` when present (wslu); otherwise `/mnt/c/Windows/System32/rundll32.exe url.dll,FileProtocolHandler <url>` |
 
-`stdout` and `stderr` of the launcher are discarded. A non-zero exit of `open`/`xdg-open` within the
+`stdin`, `stdout` and `stderr` of the launcher are `/dev/null` on Unix, set by running it through
+the constant script `sh -c 'exec "$0" "$@" </dev/null >/dev/null 2>&1' <launcher> <args…>`, so the
+URL is an argument and never script text. Pipes would close when the CLI exits and fail the
+browser's next write (the launcher often execs the browser, which inherits them), and the CLI's own
+streams would let the browser write into a `--json` document on stdout. A non-zero exit of `open`/`xdg-open` within the
 2 seconds counts as "not opened", and the URL hint is shown (it is shown anyway, §3.2).
 
 WSL note: with the default WSL 2 configuration Windows forwards `127.0.0.1:{port}` to the WSL
@@ -1440,11 +1456,13 @@ by the fake-server tests with the environment providers stubbed.
 - Records every request (method, path, headers, form) so tests assert, for example, that the
   access token was never sent to the Portal and the refresh token was never in a URL.
 
-Flow tests run `Program.Run` in-process with `isTerminal: true`, `XPING_LOCAL_STORE` pointing at
-a scratch store, `HOME`/`USERPROFILE` redirected to a scratch directory so `~/.xping` is
-isolated, and a test-only hook `Program.Run(..., configureServices)` that replaces
-`BrowserLauncher` with a capturing fake, `HeadlessDetector` with a fixed answer, `TimeProvider`
-with `FakeTimeProvider`, and `CredentialStoreSelector` with the file backend. Scenarios:
+Flow tests run `Program.Run` in-process with `isTerminal: true` (one flag for stdin, stdout and
+stderr), and a test-only hook `Program.Run(..., configureServices)` that replaces `XpingHome` with a
+scratch directory so `~/.xping` is isolated, `IBrowserLauncher` with a capturing fake,
+`IHeadlessDetector` with a fixed answer, `TimeProvider` with `FakeTimeProvider`, and the
+environment provider with a dictionary. The environment is always injected: CI runners set
+`CI=true`, which `login` refuses (§3.2). `CredentialStoreSelector` holds the file backend until
+phase 5. Scenarios:
 
 | Test | Scenario |
 |---|---|

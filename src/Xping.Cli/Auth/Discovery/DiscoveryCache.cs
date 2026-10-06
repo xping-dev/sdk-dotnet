@@ -85,6 +85,24 @@ internal sealed class DiscoveryCache(
         }
     }
 
+    /// <summary>
+    /// Removes the cached document for <paramref name="cloudUrl"/>, if there is one.
+    /// </summary>
+    /// <remarks>Best effort, like the rest of the cache: <c>logout</c> must not fail on it.</remarks>
+    public void Delete(string cloudUrl)
+    {
+        string path = PathFor(cloudUrl);
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogInformation("Discovery cache entry {Path} could not be deleted: {Reason}", path, ex.GetType().Name);
+        }
+    }
+
     private string PathFor(string cloudUrl) =>
         Path.Combine(home.DiscoveryCacheDirectory, CloudUrl.StorageKey(cloudUrl) + ".json");
 

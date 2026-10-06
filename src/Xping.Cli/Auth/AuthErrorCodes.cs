@@ -19,4 +19,6 @@ internal static class AuthErrorCodes
     public const string CredentialStore = "credential_store";
     public const string OAuthError = "oauth_error";
     public const string Cancelled = "cancelled";
+    public const string Configuration = "configuration";
+    public const string LocalListener = "local_listener";
 }

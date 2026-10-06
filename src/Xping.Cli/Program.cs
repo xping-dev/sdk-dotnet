@@ -53,8 +53,8 @@ internal static class Program
     /// <param name="error">Where warnings and failures are written.</param>
     /// <param name="input">Where prompts are read from.</param>
     /// <param name="isTerminal">
-    /// Whether <paramref name="output"/> is a terminal. Defaults to what the process can see, and is
-    /// passed explicitly by tests that exercise the parts of the output only a terminal gets.
+    /// Whether stdin, stdout and stderr are terminals. Defaults to what the process can see, stream by
+    /// stream, and is passed explicitly by tests that exercise the parts only a terminal gets.
     /// </param>
     /// <param name="configureServices">
     /// Replaces registrations after the real ones are made. Tests use it to substitute the parts
@@ -79,7 +79,7 @@ internal static class Program
             output,
             error,
             input ?? TextReader.Null,
-            isTerminal ?? !Console.IsOutputRedirected,
+            isTerminal is { } all ? Terminals.All(all) : Terminals.Detect(),
             configureServices);
 
         var globals = new GlobalOptionSet();
@@ -220,7 +220,7 @@ internal static class Program
         TextWriter output,
         TextWriter error,
         TextReader input,
-        bool isTerminal,
+        Terminals terminals,
         Action<IServiceCollection>? configureServices)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
@@ -239,7 +239,7 @@ internal static class Program
         builder.Logging.ClearProviders();
         builder.Logging.Services.AddSingleton<ILoggerProvider, VerboseLoggerProvider>();
 
-        builder.Services.AddXpingCliServices(output, error, input, isTerminal);
+        builder.Services.AddXpingCliServices(output, error, input, terminals);
         configureServices?.Invoke(builder.Services);
 
         return builder.Build();

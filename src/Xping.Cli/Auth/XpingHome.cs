@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Configuration;
+
 namespace Xping.Cli.Auth;
 
 /// <summary>
@@ -24,6 +26,14 @@ internal sealed class XpingHome(string root)
     /// Gets where the discovery documents are cached (cli-auth-cli-spec §14.4).
     /// </summary>
     public string DiscoveryCacheDirectory => Path.Combine(Root, "cache", "discovery");
+
+    /// <summary>
+    /// Returns where the projects resolved for <paramref name="cloudUrl"/> are cached, one file per
+    /// workspace (cli-auth-cli-spec §11.2).
+    /// </summary>
+    /// <param name="cloudUrl">The normalized Cloud URL.</param>
+    public string ProjectCacheDirectory(string cloudUrl) =>
+        Path.Combine(Root, "cache", "projects", CloudUrl.StorageKey(cloudUrl));
 
     /// <summary>
     /// Gets the file that holds sign-ins when no OS credential store is used (cli-auth-cli-spec §7.5).

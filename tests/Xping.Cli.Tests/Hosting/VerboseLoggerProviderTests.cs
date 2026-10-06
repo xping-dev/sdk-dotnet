@@ -17,7 +17,7 @@ public sealed class VerboseLoggerProviderTests : IDisposable
     public VerboseLoggerProviderTests()
     {
         _provider = new VerboseLoggerProvider(
-            new ConsoleIO(TextWriter.Null, _error, TextReader.Null, isTerminal: false), _options);
+            new ConsoleIO(TextWriter.Null, _error, TextReader.Null, Terminals.All(false)), _options);
     }
 
     public void Dispose()

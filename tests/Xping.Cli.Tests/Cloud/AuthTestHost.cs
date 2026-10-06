@@ -24,7 +24,7 @@ internal sealed class AuthTestHost : IAsyncDisposable
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddXpingCliServices(TextWriter.Null, TextWriter.Null, TextReader.Null, isTerminal: false);
+        services.AddXpingCliServices(TextWriter.Null, TextWriter.Null, TextReader.Null, Terminals.All(false));
         services.AddSingleton<TimeProvider>(Time);
         services.AddSingleton(new XpingHome(HomeDirectory));
         services.AddSingleton(new CliVersion(cliVersion));

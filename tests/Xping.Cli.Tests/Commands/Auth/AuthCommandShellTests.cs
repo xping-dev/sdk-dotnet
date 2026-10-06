@@ -66,19 +66,6 @@ public sealed class AuthCommandShellTests
         Assert.Contains("--json", output, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("login")]
-    [InlineData("logout")]
-    [InlineData("auth", "status")]
-    public void AnUnimplementedCommandSaysSoOnStderrAndFails(params string[] verb)
-    {
-        var (code, output, error) = Run(verb);
-
-        Assert.Equal(AuthExitCodes.LoginFailed, code);
-        Assert.Empty(output);
-        Assert.Contains("not implemented", error, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void AnInvalidCloudUrlIsAParseError()
     {

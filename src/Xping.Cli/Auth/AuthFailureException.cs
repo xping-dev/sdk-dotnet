@@ -48,6 +48,19 @@ internal sealed class AuthFailureException : Exception
     public string ErrorCode { get; }
 
     /// <summary>
+    /// Gets the server's OAuth <c>error</c> when <see cref="ErrorCode"/> is
+    /// <see cref="AuthErrorCodes.OAuthError"/>; the JSON documents carry it as <c>oauthError</c>.
+    /// </summary>
+    public string? OAuthErrorCode { get; init; }
+
+    /// <summary>
+    /// Gets the short cause on its own ("connection failed", "timeout"), for a message that wraps it
+    /// in words of its own, such as <c>logout</c>'s warning; <see langword="null"/> when there is none
+    /// beyond <see cref="Exception.Message"/>.
+    /// </summary>
+    public string? Reason { get; init; }
+
+    /// <summary>
     /// Xping Cloud could not be reached, or answered with something this CLI cannot use.
     /// </summary>
     public static AuthFailureException Unreachable(string cloudUrl, string reason, Exception? innerException = null) =>
@@ -55,7 +68,10 @@ internal sealed class AuthFailureException : Exception
             AuthExitCodes.CloudUnreachable,
             AuthErrorCodes.CloudUnreachable,
             $"Could not reach Xping Cloud at {cloudUrl}: {reason}.",
-            innerException);
+            innerException)
+        {
+            Reason = reason
+        };
 
     /// <summary>
     /// The server and this CLI implement versions of the contract that do not work together.
