@@ -542,6 +542,28 @@ internal static class Program
         return parsed;
     }
 
+    /// <summary>
+    /// Parses a workspace id: a ULID, 26 Crockford base32 characters in either case.
+    /// </summary>
+    /// <remarks>
+    /// Checked here so a typo fails before the browser opens, not as a consent page that silently
+    /// ignores the preselection (cli-auth-cli-spec §3.2).
+    /// </remarks>
+    private static string? ParseWorkspaceId(ArgumentResult result)
+    {
+        const string Crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+        // The first character carries only the top 3 of 128 bits, so it is at most 7.
+        if (raw.Length != 26 || raw[0] > '7' || !raw.All(c => Crockford.Contains(char.ToUpperInvariant(c), StringComparison.Ordinal)))
+        {
+            result.AddError($"--workspace expects a workspace id (26 characters, as `xping auth status` shows it), got '{raw}'.");
+            return null;
+        }
+
+        return raw;
+    }
+
     private static Command BuildWhereCommand(IServiceProvider services)
     {
         Option<string?> directoryOption = new("--directory")
@@ -598,11 +620,36 @@ internal static class Program
             Description = "Write the result to stdout as JSON"
         };
 
-        Command command = new("login", "Sign in to Xping Cloud from your browser") { jsonOption };
+        Option<bool> deviceOption = new("--device")
+        {
+            Description = "Sign in with a code on any device, for a browser on another machine"
+        };
+
+        Option<bool> noBrowserOption = new("--no-browser")
+        {
+            Description = "Print the sign-in link without trying to open a browser"
+        };
+
+        Option<string?> workspaceOption = new("--workspace")
+        {
+            Description = "Preselect this workspace id on the consent page",
+            CustomParser = ParseWorkspaceId
+        };
+
+        Command command = new("login", "Sign in to Xping Cloud from your browser")
+        {
+            deviceOption, noBrowserOption, workspaceOption, jsonOption
+        };
 
         command.SetAction((parseResult, cancellationToken) => RunCooperatively(
             cancelKeys,
-            () => services.GetRequiredService<LoginCommand>().RunAsync(parseResult.GetValue(jsonOption), cancellationToken)));
+            () => services.GetRequiredService<LoginCommand>().RunAsync(
+                new LoginOptions(
+                    parseResult.GetValue(jsonOption),
+                    parseResult.GetValue(deviceOption),
+                    parseResult.GetValue(noBrowserOption),
+                    parseResult.GetValue(workspaceOption)),
+                cancellationToken)));
 
         return command;
     }
