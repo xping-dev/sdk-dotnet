@@ -236,8 +236,10 @@ delays from an injected `TimeProvider` so tests do not wait:
 - Human text goes to stderr in every mode, including success messages. Stdout carries only the
   `--json` document. This follows the finding-detail spec D8 rule that stdout is data.
 - Decoration follows `OutputCapabilities.Resolve(ascii: false, noColor: false, redirected:
-  !io.IsTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
-  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1).
+  !io.IsErrorTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
+  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1). `ConsoleIO` carries one
+  terminal flag per stream (`IsInputTerminal`, `IsTerminal` for stdout, `IsErrorTerminal`); the
+  auth commands write their text to stderr, so stderr's flag decides.
 - Every JSON document has `"schemaVersion": "1"` (the auth JSON schema, independent of the report
   envelope) and `"cloudUrl"`. Field names are camelCase. Enum values are lowercase strings.
 - JSON output MUST NOT contain a token, code, verifier or `state` (§15). It MAY contain `sid`,
@@ -388,7 +390,7 @@ JSON:
   "schemaVersion": "1",
   "cloudUrl": "https://app.xping.io",
   "credential": "stored-login" | "api-key" | "none",
-  "credentialSource": "keychain" | "file" | "flag" | "env" | null,
+  "credentialSource": "keychain" | "file" | "flag" | "env" | "config" | null,
   "loggedIn": true,
   "email": "jane@example.com",
   "sub": "...",
@@ -1440,11 +1442,13 @@ by the fake-server tests with the environment providers stubbed.
 - Records every request (method, path, headers, form) so tests assert, for example, that the
   access token was never sent to the Portal and the refresh token was never in a URL.
 
-Flow tests run `Program.Run` in-process with `isTerminal: true`, `XPING_LOCAL_STORE` pointing at
-a scratch store, `HOME`/`USERPROFILE` redirected to a scratch directory so `~/.xping` is
-isolated, and a test-only hook `Program.Run(..., configureServices)` that replaces
-`BrowserLauncher` with a capturing fake, `HeadlessDetector` with a fixed answer, `TimeProvider`
-with `FakeTimeProvider`, and `CredentialStoreSelector` with the file backend. Scenarios:
+Flow tests run `Program.Run` in-process with `isTerminal: true` (one flag for stdin, stdout and
+stderr), and a test-only hook `Program.Run(..., configureServices)` that replaces `XpingHome` with a
+scratch directory so `~/.xping` is isolated, `IBrowserLauncher` with a capturing fake,
+`IHeadlessDetector` with a fixed answer, `TimeProvider` with `FakeTimeProvider`, and the
+environment provider with a dictionary. The environment is always injected: CI runners set
+`CI=true`, which `login` refuses (§3.2). `CredentialStoreSelector` holds the file backend until
+phase 5. Scenarios:
 
 | Test | Scenario |
 |---|---|
