@@ -13,10 +13,11 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 
 /// <summary>
 /// Detects pull request context on Jenkins multibranch (Branch Source) PR builds, for repositories on
-/// github.com, gitlab.com or Azure DevOps Services.
+/// GitHub, GitLab or Azure DevOps, cloud-hosted or self-hosted.
 /// </summary>
 /// <remarks>
-/// Platform, owner, name and number come from <c>CHANGE_URL</c>; other hosts return <c>null</c>.
+/// Platform, server, owner, name and number come from <c>CHANGE_URL</c>; URLs of other platforms
+/// return <c>null</c>.
 /// GHPRB builds (<c>ghprbPullId</c>) are flagged by <c>CI.IsPullRequest</c> but get no context.
 /// Detection never throws.
 /// <para>
@@ -83,8 +84,8 @@ internal sealed class JenkinsPullRequestDetector(
         if (parsed is null)
         {
             logger.LogDebug(
-                "Jenkins PR detection skipped: CHANGE_URL='{ChangeUrl}' is not a github.com, gitlab.com or " +
-                "Azure DevOps Services pull request URL.",
+                "Jenkins PR detection skipped: CHANGE_URL='{ChangeUrl}' is not a GitHub, GitLab or " +
+                "Azure DevOps pull request URL.",
                 changeUrl);
             return null;
         }
@@ -109,6 +110,7 @@ internal sealed class JenkinsPullRequestDetector(
 
         return new PullRequestContext(
             platform: parsed.Platform,
+            serverUrl: parsed.ServerUrl,
             repositoryOwner: parsed.Owner,
             repositoryName: parsed.Name,
             pullRequestNumber: prNumber,
@@ -156,30 +158,33 @@ internal sealed class JenkinsPullRequestDetector(
     }
 
     /// <summary>
-    /// Parses a Branch Source <c>CHANGE_URL</c>. Owners and names match what the GitHub, GitLab and Azure
-    /// Pipelines detectors produce for the same repository.
+    /// Parses a Branch Source <c>CHANGE_URL</c>. Owners, names and server URLs match what the GitHub,
+    /// GitLab and Azure Pipelines detectors produce for the same repository, except on a GitLab
+    /// instance under a relative URL root (see remarks).
     /// </summary>
+    /// <remarks>
+    /// The platform is read from the path shape, so any host works: <c>/pull/{n}</c> is GitHub,
+    /// <c>/-/merge_requests/{n}</c> is GitLab and <c>/_git/{repo}/pullrequest/{n}</c> is Azure Repos.
+    /// Gitea (<c>/pulls/</c>) and Bitbucket (<c>/pull-requests/</c>) match none of them. The server is
+    /// taken to be the host alone, except for Azure DevOps Server, whose collection anchors the path. A
+    /// GitLab instance under a relative URL root therefore has that root in the owner, where GitLab CI
+    /// puts it in the server, so the two report different identities for the same merge request. The
+    /// URL itself has no marker separating the root from the group, so this can't be resolved here.
+    /// </remarks>
     internal static ChangeUrl? ParseChangeUrl(string changeUrl)
     {
-        if (!Uri.TryCreate(changeUrl, UriKind.Absolute, out Uri? uri))
+        if (!Uri.TryCreate(changeUrl, UriKind.Absolute, out Uri? uri)
+            || !PullRequestEnvironment.TryGetServerRoot(changeUrl, out string? serverRoot))
             return null;
 
         string[] segments = uri.AbsolutePath.Trim('/').Split('/');
         string host = uri.Host;
 
-        if (string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase))
-            return ParseGitHub(segments);
-
-        if (string.Equals(host, "gitlab.com", StringComparison.OrdinalIgnoreCase))
-            return ParseGitLab(segments);
-
         if (string.Equals(host, "dev.azure.com", StringComparison.OrdinalIgnoreCase))
         {
             // dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{n}
             if (segments.Length != 6) return null;
-            string? organization = AzureDevOpsPullRequestDetector.ParseOrganization(
-                uri.GetLeftPart(UriPartial.Authority) + "/" + segments[0]);
-            return ParseAzureRepos(organization, segments, 1);
+            return ParseAzureRepos(AzureDevOpsPullRequestDetector.ParseCollection(serverRoot + "/" + segments[0]), segments, 1);
         }
 
         if (host.EndsWith(".visualstudio.com", StringComparison.OrdinalIgnoreCase))
@@ -188,25 +193,34 @@ internal sealed class JenkinsPullRequestDetector(
             int projectIndex = segments.Length == 6
                 && string.Equals(segments[0], "DefaultCollection", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
             if (segments.Length != projectIndex + 5) return null;
-            string? organization = AzureDevOpsPullRequestDetector.ParseOrganization(uri.GetLeftPart(UriPartial.Authority));
-            return ParseAzureRepos(organization, segments, projectIndex);
+            return ParseAzureRepos(AzureDevOpsPullRequestDetector.ParseCollection(serverRoot), segments, projectIndex);
         }
 
-        return null;
+        // Azure DevOps Server: {server path…}/{collection}/{project}/_git/{repo}/pullrequest/{n}
+        int git = Array.FindIndex(segments, s => string.Equals(s, "_git", StringComparison.OrdinalIgnoreCase));
+        // Not returned early on a miss: a GitLab or GitHub path can contain a "_git" segment too.
+        ChangeUrl? azureRepos = null;
+        if (git >= 2 && segments.Length == git + 4)
+        {
+            string collectionUri = serverRoot + "/" + string.Join("/", segments.Take(git - 1));
+            azureRepos = ParseAzureRepos(AzureDevOpsPullRequestDetector.ParseCollection(collectionUri), segments, git - 1);
+        }
+
+        return azureRepos ?? ParseGitLab(serverRoot, segments) ?? ParseGitHub(serverRoot, segments);
     }
 
-    private static ChangeUrl? ParseGitHub(string[] segments)
+    private static ChangeUrl? ParseGitHub(string serverUrl, string[] segments)
     {
-        // github.com/{owner}/{repo}/pull/{n}
+        // {host}/{owner}/{repo}/pull/{n}
         if (segments.Length != 4 || !string.Equals(segments[2], "pull", StringComparison.Ordinal))
             return null;
 
-        return Create(PullRequestPlatform.GitHub, Decode(segments[0]), Decode(segments[1]), segments[3]);
+        return Create(PullRequestPlatform.GitHub, serverUrl, Decode(segments[0]), Decode(segments[1]), segments[3]);
     }
 
-    private static ChangeUrl? ParseGitLab(string[] segments)
+    private static ChangeUrl? ParseGitLab(string serverUrl, string[] segments)
     {
-        // gitlab.com/{group…}/{project}/-/merge_requests/{n}
+        // {host}/{group…}/{project}/-/merge_requests/{n}
         int dash = Array.IndexOf(segments, "-");
         if (dash < 2 || segments.Length != dash + 3
             || !string.Equals(segments[dash + 1], "merge_requests", StringComparison.Ordinal))
@@ -216,29 +230,37 @@ internal sealed class JenkinsPullRequestDetector(
         if (!PullRequestEnvironment.TrySplitAtLastSlash(projectPath, out string? owner, out string? name))
             return null;
 
-        return Create(PullRequestPlatform.GitLab, owner, name, segments[dash + 2]);
+        return Create(PullRequestPlatform.GitLab, serverUrl, owner, name, segments[dash + 2]);
     }
 
-    private static ChangeUrl? ParseAzureRepos(string? organization, string[] segments, int projectIndex)
+    private static ChangeUrl? ParseAzureRepos(
+        AzureDevOpsPullRequestDetector.AzureCollection? collection,
+        string[] segments,
+        int projectIndex)
     {
         // {project}/_git/{repo}/pullrequest/{n}, starting at projectIndex.
-        if (organization is null
+        if (collection is null
             || !string.Equals(segments[projectIndex + 1], "_git", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(segments[projectIndex + 3], "pullrequest", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        // Same owner shape as AzureDevOpsPullRequestDetector: {organization}/{project}.
-        string owner = organization + "/" + Decode(segments[projectIndex]);
-        return Create(PullRequestPlatform.AzureDevOps, owner, Decode(segments[projectIndex + 2]), segments[projectIndex + 4]);
+        // Same owner shape as AzureDevOpsPullRequestDetector: {organization or collection}/{project}.
+        string owner = collection.Name + "/" + Decode(segments[projectIndex]);
+        return Create(
+            PullRequestPlatform.AzureDevOps,
+            collection.ServerUrl,
+            owner,
+            Decode(segments[projectIndex + 2]),
+            segments[projectIndex + 4]);
     }
 
-    private static ChangeUrl? Create(PullRequestPlatform platform, string owner, string name, string number)
+    private static ChangeUrl? Create(PullRequestPlatform platform, string serverUrl, string owner, string name, string number)
     {
         if (owner.Length == 0 || name.Length == 0
             || !int.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out int value) || value <= 0)
             return null;
 
-        return new ChangeUrl(platform, owner, name, value);
+        return new ChangeUrl(platform, serverUrl, owner, name, value);
     }
 
     private static string Decode(string segment) => Uri.UnescapeDataString(segment);
@@ -247,5 +269,5 @@ internal sealed class JenkinsPullRequestDetector(
         PullRequestEnvironment.TryGetRequired(env, logger, Platform, variable, out value);
 
     /// <summary>The repository and PR number a <c>CHANGE_URL</c> points at.</summary>
-    internal sealed record ChangeUrl(PullRequestPlatform Platform, string Owner, string Name, int Number);
+    internal sealed record ChangeUrl(PullRequestPlatform Platform, string ServerUrl, string Owner, string Name, int Number);
 }

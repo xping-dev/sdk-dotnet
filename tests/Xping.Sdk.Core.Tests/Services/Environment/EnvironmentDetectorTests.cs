@@ -53,6 +53,11 @@ public sealed class EnvironmentDetectorTests
         "BITBUCKET_PR_ID",
         "APPVEYOR_REPO_COMMIT",
         "APPVEYOR_PULL_REQUEST_NUMBER",
+        "GITHUB_SERVER_URL",
+        "CI_SERVER_URL",
+        "BUILD_REPOSITORY_URI",
+        "BUILD_REPOSITORY_PROVIDER",
+        "SYSTEM_COLLECTIONURI",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -335,6 +340,78 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
         Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
+    }
+
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SERVER_URL", "https://GHES.acme.com/", "https://ghes.acme.com")]
+    [InlineData("GITLAB_CI", "true", "CI_SERVER_URL", "https://gitlab.acme.com:8443/gitlab", "https://gitlab.acme.com:8443/gitlab")]
+    public async Task ServerUrlIsReadFromThePlatformsServerVariable(
+        string platformVariable, string platformValue, string serverVariable, string serverValue, string expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var platform = new EnvRestorer(platformVariable, platformValue);
+        using var server = new EnvRestorer(serverVariable, serverValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.ServerUrl"]);
+    }
+
+    // CI.ServerUrl must name the same server as the PR context, which Azure Repos takes from the
+    // collection: the repository URI's host differs for legacy organizations and drops /tfs.
+    [Theory]
+    [InlineData("TfsGit", "https://fabrikam.visualstudio.com/", "https://fabrikam.visualstudio.com/Payments/_git/api", "https://dev.azure.com")]
+    [InlineData("TfsGit", "https://dev.azure.com/fabrikam/", "https://fabrikam@dev.azure.com/fabrikam/Payments/_git/api", "https://dev.azure.com")]
+    [InlineData("TfsGit", "https://tfs.contoso.local/tfs/DefaultCollection/", "https://tfs.contoso.local/tfs/DefaultCollection/Payments/_git/api", "https://tfs.contoso.local/tfs")]
+    [InlineData("GitHubEnterprise", "https://dev.azure.com/fabrikam/", "https://ghes.acme.com/acme/api", "https://ghes.acme.com")]
+    public async Task AzurePipelinesServerUrlMatchesThePullRequestContextsServer(
+        string provider, string collectionValue, string repositoryValue, string expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var azurePipelines = new EnvRestorer("TF_BUILD", "True");
+        using var repositoryProvider = new EnvRestorer("BUILD_REPOSITORY_PROVIDER", provider);
+        using var collection = new EnvRestorer("SYSTEM_COLLECTIONURI", collectionValue);
+        using var repository = new EnvRestorer("BUILD_REPOSITORY_URI", repositoryValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.ServerUrl"]);
+    }
+
+    // Bitbucket Pipelines only runs on bitbucket.org, and its origin variable is http://, so a server
+    // recorded from it would add nothing and disagree with https identities.
+    [Fact]
+    public async Task ServerUrlIsNotRecordedOnBitbucketPipelines()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var bitbucket = new EnvRestorer("BITBUCKET_PIPELINE_UUID", "{uuid}");
+        using var origin = new EnvRestorer("BITBUCKET_GIT_HTTP_ORIGIN", "http://bitbucket.org/acme/api");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.ServerUrl", info.CustomProperties.Keys);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("ghes.acme.com")]
+    public async Task ServerUrlIsLeftOutWhenThePlatformNamesNoUsableServer(string? serverValue)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var server = new EnvRestorer("GITHUB_SERVER_URL", serverValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.ServerUrl", info.CustomProperties.Keys);
     }
 
     [Theory]

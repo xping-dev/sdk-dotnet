@@ -14,10 +14,10 @@ namespace Xping.Sdk.Core.Services.PullRequest.Internals;
 /// Detects GitLab merge request context from GitLab CI/CD environment variables.
 /// </summary>
 /// <remarks>
-/// Only merge request pipelines on gitlab.com carry MR context; branch and tag pipelines return
-/// <c>null</c>. Self-managed instances return <c>null</c> too: the context names no host, so
-/// Xping Cloud would attribute their projects to gitlab.com. Their pipelines are still flagged by
-/// <c>CI.IsPullRequest</c>. Returns <c>null</c> when required variables are absent. Detection never throws.
+/// Only merge request pipelines carry MR context; branch and tag pipelines return <c>null</c>. Works
+/// on gitlab.com and self-managed instances alike: the host comes from <c>CI_SERVER_URL</c>, which
+/// includes the port and any relative URL root, into <see cref="PullRequestContext.ServerUrl"/>.
+/// Returns <c>null</c> when required variables are absent. Detection never throws.
 /// <para>
 /// <see cref="PullRequestContext.CommitSha"/> is the MR head commit. In merged-results and
 /// merge-train pipelines <c>CI_COMMIT_SHA</c> is the merge result GitLab built, so
@@ -30,7 +30,6 @@ internal sealed class GitLabPullRequestDetector(
     ILogger<GitLabPullRequestDetector> logger) : IPlatformPullRequestDetector
 {
     private const string Platform = "GitLab";
-    private const string GitLabComHost = "gitlab.com";
 
     /// <summary>
     /// Whether the environment is a GitLab merge request pipeline. <c>EnvironmentDetector</c> uses the
@@ -61,15 +60,14 @@ internal sealed class GitLabPullRequestDetector(
             return null;
         }
 
-        if (!TryGetRequired("CI_SERVER_HOST", out string? serverHost))
+        if (!TryGetRequired("CI_SERVER_URL", out string? rawServerUrl))
             return null;
 
-        if (!string.Equals(serverHost, GitLabComHost, StringComparison.OrdinalIgnoreCase))
+        if (!PullRequestEnvironment.TryNormalizeServerUrl(rawServerUrl, out string? serverUrl))
         {
             logger.LogDebug(
-                "GitLab PR detection skipped: CI_SERVER_HOST='{ServerHost}' is a self-managed instance; " +
-                "only gitlab.com is supported.",
-                serverHost);
+                "GitLab PR detection skipped: CI_SERVER_URL='{ServerUrl}' is not an absolute http(s) URL.",
+                rawServerUrl);
             return null;
         }
 
@@ -106,6 +104,7 @@ internal sealed class GitLabPullRequestDetector(
 
         return new PullRequestContext(
             platform: PullRequestPlatform.GitLab,
+            serverUrl: serverUrl,
             repositoryOwner: owner,
             repositoryName: repoName,
             pullRequestNumber: mrNumber,

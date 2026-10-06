@@ -450,6 +450,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             {
                 case CIPlatform.GitHubActions:
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("GITHUB_REPOSITORY"));
+                    AddServerUrl(properties, ServerUrlOf(GetEnvironmentVariable("GITHUB_SERVER_URL")));
                     AddIfNotNull(properties, "CI.RunId", GetEnvironmentVariable("GITHUB_RUN_ID"));
                     AddIfNotNull(properties, "CI.RunNumber", GetEnvironmentVariable("GITHUB_RUN_NUMBER"));
                     AddIfNotNull(properties, "CI.Ref", GetEnvironmentVariable("GITHUB_REF"));
@@ -481,6 +482,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildId", GetEnvironmentVariable("BUILD_BUILDID"));
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_BUILDNUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BUILD_REPOSITORY_NAME"));
+                    AddServerUrl(properties, AzurePipelinesServerUrl());
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
@@ -508,6 +510,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.JobId", GetEnvironmentVariable("CI_JOB_ID"));
                     AddIfNotNull(properties, "CI.PipelineId", GetEnvironmentVariable("CI_PIPELINE_ID"));
                     AddIfNotNull(properties, "CI.ProjectPath", GetEnvironmentVariable("CI_PROJECT_PATH"));
+                    AddServerUrl(properties, ServerUrlOf(GetEnvironmentVariable("CI_SERVER_URL")));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CI_COMMIT_SHA"));
                     AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
@@ -853,6 +856,33 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         {
             dictionary[key] = value!;
         }
+    }
+
+    // CI.Repository is owner/name only, so the server is what tells GitHub Enterprise's acme/api apart
+    // from github.com's. It is normalized the way PullRequestContext.ServerUrl is, so the two compare.
+    private static void AddServerUrl(Dictionary<string, string> dictionary, string? serverUrl)
+    {
+        if (serverUrl is not null)
+            dictionary["CI.ServerUrl"] = serverUrl;
+    }
+
+    private static string? ServerUrlOf(string? raw) =>
+        PullRequestEnvironment.TryNormalizeServerUrl(raw, out string? serverUrl) ? serverUrl : null;
+
+    // Azure Repos takes the server from the collection, as AzureDevOpsPullRequestDetector does: the
+    // repository URI's host alone would give https://fabrikam.visualstudio.com for an organization the
+    // PR context files under https://dev.azure.com, and would drop a Server's virtual directory (/tfs).
+    private static string? AzurePipelinesServerUrl()
+    {
+        if (string.Equals(GetEnvironmentVariable("BUILD_REPOSITORY_PROVIDER"), "TfsGit", StringComparison.OrdinalIgnoreCase))
+        {
+            string? collectionUri = GetEnvironmentVariable("SYSTEM_COLLECTIONURI");
+            return collectionUri is null ? null : AzureDevOpsPullRequestDetector.ParseCollection(collectionUri)?.ServerUrl;
+        }
+
+        return PullRequestEnvironment.TryGetServerRoot(GetEnvironmentVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
+            ? serverUrl
+            : null;
     }
 
     private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>

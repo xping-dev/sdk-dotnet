@@ -84,6 +84,7 @@ public sealed class JenkinsPullRequestDetectorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(PullRequestPlatform.GitHub, result.Platform);
+        Assert.Equal("https://github.com", result.ServerUrl);
         Assert.Equal("acme", result.RepositoryOwner);
         Assert.Equal("api-service", result.RepositoryName);
         Assert.Equal(17, result.PullRequestNumber);
@@ -126,8 +127,53 @@ public sealed class JenkinsPullRequestDetectorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(PullRequestPlatform.AzureDevOps, result.Platform);
+        Assert.Equal("https://dev.azure.com", result.ServerUrl);
         Assert.Equal("fabrikam/Payments", result.RepositoryOwner);
         Assert.Equal("api-service", result.RepositoryName);
+    }
+
+    [Theory]
+    [InlineData("https://ghes.acme.com/acme/api-service/pull/17", PullRequestPlatform.GitHub, "https://ghes.acme.com", "acme")]
+    [InlineData("https://acme.ghe.com/acme/api-service/pull/17", PullRequestPlatform.GitHub, "https://acme.ghe.com", "acme")]
+    [InlineData("https://gitlab.acme.com:8443/group/sub/api-service/-/merge_requests/17", PullRequestPlatform.GitLab, "https://gitlab.acme.com:8443", "group/sub")]
+    [InlineData("https://tfs.contoso.local/tfs/DefaultCollection/Payments/_git/api-service/pullrequest/17", PullRequestPlatform.AzureDevOps, "https://tfs.contoso.local/tfs", "DefaultCollection/Payments")]
+    [InlineData("https://tfs.contoso.local/DefaultCollection/Payments/_git/api-service/pullrequest/17", PullRequestPlatform.AzureDevOps, "https://tfs.contoso.local", "DefaultCollection/Payments")]
+    public void Detect_SelfHostedServer_ReadsThePlatformFromThePathAndKeepsTheServer(
+        string changeValue,
+        PullRequestPlatform expectedPlatform,
+        string expectedServer,
+        string expectedOwner)
+    {
+        // Arrange
+        var variables = ValidVariables();
+        variables["CHANGE_URL"] = changeValue;
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(expectedPlatform, result.Platform);
+        Assert.Equal(expectedServer, result.ServerUrl);
+        Assert.Equal(expectedOwner, result.RepositoryOwner);
+        Assert.Equal("api-service", result.RepositoryName);
+    }
+
+    [Fact]
+    public void Detect_GitLabProjectNamedLikeAnAzureReposSegment_IsStillParsedAsGitLab()
+    {
+        // Arrange — a project named "_git" puts the segment where an Azure DevOps Server URL has it
+        var variables = ValidVariables();
+        variables["CHANGE_URL"] = "https://gitlab.acme.com/a/b/_git/-/merge_requests/17";
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(PullRequestPlatform.GitLab, result.Platform);
+        Assert.Equal("a/b", result.RepositoryOwner);
+        Assert.Equal("_git", result.RepositoryName);
     }
 
     [Fact]
@@ -190,10 +236,10 @@ public sealed class JenkinsPullRequestDetectorTests
     }
 
     [Theory]
-    [InlineData("https://github.example.com/acme/api-service/pull/17")]
-    [InlineData("https://gitlab.example.com/acme/api-service/-/merge_requests/17")]
-    [InlineData("https://tfs.contoso.local/DefaultCollection/Payments/_git/api-service/pullrequest/17")]
     [InlineData("https://bitbucket.org/acme/api-service/pull-requests/17")]
+    [InlineData("https://gitea.acme.com/acme/api-service/pulls/17")]
+    [InlineData("https://tfs.contoso.local/Payments/_git/api-service/pullrequest/17")]
+    [InlineData("ftp://ghes.acme.com/acme/api-service/pull/17")]
     [InlineData("https://github.com/acme/api-service/issues/17")]
     [InlineData("https://github.com/acme/pull/17")]
     [InlineData("https://gitlab.com/project/-/merge_requests/17")]
@@ -327,6 +373,7 @@ public sealed class JenkinsPullRequestDetectorTests
     [Theory]
     [InlineData("https://dev.azure.com/fabrikam/Online%20Payments/_git/api-service/pullrequest/17", "https://dev.azure.com/fabrikam/")]
     [InlineData("https://fabrikam.visualstudio.com/Online%20Payments/_git/api-service/pullrequest/17", "https://fabrikam.visualstudio.com/")]
+    [InlineData("https://tfs.contoso.local/tfs/fabrikam/Online%20Payments/_git/api-service/pullrequest/17", "https://tfs.contoso.local/tfs/fabrikam/")]
     public void Detect_AzureReposRepository_GivesTheSameOwnerAndNameAsAzurePipelines(string changeValue, string collectionValue)
     {
         // Arrange
@@ -358,6 +405,7 @@ public sealed class JenkinsPullRequestDetectorTests
         Assert.NotNull(jenkins);
         Assert.NotNull(azure);
         Assert.Equal(azure.Platform, jenkins.Platform);
+        Assert.Equal(azure.ServerUrl, jenkins.ServerUrl);
         Assert.Equal(azure.RepositoryOwner, jenkins.RepositoryOwner);
         Assert.Equal(azure.RepositoryName, jenkins.RepositoryName);
     }
@@ -371,7 +419,7 @@ public sealed class JenkinsPullRequestDetectorTests
 
         var gitLabVariables = new Dictionary<string, string?>
         {
-            ["CI_SERVER_HOST"] = "gitlab.com",
+            ["CI_SERVER_URL"] = "https://gitlab.com",
             ["CI_MERGE_REQUEST_IID"] = "17",
             ["CI_MERGE_REQUEST_PROJECT_PATH"] = "group/sub/project",
             ["CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"] = "feature/login",
@@ -391,6 +439,7 @@ public sealed class JenkinsPullRequestDetectorTests
         Assert.NotNull(jenkins);
         Assert.NotNull(gitLab);
         Assert.Equal(gitLab.Platform, jenkins.Platform);
+        Assert.Equal(gitLab.ServerUrl, jenkins.ServerUrl);
         Assert.Equal(gitLab.RepositoryOwner, jenkins.RepositoryOwner);
         Assert.Equal(gitLab.RepositoryName, jenkins.RepositoryName);
     }
