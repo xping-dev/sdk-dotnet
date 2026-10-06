@@ -461,7 +461,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
-                    bool? isGitHubPullRequest = GitHubPullRequestFlag(githubEventName);
+                    bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(GetEnvironmentVariable);
                     if (isGitHubPullRequest is not null)
                     {
                         // CI.CommitSha is the commit the build tested. On pull_request_target GITHUB_SHA is
@@ -884,20 +884,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         return PullRequestEnvironment.TryGetServerRoot(GetEnvironmentVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
             ? serverUrl
             : null;
-    }
-
-    // null when the event doesn't say what was built; see GitHubPullRequestDetector.PushEventNames.
-    // The PR event set misses other PR-triggered events (pull_request_review, …), which run on
-    // refs/pull/N/merge. pull_request_target runs on the base ref, so both checks are needed.
-    private static bool? GitHubPullRequestFlag(string eventName)
-    {
-        if (GitHubPullRequestDetector.PullRequestEventNames.Contains(eventName) ||
-            (GetEnvironmentVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false))
-        {
-            return true;
-        }
-
-        return GitHubPullRequestDetector.PushEventNames.Contains(eventName) ? false : null;
     }
 
     private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>

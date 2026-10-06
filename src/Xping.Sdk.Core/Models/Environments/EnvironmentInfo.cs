@@ -130,7 +130,8 @@ public sealed class EnvironmentInfo
     /// <item><description><c>CI.IsPullRequest</c>: <c>true</c> or <c>false</c> from the platform's
     /// pull request marker; omitted on a platform that has none. On GitHub, <c>false</c> is sent only
     /// for push-like events (<c>push</c>, <c>schedule</c>, <c>workflow_dispatch</c>,
-    /// <c>merge_group</c>, <c>release</c>, <c>create</c>); other non-PR events send neither entry.</description></item>
+    /// <c>merge_group</c>, <c>release</c>, <c>create</c>, <c>deployment</c>, <c>deployment_status</c>);
+    /// other non-PR events send neither entry.</description></item>
     /// </list>
     /// The pull request's head commit is <see cref="PullRequests.PullRequestContext.CommitSha"/>.
     /// When a pull request context is present it identifies the run; <c>CI.CommitSha</c> does so

@@ -52,7 +52,7 @@ A pull request build can carry two different commits, and Xping records both on 
 
 | Build | PR context commit | `CI.CommitSha` |
 |---|---|---|
-| GitHub `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create` | — | `GITHUB_SHA` (the commit the run checked out) |
+| GitHub `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create`, `deployment`, `deployment_status` | — | `GITHUB_SHA` (the commit the run checked out) |
 | GitHub `pull_request` | `pull_request.head.sha` | `GITHUB_SHA` (merge commit) |
 | GitHub `pull_request_target` | `pull_request.head.sha` | not sent (`GITHUB_SHA` is the base branch's tip) |
 | GitHub, any other event (`issue_comment`, `workflow_run`, `repository_dispatch`, …) | — | not sent (`GITHUB_SHA` is the default branch's tip, not what the workflow checked out) |
@@ -129,7 +129,7 @@ Xping automatically captures:
 - `GITHUB_RUN_NUMBER` - Sequential run number
 - `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` and on events outside the list below (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
-- `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest`: `true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`; `false` for `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release` and `create`; not sent for any other event
+- `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest`: `true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`; `false` for `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create`, `deployment` and `deployment_status`; not sent for any other event
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
@@ -511,7 +511,9 @@ ID, actor and `IsCIEnvironment` flag on its own.
 Whatever the platform, the commit lands in `CI.CommitSha` and the pull request flag in
 `CI.IsPullRequest` (`"true"` or `"false"`). The flag is left out where the platform gives no
 reliable pull request marker (TeamCity, or a generic `CI=true` runner), and Xping Cloud then treats
-the run as possibly a pull request.
+the run as possibly a pull request. On GitHub Actions, a run of an event that doesn't say which commit
+was built (`issue_comment`, `workflow_run`, …) sends neither the flag nor `CI.CommitSha` (see
+[Which Commit Is Recorded](#which-commit-is-recorded)).
 
 ### 3. Name Environments After Deployments, Not After Runs
 

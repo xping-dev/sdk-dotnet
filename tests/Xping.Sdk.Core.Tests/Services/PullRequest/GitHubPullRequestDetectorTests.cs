@@ -714,4 +714,35 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(1, result.PullRequestNumber);
     }
+
+    // ---------------------------------------------------------------------------
+    // PullRequestFlag — EnvironmentDetector's CI.IsPullRequest
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("pull_request", "refs/pull/17/merge", true)]
+    [InlineData("pull_request_target", "refs/heads/main", true)]
+    [InlineData("pull_request_review", "refs/pull/17/merge", true)]
+    [InlineData("push", "refs/heads/main", false)]
+    [InlineData("PUSH", "refs/heads/main", false)]
+    [InlineData("schedule", "refs/heads/main", false)]
+    [InlineData("workflow_dispatch", "refs/heads/feature", false)]
+    [InlineData("merge_group", "refs/heads/gh-readonly-queue/main/pr-17-0123abcd", false)]
+    [InlineData("release", "refs/tags/v1.0.0", false)]
+    [InlineData("create", "refs/heads/feature", false)]
+    [InlineData("deployment", "refs/heads/main", false)]
+    [InlineData("deployment_status", "refs/heads/main", false)]
+    [InlineData("issue_comment", "refs/heads/main", null)]
+    [InlineData("workflow_run", "refs/heads/main", null)]
+    [InlineData("repository_dispatch", "refs/heads/main", null)]
+    [InlineData(null, "refs/heads/main", null)]
+    public void PullRequestFlag_FollowsEventAndRef(string? eventName, string githubRef, bool? expected)
+    {
+        Assert.Equal(expected, GitHubPullRequestDetector.PullRequestFlag(name => name switch
+        {
+            "GITHUB_EVENT_NAME" => eventName,
+            "GITHUB_REF" => githubRef,
+            _ => null,
+        }));
+    }
 }

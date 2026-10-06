@@ -510,6 +510,8 @@ public sealed class EnvironmentDetectorTests
     [InlineData("merge_group")]
     [InlineData("release")]
     [InlineData("create")]
+    [InlineData("deployment")]
+    [InlineData("deployment_status")]
     [InlineData("PUSH")]
     public async Task GitHubPushLikeEventsSendFalseAndTheBuiltCommit(string eventName)
     {
@@ -524,6 +526,7 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
         Assert.Equal("false", info.CustomProperties["CI.IsPullRequest"]);
+        Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
     }
 
     // These events run on the default branch's ref, so GITHUB_SHA is main's tip, while the workflow
