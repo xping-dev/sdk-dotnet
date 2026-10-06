@@ -31,8 +31,8 @@ namespace Xping.Cli.Tests.Cloud;
 /// </remarks>
 internal sealed partial class FakeCloud : IAsyncDisposable
 {
-    public const string WorkspaceId = "01J8K2V6XN7Y0Q4R5S6T7U8V9X";
-    public const string UserId = "01J8K2V6XN7Y0Q4R5S6T7U8V9W";
+    public const string WorkspaceId = "01J8K2V6XN7Y0Q4R5S6T7V8V9X";
+    public const string UserId = "01J8K2V6XN7Y0Q4R5S6T7V8V9W";
     public const string Email = "jane@example.com";
 
     private static readonly TimeSpan CodeLifetime = TimeSpan.FromSeconds(60);
@@ -147,6 +147,18 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             string code = NewOpaque("code");
             _codes[code] = new AuthorizationCode(redirectUri, codeChallenge, _time.GetUtcNow() + CodeLifetime);
             return code;
+        }
+    }
+
+    /// <summary>
+    /// Gets the user codes of the device flows started and not yet completed, oldest first.
+    /// </summary>
+    public IReadOnlyList<string> DeviceUserCodes
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _deviceGrants.Values.Select(g => g.UserCode).Order(StringComparer.Ordinal)];
         }
     }
 
@@ -542,7 +554,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         string.Create(CultureInfo.InvariantCulture, $"{kind}-{Interlocked.Increment(ref _sequence):D4}-{Convert.ToHexString(RandomNumberGenerator.GetBytes(12))}");
 
     private string NewUlidLike() =>
-        string.Create(CultureInfo.InvariantCulture, $"01J8K2V6XN7Y0Q4R5S6T7U{Interlocked.Increment(ref _sequence):D4}");
+        string.Create(CultureInfo.InvariantCulture, $"01J8K2V6XN7Y0Q4R5S6T7V{Interlocked.Increment(ref _sequence):D4}");
 
     private static bool HasContractScope(string? scope) =>
         (scope ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal)

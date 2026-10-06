@@ -215,8 +215,9 @@ delays from an injected `TimeProvider` so tests do not wait:
   redeemed it; a retry would answer `invalid_grant` and hide the network failure. A 5xx answer
   means the code was not redeemed, so that is still retried.
 - `PollDeviceAsync` makes none of these retries: a network failure, `server_error`,
-  `temporarily_unavailable` or another 5xx comes back as a transient result, and the device flow
-  polls again at the next interval (contract §3.2, §6.3). An immediate retry would poll faster
+  `temporarily_unavailable`, another 5xx, or a `429` without an OAuth body (a rate limiter in
+  front of the Portal) comes back as a transient result, and the device flow polls again at the
+  next interval (contract §3.2, §6.3). An immediate retry would poll faster
   than `interval`.
 - When the retries are spent, the failure is `AuthFailureException` with `CloudUnreachable`
   (§9.6).
@@ -254,7 +255,8 @@ delays from an injected `TimeProvider` so tests do not wait:
 
 Options: `--device` (use the device flow), `--no-browser` (loopback flow, do not try to open a
 browser), `--workspace <ulid>` (sent as `xping_workspace_id`, contract §4.2; preselects only),
-`--json`.
+`--json`. `--workspace` must be a ULID: 26 Crockford base32 characters, case-insensitive. Anything
+else is a parse error, exit 2, before any request; a valid value is sent as given.
 
 **Preconditions, checked in this order, before any network call:**
 
@@ -291,7 +293,9 @@ The link line prints the full authorization URL exactly once, always, even when 
 opened (contract §3.1 step 4). When `HeadlessDetector` reports headless (§5.2) the first line is
 replaced by "No browser was found on this machine. Open this link in a browser **on this
 machine**:" followed by the hint "If your browser is on another machine, press Ctrl+C and run
-`xping login --device`."
+`xping login --device`." Under `--no-browser` the first line is "Open this link in a browser **on
+this machine**:" (nothing was looked for, so "No browser was found" would be false), followed by
+the same hint.
 
 **Text output, device flow:**
 
@@ -304,7 +308,9 @@ and enter the code  ABCD-EFGH
 Waiting for you to approve in the browser (up to 10 minutes)...
 ```
 
-followed by the same success block. The code is printed in bold on a terminal, plain otherwise.
+followed by the same success block. The code is printed in bold on a terminal, plain otherwise. The
+waiting line names `expires_in` in whole minutes, or in seconds when it is not a whole number of
+minutes, so a short lifetime never reads "up to 0 minutes".
 
 **JSON result** (`--json`, stdout, exit 0):
 
@@ -598,7 +604,8 @@ the 5-minute timeout message names `--device` (§4.7).
 
 When headless, `login` does not try to open a browser, prints the URL with the "on this machine"
 wording of §3.2, and adds the `--device` suggestion. It keeps waiting (contract §3.1: not a
-failure). `--no-browser` forces the same behaviour without the detection.
+failure). `--no-browser` forces the same behaviour without the detection, with the first line of
+§3.2 for `--no-browser`.
 
 The detector only reads environment variables and two file paths, all through injectable
 providers, so tests cover every row (§18.1).
@@ -611,7 +618,9 @@ providers, so tests cover every row (§18.1).
 
 After discovery, `OAuthClient.StartDeviceAsync(workspaceId)` (contract §4.5). The response DTO:
 `DeviceAuthorization(DeviceCode, UserCode, VerificationUri, VerificationUriComplete, ExpiresIn,
-Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required.
+Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required. A `user_code` with a
+control character is an incomplete response (`CloudUnreachable`): it is printed as sent, and
+nobody could type it. Errors are mapped as §4.8.
 
 ### 6.2 Prompt
 
@@ -625,7 +634,7 @@ and `--no-browser` is absent; failure to open changes nothing (contract §3.2 st
 interval = response.interval
 deadline = now + response.expires_in
 loop:
-  wait interval (TimeProvider-based delay; cancellable)
+  wait min(interval, deadline - now) (TimeProvider-based delay; cancellable)
   if now >= deadline: fail LoginTimedOut ("The sign-in code expired. Run xping login --device again.")
   r = PollDeviceAsync(device_code)
   success            → store (§7), print success block, exit 0
@@ -634,9 +643,16 @@ loop:
   access_denied      → LoginDeclined
   expired_token      → LoginTimedOut, same message as the deadline
   invalid_grant      → LoginFailed ("The device code was rejected. Run xping login --device again.")
-  network error / 5xx → continue at the next interval (never faster; contract §3.2)
-  any other error    → LoginFailed with error and error_description verbatim
+  network error / 5xx / 429 → continue at the next interval (never faster; contract §3.2);
+                       the first one prints a warning on stderr
+  any other error    → as §4.8 (invalid_client → CloudUnreachable; invalid_request and the
+                       other client-bug codes → LoginFailed "please report it"); otherwise
+                       LoginFailed with error and error_description, control characters dropped
 ```
+
+The warning reads "! Could not reach Xping Cloud ({reason}). Still waiting; an approval made in
+the meantime is not lost." Without it a user whose network dropped waits out the code's lifetime
+with no sign of trouble.
 
 The CLI MUST NOT poll faster than `interval`, including after a network error; the delay is
 always waited before the next request. `device_code` is held in memory only and cleared after
@@ -1207,7 +1223,7 @@ a `report` meaning and are easy to recognise in scripts:
 |---|---|---|---|
 | 0 | `Success` | as today; also `logout` in every completed case, `auth status` with a credential | all |
 | 1 | — | as today (`report` threshold, `where`/`clear` failures, root without args) | existing |
-| 2 | — | parse or validation error, including an invalid `--cloud-url` or `--project`; `report` unavailable | existing + new options |
+| 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; `report` unavailable | existing + new options |
 | 3 | — | `report --id` not reported | existing |
 | 10 | `AuthRequired` | `auth status` with no credential of any kind | `auth status` |
 | 11 | `LoginDeclined` | consent denied in the browser | `login` |
@@ -1418,7 +1434,7 @@ by the fake-server tests with the environment providers stubbed.
 | `OAuthClientTests` | form encoding, `client_id` on every grant, no `scope` on refresh, error mapping and retry delays with `FakeTimeProvider` |
 | `LoopbackListenerTests` | real `HttpListener` on an ephemeral port: 404 for other paths, 400 for wrong state, keeps waiting, success page has no code/state, stops after success, cancellation, bind retry (port occupied by a `TcpListener` the test holds) |
 | `HeadlessDetectorTests`, `BrowserLauncherTests` | every row of §5.2; launcher argument construction per OS with a fake process starter |
-| `DeviceFlowTests` | polling state machine with a fake `OAuthClient` and `FakeTimeProvider`: pending, slow_down accumulation, denied, expired, network error keeps interval |
+| `DeviceFlowTests` | polling state machine against `FakeCloud` (§18.2) with the real `OAuthClient`, as the loopback flow is tested, and `FakeTimeProvider`: pending, slow_down accumulation, denied, expired, network error keeps interval |
 | `CredentialRecordTests`, `FileCredentialStoreTests` | round trip, atomic write, mode 0600/0700 (the mode assertions are skipped on Windows through a trait), refusal of group/world-readable file, corrupt record, multi-cloud file |
 | `CredentialStoreSelectorTests` | selection with fake availability probes; read order keychain → file |
 | `WindowsCredentialStoreTests`, `MacOsKeychainStoreTests`, `LibSecretStoreTests` | `Category=CredentialStore` (§17.2); on other OSes they are skipped, not failed |

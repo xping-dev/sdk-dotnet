@@ -369,6 +369,67 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
+    public async Task NoBrowserPrintsTheLinkWithoutLookingForABrowser()
+    {
+        CliFlowHost host = _host;
+        host.Environment["NO_COLOR"] = "1";
+
+        Task<CliResult> run = host.Start("login", "--no-browser");
+        await host.WaitForTimerAsync(LoopbackFlow.Timeout).ConfigureAwait(true);
+        host.Time.Advance(LoopbackFlow.Timeout);
+        CliResult result = await run.ConfigureAwait(true);
+
+        Assert.Empty(host.Browser.Opened);
+        Assert.Contains("Open this link in a browser on this machine:", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("No browser was found", result.Error, StringComparison.Ordinal);
+        Assert.Contains("press Ctrl+C and run `xping login --device`", result.Error, StringComparison.Ordinal);
+        Assert.Contains("/connect/authorize?", result.Error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(FakeCloud.WorkspaceId)]
+    [InlineData("01j8k2v6xn7y0q4r5s6t7v8v9x")]
+    public void TheWorkspaceIsSentWithTheAuthorizationRequestAsGiven(string workspace)
+    {
+        CliFlowHost host = _host;
+
+        CliResult result = host.Run("login", "--workspace", workspace);
+
+        Assert.True(result.Code == 0, result.Error);
+        var query = HttpUtility.ParseQueryString(Assert.Single(host.Browser.Opened).Query);
+        Assert.Equal(workspace, query["xping_workspace_id"]);
+    }
+
+    [Fact]
+    public void WithoutAWorkspaceTheAuthorizationRequestNamesNone()
+    {
+        CliFlowHost host = _host;
+
+        host.Run("login");
+
+        var query = HttpUtility.ParseQueryString(Assert.Single(host.Browser.Opened).Query);
+        Assert.Null(query["xping_workspace_id"]);
+    }
+
+    [Theory]
+    [InlineData("acme")]
+    [InlineData("01J8K2V6XN7Y0Q4R5S6T7V8V9")]
+    [InlineData("01J8K2V6XN7Y0Q4R5S6T7V8V9XX")]
+    [InlineData("81J8K2V6XN7Y0Q4R5S6T7V8V9X")]
+    [InlineData("01J8K2V6XN7Y0Q4R5S6T7U8V9X")]
+    public void AnInvalidWorkspaceIsAParseErrorBeforeAnyRequest(string workspace)
+    {
+        CliFlowHost host = _host;
+
+        CliResult result = host.Run("login", "--workspace", workspace);
+
+        Assert.Equal(2, result.Code);
+        Assert.Contains("--workspace expects a workspace id", result.Error, StringComparison.Ordinal);
+        Assert.Empty(host.Cloud.Requests);
+        AssertNoSignInStarted(host);
+    }
+
+    [Fact]
     public void ABrowserThatDoesNotOpenChangesNothing()
     {
         CliFlowHost host = _host;

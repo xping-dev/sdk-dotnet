@@ -135,8 +135,11 @@ internal sealed class OAuthClient(
         string body = SuccessBody(discovery.CloudUrl, "device authorization", outcome);
         DeviceResponseBody? response = TryDeserialize<DeviceResponseBody>(body);
 
-        // The user signs in on these pages, so they meet the rule every server URL meets.
+        // The user signs in on these pages, so they meet the rule every server URL meets. The user
+        // code is printed as sent, so a control character in it, which nobody could type anyway,
+        // must not reach the terminal.
         if (response is not { DeviceCode.Length: > 0, UserCode.Length: > 0, ExpiresIn: > 0 }
+            || response.UserCode.Any(char.IsControl)
             || !ServerUri.TryParse(response.VerificationUri, out Uri? verificationUri))
         {
             throw Incomplete(discovery.CloudUrl, "device authorization");
@@ -187,6 +190,9 @@ internal sealed class OAuthClient(
         return outcome switch
         {
             Outcome.Transient transient => DevicePollResult.Transient(transient.Reason),
+
+            // A rate limiter in front of the Portal: the next interval is the back-off.
+            Outcome.Unexpected { StatusCode: 429 } => DevicePollResult.Transient("rate limited"),
             Outcome.Failed { Error.Error: OAuthProtocol.AuthorizationPending } => DevicePollResult.Pending,
             Outcome.Failed { Error.Error: OAuthProtocol.SlowDown } => DevicePollResult.SlowDown,
             _ => DevicePollResult.Completed(ReadToken(discovery.CloudUrl, outcome))

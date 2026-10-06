@@ -16,6 +16,15 @@ using Xping.Sdk.Core.Services.Environment;
 namespace Xping.Cli.Commands.Auth;
 
 /// <summary>
+/// The options of <c>xping login</c> (cli-auth-cli-spec §3.2).
+/// </summary>
+/// <param name="Json">Write the result to stdout as JSON.</param>
+/// <param name="Device">Use the device flow instead of the loopback flow.</param>
+/// <param name="NoBrowser">Do not try to open a browser.</param>
+/// <param name="WorkspaceId">The workspace to preselect, already validated as a ULID.</param>
+internal sealed record LoginOptions(bool Json, bool Device, bool NoBrowser, string? WorkspaceId);
+
+/// <summary>
 /// Signs in to Xping Cloud from a browser (cli-auth-cli-spec §3.2).
 /// </summary>
 /// <remarks>
@@ -30,12 +39,23 @@ internal sealed class LoginCommand(
     XpingHome home,
     CredentialStoreSelector selector,
     LoopbackFlow loopback,
+    DeviceFlow device,
     ILogger<LoginCommand> logger)
 {
-    public Task<int> RunAsync(bool json, CancellationToken cancellationToken) =>
-        runner.RunAsync(json, (session, configuration) => SignInAsync(session, configuration, cancellationToken), cancellationToken);
+    public Task<int> RunAsync(LoginOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return runner.RunAsync(
+            options.Json,
+            (session, configuration) => SignInAsync(options, session, configuration, cancellationToken),
+            cancellationToken);
+    }
 
-    private async Task<int> SignInAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
+    private async Task<int> SignInAsync(
+        LoginOptions options,
+        AuthSession session,
+        CliConfiguration configuration,
+        CancellationToken cancellationToken)
     {
         // Before anything touches the network or the disk: a coding agent or a CI job that reaches
         // this command must learn at once that it cannot sign in, not after a browser opened.
@@ -55,10 +75,19 @@ internal sealed class LoginCommand(
         if (configuration.ApiKey is { } apiKey)
             logger.LogInformation("An API key is also set ({Origin}); it is used only when no sign-in is available", apiKey.Origin);
 
-        CredentialRecord record = await loopback.RunAsync(
-            cloudUrl,
-            (url, browser, timeout) => ShowLink(session.Text, cloudUrl, url, browser, timeout),
-            cancellationToken).ConfigureAwait(false);
+        CredentialRecord record = options.Device
+            ? await device.RunAsync(
+                cloudUrl,
+                options.WorkspaceId,
+                options.NoBrowser,
+                new DeviceOutput(session.Text),
+                cancellationToken).ConfigureAwait(false)
+            : await loopback.RunAsync(
+                cloudUrl,
+                options.WorkspaceId,
+                options.NoBrowser,
+                (url, mode, timeout) => ShowLink(session.Text, cloudUrl, url, mode, timeout),
+                cancellationToken).ConfigureAwait(false);
 
         // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
         cancellationToken.ThrowIfCancellationRequested();
@@ -81,7 +110,7 @@ internal sealed class LoginCommand(
             AuthJson.SchemaVersion,
             "signed-in",
             cloudUrl,
-            "loopback",
+            options.Device ? "device" : "loopback",
             record.Email,
             record.Sub,
             record.WorkspaceId,
@@ -122,27 +151,63 @@ internal sealed class LoginCommand(
         }
     }
 
-    private static void ShowLink(AuthText text, string cloudUrl, Uri url, BrowserEnvironment browser, TimeSpan timeout)
+    private static void ShowLink(AuthText text, string cloudUrl, Uri url, LinkMode mode, TimeSpan timeout)
     {
-        if (browser.IsHeadless)
+        switch (mode)
         {
-            text.Line($"No browser was found on this machine. Open this link in a browser {text.Emphasis("on this machine")}:");
-        }
-        else
-        {
-            text.Line($"Opening your browser to sign in to Xping Cloud ({cloudUrl}).");
-            text.Line("If it does not open, use this link:");
+            case LinkMode.Headless:
+                text.Line($"No browser was found on this machine. Open this link in a browser {text.Emphasis("on this machine")}:");
+                break;
+            case LinkMode.NoBrowser:
+                text.Line($"Open this link in a browser {text.Emphasis("on this machine")}:");
+                break;
+            default:
+                text.Line($"Opening your browser to sign in to Xping Cloud ({cloudUrl}).");
+                text.Line("If it does not open, use this link:");
+                break;
         }
 
         text.Line();
         text.Line($"  {url.AbsoluteUri}");
         text.Line();
 
-        if (browser.IsHeadless)
+        if (mode != LinkMode.Browser)
             text.Line("If your browser is on another machine, press Ctrl+C and run `xping login --device`.");
 
         text.Line(string.Create(
             CultureInfo.InvariantCulture,
             $"Waiting for you to finish in the browser (up to {timeout.TotalMinutes:0} minutes)..."));
+    }
+
+    /// <summary>
+    /// A lifetime as the waiting line names it: whole minutes, else seconds.
+    /// </summary>
+    internal static string Lifetime(TimeSpan lifetime)
+    {
+        int seconds = (int)Math.Ceiling(lifetime.TotalSeconds);
+        return seconds % 60 == 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{seconds / 60} minute{(seconds == 60 ? string.Empty : "s")}")
+            : string.Create(CultureInfo.InvariantCulture, $"{seconds} second{(seconds == 1 ? string.Empty : "s")}");
+    }
+
+    private sealed class DeviceOutput(AuthText text) : IDeviceFlowOutput
+    {
+        public void ShowCode(DeviceAuthorization authorization)
+        {
+            text.Line($"To sign in, open  {authorization.VerificationUri.AbsoluteUri}");
+            text.Line($"and enter the code  {text.Emphasis(authorization.UserCode)}");
+            text.Line();
+
+            if (authorization.VerificationUriComplete is { } complete)
+            {
+                text.Line($"(or open {complete.AbsoluteUri})");
+                text.Line();
+            }
+
+            text.Line($"Waiting for you to approve in the browser (up to {Lifetime(authorization.ExpiresIn)})...");
+        }
+
+        public void PollingFailed(string reason) =>
+            text.Warning($"Could not reach Xping Cloud ({reason}). Still waiting; an approval made in the meantime is not lost.");
     }
 }

@@ -221,6 +221,42 @@ public sealed class OAuthClientTests : IAsyncLifetime, IAsyncDisposable
         Assert.Null(device.VerificationUriComplete);
     }
 
+    [Fact]
+    public async Task AUserCodeWithAControlCharacterIsRefused()
+    {
+        _host.Cloud.EditDeviceResponse = r => r["user_code"] = "ABCD\u001b]52;c;eA==\u0007";
+
+        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
+            () => _host.OAuth.StartDeviceAsync(_discovery, workspaceId: null, CancellationToken.None));
+
+        Assert.Equal(AuthExitCodes.CloudUnreachable, failure.ExitCode);
+        Assert.Contains("incomplete response", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARateLimitedPollIsTransient()
+    {
+        DeviceAuthorization device = await _host.OAuth.StartDeviceAsync(_discovery, workspaceId: null, CancellationToken.None);
+        _host.Cloud.Fail(Token, 1, (HttpStatusCode)429, error: null);
+
+        DevicePollResult result = await PollAsync(device);
+
+        Assert.Equal(DevicePollStatus.Transient, result.Status);
+        Assert.Equal("rate limited", result.Reason);
+        Assert.Single(_host.Cloud.RequestsTo(Token));
+    }
+
+    [Fact]
+    public async Task AnyOtherPollWithoutAnOAuthBodyIsUnexpected()
+    {
+        DeviceAuthorization device = await _host.OAuth.StartDeviceAsync(_discovery, workspaceId: null, CancellationToken.None);
+        _host.Cloud.Fail(Token, 1, HttpStatusCode.NotFound, error: null);
+
+        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(() => PollAsync(device));
+
+        Assert.Contains("answered HTTP 404", failure.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("http://app.example.com/device")]
     [InlineData("https://user:pass@app.example.com/device")]

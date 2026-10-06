@@ -89,6 +89,7 @@ internal static class ServiceCollectionExtensions
             HostOsDetector.Current,
             File.Exists));
         services.AddTransient<LoopbackFlow>();
+        services.AddTransient<DeviceFlow>();
 
         services
             .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>
