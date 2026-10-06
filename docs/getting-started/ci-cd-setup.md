@@ -52,9 +52,10 @@ A pull request build can carry two different commits, and Xping records both on 
 
 | Build | PR context commit | `CI.CommitSha` |
 |---|---|---|
-| GitHub `push` | — | `GITHUB_SHA` (the pushed commit) |
+| GitHub `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create` | — | `GITHUB_SHA` (the commit the run checked out) |
 | GitHub `pull_request` | `pull_request.head.sha` | `GITHUB_SHA` (merge commit) |
 | GitHub `pull_request_target` | `pull_request.head.sha` | not sent (`GITHUB_SHA` is the base branch's tip) |
+| GitHub, any other event (`issue_comment`, `workflow_run`, `repository_dispatch`, …) | — | not sent (`GITHUB_SHA` is the default branch's tip, not what the workflow checked out) |
 | Azure Pipelines PR | `SYSTEM_PULLREQUEST_SOURCECOMMITID` | `BUILD_SOURCEVERSION` (merge commit) |
 | GitLab merged-results / merge train | `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` | `CI_COMMIT_SHA` (merge result) |
 | Jenkins Branch Source PR | `refs/remotes/origin/$BRANCH_NAME`, checked against `GIT_COMMIT` | `GIT_COMMIT` (merge commit under the merge strategy) |
@@ -62,6 +63,8 @@ A pull request build can carry two different commits, and Xping records both on 
 Xping Cloud files a run under the PR context's commit when there is one. It uses `CI.CommitSha`
 only when `CI.IsPullRequest` is `false`. A pull request build without a PR context (for example a
 Jenkins GHPRB job) is filed under no commit, so it is never mistaken for a run on your main branch.
+A GitHub run of any other event is filed under no commit too: it sends neither `CI.IsPullRequest`
+nor `CI.CommitSha`, because a "/retest" comment or a `workflow_run` follow-up usually tests PR code.
 
 PR context and `CI.ServerUrl` both name the server the repository lives on (`https://github.com`,
 `https://ghes.example.com`, `https://gitlab.example.com:8443`, …), so GitHub Enterprise, GHE.com,
@@ -124,9 +127,9 @@ Xping automatically captures:
 - `GITHUB_ACTIONS` - CI environment indicator
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
-- `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` (see [Which Commit Is Recorded](#which-commit-is-recorded))
+- `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` and on events outside the list below (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
-- `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest` (`true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`)
+- `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest`: `true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`; `false` for `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release` and `create`; not sent for any other event
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
@@ -136,7 +139,8 @@ Xping automatically captures:
 If tests run inside a container (`docker run`), pass the `GITHUB_*` variables, including
 `GITHUB_SERVER_URL`, **and** mount the runner's temp directory so the file at `GITHUB_EVENT_PATH`
 is readable. Without them, the run is still recorded, but PR context (PR number, branches, PR
-comment) is skipped and a warning is logged.
+comment) is skipped and a warning is logged. Without `GITHUB_EVENT_NAME`, the run is also filed under
+no commit.
 
 ---
 

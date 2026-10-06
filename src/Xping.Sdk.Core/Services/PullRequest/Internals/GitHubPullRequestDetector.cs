@@ -49,6 +49,16 @@ internal sealed class GitHubPullRequestDetector(
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
 
+    // Events that aren't PR builds and check out GITHUB_SHA by default; only these report
+    // CI.IsPullRequest=false. Any other event (issue_comment, workflow_run, repository_dispatch, …) runs
+    // on the default branch's ref but usually checks out other code, so calling it a push build would
+    // file the tested code under main's tip. Such runs send neither the flag nor CI.CommitSha.
+    internal static readonly HashSet<string> PushEventNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "push", "schedule", "workflow_dispatch", "merge_group", "release", "create",
+        };
+
     // ReadOnlySpan<byte> deserialization doesn't skip a BOM the way the stream overloads do.
     private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 

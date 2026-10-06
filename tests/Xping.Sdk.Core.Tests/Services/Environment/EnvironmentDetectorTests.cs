@@ -306,6 +306,7 @@ public sealed class EnvironmentDetectorTests
     {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "push");
         using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/ci-branch");
         using var githubSha = new EnvRestorer("GITHUB_SHA", "cafebabe");
 
@@ -318,7 +319,6 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Theory]
-    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SHA")]
     [InlineData("TF_BUILD", "True", "BUILD_SOURCEVERSION")]
     [InlineData("JENKINS_URL", "https://jenkins.example", "GIT_COMMIT")]
     [InlineData("GITLAB_CI", "true", "CI_COMMIT_SHA")]
@@ -440,9 +440,6 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Theory]
-    [InlineData("GITHUB_ACTIONS", "true", null, null)]
-    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "push")]
-    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_EVENT_NAME", "schedule")]
     [InlineData("TF_BUILD", "True", null, null)]
     [InlineData("TF_BUILD", "True", "BUILD_REASON", "IndividualCI")]
     [InlineData("JENKINS_URL", "https://jenkins.example", null, null)]
@@ -506,12 +503,19 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
     }
 
-    [Fact]
-    public async Task GitHubPushSendsThePushedCommit()
+    [Theory]
+    [InlineData("push")]
+    [InlineData("schedule")]
+    [InlineData("workflow_dispatch")]
+    [InlineData("merge_group")]
+    [InlineData("release")]
+    [InlineData("create")]
+    [InlineData("PUSH")]
+    public async Task GitHubPushLikeEventsSendFalseAndTheBuiltCommit(string eventName)
     {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "push");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
         using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
         using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
 
@@ -520,6 +524,29 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
         Assert.Equal("false", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    // These events run on the default branch's ref, so GITHUB_SHA is main's tip, while the workflow
+    // usually checks out PR code. Reporting a push build would file that code under main's tip.
+    [Theory]
+    [InlineData("issue_comment")]
+    [InlineData("workflow_run")]
+    [InlineData("repository_dispatch")]
+    [InlineData(null)]
+    public async Task GitHubEventsThatDontSayWhatWasBuiltSendNeitherFlagNorCommit(string? eventName)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
+        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
+        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+
+        IEnvironmentDetector detector = CreateDetector();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("GitHubActions", info.CustomProperties["CIPlatform"]);
+        Assert.False(info.CustomProperties.ContainsKey("CI.IsPullRequest"));
+        Assert.False(info.CustomProperties.ContainsKey("CI.CommitSha"));
     }
 
     [Fact]
