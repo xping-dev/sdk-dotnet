@@ -2,7 +2,7 @@
 
 **Status:** Draft for review, written 2026-09-29 from the CLI P0 inventory of the same day.
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`, plus one small change in `src/Xping.Sdk.Core` (§11.2) and the CLI test projects.
-**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
+**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29) and re-read at `60a64fc4329b1d5f00766ba7bd53436f32a55dbe` (2026-10-03) for contract OQ-17 to OQ-20 (§20). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
 **Reference only:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-cloud-spec.md`, same commit. Written as "Cloud spec §n". It is not authoritative for the CLI; where it and the contract disagree, the contract wins.
 **Depends on:** `cli-report-format-spec.md` §8, `cli-latest-run-spec.md` §8, `cli-finding-detail-spec.md` §8 (the reserved Cloud slots). §11 amends them.
 **Schema:** report envelope `1.21` → `1.22` (§11.4).
@@ -167,7 +167,9 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
    Cloud URL is used without a request (contract §4.1).
 2. Otherwise `GET {cloudUrl}/.well-known/openid-configuration` through `"xping-oauth"`.
 3. Validate, in this order, and fail closed on the first failure with `AuthExitCodes`:
-   - `issuer` equals the normalized Cloud URL exactly, ordinal comparison (contract §3.1 step 1).
+   - `issuer` equals the normalized Cloud URL followed by exactly one `/`, ordinal comparison
+     (contract §3.1 step 1, §4.1, OQ-17). OpenIddict writes the issuer as `Uri.AbsoluteUri`, so
+     `https://app.xping.io` publishes `https://app.xping.io/`; any other value fails closed.
    - `xping_data_gateway_uri` present, absolute, `https` (or `http` on `localhost`/`127.0.0.1`), no
      trailing slash after normalization.
    - `xping_contract_version` equals `1`. Otherwise: "This CLI implements Cloud contract version 1;
@@ -197,7 +199,7 @@ One class, three operations, all `POST` with `application/x-www-form-urlencoded`
 | `RefreshAsync(refreshToken)` | `refresh_token`, no `scope` parameter | §4.3 |
 | `PollDeviceAsync(deviceCode)` | `urn:ietf:params:oauth:grant-type:device_code` | §4.3 |
 | `StartDeviceAsync(workspaceId?)` | `device_authorization_endpoint`, `scope=user:read offline_access` | §4.5 |
-| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token` | §4.4 |
+| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token`; any `200` succeeds and the body (empty or `{}`) is ignored | §4.4, OQ-19 |
 
 Token responses map to `TokenResponse(AccessToken, ExpiresIn, RefreshToken, Scope)`; extra members
 are ignored. Error responses map to `OAuthError(Error, ErrorDescription, StatusCode)` and are
@@ -1161,7 +1163,7 @@ a `report` meaning and are easy to recognise in scripts:
 Validation (parse-time, exit 2): absolute URI; scheme `https`, or `http` only when the host is
 `localhost` or `127.0.0.1` (contract §10.1; `[::1]` is not in the contract's list and is refused,
 Q-5, answered); no user info, query or fragment; a path is allowed only as `/` (the issuer must equal the URL
-exactly, and the Portal issuer has no path). Normalization: lowercase scheme and host, default port
+followed by one `/`, contract OQ-17, so the Portal issuer has no other path). Normalization: lowercase scheme and host, default port
 removed, trailing slash removed. The normalized string is the key for the credential store, the
 discovery cache and the project cache. `https://App.Xping.io/` and `https://app.xping.io` are the
 same login.
@@ -1484,6 +1486,11 @@ finds a contract or spec conflict stops and reports.
 | Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
 
 ### Contract observations recorded while writing (no conflict found)
+
+- Contract amendments of 2026-10-02/03, applied in phase 1: OQ-17 (`issuer` is `{Cloud URL}/`,
+  §2.3), OQ-19 (revocation body may be `{}`, §2.4). OQ-18 (authorize request errors render a page
+  and never redirect) needs no CLI change: the loopback flow meets them as its timeout (§4.7).
+  OQ-20 (key withdrawal ends sessions with `invalid_grant`) is already §9.6.
 
 - Contract §3.1 step 8 versus the failure table: resolved as A-6 ("one successful callback").
 - Contract §3.1 step 2 says "port 0, then read the assigned port"; with `HttpListener` this is a
