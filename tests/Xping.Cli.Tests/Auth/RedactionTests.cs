@@ -26,6 +26,9 @@ public sealed class RedactionTests
     [InlineData("code_verifier=v1", "code_verifier=[redacted]")]
     [InlineData("token=t1&token_type_hint=refresh_token", "token=[redacted]&token_type_hint=refresh_token")]
     [InlineData("/callback?code=abc", "/callback?code=[redacted]")]
+    [InlineData("#access_token=opaque123&expires_in=900", "#access_token=[redacted]&expires_in=900")]
+    [InlineData("id_token=i1", "id_token=[redacted]")]
+    [InlineData("client_id=xping-cli&client_secret=s1", "client_id=xping-cli&client_secret=[redacted]")]
     public void FormFieldsAreRemoved(string text, string expected)
     {
         Assert.Equal(expected, Redaction.Scrub(text));
@@ -42,6 +45,26 @@ public sealed class RedactionTests
     }
 
     [Fact]
+    public void TokenValuesInAJsonBodyAreRemoved()
+    {
+        const string body = """{"access_token":"opaque-a","expires_in":900,"refresh_token" : "opaque\"r","scope":"user:read"}""";
+
+        Assert.Equal(
+            """{"access_token":"[redacted]","expires_in":900,"refresh_token" : "[redacted]","scope":"user:read"}""",
+            Redaction.Scrub(body));
+    }
+
+    [Fact]
+    public void TokenValuesInTheStoredRecordAreRemoved()
+    {
+        const string record = """{"refreshToken":"r1","accessToken":"a1","email":"jane@example.com"}""";
+
+        Assert.Equal(
+            """{"refreshToken":"[redacted]","accessToken":"[redacted]","email":"jane@example.com"}""",
+            Redaction.Scrub(record));
+    }
+
+    [Fact]
     public void AJwtShapedStringIsRemoved()
     {
         const string jwt = "eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiIwMUo4SzJWNlhOIn0.c2lnbmF0dXJlLXZhbHVl";
@@ -49,11 +72,12 @@ public sealed class RedactionTests
         Assert.Equal("token was [redacted].", Redaction.Scrub($"token was {jwt}."));
     }
 
-    [Fact]
-    public void ADottedNameWithShortSegmentsIsKept()
+    [Theory]
+    [InlineData("Xping.Cli.Auth failed in System.Net.Http")]
+    [InlineData("at Microsoft.Extensions.Configuration.FileConfigurationProvider.HandleException()")]
+    [InlineData("at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)")]
+    public void ADottedTypeNameIsKept(string text)
     {
-        const string text = "Xping.Cli.Auth failed in System.Net.Http";
-
         Assert.Equal(text, Redaction.Scrub(text));
     }
 

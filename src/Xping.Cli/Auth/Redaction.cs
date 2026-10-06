@@ -62,6 +62,7 @@ internal static partial class Redaction
 
         text = HeaderValue().Replace(text, "${name}" + Placeholder);
         text = FormField().Replace(text, "${name}" + Placeholder);
+        text = JsonMember().Replace(text, "${name}" + Placeholder);
         text = Jwt().Replace(text, Placeholder);
 
         return text;
@@ -73,15 +74,25 @@ internal static partial class Redaction
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex HeaderValue();
 
-    // The look-behind keeps "code=" from matching the tail of "device_code=" or "error_code=": the
-    // underscore is a word character, so neither is a field named "code".
+    // The look-behind keeps "code=" from matching the tail of "error_code=": the underscore is a
+    // word character, so that is not a field named "code". Names that are secrets in their own
+    // right ("access_token") are listed in full for the same reason.
     [GeneratedRegex(
-        @"(?<name>(?<![A-Za-z0-9_])(?:code|refresh_token|device_code|code_verifier|token|state)=)[^&\s]+",
+        @"(?<name>(?<![A-Za-z0-9_])(?:code|refresh_token|access_token|id_token|device_code|code_verifier|client_secret|token|state)=)[^&\s]+",
         RegexOptions.CultureInvariant)]
     private static partial Regex FormField();
 
+    // A token response body, or the stored credential record, quoted in a message. The camelCase
+    // names are the record's (IXpingSerializer writes camelCase).
     [GeneratedRegex(
-        @"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+        @"(?<name>""(?:code|refresh_token|access_token|id_token|device_code|code_verifier|client_secret|token|state|refreshToken|accessToken|idToken|deviceCode|codeVerifier|clientSecret)""\s*:\s*"")(?:[^""\\]|\\.)*",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex JsonMember();
+
+    // Header and payload are Base64URL JSON objects, so both start "eyJ". Requiring that keeps
+    // dotted .NET type names in a --verbose stack trace intact.
+    [GeneratedRegex(
+        @"eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+",
         RegexOptions.CultureInvariant)]
     private static partial Regex Jwt();
 }

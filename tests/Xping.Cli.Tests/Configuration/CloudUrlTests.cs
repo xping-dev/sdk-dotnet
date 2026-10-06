@@ -53,6 +53,26 @@ public sealed class CloudUrlTests
         Assert.StartsWith("XPING_CLOUDURL must use https", error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("http://user:s3cret@example.com")]
+    [InlineData("ftp://user:s3cret@example.com")]
+    [InlineData("https://app.xping.io/?token=s3cret")]
+    [InlineData("https://app.xping.io/#s3cret")]
+    [InlineData("http://example.com/?s3cret")]
+    [InlineData("not a url s3cret")]
+    public void TheRefusalNeverQuotesASecretFromTheValue(string value)
+    {
+        Assert.False(CloudUrl.TryNormalize(value, "--cloud-url", out _, out string? error));
+        Assert.DoesNotContain("s3cret", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRefusalQuotesTheHarmlessPartsToHelpFixATypo()
+    {
+        Assert.False(CloudUrl.TryNormalize("https://App.Xping.io/portal", "--cloud-url", out _, out string? error));
+        Assert.Equal("--cloud-url must not contain a path, got 'https://app.xping.io/portal'.", error);
+    }
+
     [Fact]
     public void TheDefaultIsAlreadyNormalized()
     {

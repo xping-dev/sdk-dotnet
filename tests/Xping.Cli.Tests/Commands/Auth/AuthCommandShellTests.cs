@@ -21,13 +21,13 @@ public sealed class AuthCommandShellTests
     private static (int Code, string Out, string Err) Run(
         string[] args,
         Action<IServiceCollection>? configureServices = null,
-        CancellationToken cancellationToken = default)
+        CancelKeyHandler? cancelKeys = null)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         int code = Program.Run(
-            args, output, error, input: null, isTerminal: true, configureServices, cancellationToken);
+            args, output, error, input: null, isTerminal: true, configureServices, cancelKeys);
         return (code, output.ToString(), error.ToString());
     }
 
@@ -89,6 +89,31 @@ public sealed class AuthCommandShellTests
         Assert.Contains("Run `xping login --help` for usage.", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ACloudUrlWithAPasswordIsRefusedWithoutQuotingIt()
+    {
+        var (code, _, error) = Run(["login", "--cloud-url", "http://user:s3cret@example.com"]);
+
+        Assert.Equal(2, code);
+        Assert.Contains("must not contain a user name or password", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("s3cret", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Run `xping login --help` for usage.", "--verbose", "login", "--bogus")]
+    [InlineData("Run `xping login --help` for usage.", "--cloud-url", "http://example.com", "login")]
+    [InlineData("Run `xping auth status --help` for usage.", "auth", "status", "--bogus")]
+    [InlineData("Run `xping auth status --help` for usage.", "--verbose", "auth", "status", "--bogus")]
+    [InlineData("Run `xping report --help` for usage.", "report", "--bogus")]
+    [InlineData("Run `xping --help` for usage.", "--verbose", "frobnicate")]
+    public void TheUsageHintNamesTheCommandEvenAfterAGlobalOption(string hint, params string[] args)
+    {
+        var (code, _, error) = Run(args);
+
+        Assert.Equal(2, code);
+        Assert.EndsWith(hint + Environment.NewLine, error, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("--cloud-url", "https://app.xping.io", "where")]
     [InlineData("where", "--cloud-url", "https://app.xping.io")]
@@ -128,7 +153,7 @@ public sealed class AuthCommandShellTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        var (code, output, error) = Run(["login"], cancellationToken: cancellation.Token);
+        var (code, output, error) = Run(["login"], cancelKeys: new CancelKeyHandler(cancellation));
 
         Assert.Equal(AuthExitCodes.Cancelled, code);
         Assert.Empty(output);

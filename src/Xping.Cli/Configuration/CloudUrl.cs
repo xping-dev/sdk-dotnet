@@ -41,17 +41,12 @@ internal static class CloudUrl
         normalized = null;
         string trimmed = value.Trim();
 
-        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri)
-            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        // Messages never quote the value as given: it can carry a password or a query string, and
+        // an env var or settings file is no less likely to hold one than the command line. They
+        // quote the parts that cannot be secret instead.
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri))
         {
-            error = $"{sourceName} must be an absolute https URL, got '{value}'.";
-            return false;
-        }
-
-        // [::1] is deliberately absent: the contract lists only these two hosts for plain http.
-        if (uri.Scheme == Uri.UriSchemeHttp && uri.Host is not ("localhost" or "127.0.0.1"))
-        {
-            error = $"{sourceName} must use https; http is allowed only for localhost and 127.0.0.1, got '{value}'.";
+            error = $"{sourceName} must be an absolute https URL.";
             return false;
         }
 
@@ -61,28 +56,44 @@ internal static class CloudUrl
             return false;
         }
 
+        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+        {
+            error = $"{sourceName} must be an absolute https URL, got scheme '{uri.Scheme}'.";
+            return false;
+        }
+
         // Uri drops an empty "?" or "#", so the raw text is checked as well: the issuer comparison
         // happens on the normalized string, and a URL the user typed with a query is not the issuer
         // whatever Uri makes of it.
         if (uri.Query.Length > 0 || uri.Fragment.Length > 0 || trimmed.Contains('?', StringComparison.Ordinal)
             || trimmed.Contains('#', StringComparison.Ordinal))
         {
-            error = $"{sourceName} must not contain a query or fragment, got '{value}'.";
+            error = $"{sourceName} must not contain a query or fragment.";
+            return false;
+        }
+
+        // [::1] is deliberately absent: the contract lists only these two hosts for plain http.
+        if (uri.Scheme == Uri.UriSchemeHttp && uri.Host is not ("localhost" or "127.0.0.1"))
+        {
+            error = $"{sourceName} must use https; http is allowed only for localhost and 127.0.0.1, got '{Origin(uri)}'.";
             return false;
         }
 
         // The Portal's issuer has no path, and the issuer must equal this URL exactly.
         if (uri.AbsolutePath != "/")
         {
-            error = $"{sourceName} must not contain a path, got '{value}'.";
+            error = $"{sourceName} must not contain a path, got '{Origin(uri)}{uri.AbsolutePath}'.";
             return false;
         }
 
-        // Uri already lowercases scheme and host and keeps the brackets of an IPv6 host.
-        normalized = uri.IsDefaultPort
-            ? $"{uri.Scheme}://{uri.Host}"
-            : string.Create(CultureInfo.InvariantCulture, $"{uri.Scheme}://{uri.Host}:{uri.Port}");
+        normalized = Origin(uri);
         error = null;
         return true;
     }
+
+    // Uri already lowercases scheme and host and keeps the brackets of an IPv6 host.
+    private static string Origin(Uri uri) =>
+        uri.IsDefaultPort
+            ? $"{uri.Scheme}://{uri.Host}"
+            : string.Create(CultureInfo.InvariantCulture, $"{uri.Scheme}://{uri.Host}:{uri.Port}");
 }

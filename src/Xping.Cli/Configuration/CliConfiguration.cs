@@ -153,9 +153,14 @@ internal sealed class CliConfiguration
         if (NonBlank(environment(prefixed)) is { } fromPrefixed)
             return new ConfiguredValue(fromPrefixed, ConfigurationSource.Environment, prefixed);
 
-        string nested = $"{Section}__{name}";
-        if (NonBlank(environment(nested)) is { } fromNested)
-            return new ConfiguredValue(fromNested, ConfigurationSource.Environment, nested);
+        // The SDK reads these through AddEnvironmentVariables, which matches names case-insensitively.
+        // A lookup by name cannot enumerate every casing, so it covers the two that are written:
+        // the documented one and the all-capitals one shell scripts tend to use.
+        foreach (string nested in (string[])[$"{Section}__{name}", $"{Section}__{name}".ToUpperInvariant()])
+        {
+            if (NonBlank(environment(nested)) is { } fromNested)
+                return new ConfiguredValue(fromNested, ConfigurationSource.Environment, nested);
+        }
 
         foreach ((string fileName, IConfiguration settings) in files)
         {
@@ -183,6 +188,11 @@ internal sealed class CliConfiguration
 
         string basePath = Path.GetFullPath(directory);
 
+        // A directory that does not exist holds no settings. The command that named it reports
+        // that in its own words; configuration is not the place to fail for it.
+        if (!Directory.Exists(basePath))
+            return [];
+
         return
         [
             ($"appsettings.{environmentName}.json", ReadSettingsFile(basePath, $"appsettings.{environmentName}.json")),
@@ -199,9 +209,10 @@ internal sealed class CliConfiguration
                 .AddJsonFile(fileName, optional: true, reloadOnChange: false)
                 .Build();
         }
-        catch (InvalidDataException ex)
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            throw new CliConfigurationException(ex.Message, ex);
+            throw new CliConfigurationException(
+                $"Could not read {Path.Combine(basePath, fileName)}: {ex.Message}", ex);
         }
     }
 

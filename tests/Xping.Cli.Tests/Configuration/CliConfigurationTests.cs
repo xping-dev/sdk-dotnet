@@ -30,9 +30,9 @@ public sealed class CliConfigurationTests : IDisposable
         }
     }
 
-    private CliConfiguration Load(string? cloudUrlFlag = null, string? apiKeyFlag = null) =>
+    private CliConfiguration Load(string? cloudUrlFlag = null, string? apiKeyFlag = null, string? directory = null) =>
         CliConfiguration.Load(
-            cloudUrlFlag, apiKeyFlag, _directory, name => _environment.GetValueOrDefault(name));
+            cloudUrlFlag, apiKeyFlag, directory ?? _directory, name => _environment.GetValueOrDefault(name));
 
     private void WriteSettings(string fileName, string json) =>
         File.WriteAllText(Path.Combine(_directory, fileName), json);
@@ -77,6 +77,34 @@ public sealed class CliConfigurationTests : IDisposable
         WriteSettings("appsettings.json", """{ "Xping": { "ProjectId": "file" } }""");
 
         Assert.Equal(new ConfiguredValue("nested", ConfigurationSource.Environment, "Xping__ProjectId"), Load().ProjectId);
+    }
+
+    [Fact]
+    public void TheAllCapitalsNestedVariableIsReadAsTheSdkReadsIt()
+    {
+        _environment["XPING__APIKEY"] = "capitals";
+
+        Assert.Equal(new ConfiguredValue("capitals", ConfigurationSource.Environment, "XPING__APIKEY"), Load().ApiKey);
+    }
+
+    [Fact]
+    public void TheDocumentedNestedSpellingWinsOverTheAllCapitalsOne()
+    {
+        _environment["Xping__ApiKey"] = "documented";
+        _environment["XPING__APIKEY"] = "capitals";
+
+        Assert.Equal("documented", Load().ApiKey?.Value);
+    }
+
+    [Fact]
+    public void AMissingDirectoryHoldsNoSettings()
+    {
+        _environment["XPING_APIKEY"] = "env";
+
+        CliConfiguration configuration = Load(directory: Path.Combine(_directory, "missing"));
+
+        Assert.Equal(CloudUrl.Default, configuration.CloudUrl.Value);
+        Assert.Equal("env", configuration.ApiKey?.Value);
     }
 
     [Fact]
@@ -142,6 +170,27 @@ public sealed class CliConfigurationTests : IDisposable
     {
         WriteSettings("appsettings.json", "{ not json");
 
-        Assert.Throws<CliConfigurationException>(() => Load());
+        var ex = Assert.Throws<CliConfigurationException>(() => Load());
+        Assert.StartsWith($"Could not read {Path.Combine(_directory, "appsettings.json")}: ", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnreadableSettingsFileIsAConfigurationError()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        string path = Path.Combine(_directory, "appsettings.json");
+        WriteSettings("appsettings.json", """{ "Xping": { "ApiKey": "file" } }""");
+        File.SetUnixFileMode(path, UnixFileMode.None);
+
+        try
+        {
+            Assert.Throws<CliConfigurationException>(() => Load());
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 }
