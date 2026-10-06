@@ -171,7 +171,7 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
      (contract §3.1 step 1, §4.1, OQ-17). OpenIddict writes the issuer as `Uri.AbsoluteUri`, so
      `https://app.xping.io` publishes `https://app.xping.io/`; any other value fails closed.
    - `xping_data_gateway_uri` present, absolute, `https` (or `http` on `localhost`/`127.0.0.1`), no
-     trailing slash after normalization.
+     user info, query or fragment, no trailing slash after normalization.
    - `xping_contract_version` equals `1`. Otherwise: "This CLI implements Cloud contract version 1;
      the server reports {n}. {Upgrade the CLI | The server is older than this CLI}." Exit code
      `CloudVersionMismatch` (contract §11).
@@ -179,7 +179,9 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
      precedence rules (prerelease lower than release). A lower CLI stops: "Please upgrade the xping
      CLI: this server requires {min} or newer, you have {current}." Same exit code.
    - `authorization_endpoint`, `token_endpoint`, `revocation_endpoint`,
-     `device_authorization_endpoint` present and absolute. They are used as given, never rebuilt
+     `device_authorization_endpoint` present, absolute, `https` (or `http` on
+     `localhost`/`127.0.0.1`), no user info or fragment: codes and refresh tokens are sent there,
+     so they meet the same rule as the Cloud URL (§14.1). They are used as given, never rebuilt
      from the paths in contract §4.
 4. Unknown members are ignored (contract §11). Deserialization goes through `IXpingSerializer`
    with a DTO that lists only the fields above.
@@ -208,10 +210,15 @@ delays from an injected `TimeProvider` so tests do not wait:
 
 - `server_error` (500): one retry after 2 s.
 - `temporarily_unavailable` (503): retries after 2 s, 4 s, 8 s.
-- Any network failure (`HttpRequestException`, timeout): treated like `temporarily_unavailable`
-  during device polling (contract §3.2, "retry at the next interval") and like `server_error`
-  elsewhere.
-- Everything else is returned to the caller on the first response.
+- Any network failure (`HttpRequestException`, timeout): treated like `server_error`.
+- `PollDeviceAsync` makes none of these retries: a network failure, `server_error`,
+  `temporarily_unavailable` or another 5xx comes back as a transient result, and the device flow
+  polls again at the next interval (contract §3.2, §6.3). An immediate retry would poll faster
+  than `interval`.
+- When the retries are spent, the failure is `AuthFailureException` with `CloudUnreachable`
+  (§9.6).
+- Everything else is returned to the caller on the first response. A redirect or an error status
+  without an OAuth body is never a success; it is `CloudUnreachable` with the status.
 
 `OAuthClient` never logs a request body or a response body (§15).
 
