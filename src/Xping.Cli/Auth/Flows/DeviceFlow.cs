@@ -11,10 +11,23 @@ using Xping.Cli.Auth.Store;
 namespace Xping.Cli.Auth.Flows;
 
 /// <summary>
-/// Shows the user where to go and which code to enter, before polling starts.
+/// What the device flow tells the user while it runs.
 /// </summary>
-/// <param name="authorization">The codes and pages; the device code on it is never shown.</param>
-internal delegate void ShowDeviceCode(DeviceAuthorization authorization);
+internal interface IDeviceFlowOutput
+{
+    /// <summary>
+    /// Shows where to go and which code to enter, before polling starts.
+    /// </summary>
+    /// <param name="authorization">The codes and pages; the device code on it is never shown.</param>
+    void ShowCode(DeviceAuthorization authorization);
+
+    /// <summary>
+    /// Says that a poll could not reach Xping Cloud and that the flow keeps trying. Called once per
+    /// run, on the first such poll.
+    /// </summary>
+    /// <param name="reason">The failure category, such as "connection failed".</param>
+    void PollingFailed(string reason);
+}
 
 /// <summary>
 /// One sign-in through the device flow: the user approves in a browser on any machine while the
@@ -45,7 +58,7 @@ internal sealed class DeviceFlow(
     /// <param name="cloudUrl">The normalized Cloud URL.</param>
     /// <param name="workspaceId">A workspace to preselect on the approval page, or <see langword="null"/>.</param>
     /// <param name="noBrowser">Whether <c>--no-browser</c> was given.</param>
-    /// <param name="showCode">Prints the page, the code and the waiting line.</param>
+    /// <param name="output">Prints the page, the code and the waiting line, and polling trouble.</param>
     /// <param name="cancellationToken">Ctrl+C.</param>
     /// <exception cref="AuthFailureException">The sign-in failed; the exit code and message are on it.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired.</exception>
@@ -53,10 +66,10 @@ internal sealed class DeviceFlow(
         string cloudUrl,
         string? workspaceId,
         bool noBrowser,
-        ShowDeviceCode showCode,
+        IDeviceFlowOutput output,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(showCode);
+        ArgumentNullException.ThrowIfNull(output);
 
         DiscoveryDocument document = await discovery.GetAsync(cloudUrl, useCache: false, cancellationToken).ConfigureAwait(false);
 
@@ -71,15 +84,19 @@ internal sealed class DeviceFlow(
         }
 
         DateTimeOffset deadline = timeProvider.GetUtcNow() + authorization.ExpiresIn;
-        showCode(authorization);
-        OpenBrowser(authorization, noBrowser);
+        output.ShowCode(authorization);
+        BrowserChoice.Make(headless, noBrowser, logger)
+            .Open(browser, authorization.VerificationUriComplete ?? authorization.VerificationUri);
 
         TimeSpan interval = authorization.Interval;
+        bool warned = false;
         while (true)
         {
             // Waited before every poll, including the first and the one after a network error: the
-            // CLI never polls faster than the interval (contract §3.2).
-            await Task.Delay(interval, timeProvider, cancellationToken).ConfigureAwait(false);
+            // CLI never polls faster than the interval (contract §3.2). The last wait stops at the
+            // deadline, so an expiry after several slow_down answers is reported when it happens.
+            TimeSpan remaining = deadline - timeProvider.GetUtcNow();
+            await Task.Delay(remaining < interval ? remaining : interval, timeProvider, cancellationToken).ConfigureAwait(false);
 
             if (timeProvider.GetUtcNow() >= deadline)
                 throw Expired();
@@ -91,7 +108,7 @@ internal sealed class DeviceFlow(
             }
             catch (OAuthException ex)
             {
-                throw PollFailed(ex.Error);
+                throw PollFailed(cloudUrl, ex.Error);
             }
 
             switch (result.Status)
@@ -106,6 +123,15 @@ internal sealed class DeviceFlow(
 
                 case DevicePollStatus.Transient:
                     logger.LogInformation("Polling failed ({Reason}); trying again in {Interval} s", result.Reason, interval.TotalSeconds);
+
+                    // Without a word the user would wait out the whole code lifetime, approve, and
+                    // see nothing happen.
+                    if (!warned)
+                    {
+                        output.PollingFailed(result.Reason ?? "unknown failure");
+                        warned = true;
+                    }
+
                     break;
 
                 case DevicePollStatus.Pending:
@@ -115,27 +141,10 @@ internal sealed class DeviceFlow(
         }
     }
 
-    private void OpenBrowser(DeviceAuthorization authorization, bool noBrowser)
-    {
-        if (noBrowser)
-            return;
-
-        BrowserEnvironment environment = headless.Detect();
-        if (environment.IsHeadless)
-        {
-            logger.LogInformation("Not opening a browser: {Reason}", environment.Reason);
-            return;
-        }
-
-        // A convenience only: the page and the code are on the screen whether or not it opens
-        // (contract §3.2 step 3).
-        browser.TryOpen(authorization.VerificationUriComplete ?? authorization.VerificationUri, environment);
-    }
-
     private static AuthFailureException Expired() =>
         new(AuthExitCodes.LoginTimedOut, AuthErrorCodes.Timeout, ExpiredMessage);
 
-    private static AuthFailureException PollFailed(OAuthError error) =>
+    private static AuthFailureException PollFailed(string cloudUrl, OAuthError error) =>
         error.Error switch
         {
             OAuthProtocol.AccessDenied => FlowFailures.Declined(),
@@ -147,6 +156,6 @@ internal sealed class DeviceFlow(
             {
                 OAuthErrorCode = error.Error
             },
-            _ => FlowFailures.Verbatim(error.Error, error.ErrorDescription)
+            _ => FlowFailures.ServerRefused(cloudUrl, error)
         };
 }

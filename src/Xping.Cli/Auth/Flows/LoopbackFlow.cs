@@ -13,22 +13,6 @@ using Xping.Cli.Auth.Store;
 namespace Xping.Cli.Auth.Flows;
 
 /// <summary>
-/// Whether the loopback flow opens a browser, and if not, why not; the wording around the link
-/// depends on it (cli-auth-cli-spec §3.2).
-/// </summary>
-internal enum LinkMode
-{
-    /// <summary>A browser is opened on the link.</summary>
-    Browser,
-
-    /// <summary>The machine has no browser the CLI can open.</summary>
-    Headless,
-
-    /// <summary><c>--no-browser</c> was given.</summary>
-    NoBrowser
-}
-
-/// <summary>
 /// Shows the authorization link to the user before the browser is opened.
 /// </summary>
 /// <param name="authorizationUrl">The link; printed exactly once, always (contract §3.1 step 4).</param>
@@ -77,13 +61,7 @@ internal sealed class LoopbackFlow(
         ArgumentNullException.ThrowIfNull(showLink);
 
         DiscoveryDocument document = await discovery.GetAsync(cloudUrl, useCache: false, cancellationToken).ConfigureAwait(false);
-
-        // --no-browser skips the detection: the user has already said what it would find out.
-        BrowserEnvironment environment = noBrowser ? BrowserEnvironment.Headless("--no-browser") : headless.Detect();
-        if (environment.Reason is { } reason)
-            logger.LogInformation("Not opening a browser: {Reason}", reason);
-
-        LinkMode mode = noBrowser ? LinkMode.NoBrowser : environment.IsHeadless ? LinkMode.Headless : LinkMode.Browser;
+        BrowserChoice choice = BrowserChoice.Make(headless, noBrowser, logger);
 
         using Pkce pkce = Pkce.Create();
 
@@ -101,10 +79,8 @@ internal sealed class LoopbackFlow(
             using var timeout = new CancellationTokenSource(Timeout, timeProvider);
             using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
-            showLink(authorizationUrl, mode, Timeout);
-
-            if (mode == LinkMode.Browser)
-                browser.TryOpen(authorizationUrl, environment);
+            showLink(authorizationUrl, choice.Mode, Timeout);
+            choice.Open(browser, authorizationUrl);
 
             try
             {

@@ -23,6 +23,9 @@ internal static class FlowFailures
     {
         ArgumentNullException.ThrowIfNull(error);
 
+        // The code is matched raw, against constants, and shown only after control characters are
+        // dropped: whoever answered wrote it.
+        string code = Printable(error.Error);
         string description = Printable(error.ErrorDescription);
 
         (int exitCode, string errorCode, string message) = error.Error switch
@@ -37,17 +40,18 @@ internal static class FlowFailures
                 AuthExitCodes.LoginFailed,
                 AuthErrorCodes.OAuthError,
                 description.Length > 0
-                    ? $"Xping Cloud rejected the request ({error.Error}): {description}. This is a CLI or server bug; please report it."
-                    : $"Xping Cloud rejected the request ({error.Error}). This is a CLI or server bug; please report it."),
+                    ? $"Xping Cloud rejected the request ({code}): {description}. This is a CLI or server bug; please report it."
+                    : $"Xping Cloud rejected the request ({code}). This is a CLI or server bug; please report it."),
 
-            _ => (AuthExitCodes.LoginFailed, AuthErrorCodes.OAuthError, Returned(error.Error, description))
+            _ => (AuthExitCodes.LoginFailed, AuthErrorCodes.OAuthError, Returned(code, description))
         };
 
-        return new AuthFailureException(exitCode, errorCode, message) { OAuthErrorCode = error.Error };
+        return new AuthFailureException(exitCode, errorCode, message) { OAuthErrorCode = code };
     }
 
     /// <summary>
-    /// The Portal returned an error this CLI shows as it came: the code and its description.
+    /// The Portal returned an error this CLI shows as it came: the code and its description,
+    /// without control characters.
     /// </summary>
     public static AuthFailureException Verbatim(string error, string? description) =>
         new(AuthExitCodes.LoginFailed, AuthErrorCodes.OAuthError, Returned(Printable(error), Printable(description)))

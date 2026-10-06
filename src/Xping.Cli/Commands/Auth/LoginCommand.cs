@@ -22,7 +22,7 @@ namespace Xping.Cli.Commands.Auth;
 /// <param name="Device">Use the device flow instead of the loopback flow.</param>
 /// <param name="NoBrowser">Do not try to open a browser.</param>
 /// <param name="WorkspaceId">The workspace to preselect, already validated as a ULID.</param>
-internal sealed record LoginOptions(bool Json, bool Device = false, bool NoBrowser = false, string? WorkspaceId = null);
+internal sealed record LoginOptions(bool Json, bool Device, bool NoBrowser, string? WorkspaceId);
 
 /// <summary>
 /// Signs in to Xping Cloud from a browser (cli-auth-cli-spec §3.2).
@@ -80,7 +80,7 @@ internal sealed class LoginCommand(
                 cloudUrl,
                 options.WorkspaceId,
                 options.NoBrowser,
-                authorization => ShowCode(session.Text, authorization),
+                new DeviceOutput(session.Text),
                 cancellationToken).ConfigureAwait(false)
             : await loopback.RunAsync(
                 cloudUrl,
@@ -179,20 +179,35 @@ internal sealed class LoginCommand(
             $"Waiting for you to finish in the browser (up to {timeout.TotalMinutes:0} minutes)..."));
     }
 
-    private static void ShowCode(AuthText text, DeviceAuthorization authorization)
+    /// <summary>
+    /// A lifetime as the waiting line names it: whole minutes, else seconds.
+    /// </summary>
+    internal static string Lifetime(TimeSpan lifetime)
     {
-        text.Line($"To sign in, open  {authorization.VerificationUri.AbsoluteUri}");
-        text.Line($"and enter the code  {text.Emphasis(authorization.UserCode)}");
-        text.Line();
+        int seconds = (int)Math.Ceiling(lifetime.TotalSeconds);
+        return seconds % 60 == 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{seconds / 60} minute{(seconds == 60 ? string.Empty : "s")}")
+            : string.Create(CultureInfo.InvariantCulture, $"{seconds} second{(seconds == 1 ? string.Empty : "s")}");
+    }
 
-        if (authorization.VerificationUriComplete is { } complete)
+    private sealed class DeviceOutput(AuthText text) : IDeviceFlowOutput
+    {
+        public void ShowCode(DeviceAuthorization authorization)
         {
-            text.Line($"(or open {complete.AbsoluteUri})");
+            text.Line($"To sign in, open  {authorization.VerificationUri.AbsoluteUri}");
+            text.Line($"and enter the code  {text.Emphasis(authorization.UserCode)}");
             text.Line();
+
+            if (authorization.VerificationUriComplete is { } complete)
+            {
+                text.Line($"(or open {complete.AbsoluteUri})");
+                text.Line();
+            }
+
+            text.Line($"Waiting for you to approve in the browser (up to {Lifetime(authorization.ExpiresIn)})...");
         }
 
-        text.Line(string.Create(
-            CultureInfo.InvariantCulture,
-            $"Waiting for you to approve in the browser (up to {authorization.ExpiresIn.TotalMinutes:0} minutes)..."));
+        public void PollingFailed(string reason) =>
+            text.Warning($"Could not reach Xping Cloud ({reason}). Still waiting; an approval made in the meantime is not lost.");
     }
 }

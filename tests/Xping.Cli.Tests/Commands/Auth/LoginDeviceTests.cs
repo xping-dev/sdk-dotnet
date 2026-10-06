@@ -8,6 +8,7 @@ using System.Text.Json;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Browser;
 using Xping.Cli.Auth.Store;
+using Xping.Cli.Commands.Auth;
 using Xping.Cli.Hosting;
 using Xping.Cli.Tests.Cloud;
 
@@ -70,6 +71,61 @@ public sealed class LoginDeviceTests : IAsyncLifetime, IAsyncDisposable
             Assert.DoesNotContain("eyJ", output, StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public async Task ACloudThatCannotBeReachedWhilePollingIsReportedOnce()
+    {
+        CliFlowHost host = _host;
+        host.Environment["NO_COLOR"] = "1";
+        host.Cloud.Drop("/connect/token", 2);
+
+        Task<CliResult> run = host.Start("login", "--device");
+        for (int poll = 0; poll < 2; poll++)
+        {
+            await host.WaitForTimerAsync(Interval).ConfigureAwait(true);
+            host.Time.Advance(Interval);
+        }
+
+        await host.WaitForTimerAsync(Interval).ConfigureAwait(true);
+        host.Cloud.ApproveDevice(Assert.Single(host.Cloud.DeviceUserCodes));
+        host.Time.Advance(Interval);
+        CliResult result = await run.ConfigureAwait(true);
+
+        Assert.True(result.Code == 0, result.Error);
+        const string Warning = "Could not reach Xping Cloud (";
+        int first = result.Error.IndexOf(Warning, StringComparison.Ordinal);
+        Assert.True(first >= 0, result.Error);
+        Assert.Equal(-1, result.Error.IndexOf(Warning, first + 1, StringComparison.Ordinal));
+        Assert.Contains("Still waiting; an approval made in the meantime is not lost.", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AControlCharacterInAServerErrorNeverReachesTheTerminal()
+    {
+        CliFlowHost host = _host;
+
+        // Without colour, any escape character left in the output came from the server.
+        host.Environment["NO_COLOR"] = "1";
+        host.Cloud.Fail("/connect/token", 1, HttpStatusCode.BadRequest, "odd\u001b[2J", "x\u001b]52;c;eA==\u0007");
+
+        Task<CliResult> run = host.Start("login", "--device", "--json");
+        await host.WaitForTimerAsync(Interval).ConfigureAwait(true);
+        host.Time.Advance(Interval);
+        CliResult result = await run.ConfigureAwait(true);
+
+        Assert.Equal(AuthExitCodes.LoginFailed, result.Code);
+        Assert.DoesNotContain('\u001b', result.Error);
+        Assert.DoesNotContain('\u001b', result.Output);
+        Assert.Equal("odd[2J", result.Json().GetProperty("oauthError").GetString());
+    }
+
+    [Theory]
+    [InlineData(600, "10 minutes")]
+    [InlineData(60, "1 minute")]
+    [InlineData(90, "90 seconds")]
+    [InlineData(20, "20 seconds")]
+    public void TheWaitingLineNamesTheLifetimeWithoutRoundingItAway(int seconds, string expected) =>
+        Assert.Equal(expected, LoginCommand.Lifetime(TimeSpan.FromSeconds(seconds)));
 
     [Fact]
     public async Task Login_Device_SlowDown()
