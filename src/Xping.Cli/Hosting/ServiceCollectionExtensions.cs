@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Discovery;
+using Xping.Cli.Auth.Store;
 using Xping.Cli.Commands;
 using Xping.Cli.Commands.Auth;
 using Xping.Cli.Report;
@@ -66,6 +67,9 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<DiscoveryCache>();
         services.AddSingleton<DiscoveryClient>();
         services.AddSingleton<OAuthClient>();
+        services.AddSingleton<FileCredentialStore>();
+        services.AddSingleton<CredentialStoreSelector>();
+        services.AddSingleton<CredentialResolver>();
 
         services
             .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>

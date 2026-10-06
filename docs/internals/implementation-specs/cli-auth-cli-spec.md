@@ -376,7 +376,8 @@ second line reads "API key (XPING_APIKEY) also set; used only when no login is a
 With `--api-key` given: `Credential  API key (--api-key)` and, when a login exists, "A stored
 login also exists and is not used while --api-key is given." With only a key:
 `Credential  API key (XPING_APIKEY)`. Not logged in and no key: `Credential  none` and "Run
-`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available;
+`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available
+(`CredentialStoreError` when, in addition, a credential store could not be read, §8.1);
 `0` otherwise, including when only an API key is set (the CLI cannot verify a key without a
 network call, and `status` makes none).
 
@@ -676,11 +677,18 @@ internal interface ICredentialStore
 {
     CredentialStoreKind Kind { get; }                        // Keychain, File
     string DisplayName { get; }                              // "macOS Keychain", "Windows Credential Manager", "Secret Service", "~/.xping/credentials.json"
-    Task<CredentialRecord?> ReadAsync(string cloudUrl, CancellationToken ct);
+    Task<CredentialReadResult> ReadAsync(string cloudUrl, CancellationToken ct);
     Task WriteAsync(CredentialRecord record, CancellationToken ct);   // create or replace, atomic per Cloud URL
     Task<bool> DeleteAsync(string cloudUrl, CancellationToken ct);
 }
+
+internal sealed record CredentialReadResult(CredentialRecord? Record, string? Warning);
 ```
+
+A corrupt entry (§7.7) and a refused file (§7.5) both read as "no record" with one `Warning` for
+the user; `auth status` and `report` need that text, so it travels with the result instead of
+being logged. A failure to reach the backend at all (I/O error, access denied) throws
+`CredentialStoreException`; §7.4 says what the callers of a backend do with it.
 
 Entry naming (contract §10.4): service/label `xping-cli`, account/target = the normalized Cloud
 URL. Concretely:
@@ -732,6 +740,17 @@ available) must still be logged in. `logout` deletes from both. `login` writes t
 store and, when that is the keychain, also deletes any file entry for the same Cloud URL so the
 two never disagree.
 
+These rules live in one place: `Select()` returns `CredentialStores`, which holds the selected
+store (`Selected`, with its `DisplayName` and the selector's `FallbackReason`, `null` when the
+keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns the first valid
+record with the store it came from, plus the warnings of every store it visited and the
+`Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
+the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
+clears the file entry when `Selected` is a keychain; a failure is thrown. `DeleteAllAsync` tries
+every store, even after one fails, so `logout` removes whatever it can, and then throws one
+`CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
+a backend directly. Until phase 5 the read order is the file store alone.
+
 ### 7.5 The file backend
 
 Path: `~/.xping/credentials.json`, where `~` is `Environment.GetFolderPath(UserProfile)`. The
@@ -757,6 +776,12 @@ then `File.Move(tmp, path, overwrite: true)`. The file holds every Cloud URL:
 { "schemaVersion": 1, "credentials": { "https://app.xping.io": { ...record... } } }
 ```
 
+Each entry is parsed on its own when it is looked up. A write or delete for one Cloud URL carries
+every other entry over verbatim, a corrupt one included (§7.7: nothing is deleted
+automatically). Read-modify-write is serialized within the process; across processes the last
+move wins, which only matters for two concurrent logins to different Cloud URLs (refresh is
+serialized by §9.4).
+
 **Refusing unsafe files (contract §10.4).** Before reading on Unix, `File.GetUnixFileMode(path)`
 is checked; if any group or other bit is set, the store does not read the file and the command
 prints: "Refusing to read ~/.xping/credentials.json because other users can read it. Run
@@ -764,6 +789,11 @@ prints: "Refusing to read ~/.xping/credentials.json because other users can read
 reports `credential: none` with that warning; `report` degrades to local with the same one-line
 hint; `login` overwrites the file with a correct mode and does not need the check. On Windows the
 mode check is skipped; the ACL is set on write only.
+
+An unsafe file's content is never carried into a safe one: a write on a refused file starts from
+an empty file, so entries for other Cloud URLs are dropped, and a delete removes the file and
+reports that it deleted something (nothing in it is trusted for any Cloud URL). Carrying them over would
+give a `0600` file, and the next read would trust entries that another user could have written.
 
 ### 7.6 Warning the user about the fallback
 
@@ -781,7 +811,11 @@ mode check is skipped; the ACL is set on write only.
 
 - There is nothing to migrate: no credentials exist before this feature.
 - A keychain entry or file record that fails to deserialize, has a `schemaVersion` other than `1`,
-  or lacks `refreshToken` is **corrupt**. The store returns `null` and reports a warning "Stored
+  lacks `refreshToken` or `dataGatewayUri`, or whose `cloudUrl` is missing or differs from the
+  Cloud URL it is stored under, is **corrupt**. A credentials file that does not parse, or whose
+  top-level `schemaVersion` is not `1`, makes every lookup in it corrupt; `login` replaces it, and
+  a delete leaves it untouched and reports nothing deleted (it may hold another Cloud URL's login
+  written by a newer CLI). The store returns `null` and reports a warning "Stored
   credentials for {url} are unreadable and will be replaced at the next `xping login`."
   Nothing is deleted automatically, so a bug in a new CLI version cannot wipe a login; `login`
   overwrites and `logout` deletes.
@@ -796,7 +830,14 @@ mode check is skipped; the ACL is set on write only.
 
 ### 8.1 Precedence
 
-`CredentialResolver.ResolveAsync(cloudUrl)` returns one `ResolvedCredential`:
+`CredentialResolver.ResolveAsync(configuration)` takes the `CliConfiguration` (§14), because it
+needs the API key and where it came from as well as the Cloud URL, and returns one
+`ResolvedCredential`. It makes no request and writes nothing. A corrupt or refused stored login
+counts as "no stored login" and its warning is carried in `ResolvedCredential.Warnings`. A store
+that cannot be read also counts as "no stored login", so `report` still degrades to the next row
+or to local; its message is carried in `ResolvedCredential.StoreFailures`, and `auth status`
+exits `CredentialStoreError` instead of `AuthRequired` when no credential was found and a store
+failed (§3.4).
 
 | Order | Source | `CredentialSource` | Header used |
 |---|---|---|---|
@@ -823,6 +864,10 @@ is Cloud down for all, and a second try only doubles the wait):
 | API key: 403 `Error.ApiKey.InsufficientScope` (upload-only key) or `Error.ApiKey.FeatureNotAvailable` (plan without `ApiAccess`, contract §7.4) | nothing left to try; hint "This API key cannot read Cloud data ({scope or plan}). Sign in with `xping login` instead." |
 | API key: any other 401/403 | nothing left; hint with `title` |
 | Network error, timeout, 5xx, version mismatch | stop; `Cloud data unavailable` hint; no fallback |
+
+The resolver owns *where* to fall back: `ResolvedCredential.FallbackToApiKey()` returns the row-3
+credential (or `None`) for a stored login. The caller owns *when*: only the authenticated pipeline
+(§9) sees the outcome, so the "definitive outcome only" rule is enforced and tested there.
 
 The fallback happens at most once per command, and a rebuilt `HttpClient` pipeline is used for
 the second credential so no header from the first can leak into it. An API key is used as-is; the
@@ -1361,7 +1406,7 @@ by the fake-server tests with the environment providers stubbed.
 | `CredentialRecordTests`, `FileCredentialStoreTests` | round trip, atomic write, mode 0600/0700 (the mode assertions are skipped on Windows through a trait), refusal of group/world-readable file, corrupt record, multi-cloud file |
 | `CredentialStoreSelectorTests` | selection with fake availability probes; read order keychain → file |
 | `WindowsCredentialStoreTests`, `MacOsKeychainStoreTests`, `LibSecretStoreTests` | `Category=CredentialStore` (§17.2); on other OSes they are skipped, not failed |
-| `CredentialResolverTests` | precedence table of §8.1, both fallback rows (no login → key; login invalid → key), no fallback on network error, shadowed-login and fallback-key reporting |
+| `CredentialResolverTests` | precedence table of §8.1, both fallback rows (no login → key; login invalid → key through `FallbackToApiKey`), corrupt or refused login → next row with its warning, shadowed-login and fallback-key reporting. "No fallback on network error" is the pipeline's decision and is tested by `Report_NoFallback_OnNetworkError` (phase 6) |
 | `TokenRefresherTests` | proactive margin, single-flight (N concurrent callers, one refresh), re-read under lock adopts a fresher record, `invalid_grant` with a rotated stored token retries once, `invalid_grant` otherwise deletes and throws, store write failure keeps in-memory tokens |
 | `BearerTokenHandlerTests` | host guard, header set, 401 `invalid_token` → one refresh and retry, second 401 passes through, 403 not retried, no `X-API-Key` |
 | `CloudApiClientTests` | DTO mapping, 404 → null, status-then-title mapping table of §9.7, 429 `Retry-After` |
@@ -1472,7 +1517,7 @@ without a credential.
 |---|---|---|---|
 | 0 | `feat/cli-auth-00-scaffold` | Global options `--cloud-url`, `--api-key`, `--verbose`; `CliConfiguration` (§14) with env and appsettings reading; `AuthExitCodes`; `Redaction`; `Program.Run` test hook and Ctrl+C token; `auth`, `login`, `logout` command shells that print "not implemented" and exit 14; docs rows of §14.3. | Build green; all existing tests green unchanged; `xping --help` lists the new commands; `CloudUrlTests`, `RedactionTests` green. |
 | 1 | `feat/cli-auth-01-discovery-oauth` | `DiscoveryClient` + cache, `OAuthClient` with the §2.4 retries, DTOs, `"xping-oauth"` client; `FakeCloud` with discovery, token, device, revoke. | `DiscoveryClientTests`, `OAuthClientTests` green against `FakeCloud`; every §2.3 failure row has a test. |
-| 2 | `feat/cli-auth-02-file-store` | `CredentialRecord`, `ICredentialStore`, `FileCredentialStore` with modes and atomic write, `CredentialStoreSelector` with the file backend only, `CredentialResolver`. | `FileCredentialStoreTests`, `CredentialResolverTests` green on Linux and macOS locally; the refusal message verified by a test that chmods the file. |
+| 2 | `feat/cli-auth-02-file-store` | `CredentialRecord`, `ICredentialStore`, `FileCredentialStore` with modes and atomic write, `CredentialStoreSelector` and `CredentialStores` (read order) with the file backend only, `CredentialResolver`. | `FileCredentialStoreTests`, `CredentialResolverTests` green on Linux and macOS locally; the refusal message verified by a test that chmods the file. |
 | 3 | `feat/cli-auth-03-loopback-login` | `Pkce`, `LoopbackListener`, pages, `BrowserLauncher`, `HeadlessDetector`, `LoopbackFlow`, `LoginCommand` (loopback only), `AuthStatusCommand`, `LogoutCommand` (§12). | Flow tests `Login_Loopback_*`, `Logout_*`, `AuthStatus_*` green; manual login against production succeeds on the developer machine with the file store. |
 | 4 | `feat/cli-auth-04-device-login` | `DeviceFlow`, `--device`, `--no-browser`, `--workspace`. | `Login_Device_*` green; manual device login over SSH succeeds. |
 | 5 | `feat/cli-auth-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
