@@ -159,15 +159,17 @@ internal sealed class JenkinsPullRequestDetector(
 
     /// <summary>
     /// Parses a Branch Source <c>CHANGE_URL</c>. Owners, names and server URLs match what the GitHub,
-    /// GitLab and Azure Pipelines detectors produce for the same repository.
+    /// GitLab and Azure Pipelines detectors produce for the same repository, except on a GitLab
+    /// instance under a relative URL root (see remarks).
     /// </summary>
     /// <remarks>
     /// The platform is read from the path shape, so any host works: <c>/pull/{n}</c> is GitHub,
     /// <c>/-/merge_requests/{n}</c> is GitLab and <c>/_git/{repo}/pullrequest/{n}</c> is Azure Repos.
     /// Gitea (<c>/pulls/</c>) and Bitbucket (<c>/pull-requests/</c>) match none of them. The server is
     /// taken to be the host alone, except for Azure DevOps Server, whose collection anchors the path. A
-    /// GitLab instance under a relative URL root therefore has that root in the owner; the repository's
-    /// URL still comes out right.
+    /// GitLab instance under a relative URL root therefore has that root in the owner, where GitLab CI
+    /// puts it in the server, so the two report different identities for the same merge request. The
+    /// URL itself has no marker separating the root from the group, so this can't be resolved here.
     /// </remarks>
     internal static ChangeUrl? ParseChangeUrl(string changeUrl)
     {
@@ -196,13 +198,15 @@ internal sealed class JenkinsPullRequestDetector(
 
         // Azure DevOps Server: {server path…}/{collection}/{project}/_git/{repo}/pullrequest/{n}
         int git = Array.FindIndex(segments, s => string.Equals(s, "_git", StringComparison.OrdinalIgnoreCase));
+        // Not returned early on a miss: a GitLab or GitHub path can contain a "_git" segment too.
+        ChangeUrl? azureRepos = null;
         if (git >= 2 && segments.Length == git + 4)
         {
             string collectionUri = serverRoot + "/" + string.Join("/", segments.Take(git - 1));
-            return ParseAzureRepos(AzureDevOpsPullRequestDetector.ParseCollection(collectionUri), segments, git - 1);
+            azureRepos = ParseAzureRepos(AzureDevOpsPullRequestDetector.ParseCollection(collectionUri), segments, git - 1);
         }
 
-        return ParseGitLab(serverRoot, segments) ?? ParseGitHub(serverRoot, segments);
+        return azureRepos ?? ParseGitLab(serverRoot, segments) ?? ParseGitHub(serverRoot, segments);
     }
 
     private static ChangeUrl? ParseGitHub(string serverUrl, string[] segments)

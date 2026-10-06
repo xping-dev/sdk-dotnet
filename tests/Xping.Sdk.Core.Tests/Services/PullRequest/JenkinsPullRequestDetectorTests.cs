@@ -160,6 +160,23 @@ public sealed class JenkinsPullRequestDetectorTests
     }
 
     [Fact]
+    public void Detect_GitLabProjectNamedLikeAnAzureReposSegment_IsStillParsedAsGitLab()
+    {
+        // Arrange — a project named "_git" puts the segment where an Azure DevOps Server URL has it
+        var variables = ValidVariables();
+        variables["CHANGE_URL"] = "https://gitlab.acme.com/a/b/_git/-/merge_requests/17";
+
+        // Act
+        var result = Detect(variables);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(PullRequestPlatform.GitLab, result.Platform);
+        Assert.Equal("a/b", result.RepositoryOwner);
+        Assert.Equal("_git", result.RepositoryName);
+    }
+
+    [Fact]
     public void Detect_AzureProjectNameWithSpaces_IsDecoded()
     {
         // Arrange

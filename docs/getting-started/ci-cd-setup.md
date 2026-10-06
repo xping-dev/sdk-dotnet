@@ -204,7 +204,8 @@ Xping automatically captures:
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` - Branch name
 - `BUILD_REPOSITORY_NAME` - Repository name
-- `BUILD_REPOSITORY_URI` - Its scheme, host and port are normalized into `CI.ServerUrl`
+- `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
+  `CI.ServerUrl`, the same server the PR context records
 - `BUILD_REQUESTEDFOR` - User who triggered the build
 
 On a pull request build, Xping also records the PR context (number, branches, head commit) for

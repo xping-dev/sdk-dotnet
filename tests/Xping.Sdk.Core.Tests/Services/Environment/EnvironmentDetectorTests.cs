@@ -56,7 +56,8 @@ public sealed class EnvironmentDetectorTests
         "GITHUB_SERVER_URL",
         "CI_SERVER_URL",
         "BUILD_REPOSITORY_URI",
-        "BITBUCKET_GIT_HTTP_ORIGIN",
+        "BUILD_REPOSITORY_PROVIDER",
+        "SYSTEM_COLLECTIONURI",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -344,8 +345,6 @@ public sealed class EnvironmentDetectorTests
     [Theory]
     [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SERVER_URL", "https://GHES.acme.com/", "https://ghes.acme.com")]
     [InlineData("GITLAB_CI", "true", "CI_SERVER_URL", "https://gitlab.acme.com:8443/gitlab", "https://gitlab.acme.com:8443/gitlab")]
-    [InlineData("TF_BUILD", "True", "BUILD_REPOSITORY_URI", "https://fabrikam@dev.azure.com/fabrikam/Payments/_git/api", "https://dev.azure.com")]
-    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", "BITBUCKET_GIT_HTTP_ORIGIN", "http://bitbucket.org/acme/api", "http://bitbucket.org")]
     public async Task ServerUrlIsReadFromThePlatformsServerVariable(
         string platformVariable, string platformValue, string serverVariable, string serverValue, string expected)
     {
@@ -358,6 +357,45 @@ public sealed class EnvironmentDetectorTests
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal(expected, info.CustomProperties["CI.ServerUrl"]);
+    }
+
+    // CI.ServerUrl must name the same server as the PR context, which Azure Repos takes from the
+    // collection: the repository URI's host differs for legacy organizations and drops /tfs.
+    [Theory]
+    [InlineData("TfsGit", "https://fabrikam.visualstudio.com/", "https://fabrikam.visualstudio.com/Payments/_git/api", "https://dev.azure.com")]
+    [InlineData("TfsGit", "https://dev.azure.com/fabrikam/", "https://fabrikam@dev.azure.com/fabrikam/Payments/_git/api", "https://dev.azure.com")]
+    [InlineData("TfsGit", "https://tfs.contoso.local/tfs/DefaultCollection/", "https://tfs.contoso.local/tfs/DefaultCollection/Payments/_git/api", "https://tfs.contoso.local/tfs")]
+    [InlineData("GitHubEnterprise", "https://dev.azure.com/fabrikam/", "https://ghes.acme.com/acme/api", "https://ghes.acme.com")]
+    public async Task AzurePipelinesServerUrlMatchesThePullRequestContextsServer(
+        string provider, string collectionValue, string repositoryValue, string expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var azurePipelines = new EnvRestorer("TF_BUILD", "True");
+        using var repositoryProvider = new EnvRestorer("BUILD_REPOSITORY_PROVIDER", provider);
+        using var collection = new EnvRestorer("SYSTEM_COLLECTIONURI", collectionValue);
+        using var repository = new EnvRestorer("BUILD_REPOSITORY_URI", repositoryValue);
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.ServerUrl"]);
+    }
+
+    // Bitbucket Pipelines only runs on bitbucket.org, and its origin variable is http://, so a server
+    // recorded from it would add nothing and disagree with https identities.
+    [Fact]
+    public async Task ServerUrlIsNotRecordedOnBitbucketPipelines()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var bitbucket = new EnvRestorer("BITBUCKET_PIPELINE_UUID", "{uuid}");
+        using var origin = new EnvRestorer("BITBUCKET_GIT_HTTP_ORIGIN", "http://bitbucket.org/acme/api");
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.ServerUrl", info.CustomProperties.Keys);
     }
 
     [Theory]

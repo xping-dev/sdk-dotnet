@@ -482,7 +482,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildId", GetEnvironmentVariable("BUILD_BUILDID"));
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_BUILDNUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BUILD_REPOSITORY_NAME"));
-                    AddServerUrl(properties, ServerRootOf(GetEnvironmentVariable("BUILD_REPOSITORY_URI")));
+                    AddServerUrl(properties, AzurePipelinesServerUrl());
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
@@ -556,7 +556,6 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 case CIPlatform.BitbucketPipelines:
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BITBUCKET_BUILD_NUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BITBUCKET_REPO_FULL_NAME"));
-                    AddServerUrl(properties, ServerRootOf(GetEnvironmentVariable("BITBUCKET_GIT_HTTP_ORIGIN")));
                     AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("BITBUCKET_BRANCH"));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BITBUCKET_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("BITBUCKET_PR_ID"));
@@ -870,8 +869,21 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private static string? ServerUrlOf(string? raw) =>
         PullRequestEnvironment.TryNormalizeServerUrl(raw, out string? serverUrl) ? serverUrl : null;
 
-    private static string? ServerRootOf(string? raw) =>
-        PullRequestEnvironment.TryGetServerRoot(raw, out string? serverUrl) ? serverUrl : null;
+    // Azure Repos takes the server from the collection, as AzureDevOpsPullRequestDetector does: the
+    // repository URI's host alone would give https://fabrikam.visualstudio.com for an organization the
+    // PR context files under https://dev.azure.com, and would drop a Server's virtual directory (/tfs).
+    private static string? AzurePipelinesServerUrl()
+    {
+        if (string.Equals(GetEnvironmentVariable("BUILD_REPOSITORY_PROVIDER"), "TfsGit", StringComparison.OrdinalIgnoreCase))
+        {
+            string? collectionUri = GetEnvironmentVariable("SYSTEM_COLLECTIONURI");
+            return collectionUri is null ? null : AzureDevOpsPullRequestDetector.ParseCollection(collectionUri)?.ServerUrl;
+        }
+
+        return PullRequestEnvironment.TryGetServerRoot(GetEnvironmentVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
+            ? serverUrl
+            : null;
+    }
 
     private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>
         dictionary["CI.IsPullRequest"] = isPullRequest ? "true" : "false";
