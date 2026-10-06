@@ -187,7 +187,24 @@ public sealed class CredentialResolverTests : IDisposable
         ResolvedCredential credential = await ResolveAsync(apiKeyFlag: FlagKey);
 
         Assert.Equal(CredentialSource.ApiKeyFlag, credential.Source);
-        Assert.Contains("credentials.json", Assert.Single(credential.Warnings), StringComparison.Ordinal);
+        Assert.Contains("credentials.json", Assert.Single(credential.StoreFailures), StringComparison.Ordinal);
+        Assert.Empty(credential.Warnings);
+    }
+
+    [Fact]
+    public async Task AStoreThatCannotBeReadIsAFailureNotAWarning()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        // auth status tells "nothing stored" (exit 10) from "store unreadable" (exit 17) by this.
+        Directory.CreateDirectory(_home.CredentialsFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        ResolvedCredential credential = await ResolveAsync();
+
+        Assert.Equal(CredentialSource.None, credential.Source);
+        Assert.Single(credential.StoreFailures);
+        Assert.Empty(credential.Warnings);
     }
 
     [Fact]

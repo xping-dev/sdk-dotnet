@@ -84,7 +84,12 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
 
         lock (_gate)
         {
-            Dictionary<string, JsonElement> entries = LoadForUpdate() ?? new(StringComparer.Ordinal);
+            // Entries of an unsafe file are dropped, not carried over: the rewritten file is
+            // private, and the next read would trust entries another user could have written. A
+            // file that does not parse is replaced (§7.5, §7.7).
+            Snapshot snapshot = Load();
+            Dictionary<string, JsonElement> entries = snapshot.State == FileState.Usable ? snapshot.Entries! : [];
+
             entries[record.CloudUrl] = document.RootElement;
             Save(entries);
         }
@@ -100,54 +105,62 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
 
         lock (_gate)
         {
-            string path = home.CredentialsFile;
-            if (!File.Exists(path))
-                return Task.FromResult(false);
+            Snapshot snapshot = Load();
 
-            // A file this CLI cannot parse, or must not trust, is unusable for every Cloud URL;
-            // signing out removes it.
-            Dictionary<string, JsonElement>? entries = IsUnsafe(path) ? null : LoadForUpdate();
-            if (entries is null)
+            switch (snapshot.State)
             {
-                Delete(path);
-                return Task.FromResult(true);
+                case FileState.Missing:
+                    return Task.FromResult(false);
+
+                // Nothing in it is trusted for any Cloud URL, and the user was told so on every read.
+                case FileState.Unsafe:
+                    Delete(home.CredentialsFile);
+                    return Task.FromResult(true);
+
+                // It may hold another Cloud URL's sign-in written by a newer CLI; only a login
+                // replaces it (§7.7).
+                case FileState.Unparseable:
+                    return Task.FromResult(false);
             }
 
-            bool existed = entries.Remove(cloudUrl);
+            Dictionary<string, JsonElement> entries = snapshot.Entries!;
+            if (!entries.Remove(cloudUrl))
+                return Task.FromResult(false);
+
             if (entries.Count == 0)
-                Delete(path);
-            else if (existed)
+                Delete(home.CredentialsFile);
+            else
                 Save(entries);
 
-            return Task.FromResult(existed);
+            return Task.FromResult(true);
         }
     }
 
-    /// <summary>
-    /// Returns the entries a change starts from: the file's own, or none when the file is missing,
-    /// cannot be parsed, or is readable by others.
-    /// </summary>
-    /// <remarks>
-    /// Entries of an unsafe file are dropped, not carried over: the rewritten file is private, and
-    /// the next read would trust entries another user could have written (§7.5).
-    /// </remarks>
-    private Dictionary<string, JsonElement>? LoadForUpdate()
+    private Snapshot Load()
     {
         string path = home.CredentialsFile;
         if (IsUnsafe(path))
-            return new(StringComparer.Ordinal);
+            return new Snapshot(FileState.Unsafe, null);
 
         byte[]? content;
         try
         {
-            content = File.Exists(path) ? File.ReadAllBytes(path) : null;
+            using FileStream? stream = OpenForRead(path);
+            if (stream is null)
+                return new Snapshot(FileState.Missing, null);
+
+            content = new byte[stream.Length];
+            stream.ReadExactly(content);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new CredentialStoreException($"Could not read {DisplayName}: {ex.Message}", ex);
         }
 
-        return content is null ? new(StringComparer.Ordinal) : Parse(content);
+        Dictionary<string, JsonElement>? entries = Parse(content);
+        return entries is null
+            ? new Snapshot(FileState.Unparseable, null)
+            : new Snapshot(FileState.Usable, entries);
     }
 
     private void Save(Dictionary<string, JsonElement> entries)
@@ -181,15 +194,37 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
     {
         try
         {
-            return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return null;
+            using FileStream? stream = OpenForRead(path);
+            if (stream is null)
+                return null;
+
+            byte[] content = new byte[stream.Length];
+            await stream.ReadExactlyAsync(content, cancellationToken).ConfigureAwait(false);
+            return content;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new CredentialStoreException($"Could not read {DisplayName}: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Opens the file for reading, or returns <see langword="null"/> when it does not exist.
+    /// </summary>
+    /// <remarks>
+    /// Shared for delete as well as write: on Windows, replacing a file that a reader holds open
+    /// without <see cref="FileShare.Delete"/> fails with a sharing violation, and a reader in one
+    /// process must never make a writer in another lose a rotated refresh token.
+    /// </remarks>
+    internal static FileStream? OpenForRead(string path)
+    {
+        try
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
         }
     }
 
@@ -198,9 +233,7 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         try
         {
             CredentialsFileContent? file = serializer.Deserialize<CredentialsFileContent>(content);
-            return file is { SchemaVersion: FileSchemaVersion, Credentials: not null }
-                ? new Dictionary<string, JsonElement>(file.Credentials, StringComparer.Ordinal)
-                : null;
+            return file is { SchemaVersion: FileSchemaVersion, Credentials: not null } ? file.Credentials : null;
         }
         catch (JsonException)
         {
@@ -223,7 +256,7 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         }
     }
 
-    private static bool IsUnsafe(string path)
+    private bool IsUnsafe(string path)
     {
         // Windows has no mode bits; the file gets an owner-only ACL when it is written.
         if (OperatingSystem.IsWindows())
@@ -237,6 +270,11 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         {
             return false;
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A ~/.xping the user cannot search (left root-owned by a `sudo xping login`).
+            throw new CredentialStoreException($"Could not read {DisplayName}: {ex.Message}", ex);
+        }
     }
 
     private string RefusalMessage()
@@ -249,6 +287,16 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
 
     private static string CorruptMessage(string cloudUrl) =>
         $"Stored credentials for {cloudUrl} are unreadable and will be replaced at the next `xping login`.";
+
+    private enum FileState
+    {
+        Missing,
+        Unsafe,
+        Unparseable,
+        Usable
+    }
+
+    private sealed record Snapshot(FileState State, Dictionary<string, JsonElement>? Entries);
 
     private sealed record CredentialsFileContent(int SchemaVersion, Dictionary<string, JsonElement>? Credentials);
 }

@@ -17,7 +17,8 @@ internal sealed record StoredLogin(CredentialRecord Record, ICredentialStore Sto
 /// </summary>
 /// <param name="Login">The first usable sign-in in read order, or <see langword="null"/>.</param>
 /// <param name="Warnings">Why entries that exist could not be used, worded for the user.</param>
-internal sealed record StoredLoginLookup(StoredLogin? Login, IReadOnlyList<string> Warnings);
+/// <param name="Failures">Why stores could not be read at all, worded for the user.</param>
+internal sealed record StoredLoginLookup(StoredLogin? Login, IReadOnlyList<string> Warnings, IReadOnlyList<string> Failures);
 
 /// <summary>
 /// The credential stores of this process: the one sign-ins are written to, and the order they are
@@ -62,23 +63,36 @@ internal sealed class CredentialStores
     /// <summary>
     /// Returns the first usable sign-in for <paramref name="cloudUrl"/>, in read order.
     /// </summary>
-    /// <exception cref="CredentialStoreException">A store could not be read.</exception>
+    /// <remarks>
+    /// A store that cannot be read is recorded in <see cref="StoredLoginLookup.Failures"/> and the
+    /// next one is tried: a locked keychain must not hide a sign-in kept in the file.
+    /// </remarks>
     public async Task<StoredLoginLookup> ReadAsync(string cloudUrl, CancellationToken cancellationToken)
     {
         List<string> warnings = [];
+        List<string> failures = [];
 
         foreach (ICredentialStore store in ReadOrder)
         {
-            CredentialReadResult result = await store.ReadAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
+            CredentialReadResult result;
+            try
+            {
+                result = await store.ReadAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
+            }
+            catch (CredentialStoreException ex)
+            {
+                failures.Add(ex.Message);
+                continue;
+            }
 
             if (result.Warning is not null)
                 warnings.Add(result.Warning);
 
             if (result.Record is not null)
-                return new StoredLoginLookup(new StoredLogin(result.Record, store), warnings);
+                return new StoredLoginLookup(new StoredLogin(result.Record, store), warnings, failures);
         }
 
-        return new StoredLoginLookup(null, warnings);
+        return new StoredLoginLookup(null, warnings, failures);
     }
 
     /// <summary>
@@ -105,15 +119,37 @@ internal sealed class CredentialStores
     /// <summary>
     /// Removes the sign-in for <paramref name="cloudUrl"/> from every store.
     /// </summary>
+    /// <remarks>
+    /// Every store is tried even after one fails, so signing out removes whatever it can.
+    /// </remarks>
     /// <returns>Whether any store had an entry.</returns>
-    /// <exception cref="CredentialStoreException">A store could not be changed.</exception>
+    /// <exception cref="CredentialStoreException">
+    /// One or more stores could not be changed; the others were.
+    /// </exception>
     public async Task<bool> DeleteAllAsync(string cloudUrl, CancellationToken cancellationToken)
     {
         bool deleted = false;
+        List<CredentialStoreException> failures = [];
 
         foreach (ICredentialStore store in ReadOrder)
-            deleted |= await store.DeleteAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
+        {
+            try
+            {
+                deleted |= await store.DeleteAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
+            }
+            catch (CredentialStoreException ex)
+            {
+                failures.Add(ex);
+            }
+        }
 
-        return deleted;
+        return failures switch
+        {
+            [] => deleted,
+            [var only] => throw only,
+            _ => throw new CredentialStoreException(
+                string.Join(" ", failures.Select(f => f.Message)),
+                new AggregateException(failures)),
+        };
     }
 }

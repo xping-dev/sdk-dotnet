@@ -14,10 +14,10 @@ namespace Xping.Cli.Auth.Store;
 /// </remarks>
 internal sealed class CredentialStoreSelector(FileCredentialStore file)
 {
-    private readonly Lazy<CredentialStores> _stores = new(() => new CredentialStores(file, [file], fallbackReason: null));
+    private readonly CredentialStores _stores = new(file, [file], fallbackReason: null);
 
     /// <summary>
     /// Returns the stores of this process.
     /// </summary>
-    public CredentialStores Select() => _stores.Value;
+    public CredentialStores Select() => _stores;
 }

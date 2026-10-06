@@ -43,13 +43,18 @@ internal enum CredentialSource
 /// Whether a sign-in exists but is not used because <c>--api-key</c> was given.
 /// </param>
 /// <param name="Warnings">Why stored entries could not be used, worded for the user.</param>
+/// <param name="StoreFailures">
+/// Why credential stores could not be read at all; <c>auth status</c> exits
+/// <see cref="AuthExitCodes.CredentialStoreError"/> on them when nothing else is available (§8.1).
+/// </param>
 internal sealed record ResolvedCredential(
     CredentialSource Source,
     ConfiguredValue? ApiKey,
     StoredLogin? Login,
     ConfiguredValue? FallbackApiKey,
     bool ShadowedLogin,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string> StoreFailures)
 {
     /// <summary>
     /// Returns the credential to use once this sign-in has been found invalid: the ambient key, or
@@ -66,8 +71,8 @@ internal sealed record ResolvedCredential(
             throw new InvalidOperationException("Only a stored sign-in falls back to an API key.");
 
         return FallbackApiKey is null
-            ? new ResolvedCredential(CredentialSource.None, null, null, null, ShadowedLogin: false, Warnings)
-            : CredentialResolver.FromApiKey(FallbackApiKey, shadowedLogin: false, Warnings);
+            ? new ResolvedCredential(CredentialSource.None, null, null, null, ShadowedLogin: false, Warnings, StoreFailures)
+            : CredentialResolver.FromApiKey(FallbackApiKey, shadowedLogin: false, Warnings, StoreFailures);
     }
 
     // The key itself must not reach a log line through the generated ToString.
@@ -92,8 +97,8 @@ internal sealed class CredentialResolver(CredentialStoreSelector selector)
     /// </summary>
     /// <remarks>
     /// A store that cannot be read counts as no sign-in, with its reason in
-    /// <see cref="ResolvedCredential.Warnings"/>: a broken keychain must not stop a command that
-    /// has an API key, or one that only wanted to report locally.
+    /// <see cref="ResolvedCredential.StoreFailures"/>: a broken keychain must not stop a command
+    /// that has an API key, or one that only wanted to report locally.
     /// </remarks>
     public async Task<ResolvedCredential> ResolveAsync(CliConfiguration configuration, CancellationToken cancellationToken)
     {
@@ -102,28 +107,23 @@ internal sealed class CredentialResolver(CredentialStoreSelector selector)
         ConfiguredValue? apiKey = configuration.ApiKey;
         Redaction.AddSecret(apiKey?.Value);
 
-        StoredLoginLookup lookup;
-        try
-        {
-            lookup = await selector.Select().ReadAsync(configuration.CloudUrl.Value, cancellationToken).ConfigureAwait(false);
-        }
-        catch (CredentialStoreException ex)
-        {
-            lookup = new StoredLoginLookup(null, [ex.Message]);
-        }
+        StoredLoginLookup lookup = await selector.Select()
+            .ReadAsync(configuration.CloudUrl.Value, cancellationToken)
+            .ConfigureAwait(false);
 
         if (apiKey is { Source: ConfigurationSource.Flag })
-            return FromApiKey(apiKey, shadowedLogin: lookup.Login is not null, lookup.Warnings);
+            return FromApiKey(apiKey, shadowedLogin: lookup.Login is not null, lookup.Warnings, lookup.Failures);
 
         if (lookup.Login is { } login)
-            return new ResolvedCredential(CredentialSource.StoredLogin, null, login, apiKey, ShadowedLogin: false, lookup.Warnings);
+            return new ResolvedCredential(CredentialSource.StoredLogin, null, login, apiKey, ShadowedLogin: false, lookup.Warnings, lookup.Failures);
 
         return apiKey is null
-            ? new ResolvedCredential(CredentialSource.None, null, null, null, ShadowedLogin: false, lookup.Warnings)
-            : FromApiKey(apiKey, shadowedLogin: false, lookup.Warnings);
+            ? new ResolvedCredential(CredentialSource.None, null, null, null, ShadowedLogin: false, lookup.Warnings, lookup.Failures)
+            : FromApiKey(apiKey, shadowedLogin: false, lookup.Warnings, lookup.Failures);
     }
 
-    internal static ResolvedCredential FromApiKey(ConfiguredValue apiKey, bool shadowedLogin, IReadOnlyList<string> warnings)
+    internal static ResolvedCredential FromApiKey(
+        ConfiguredValue apiKey, bool shadowedLogin, IReadOnlyList<string> warnings, IReadOnlyList<string> storeFailures)
     {
         CredentialSource source = apiKey.Source switch
         {
@@ -133,6 +133,6 @@ internal sealed class CredentialResolver(CredentialStoreSelector selector)
             _ => throw new UnreachableException($"An API key has no {apiKey.Source} source."),
         };
 
-        return new ResolvedCredential(source, apiKey, null, null, shadowedLogin, warnings);
+        return new ResolvedCredential(source, apiKey, null, null, shadowedLogin, warnings, storeFailures);
     }
 }

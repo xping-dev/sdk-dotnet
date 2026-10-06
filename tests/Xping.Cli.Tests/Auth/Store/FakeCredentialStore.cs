@@ -44,6 +44,9 @@ internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displ
 
     public Task<bool> DeleteAsync(string cloudUrl, CancellationToken cancellationToken)
     {
+        if (Fails)
+            throw new CredentialStoreException($"Could not delete from {DisplayName}.");
+
         Deleted.Add(cloudUrl);
         return Task.FromResult(_records.Remove(cloudUrl));
     }

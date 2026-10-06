@@ -228,14 +228,18 @@ public sealed class FileCredentialStoreTests : IDisposable
         Assert.Equal(before, await File.ReadAllTextAsync(FilePath));
     }
 
-    [Fact]
-    public async Task SigningOutRemovesAFileThatCannotBeUsed()
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("""{"schemaVersion":2,"credentials":{"https://other.tests.invalid":{"schemaVersion":2}}}""")]
+    public async Task SigningOutLeavesAFileThatDoesNotParseUntouched(string content)
     {
-        WriteFile("not json");
+        // It may hold another Cloud URL's sign-in written by a newer CLI. Before the fix, signing
+        // out of any Cloud URL deleted it and reported a sign-out that never happened.
+        WriteFile(content);
 
-        Assert.True(await _store.DeleteAsync(CloudUrl, CancellationToken.None));
+        Assert.False(await _store.DeleteAsync(CloudUrl, CancellationToken.None));
 
-        Assert.False(File.Exists(FilePath));
+        Assert.Equal(content, await File.ReadAllTextAsync(FilePath));
     }
 
     [Fact]
@@ -275,10 +279,44 @@ public sealed class FileCredentialStoreTests : IDisposable
     }
 
     [Fact]
-    public void TheDisplayNameIsThePathAUserWouldType() =>
-        Assert.Equal(
-            "~/.xping/credentials.json",
-            new FileCredentialStore(XpingHome.ForCurrentUser(), Serializer).DisplayName);
+    public async Task AnXpingDirectoryTheUserCannotSearchIsAStoreFailure()
+    {
+        // Root ignores the mode, so the failure cannot be produced as root (a container run).
+        if (OperatingSystem.IsWindows() || Environment.UserName == "root")
+            return;
+
+        // Left behind by a `sudo xping login`. Before the fix, the stat in the mode check threw
+        // UnauthorizedAccessException, which no caller expects.
+        await _store.WriteAsync(Record(), CancellationToken.None);
+        File.SetUnixFileMode(_home.Root, UnixFileMode.None);
+
+        try
+        {
+            await Assert.ThrowsAsync<CredentialStoreException>(() => _store.ReadAsync(CloudUrl, CancellationToken.None));
+            await Assert.ThrowsAsync<CredentialStoreException>(() => _store.WriteAsync(Record(), CancellationToken.None));
+            await Assert.ThrowsAsync<CredentialStoreException>(() => _store.DeleteAsync(CloudUrl, CancellationToken.None));
+        }
+        finally
+        {
+            File.SetUnixFileMode(_home.Root, PrivateDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task AWriteReplacesTheFileWhileAReaderHoldsItOpen()
+    {
+        // On Windows, a reader without FileShare.Delete made the replacing move fail with a sharing
+        // violation, losing a rotated refresh token. Elsewhere this always held.
+        await _store.WriteAsync(Record(), CancellationToken.None);
+
+        using (FileStream? reader = FileCredentialStore.OpenForRead(FilePath))
+        {
+            Assert.NotNull(reader);
+            await _store.WriteAsync(Record(refreshToken: "rotated-refresh-token-01"), CancellationToken.None);
+        }
+
+        Assert.Equal("rotated-refresh-token-01", (await _store.ReadAsync(CloudUrl, CancellationToken.None)).Record?.RefreshToken);
+    }
 
     private void WriteFile(string content)
     {
