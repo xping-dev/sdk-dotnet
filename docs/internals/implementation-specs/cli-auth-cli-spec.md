@@ -1230,9 +1230,16 @@ The existing local store (`<repo>/.xping/`) is unrelated and unchanged.
 `--verbose` line. It replaces:
 
 - The value of `Authorization` and `X-API-Key` headers when they appear as `Name: value`.
-- Form fields `code=`, `refresh_token=`, `device_code=`, `code_verifier=`, `token=`, `state=`
-  up to the next `&` or whitespace.
-- Any string that looks like a JWT (`[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`).
+- Form fields `code=`, `refresh_token=`, `access_token=`, `id_token=`, `device_code=`,
+  `code_verifier=`, `client_secret=`, `token=`, `state=` up to the next `&` or whitespace.
+- The same names, and their camelCase forms (`refreshToken`, `accessToken`, …, as in the stored
+  record of §7.2), as JSON members: the string value of `"name": "value"`. A token response body
+  is the likeliest place for an opaque, non-JWT token to reach a message.
+- Any string that looks like a JWT (`eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+`).
+  Both the header and the payload are Base64URL JSON objects, so both start `eyJ`. A looser
+  pattern (three dot-separated runs of 10+ characters) also matches .NET type names such as
+  `Microsoft.Extensions.Configuration.FileConfigurationProvider` and would mangle the stack traces
+  `--verbose` prints.
 - The current refresh token, access token and API key values themselves, when known to the
   process (exact substring match).
 
@@ -1455,7 +1462,7 @@ without a credential.
 | 5 | `feat/cli-auth-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
 | 6 | `feat/cli-auth-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green. |
 | 7 | `feat/cli-auth-07-report-enrichment` | SDK pin stamp (§11.2 step 3), `ProjectResolver` + cache, `--project`, `CloudEnricher`, envelope `1.22`, the three renderer slots, amendments to the three report specs, `context.cloud`. Depends on the DataGateway `displayName`/`slug` change for step 4; steps 1–3 work without it. | Goldens unchanged; `Report_Enriched`, `Report_CloudDown`, `Report_ApiKey_Precedence`, `Report_NoCredential_NoNetwork` green; `ReportEnvelopeTests` updated for `1.22`. |
-| 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR. | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
+| 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR; remove `feat/cli-auth` from the `pull_request` branches in `.github/workflows/ci.yml` (added in phase 0 so the phase PRs run CI). | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
 
 Each PR names the contract sections it implements and the tests that prove them. A phase that
 finds a contract or spec conflict stops and reports.
