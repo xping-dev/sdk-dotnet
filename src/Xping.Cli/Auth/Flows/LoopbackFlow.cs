@@ -205,7 +205,9 @@ internal sealed class LoopbackFlow(
                 or OAuthProtocol.UnsupportedGrantType or OAuthProtocol.InvalidScope => (
                 AuthExitCodes.LoginFailed,
                 AuthErrorCodes.OAuthError,
-                $"Xping Cloud rejected the request ({error.Error}): {description}. This is a CLI or server bug; please report it."),
+                description.Length > 0
+                    ? $"Xping Cloud rejected the request ({error.Error}): {description}. This is a CLI or server bug; please report it."
+                    : $"Xping Cloud rejected the request ({error.Error}). This is a CLI or server bug; please report it."),
 
             _ => (
                 AuthExitCodes.LoginFailed,

@@ -46,6 +46,12 @@ internal sealed class CliFlowHost : IAsyncDisposable
 
     public bool IsTerminal { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets whether <c>--cloud-url</c> is added to every command line; off for tests about
+    /// the other sources of the Cloud URL.
+    /// </summary>
+    public bool PassCloudUrl { get; set; } = true;
+
     public string CredentialsFile => Path.Combine(HomeDirectory, "credentials.json");
 
     /// <summary>
@@ -59,7 +65,7 @@ internal sealed class CliFlowHost : IAsyncDisposable
         using var error = new StringWriter();
 
         int code = Program.Run(
-            [.. args, "--cloud-url", Cloud.CloudUrl],
+            PassCloudUrl ? [.. args, "--cloud-url", Cloud.CloudUrl] : args,
             output,
             error,
             input: null,

@@ -87,15 +87,6 @@ public sealed class BrowserLauncherTests
     }
 
     [Fact]
-    public void AHeadlessEnvironmentLaunchesNothing()
-    {
-        var process = new FakeProcess("xdg-open");
-
-        Assert.False(Launch(HostOs.Linux, process, BrowserEnvironment.Headless("SSH session")));
-        Assert.Empty(process.Runs);
-    }
-
-    [Fact]
     public void ALauncherThatFailsReportsNotOpened()
     {
         var process = new FakeProcess { Succeeds = false };

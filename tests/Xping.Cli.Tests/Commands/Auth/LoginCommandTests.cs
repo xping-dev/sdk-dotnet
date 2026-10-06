@@ -429,6 +429,45 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(second.RefreshToken, host.StoredRecord()!.RefreshToken);
     }
 
+    [Fact]
+    public void AServerMessageIsScrubbedBeforeItIsShown()
+    {
+        CliFlowHost host = _host;
+        host.Cloud.Fail("/connect/token", 1, HttpStatusCode.BadRequest, "invalid_request", "bad form code_verifier=SECRETVALUE&x=1");
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.Equal(AuthExitCodes.LoginFailed, result.Code);
+        Assert.Contains("code_verifier=[redacted]", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("SECRETVALUE", result.Error + result.Output, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", result.Json().GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARejectedRequestWithoutADescriptionReadsCleanly()
+    {
+        CliFlowHost host = _host;
+        host.Cloud.Fail("/connect/token", 1, HttpStatusCode.BadRequest, "invalid_request", string.Empty);
+
+        CliResult result = host.Run("login");
+
+        Assert.Contains("Xping Cloud rejected the request (invalid_request). This is a CLI or server bug", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheFailureDocumentNamesTheConfiguredCloudUrl()
+    {
+        CliFlowHost host = _host;
+        host.PassCloudUrl = false;
+        host.Environment["XPING_CLOUDURL"] = host.Cloud.CloudUrl;
+        host.Environment["CI"] = "true";
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.Equal(AuthExitCodes.InteractiveRequired, result.Code);
+        Assert.Equal(host.Cloud.CloudUrl, result.Json().GetProperty("cloudUrl").GetString());
+    }
+
     private static void AssertNoSignInStarted(CliFlowHost host)
     {
         Assert.Empty(host.Cloud.RequestsTo("/connect/authorize"));

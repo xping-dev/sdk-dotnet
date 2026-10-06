@@ -83,7 +83,8 @@ public sealed class LogoutCommandTests : IAsyncLifetime, IAsyncDisposable
         CliResult result = _host.Run("logout");
 
         Assert.Equal(0, result.Code);
-        Assert.Contains("(invalid_client)", result.Error, StringComparison.Ordinal);
+        Assert.Contains($"Xping Cloud at {_host.Cloud.CloudUrl} refused to revoke the session (invalid_client).", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("Could not reach", result.Error, StringComparison.Ordinal);
         Assert.Null(_host.StoredRecord());
     }
 

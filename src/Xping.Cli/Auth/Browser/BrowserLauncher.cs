@@ -35,7 +35,7 @@ internal interface ILauncherProcess
 
     /// <summary>
     /// Runs <paramref name="fileName"/> with <paramref name="arguments"/>, each passed as one argument
-    /// and never through a shell.
+    /// and never as part of a command line a shell parses. Its output goes nowhere.
     /// </summary>
     /// <returns>
     /// <see langword="false"/> when it could not start or exited non-zero within
@@ -72,9 +72,6 @@ internal sealed class BrowserLauncher(ILauncherProcess process, HostOs os, ILogg
     {
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(environment);
-
-        if (environment.IsHeadless)
-            return false;
 
         string link = url.AbsoluteUri;
 
@@ -154,14 +151,9 @@ internal sealed class LauncherProcess : ILauncherProcess
 
     public bool TryRun(string fileName, IReadOnlyList<string> arguments, TimeSpan wait)
     {
-        var startInfo = new ProcessStartInfo(fileName)
-        {
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
+        ProcessStartInfo startInfo = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo(fileName) { UseShellExecute = false, CreateNoWindow = true }
+            : DetachedFromTheTerminal(fileName);
 
         foreach (string argument in arguments)
             startInfo.ArgumentList.Add(argument);
@@ -172,14 +164,6 @@ internal sealed class LauncherProcess : ILauncherProcess
             if (started is null)
                 return false;
 
-            // Read and dropped, so a chatty launcher cannot fill a pipe and block, and nothing it
-            // prints reaches the user's terminal.
-            started.OutputDataReceived += static (_, _) => { };
-            started.ErrorDataReceived += static (_, _) => { };
-            started.BeginOutputReadLine();
-            started.BeginErrorReadLine();
-            started.StandardInput.Close();
-
             // Still running after the wait counts as opened: xdg-open can stay alive as long as the
             // browser it started.
             return !started.WaitForExit(wait) || started.ExitCode == 0;
@@ -188,6 +172,26 @@ internal sealed class LauncherProcess : ILauncherProcess
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="fileName"/> through a fixed <c>sh</c> script that points its standard
+    /// streams at <c>/dev/null</c>.
+    /// </summary>
+    /// <remarks>
+    /// The launcher often starts the browser itself, which inherits its streams. Pipes owned by the
+    /// CLI would close when the CLI exits and fail the browser's next write; the CLI's own streams
+    /// would let the browser write into a <c>--json</c> document on stdout. <c>.NET</c> cannot hand a
+    /// child <c>/dev/null</c> directly, so <c>sh</c> does it. The script is a constant: the launcher
+    /// and the URL arrive as <c>$0</c> and <c>$@</c>, never as script text.
+    /// </remarks>
+    private static ProcessStartInfo DetachedFromTheTerminal(string fileName)
+    {
+        var startInfo = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add("exec \"$0\" \"$@\" </dev/null >/dev/null 2>&1");
+        startInfo.ArgumentList.Add(fileName);
+        return startInfo;
     }
 
     public bool TryShellOpen(string url)

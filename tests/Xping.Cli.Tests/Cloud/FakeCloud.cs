@@ -101,12 +101,13 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     /// <param name="count">How many requests in a row.</param>
     /// <param name="status">The status to answer with.</param>
     /// <param name="error">The OAuth <c>error</c>, or <see langword="null"/> for a body that is not JSON.</param>
-    public void Fail(string path, int count, HttpStatusCode status, string? error)
+    /// <param name="description">The <c>error_description</c>.</param>
+    public void Fail(string path, int count, HttpStatusCode status, string? error, string description = "Injected fault.")
     {
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, status, error, Drop: false));
+                _faults.Enqueue(new Fault(path, status, error, Drop: false, description));
         }
     }
 
@@ -119,7 +120,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, 0, null, Drop: true));
+                _faults.Enqueue(new Fault(path, 0, null, Drop: true, string.Empty));
         }
     }
 
@@ -271,7 +272,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         }
 
         Reply reply = fault is not null
-            ? new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, "Injected fault."))
+            ? new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, fault.Description))
             : Route(request.HttpMethod, path, form, request.QueryString);
 
         context.Response.StatusCode = reply.Status;
@@ -560,7 +561,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
     private sealed record Reply(int Status, string Body, string? Location = null);
 
-    private sealed record Fault(string Path, HttpStatusCode Status, string? Error, bool Drop);
+    private sealed record Fault(string Path, HttpStatusCode Status, string? Error, bool Drop, string Description);
 
     private sealed record AuthorizationCode(string RedirectUri, string CodeChallenge, DateTimeOffset ExpiresAt);
 

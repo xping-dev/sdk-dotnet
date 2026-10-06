@@ -21,10 +21,8 @@ namespace Xping.Cli.Commands.Auth;
 /// only: it never refreshes, never verifies a key, and never makes a request.
 /// </remarks>
 internal sealed class AuthStatusCommand(
-    ConsoleIO io,
+    AuthCommandRunner runner,
     GlobalOptions options,
-    CliConfigurationLoader configurationLoader,
-    IEnvironmentVariableProvider environment,
     XpingHome home,
     CredentialStoreSelector selector,
     CredentialResolver resolver,
@@ -32,37 +30,26 @@ internal sealed class AuthStatusCommand(
 {
     private const int LabelWidth = 14;
 
-    public async Task<int> RunAsync(bool json, CancellationToken cancellationToken)
+    public Task<int> RunAsync(bool json, CancellationToken cancellationToken) =>
+        runner.RunAsync(json, (session, configuration) => ReportAsync(session, configuration, cancellationToken), cancellationToken);
+
+    private async Task<int> ReportAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        CliConfiguration configuration;
-        try
-        {
-            configuration = configurationLoader.Load();
-        }
-        catch (CliConfigurationException ex)
-        {
-            await io.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
-            return 2;
-        }
-
-        string cloudUrl = configuration.CloudUrl.Value;
+        string cloudUrl = session.CloudUrl;
         CredentialStores stores = selector.Select();
         ResolvedCredential credential = await resolver.ResolveAsync(configuration, cancellationToken).ConfigureAwait(false);
 
-        List<string> warnings = [.. credential.Warnings, .. credential.StoreFailures];
+        // Store messages can quote an exception from the file system; scrubbed like every message.
+        List<string> warnings = [.. credential.Warnings.Concat(credential.StoreFailures).Select(w => Redaction.Scrub(w))];
         if (stores.FallbackReason is { } fallback)
             warnings.Add($"No OS credential store is available ({fallback}); sign-ins are kept in {stores.Selected.DisplayName}.");
 
-        var text = new AuthText(io, environment);
-        WriteText(text, cloudUrl, credential, warnings);
+        WriteText(session.Text, cloudUrl, credential, warnings);
 
         if (options.Verbose)
-            WritePaths(text, cloudUrl);
+            WritePaths(session.Text, cloudUrl);
 
-        if (json)
-            AuthJson.Write(io.Output, Document(cloudUrl, credential, warnings));
+        session.Write(Document(cloudUrl, credential, warnings));
 
         if (credential.Source != CredentialSource.None)
             return AuthExitCodes.Success;

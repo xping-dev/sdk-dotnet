@@ -101,7 +101,7 @@ internal sealed class LoopbackListener : IAsyncDisposable
 
         throw new AuthFailureException(
             AuthExitCodes.LoginFailed,
-            AuthErrorCodes.OAuthError,
+            AuthErrorCodes.LocalListener,
             "Could not open a local port for the browser to return to. Run `xping login --device` instead.");
     }
 
@@ -133,7 +133,7 @@ internal sealed class LoopbackListener : IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 throw new AuthFailureException(
                     AuthExitCodes.LoginFailed,
-                    AuthErrorCodes.OAuthError,
+                    AuthErrorCodes.LocalListener,
                     "The local port the browser returns to closed unexpectedly. Run `xping login` again.",
                     ex);
             }

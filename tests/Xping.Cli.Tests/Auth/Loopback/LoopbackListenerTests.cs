@@ -220,6 +220,7 @@ public sealed class LoopbackListenerTests : IAsyncLifetime, IAsyncDisposable
             _ => throw new SocketException((int)SocketError.AddressFamilyNotSupported)));
 
         Assert.Equal(AuthExitCodes.LoginFailed, failure.ExitCode);
+        Assert.Equal(AuthErrorCodes.LocalListener, failure.ErrorCode);
         Assert.Contains("xping login --device", failure.Message, StringComparison.Ordinal);
     }
 

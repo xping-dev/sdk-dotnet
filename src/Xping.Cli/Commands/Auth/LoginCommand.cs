@@ -25,102 +25,71 @@ namespace Xping.Cli.Commands.Auth;
 /// </remarks>
 internal sealed class LoginCommand(
     ConsoleIO io,
-    GlobalOptions options,
-    CliConfigurationLoader configurationLoader,
+    AuthCommandRunner runner,
     IEnvironmentVariableProvider environment,
     XpingHome home,
     CredentialStoreSelector selector,
     LoopbackFlow loopback,
     ILogger<LoginCommand> logger)
 {
-    public async Task<int> RunAsync(bool json, CancellationToken cancellationToken)
+    public Task<int> RunAsync(bool json, CancellationToken cancellationToken) =>
+        runner.RunAsync(json, (session, configuration) => SignInAsync(session, configuration, cancellationToken), cancellationToken);
+
+    private async Task<int> SignInAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
     {
-        var text = new AuthText(io, environment);
-        string cloudUrl = options.CloudUrl ?? CloudUrl.Default;
+        // Before anything touches the network or the disk: a coding agent or a CI job that reaches
+        // this command must learn at once that it cannot sign in, not after a browser opened.
+        if (!io.IsInputTerminal || !io.IsErrorTerminal || IsTruthy(environment.GetVariable("CI")))
+        {
+            throw new AuthFailureException(
+                AuthExitCodes.InteractiveRequired,
+                AuthErrorCodes.InteractiveRequired,
+                "xping login needs an interactive terminal. Run it in your own shell. Coding agents and " +
+                "CI must use an API key or a login stored earlier; see `xping auth status`.");
+        }
+
+        string cloudUrl = session.CloudUrl;
+        CredentialStores stores = selector.Select();
+        EnsureStoreAvailable(stores);
+
+        if (configuration.ApiKey is { } apiKey)
+            logger.LogInformation("An API key is also set ({Origin}); it is used only when no sign-in is available", apiKey.Origin);
+
+        CredentialRecord record = await loopback.RunAsync(
+            cloudUrl,
+            (url, browser, timeout) => ShowLink(session.Text, cloudUrl, url, browser, timeout),
+            cancellationToken).ConfigureAwait(false);
+
+        // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Before anything touches the network or the disk: a coding agent or a CI job that reaches
-            // this command must learn at once that it cannot sign in, not after a browser opened.
-            if (!io.IsInputTerminal || !io.IsErrorTerminal || IsTruthy(environment.GetVariable("CI")))
-            {
-                throw new AuthFailureException(
-                    AuthExitCodes.InteractiveRequired,
-                    AuthErrorCodes.InteractiveRequired,
-                    "xping login needs an interactive terminal. Run it in your own shell. Coding agents and " +
-                    "CI must use an API key or a login stored earlier; see `xping auth status`.");
-            }
-
-            CliConfiguration configuration;
-            try
-            {
-                configuration = configurationLoader.Load();
-            }
-            catch (CliConfigurationException ex)
-            {
-                await io.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
-                return 2;
-            }
-
-            cloudUrl = configuration.CloudUrl.Value;
-            CredentialStores stores = selector.Select();
-            EnsureStoreAvailable(stores);
-
-            if (configuration.ApiKey is { } apiKey)
-                logger.LogInformation("An API key is also set ({Origin}); it is used only when no sign-in is available", apiKey.Origin);
-
-            CredentialRecord record = await loopback.RunAsync(
-                cloudUrl,
-                (url, browser, timeout) => ShowLink(text, cloudUrl, url, browser, timeout),
-                cancellationToken).ConfigureAwait(false);
-
-            // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (CredentialStoreException ex)
-            {
-                throw new AuthFailureException(
-                    AuthExitCodes.CredentialStoreError,
-                    AuthErrorCodes.CredentialStore,
-                    $"Signed in, but the sign-in could not be stored: {ex.Message}",
-                    ex);
-            }
-
-            text.SignedIn(record, stores.Selected);
-
-            if (json)
-            {
-                AuthJson.Write(io.Output, new LoginSucceededDocument(
-                    AuthJson.SchemaVersion,
-                    "signed-in",
-                    cloudUrl,
-                    "loopback",
-                    record.Email,
-                    record.Sub,
-                    record.WorkspaceId,
-                    record.Sid,
-                    AuthJson.StoreName(stores.Selected.Kind),
-                    AuthJson.Timestamp(record.AccessTokenExpiresAt)));
-            }
-
-            return AuthExitCodes.Success;
+            await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (AuthFailureException ex)
+        catch (CredentialStoreException ex)
         {
-            Fail(text, json, cloudUrl, ex.ErrorCode, ex.Message, ex.OAuthErrorCode);
-            return ex.ExitCode;
+            throw new AuthFailureException(
+                AuthExitCodes.CredentialStoreError,
+                AuthErrorCodes.CredentialStore,
+                $"Signed in, but the sign-in could not be stored: {ex.Message}",
+                ex);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            Fail(text, json, cloudUrl, AuthErrorCodes.Cancelled, "Cancelled.", oauthError: null);
-            return AuthExitCodes.Cancelled;
-        }
+
+        session.Text.SignedIn(record, stores.Selected);
+        session.Write(new LoginSucceededDocument(
+            AuthJson.SchemaVersion,
+            "signed-in",
+            cloudUrl,
+            "loopback",
+            record.Email,
+            record.Sub,
+            record.WorkspaceId,
+            record.Sid,
+            AuthJson.StoreName(stores.Selected.Kind),
+            AuthJson.Timestamp(record.AccessTokenExpiresAt)));
+
+        return AuthExitCodes.Success;
     }
 
     /// <summary>
@@ -175,16 +144,5 @@ internal sealed class LoginCommand(
         text.Line(string.Create(
             CultureInfo.InvariantCulture,
             $"Waiting for you to finish in the browser (up to {timeout.TotalMinutes:0} minutes)..."));
-    }
-
-    private void Fail(AuthText text, bool json, string cloudUrl, string error, string message, string? oauthError)
-    {
-        text.Line(message);
-
-        if (json)
-        {
-            AuthJson.Write(io.Output, new AuthFailedDocument(
-                AuthJson.SchemaVersion, "failed", cloudUrl, error, message, oauthError));
-        }
     }
 }

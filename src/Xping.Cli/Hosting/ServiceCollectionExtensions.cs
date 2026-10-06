@@ -78,6 +78,7 @@ internal static class ServiceCollectionExtensions
 
         services.TryAddSingleton<IEnvironmentVariableProvider, ProcessEnvironment>();
         services.AddSingleton<CliConfigurationLoader>();
+        services.AddTransient<AuthCommandRunner>();
         services.AddSingleton<ILauncherProcess, LauncherProcess>();
         services.AddSingleton<IBrowserLauncher>(provider => new BrowserLauncher(
             provider.GetRequiredService<ILauncherProcess>(),
