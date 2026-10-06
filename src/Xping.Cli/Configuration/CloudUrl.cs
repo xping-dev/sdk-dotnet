@@ -5,6 +5,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Xping.Cli.Configuration;
 
@@ -89,6 +91,22 @@ internal static class CloudUrl
         normalized = Origin(uri);
         error = null;
         return true;
+    }
+
+    /// <summary>
+    /// Returns the file-name-safe key of a normalized Cloud URL: the first 16 hex digits of its
+    /// SHA-256.
+    /// </summary>
+    /// <remarks>
+    /// A URL holds characters no file system accepts (<c>:</c> on Windows), and a hash keeps the
+    /// names of the caches under <c>~/.xping</c> the same length for every server.
+    /// </remarks>
+    /// <param name="normalized">A value returned by <see cref="TryNormalize"/>.</param>
+    /// <returns>Sixteen lowercase hex digits.</returns>
+    public static string StorageKey(string normalized)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        return Convert.ToHexStringLower(hash, 0, 8);
     }
 
     // Uri already lowercases scheme and host and keeps the brackets of an IPv6 host.

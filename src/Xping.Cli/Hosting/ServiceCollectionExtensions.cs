@@ -3,13 +3,19 @@
  * License: [MIT]
  */
 
+using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xping.Cli.Auth;
+using Xping.Cli.Auth.Discovery;
 using Xping.Cli.Commands;
 using Xping.Cli.Commands.Auth;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Services;
+using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Hosting;
 
@@ -44,14 +50,38 @@ internal static class ServiceCollectionExtensions
     /// Registers <c>login</c>, <c>logout</c> and <c>auth status</c>, and the services behind them.
     /// </summary>
     /// <remarks>
-    /// The OAuth and Cloud HTTP clients, the credential stores and the token refresher register here
-    /// as they are built (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
+    /// The Cloud HTTP client, the credential stores and the token refresher register here as they
+    /// are built (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
     /// </remarks>
     private static IServiceCollection AddXpingCliAuth(this IServiceCollection services)
     {
         services.AddTransient<LoginCommand>();
         services.AddTransient<LogoutCommand>();
         services.AddTransient<AuthStatusCommand>();
+
+        services.AddXpingSerialization();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(new CliVersion(XpingVersion.Current));
+        services.AddSingleton(_ => XpingHome.ForCurrentUser());
+        services.AddSingleton<DiscoveryCache>();
+        services.AddSingleton<DiscoveryClient>();
+        services.AddSingleton<OAuthClient>();
+
+        services
+            .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>
+            {
+                client.Timeout = AuthHttpClients.OAuthTimeout;
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(provider.GetRequiredService<CliVersion>().UserAgent);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            })
+
+            // A redirect on the back channel is never followed (contract §10.2), and no cookie the
+            // Portal sets for its browser session belongs in a CLI request.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+
+            // The factory's logging handlers write full URLs and headers. They would be silenced by
+            // the verbose logger's category filter anyway; removing them means no filter has to hold.
+            .RemoveAllLoggers();
 
         return services;
     }

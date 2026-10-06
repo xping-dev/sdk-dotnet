@@ -2,7 +2,7 @@
 
 **Status:** Draft for review, written 2026-09-29 from the CLI P0 inventory of the same day.
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`, plus one small change in `src/Xping.Sdk.Core` (§11.2) and the CLI test projects.
-**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
+**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29) and re-read at `60a64fc4329b1d5f00766ba7bd53436f32a55dbe` (2026-10-03) for contract OQ-17 to OQ-20 (§20). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
 **Reference only:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-cloud-spec.md`, same commit. Written as "Cloud spec §n". It is not authoritative for the CLI; where it and the contract disagree, the contract wins.
 **Depends on:** `cli-report-format-spec.md` §8, `cli-latest-run-spec.md` §8, `cli-finding-detail-spec.md` §8 (the reserved Cloud slots). §11 amends them.
 **Schema:** report envelope `1.21` → `1.22` (§11.4).
@@ -167,9 +167,11 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
    Cloud URL is used without a request (contract §4.1).
 2. Otherwise `GET {cloudUrl}/.well-known/openid-configuration` through `"xping-oauth"`.
 3. Validate, in this order, and fail closed on the first failure with `AuthExitCodes`:
-   - `issuer` equals the normalized Cloud URL exactly, ordinal comparison (contract §3.1 step 1).
+   - `issuer` equals the normalized Cloud URL followed by exactly one `/`, ordinal comparison
+     (contract §3.1 step 1, §4.1, OQ-17). OpenIddict writes the issuer as `Uri.AbsoluteUri`, so
+     `https://app.xping.io` publishes `https://app.xping.io/`; any other value fails closed.
    - `xping_data_gateway_uri` present, absolute, `https` (or `http` on `localhost`/`127.0.0.1`), no
-     trailing slash after normalization.
+     user info, query or fragment, no trailing slash after normalization.
    - `xping_contract_version` equals `1`. Otherwise: "This CLI implements Cloud contract version 1;
      the server reports {n}. {Upgrade the CLI | The server is older than this CLI}." Exit code
      `CloudVersionMismatch` (contract §11).
@@ -177,7 +179,9 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
      precedence rules (prerelease lower than release). A lower CLI stops: "Please upgrade the xping
      CLI: this server requires {min} or newer, you have {current}." Same exit code.
    - `authorization_endpoint`, `token_endpoint`, `revocation_endpoint`,
-     `device_authorization_endpoint` present and absolute. They are used as given, never rebuilt
+     `device_authorization_endpoint` present, absolute, `https` (or `http` on
+     `localhost`/`127.0.0.1`), no user info or fragment: codes and refresh tokens are sent there,
+     so they meet the same rule as the Cloud URL (§14.1). They are used as given, never rebuilt
      from the paths in contract §4.
 4. Unknown members are ignored (contract §11). Deserialization goes through `IXpingSerializer`
    with a DTO that lists only the fields above.
@@ -197,7 +201,7 @@ One class, three operations, all `POST` with `application/x-www-form-urlencoded`
 | `RefreshAsync(refreshToken)` | `refresh_token`, no `scope` parameter | §4.3 |
 | `PollDeviceAsync(deviceCode)` | `urn:ietf:params:oauth:grant-type:device_code` | §4.3 |
 | `StartDeviceAsync(workspaceId?)` | `device_authorization_endpoint`, `scope=user:read offline_access` | §4.5 |
-| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token` | §4.4 |
+| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token`; any `200` succeeds and the body (empty or `{}`) is ignored | §4.4, OQ-19 |
 
 Token responses map to `TokenResponse(AccessToken, ExpiresIn, RefreshToken, Scope)`; extra members
 are ignored. Error responses map to `OAuthError(Error, ErrorDescription, StatusCode)` and are
@@ -206,10 +210,18 @@ delays from an injected `TimeProvider` so tests do not wait:
 
 - `server_error` (500): one retry after 2 s.
 - `temporarily_unavailable` (503): retries after 2 s, 4 s, 8 s.
-- Any network failure (`HttpRequestException`, timeout): treated like `temporarily_unavailable`
-  during device polling (contract §3.2, "retry at the next interval") and like `server_error`
-  elsewhere.
-- Everything else is returned to the caller on the first response.
+- Any network failure (`HttpRequestException`, timeout): treated like `server_error`, except in
+  `ExchangeCodeAsync`. A code works once, and when no answer arrived the server may already have
+  redeemed it; a retry would answer `invalid_grant` and hide the network failure. A 5xx answer
+  means the code was not redeemed, so that is still retried.
+- `PollDeviceAsync` makes none of these retries: a network failure, `server_error`,
+  `temporarily_unavailable` or another 5xx comes back as a transient result, and the device flow
+  polls again at the next interval (contract §3.2, §6.3). An immediate retry would poll faster
+  than `interval`.
+- When the retries are spent, the failure is `AuthFailureException` with `CloudUnreachable`
+  (§9.6).
+- Everything else is returned to the caller on the first response. A redirect or an error status
+  without an OAuth body is never a success; it is `CloudUnreachable` with the status.
 
 `OAuthClient` never logs a request body or a response body (§15).
 
@@ -518,7 +530,7 @@ code `LoginTimedOut`. A code issued later expires on its own (contract §6.4).
 | `invalid_grant` on exchange | `LoginFailed` | §4.6 |
 | `invalid_client` | `CloudUnreachable` | "Xping Cloud did not recognise this CLI. Check `--cloud-url` ({url})." |
 | `invalid_request`, `unauthorized_client`, `unsupported_grant_type`, `invalid_scope` | `LoginFailed` | "Xping Cloud rejected the request ({error}): {error_description}. This is a CLI or server bug; please report it." |
-| Discovery failure, TLS error, network error | `CloudUnreachable` | "Could not reach Xping Cloud at {url}: {reason}." The reason names the exception category only (connection refused, name not resolved, TLS certificate error, timeout). |
+| Discovery failure, TLS error, network error | `CloudUnreachable` | "Could not reach Xping Cloud at {url}: {reason}." The reason names the exception category only (connection failed, name not resolved, TLS error, timeout). "Connection failed" and "TLS error" stay broad on purpose: refused, reset and unreachable share one category in `HttpRequestError`, and so do certificate and handshake failures. |
 | Version checks | `CloudVersionMismatch` | §2.3 |
 | Ctrl+C | 130 | "Cancelled." |
 
@@ -725,8 +737,11 @@ two never disagree.
 Path: `~/.xping/credentials.json`, where `~` is `Environment.GetFolderPath(UserProfile)`. The
 directory `~/.xping` is created with mode `0700` and the file with `0600` (contract §10.4):
 
-- Unix: `Directory.CreateDirectory` followed by `File.SetUnixFileMode(dir,
-  UserReadWriteExecute)`; the file is created with `new FileStream(tmp, new FileStreamOptions {
+- Unix: each missing directory level is created with `Directory.CreateDirectory(dir,
+  UserReadWriteExecute)` (the overload applies the mode to the last level only). An existing
+  `~/.xping` with group or other bits is tightened to `0700` before anything is written: the SDK
+  puts its local store at `<repo>/.xping`, so a home directory that is a repository (a dotfiles
+  repo) already has a `0755` `~/.xping`, and the store works the same at `0700`. The file is created with `new FileStream(tmp, new FileStreamOptions {
   Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, UnixCreateMode =
   UnixFileMode.UserRead | UnixFileMode.UserWrite })`, so the mode is `0600` from the first byte
   and no separate chmod step exists.
@@ -734,7 +749,8 @@ directory `~/.xping` is created with mode `0700` and the file with `0600` (contr
   current user `FullControl` (`FileSystemAclExtensions.SetAccessControl`). On Windows the file
   backend is only reached when Credential Manager fails, so this path is rare.
 
-Writes are atomic: serialize to `credentials.json.tmp-{pid}` in the same directory, set its mode,
+Writes are atomic: serialize to `credentials.json.tmp-{pid}-{random}` in the same directory
+(unique per write, so two writers in one process never touch each other's file), set its mode,
 then `File.Move(tmp, path, overwrite: true)`. The file holds every Cloud URL:
 
 ```json
@@ -1161,7 +1177,7 @@ a `report` meaning and are easy to recognise in scripts:
 Validation (parse-time, exit 2): absolute URI; scheme `https`, or `http` only when the host is
 `localhost` or `127.0.0.1` (contract §10.1; `[::1]` is not in the contract's list and is refused,
 Q-5, answered); no user info, query or fragment; a path is allowed only as `/` (the issuer must equal the URL
-exactly, and the Portal issuer has no path). Normalization: lowercase scheme and host, default port
+followed by one `/`, contract OQ-17, so the Portal issuer has no other path). Normalization: lowercase scheme and host, default port
 removed, trailing slash removed. The normalized string is the key for the credential store, the
 discovery cache and the project cache. `https://App.Xping.io/` and `https://app.xping.io` are the
 same login.
@@ -1250,7 +1266,7 @@ disabled even under `--verbose`, because their messages include full URLs and he
 
 §7.5 and §14.4. Every file the CLI creates under `~/.xping` is `0600` in a `0700` directory on
 Unix, with an owner-only ACL on Windows, created with the mode before content is written, never
-chmod-ed afterwards.
+chmod-ed afterwards. The only chmod is the tightening of an existing `~/.xping` itself (§7.5).
 
 ### 15.4 Loopback listener
 
@@ -1484,6 +1500,11 @@ finds a contract or spec conflict stops and reports.
 | Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
 
 ### Contract observations recorded while writing (no conflict found)
+
+- Contract amendments of 2026-10-02/03, applied in phase 1: OQ-17 (`issuer` is `{Cloud URL}/`,
+  §2.3), OQ-19 (revocation body may be `{}`, §2.4). OQ-18 (authorize request errors render a page
+  and never redirect) needs no CLI change: the loopback flow meets them as its timeout (§4.7).
+  OQ-20 (key withdrawal ends sessions with `invalid_grant`) is already §9.6.
 
 - Contract §3.1 step 8 versus the failure table: resolved as A-6 ("one successful callback").
 - Contract §3.1 step 2 says "port 0, then read the assigned port"; with `HttpListener` this is a
