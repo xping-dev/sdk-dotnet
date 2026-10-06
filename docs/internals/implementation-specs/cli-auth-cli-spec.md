@@ -476,6 +476,12 @@ Binding rules (contract §10.2):
 
 The prefix is never `localhost`, `+`, `*`, `0.0.0.0` or `::`.
 
+Platform note (found in phase 3): the managed `HttpListener` of macOS and Linux rejects a bracketed
+IPv6 prefix (`HttpListenerException`: "Invalid port in prefix"), so step 2 binds only on Windows,
+where `http.sys` accepts it. Elsewhere step 2 fails and step 3 applies. The attempt is kept so the
+order is the same on every OS; the `TcpListener` responder would lift the limit, and is not worth
+its parser while `127.0.0.1` is always present on a loopback interface.
+
 ### 4.4 Callback validation and responses
 
 The listener loop runs until it has one successful callback, the timeout (§4.7) fires, or the
