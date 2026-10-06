@@ -6,16 +6,21 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Xping.Cli.Auth;
+using Xping.Cli.Auth.Browser;
 using Xping.Cli.Auth.Discovery;
+using Xping.Cli.Auth.Flows;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Commands;
 using Xping.Cli.Commands.Auth;
+using Xping.Cli.Configuration;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Hosting;
@@ -30,9 +35,9 @@ internal static class ServiceCollectionExtensions
         TextWriter output,
         TextWriter error,
         TextReader input,
-        bool isTerminal)
+        Terminals terminals)
     {
-        services.AddSingleton(new ConsoleIO(output, error, input, isTerminal));
+        services.AddSingleton(new ConsoleIO(output, error, input, terminals));
         services.AddSingleton<GlobalOptions>();
         services.AddSingleton<ILocalSessionStoreFactory, LocalSessionStoreFactory>();
 
@@ -70,6 +75,19 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<FileCredentialStore>();
         services.AddSingleton<CredentialStoreSelector>();
         services.AddSingleton<CredentialResolver>();
+
+        services.TryAddSingleton<IEnvironmentVariableProvider, ProcessEnvironment>();
+        services.AddSingleton<CliConfigurationLoader>();
+        services.AddSingleton<ILauncherProcess, LauncherProcess>();
+        services.AddSingleton<IBrowserLauncher>(provider => new BrowserLauncher(
+            provider.GetRequiredService<ILauncherProcess>(),
+            HostOsDetector.Current,
+            provider.GetRequiredService<ILogger<BrowserLauncher>>()));
+        services.AddSingleton<IHeadlessDetector>(provider => new HeadlessDetector(
+            provider.GetRequiredService<IEnvironmentVariableProvider>(),
+            HostOsDetector.Current,
+            File.Exists));
+        services.AddTransient<LoopbackFlow>();
 
         services
             .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>

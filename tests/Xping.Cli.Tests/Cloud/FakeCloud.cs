@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Web;
 
 namespace Xping.Cli.Tests.Cloud;
@@ -28,7 +29,7 @@ namespace Xping.Cli.Tests.Cloud;
 /// never appeared in a URL, that <c>client_id</c> was on every grant.
 /// </para>
 /// </remarks>
-internal sealed class FakeCloud : IAsyncDisposable
+internal sealed partial class FakeCloud : IAsyncDisposable
 {
     public const string WorkspaceId = "01J8K2V6XN7Y0Q4R5S6T7U8V9X";
     public const string UserId = "01J8K2V6XN7Y0Q4R5S6T7U8V9W";
@@ -48,6 +49,7 @@ internal sealed class FakeCloud : IAsyncDisposable
     private readonly Dictionary<string, RefreshToken> _refreshTokens = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DeviceGrant> _deviceGrants = new(StringComparer.Ordinal);
+    private readonly Queue<AuthorizeScript> _authorizeScripts = new();
     private int _sequence;
 
     public FakeCloud(TimeProvider time)
@@ -118,6 +120,19 @@ internal sealed class FakeCloud : IAsyncDisposable
         {
             for (int i = 0; i < count; i++)
                 _faults.Enqueue(new Fault(path, 0, null, Drop: true));
+        }
+    }
+
+    /// <summary>
+    /// Decides how the next requests to <c>/connect/authorize</c> end, one script per request; once
+    /// they are used up, the user approves.
+    /// </summary>
+    public void QueueAuthorize(params AuthorizeScript[] scripts)
+    {
+        lock (_gate)
+        {
+            foreach (AuthorizeScript script in scripts)
+                _authorizeScripts.Enqueue(script);
         }
     }
 
@@ -257,7 +272,7 @@ internal sealed class FakeCloud : IAsyncDisposable
 
         Reply reply = fault is not null
             ? new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, "Injected fault."))
-            : Route(request.HttpMethod, path, form);
+            : Route(request.HttpMethod, path, form, request.QueryString);
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";
@@ -271,10 +286,11 @@ internal sealed class FakeCloud : IAsyncDisposable
         context.Response.Close();
     }
 
-    private Reply Route(string method, string path, NameValueCollection form) =>
+    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query) =>
         (method, path) switch
         {
             ("GET", "/.well-known/openid-configuration") => Discovery(),
+            ("GET", "/connect/authorize") => Authorize(query),
             (_, "/moved") => new Reply(302, string.Empty, CloudUrl + "/connect/token"),
             ("POST", "/connect/token") => WithClient(form, Token),
             ("POST", "/connect/device") => WithClient(form, Device),
@@ -302,6 +318,46 @@ internal sealed class FakeCloud : IAsyncDisposable
         EditDiscovery?.Invoke(document);
         return new Reply(200, document.ToJsonString());
     }
+
+    // Contract §4.2. A request that breaks the contract renders a page and never redirects (OQ-18),
+    // so a CLI bug shows up as the loopback timeout rather than as a callback.
+    private Reply Authorize(NameValueCollection query)
+    {
+        string redirectUri = query["redirect_uri"] ?? string.Empty;
+        string state = query["state"] ?? string.Empty;
+        string challenge = query["code_challenge"] ?? string.Empty;
+
+        bool valid =
+            query["response_type"] == "code"
+            && query["client_id"] == "xping-cli"
+            && query["code_challenge_method"] == "S256"
+            && challenge.Length == 43
+            && HasContractScope(query["scope"])
+            && LoopbackRedirect().IsMatch(redirectUri)
+            && state.Length > 0;
+
+        if (!valid)
+            return new Reply(400, "<html>invalid authorization request</html>");
+
+        AuthorizeScript script;
+        lock (_gate)
+            script = _authorizeScripts.TryDequeue(out AuthorizeScript next) ? next : AuthorizeScript.Approve;
+
+        return script switch
+        {
+            AuthorizeScript.Approve => Redirect(redirectUri, ("code", IssueCode(redirectUri, challenge)), ("state", state)),
+            AuthorizeScript.Deny => Redirect(redirectUri, ("error", "access_denied"), ("error_description", "The user declined."), ("state", state)),
+            AuthorizeScript.WrongState => Redirect(redirectUri, ("code", IssueCode(redirectUri, challenge)), ("state", "wrong-" + state)),
+            AuthorizeScript.ServerError => Redirect(redirectUri, ("error", "server_error"), ("error_description", "Something broke."), ("state", state)),
+            _ => new Reply(200, "<html>consent page; the user never decides</html>")
+        };
+    }
+
+    private static Reply Redirect(string redirectUri, params (string Name, string Value)[] parameters) =>
+        new(302, string.Empty, redirectUri + "?" + string.Join('&', parameters.Select(p => $"{Uri.EscapeDataString(p.Name)}={Uri.EscapeDataString(p.Value)}")));
+
+    [GeneratedRegex(@"^http://(127\.0\.0\.1|\[::1\]):\d+/callback$", RegexOptions.CultureInvariant)]
+    private static partial Regex LoopbackRedirect();
 
     private static Reply WithClient(NameValueCollection form, Func<NameValueCollection, Reply> handler) =>
         string.Equals(form["client_id"], "xping-cli", StringComparison.Ordinal)
@@ -533,6 +589,27 @@ internal sealed class FakeCloud : IAsyncDisposable
 
         public DeviceDecision Decision { get; set; }
     }
+}
+
+/// <summary>
+/// How a visit to <see cref="FakeCloud"/>'s <c>/connect/authorize</c> ends.
+/// </summary>
+internal enum AuthorizeScript
+{
+    /// <summary>The user consents; redirect with a code and the same state.</summary>
+    Approve,
+
+    /// <summary>The user declines; redirect with <c>error=access_denied</c>.</summary>
+    Deny,
+
+    /// <summary>Redirect with a code and a state the CLI did not send.</summary>
+    WrongState,
+
+    /// <summary>Redirect with <c>error=server_error</c>.</summary>
+    ServerError,
+
+    /// <summary>Show the consent page and never redirect.</summary>
+    NoRedirect
 }
 
 /// <summary>

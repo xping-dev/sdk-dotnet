@@ -78,7 +78,7 @@ public sealed class CancelKeyHandlerTests : IDisposable
             configureServices: services => services.AddTransient(sp =>
             {
                 keptAlive = _handler.OnCancelKeyPress();
-                return new LoginCommand(sp.GetRequiredService<ConsoleIO>());
+                return ActivatorUtilities.CreateInstance<LoginCommand>(sp);
             }),
             cancelKeys: _handler);
 
