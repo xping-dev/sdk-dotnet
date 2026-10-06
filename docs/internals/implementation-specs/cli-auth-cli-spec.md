@@ -376,7 +376,8 @@ second line reads "API key (XPING_APIKEY) also set; used only when no login is a
 With `--api-key` given: `Credential  API key (--api-key)` and, when a login exists, "A stored
 login also exists and is not used while --api-key is given." With only a key:
 `Credential  API key (XPING_APIKEY)`. Not logged in and no key: `Credential  none` and "Run
-`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available;
+`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available
+(`CredentialStoreError` when, in addition, a credential store could not be read, §8.1);
 `0` otherwise, including when only an API key is set (the CLI cannot verify a key without a
 network call, and `status` makes none).
 
@@ -687,7 +688,7 @@ internal sealed record CredentialReadResult(CredentialRecord? Record, string? Wa
 A corrupt entry (§7.7) and a refused file (§7.5) both read as "no record" with one `Warning` for
 the user; `auth status` and `report` need that text, so it travels with the result instead of
 being logged. A failure to reach the backend at all (I/O error, access denied) throws
-`CredentialStoreException`, which commands map to `CredentialStoreError`.
+`CredentialStoreException`; §7.4 says what the callers of a backend do with it.
 
 Entry naming (contract §10.4): service/label `xping-cli`, account/target = the normalized Cloud
 URL. Concretely:
@@ -742,9 +743,12 @@ two never disagree.
 These rules live in one place: `Select()` returns `CredentialStores`, which holds the selected
 store (`Selected`, with its `DisplayName` and the selector's `FallbackReason`, `null` when the
 keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns the first valid
-record with the store it came from, plus the warnings of every store it visited;
-`WriteAsync` writes to `Selected` and clears the file entry when `Selected` is a keychain;
-`DeleteAllAsync` deletes from every store. Commands and the resolver use `CredentialStores`, never
+record with the store it came from, plus the warnings of every store it visited and the
+`Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
+the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
+clears the file entry when `Selected` is a keychain; a failure is thrown. `DeleteAllAsync` tries
+every store, even after one fails, so `logout` removes whatever it can, and then throws one
+`CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
 a backend directly. Until phase 5 the read order is the file store alone.
 
 ### 7.5 The file backend
@@ -786,8 +790,9 @@ reports `credential: none` with that warning; `report` degrades to local with th
 hint; `login` overwrites the file with a correct mode and does not need the check. On Windows the
 mode check is skipped; the ACL is set on write only.
 
-An unsafe file's content is never carried into a safe one: a write or delete on a refused file
-starts from an empty file, so entries for other Cloud URLs are dropped. Carrying them over would
+An unsafe file's content is never carried into a safe one: a write on a refused file starts from
+an empty file, so entries for other Cloud URLs are dropped, and a delete removes the file and
+reports that it deleted something (nothing in it is trusted for any Cloud URL). Carrying them over would
 give a `0600` file, and the next read would trust entries that another user could have written.
 
 ### 7.6 Warning the user about the fallback
@@ -808,7 +813,9 @@ give a `0600` file, and the next read would trust entries that another user coul
 - A keychain entry or file record that fails to deserialize, has a `schemaVersion` other than `1`,
   lacks `refreshToken` or `dataGatewayUri`, or whose `cloudUrl` is missing or differs from the
   Cloud URL it is stored under, is **corrupt**. A credentials file that does not parse, or whose
-  top-level `schemaVersion` is not `1`, makes every lookup in it corrupt; `login` replaces it. The store returns `null` and reports a warning "Stored
+  top-level `schemaVersion` is not `1`, makes every lookup in it corrupt; `login` replaces it, and
+  a delete leaves it untouched and reports nothing deleted (it may hold another Cloud URL's login
+  written by a newer CLI). The store returns `null` and reports a warning "Stored
   credentials for {url} are unreadable and will be replaced at the next `xping login`."
   Nothing is deleted automatically, so a bug in a new CLI version cannot wipe a login; `login`
   overwrites and `logout` deletes.
@@ -825,8 +832,12 @@ give a `0600` file, and the next read would trust entries that another user coul
 
 `CredentialResolver.ResolveAsync(configuration)` takes the `CliConfiguration` (§14), because it
 needs the API key and where it came from as well as the Cloud URL, and returns one
-`ResolvedCredential`. It makes no request and writes nothing; a corrupt or refused stored login
-counts as "no stored login" and its warning is carried in `ResolvedCredential.Warnings`.
+`ResolvedCredential`. It makes no request and writes nothing. A corrupt or refused stored login
+counts as "no stored login" and its warning is carried in `ResolvedCredential.Warnings`. A store
+that cannot be read also counts as "no stored login", so `report` still degrades to the next row
+or to local; its message is carried in `ResolvedCredential.StoreFailures`, and `auth status`
+exits `CredentialStoreError` instead of `AuthRequired` when no credential was found and a store
+failed (§3.4).
 
 | Order | Source | `CredentialSource` | Header used |
 |---|---|---|---|
