@@ -102,12 +102,17 @@ internal sealed partial class SemanticVersion : IComparable<SemanticVersion>
 
         for (int i = 0; i < Math.Min(left.Length, right.Length); i++)
         {
-            bool leftNumeric = TryParseNumber(left[i], out long leftNumber);
-            bool rightNumeric = TryParseNumber(right[i], out long rightNumber);
+            bool leftNumeric = IsNumeric(left[i]);
+            bool rightNumeric = IsNumeric(right[i]);
 
+            // Numeric identifiers have no leading zeros (the pattern refuses them), so the longer one
+            // is the larger, and equal lengths compare digit by digit. No integer type is needed, so
+            // an identifier of any length compares right.
             int result = (leftNumeric, rightNumeric) switch
             {
-                (true, true) => leftNumber.CompareTo(rightNumber),
+                (true, true) => left[i].Length != right[i].Length
+                    ? left[i].Length.CompareTo(right[i].Length)
+                    : string.CompareOrdinal(left[i], right[i]),
                 (true, false) => -1,
                 (false, true) => 1,
                 _ => string.CompareOrdinal(left[i], right[i])
@@ -123,11 +128,14 @@ internal sealed partial class SemanticVersion : IComparable<SemanticVersion>
     private static bool TryParseNumber(string value, out long number) =>
         long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out number);
 
-    // The grammar of semver.org, without leading zeros in numeric parts.
+    private static bool IsNumeric(string identifier) => identifier.All(char.IsAsciiDigit);
+
+    // The grammar of semver.org, without leading zeros in numeric parts. [0-9] rather than \d, which
+    // matches every Unicode digit, and \z rather than $, which also matches before a final newline.
     [GeneratedRegex(
-        @"^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)" +
-        @"(?:-(?<pre>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?" +
-        @"(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$",
+        @"^(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)" +
+        @"(?:-(?<pre>(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?" +
+        @"(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?\z",
         RegexOptions.CultureInvariant)]
     private static partial Regex Pattern();
 }

@@ -22,6 +22,8 @@ public sealed class SemanticVersionTests
     [InlineData("2.0.0", "2.1.0")]
     [InlineData("2.1.0", "2.1.1")]
     [InlineData("1.9.0", "1.10.0")]
+    [InlineData("1.0.0-99999999999999999999", "1.0.0-100000000000000000000")]
+    [InlineData("1.0.0-99999999999999999999", "1.0.0-alpha")]
     public void PrecedenceFollowsTheSpecification(string lower, string higher)
     {
         Assert.True(SemanticVersion.TryParse(lower, out SemanticVersion? low));
@@ -49,6 +51,9 @@ public sealed class SemanticVersionTests
     [InlineData("1.2.3-")]
     [InlineData("1.2.3-01")]
     [InlineData("1.2.3.4")]
+    [InlineData("1.2.3\n")]
+    [InlineData("1.2.\u0663")]
+    [InlineData("1.0.0-\u0661")]
     public void AnythingElseIsNotAVersion(string value)
     {
         Assert.False(SemanticVersion.TryParse(value, out _));

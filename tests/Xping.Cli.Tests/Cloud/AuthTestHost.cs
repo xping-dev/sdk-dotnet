@@ -4,7 +4,6 @@
  */
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Discovery;
 using Xping.Cli.Hosting;
@@ -19,7 +18,7 @@ internal sealed class AuthTestHost : IAsyncDisposable
 {
     public AuthTestHost(string cliVersion = "1.0.0")
     {
-        Time = new FakeTimeProvider(new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero));
+        Time = new TimerTrackingTimeProvider(new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero));
         Cloud = new FakeCloud(Time);
         HomeDirectory = Path.Combine(Path.GetTempPath(), "xping-cli-auth-tests", Guid.NewGuid().ToString("N"), ".xping");
 
@@ -32,7 +31,7 @@ internal sealed class AuthTestHost : IAsyncDisposable
         Services = services.BuildServiceProvider();
     }
 
-    public FakeTimeProvider Time { get; }
+    public TimerTrackingTimeProvider Time { get; }
 
     public FakeCloud Cloud { get; }
 
@@ -48,13 +47,12 @@ internal sealed class AuthTestHost : IAsyncDisposable
         Discovery.GetAsync(Cloud.CloudUrl, useCache, CancellationToken.None);
 
     /// <summary>
-    /// Waits for <paramref name="task"/>, moving the fake clock forward in small steps so the
-    /// retry waits it starts can elapse.
+    /// Waits for <paramref name="task"/>, moving the fake clock past each wait it starts.
     /// </summary>
     /// <remarks>
-    /// A single large step would be lost if it landed before the client started its wait, so the
-    /// clock moves 100 ms at a time until the task is done. Gaps measured on the fake clock are
-    /// therefore exact to within one step plus a request's round trip.
+    /// The clock moves only when the code under test has started a timer, and by exactly that
+    /// timer's due time, so gaps measured on the fake clock are exact whatever the machine's speed.
+    /// A task that neither finishes nor starts a timer fails the test rather than hang it.
     /// </remarks>
     public async Task<T> DriveAsync<T>(Task<T> task)
     {
@@ -64,14 +62,17 @@ internal sealed class AuthTestHost : IAsyncDisposable
 
     public async Task DriveAsync(Task task)
     {
-        TimeSpan limit = TimeSpan.FromMinutes(2);
-        TimeSpan step = TimeSpan.FromMilliseconds(100);
+        TimeSpan patience = TimeSpan.FromSeconds(30);
 
-        for (TimeSpan moved = TimeSpan.Zero; !task.IsCompleted && moved < limit; moved += step)
+        while (!task.IsCompleted)
         {
-            await Task.WhenAny(task, Task.Delay(5)).ConfigureAwait(false);
-            if (!task.IsCompleted)
-                Time.Advance(step);
+            // Waiting does not take the timer, so a wait abandoned because the task finished
+            // first leaves it for the next call.
+            Task<bool> timerCreated = Time.CreatedTimers.WaitToReadAsync().AsTask();
+            await Task.WhenAny(task, timerCreated).WaitAsync(patience).ConfigureAwait(false);
+
+            if (Time.CreatedTimers.TryRead(out TimeSpan dueTime))
+                Time.Advance(dueTime);
         }
 
         await task.ConfigureAwait(false);

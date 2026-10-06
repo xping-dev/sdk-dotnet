@@ -26,6 +26,12 @@ internal sealed class XpingHome(string root)
     public string DiscoveryCacheDirectory => Path.Combine(Root, "cache", "discovery");
 
     /// <summary>
+    /// Creates <see cref="Root"/> readable only by the user, or tightens it if it exists.
+    /// </summary>
+    /// <remarks>Called before anything is written below it.</remarks>
+    public void EnsurePrivate() => PrivateFiles.EnsurePrivateRoot(Root);
+
+    /// <summary>
     /// Returns the home of the user running the process.
     /// </summary>
     public static XpingHome ForCurrentUser() =>

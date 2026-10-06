@@ -260,7 +260,7 @@ public sealed class DiscoveryClientTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
-    public async Task AServerThatIsNotListeningIsReportedAsConnectionRefused()
+    public async Task AServerThatIsNotListeningIsReportedAsAConnectionFailure()
     {
         string cloudUrl = $"http://127.0.0.1:{UnusedPort()}";
 
@@ -268,7 +268,7 @@ public sealed class DiscoveryClientTests : IAsyncLifetime, IAsyncDisposable
             () => _host.Discovery.GetAsync(cloudUrl, useCache: false, CancellationToken.None));
 
         Assert.Equal(AuthExitCodes.CloudUnreachable, failure.ExitCode);
-        Assert.Equal($"Could not reach Xping Cloud at {cloudUrl}: connection refused.", failure.Message);
+        Assert.Equal($"Could not reach Xping Cloud at {cloudUrl}: connection failed.", failure.Message);
     }
 
     [Fact]
@@ -379,6 +379,27 @@ public sealed class DiscoveryClientTests : IAsyncLifetime, IAsyncDisposable
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
             File.GetUnixFileMode(_host.HomeDirectory));
         Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(CachePath())!, "*.tmp-*"));
+    }
+
+    [Fact]
+    public async Task AnExistingHomeOthersCanReadIsTightened()
+    {
+        // The SDK's local store makes ~/.xping with the default mode when the home directory is a
+        // repository; credentials must not land in it as it is.
+        if (OperatingSystem.IsWindows())
+            return;
+
+        Directory.CreateDirectory(_host.HomeDirectory);
+        File.SetUnixFileMode(_host.HomeDirectory, (UnixFileMode)0b111_101_101);
+        string session = Path.Combine(_host.HomeDirectory, "sessions");
+        Directory.CreateDirectory(session);
+
+        await _host.DiscoverAsync();
+
+        Assert.Equal(
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+            File.GetUnixFileMode(_host.HomeDirectory));
+        Assert.True(Directory.Exists(session));
     }
 
     private string CachePath() =>

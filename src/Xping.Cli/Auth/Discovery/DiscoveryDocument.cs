@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace Xping.Cli.Auth.Discovery;
@@ -52,7 +51,7 @@ internal sealed record DiscoveryDocument(
             throw Unusable(cloudUrl, $"names an issuer other than {expectedIssuer}");
 
         // A query would be dropped by every v1/ path appended to the base, so it cannot be meant.
-        if (!TryServerUri(response.DataGatewayUri, out Uri? gateway) || gateway.Query.Length > 0)
+        if (!ServerUri.TryParse(response.DataGatewayUri, out Uri? gateway) || gateway.Query.Length > 0)
             throw Unusable(cloudUrl, "has no usable xping_data_gateway_uri");
 
         CheckContractVersion(response.ContractVersion);
@@ -94,26 +93,7 @@ internal sealed record DiscoveryDocument(
 
     // Used as given, never rebuilt from the paths in the contract: the server may move them.
     private static Uri Endpoint(string cloudUrl, string? value, string name) =>
-        TryServerUri(value, out Uri? uri) ? uri : throw Unusable(cloudUrl, $"has no usable {name}");
-
-    /// <summary>
-    /// Accepts the URLs a code or token may be sent to: absolute, <c>https</c> (or <c>http</c> on the
-    /// two loopback names the contract allows), no user info, no fragment.
-    /// </summary>
-    private static bool TryServerUri(string? value, [NotNullWhen(true)] out Uri? uri)
-    {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out uri)
-            || uri.UserInfo.Length > 0
-            || uri.Fragment.Length > 0
-            || !(uri.Scheme == Uri.UriSchemeHttps
-                 || (uri.Scheme == Uri.UriSchemeHttp && uri.Host is "localhost" or "127.0.0.1")))
-        {
-            uri = null;
-            return false;
-        }
-
-        return true;
-    }
+        ServerUri.TryParse(value, out Uri? uri) ? uri : throw Unusable(cloudUrl, $"has no usable {name}");
 
     // Lowercase scheme and host, no default port, no trailing slash: the form the host guard of
     // §9.1 compares request URIs against.

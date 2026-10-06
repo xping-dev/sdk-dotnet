@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
@@ -58,8 +57,10 @@ internal sealed class OAuthClient(
         Redaction.AddSecret(code);
         Redaction.AddSecret(codeVerifier);
 
+        // A code works once. After a network failure the server may already have redeemed it, and a
+        // retry would answer invalid_grant and hide the failure that actually happened. A 5xx answer
+        // means the server did not redeem it, so that is retried.
         Outcome outcome = await PostAsync(
-            discovery.CloudUrl,
             discovery.TokenEndpoint,
             [
                 new("grant_type", OAuthProtocol.AuthorizationCodeGrant),
@@ -67,7 +68,7 @@ internal sealed class OAuthClient(
                 new("redirect_uri", redirectUri),
                 new("code_verifier", codeVerifier)
             ],
-            retry: true,
+            Retry.ServerAnswersOnly,
             cancellationToken).ConfigureAwait(false);
 
         return ReadToken(discovery.CloudUrl, outcome);
@@ -94,14 +95,15 @@ internal sealed class OAuthClient(
         ArgumentNullException.ThrowIfNull(discovery);
         Redaction.AddSecret(refreshToken);
 
+        // Retried after a network failure too: a rotated token stays valid for the server's 30 s reuse
+        // leeway (contract §6.6), far longer than the 2 s wait.
         Outcome outcome = await PostAsync(
-            discovery.CloudUrl,
             discovery.TokenEndpoint,
             [
                 new("grant_type", OAuthProtocol.RefreshTokenGrant),
                 new("refresh_token", refreshToken)
             ],
-            retry: true,
+            Retry.Always,
             cancellationToken).ConfigureAwait(false);
 
         return ReadToken(discovery.CloudUrl, outcome);
@@ -127,15 +129,15 @@ internal sealed class OAuthClient(
         if (!string.IsNullOrWhiteSpace(workspaceId))
             form.Add(new("xping_workspace_id", workspaceId));
 
-        Outcome outcome = await PostAsync(
-            discovery.CloudUrl, discovery.DeviceAuthorizationEndpoint, form, retry: true, cancellationToken)
+        Outcome outcome = await PostAsync(discovery.DeviceAuthorizationEndpoint, form, Retry.Always, cancellationToken)
             .ConfigureAwait(false);
 
         string body = SuccessBody(discovery.CloudUrl, "device authorization", outcome);
         DeviceResponseBody? response = TryDeserialize<DeviceResponseBody>(body);
 
+        // The user signs in on these pages, so they meet the rule every server URL meets.
         if (response is not { DeviceCode.Length: > 0, UserCode.Length: > 0, ExpiresIn: > 0 }
-            || !TryAbsoluteUri(response.VerificationUri, out Uri? verificationUri))
+            || !ServerUri.TryParse(response.VerificationUri, out Uri? verificationUri))
         {
             throw Incomplete(discovery.CloudUrl, "device authorization");
         }
@@ -143,7 +145,7 @@ internal sealed class OAuthClient(
         Redaction.AddSecret(response.DeviceCode);
 
         // An unusable complete URI is dropped rather than fatal: it is a convenience (contract §3.2).
-        _ = TryAbsoluteUri(response.VerificationUriComplete, out Uri? complete);
+        _ = ServerUri.TryParse(response.VerificationUriComplete, out Uri? complete);
 
         return new DeviceAuthorization(
             response.DeviceCode,
@@ -174,13 +176,12 @@ internal sealed class OAuthClient(
         ArgumentNullException.ThrowIfNull(discovery);
 
         Outcome outcome = await PostAsync(
-            discovery.CloudUrl,
             discovery.TokenEndpoint,
             [
                 new("grant_type", OAuthProtocol.DeviceCodeGrant),
                 new("device_code", deviceCode)
             ],
-            retry: false,
+            Retry.Never,
             cancellationToken).ConfigureAwait(false);
 
         return outcome switch
@@ -210,23 +211,21 @@ internal sealed class OAuthClient(
         Redaction.AddSecret(refreshToken);
 
         Outcome outcome = await PostAsync(
-            discovery.CloudUrl,
             discovery.RevocationEndpoint,
             [
                 new("token", refreshToken),
                 new("token_type_hint", "refresh_token")
             ],
-            retry: true,
+            Retry.Always,
             cancellationToken).ConfigureAwait(false);
 
         _ = SuccessBody(discovery.CloudUrl, "revocation", outcome);
     }
 
     private async Task<Outcome> PostAsync(
-        string cloudUrl,
         Uri endpoint,
         IEnumerable<KeyValuePair<string, string>> parameters,
-        bool retry,
+        Retry retry,
         CancellationToken cancellationToken)
     {
         KeyValuePair<string, string>[] form = [new("client_id", OAuthProtocol.ClientId), .. parameters];
@@ -235,8 +234,13 @@ internal sealed class OAuthClient(
         {
             Outcome outcome = await SendOnceAsync(endpoint, form, cancellationToken).ConfigureAwait(false);
 
-            if (!retry || outcome is not Outcome.Transient transient || attempt >= transient.Retries)
+            if (retry == Retry.Never
+                || outcome is not Outcome.Transient transient
+                || attempt >= transient.Retries
+                || (transient.NetworkFailure && retry == Retry.ServerAnswersOnly))
+            {
                 return outcome;
+            }
 
             TimeSpan delay = Backoff[attempt];
             logger.LogInformation(
@@ -265,7 +269,7 @@ internal sealed class OAuthClient(
         catch (Exception ex) when (NetworkFailure.IsNetworkFailure(ex, cancellationToken))
         {
             logger.LogInformation("POST {Path} failed: {Reason}", endpoint.AbsolutePath, NetworkFailure.Describe(ex));
-            return new Outcome.Transient(NetworkFailure.Describe(ex), Retries: 1);
+            return new Outcome.Transient(NetworkFailure.Describe(ex), Retries: 1, NetworkFailure: true);
         }
 
         int code = (int)status;
@@ -339,15 +343,6 @@ internal sealed class OAuthClient(
         }
     }
 
-    private static bool TryAbsoluteUri(string? value, [NotNullWhen(true)] out Uri? uri)
-    {
-        if (Uri.TryCreate(value, UriKind.Absolute, out uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
-            return true;
-
-        uri = null;
-        return false;
-    }
-
     /// <summary>
     /// How one request ended, before the caller decides what that means for its grant.
     /// </summary>
@@ -357,10 +352,28 @@ internal sealed class OAuthClient(
 
         internal sealed record Failed(OAuthError Error) : Outcome;
 
-        /// <summary>A failure that may pass; <paramref name="Retries"/> is how often to try again.</summary>
-        internal sealed record Transient(string Reason, int Retries) : Outcome;
+        /// <summary>
+        /// A failure that may pass; <paramref name="Retries"/> is how often to try again, and
+        /// <paramref name="NetworkFailure"/> says no answer arrived at all.
+        /// </summary>
+        internal sealed record Transient(string Reason, int Retries, bool NetworkFailure = false) : Outcome;
 
         internal sealed record Unexpected(int StatusCode) : Outcome;
+    }
+
+    /// <summary>
+    /// Which transient failures a request is retried after.
+    /// </summary>
+    private enum Retry
+    {
+        /// <summary>None: the caller's next attempt is the retry.</summary>
+        Never,
+
+        /// <summary>Transient answers from the server, but not a request that got no answer.</summary>
+        ServerAnswersOnly,
+
+        /// <summary>Every transient failure.</summary>
+        Always
     }
 
     private sealed record TokenResponseBody(

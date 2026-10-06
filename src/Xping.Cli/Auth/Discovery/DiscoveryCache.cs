@@ -76,6 +76,7 @@ internal sealed class DiscoveryCache(
 
         try
         {
+            home.EnsurePrivate();
             PrivateFiles.WriteAtomically(path, serializer.SerializeToUtf8Bytes(entry));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

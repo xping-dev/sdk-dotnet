@@ -6,6 +6,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
+using System.Security.Cryptography;
 using System.Security.Principal;
 
 namespace Xping.Cli.Auth;
@@ -60,10 +61,9 @@ internal static class PrivateFiles
 
         EnsureDirectory(directory);
 
-        // The process id keeps two processes writing the same file from sharing a temporary file;
-        // one left behind by a crashed process with a recycled id is replaced.
-        string temporary = $"{path}.tmp-{Environment.ProcessId}";
-        File.Delete(temporary);
+        // Unique per write, not per process: two writers of the same file, in one process or two,
+        // must never open or delete each other's temporary file. The last move wins whole.
+        string temporary = $"{path}.tmp-{Environment.ProcessId}-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(6))}";
 
         try
         {
@@ -93,6 +93,28 @@ internal static class PrivateFiles
             TryDelete(temporary);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="root"/> a <c>0700</c> directory on Unix, creating it or tightening it.
+    /// </summary>
+    /// <remarks>
+    /// <c>~/.xping</c> can exist before the CLI writes to it: the SDK puts its local store at
+    /// <c>&lt;repo&gt;/.xping</c>, and a home directory that is a repository (a dotfiles repo) makes
+    /// that <c>~/.xping</c>, with the default mode. The store works the same in a <c>0700</c>
+    /// directory, so the CLI tightens it rather than write credentials into a directory others can
+    /// list (cli-auth-cli-spec §15.3).
+    /// </remarks>
+    public static void EnsurePrivateRoot(string root)
+    {
+        EnsureDirectory(root);
+
+        if (OperatingSystem.IsWindows())
+            return;
+
+        UnixFileMode mode = File.GetUnixFileMode(root);
+        if ((mode & ~DirectoryMode) != 0)
+            File.SetUnixFileMode(root, mode & DirectoryMode);
     }
 
     [SupportedOSPlatform("windows")]

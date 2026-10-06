@@ -222,6 +222,30 @@ public sealed class OAuthClientTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Theory]
+    [InlineData("http://app.example.com/device")]
+    [InlineData("https://user:pass@app.example.com/device")]
+    [InlineData("javascript:alert(1)")]
+    public async Task AVerificationPageOutsideTheServerUrlRuleIsRefused(string page)
+    {
+        _host.Cloud.EditDeviceResponse = r => r["verification_uri"] = page;
+
+        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
+            () => _host.OAuth.StartDeviceAsync(_discovery, workspaceId: null, CancellationToken.None));
+
+        Assert.Contains("incomplete response", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACompleteVerificationPageOverPlainHttpIsDropped()
+    {
+        _host.Cloud.EditDeviceResponse = r => r["verification_uri_complete"] = "http://app.example.com/device?user_code=X";
+
+        DeviceAuthorization device = await _host.OAuth.StartDeviceAsync(_discovery, workspaceId: null, CancellationToken.None);
+
+        Assert.Null(device.VerificationUriComplete);
+    }
+
+    [Theory]
     [InlineData("device_code")]
     [InlineData("user_code")]
     [InlineData("verification_uri")]
@@ -396,6 +420,19 @@ public sealed class OAuthClientTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
+    public async Task ALostCodeExchangeIsNotRetried()
+    {
+        // The server may have redeemed the code before the answer was lost; a retry would only
+        // answer invalid_grant and hide the network failure.
+        _host.Cloud.Drop(Token, 1);
+
+        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(() => _host.DriveAsync(ExchangeAsync()));
+
+        Assert.Equal(AuthExitCodes.CloudUnreachable, failure.ExitCode);
+        Assert.Single(_host.Cloud.RequestsTo(Token));
+    }
+
+    [Fact]
     public async Task RevocationIsRetriedToo()
     {
         _host.Cloud.Fail(Revoke, 1, HttpStatusCode.ServiceUnavailable, "temporarily_unavailable");
@@ -485,16 +522,13 @@ public sealed class OAuthClientTests : IAsyncLifetime, IAsyncDisposable
         return _host.OAuth.PollDeviceAsync(_discovery, device.DeviceCode, CancellationToken.None);
     }
 
-    // Measured on the fake clock, which moves in 100 ms steps while a request is in flight.
+    // Exact: the fake clock moves only by the waits the client starts.
     private static void AssertGaps(IReadOnlyList<RecordedRequest> requests, params int[] seconds)
     {
         Assert.Equal(seconds.Length + 1, requests.Count);
 
         for (int i = 0; i < seconds.Length; i++)
-        {
-            TimeSpan gap = requests[i + 1].ReceivedAt - requests[i].ReceivedAt;
-            Assert.InRange(gap, TimeSpan.FromSeconds(seconds[i]), TimeSpan.FromSeconds(seconds[i] + 0.5));
-        }
+            Assert.Equal(TimeSpan.FromSeconds(seconds[i]), requests[i + 1].ReceivedAt - requests[i].ReceivedAt);
     }
 
     private static string Challenge(string verifier) =>

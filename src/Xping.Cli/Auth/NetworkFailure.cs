@@ -42,9 +42,12 @@ internal static class NetworkFailure
         {
             OperationCanceledException => "timeout",
             HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError } => "name not resolved",
-            HttpRequestException { HttpRequestError: HttpRequestError.SecureConnectionError } => "TLS certificate error",
-            HttpRequestException { InnerException: AuthenticationException } => "TLS certificate error",
-            HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError } => "connection refused",
+            HttpRequestException { HttpRequestError: HttpRequestError.SecureConnectionError } => "TLS error",
+            HttpRequestException { InnerException: AuthenticationException } => "TLS error",
+
+            // Refused, reset and unreachable all land here; naming one of them would send the user
+            // to check the wrong thing.
+            HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError } => "connection failed",
             _ => "network error"
         };
 }
