@@ -26,6 +26,25 @@ internal sealed class XpingHome(string root)
     public string DiscoveryCacheDirectory => Path.Combine(Root, "cache", "discovery");
 
     /// <summary>
+    /// Gets the file that holds sign-ins when no OS credential store is used (cli-auth-cli-spec §7.5).
+    /// </summary>
+    public string CredentialsFile => Path.Combine(Root, "credentials.json");
+
+    /// <summary>
+    /// Returns <paramref name="path"/> as a user would type it: below the home directory it starts
+    /// with <c>~/</c>, so <c>~/.xping/credentials.json</c> rather than an absolute path.
+    /// </summary>
+    public static string Display(string path)
+    {
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string relative = Path.GetRelativePath(profile, path);
+
+        return string.IsNullOrEmpty(profile) || Path.IsPathRooted(relative) || relative.StartsWith("..", StringComparison.Ordinal)
+            ? path
+            : "~/" + relative.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    /// <summary>
     /// Creates <see cref="Root"/> readable only by the user, or tightens it if it exists.
     /// </summary>
     /// <remarks>Called before anything is written below it.</remarks>
