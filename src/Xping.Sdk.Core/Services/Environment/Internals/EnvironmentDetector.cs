@@ -461,19 +461,20 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
-                    // CI.CommitSha is the commit the build tested. On pull_request_target GITHUB_SHA is the
-                    // base branch's tip, but such workflows usually check out the PR head, so the built
-                    // commit is unknown and sending the base tip would tie PR results to main.
-                    if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
+                    bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(GetEnvironmentVariable);
+                    if (isGitHubPullRequest is not null)
                     {
-                        AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));
+                        // CI.CommitSha is the commit the build tested. On pull_request_target GITHUB_SHA is
+                        // the base branch's tip, but such workflows usually check out the PR head, so the
+                        // built commit is unknown and sending the base tip would tie PR results to main.
+                        if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GITHUB_SHA"));
+                        }
+
+                        AddPullRequestFlag(properties, isGitHubPullRequest.Value);
                     }
 
-                    // The event set misses other PR-triggered events (pull_request_review, …), which run
-                    // on refs/pull/N/merge. pull_request_target runs on the base ref, so both are needed.
-                    AddPullRequestFlag(properties,
-                        GitHubPullRequestDetector.PullRequestEventNames.Contains(githubEventName) ||
-                        (GetEnvironmentVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false));
                     AddIfNotNull(properties, "CI.Actor", GetEnvironmentVariable("GITHUB_ACTOR"));
                     AddIfNotNull(properties, "CI.Workflow", GetEnvironmentVariable("GITHUB_WORKFLOW"));
                     break;

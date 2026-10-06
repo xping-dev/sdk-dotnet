@@ -125,9 +125,13 @@ public sealed class EnvironmentInfo
     /// <list type="bullet">
     /// <item><description><c>CI.CommitSha</c>: the commit the build checked out and tested. On a pull
     /// request build this is often a merge commit that exists nowhere else. It is omitted when the
-    /// platform doesn't say which commit was built (GitHub <c>pull_request_target</c>).</description></item>
+    /// platform doesn't say which commit was built (GitHub <c>pull_request_target</c>, and GitHub events
+    /// such as <c>issue_comment</c> or <c>workflow_run</c>).</description></item>
     /// <item><description><c>CI.IsPullRequest</c>: <c>true</c> or <c>false</c> from the platform's
-    /// pull request marker; omitted on a platform that has none.</description></item>
+    /// pull request marker; omitted on a platform that has none. On GitHub, <c>false</c> is sent only
+    /// for push-like events (<c>push</c>, <c>schedule</c>, <c>workflow_dispatch</c>,
+    /// <c>merge_group</c>, <c>release</c>, <c>create</c>, <c>deployment</c>, <c>deployment_status</c>);
+    /// other non-PR events send neither entry.</description></item>
     /// </list>
     /// The pull request's head commit is <see cref="PullRequests.PullRequestContext.CommitSha"/>.
     /// When a pull request context is present it identifies the run; <c>CI.CommitSha</c> does so

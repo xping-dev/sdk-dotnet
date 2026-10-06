@@ -49,6 +49,39 @@ internal sealed class GitHubPullRequestDetector(
     internal static readonly HashSet<string> PullRequestEventNames =
         new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
 
+    // Events that aren't PR builds and check out GITHUB_SHA by default; only these report
+    // CI.IsPullRequest=false. Any other event (issue_comment, workflow_run, repository_dispatch, …) runs
+    // on the default branch's ref but usually checks out other code, so calling it a push build would
+    // file the tested code under main's tip. Such runs send neither the flag nor CI.CommitSha.
+    private static readonly HashSet<string> _pushEventNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "push", "schedule", "workflow_dispatch", "merge_group", "release", "create",
+            "deployment", "deployment_status",
+        };
+
+    /// <summary>
+    /// <c>CI.IsPullRequest</c> for a GitHub Actions run: <c>true</c> for a PR build, <c>false</c> for a
+    /// push-like event, and <c>null</c> when the event doesn't say which commit was built (then
+    /// <c>EnvironmentDetector</c> sends neither the flag nor <c>CI.CommitSha</c>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PullRequestEventNames"/> misses other PR-triggered events (<c>pull_request_review</c>,
+    /// …), which run on <c>refs/pull/N/merge</c>; <c>pull_request_target</c> runs on the base ref, so
+    /// both checks are needed.
+    /// </remarks>
+    internal static bool? PullRequestFlag(Func<string, string?> getVariable)
+    {
+        string eventName = getVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+        if (PullRequestEventNames.Contains(eventName) ||
+            (getVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false))
+        {
+            return true;
+        }
+
+        return _pushEventNames.Contains(eventName) ? false : null;
+    }
+
     // ReadOnlySpan<byte> deserialization doesn't skip a BOM the way the stream overloads do.
     private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
