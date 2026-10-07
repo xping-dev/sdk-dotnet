@@ -139,8 +139,8 @@ Xping automatically captures:
 If tests run inside a container (`docker run`), pass the `GITHUB_*` variables, including
 `GITHUB_SERVER_URL`, **and** mount the runner's temp directory so the file at `GITHUB_EVENT_PATH`
 is readable. Without them, the run is still recorded, but PR context (PR number, branches, PR
-comment) is skipped and a warning is logged. Without `GITHUB_EVENT_NAME`, the run is also filed under
-no commit.
+comment) is skipped and a warning is logged. Without `GITHUB_EVENT_NAME`, a warning is logged, PR
+context is skipped, and unless `GITHUB_REF` is `refs/pull/*` the run is filed under no commit.
 
 ---
 
