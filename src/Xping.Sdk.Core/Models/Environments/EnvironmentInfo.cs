@@ -140,7 +140,7 @@ public sealed class EnvironmentInfo
     /// Two more describe the branch:
     /// <list type="bullet">
     /// <item><description><c>CI.Branch</c>: the bare name of the branch built (no <c>refs/heads/</c>,
-    /// no remote); on a pull request build, the PR's source branch.</description></item>
+    /// no remote); on a pull request build, the PR's source branch; on a tag build, the tag name.</description></item>
     /// <item><description><c>CI.DefaultBranch</c>: the repository's default branch, sent only where the
     /// platform reports it (GitHub Actions, GitLab CI).</description></item>
     /// </list>

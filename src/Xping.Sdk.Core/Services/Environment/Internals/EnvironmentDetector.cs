@@ -492,7 +492,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
                     // Not BUILD_SOURCEBRANCHNAME: it is the ref's last segment only, so feature/main would read
                     // as main. A PR build's BUILD_SOURCEBRANCH is refs/pull/N/merge, so take the PR's source.
-                    AddIfNotNull(properties, "CI.Branch", BranchOfHeadsRef(GetEnvironmentVariable(
+                    AddIfNotNull(properties, "CI.Branch", BranchOrTagOfRef(GetEnvironmentVariable(
                         isAzurePullRequest ? "SYSTEM_PULLREQUEST_SOURCEBRANCH" : "BUILD_SOURCEBRANCH")));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
                     AddPullRequestFlag(properties, isAzurePullRequest);
@@ -930,14 +930,21 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             : gitRef;
     }
 
-    // Only refs/heads/ refs name a branch; a tag or PR ref yields nothing rather than a non-branch name.
-    private static string? BranchOfHeadsRef(string? gitRef)
+    // A tag build sends the tag name, as GITHUB_REF_NAME and CI_COMMIT_REF_NAME do, so Xping Cloud
+    // files it as a non-default ref rather than an unplaceable run. Any other ref (refs/pull/N/merge)
+    // names no branch and yields nothing.
+    private static string? BranchOrTagOfRef(string? gitRef)
     {
-        const string headsPrefix = "refs/heads/";
-        return gitRef is not null && gitRef.Length > headsPrefix.Length &&
-            gitRef.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
-            ? gitRef.Substring(headsPrefix.Length)
-            : null;
+        if (gitRef is null)
+            return null;
+
+        foreach (string prefix in (string[])["refs/heads/", "refs/tags/"])
+        {
+            if (gitRef.Length > prefix.Length && gitRef.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return gitRef.Substring(prefix.Length);
+        }
+
+        return null;
     }
 
     // Freestyle jobs report GIT_BRANCH as origin/main. Only the origin remote is stripped: a job that

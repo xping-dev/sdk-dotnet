@@ -628,7 +628,7 @@ public sealed class EnvironmentDetectorTests
     [Theory]
     [InlineData(null, "refs/heads/feature/main", "main", null, "feature/main")]
     [InlineData(null, "refs/heads/main", "main", null, "main")]
-    [InlineData(null, "refs/tags/v1", "v1", null, null)]
+    [InlineData(null, "refs/tags/release/1.0", "1.0", null, "release/1.0")]
     [InlineData("PullRequest", "refs/pull/12/merge", "merge", "refs/heads/feature/x", "feature/x")]
     public async Task AzurePipelinesSendsTheFullBranchName(
         string? buildReason,

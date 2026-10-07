@@ -207,8 +207,8 @@ Xping automatically captures:
 - `BUILD_SOURCEVERSION` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_SOURCEBRANCH` - Normalized into `CI.Branch`, the full branch name
-  without `refs/heads/` (`feature/main`, not `main`); on a PR build, the PR's source branch. Not sent
-  for a tag build
+  without `refs/heads/` (`feature/main`, not `main`); on a PR build, the PR's source branch; on a tag
+  build, the tag name
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
   `CI.ServerUrl`, the same server the PR context records
