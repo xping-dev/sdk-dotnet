@@ -1445,6 +1445,12 @@ The Xping skill and the MCP server run the CLI as a child process. Rules:
   answered): it runs weekly**, about 160 billed minutes per month, plus
   `workflow_dispatch` for a manual run after a backend change. Developers run the same filter
   locally before touching a backend.
+- Code coverage comes from the PR job only, which cannot run the native backends: the Windows and
+  macOS stores never execute on Linux, and `LibSecretStore` needs a keyring the PR runner does not
+  install. The three backend classes, and the OS switch in `ServiceCollectionExtensions` that
+  constructs them, are `[ExcludeFromCodeCoverage]` with that reason; their tests are the weekly run
+  above. Everything they share (`CredentialRecordCodec`, `ProbedSecret`, the selector and
+  `CredentialStores`) stays measured, so keep logic out of the backends.
 - Tests use the service/target name `xping-cli-tests` and a Cloud URL of
   `https://tests.invalid`, and delete what they create in `finally`, so a developer's real login
   is never touched.
