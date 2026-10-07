@@ -364,6 +364,7 @@ public static class XpingServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
+        services.AddXpingSerialization();
         services.AddSingleton<IEnvironmentDetector, EnvironmentDetector>();
 
         return services;

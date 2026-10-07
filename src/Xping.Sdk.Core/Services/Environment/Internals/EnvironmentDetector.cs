@@ -490,10 +490,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddServerUrl(properties, AzurePipelinesServerUrl());
                     bool isAzurePullRequest = AzureDevOpsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable);
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
-                    // Not BUILD_SOURCEBRANCHNAME: it is the ref's last segment only, so feature/main would read
-                    // as main. A PR build's BUILD_SOURCEBRANCH is refs/pull/N/merge, so take the PR's source.
-                    AddIfNotNull(properties, "CI.Branch", BranchOrTagOfRef(GetEnvironmentVariable(
-                        isAzurePullRequest ? "SYSTEM_PULLREQUEST_SOURCEBRANCH" : "BUILD_SOURCEBRANCH")));
+                    AddIfNotNull(properties, "CI.Branch", AzurePipelinesBranch(isAzurePullRequest));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
                     AddPullRequestFlag(properties, isAzurePullRequest);
                     AddIfNotNull(properties, "CI.RequestedFor", GetEnvironmentVariable("BUILD_REQUESTEDFOR"));
@@ -507,12 +504,14 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB (flagged, but no PR
                     // context is detected for it). A job built by any other PR plugin reads as a push build.
                     bool isBranchSourcePullRequest = JenkinsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable);
-                    AddPullRequestFlag(properties, isBranchSourcePullRequest || HasValue("ghprbPullId"));
+                    bool isGhprbPullRequest = HasValue("ghprbPullId");
+                    AddPullRequestFlag(properties, isBranchSourcePullRequest || isGhprbPullRequest);
                     AddIfNotNull(properties, "CI.GitBranch", GetEnvironmentVariable("GIT_BRANCH"));
-                    // A Branch Source PR build names its job (BRANCH_NAME, and GIT_BRANCH with it) PR-12, so
-                    // only CHANGE_BRANCH names the PR's source branch.
-                    AddIfNotNull(properties, "CI.Branch", isBranchSourcePullRequest
-                        ? GetEnvironmentVariable("CHANGE_BRANCH")
+                    // On a PR build, GIT_BRANCH names the PR, not its source branch: Branch Source names the job
+                    // (BRANCH_NAME, and GIT_BRANCH with it) PR-12, and GHPRB checks out origin/pr/12/merge.
+                    AddIfNotNull(properties, "CI.Branch",
+                        isBranchSourcePullRequest ? GetEnvironmentVariable("CHANGE_BRANCH")
+                        : isGhprbPullRequest ? GetEnvironmentVariable("ghprbSourceBranch")
                         : GetFirstNonEmptyValue(
                             GetEnvironmentVariable("BRANCH_NAME"),
                             StripOriginRemote(GetEnvironmentVariable("GIT_BRANCH"))));
@@ -928,6 +927,21 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         return gitRef!.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
             ? gitRef.Substring(headsPrefix.Length, gitRef.Length - headsPrefix.Length)
             : gitRef;
+    }
+
+    // Not BUILD_SOURCEBRANCHNAME for a Git ref: it is the ref's last segment only, so feature/main would
+    // read as main. A PR build's BUILD_SOURCEBRANCH is refs/pull/N/merge, so the PR's source is taken;
+    // Azure Repos gives it as refs/heads/feature/x, GitHub repos as a bare feature/x. A TFVC build's
+    // BUILD_SOURCEBRANCH is a server path ($/project/main), which only BUILD_SOURCEBRANCHNAME names.
+    private static string? AzurePipelinesBranch(bool isPullRequest)
+    {
+        if (isPullRequest)
+            return ExtractBranchName(GetEnvironmentVariable("SYSTEM_PULLREQUEST_SOURCEBRANCH"));
+
+        string? sourceBranch = GetEnvironmentVariable("BUILD_SOURCEBRANCH");
+        return sourceBranch is not null && sourceBranch.StartsWith("refs/", StringComparison.OrdinalIgnoreCase)
+            ? BranchOrTagOfRef(sourceBranch)
+            : GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME");
     }
 
     // A tag build sends the tag name, as GITHUB_REF_NAME and CI_COMMIT_REF_NAME do, so Xping Cloud

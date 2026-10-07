@@ -208,7 +208,7 @@ Xping automatically captures:
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
 - `BUILD_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_SOURCEBRANCH` - Normalized into `CI.Branch`, the full branch name
   without `refs/heads/` (`feature/main`, not `main`); on a PR build, the PR's source branch; on a tag
-  build, the tag name
+  build, the tag name. TFVC builds use `BUILD_SOURCEBRANCHNAME`
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
   `CI.ServerUrl`, the same server the PR context records
@@ -382,9 +382,10 @@ Xping automatically captures:
   multibranch (Branch Source) builds of GitHub, GitLab and Azure DevOps repositories on any server.
   The platform is read from the shape of `CHANGE_URL`. For a GitLab instance under a relative URL
   root, the root ends up in the owner rather than the server.
-- `CHANGE_BRANCH` / `BRANCH_NAME` / `GIT_BRANCH` - Normalized into `CI.Branch`: the PR's source branch
-  (`CHANGE_BRANCH`) on a Branch Source PR build, else `BRANCH_NAME`, else `GIT_BRANCH` without a
-  leading `origin/`
+- `CHANGE_BRANCH` / `ghprbSourceBranch` / `BRANCH_NAME` / `GIT_BRANCH` - Normalized into `CI.Branch`:
+  the PR's source branch on a Branch Source (`CHANGE_BRANCH`) or GHPRB (`ghprbSourceBranch`) PR build,
+  else `BRANCH_NAME`, else `GIT_BRANCH` without a leading `origin/` or `refs/remotes/origin/` (other
+  remotes are kept as is)
 - `JOB_NAME` - Job name
 - `BUILD_USER` - User who triggered the build (if available)
 

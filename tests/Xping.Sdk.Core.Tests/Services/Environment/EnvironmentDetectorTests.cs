@@ -70,6 +70,7 @@ public sealed class EnvironmentDetectorTests
         "GIT_BRANCH",
         "BRANCH_NAME",
         "CHANGE_BRANCH",
+        "ghprbSourceBranch",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -630,6 +631,8 @@ public sealed class EnvironmentDetectorTests
     [InlineData(null, "refs/heads/main", "main", null, "main")]
     [InlineData(null, "refs/tags/release/1.0", "1.0", null, "release/1.0")]
     [InlineData("PullRequest", "refs/pull/12/merge", "merge", "refs/heads/feature/x", "feature/x")]
+    [InlineData("PullRequest", "refs/pull/12/merge", "merge", "feature/x", "feature/x")]
+    [InlineData(null, "$/Project/main", "main", null, "main")]
     public async Task AzurePipelinesSendsTheFullBranchName(
         string? buildReason,
         string sourceBranch,
@@ -660,14 +663,35 @@ public sealed class EnvironmentDetectorTests
     public async Task JenkinsSendsABareBranchName(
         string gitBranch, string? branchName, string? changeId, string? changeBranch, string expected)
     {
+        await AssertJenkinsBranch(gitBranch, branchName, changeId, changeBranch, null, null, expected);
+    }
+
+    [Fact]
+    public async Task JenkinsGhprbBuildSendsThePullRequestsSourceBranch()
+    {
+        await AssertJenkinsBranch("origin/pr/12/merge", null, null, null, "12", "feature/x", "feature/x");
+    }
+
+    private static async Task AssertJenkinsBranch(
+        string gitBranch,
+        string? branchName,
+        string? changeId,
+        string? changeBranch,
+        string? ghprbPullId,
+        string? ghprbSourceBranch,
+        string expected)
+    {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var jenkins = new EnvRestorer("JENKINS_URL", "https://jenkins.example");
         using var git = new EnvRestorer("GIT_BRANCH", gitBranch);
         using var branch = new EnvRestorer("BRANCH_NAME", branchName);
         using var change = new EnvRestorer("CHANGE_ID", changeId);
         using var changeSource = new EnvRestorer("CHANGE_BRANCH", changeBranch);
+        using var ghprbPull = new EnvRestorer("ghprbPullId", ghprbPullId);
+        using var ghprbSource = new EnvRestorer("ghprbSourceBranch", ghprbSourceBranch);
 
-        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync()
+            .ConfigureAwait(false);
 
         Assert.Equal(expected, info.CustomProperties["CI.Branch"]);
         Assert.Equal(gitBranch, info.CustomProperties["CI.GitBranch"]);
