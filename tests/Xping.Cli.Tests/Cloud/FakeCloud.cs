@@ -50,6 +50,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     private readonly Dictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DeviceGrant> _deviceGrants = new(StringComparer.Ordinal);
     private readonly Queue<AuthorizeScript> _authorizeScripts = new();
+    private readonly Dictionary<string, IssuedAccessToken> _accessTokens = new(StringComparer.Ordinal);
     private int _sequence;
 
     public FakeCloud(TimeProvider time)
@@ -107,7 +108,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, status, error, Drop: false, description));
+                _faults.Enqueue(new Fault(path, status, error, Drop: false, description, Problem: false, RetryAfter: null));
         }
     }
 
@@ -120,7 +121,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, 0, null, Drop: true, string.Empty));
+                _faults.Enqueue(new Fault(path, 0, null, Drop: true, string.Empty, Problem: false, RetryAfter: null));
         }
     }
 
@@ -194,6 +195,10 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         {
             // Stopping the listener ends the loop this way.
         }
+
+        // Contract §7.1, for every test that talks to the fake: never both credential headers
+        // (Report_BothHeadersNever, cli-auth-cli-spec §18.2).
+        Assert.DoesNotContain(Requests, r => r.Headers.ContainsKey("Authorization") && r.Headers.ContainsKey("X-API-Key"));
     }
 
     private static (HttpListener Listener, int Port) Bind()
@@ -283,15 +288,25 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             return;
         }
 
-        Reply reply = fault is not null
-            ? new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, fault.Description))
-            : Route(request.HttpMethod, path, form, request.QueryString);
+        Reply reply = fault switch
+        {
+            null => Route(request.HttpMethod, path, form, request.QueryString, request.Headers),
+            { Problem: true } => Problem((int)fault.Status, fault.Error ?? "Error.Injected", fault.Description) with
+            {
+                RetryAfter = fault.RetryAfter
+            },
+            _ => new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, fault.Description))
+        };
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";
         context.Response.Headers["Cache-Control"] = "no-store";
         if (reply.Location is not null)
             context.Response.Headers["Location"] = reply.Location;
+        if (reply.WwwAuthenticate is not null)
+            context.Response.Headers["WWW-Authenticate"] = reply.WwwAuthenticate;
+        if (reply.RetryAfter is { } retryAfter)
+            context.Response.Headers["Retry-After"] = retryAfter.ToString(CultureInfo.InvariantCulture);
 
         byte[] bytes = Encoding.UTF8.GetBytes(reply.Body);
         context.Response.ContentLength64 = bytes.Length;
@@ -299,9 +314,10 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         context.Response.Close();
     }
 
-    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query) =>
+    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers) =>
         (method, path) switch
         {
+            (_, _) when path.StartsWith(GatewayPrefix, StringComparison.Ordinal) => Gateway(method, path, query, headers),
             ("GET", "/.well-known/openid-configuration") => Discovery(),
             ("GET", "/connect/authorize") => Authorize(query),
             (_, "/moved") => new Reply(302, string.Empty, CloudUrl + "/connect/token"),
@@ -525,6 +541,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     private string AccessToken(Session session)
     {
         DateTimeOffset now = _time.GetUtcNow();
+        string jti = NewOpaque("jti");
         var header = new JsonObject { ["alg"] = "none", ["typ"] = "at+jwt" };
         var payload = new JsonObject
         {
@@ -536,12 +553,14 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             ["email"] = Email,
             ["scope"] = "user:read",
             ["client_id"] = "xping-cli",
-            ["jti"] = NewOpaque("jti"),
+            ["jti"] = jti,
             ["iat"] = now.ToUnixTimeSeconds(),
             ["exp"] = (now + AccessTokenLifetime).ToUnixTimeSeconds()
         };
 
-        return $"{Base64Url(header.ToJsonString())}.{Base64Url(payload.ToJsonString())}.fake-signature";
+        string token = $"{Base64Url(header.ToJsonString())}.{Base64Url(payload.ToJsonString())}.fake-signature";
+        _accessTokens[token] = new IssuedAccessToken(session.Id, now + AccessTokenLifetime);
+        return token;
     }
 
     private void SetDeviceDecision(string userCode, DeviceDecision decision)
@@ -571,9 +590,16 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     private static string ErrorJson(string error, string description) =>
         JsonSerializer.Serialize(new Dictionary<string, string> { ["error"] = error, ["error_description"] = description });
 
-    private sealed record Reply(int Status, string Body, string? Location = null);
+    private sealed record Reply(int Status, string Body, string? Location = null)
+    {
+        public string? WwwAuthenticate { get; init; }
 
-    private sealed record Fault(string Path, HttpStatusCode Status, string? Error, bool Drop, string Description);
+        public int? RetryAfter { get; init; }
+    }
+
+    private sealed record Fault(string Path, HttpStatusCode Status, string? Error, bool Drop, string Description, bool Problem, int? RetryAfter);
+
+    private sealed record IssuedAccessToken(string SessionId, DateTimeOffset ExpiresAt);
 
     private sealed record AuthorizationCode(string RedirectUri, string CodeChallenge, DateTimeOffset ExpiresAt);
 

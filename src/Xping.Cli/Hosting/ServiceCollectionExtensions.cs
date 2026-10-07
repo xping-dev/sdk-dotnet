@@ -12,7 +12,9 @@ using Xping.Cli.Auth;
 using Xping.Cli.Auth.Browser;
 using Xping.Cli.Auth.Discovery;
 using Xping.Cli.Auth.Flows;
+using Xping.Cli.Auth.Http;
 using Xping.Cli.Auth.Store;
+using Xping.Cli.Cloud;
 using Xping.Cli.Commands;
 using Xping.Cli.Commands.Auth;
 using Xping.Cli.Configuration;
@@ -61,8 +63,8 @@ internal static class ServiceCollectionExtensions
     /// Registers <c>login</c>, <c>logout</c> and <c>auth status</c>, and the services behind them.
     /// </summary>
     /// <remarks>
-    /// The Cloud HTTP client, the credential stores and the token refresher register here as they
-    /// are built (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
+    /// The Cloud HTTP clients, the credential stores and the DataGateway client factory
+    /// (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
     /// </remarks>
     private static IServiceCollection AddXpingCliAuth(this IServiceCollection services)
     {
@@ -97,6 +99,8 @@ internal static class ServiceCollectionExtensions
             File.Exists));
         services.AddTransient<LoopbackFlow>();
         services.AddTransient<DeviceFlow>();
+        services.AddSingleton<CrossProcessLock>();
+        services.AddSingleton<CloudApiClientFactory>();
 
         services
             .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>
@@ -112,6 +116,13 @@ internal static class ServiceCollectionExtensions
 
             // The factory's logging handlers write full URLs and headers. They would be silenced by
             // the verbose logger's category filter anyway; removing them means no filter has to hold.
+            .RemoveAllLoggers();
+
+        // Only the primary handler: the resilience and credential handlers are composed per
+        // credential by CloudApiClientFactory (§2.2).
+        services
+            .AddHttpClient(CloudHttp.ClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
             .RemoveAllLoggers();
 
         return services;

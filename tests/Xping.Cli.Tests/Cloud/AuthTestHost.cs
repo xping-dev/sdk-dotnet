@@ -47,36 +47,12 @@ internal sealed class AuthTestHost : IAsyncDisposable
         Discovery.GetAsync(Cloud.CloudUrl, useCache, CancellationToken.None);
 
     /// <summary>
-    /// Waits for <paramref name="task"/>, moving the fake clock past each wait it starts.
+    /// Waits for <paramref name="task"/>, moving the fake clock past each wait it starts
+    /// (<see cref="ClockDriver"/>).
     /// </summary>
-    /// <remarks>
-    /// The clock moves only when the code under test has started a timer, and by exactly that
-    /// timer's due time, so gaps measured on the fake clock are exact whatever the machine's speed.
-    /// A task that neither finishes nor starts a timer fails the test rather than hang it.
-    /// </remarks>
-    public async Task<T> DriveAsync<T>(Task<T> task)
-    {
-        await DriveAsync((Task)task).ConfigureAwait(false);
-        return await task.ConfigureAwait(false);
-    }
+    public Task<T> DriveAsync<T>(Task<T> task) => ClockDriver.DriveAsync(Time, task);
 
-    public async Task DriveAsync(Task task)
-    {
-        TimeSpan patience = TimeSpan.FromSeconds(30);
-
-        while (!task.IsCompleted)
-        {
-            // Waiting does not take the timer, so a wait abandoned because the task finished
-            // first leaves it for the next call.
-            Task<bool> timerCreated = Time.CreatedTimers.WaitToReadAsync().AsTask();
-            await Task.WhenAny(task, timerCreated).WaitAsync(patience).ConfigureAwait(false);
-
-            if (Time.CreatedTimers.TryRead(out TimeSpan dueTime))
-                Time.Advance(dueTime);
-        }
-
-        await task.ConfigureAwait(false);
-    }
+    public Task DriveAsync(Task task) => ClockDriver.DriveAsync(Time, task);
 
     public async ValueTask DisposeAsync()
     {

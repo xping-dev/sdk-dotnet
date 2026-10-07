@@ -96,6 +96,35 @@ internal static class PrivateFiles
     }
 
     /// <summary>
+    /// Opens <paramref name="path"/> for this handle alone, creating it readable only by the user.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FileShare.None"/> is a lock: Windows enforces it, and .NET on Unix backs it with an
+    /// advisory <c>flock</c>.
+    /// </remarks>
+    /// <exception cref="IOException">Another handle has the file open.</exception>
+    public static FileStream OpenExclusive(string path)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = System.IO.FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None
+        };
+
+        if (!OperatingSystem.IsWindows())
+            options.UnixCreateMode = FileMode;
+
+        var stream = new FileStream(path, options);
+
+        // Through the handle: opening the path again to set the ACL would collide with the share mode.
+        if (OperatingSystem.IsWindows())
+            stream.SetAccessControl(CurrentUserOnly());
+
+        return stream;
+    }
+
+    /// <summary>
     /// Makes <paramref name="root"/> a <c>0700</c> directory on Unix, creating it or tightening it.
     /// </summary>
     /// <remarks>
@@ -118,7 +147,11 @@ internal static class PrivateFiles
     }
 
     [SupportedOSPlatform("windows")]
-    private static void RestrictToCurrentUser(string path)
+    private static void RestrictToCurrentUser(string path) =>
+        new FileInfo(path).SetAccessControl(CurrentUserOnly());
+
+    [SupportedOSPlatform("windows")]
+    private static FileSecurity CurrentUserOnly()
     {
         SecurityIdentifier user = WindowsIdentity.GetCurrent().User
             ?? throw new UnreachableException("A Windows process always runs as a user.");
@@ -126,7 +159,7 @@ internal static class PrivateFiles
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
-        new FileInfo(path).SetAccessControl(security);
+        return security;
     }
 
     private static void TryDelete(string path)
