@@ -81,11 +81,68 @@ public sealed class CredentialStoresTests
         _file.Add(Record());
         var stores = new CredentialStores(_keychain, [_keychain, _file], null);
 
-        Assert.True(await stores.DeleteAllAsync(CloudUrl, CancellationToken.None));
+        CredentialDeletion deletion = await stores.DeleteAllAsync(CloudUrl, CancellationToken.None);
+
+        Assert.True(deletion.Deleted);
+        Assert.Empty(deletion.Unchecked);
 
         Assert.Equal([CloudUrl], _keychain.Deleted);
         Assert.Equal([CloudUrl], _file.Deleted);
-        Assert.False(await stores.DeleteAllAsync(CloudUrl, CancellationToken.None));
+        Assert.False((await stores.DeleteAllAsync(CloudUrl, CancellationToken.None)).Deleted);
+    }
+
+    [Fact]
+    public async Task AFailureToRemoveTheOldFileEntryDoesNotFailTheWrite()
+    {
+        // Before the fix, login exited 14 "could not be stored" although the keychain held the sign-in.
+        _file.Add(Record());
+        _file.Fails = true;
+        var stores = new CredentialStores(_keychain, [_keychain, _file], null);
+
+        string? warning = await stores.WriteAsync(Record(), CancellationToken.None);
+
+        Assert.True(_keychain.Contains(CloudUrl));
+        Assert.Equal(
+            "An older sign-in could not be removed; it is no longer used. Could not delete from ~/.xping/credentials.json.",
+            warning);
+    }
+
+    [Fact]
+    public async Task AFailureToWriteTheSelectedStoreIsThrown()
+    {
+        var stores = new CredentialStores(_keychain, [_keychain, _file], null);
+        _keychain.WriteFails = true;
+
+        await Assert.ThrowsAsync<CredentialStoreException>(() => stores.WriteAsync(Record(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SigningOutAlsoDeletesFromAnUnreachableKeychain()
+    {
+        // Before the fix, a keychain whose probe failed (locked over SSH) was never touched by
+        // logout, so a desktop sign-in survived it.
+        _keychain.Add(Record());
+        var stores = new CredentialStores(_file, [_file], "keychain locked", [_keychain]);
+
+        CredentialDeletion deletion = await stores.DeleteAllAsync(CloudUrl, CancellationToken.None);
+
+        Assert.True(deletion.Deleted);
+        Assert.Empty(deletion.Unchecked);
+        Assert.False(_keychain.Contains(CloudUrl));
+    }
+
+    [Fact]
+    public async Task AnUnreachableKeychainThatCannotBeChangedIsReportedNotThrown()
+    {
+        _keychain.Fails = true;
+        _file.Add(Record());
+        var stores = new CredentialStores(_file, [_file], "keychain locked", [_keychain]);
+
+        CredentialDeletion deletion = await stores.DeleteAllAsync(CloudUrl, CancellationToken.None);
+
+        Assert.True(deletion.Deleted);
+        Assert.Equal(["Test Keychain"], deletion.Unchecked);
+        Assert.False(_file.Contains(CloudUrl));
     }
 
     [Fact]

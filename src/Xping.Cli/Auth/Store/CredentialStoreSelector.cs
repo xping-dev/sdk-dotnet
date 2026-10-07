@@ -12,7 +12,7 @@ namespace Xping.Cli.Auth.Store;
 /// The OS keychain is used when its probe succeeds; otherwise sign-ins go to the file, with the
 /// reason shown to the user. A keychain whose probe failed is left out of the read order: reading it
 /// would fail the same way, and <c>auth status</c> would report a store failure on every machine
-/// without a keyring.
+/// without a keyring. It is still tried by <c>logout</c>.
 /// </remarks>
 /// <param name="file">The file store, always present.</param>
 /// <param name="keychain">The OS keychain, or <see langword="null"/> where there is none.</param>
@@ -42,8 +42,11 @@ internal sealed class CredentialStoreSelector(FileCredentialStore file, IKeychai
             return new CredentialStores(file, [file], fallbackReason: null);
 
         KeychainProbe probe = keychain.Probe(cloudUrl);
-        return probe.Available
-            ? new CredentialStores(keychain, [keychain, file], fallbackReason: null)
-            : new CredentialStores(file, [file], probe.Reason);
+        if (probe.Available)
+            return new CredentialStores(keychain, [keychain, file], fallbackReason: null);
+
+        // Still offered for deletion: a sign-in made in a desktop session must not survive a
+        // logout over SSH unnoticed (§7.4).
+        return new CredentialStores(file, [file], probe.Reason, probe.MayHoldSignIns ? [keychain] : []);
     }
 }

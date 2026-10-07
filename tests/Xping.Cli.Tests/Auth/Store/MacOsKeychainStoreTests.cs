@@ -27,6 +27,12 @@ public sealed class MacOsKeychainStoreTests : IAsyncLifetime
     public Task NothingStoredReadsAsNoneAndProbesAsAvailable() => KeychainStoreScenarios.NothingStoredReadsAsNoneAndProbesAsAvailable(_store);
 
     [MacOsFact]
+    public Task AReadAfterAWriteSeesTheWriteNotTheProbe() => KeychainStoreScenarios.AReadAfterAWriteSeesTheWriteNotTheProbe(_store);
+
+    [MacOsFact]
+    public Task AReadAfterADeleteSeesTheDeleteNotTheProbe() => KeychainStoreScenarios.AReadAfterADeleteSeesTheDeleteNotTheProbe(_store);
+
+    [MacOsFact]
     public Task ARecordRoundTrips() => KeychainStoreScenarios.ARecordRoundTrips(_store);
 
     [MacOsFact]

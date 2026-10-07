@@ -10,13 +10,13 @@ using Xping.Sdk.Core.Services.Serialization;
 namespace Xping.Cli.Auth.Store;
 
 /// <summary>
-/// Turns a <see cref="CredentialRecord"/> into the secret a keychain entry holds, and back.
+/// Turns a <see cref="CredentialRecord"/> into the UTF-8 JSON a store keeps, and back.
 /// </summary>
 /// <remarks>
-/// Shared by the OS backends so the size rule and the corruption rule are the same everywhere
-/// (cli-auth-cli-spec §7.3, §7.7).
+/// Shared by every backend, the file included, so the size rule, the corruption rule and the
+/// registration of tokens for redaction are the same everywhere (cli-auth-cli-spec §7.3, §7.7).
 /// </remarks>
-internal static class KeychainRecordCodec
+internal static class CredentialRecordCodec
 {
     /// <summary>
     /// Returns the UTF-8 JSON of <paramref name="record"/>, without its access token when the whole

@@ -81,7 +81,7 @@ internal sealed partial class WindowsCredentialStore(string service, IXpingSeria
                 secret = new ReadOnlySpan<byte>(native->CredentialBlob, (int)native->CredentialBlobSize).ToArray();
             }
 
-            return Task.FromResult(KeychainRecordCodec.Decode(secret, cloudUrl, serializer));
+            return Task.FromResult(CredentialRecordCodec.Decode(secret, cloudUrl, serializer));
         }
         finally
         {
@@ -96,7 +96,7 @@ internal sealed partial class WindowsCredentialStore(string service, IXpingSeria
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        byte[] secret = KeychainRecordCodec.Encode(record, MaxSecretBytes, serializer, DisplayName);
+        byte[] secret = CredentialRecordCodec.Encode(record, MaxSecretBytes, serializer, DisplayName);
         try
         {
             unsafe

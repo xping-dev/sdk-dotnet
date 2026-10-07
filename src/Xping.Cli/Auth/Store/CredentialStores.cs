@@ -21,6 +21,16 @@ internal sealed record StoredLogin(CredentialRecord Record, ICredentialStore Sto
 internal sealed record StoredLoginLookup(StoredLogin? Login, IReadOnlyList<string> Warnings, IReadOnlyList<string> Failures);
 
 /// <summary>
+/// What removing a sign-in from every store did.
+/// </summary>
+/// <param name="Deleted">Whether any store had an entry.</param>
+/// <param name="Unchecked">
+/// The stores that could not be reached in this session and may still hold a sign-in, by
+/// <see cref="ICredentialStore.DisplayName"/>.
+/// </param>
+internal sealed record CredentialDeletion(bool Deleted, IReadOnlyList<string> Unchecked);
+
+/// <summary>
 /// The credential stores of this process: the one sign-ins are written to, and the order they are
 /// read in (cli-auth-cli-spec §7.4).
 /// </summary>
@@ -31,7 +41,11 @@ internal sealed record StoredLoginLookup(StoredLogin? Login, IReadOnlyList<strin
 /// </remarks>
 internal sealed class CredentialStores
 {
-    public CredentialStores(ICredentialStore selected, IReadOnlyList<ICredentialStore> readOrder, string? fallbackReason)
+    public CredentialStores(
+        ICredentialStore selected,
+        IReadOnlyList<ICredentialStore> readOrder,
+        string? fallbackReason,
+        IReadOnlyList<ICredentialStore>? unreachable = null)
     {
         ArgumentNullException.ThrowIfNull(selected);
         ArgumentNullException.ThrowIfNull(readOrder);
@@ -42,6 +56,7 @@ internal sealed class CredentialStores
         Selected = selected;
         ReadOrder = readOrder;
         FallbackReason = fallbackReason;
+        Unreachable = unreachable ?? [];
     }
 
     /// <summary>
@@ -59,6 +74,16 @@ internal sealed class CredentialStores
     /// ("Secret Service not running"), or <see langword="null"/> when a keychain was selected.
     /// </summary>
     public string? FallbackReason { get; }
+
+    /// <summary>
+    /// Gets the stores that exist on this machine but could not be used in this session, and may
+    /// hold a sign-in made where they can (a keychain locked over SSH).
+    /// </summary>
+    /// <remarks>
+    /// Not read, because a read would fail the same way; <see cref="DeleteAllAsync"/> still tries
+    /// them, so signing out does not silently leave a sign-in behind.
+    /// </remarks>
+    public IReadOnlyList<ICredentialStore> Unreachable { get; }
 
     /// <summary>
     /// Returns the first usable sign-in for <paramref name="cloudUrl"/>, in read order.
@@ -100,36 +125,68 @@ internal sealed class CredentialStores
     /// </summary>
     /// <remarks>
     /// When that is a keychain, a file entry for the same Cloud URL is removed, so the two never
-    /// disagree about who is signed in.
+    /// disagree about who is signed in. Failing to remove it does not fail the write: the sign-in is
+    /// stored, and the keychain is read first, so the old entry is never used.
     /// </remarks>
-    /// <exception cref="CredentialStoreException">A store could not be written.</exception>
-    public async Task WriteAsync(CredentialRecord record, CancellationToken cancellationToken)
+    /// <returns>Why an older entry could not be removed, worded for the user; otherwise <see langword="null"/>.</returns>
+    /// <exception cref="CredentialStoreException">The selected store could not be written.</exception>
+    public async Task<string?> WriteAsync(CredentialRecord record, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record);
 
         await Selected.WriteAsync(record, cancellationToken).ConfigureAwait(false);
 
         if (Selected.Kind == CredentialStoreKind.File)
-            return;
+            return null;
 
+        List<string> leftovers = [];
         foreach (ICredentialStore store in ReadOrder.Where(s => s.Kind == CredentialStoreKind.File))
-            await store.DeleteAsync(record.CloudUrl, cancellationToken).ConfigureAwait(false);
+        {
+            try
+            {
+                await store.DeleteAsync(record.CloudUrl, cancellationToken).ConfigureAwait(false);
+            }
+            catch (CredentialStoreException ex)
+            {
+                leftovers.Add(ex.Message);
+            }
+        }
+
+        return leftovers.Count == 0
+            ? null
+            : $"An older sign-in could not be removed; it is no longer used. {string.Join(" ", leftovers)}";
     }
 
     /// <summary>
     /// Removes the sign-in for <paramref name="cloudUrl"/> from every store.
     /// </summary>
     /// <remarks>
-    /// Every store is tried even after one fails, so signing out removes whatever it can.
+    /// Every store is tried even after one fails, so signing out removes whatever it can. An
+    /// <see cref="Unreachable"/> store that fails is reported in
+    /// <see cref="CredentialDeletion.Unchecked"/>, not thrown: it failed its probe already, and on a
+    /// machine where it never held anything that is no reason to fail the sign-out.
     /// </remarks>
-    /// <returns>Whether any store had an entry.</returns>
+    /// <returns>Whether any store had an entry, and the stores that could not be checked.</returns>
     /// <exception cref="CredentialStoreException">
     /// One or more stores could not be changed; the others were.
     /// </exception>
-    public async Task<bool> DeleteAllAsync(string cloudUrl, CancellationToken cancellationToken)
+    public async Task<CredentialDeletion> DeleteAllAsync(string cloudUrl, CancellationToken cancellationToken)
     {
         bool deleted = false;
         List<CredentialStoreException> failures = [];
+        List<string> @unchecked = [];
+
+        foreach (ICredentialStore store in Unreachable)
+        {
+            try
+            {
+                deleted |= await store.DeleteAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
+            }
+            catch (CredentialStoreException)
+            {
+                @unchecked.Add(store.DisplayName);
+            }
+        }
 
         foreach (ICredentialStore store in ReadOrder)
         {
@@ -145,7 +202,7 @@ internal sealed class CredentialStores
 
         return failures switch
         {
-            [] => deleted,
+            [] => new CredentialDeletion(deleted, @unchecked),
             [var only] => throw only,
             _ => throw new CredentialStoreException(
                 string.Join(" ", failures.Select(f => f.Message)),

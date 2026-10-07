@@ -27,6 +27,12 @@ public sealed class WindowsCredentialStoreTests : IAsyncLifetime
     public Task NothingStoredReadsAsNoneAndProbesAsAvailable() => KeychainStoreScenarios.NothingStoredReadsAsNoneAndProbesAsAvailable(_store);
 
     [WindowsFact]
+    public Task AReadAfterAWriteSeesTheWriteNotTheProbe() => KeychainStoreScenarios.AReadAfterAWriteSeesTheWriteNotTheProbe(_store);
+
+    [WindowsFact]
+    public Task AReadAfterADeleteSeesTheDeleteNotTheProbe() => KeychainStoreScenarios.AReadAfterADeleteSeesTheDeleteNotTheProbe(_store);
+
+    [WindowsFact]
     public Task ARecordRoundTrips() => KeychainStoreScenarios.ARecordRoundTrips(_store);
 
     [WindowsFact]

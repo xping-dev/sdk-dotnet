@@ -60,6 +60,26 @@ public sealed class CredentialStoreSelectorTests
     }
 
     [Fact]
+    public void AnUnavailableKeychainIsStillOfferedForSigningOut()
+    {
+        _keychain.ProbeResult = KeychainProbe.Unavailable("keychain locked");
+
+        CredentialStores stores = new CredentialStoreSelector(_file, _keychain).Select(CloudUrl);
+
+        Assert.Equal<ICredentialStore>([_keychain], stores.Unreachable);
+    }
+
+    [Fact]
+    public void AKeychainThatCannotHoldAnythingIsNotOfferedForSigningOut()
+    {
+        _keychain.ProbeResult = KeychainProbe.Unavailable("libsecret not installed", mayHoldSignIns: false);
+
+        CredentialStores stores = new CredentialStoreSelector(_file, _keychain).Select(CloudUrl);
+
+        Assert.Empty(stores.Unreachable);
+    }
+
+    [Fact]
     public void WithoutAKeychainTheFileIsSelectedWithoutAReason()
     {
         CredentialStores stores = new CredentialStoreSelector(_file, keychain: null).Select(CloudUrl);

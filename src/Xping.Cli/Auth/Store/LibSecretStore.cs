@@ -41,6 +41,7 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
     private readonly IEnvironmentVariableProvider _environment;
     private readonly Func<string, bool> _fileExists;
     private readonly Lazy<Native?> _native;
+    private readonly ProbedSecret _probed = new();
 
     /// <param name="service">The <c>service</c> attribute: <c>xping-cli</c>, or a test name.</param>
     /// <param name="serializer">Writes and reads the record.</param>
@@ -76,7 +77,7 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
         ArgumentNullException.ThrowIfNull(cloudUrl);
 
         if (_native.Value is null)
-            return KeychainProbe.Unavailable("libsecret not installed");
+            return KeychainProbe.Unavailable("libsecret not installed", mayHoldSignIns: false);
 
         // Without a session bus libsecret tries to autolaunch one, which fails slowly or, on a
         // server with X11 forwarding, starts a daemon the user did not ask for.
@@ -85,10 +86,7 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
 
         try
         {
-            byte[]? secret = Lookup(cloudUrl);
-            if (secret is not null)
-                Array.Clear(secret);
-
+            _probed.Keep(cloudUrl, Lookup(cloudUrl));
             return KeychainProbe.Ok;
         }
         catch (CredentialStoreException)
@@ -103,13 +101,15 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
         ArgumentNullException.ThrowIfNull(cloudUrl);
         cancellationToken.ThrowIfCancellationRequested();
 
-        byte[]? secret = Lookup(cloudUrl);
+        if (!_probed.TryTake(cloudUrl, out byte[]? secret))
+            secret = Lookup(cloudUrl);
+
         if (secret is null)
             return Task.FromResult(CredentialReadResult.None);
 
         try
         {
-            return Task.FromResult(KeychainRecordCodec.Decode(secret, cloudUrl, _serializer));
+            return Task.FromResult(CredentialRecordCodec.Decode(secret, cloudUrl, _serializer));
         }
         finally
         {
@@ -123,8 +123,9 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
+        _probed.Forget();
         Native native = Loaded();
-        byte[] secret = KeychainRecordCodec.Encode(record, MaxSecretBytes, _serializer, DisplayName);
+        byte[] secret = CredentialRecordCodec.Encode(record, MaxSecretBytes, _serializer, DisplayName);
 
         // A NUL-terminated copy in native memory, cleared before it is freed.
         byte* password = (byte*)NativeMemory.AllocZeroed((nuint)secret.Length + 1);
@@ -159,6 +160,7 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
         ArgumentNullException.ThrowIfNull(cloudUrl);
         cancellationToken.ThrowIfCancellationRequested();
 
+        _probed.Forget();
         Native native = Loaded();
         using var attributes = new Attributes(native, _service, cloudUrl);
 
@@ -201,8 +203,17 @@ internal sealed class LibSecretStore : IKeychainCredentialStore
         return !string.IsNullOrEmpty(runtime) && _fileExists(Path.Combine(runtime, "bus"));
     }
 
-    private Native Loaded() =>
-        _native.Value ?? throw new CredentialStoreException($"Could not use the {DisplayName}: libsecret is not installed.");
+    private Native Loaded()
+    {
+        Native native = _native.Value
+            ?? throw new CredentialStoreException($"Could not use the {DisplayName}: libsecret is not installed.");
+
+        // Checked on every call, not only by the probe: logout still tries a store whose probe
+        // failed, and must not make libsecret autolaunch a bus.
+        return HasSessionBus()
+            ? native
+            : throw new CredentialStoreException($"Could not use the {DisplayName}: no session bus.");
+    }
 
     private unsafe void ThrowOnError(Native native, nint error, string verb)
     {

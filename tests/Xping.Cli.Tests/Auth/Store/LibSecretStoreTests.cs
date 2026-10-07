@@ -42,7 +42,7 @@ public sealed class LibSecretStoreTests : IAsyncLifetime
             KeychainStoreScenarios.Service, Serializer, Environment(("DBUS_SESSION_BUS_ADDRESS", "unix:path=/tmp/bus")), _ => true,
             libraryName: "libxping-not-installed.so.0");
 
-        Assert.Equal(KeychainProbe.Unavailable("libsecret not installed"), store.Probe(CloudUrl));
+        Assert.Equal(KeychainProbe.Unavailable("libsecret not installed", mayHoldSignIns: false), store.Probe(CloudUrl));
     }
 
     [LibSecretFact]
@@ -51,6 +51,18 @@ public sealed class LibSecretStoreTests : IAsyncLifetime
         var store = new LibSecretStore(KeychainStoreScenarios.Service, Serializer, Environment(), _ => false);
 
         Assert.Equal(KeychainProbe.Unavailable("Secret Service not running"), store.Probe(CloudUrl));
+    }
+
+    [LibSecretFact]
+    public async Task WithoutASessionBusNoOperationReachesLibsecret()
+    {
+        // Logout still tries a keychain whose probe failed; it must fail fast, not autolaunch a bus.
+        var store = new LibSecretStore(KeychainStoreScenarios.Service, Serializer, Environment(), _ => false);
+
+        CredentialStoreException ex = await Assert.ThrowsAsync<CredentialStoreException>(
+            () => store.DeleteAsync(CloudUrl, CancellationToken.None)).ConfigureAwait(false);
+
+        Assert.Equal("Could not use the Secret Service: no session bus.", ex.Message);
     }
 
     [LibSecretFact]
@@ -69,6 +81,14 @@ public sealed class LibSecretStoreTests : IAsyncLifetime
     [LibSecretFact]
     [Trait("Category", KeychainStoreScenarios.Category)]
     public Task NothingStoredReadsAsNoneAndProbesAsAvailable() => KeychainStoreScenarios.NothingStoredReadsAsNoneAndProbesAsAvailable(_store);
+
+    [LibSecretFact]
+    [Trait("Category", KeychainStoreScenarios.Category)]
+    public Task AReadAfterAWriteSeesTheWriteNotTheProbe() => KeychainStoreScenarios.AReadAfterAWriteSeesTheWriteNotTheProbe(_store);
+
+    [LibSecretFact]
+    [Trait("Category", KeychainStoreScenarios.Category)]
+    public Task AReadAfterADeleteSeesTheDeleteNotTheProbe() => KeychainStoreScenarios.AReadAfterADeleteSeesTheDeleteNotTheProbe(_store);
 
     [LibSecretFact]
     [Trait("Category", KeychainStoreScenarios.Category)]

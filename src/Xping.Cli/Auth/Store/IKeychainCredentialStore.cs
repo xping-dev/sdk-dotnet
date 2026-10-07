@@ -12,7 +12,11 @@ namespace Xping.Cli.Auth.Store;
 /// <param name="Reason">
 /// Why not, worded for the user ("keychain locked"); <see langword="null"/> when available.
 /// </param>
-internal sealed record KeychainProbe(bool Available, string? Reason)
+/// <param name="MayHoldSignIns">
+/// Whether the keychain, though unusable now, may hold a sign-in made elsewhere: a keychain locked
+/// over SSH does, a libsecret that is not installed does not.
+/// </param>
+internal sealed record KeychainProbe(bool Available, string? Reason, bool MayHoldSignIns = true)
 {
     /// <summary>
     /// The keychain can be used.
@@ -22,7 +26,7 @@ internal sealed record KeychainProbe(bool Available, string? Reason)
     /// <summary>
     /// The keychain cannot be used, for <paramref name="reason"/>.
     /// </summary>
-    public static KeychainProbe Unavailable(string reason) => new(false, reason);
+    public static KeychainProbe Unavailable(string reason, bool mayHoldSignIns = true) => new(false, reason, mayHoldSignIns);
 }
 
 /// <summary>

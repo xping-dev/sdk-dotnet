@@ -30,6 +30,26 @@ internal static class KeychainStoreScenarios
         Assert.Equal(CredentialReadResult.None, await store.ReadAsync(CloudUrl, CancellationToken.None).ConfigureAwait(false));
     }
 
+    public static async Task AReadAfterAWriteSeesTheWriteNotTheProbe(IKeychainCredentialStore store)
+    {
+        await store.DeleteAsync(CloudUrl, CancellationToken.None).ConfigureAwait(false);
+        Assert.Equal(KeychainProbe.Ok, store.Probe(CloudUrl));
+
+        await store.WriteAsync(Record(), CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Equal(Record(), (await store.ReadAsync(CloudUrl, CancellationToken.None).ConfigureAwait(false)).Record);
+    }
+
+    public static async Task AReadAfterADeleteSeesTheDeleteNotTheProbe(IKeychainCredentialStore store)
+    {
+        await store.WriteAsync(Record(), CancellationToken.None).ConfigureAwait(false);
+        Assert.Equal(KeychainProbe.Ok, store.Probe(CloudUrl));
+
+        await store.DeleteAsync(CloudUrl, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Equal(CredentialReadResult.None, await store.ReadAsync(CloudUrl, CancellationToken.None).ConfigureAwait(false));
+    }
+
     public static async Task ARecordRoundTrips(IKeychainCredentialStore store)
     {
         await store.WriteAsync(Record(), CancellationToken.None).ConfigureAwait(false);

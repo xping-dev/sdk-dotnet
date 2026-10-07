@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Xping.Sdk.Core.Services.Serialization;
 
@@ -65,13 +66,7 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         if (!entries.TryGetValue(cloudUrl, out JsonElement entry))
             return CredentialReadResult.None;
 
-        CredentialRecord? record = ParseRecord(entry);
-        if (record is null || !record.IsValidFor(cloudUrl))
-            return CredentialReadResult.Corrupt(cloudUrl);
-
-        Redaction.AddSecret(record.RefreshToken);
-        Redaction.AddSecret(record.AccessToken);
-        return new CredentialReadResult(record, null);
+        return CredentialRecordCodec.Decode(JsonMarshal.GetRawUtf8Value(entry), cloudUrl, serializer);
     }
 
     /// <inheritdoc/>
@@ -234,21 +229,6 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         {
             CredentialsFileContent? file = serializer.Deserialize<CredentialsFileContent>(content);
             return file is { SchemaVersion: FileSchemaVersion, Credentials: not null } ? file.Credentials : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private CredentialRecord? ParseRecord(JsonElement entry)
-    {
-        if (entry.ValueKind != JsonValueKind.Object)
-            return null;
-
-        try
-        {
-            return serializer.Deserialize<CredentialRecord>(entry.GetRawText());
         }
         catch (JsonException)
         {

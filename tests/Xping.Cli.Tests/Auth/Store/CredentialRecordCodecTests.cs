@@ -9,7 +9,7 @@ using static Xping.Cli.Tests.Auth.Store.CredentialTestData;
 
 namespace Xping.Cli.Tests.Auth.Store;
 
-public sealed class KeychainRecordCodecTests
+public sealed class CredentialRecordCodecTests
 {
     // CRED_MAX_CREDENTIAL_BLOB_SIZE, the only limit a backend declares today.
     private const int WindowsLimit = 2560;
@@ -17,9 +17,9 @@ public sealed class KeychainRecordCodecTests
     [Fact]
     public void ARecordThatFitsKeepsItsAccessToken()
     {
-        byte[] secret = KeychainRecordCodec.Encode(Record(), maxBytes: 4096, Serializer, "Test Keychain");
+        byte[] secret = CredentialRecordCodec.Encode(Record(), maxBytes: 4096, Serializer, "Test Keychain");
 
-        CredentialRecord? record = KeychainRecordCodec.Decode(secret, CloudUrl, Serializer).Record;
+        CredentialRecord? record = CredentialRecordCodec.Decode(secret, CloudUrl, Serializer).Record;
 
         Assert.Equal(Record(), record);
     }
@@ -29,9 +29,9 @@ public sealed class KeychainRecordCodecTests
     {
         CredentialRecord large = Record(refreshToken: new string('r', 2048)) with { AccessToken = LargeAccessToken };
 
-        byte[] secret = KeychainRecordCodec.Encode(large, maxBytes: null, Serializer, "Test Keychain");
+        byte[] secret = CredentialRecordCodec.Encode(large, maxBytes: null, Serializer, "Test Keychain");
 
-        Assert.Equal(LargeAccessToken, KeychainRecordCodec.Decode(secret, CloudUrl, Serializer).Record?.AccessToken);
+        Assert.Equal(LargeAccessToken, CredentialRecordCodec.Decode(secret, CloudUrl, Serializer).Record?.AccessToken);
     }
 
     [Fact]
@@ -40,10 +40,10 @@ public sealed class KeychainRecordCodecTests
         // A maximum-length refresh token and an access token do not fit a Windows credential (§7.3).
         CredentialRecord large = Record(refreshToken: new string('r', 2048)) with { AccessToken = LargeAccessToken };
 
-        byte[] secret = KeychainRecordCodec.Encode(large, WindowsLimit, Serializer, "Test Keychain");
+        byte[] secret = CredentialRecordCodec.Encode(large, WindowsLimit, Serializer, "Test Keychain");
 
         Assert.True(secret.Length <= WindowsLimit);
-        CredentialRecord? record = KeychainRecordCodec.Decode(secret, CloudUrl, Serializer).Record;
+        CredentialRecord? record = CredentialRecordCodec.Decode(secret, CloudUrl, Serializer).Record;
         Assert.Equal(large with { AccessToken = null, AccessTokenExpiresAt = null }, record);
     }
 
@@ -53,7 +53,7 @@ public sealed class KeychainRecordCodecTests
         CredentialRecord huge = Record(refreshToken: new string('r', 4096));
 
         var ex = Assert.Throws<CredentialStoreException>(
-            () => KeychainRecordCodec.Encode(huge, WindowsLimit, Serializer, "Test Keychain"));
+            () => CredentialRecordCodec.Encode(huge, WindowsLimit, Serializer, "Test Keychain"));
 
         Assert.Contains("too large for Test Keychain", ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("rrrr", ex.Message, StringComparison.Ordinal);
@@ -65,7 +65,7 @@ public sealed class KeychainRecordCodecTests
     [InlineData("{}")]
     public void AnUnreadableSecretIsCorrupt(string secret)
     {
-        CredentialReadResult result = KeychainRecordCodec.Decode(Encoding.UTF8.GetBytes(secret), CloudUrl, Serializer);
+        CredentialReadResult result = CredentialRecordCodec.Decode(Encoding.UTF8.GetBytes(secret), CloudUrl, Serializer);
 
         Assert.Null(result.Record);
         Assert.Equal(CredentialReadResult.Corrupt(CloudUrl), result);
@@ -76,7 +76,7 @@ public sealed class KeychainRecordCodecTests
     {
         byte[] secret = Serializer.SerializeToUtf8Bytes(Record() with { SchemaVersion = 2 });
 
-        Assert.Equal(CredentialReadResult.Corrupt(CloudUrl), KeychainRecordCodec.Decode(secret, CloudUrl, Serializer));
+        Assert.Equal(CredentialReadResult.Corrupt(CloudUrl), CredentialRecordCodec.Decode(secret, CloudUrl, Serializer));
     }
 
     [Fact]
@@ -84,6 +84,6 @@ public sealed class KeychainRecordCodecTests
     {
         byte[] secret = Serializer.SerializeToUtf8Bytes(Record(OtherCloudUrl));
 
-        Assert.Equal(CredentialReadResult.Corrupt(CloudUrl), KeychainRecordCodec.Decode(secret, CloudUrl, Serializer));
+        Assert.Equal(CredentialReadResult.Corrupt(CloudUrl), CredentialRecordCodec.Decode(secret, CloudUrl, Serializer));
     }
 }

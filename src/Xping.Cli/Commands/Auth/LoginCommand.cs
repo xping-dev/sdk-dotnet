@@ -92,9 +92,10 @@ internal sealed class LoginCommand(
         // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
         cancellationToken.ThrowIfCancellationRequested();
 
+        string? leftover;
         try
         {
-            await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
+            leftover = await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
         }
         catch (CredentialStoreException ex)
         {
@@ -106,6 +107,9 @@ internal sealed class LoginCommand(
         }
 
         session.Text.SignedIn(record, stores.Selected);
+
+        if (leftover is not null)
+            session.Text.Warning(Redaction.Scrub(leftover));
 
         if (stores.FallbackReason is { } reason)
         {

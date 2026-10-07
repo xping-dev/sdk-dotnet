@@ -23,6 +23,8 @@ internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displ
 
     public bool Fails { get; set; }
 
+    public bool WriteFails { get; set; }
+
     public List<string> Deleted { get; } = [];
 
     public KeychainProbe ProbeResult { get; set; } = KeychainProbe.Ok;
@@ -51,6 +53,9 @@ internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displ
 
     public Task WriteAsync(CredentialRecord record, CancellationToken cancellationToken)
     {
+        if (WriteFails)
+            throw new CredentialStoreException($"Could not write to {DisplayName}.");
+
         Add(record);
         return Task.CompletedTask;
     }

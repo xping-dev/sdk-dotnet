@@ -29,6 +29,8 @@ internal sealed partial class MacOsKeychainStore(string service, IXpingSerialize
     private const int ErrSecInteractionNotAllowed = -25308;
     private const int ErrSecAuthFailed = -25293;
 
+    private readonly ProbedSecret _probed = new();
+
     /// <inheritdoc/>
     public CredentialStoreKind Kind => CredentialStoreKind.Keychain;
 
@@ -49,8 +51,8 @@ internal sealed partial class MacOsKeychainStore(string service, IXpingSerialize
             // The data is asked for, not only the item: a locked keychain still lists items over SSH
             // but refuses their content, and the content is what a sign-in needs.
             status = CopyData(cloudUrl, out byte[]? secret);
-            if (secret is not null)
-                Array.Clear(secret);
+            if (status is ErrSecSuccess or ErrSecItemNotFound)
+                _probed.Keep(cloudUrl, secret);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException
             or CredentialStoreException)
@@ -72,12 +74,14 @@ internal sealed partial class MacOsKeychainStore(string service, IXpingSerialize
         ArgumentNullException.ThrowIfNull(cloudUrl);
         cancellationToken.ThrowIfCancellationRequested();
 
-        int status = CopyData(cloudUrl, out byte[]? secret);
+        int status = _probed.TryTake(cloudUrl, out byte[]? secret)
+            ? secret is null ? ErrSecItemNotFound : ErrSecSuccess
+            : CopyData(cloudUrl, out secret);
         try
         {
             return status switch
             {
-                ErrSecSuccess => Task.FromResult(KeychainRecordCodec.Decode(secret, cloudUrl, serializer)),
+                ErrSecSuccess => Task.FromResult(CredentialRecordCodec.Decode(secret, cloudUrl, serializer)),
                 ErrSecItemNotFound => Task.FromResult(CredentialReadResult.None),
                 _ => throw Failure("read", status),
             };
@@ -95,7 +99,8 @@ internal sealed partial class MacOsKeychainStore(string service, IXpingSerialize
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        byte[] secret = KeychainRecordCodec.Encode(record, MaxSecretBytes, serializer, DisplayName);
+        _probed.Forget();
+        byte[] secret = CredentialRecordCodec.Encode(record, MaxSecretBytes, serializer, DisplayName);
         try
         {
             using var scope = new CoreFoundation.Scope();
@@ -136,6 +141,7 @@ internal sealed partial class MacOsKeychainStore(string service, IXpingSerialize
         ArgumentNullException.ThrowIfNull(cloudUrl);
         cancellationToken.ThrowIfCancellationRequested();
 
+        _probed.Forget();
         using var scope = new CoreFoundation.Scope();
         int status = Security.SecItemDelete(ItemQuery(scope, cloudUrl, returnData: false));
 
