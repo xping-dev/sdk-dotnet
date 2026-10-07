@@ -474,7 +474,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.HeadBranch", GetVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetVariable("GITHUB_EVENT_NAME") ?? string.Empty;
-                    if (githubEventName.Length == 0)
+                    if (string.IsNullOrWhiteSpace(githubEventName))
                         WarnMissingGitHubEventName();
 
                     bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(GetVariable);
@@ -910,18 +910,29 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     }
 
     // Actions always sets GITHUB_EVENT_NAME, so an unset value means a container was given only some
-    // GITHUB_* variables. Without it every run - pushes to main included - silently loses its commit.
+    // GITHUB_* variables. Without it every run - pushes to main included - silently loses its commit in
+    // Xping Cloud. Git.SHA is still read from .git, so the message names CI.CommitSha, not "the commit".
     // This runs inside the _customProperties lazy, so it logs once per detector, and a lazy caches an
     // exception: a throwing logger must not fail every later detection call.
     private void WarnMissingGitHubEventName()
     {
         try
         {
-            _logger.LogWarning(
-                "GITHUB_EVENT_NAME is not set, so Xping can't tell a push from a pull request: PR context is " +
-                "skipped and, unless GITHUB_REF is refs/pull/*, the commit and CI.IsPullRequest are not " +
-                "recorded. If tests run in a container, pass GITHUB_EVENT_NAME along with the other " +
-                "GITHUB_* variables.");
+            if (_configuration.EnablePullRequestDetection)
+            {
+                _logger.LogWarning(
+                    "GITHUB_EVENT_NAME is not set, so Xping can't tell a push from a pull request: PR context " +
+                    "is skipped and, unless GITHUB_REF is refs/pull/*, CI.CommitSha and CI.IsPullRequest are " +
+                    "not sent to Xping Cloud. If tests run in a container, pass GITHUB_EVENT_NAME along with " +
+                    "the other GITHUB_* variables.");
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "GITHUB_EVENT_NAME is not set, so Xping can't tell a push from a pull request: unless " +
+                    "GITHUB_REF is refs/pull/*, CI.CommitSha and CI.IsPullRequest are not sent to Xping Cloud. " +
+                    "If tests run in a container, pass GITHUB_EVENT_NAME along with the other GITHUB_* variables.");
+            }
         }
         catch
         {

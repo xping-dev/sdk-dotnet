@@ -8,13 +8,15 @@ using Microsoft.Extensions.Logging;
 namespace Xping.Sdk.Core.Tests.Helpers;
 
 /// <summary>
-/// Records the level of every log call, or throws on each one to test that logging failures are
+/// Records the level and message of every log call, or throws on each one to test that logging failures are
 /// contained.
 /// </summary>
 // Moq can't proxy ILogger<T> for an internal T: Logging.Abstractions is strong-named.
 internal sealed class LevelRecordingLogger<T> : ILogger<T>
 {
     public List<LogLevel> Levels { get; } = [];
+
+    public List<string> Messages { get; } = [];
 
     public bool ThrowOnLog { get; init; }
 
@@ -33,5 +35,6 @@ internal sealed class LevelRecordingLogger<T> : ILogger<T>
             throw new InvalidOperationException("Logger failure.");
 
         Levels.Add(logLevel);
+        Messages.Add(formatter(state, exception));
     }
 }

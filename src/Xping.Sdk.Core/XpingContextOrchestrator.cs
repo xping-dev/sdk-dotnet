@@ -194,6 +194,11 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
             {
+                // Detect the environment now rather than at finalization: detection logs configuration
+                // warnings (a container missing GITHUB_EVENT_NAME), which at finalization would print
+                // after every test result, or not at all when vstest kills the testhost (#126).
+                _ = _environmentDetector.CustomProperties;
+
                 if (configuration.EnablePullRequestDetection)
                     _pullRequestContext = _prDetector.Detect();
 

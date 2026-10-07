@@ -900,6 +900,7 @@ public sealed class EnvironmentDetectorTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
+    [InlineData("  ")]
     public async Task GitHubWithoutAnEventNameWarnsOnce(string? eventName)
     {
         _env["GITHUB_ACTIONS"] = "true";
@@ -927,6 +928,36 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Single(logger.Levels, LogLevel.Warning);
         Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Fact]
+    public async Task TheMissingEventNameWarningNamesWhatXpingCloudLoses()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        string message = Assert.Single(logger.Messages);
+        Assert.Contains("PR context is skipped", message, StringComparison.Ordinal);
+        Assert.Contains("CI.CommitSha", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("the commit", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheMissingEventNameWarningOmitsPrContextWhenPrDetectionIsOff()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(
+            new XpingConfiguration { EnablePullRequestDetection = false }, logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        string message = Assert.Single(logger.Messages);
+        Assert.DoesNotContain("PR context", message, StringComparison.Ordinal);
+        Assert.Contains("CI.CommitSha", message, StringComparison.Ordinal);
     }
 
     [Theory]

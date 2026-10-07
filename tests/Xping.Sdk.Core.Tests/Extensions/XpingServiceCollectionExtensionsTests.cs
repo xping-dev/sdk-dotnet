@@ -178,7 +178,6 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         // Arrange
         var services = new ServiceCollection();
         services.Configure<XpingConfiguration>(o => { o.ApiKey = "k"; o.ProjectId = "p"; });
-        services.AddLogging();
         services.AddXpingCollectors();
 
         // Act

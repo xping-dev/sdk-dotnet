@@ -561,6 +561,19 @@ public sealed class XpingContextOrchestratorTests
         await orchestrator.DisposeAsync();
     }
 
+    [Fact]
+    public async Task EnvironmentIsDetectedAtInitializationSoItsWarningsAreNotLostAtShutdown()
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        var orchestrator = new TestOrchestrator(ServiceHelper.BuildOrchestratorHost(uploaderMock, envDetectorMock));
+
+        envDetectorMock.VerifyGet(e => e.CustomProperties, Times.AtLeastOnce());
+        await orchestrator.DisposeAsync();
+    }
+
     // ---------------------------------------------------------------------------
     // FinalizeSessionAsync
     // ---------------------------------------------------------------------------
