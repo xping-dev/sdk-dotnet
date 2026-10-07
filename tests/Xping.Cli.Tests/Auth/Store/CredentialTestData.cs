@@ -27,6 +27,11 @@ internal static class CredentialTestData
 
     public const string AccessToken = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl";
 
+    /// <summary>
+    /// An access token of a realistic size; a JWT with its claims is about a kilobyte.
+    /// </summary>
+    public static string LargeAccessToken { get; } = "eyJhbGciOiJSUzI1NiJ9.eyJ" + new string('a', 1000) + ".c2lnbmF0dXJl";
+
     public static IXpingSerializer Serializer { get; } =
         new ServiceCollection().AddXpingSerialization().BuildServiceProvider().GetRequiredService<IXpingSerializer>();
 

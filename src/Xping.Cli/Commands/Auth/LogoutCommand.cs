@@ -42,7 +42,7 @@ internal sealed class LogoutCommand(
     private async Task<int> SignOutAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
     {
         string cloudUrl = session.CloudUrl;
-        CredentialStores stores = selector.Select();
+        CredentialStores stores = selector.Select(cloudUrl);
         StoredLoginLookup lookup = await stores.ReadAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
 
         string? warning = null;

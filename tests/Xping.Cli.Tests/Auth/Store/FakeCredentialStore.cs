@@ -8,9 +8,10 @@ using Xping.Cli.Auth.Store;
 namespace Xping.Cli.Tests.Auth.Store;
 
 /// <summary>
-/// An in-memory store that stands in for a keychain or the file, with a scripted warning or failure.
+/// An in-memory store that stands in for a keychain or the file, with a scripted warning, failure
+/// or probe result.
 /// </summary>
-internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displayName) : ICredentialStore
+internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displayName) : IKeychainCredentialStore
 {
     private readonly Dictionary<string, CredentialRecord> _records = new(StringComparer.Ordinal);
 
@@ -23,6 +24,18 @@ internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displ
     public bool Fails { get; set; }
 
     public List<string> Deleted { get; } = [];
+
+    public KeychainProbe ProbeResult { get; set; } = KeychainProbe.Ok;
+
+    public List<string> Probed { get; } = [];
+
+    public int? MaxSecretBytes => null;
+
+    public KeychainProbe Probe(string cloudUrl)
+    {
+        Probed.Add(cloudUrl);
+        return ProbeResult;
+    }
 
     public void Add(CredentialRecord record) => _records[record.CloudUrl] = record;
 

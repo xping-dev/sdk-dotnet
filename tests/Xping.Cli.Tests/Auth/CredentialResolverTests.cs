@@ -33,7 +33,7 @@ public sealed class CredentialResolverTests : IDisposable
     {
         _home = new XpingHome(Path.Combine(_scratch, ".xping"));
         _store = new FileCredentialStore(_home, Serializer);
-        _resolver = new CredentialResolver(new CredentialStoreSelector(_store));
+        _resolver = new CredentialResolver(new CredentialStoreSelector(_store, keychain: null));
         Directory.CreateDirectory(ProjectDirectory);
     }
 

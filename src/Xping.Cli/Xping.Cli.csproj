@@ -8,6 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RollForward>Major</RollForward>
 
+    <!-- The OS credential stores call Credential Manager, Keychain and libsecret through
+         LibraryImport and function pointers (cli-auth-cli-spec §7.3). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <!-- Packaged as a .NET tool. The documented install is global (`dotnet tool install -g`),
          which puts an `xping` command on PATH - the name every command the tool prints uses.
          A tool-manifest install still works and is invoked as `dotnet xping`. -->

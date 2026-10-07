@@ -21,6 +21,7 @@ using Xping.Cli.Report.Windowing;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Hosting;
@@ -30,6 +31,9 @@ namespace Xping.Cli.Hosting;
 /// </summary>
 internal static class ServiceCollectionExtensions
 {
+    // The keychain entry name of contract §10.4; tests use their own so a real sign-in is never touched.
+    private const string KeychainService = "xping-cli";
+
     public static IServiceCollection AddXpingCliServices(
         this IServiceCollection services,
         TextWriter output,
@@ -73,7 +77,9 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<DiscoveryClient>();
         services.AddSingleton<OAuthClient>();
         services.AddSingleton<FileCredentialStore>();
-        services.AddSingleton<CredentialStoreSelector>();
+        services.AddSingleton(provider => new CredentialStoreSelector(
+            provider.GetRequiredService<FileCredentialStore>(),
+            Keychain(provider, HostOsDetector.Current)));
         services.AddSingleton<CredentialResolver>();
 
         services.TryAddSingleton<IEnvironmentVariableProvider, ProcessEnvironment>();
@@ -108,6 +114,24 @@ internal static class ServiceCollectionExtensions
             .RemoveAllLoggers();
 
         return services;
+    }
+
+    /// <summary>
+    /// Returns the OS credential store of <paramref name="os"/>, or <see langword="null"/> where
+    /// there is none (cli-auth-cli-spec §7.4).
+    /// </summary>
+    private static IKeychainCredentialStore? Keychain(IServiceProvider provider, HostOs os)
+    {
+        IXpingSerializer serializer = provider.GetRequiredService<IXpingSerializer>();
+
+        return os switch
+        {
+            HostOs.Windows when OperatingSystem.IsWindows() => new WindowsCredentialStore(KeychainService, serializer),
+            HostOs.MacOS when OperatingSystem.IsMacOS() => new MacOsKeychainStore(KeychainService, serializer),
+            HostOs.Linux when OperatingSystem.IsLinux() => new LibSecretStore(
+                KeychainService, serializer, provider.GetRequiredService<IEnvironmentVariableProvider>(), File.Exists),
+            _ => null,
+        };
     }
 
     /// <summary>

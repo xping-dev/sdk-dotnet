@@ -13,6 +13,7 @@ using Xping.Cli.Auth.Flows;
 using Xping.Cli.Auth.Loopback;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Hosting;
+using Xping.Cli.Tests.Auth.Store;
 using Xping.Cli.Tests.Cloud;
 
 namespace Xping.Cli.Tests.Commands.Auth;
@@ -89,6 +90,47 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(1, Occurrences(result.Error, opened.AbsoluteUri));
         Assert.Empty(result.Output);
         Assert.Contains("Waiting for you to finish in the browser (up to 5 minutes)...", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithAKeychainTheSignInIsStoredThereAndTheFileEntryRemoved()
+    {
+        CliFlowHost host = _host;
+        host.SignIn();
+        Assert.True(File.Exists(host.CredentialsFile));
+        var keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain");
+        host.Keychain = keychain;
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.True(keychain.Contains(host.Cloud.CloudUrl));
+        Assert.False(File.Exists(host.CredentialsFile));
+        Assert.Contains("Stored in  Test Keychain", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("no OS credential store", result.Error, StringComparison.Ordinal);
+        Assert.Equal("keychain", result.Json().GetProperty("store").GetString());
+    }
+
+    [Fact]
+    public void WithoutAUsableKeychainTheSignInGoesToTheFileAndTheUserIsToldWhy()
+    {
+        CliFlowHost host = _host;
+        var keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("keychain locked"),
+        };
+        host.Keychain = keychain;
+
+        CliResult result = host.Run("login");
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.False(keychain.Contains(host.Cloud.CloudUrl));
+        Assert.True(File.Exists(host.CredentialsFile));
+        Assert.Contains(
+            $"Stored credentials in {XpingHome.Display(host.CredentialsFile)} because no OS credential store is available " +
+            "(keychain locked). The file is readable only by you.",
+            result.Error,
+            StringComparison.Ordinal);
     }
 
     [Fact]

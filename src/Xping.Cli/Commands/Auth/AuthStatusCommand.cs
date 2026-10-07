@@ -36,7 +36,7 @@ internal sealed class AuthStatusCommand(
     private async Task<int> ReportAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
     {
         string cloudUrl = session.CloudUrl;
-        CredentialStores stores = selector.Select();
+        CredentialStores stores = selector.Select(cloudUrl);
         ResolvedCredential credential = await resolver.ResolveAsync(configuration, cancellationToken).ConfigureAwait(false);
 
         // Store messages can quote an exception from the file system; scrubbed like every message.

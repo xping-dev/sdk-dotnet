@@ -31,6 +31,13 @@ internal sealed record CredentialReadResult(CredentialRecord? Record, string? Wa
     /// Nothing is stored and nothing is wrong.
     /// </summary>
     public static CredentialReadResult None { get; } = new(null, null);
+
+    /// <summary>
+    /// An entry exists for <paramref name="cloudUrl"/> but cannot be used (cli-auth-cli-spec §7.7).
+    /// </summary>
+    /// <remarks>Nothing is deleted: a newer CLI may have written it, and only a login replaces it.</remarks>
+    public static CredentialReadResult Corrupt(string cloudUrl) =>
+        new(null, $"Stored credentials for {cloudUrl} are unreadable and will be replaced at the next `xping login`.");
 }
 
 /// <summary>

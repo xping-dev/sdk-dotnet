@@ -107,8 +107,9 @@ internal sealed class CredentialResolver(CredentialStoreSelector selector)
         ConfiguredValue? apiKey = configuration.ApiKey;
         Redaction.AddSecret(apiKey?.Value);
 
-        StoredLoginLookup lookup = await selector.Select()
-            .ReadAsync(configuration.CloudUrl.Value, cancellationToken)
+        string cloudUrl = configuration.CloudUrl.Value;
+        StoredLoginLookup lookup = await selector.Select(cloudUrl)
+            .ReadAsync(cloudUrl, cancellationToken)
             .ConfigureAwait(false);
 
         if (apiKey is { Source: ConfigurationSource.Flag })

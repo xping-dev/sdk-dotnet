@@ -60,14 +60,14 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
 
         Dictionary<string, JsonElement>? entries = Parse(content);
         if (entries is null)
-            return new CredentialReadResult(null, CorruptMessage(cloudUrl));
+            return CredentialReadResult.Corrupt(cloudUrl);
 
         if (!entries.TryGetValue(cloudUrl, out JsonElement entry))
             return CredentialReadResult.None;
 
         CredentialRecord? record = ParseRecord(entry);
         if (record is null || !record.IsValidFor(cloudUrl))
-            return new CredentialReadResult(null, CorruptMessage(cloudUrl));
+            return CredentialReadResult.Corrupt(cloudUrl);
 
         Redaction.AddSecret(record.RefreshToken);
         Redaction.AddSecret(record.AccessToken);
@@ -284,9 +284,6 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         return $"Refusing to read {file} because other users can read it. " +
             $"Run `chmod 600 {file}` (and `chmod 700 {directory}`) and try again.";
     }
-
-    private static string CorruptMessage(string cloudUrl) =>
-        $"Stored credentials for {cloudUrl} are unreadable and will be replaced at the next `xping login`.";
 
     private enum FileState
     {
