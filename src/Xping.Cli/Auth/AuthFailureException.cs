@@ -61,6 +61,12 @@ internal sealed class AuthFailureException : Exception
     public string? Reason { get; init; }
 
     /// <summary>
+    /// Gets the URL that could not be reached, when <see cref="ErrorCode"/> is
+    /// <see cref="AuthErrorCodes.CloudUnreachable"/>; <c>report</c>'s hint line names it on its own.
+    /// </summary>
+    public string? Target { get; init; }
+
+    /// <summary>
     /// Xping Cloud could not be reached, or answered with something this CLI cannot use.
     /// </summary>
     public static AuthFailureException Unreachable(string cloudUrl, string reason, Exception? innerException = null) =>
@@ -70,7 +76,8 @@ internal sealed class AuthFailureException : Exception
             $"Could not reach Xping Cloud at {cloudUrl}: {reason}.",
             innerException)
         {
-            Reason = reason
+            Reason = reason,
+            Target = cloudUrl
         };
 
     /// <summary>

@@ -171,6 +171,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (Revision(envelope.Context) is { Length: > 0 } revision)
             provenance.Add(revision);
 
+        // Only when something on the page came from Cloud. A Cloud that could not answer is said on
+        // standard error; a header claiming "cloud" over purely local rows would be the lie.
+        if (envelope.Findings.Any(f => f.Cloud != null) || envelope.LatestRun?.Failures.Any(f => f.Cloud != null) == true)
+            provenance.Add("cloud");
+
         builder.AppendLine(string.Join(separator, provenance));
 
         SummaryDto summary = envelope.Summary;
@@ -428,7 +433,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             ]);
         }
 
-        WritePairs(builder, [.. finding.Metrics.Select(metric => (metric.Label, (string?)metric.Value))]);
+        WritePairs(builder,
+        [
+            .. finding.Metrics.Select(metric => (metric.Label, (string?)metric.Value)),
+            .. CloudText.Pairs(finding.Cloud)
+        ]);
 
         if (selection.SameSubject.Count > 0)
         {
@@ -744,7 +753,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                .Append(' ', Math.Max(1, LatestRunStatusWidth - status.Length))
                .AppendLine(FitName(Name(failure.Subject), LatestRunBudget));
 
-        foreach (string line in Wrap(failure.Contrast, LatestRunBudget))
+        // Cloud's statement replaces the local one rather than joining it: it is about the same
+        // history, over every run uploaded rather than the ones on this machine.
+        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud) ?? failure.Contrast, LatestRunBudget))
             builder.Append(' ', LatestRunRowIndent).AppendLine(line);
 
         var trailer = new List<string>();
@@ -942,6 +953,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Between the evidence level and the id: the two say how much to believe the finding and
         // which finding it is, and which executions its rate was taken over belongs with the first.
+        const int budget = ContinuationBudget;
+
         var trailer = new List<string>
         {
             $"evidence {finding.EvidenceLevel}",
@@ -949,7 +962,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             finding.Id
         };
 
-        const int budget = ContinuationBudget;
+        // Cloud's confidence belongs with the local evidence level: both say how much to believe it.
+        // The category goes first when the line is short of room — the detail view always has it —
+        // because Fit() would otherwise cut the local evidence word off the front.
+        if (CloudText.Trailer(finding.Cloud, capabilities.Glyphs.Separator, withCategory: true) is { } cloud)
+        {
+            int rest = trailer.Sum(part => part.Length + SeparatorWidth);
+            trailer.Insert(1, rest + cloud.Length <= budget
+                ? cloud
+                : CloudText.Trailer(finding.Cloud, capabilities.Glyphs.Separator, withCategory: false)!);
+        }
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
@@ -964,7 +986,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
             // spent counts one separator per segment already in the list, which is exactly the
             // number string.Join adds once the location joins them: three segments here — evidence,
-            // population, id — is three separators for the four the join sees. So the joined line
+            // population, id, plus Cloud's confidence when present — is three separators for the
+            // four the join sees. So the joined line
             // lands on the budget rather than three columns over it, whatever the segment count.
             if (FitPath(location, budget - spent) is { } fitted)
                 trailer.Add(fitted);

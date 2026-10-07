@@ -4,6 +4,7 @@
  */
 
 using System.Text;
+using Xping.Cli.Cloud;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
@@ -22,22 +23,25 @@ namespace Xping.Cli.Commands;
 /// Runs local analysis and renders the result.
 /// </summary>
 /// <remarks>
-/// Wiring only: resolve a window, build the context, run the providers, render, choose an exit code.
-/// Every decision worth arguing about lives in one of those steps rather than here, which is what
-/// lets each be tested without a command line.
+/// Wiring only: resolve a window, build the context, run the providers, add Cloud data, render,
+/// choose an exit code. Every decision worth arguing about lives in one of those steps rather than
+/// here, which is what lets each be tested without a command line.
 /// </remarks>
 internal sealed class ReportCommand(
     ILocalSessionStoreFactory sessionStoreFactory,
     IWindowResolver windowResolver,
     FindingCoordinator coordinator,
+    CloudEnricher enricher,
+    GlobalOptions globalOptions,
     ConsoleIO io)
 {
     /// <summary>
     /// Runs the report.
     /// </summary>
     /// <param name="options">Parsed command-line options.</param>
+    /// <param name="cancellationToken">Stops the Cloud enrichment.</param>
     /// <returns>Process exit code.</returns>
-    public int Run(ReportOptions options)
+    public async Task<int> RunAsync(ReportOptions options, CancellationToken cancellationToken)
     {
         string startDirectory = options.Directory ?? Directory.GetCurrentDirectory();
 
@@ -130,6 +134,32 @@ internal sealed class ReportCommand(
             return ExitCodes.FindingNotReported;
         }
 
+        // After every exit path the local analysis decides, so Cloud can never change one. The
+        // one-line summary has no slot for Cloud data, so it is not worth a request.
+        if (options.Format != ReportFormat.Summary)
+        {
+            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(resolved.Window.Sessions));
+            EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
+
+            WriteCloudHints(enriched.Hints);
+            envelope = enriched.Envelope;
+        }
+
+        return Render(options, envelope, analysis, resolved.Window, store, source, assembly);
+    }
+
+    /// <summary>
+    /// Writes the report and the notices around it, and chooses the exit code.
+    /// </summary>
+    private int Render(
+        ReportOptions options,
+        ReportEnvelope envelope,
+        AnalysisResult analysis,
+        AnalysisWindow window,
+        ILocalSessionStore store,
+        LocalSessionSource source,
+        string? assembly)
+    {
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
         OutputCapabilities capabilities = OutputCapabilities.Resolve(
@@ -150,7 +180,7 @@ internal sealed class ReportCommand(
         if (pad)
         {
             WriteScopeNotice(source, assembly, options.Assembly != null);
-            WriteCloudInvitation(store, analysis, resolved.Window.Sessions, capabilities);
+            WriteCloudInvitation(store, analysis, window.Sessions, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
             // block, and one wedged in the middle of it would separate nothing.
@@ -161,6 +191,42 @@ internal sealed class ReportCommand(
         return envelope.Selection != null
             ? ExitCodes.Success
             : ExitCodes.ForReport(analysis.Findings, options.FailOn);
+    }
+
+    /// <summary>
+    /// Says why Cloud data is missing, on standard error.
+    /// </summary>
+    /// <remarks>
+    /// Quiet on a pipe so <c>report --json | jq</c> stays clean, except for the expired sign-in: that
+    /// one has a fix only a human can apply, and the human may only ever see a log.
+    /// </remarks>
+    private void WriteCloudHints(IReadOnlyList<CloudHint> hints)
+    {
+        foreach (CloudHint hint in hints)
+        {
+            if (hint.Always || io.IsErrorTerminal || globalOptions.Verbose)
+                io.Error.WriteLine(hint.Text);
+        }
+    }
+
+    /// <summary>
+    /// The project pin of each assembly's newest session that recorded one.
+    /// </summary>
+    private static Dictionary<string, string> SessionPins(IReadOnlyList<TestSession> sessions)
+    {
+        var pins = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Newest first, so the first pin seen for an assembly is the current one.
+        foreach (TestSession session in sessions)
+        {
+            if (session.EnvironmentInfo?.CustomProperties?.GetValueOrDefault(LocalSessionProperties.ProjectId) is not { Length: > 0 } pin)
+                continue;
+
+            foreach (string assembly in SessionAssemblies.Of(session))
+                pins.TryAdd(assembly, pin);
+        }
+
+        return pins;
     }
 
     private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>

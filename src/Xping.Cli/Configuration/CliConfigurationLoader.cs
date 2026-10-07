@@ -10,7 +10,7 @@ namespace Xping.Cli.Configuration;
 
 /// <summary>
 /// Resolves the <see cref="CliConfiguration"/> of this invocation from the parsed global options,
-/// the environment and the working directory.
+/// the environment and the settings files of a directory.
 /// </summary>
 internal sealed class CliConfigurationLoader(GlobalOptions options, IEnvironmentVariableProvider environment)
 {
@@ -20,6 +20,16 @@ internal sealed class CliConfigurationLoader(GlobalOptions options, IEnvironment
     /// <exception cref="CliConfigurationException">
     /// A settings file cannot be parsed, or a configured Cloud URL is invalid.
     /// </exception>
-    public CliConfiguration Load() =>
-        CliConfiguration.Load(options.CloudUrl, options.ApiKey, Directory.GetCurrentDirectory(), environment.GetVariable);
+    public CliConfiguration Load() => Load(Directory.GetCurrentDirectory(), projectFlag: null);
+
+    /// <summary>
+    /// Loads the configuration with the settings files of <paramref name="directory"/>.
+    /// </summary>
+    /// <param name="directory">Where <c>appsettings*.json</c> are looked for: the directory a report is about.</param>
+    /// <param name="projectFlag">The <c>report --project</c> value, if given.</param>
+    /// <exception cref="CliConfigurationException">
+    /// A settings file cannot be parsed, or a configured Cloud URL is invalid.
+    /// </exception>
+    public CliConfiguration Load(string directory, string? projectFlag) =>
+        CliConfiguration.Load(options.CloudUrl, options.ApiKey, projectFlag, directory, environment.GetVariable);
 }

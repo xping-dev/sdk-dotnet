@@ -307,7 +307,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error);
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
         return (code, output.ToString(), error.ToString());
     }
 
@@ -326,7 +326,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.21", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.22", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -912,7 +912,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.21", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.22", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

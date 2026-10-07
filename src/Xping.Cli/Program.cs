@@ -368,6 +368,12 @@ internal static class Program
             Description = "Resolve the store from this directory"
         };
 
+        Option<string?> projectOption = new("--project")
+        {
+            Description = "Read Cloud data from this Xping Cloud project key",
+            CustomParser = ParseProjectKey
+        };
+
         Option<bool> asciiOption = new("--ascii")
         {
             Description = "Force ASCII output"
@@ -383,8 +389,8 @@ internal static class Program
         Command command = new("report", "Report test reliability findings from recent local runs")
         {
             runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
-            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, asciiOption,
-            noColorOption
+            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, projectOption,
+            asciiOption, noColorOption
         };
 
         // Presence is tested with GetResult rather than GetValue: an option whose own parser already
@@ -441,7 +447,9 @@ internal static class Program
             }
         });
 
-        command.SetAction(parseResult =>
+        // Not run cooperatively: Ctrl+C ends a report as it always has, and the Cloud enrichment
+        // has a budget of its own.
+        command.SetAction((parseResult, cancellationToken) =>
         {
             bool showAll = parseResult.GetValue(allOption);
 
@@ -456,6 +464,7 @@ internal static class Program
                 Assembly = parseResult.GetValue(assemblyOption),
                 Id = parseResult.GetValue(idOption),
                 Directory = parseResult.GetValue(directoryOption),
+                Project = parseResult.GetValue(projectOption),
                 Format = parseResult.GetValue(jsonOption) ? ReportFormat.Json
                     : parseResult.GetValue(summaryOption) ? ReportFormat.Summary
                     : parseResult.GetValue(formatOption),
@@ -464,7 +473,7 @@ internal static class Program
                 NoColor = parseResult.GetValue(noColorOption)
             };
 
-            return services.GetRequiredService<ReportCommand>().Run(options);
+            return services.GetRequiredService<ReportCommand>().RunAsync(options, cancellationToken);
         });
 
         return command;
@@ -540,6 +549,23 @@ internal static class Program
         }
 
         return parsed;
+    }
+
+    /// <summary>
+    /// Parses a Cloud project key: anything a URL path segment can carry once escaped, but not a
+    /// path, query or fragment of its own.
+    /// </summary>
+    private static string? ParseProjectKey(ArgumentResult result)
+    {
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value.Trim() : string.Empty;
+
+        if (raw.Length == 0 || raw.Length > 200 || raw.Any(c => char.IsControl(c) || c is '/' or '\\' or '?' or '#'))
+        {
+            result.AddError($"--project expects an Xping Cloud project key, got '{raw}'.");
+            return null;
+        }
+
+        return raw;
     }
 
     /// <summary>

@@ -4,6 +4,9 @@
  */
 
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Xping.Cli.Auth;
+using Xping.Cli.Cloud;
 using Xping.Cli.Commands;
 using Xping.Cli.Report;
 using Xping.Cli.Tests.Report;
@@ -120,7 +123,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
         // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true);
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Configure);
         return (code, output.ToString() + error.ToString());
     }
 
@@ -148,7 +151,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var error = new StringWriter();
 
         int code = Program.Run(
-            ["report"], output, error, input: null, isTerminal: false);
+            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
 
         string report = output.ToString();
 
@@ -184,7 +187,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], output, error, input: null, isTerminal: false);
+        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
 
         foreach (string line in ReportText.Fenced(output.ToString()))
         {
@@ -220,7 +223,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var piped = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], piped, error, input: null, isTerminal: false);
+        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
 
         // The terminal run is padded and carries the call to action; the report between the fences
         // is what the two have to agree on.
@@ -387,10 +390,38 @@ public sealed class CliSurfaceTests : IDisposable
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal("1.21", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.22", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
         Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
+    }
+
+    [Fact]
+    public void Report_NoCredential_NoNetwork()
+    {
+        // With nothing to sign in with, the report is today's local report: no request of any kind,
+        // and only a null `cloud` added to the envelope.
+        SeedSessions("Alpha.Tests", 6);
+        using var handler = new NoNetworkHandler();
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int code = Program.Run(
+            ["report", "--json"], output, error, input: null, isTerminal: true,
+            configureServices: services =>
+            {
+                OfflineCli.Configure(services);
+                services.AddHttpClient(CloudHttp.ClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+                services.AddHttpClient(AuthHttpClients.OAuth).ConfigurePrimaryHttpMessageHandler(() => handler);
+            });
+
+        Assert.Equal(0, code);
+        Assert.Equal(0, handler.Requests);
+        Assert.Empty(error.ToString());
+
+        using JsonDocument doc = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("context").GetProperty("cloud").ValueKind);
     }
 
     [Fact]
@@ -403,7 +434,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        Assert.Equal("1.21", doc.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.22", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

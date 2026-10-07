@@ -103,6 +103,7 @@ internal sealed class CliConfiguration
     /// </summary>
     /// <param name="cloudUrlFlag">The already-normalized <c>--cloud-url</c> value, if given.</param>
     /// <param name="apiKeyFlag">The <c>--api-key</c> value, if given.</param>
+    /// <param name="projectFlag">The <c>report --project</c> value, if given.</param>
     /// <param name="directory">Where <c>appsettings*.json</c> are looked for.</param>
     /// <param name="environment">Reads an environment variable.</param>
     /// <returns>The resolved configuration.</returns>
@@ -112,6 +113,7 @@ internal sealed class CliConfiguration
     public static CliConfiguration Load(
         string? cloudUrlFlag,
         string? apiKeyFlag,
+        string? projectFlag,
         string directory,
         Func<string, string?> environment)
     {
@@ -136,7 +138,7 @@ internal sealed class CliConfiguration
         return new CliConfiguration(
             cloudUrl,
             Resolve("ApiKey", "--api-key", apiKeyFlag, files, environment),
-            Resolve("ProjectId", "--project", flag: null, files, environment));
+            Resolve("ProjectId", "--project", projectFlag, files, environment));
     }
 
     private static ConfiguredValue? Resolve(

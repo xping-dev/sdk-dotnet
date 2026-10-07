@@ -30,9 +30,10 @@ public sealed class CliConfigurationTests : IDisposable
         }
     }
 
-    private CliConfiguration Load(string? cloudUrlFlag = null, string? apiKeyFlag = null, string? directory = null) =>
+    private CliConfiguration Load(
+        string? cloudUrlFlag = null, string? apiKeyFlag = null, string? directory = null, string? projectFlag = null) =>
         CliConfiguration.Load(
-            cloudUrlFlag, apiKeyFlag, directory ?? _directory, name => _environment.GetValueOrDefault(name));
+            cloudUrlFlag, apiKeyFlag, projectFlag, directory ?? _directory, name => _environment.GetValueOrDefault(name));
 
     private void WriteSettings(string fileName, string json) =>
         File.WriteAllText(Path.Combine(_directory, fileName), json);
@@ -77,6 +78,17 @@ public sealed class CliConfigurationTests : IDisposable
         WriteSettings("appsettings.json", """{ "Xping": { "ProjectId": "file" } }""");
 
         Assert.Equal(new ConfiguredValue("nested", ConfigurationSource.Environment, "Xping__ProjectId"), Load().ProjectId);
+    }
+
+    [Fact]
+    public void TheProjectFlagWinsOverEveryOtherSource()
+    {
+        _environment["XPING_PROJECTID"] = "from-env";
+        WriteSettings("appsettings.json", """{ "Xping": { "ProjectId": "file" } }""");
+
+        Assert.Equal(
+            new ConfiguredValue("shop-tests", ConfigurationSource.Flag, "--project"),
+            Load(projectFlag: "shop-tests").ProjectId);
     }
 
     [Fact]

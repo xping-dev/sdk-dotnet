@@ -146,7 +146,7 @@ internal sealed class CliFlowHost : IAsyncDisposable
     public Task<ResolvedCredential> ResolveAsync(IServiceProvider services, string? apiKeyFlag = null)
     {
         CliConfiguration configuration = CliConfiguration.Load(
-            Cloud.CloudUrl, apiKeyFlag, HomeDirectory, name => Environment.GetValueOrDefault(name));
+            Cloud.CloudUrl, apiKeyFlag, projectFlag: null, HomeDirectory, name => Environment.GetValueOrDefault(name));
 
         return services.GetRequiredService<CredentialResolver>().ResolveAsync(configuration, CancellationToken.None);
     }

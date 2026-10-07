@@ -15,6 +15,7 @@ using Xping.Cli.Auth.Flows;
 using Xping.Cli.Auth.Http;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Projects;
 using Xping.Cli.Commands;
 using Xping.Cli.Commands.Auth;
 using Xping.Cli.Configuration;
@@ -101,6 +102,10 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<DeviceFlow>();
         services.AddSingleton<CrossProcessLock>();
         services.AddSingleton<CloudApiClientFactory>();
+        services.AddSingleton<ICloudApiClientFactory>(provider => provider.GetRequiredService<CloudApiClientFactory>());
+        services.AddSingleton<ProjectCache>();
+        services.AddSingleton<ProjectResolver>();
+        services.AddSingleton<CloudEnricher>();
 
         services
             .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>
