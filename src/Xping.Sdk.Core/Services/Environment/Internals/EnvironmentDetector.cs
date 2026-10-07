@@ -10,6 +10,7 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Sdk.Core.Services.Serialization;
 
 namespace Xping.Sdk.Core.Services.Environment.Internals;
 
@@ -21,6 +22,7 @@ namespace Xping.Sdk.Core.Services.Environment.Internals;
 internal sealed class EnvironmentDetector : IEnvironmentDetector
 {
     private readonly XpingConfiguration _configuration;
+    private readonly IXpingSerializer _serializer;
 
     // Instance-level lazy initialization for thread-safe, cached detection
     private readonly Lazy<string> _machineName;
@@ -40,9 +42,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     /// <summary>
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
     /// </summary>
-    public EnvironmentDetector(IOptions<XpingConfiguration> options)
+    public EnvironmentDetector(IOptions<XpingConfiguration> options, IXpingSerializer serializer)
     {
         _configuration = options.Value;
+        _serializer = serializer;
 
         // Initialize instance-level lazy fields
         _machineName = new Lazy<string>(GetMachineName);
@@ -458,6 +461,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         GetEnvironmentVariable("GITHUB_HEAD_REF"),
                         GetEnvironmentVariable("GITHUB_REF_NAME"),
                         ExtractBranchName(GetEnvironmentVariable("GITHUB_REF"))));
+                    AddIfNotNull(properties, "CI.DefaultBranch", ReadGitHubDefaultBranch());
                     AddIfNotNull(properties, "CI.HeadBranch", GetEnvironmentVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetEnvironmentVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetEnvironmentVariable("GITHUB_EVENT_NAME") ?? string.Empty;
@@ -484,12 +488,11 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.BuildNumber", GetEnvironmentVariable("BUILD_BUILDNUMBER"));
                     AddIfNotNull(properties, "CI.Repository", GetEnvironmentVariable("BUILD_REPOSITORY_NAME"));
                     AddServerUrl(properties, AzurePipelinesServerUrl());
+                    bool isAzurePullRequest = AzureDevOpsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable);
                     AddIfNotNull(properties, "CI.SourceBranch", GetEnvironmentVariable("BUILD_SOURCEBRANCH"));
-                    AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
-                        GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME"),
-                        ExtractBranchName(GetEnvironmentVariable("BUILD_SOURCEBRANCH"))));
+                    AddIfNotNull(properties, "CI.Branch", AzurePipelinesBranch(isAzurePullRequest));
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("BUILD_SOURCEVERSION"));
-                    AddPullRequestFlag(properties, AzureDevOpsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
+                    AddPullRequestFlag(properties, isAzurePullRequest);
                     AddIfNotNull(properties, "CI.RequestedFor", GetEnvironmentVariable("BUILD_REQUESTEDFOR"));
                     break;
 
@@ -500,11 +503,18 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("GIT_COMMIT"));
                     // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB (flagged, but no PR
                     // context is detected for it). A job built by any other PR plugin reads as a push build.
-                    AddPullRequestFlag(
-                        properties,
-                        JenkinsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable) || HasValue("ghprbPullId"));
+                    bool isBranchSourcePullRequest = JenkinsPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable);
+                    bool isGhprbPullRequest = HasValue("ghprbPullId");
+                    AddPullRequestFlag(properties, isBranchSourcePullRequest || isGhprbPullRequest);
                     AddIfNotNull(properties, "CI.GitBranch", GetEnvironmentVariable("GIT_BRANCH"));
-                    AddIfNotNull(properties, "CI.Branch", GetEnvironmentVariable("GIT_BRANCH"));
+                    // On a PR build, GIT_BRANCH names the PR, not its source branch: Branch Source names the job
+                    // (BRANCH_NAME, and GIT_BRANCH with it) PR-12, and GHPRB checks out origin/pr/12/merge.
+                    AddIfNotNull(properties, "CI.Branch",
+                        isBranchSourcePullRequest ? GetEnvironmentVariable("CHANGE_BRANCH")
+                        : isGhprbPullRequest ? GetEnvironmentVariable("ghprbSourceBranch")
+                        : GetFirstNonEmptyValue(
+                            GetEnvironmentVariable("BRANCH_NAME"),
+                            StripOriginRemote(GetEnvironmentVariable("GIT_BRANCH"))));
                     break;
 
                 case CIPlatform.GitLabCI:
@@ -515,6 +525,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.CommitSha", GetEnvironmentVariable("CI_COMMIT_SHA"));
                     AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(GetEnvironmentVariable));
                     AddIfNotNull(properties, "CI.CommitBranch", GetEnvironmentVariable("CI_COMMIT_BRANCH"));
+                    AddIfNotNull(properties, "CI.DefaultBranch", GetEnvironmentVariable("CI_DEFAULT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
                         GetEnvironmentVariable("CI_COMMIT_BRANCH"),
                         GetEnvironmentVariable("CI_COMMIT_REF_NAME")));
@@ -916,6 +927,73 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         return gitRef!.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
             ? gitRef.Substring(headsPrefix.Length, gitRef.Length - headsPrefix.Length)
             : gitRef;
+    }
+
+    // Not BUILD_SOURCEBRANCHNAME for a Git ref: it is the ref's last segment only, so feature/main would
+    // read as main. A PR build's BUILD_SOURCEBRANCH is refs/pull/N/merge, so the PR's source is taken;
+    // Azure Repos gives it as refs/heads/feature/x, GitHub repos as a bare feature/x. A TFVC build's
+    // BUILD_SOURCEBRANCH is a server path ($/project/main), which only BUILD_SOURCEBRANCHNAME names.
+    private static string? AzurePipelinesBranch(bool isPullRequest)
+    {
+        if (isPullRequest)
+            return ExtractBranchName(GetEnvironmentVariable("SYSTEM_PULLREQUEST_SOURCEBRANCH"));
+
+        string? sourceBranch = GetEnvironmentVariable("BUILD_SOURCEBRANCH");
+        return sourceBranch is not null && sourceBranch.StartsWith("refs/", StringComparison.OrdinalIgnoreCase)
+            ? BranchOrTagOfRef(sourceBranch)
+            : GetEnvironmentVariable("BUILD_SOURCEBRANCHNAME");
+    }
+
+    // A tag build sends the tag name, as GITHUB_REF_NAME and CI_COMMIT_REF_NAME do, so Xping Cloud
+    // files it as a non-default ref rather than an unplaceable run. Any other ref (refs/pull/N/merge)
+    // names no branch and yields nothing.
+    private static string? BranchOrTagOfRef(string? gitRef)
+    {
+        if (gitRef is null)
+            return null;
+
+        foreach (string prefix in (string[])["refs/heads/", "refs/tags/"])
+        {
+            if (gitRef.Length > prefix.Length && gitRef.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return gitRef.Substring(prefix.Length);
+        }
+
+        return null;
+    }
+
+    // Freestyle jobs report GIT_BRANCH as origin/main. Only the origin remote is stripped: a job that
+    // checks out to a local branch reports a bare feature/x, whose first segment is not a remote.
+    private static string? StripOriginRemote(string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(branch))
+            return null;
+
+        foreach (string prefix in (string[])["refs/remotes/origin/", "origin/"])
+        {
+            if (branch!.StartsWith(prefix, StringComparison.Ordinal) && branch.Length > prefix.Length)
+                return branch.Substring(prefix.Length);
+        }
+
+        return branch;
+    }
+
+    // repository.default_branch from the event payload. It is optional context, so a missing or
+    // unreadable payload (a container without the runner's temp directory, an old GitHub Enterprise
+    // schedule payload without "repository") just leaves it out.
+    private string? ReadGitHubDefaultBranch()
+    {
+        string? eventPath = GetEnvironmentVariable("GITHUB_EVENT_PATH");
+        if (string.IsNullOrWhiteSpace(eventPath))
+            return null;
+
+        try
+        {
+            return GitHubEventPayload.Read(eventPath!, _serializer)?.Repository?.DefaultBranch;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static string? GetEnvironmentVariable(string variable)

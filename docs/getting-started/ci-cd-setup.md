@@ -128,7 +128,7 @@ Xping automatically captures:
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
 - `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` and on events outside the list below (see [Which Commit Is Recorded](#which-commit-is-recorded))
-- `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit
+- `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit; `repository.default_branch` becomes `CI.DefaultBranch`
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest`: `true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`; `false` for `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create`, `deployment` and `deployment_status`; not sent for any other event
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
@@ -206,7 +206,9 @@ Xping automatically captures:
 - `BUILD_BUILDNUMBER` - Build number
 - `BUILD_SOURCEVERSION` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `BUILD_REASON` - Normalized into `CI.IsPullRequest` (`true` when `PullRequest`)
-- `BUILD_SOURCEBRANCH` - Branch name
+- `BUILD_SOURCEBRANCH` / `SYSTEM_PULLREQUEST_SOURCEBRANCH` - Normalized into `CI.Branch`, the full branch name
+  without `refs/heads/` (`feature/main`, not `main`); on a PR build, the PR's source branch; on a tag
+  build, the tag name. TFVC builds use `BUILD_SOURCEBRANCHNAME`
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
   `CI.ServerUrl`, the same server the PR context records
@@ -284,6 +286,7 @@ Xping automatically captures:
 - `CI_COMMIT_SHA` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `CI_MERGE_REQUEST_IID` - Normalized into `CI.IsPullRequest` (`true` in merge request pipelines)
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
+- `CI_DEFAULT_BRANCH` - Normalized into `CI.DefaultBranch`
 - `CI_PROJECT_PATH` - Repository path
 - `CI_SERVER_URL` - Normalized into `CI.ServerUrl`
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
@@ -379,7 +382,10 @@ Xping automatically captures:
   multibranch (Branch Source) builds of GitHub, GitLab and Azure DevOps repositories on any server.
   The platform is read from the shape of `CHANGE_URL`. For a GitLab instance under a relative URL
   root, the root ends up in the owner rather than the server.
-- `GIT_BRANCH` - Branch name
+- `CHANGE_BRANCH` / `ghprbSourceBranch` / `BRANCH_NAME` / `GIT_BRANCH` - Normalized into `CI.Branch`:
+  the PR's source branch on a Branch Source (`CHANGE_BRANCH`) or GHPRB (`ghprbSourceBranch`) PR build,
+  else `BRANCH_NAME`, else `GIT_BRANCH` without a leading `origin/` or `refs/remotes/origin/` (other
+  remotes are kept as is)
 - `JOB_NAME` - Job name
 - `BUILD_USER` - User who triggered the build (if available)
 
