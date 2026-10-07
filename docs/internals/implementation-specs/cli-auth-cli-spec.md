@@ -791,7 +791,15 @@ available) must still be logged in. A keychain whose probe failed is left out of
 that process: reading it would fail the same way, and every `auth status` on a machine without a
 keyring would then report a store failure (exit 14) instead of "not signed in" (exit 10). The
 reason is already shown as `FallbackReason`. The SSH-then-GUI case is two processes with two
-probes, so it is unaffected. `logout` deletes from both. `login` writes to the selected
+probes, so it is unaffected. Such a keychain is kept as `CredentialStores.Unreachable` unless the
+probe says it cannot hold anything (libsecret not installed): `logout` still tries to delete from
+it, and when that fails it warns that a sign-in made in a desktop session may remain there, without
+failing the sign-out.
+
+The probe reads the secret (a locked macOS keychain lists items but refuses their content), so the
+backend keeps that result and hands it to the first `ReadAsync` of the same entry; a write or delete
+drops it. One command therefore reads the keychain once: one access dialog after an upgrade, one
+D-Bus round trip. `logout` deletes from both. `login` writes to the selected
 store and, when that is the keychain, also deletes any file entry for the same Cloud URL so the
 two never disagree.
 
@@ -801,7 +809,9 @@ keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns th
 record with the store it came from, plus the warnings of every store it visited and the
 `Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
 the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
-clears the file entry when `Selected` is a keychain; a failure is thrown. `DeleteAllAsync` tries
+clears the file entry when `Selected` is a keychain; a failure to write `Selected` is thrown, a
+failure to clear the file entry is returned as a warning (the sign-in is stored, and the keychain is
+read first, so the old entry is never used). `DeleteAllAsync` tries
 every store, even after one fails, so `logout` removes whatever it can, and then throws one
 `CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
 a backend directly.
@@ -1418,20 +1428,21 @@ The Xping skill and the MCP server run the CLI as a child process. Rules:
   (§18.2), the file backend, `LibSecretStore` with the library **absent** (fallback path), and
   the regression suites. No keyring is installed on the PR runner, and the CLI test step runs with
   `--filter "Category!=CredentialStore"` so a runner image that ships one never turns them on.
-- Nightly on `main` only (A-7), new workflow `cli-credential-stores.yml`, `schedule: cron
-  '0 3 * * *'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
+- Weekly on `main` only (A-7, Q-7), new workflow `cli-credential-stores.yml`, `schedule: cron
+  '0 3 * * 1'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
   `ubuntu-latest`. It runs **only** `tests/Xping.Cli.Tests` filtered to
   `Category=CredentialStore`, about ten tests, on each runner:
   - Windows: `WindowsCredentialStore` round trip, blob-limit rule, delete, corrupt entry.
   - macOS: `MacOsKeychainStore` round trip, update, delete, corrupt entry (the runner's login
     keychain is unlocked).
   - Ubuntu: installs `gnome-keyring` and `libsecret-1-0`, starts `dbus-run-session` with an
-    unlocked keyring, runs the `LibSecretStore` round trip; then a second step without the
-    session bus asserts the fallback.
+    unlocked keyring, runs the `LibSecretStore` round trip; then a second step, outside that
+    session, runs the fallback tests (library missing, no session bus), whose environment is
+    injected.
   The job has `timeout-minutes: 15` and `concurrency` cancel-in-progress. Expected cost:
   under 5 runner minutes on Linux, ~3 on Windows (×2 billing), ~3 on macOS (×10 billing), so
-  roughly 40 billed minutes per run, about 1200 per month if run daily. **Decision (Q-7,
-  answered): it runs weekly**, `'0 3 * * 1'`, about 160 billed minutes per month, plus
+  roughly 40 billed minutes per run, about 1200 per month if it ran daily. **Decision (Q-7,
+  answered): it runs weekly**, about 160 billed minutes per month, plus
   `workflow_dispatch` for a manual run after a backend change. Developers run the same filter
   locally before touching a backend.
 - Tests use the service/target name `xping-cli-tests` and a Cloud URL of
