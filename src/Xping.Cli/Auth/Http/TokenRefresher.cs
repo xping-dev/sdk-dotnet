@@ -68,9 +68,6 @@ internal sealed class TokenRefresher : IDisposable
 
         CloudUrl = login.Record.CloudUrl;
         DataGatewayUri = login.Record.DataGatewayUri;
-
-        Redaction.AddSecret(login.Record.RefreshToken);
-        Redaction.AddSecret(login.Record.AccessToken);
     }
 
     /// <summary>
@@ -128,20 +125,28 @@ internal sealed class TokenRefresher : IDisposable
     /// Ends the sign-in: forgets the tokens and deletes them from every store (§9.6 step 2).
     /// </summary>
     /// <remarks>
-    /// Runs once per instance. A store that cannot be changed is a warning, not a failure: the
-    /// command still falls back or degrades, and the server has ended the session anyway.
+    /// Runs once per instance. Only the sign-in this process used is deleted: a newer one stored
+    /// meanwhile, by <c>xping login</c> in another terminal, is left alone. A store that cannot be
+    /// changed is a warning, not a failure: the command still falls back or degrades, and the
+    /// server has ended the session anyway.
     /// </remarks>
     public async Task InvalidateAsync(CancellationToken cancellationToken)
     {
-        Volatile.Write(ref _record, null);
+        CredentialRecord? ended = Interlocked.Exchange(ref _record, null);
 
-        if (Interlocked.Exchange(ref _invalidated, 1) == 1)
+        if (ended is null || Interlocked.Exchange(ref _invalidated, 1) == 1)
             return;
-
-        _logger.LogInformation("The sign-in for {CloudUrl} is no longer valid; deleting it", CloudUrl);
 
         try
         {
+            StoredLoginLookup lookup = await _stores.ReadAsync(CloudUrl, cancellationToken).ConfigureAwait(false);
+            if (lookup.Login is { } stored && IsNewer(stored.Record, than: ended))
+            {
+                _logger.LogInformation("The sign-in for {CloudUrl} was replaced meanwhile; keeping the new one", CloudUrl);
+                return;
+            }
+
+            _logger.LogInformation("The sign-in for {CloudUrl} is no longer valid; deleting it", CloudUrl);
             await _stores.DeleteAllAsync(CloudUrl, cancellationToken).ConfigureAwait(false);
         }
         catch (CredentialStoreException ex)
@@ -155,6 +160,7 @@ internal sealed class TokenRefresher : IDisposable
     private async Task<string> RefreshAsync(string? rejectedToken, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        bool handedOver = false;
         try
         {
             CredentialRecord record = _record ?? throw new LoginRequiredException();
@@ -163,12 +169,40 @@ internal sealed class TokenRefresher : IDisposable
             if (Usable(record, rejectedToken))
                 return record.AccessToken!;
 
-            using (await _processLock.AcquireAsync(CloudUrl, cancellationToken).ConfigureAwait(false))
-                return await RefreshUnderLockAsync(record, rejectedToken, cancellationToken).ConfigureAwait(false);
+            IDisposable processLock = await _processLock.AcquireAsync(CloudUrl, cancellationToken).ConfigureAwait(false);
+
+            // From here on the refresh runs to the end whatever the caller does. Once the server has
+            // rotated the refresh token, the new pair must reach the store: a cancel in between
+            // would leave the old token there, and presenting it after the reuse leeway revokes the
+            // session. The caller can stop waiting; the next caller waits for this refresh.
+            Task<string> refresh = CompleteRefreshAsync(processLock, record, rejectedToken);
+            handedOver = true;
+            return await refresh.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            _gate.Release();
+            if (!handedOver)
+                _gate.Release();
+        }
+    }
+
+    private async Task<string> CompleteRefreshAsync(IDisposable processLock, CredentialRecord record, string? rejectedToken)
+    {
+        try
+        {
+            using (processLock)
+                return await RefreshUnderLockAsync(record, rejectedToken, CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                _gate.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The command finished while an abandoned refresh was still saving its pair.
+            }
         }
     }
 
@@ -176,7 +210,10 @@ internal sealed class TokenRefresher : IDisposable
     {
         // Another process may have refreshed while this one waited for the lock (§9.4 step 2).
         StoredLogin? stored = await RereadAsync(cancellationToken).ConfigureAwait(false);
-        if (stored is not null)
+
+        // The store can hold an older pair than this process: a refresh whose write failed (§9.5)
+        // keeps the new pair in memory only, and redeeming the old one again would be reuse.
+        if (stored is not null && !IsNewer(record, than: stored.Record))
         {
             Adopt(stored);
             if (Usable(stored.Record, rejectedToken))
@@ -199,8 +236,12 @@ internal sealed class TokenRefresher : IDisposable
         {
             // §9.6 step 1: a process that ran without the lock may have rotated the token just now.
             StoredLogin? rotated = await RereadAsync(cancellationToken).ConfigureAwait(false);
-            if (rotated is null || string.Equals(rotated.Record.RefreshToken, record.RefreshToken, StringComparison.Ordinal))
+            if (rotated is null
+                || string.Equals(rotated.Record.RefreshToken, record.RefreshToken, StringComparison.Ordinal)
+                || IsNewer(record, than: rotated.Record))
+            {
                 throw await EndAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             Adopt(rotated);
             if (Usable(rotated.Record, rejectedToken))
@@ -223,9 +264,6 @@ internal sealed class TokenRefresher : IDisposable
             DataGatewayUri = record.DataGatewayUri
         };
 
-        // The new pair is in memory before the store is touched, so a failed write still leaves this
-        // process with working tokens (§9.5).
-        Volatile.Write(ref _record, refreshed);
         _logger.LogInformation("Refreshed the access token for {CloudUrl}", CloudUrl);
 
         try
@@ -237,6 +275,10 @@ internal sealed class TokenRefresher : IDisposable
             Warn($"Could not store the refreshed Xping Cloud sign-in: {ex.Message} The next command may ask you to sign in again.");
         }
 
+        // Only after the write: a caller that abandoned this refresh retries, and must not finish
+        // the command on the new token while the pair is still on its way to the store. A failed
+        // write still leaves this process with working tokens (§9.5).
+        Volatile.Write(ref _record, refreshed);
         return refreshed.AccessToken!;
     }
 
@@ -276,14 +318,17 @@ internal sealed class TokenRefresher : IDisposable
         return lookup.Login;
     }
 
+    // The store registers the tokens of every record it reads with Redaction.
     private void Adopt(StoredLogin stored)
     {
-        Redaction.AddSecret(stored.Record.RefreshToken);
-        Redaction.AddSecret(stored.Record.AccessToken);
-
         Volatile.Write(ref _record, stored.Record);
         _store = stored.Store;
     }
+
+    // StoredAt is the receipt time of the pair, so a later one is the newer pair. Equal times are
+    // not newer: a record another process wrote in the same instant is as good as this one.
+    private static bool IsNewer(CredentialRecord record, CredentialRecord than) =>
+        record.StoredAt > than.StoredAt;
 
     private bool Usable(CredentialRecord record, string? rejectedToken) =>
         IsFresh(record) && !string.Equals(record.AccessToken, rejectedToken, StringComparison.Ordinal);

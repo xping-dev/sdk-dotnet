@@ -6,6 +6,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
+using Xping.Cli.Cloud;
 using Xping.Cli.Tests.Cloud;
 
 namespace Xping.Cli.Tests.Auth.Http;
@@ -30,6 +31,10 @@ public sealed class CrossProcessLockTests : IDisposable
         if (Directory.Exists(_scratch))
             Directory.Delete(_scratch, recursive: true);
     }
+
+    [Fact]
+    public void TheWaitIsShorterThanTheAttemptItRunsInside() =>
+        Assert.True(CrossProcessLock.Patience < CloudHttp.AttemptTimeout);
 
     [Fact]
     public async Task TheLockFileIsPrivateAndKeyedByCloudUrl()
@@ -67,13 +72,13 @@ public sealed class CrossProcessLockTests : IDisposable
     }
 
     [Fact]
-    public async Task AfterFifteenSecondsTheRefreshProceedsWithoutTheLock()
+    public async Task AfterFiveSecondsTheRefreshProceedsWithoutTheLock()
     {
         using IDisposable first = await _lock.AcquireAsync(CloudUrl, CancellationToken.None);
 
         using IDisposable second = await ClockDriver.DriveAsync(_time, _lock.AcquireAsync(CloudUrl, CancellationToken.None));
 
-        Assert.True(_time.GetUtcNow() >= new DateTimeOffset(2026, 9, 29, 10, 0, 15, TimeSpan.Zero));
+        Assert.True(_time.GetUtcNow() >= new DateTimeOffset(2026, 9, 29, 10, 0, 5, TimeSpan.Zero));
         Assert.IsNotType<FileStream>(second);
     }
 }

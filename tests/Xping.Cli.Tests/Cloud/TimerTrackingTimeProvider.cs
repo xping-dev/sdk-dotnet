@@ -25,6 +25,17 @@ internal sealed class TimerTrackingTimeProvider(DateTimeOffset start) : FakeTime
     /// </summary>
     public ChannelReader<TimeSpan> CreatedTimers => _created.Reader;
 
+    /// <summary>
+    /// Forgets the timers created so far, so a later drive does not advance by a wait that belonged
+    /// to an earlier command.
+    /// </summary>
+    public void DiscardCreatedTimers()
+    {
+        while (_created.Reader.TryRead(out _))
+        {
+        }
+    }
+
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {
         ITimer timer = base.CreateTimer(callback, state, dueTime, period);

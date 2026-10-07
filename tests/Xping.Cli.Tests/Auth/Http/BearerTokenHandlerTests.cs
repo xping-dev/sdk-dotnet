@@ -77,6 +77,7 @@ public sealed class BearerTokenHandlerTests : IAsyncDisposable
         Assert.Equal(2, _inner.Requests.Count);
         Assert.Equal(_access, _inner.Requests[0].Authorization?.Parameter);
         Assert.NotEqual(_access, _inner.Requests[1].Authorization?.Parameter);
+        Assert.Equal([false, true], _inner.RetriedAfterRefresh);
         Assert.Single(_host.Cloud.RequestsTo("/connect/token"));
     }
 
@@ -163,6 +164,8 @@ public sealed class BearerTokenHandlerTests : IAsyncDisposable
 
         public List<(AuthenticationHeaderValue? Authorization, bool HasApiKey)> Requests { get; } = [];
 
+        public List<bool> RetriedAfterRefresh { get; } = [];
+
         public void Respond(params HttpResponseMessage[] responses)
         {
             foreach (HttpResponseMessage response in responses)
@@ -172,6 +175,7 @@ public sealed class BearerTokenHandlerTests : IAsyncDisposable
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add((request.Headers.Authorization, request.Headers.Contains(CredentialHeaders.ApiKey)));
+            RetriedAfterRefresh.Add(request.Options.TryGetValue(BearerTokenHandler.RetriedAfterRefresh, out bool retried) && retried);
             return Task.FromResult(_responses.TryDequeue(out HttpResponseMessage? response) ? response : new HttpResponseMessage(HttpStatusCode.OK));
         }
     }

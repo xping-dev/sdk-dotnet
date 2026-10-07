@@ -4,9 +4,8 @@
  */
 
 using System.Net;
+using Microsoft.Extensions.Http.Resilience;
 using Polly;
-using Polly.Retry;
-using Polly.Timeout;
 
 namespace Xping.Cli.Cloud;
 
@@ -31,12 +30,16 @@ internal static class CloudResilience
     /// </summary>
     public static ResiliencePipeline<HttpResponseMessage> Build(TimeProvider timeProvider) =>
         new ResiliencePipelineBuilder<HttpResponseMessage> { TimeProvider = timeProvider }
-            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            .AddRetry(new HttpRetryStrategyOptions
             {
                 MaxRetryAttempts = 3,
                 Delay = BaseDelay,
                 BackoffType = DelayBackoffType.Exponential,
                 UseJitter = true,
+
+                // Retry-After is read below for 429 only, and capped; honoured on a 5xx it could
+                // stall the command for as long as the server asks.
+                ShouldRetryAfterHeader = false,
                 ShouldHandle = args => ValueTask.FromResult(ShouldRetry(args.Outcome, args.AttemptNumber, timeProvider)),
                 DelayGenerator = args => ValueTask.FromResult(
                     args.Outcome.Result is { StatusCode: HttpStatusCode.TooManyRequests } response
@@ -45,20 +48,17 @@ internal static class CloudResilience
             })
 
             // Innermost, so each attempt gets its own limit.
-            .AddTimeout(CloudHttp.AttemptTimeout)
+            .AddTimeout(new HttpTimeoutStrategyOptions { Timeout = CloudHttp.AttemptTimeout })
             .Build();
 
     private static bool ShouldRetry(Outcome<HttpResponseMessage> outcome, int attemptNumber, TimeProvider timeProvider) =>
-        outcome switch
-        {
-            { Exception: HttpRequestException or TimeoutRejectedException } => true,
+        outcome.Result is { StatusCode: HttpStatusCode.TooManyRequests } response
 
             // Contract §8.2: wait Retry-After and retry once, then fail.
-            { Result: { StatusCode: HttpStatusCode.TooManyRequests } response } =>
-                attemptNumber == 0 && RetryAfter(response, timeProvider) is not null,
-            { Result: { } response } => (int)response.StatusCode >= 500,
-            _ => false
-        };
+            ? attemptNumber == 0 && RetryAfter(response, timeProvider) is not null
+
+            // 5xx, 408, network failures and the attempt timeout; never 400, 401, 403 or 404.
+            : HttpClientResiliencePredicates.IsTransient(outcome);
 
     private static TimeSpan? RetryAfter(HttpResponseMessage response, TimeProvider timeProvider)
     {

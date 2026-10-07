@@ -20,7 +20,8 @@ namespace Xping.Cli.Auth.Http;
 /// <para>
 /// The lock is an optimisation, not the safety net. When it cannot be had within
 /// <see cref="Patience"/>, the refresh proceeds without it: the server's 30 s reuse leeway
-/// (contract §6.6) still covers a token presented by two processes.
+/// (contract §6.6) still covers a token presented by two processes. The wait is shorter than the
+/// DataGateway's per-attempt timeout it runs inside, so giving up on the lock can actually happen.
 /// </para>
 /// </remarks>
 internal sealed class CrossProcessLock(XpingHome home, TimeProvider timeProvider, ILogger<CrossProcessLock> logger)
@@ -28,7 +29,7 @@ internal sealed class CrossProcessLock(XpingHome home, TimeProvider timeProvider
     /// <summary>
     /// How long to wait for another process to finish its refresh.
     /// </summary>
-    public static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// How often to try again while another process holds the lock.

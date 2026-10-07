@@ -223,6 +223,87 @@ public sealed class TokenRefresherTests : IAsyncDisposable
         Assert.Empty(_store.Deleted);
     }
 
+    [Fact]
+    public async Task ACancelAfterTheServerRotatedStillStoresTheNewPair()
+    {
+        (string access, string refresh) = _host.Cloud.StartSession();
+        using TokenRefresher refresher = Refresher(Record(refresh, access, Now));
+        var answer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _host.Cloud.HoldTokenResponses = answer.Task;
+        using var cancel = new CancellationTokenSource();
+
+        Task<string> abandoned = refresher.GetAccessTokenAsync(cancel.Token);
+        await WaitUntilAsync(() => _host.Cloud.RequestsTo(Token).Count == 1);
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandoned);
+
+        // The server rotated before the cancel; the next caller gets that pair, not a second refresh.
+        answer.SetResult();
+        string token = await refresher.GetAccessTokenAsync(CancellationToken.None);
+
+        Assert.Single(_host.Cloud.RequestsTo(Token));
+        CredentialRecord stored = StoredRecord();
+        Assert.Equal(token, stored.AccessToken);
+        Assert.NotEqual(refresh, stored.RefreshToken);
+    }
+
+    [Fact]
+    public async Task AfterAFailedWriteTheNextRefreshPresentsTheTokenInMemoryNotTheOlderStoredOne()
+    {
+        (string access, string refresh) = _host.Cloud.StartSession();
+        using TokenRefresher refresher = Refresher(Record(refresh, access, Now + TimeSpan.FromMinutes(15)));
+        _host.Time.Advance(TimeSpan.FromMinutes(15));
+        _store.WriteFails = true;
+        await refresher.GetAccessTokenAsync(CancellationToken.None);
+
+        // The store still holds the first pair; past the reuse leeway, presenting it is theft.
+        _store.WriteFails = false;
+        _host.Time.Advance(TimeSpan.FromMinutes(15));
+        string token = await refresher.GetAccessTokenAsync(CancellationToken.None);
+
+        IReadOnlyList<RecordedRequest> refreshes = _host.Cloud.RequestsTo(Token);
+        Assert.Equal(2, refreshes.Count);
+        Assert.NotEqual(refresh, refreshes[1].Form["refresh_token"]);
+        Assert.Equal(token, StoredRecord().AccessToken);
+        Assert.False(_host.Cloud.IsSessionRevoked(refresh));
+    }
+
+    [Fact]
+    public async Task InvalidatingKeepsANewerSignInStoredMeanwhile()
+    {
+        (string access, string refresh) = _host.Cloud.StartSession();
+        using TokenRefresher refresher = Refresher(Record(refresh, access, Now + TimeSpan.FromMinutes(15)));
+
+        // xping login in another terminal.
+        _host.Time.Advance(TimeSpan.FromSeconds(1));
+        (string newAccess, string newRefresh) = _host.Cloud.StartSession();
+        _store.Add(Record(newRefresh, newAccess, Now + TimeSpan.FromMinutes(15)));
+
+        await refresher.InvalidateAsync(CancellationToken.None);
+
+        Assert.Equal(newRefresh, StoredRecord().RefreshToken);
+        Assert.Empty(_store.Deleted);
+        await Assert.ThrowsAsync<LoginRequiredException>(() => refresher.GetAccessTokenAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task InvalidatingDeletesTheSignInThisProcessUsed()
+    {
+        (string access, string refresh) = _host.Cloud.StartSession();
+        using TokenRefresher refresher = Refresher(Record(refresh, access, Now + TimeSpan.FromMinutes(15)));
+
+        await refresher.InvalidateAsync(CancellationToken.None);
+
+        Assert.False(_store.Contains(_host.Cloud.CloudUrl));
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!condition())
+            await Task.Delay(10, patience.Token).ConfigureAwait(false);
+    }
+
     private CredentialRecord Record(string refresh, string? access, DateTimeOffset? expiresAt) =>
         new(
             CredentialRecord.CurrentSchemaVersion,

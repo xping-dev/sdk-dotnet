@@ -95,6 +95,10 @@ internal sealed class CliFlowHost : IAsyncDisposable
     {
         CliResult result = Run("login");
         Assert.True(result.Code == 0, result.Error);
+
+        // The login's own waits (the 5-minute loopback timeout) are over; a test that drives the
+        // clock afterwards must not jump by them.
+        Time.DiscardCreatedTimers();
         return StoredRecord() ?? throw new InvalidOperationException("The sign-in was not stored.");
     }
 

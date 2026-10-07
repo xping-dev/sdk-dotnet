@@ -970,7 +970,8 @@ comment in `Program.BuildHost` anticipates.
 
 ### 9.1 `BearerTokenHandler`
 
-A `DelegatingHandler` registered on `"xping-cloud"` when the resolved credential is a stored login:
+A `DelegatingHandler` that `CloudApiClientFactory` places in the `"xping-cloud"` pipeline (§2.2)
+when the resolved credential is a stored login:
 
 1. **Host guard.** If `request.RequestUri` is not under `record.dataGatewayUri` (scheme, host,
    port, and path prefix), throw `InvalidOperationException` before sending. The token is sent only
@@ -980,8 +981,9 @@ A `DelegatingHandler` registered on `"xping-cloud"` when the resolved credential
 3. Send. If the response is `401` and `WWW-Authenticate` contains `error="invalid_token"`
    (contract §7.3), call `refresher.ForceRefreshAsync(ct)` once, rebuild the request (a new
    `HttpRequestMessage` with the same method, URI and headers; bodies are never present on
-   reads), and send once more. A second `401` is returned to the caller unchanged; `CloudApiClient`
-   then maps it (§10.3) and deletes the stored tokens (contract §8.2).
+   reads), and send once more. The retried request carries the request option
+   `BearerTokenHandler.RetriedAfterRefresh`. A second `401` is returned to the caller unchanged;
+   `CloudApiClient` sees the option, maps it (§9.7) and deletes the stored tokens (contract §8.2).
 4. `403` is never retried. `WWW-Authenticate` values are never logged verbatim; only the `error`
    parameter name.
 
@@ -1015,14 +1017,23 @@ agent and a human). Contract §6.6 gives a 30-second reuse leeway; the CLI MUST 
 old refresh token inside that leeway. Design:
 
 1. `CrossProcessLock`: a lock file `~/.xping/locks/{sha256(cloudUrl) first 16 hex}.lock` opened
-   with `FileShare.None`. Acquire with retry every 100 ms for up to 15 s; on timeout proceed
-   without the lock (the leeway still protects) and log at verbose.
+   with `FileShare.None`. Acquire with retry every 100 ms for up to 5 s; on timeout proceed
+   without the lock (the leeway still protects) and log at verbose. The wait runs inside the
+   10-second per-attempt timeout (§10.2), so it must be shorter than that, or the attempt would
+   time out before the "proceed without the lock" rule could apply.
 2. Under the lock, **re-read the record from the store**. If the stored `accessToken` is fresh
    (another process refreshed meanwhile), adopt it, release, return.
 3. Otherwise `POST refresh_token` with the stored (re-read) refresh token, write the new pair
    with the store's atomic `WriteAsync`, update the in-memory record, release. The pair is written
    to the store the record was read from, not to the store `login` would select today: a refresh
    does not move a file sign-in into a keychain that has since become available.
+
+Once the lock is held, the refresh request and the write of the new pair run to the end with no
+cancellation token, even if the caller cancels or its attempt times out: after the server has
+rotated the token, the new pair must reach the store, or the next process presents the old token
+outside the leeway and the session is revoked. The caller stops waiting; the next caller waits for
+that refresh. A stored record older than the one in memory (a refresh whose write failed, §9.5)
+is not adopted; records are compared by `storedAt`.
 
 Because the refresh token is re-read under the lock immediately before use, the time between
 "read" and "present" is milliseconds, far inside the leeway. A long-running process never presents
@@ -1059,7 +1070,8 @@ Handled in `CloudApiClient` after the handler's single retry:
 
 | Response | Action |
 |---|---|
-| 401 `Error.AccessToken.Invalid`, `Error.AccessToken.Expired` (second time) | delete tokens (§9.6 step 2), `LoginRequiredException` |
+| 401 `Error.AccessToken.Invalid`, `Error.AccessToken.Expired` (second time) | delete tokens (§9.6 step 2) unless the store now holds a newer sign-in (a login in another terminal), `LoginRequiredException` |
+| any other bearer 401 that was not retried after a refresh (no `invalid_token` challenge: a proxy page, a stripped header) | `CloudApiException` with `title`; tokens kept, no fallback |
 | 401 `Error.Authentication.MissingCredentials` | `LoginRequiredException` without deleting (nothing was sent; CLI bug or no credential) |
 | 400 `Error.Authentication.AmbiguousCredentials` | `CloudApiException("CLI bug: two credentials sent")`, surfaced as a bug message |
 | 403 `Error.AccessToken.InsufficientScope` | `CloudApiException`, never retried, message from `detail` |
@@ -1102,12 +1114,15 @@ clock (§11.5) so a slow Cloud cannot make a local report slow.
 
 ### 10.3 Retries
 
-`AddResilienceHandler("xping-cloud-resilience")` on `"xping-cloud"`, mirroring `AddXpingUploader`
-but without a circuit breaker (the process is short-lived):
+A `ResilienceHandler` that `CloudApiClientFactory` places first in each `"xping-cloud"` pipeline
+(§2.2), built from `HttpRetryStrategyOptions` and `HttpTimeoutStrategyOptions` with
+`HttpClientResiliencePredicates.IsTransient`, mirroring `AddXpingUploader` but without a circuit
+breaker (the process is short-lived):
 
-- Retry: `MaxRetryAttempts = 3`, exponential from 2 s with jitter, on `5xx`, `HttpRequestException`
-  and `TimeoutRejectedException`; on `429` a **single** retry after `Retry-After` (contract §8.2),
-  capped at 10 s, else give up.
+- Retry: `MaxRetryAttempts = 3`, exponential from 2 s with jitter, on what `IsTransient` accepts
+  (`5xx`, `408`, `HttpRequestException`, `TimeoutRejectedException`); on `429` a **single** retry
+  after `Retry-After` (contract §8.2) when it is 10 s or less, else give up. `Retry-After` is not
+  honoured on other statuses (`ShouldRetryAfterHeader = false`), so a 5xx cannot stall the command.
 - Never on `401`, `403`, `404`, `400`.
 - Timeout per attempt as §10.2.
 

@@ -239,6 +239,48 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AFirst401WithoutAnInvalidTokenChallengeKeepsTheSignIn()
+    {
+        _host.SignIn();
+
+        // A proxy's 401, or a challenge stripped on the way: the handler has nothing to refresh on.
+        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.Unauthorized, "Error.AccessToken.Expired");
+        using ICloudApiClient client = await SignedInClientAsync();
+
+        CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
+            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+
+        Assert.Equal(401, failure.StatusCode);
+        Assert.NotNull(_host.StoredRecord());
+        Assert.Single(_host.Cloud.GatewayRequests);
+    }
+
+    [Fact]
+    public async Task AProjectListWithoutItemsIsAnIncompleteAnswer()
+    {
+        _host.Cloud.SetGatewayBody("/gw/v1/projects", "{\"totalCount\":0,\"pageNumber\":1,\"pageSize\":50}");
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
+            () => client.ListProjectsAsync(1, 50, CancellationToken.None));
+
+        Assert.Contains("incomplete project list", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NullAndIdlessProjectsAreLeftOutOfTheList()
+    {
+        _host.Cloud.SetGatewayBody(
+            "/gw/v1/projects",
+            "{\"items\":[null,{\"slug\":\"no-id\"},{\"id\":\"api-tests\"}],\"totalCount\":3,\"pageNumber\":1,\"pageSize\":50}");
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        PagedResult<ProjectSummary> page = await client.ListProjectsAsync(1, 50, CancellationToken.None);
+
+        Assert.Equal("api-tests", Assert.Single(page.Items).Id);
+    }
+
+    [Fact]
     public async Task ASecond401AfterTheRefreshDeletesTheSignIn()
     {
         _host.SignIn();

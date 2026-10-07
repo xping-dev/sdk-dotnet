@@ -69,7 +69,11 @@ internal sealed class CloudApiClient : ICloudApiClient
         if (page is null)
             throw new CloudApiException(404, null, "The DataGateway has no project list at this address.");
 
-        return page with { Items = [.. page.Items.Where(p => !string.IsNullOrEmpty(p.Id))] };
+        // Deserialization leaves a missing list, or a null element in it, null.
+        if (page.Items is null)
+            throw Incomplete("project list");
+
+        return page with { Items = [.. page.Items.Where(p => p is { Id.Length: > 0 })] };
     }
 
     public async Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken)
@@ -110,11 +114,13 @@ internal sealed class CloudApiClient : ICloudApiClient
 
         HttpStatusCode status;
         string body;
+        bool retriedAfterRefresh;
         try
         {
             using HttpResponseMessage response = await _http.GetAsync(uri, cancellationToken).ConfigureAwait(false);
             status = response.StatusCode;
             body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            retriedAfterRefresh = response.RequestMessage?.Options.TryGetValue(BearerTokenHandler.RetriedAfterRefresh, out bool retried) == true && retried;
         }
         catch (TimeoutRejectedException ex)
         {
@@ -134,10 +140,10 @@ internal sealed class CloudApiClient : ICloudApiClient
         if (status == HttpStatusCode.NotFound)
             return null;
 
-        throw await FailureAsync(code, Read<ProblemBody>(body), cancellationToken).ConfigureAwait(false);
+        throw await FailureAsync(code, Read<ProblemBody>(body), retriedAfterRefresh, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Exception> FailureAsync(int code, ProblemBody? problem, CancellationToken cancellationToken)
+    private async Task<Exception> FailureAsync(int code, ProblemBody? problem, bool retriedAfterRefresh, CancellationToken cancellationToken)
     {
         string? title = problem?.Title;
 
@@ -147,10 +153,15 @@ internal sealed class CloudApiClient : ICloudApiClient
                 // Nothing reached the server that could be wrong, so nothing is deleted.
                 return new LoginRequiredException();
 
-            case 401 when _refresher is not null:
-                // The handler already refreshed once and retried (contract §8.2: second 401).
+            case 401 when _refresher is not null && retriedAfterRefresh:
+                // Refused again with a token refreshed for this request (contract §8.2: second 401).
                 await _refresher.InvalidateAsync(cancellationToken).ConfigureAwait(false);
                 return new LoginRequiredException();
+
+            case 401 when _refresher is not null:
+                // A first 401 without invalid_token, so the handler did not refresh: a proxy's page,
+                // or a stripped challenge. Nothing says the sign-in is over, so it is kept.
+                return new CloudApiException(code, title, Describe(code, problem));
 
             case 400 when title == AmbiguousCredentials:
                 return new CloudApiException(code, title, "CLI bug: two credentials were sent in one request.");

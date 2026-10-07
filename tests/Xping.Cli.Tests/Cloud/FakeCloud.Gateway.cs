@@ -26,6 +26,7 @@ internal sealed partial class FakeCloud
     private readonly List<JsonObject> _projects = [];
     private readonly Dictionary<(string Project, string Fingerprint), JsonObject> _tests = [];
     private readonly Dictionary<string, ApiKeyScript> _apiKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _bodies = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets or sets whether every access token is refused as invalid, including ones issued later.
@@ -129,6 +130,16 @@ internal sealed partial class FakeCloud
     }
 
     /// <summary>
+    /// Answers every authorized GET of <paramref name="path"/> with 200 and <paramref name="body"/>
+    /// as it is, for a response the scripted data cannot produce.
+    /// </summary>
+    public void SetGatewayBody(string path, string body)
+    {
+        lock (_gate)
+            _bodies[path] = body;
+    }
+
+    /// <summary>
     /// Revokes the session <paramref name="refreshToken"/> belongs to, as the Portal sessions page does.
     /// </summary>
     public void RevokeSession(string refreshToken)
@@ -171,6 +182,9 @@ internal sealed partial class FakeCloud
 
         lock (_gate)
         {
+            if (_bodies.TryGetValue(path, out string? body))
+                return new Reply(200, body);
+
             return segments switch
             {
                 ["v1", "projects"] => Projects(query),

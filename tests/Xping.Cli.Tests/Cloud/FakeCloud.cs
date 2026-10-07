@@ -83,6 +83,12 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     /// </summary>
     public Action<JsonObject>? EditTokenResponse { get; set; }
 
+    /// <summary>
+    /// Gets or sets a task every token answer waits for after the server has acted on the request,
+    /// as a slow network would; the tokens are already issued and rotated when it starts waiting.
+    /// </summary>
+    public Task? HoldTokenResponses { get; set; }
+
     public IReadOnlyList<RecordedRequest> Requests
     {
         get
@@ -297,6 +303,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             },
             _ => new Reply((int)fault.Status, fault.Error is null ? "<html>unavailable</html>" : ErrorJson(fault.Error, fault.Description))
         };
+
+        if (path == "/connect/token" && HoldTokenResponses is { } hold)
+            await hold.ConfigureAwait(false);
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";

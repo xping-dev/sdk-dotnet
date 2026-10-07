@@ -116,12 +116,22 @@ internal static class PrivateFiles
             options.UnixCreateMode = FileMode;
 
         var stream = new FileStream(path, options);
+        if (!OperatingSystem.IsWindows())
+            return stream;
 
-        // Through the handle: opening the path again to set the ACL would collide with the share mode.
-        if (OperatingSystem.IsWindows())
-            stream.SetAccessControl(CurrentUserOnly());
-
-        return stream;
+        // By path, as WriteAtomically does: the share mode governs data access, and setting an ACL
+        // asks for WRITE_DAC only, which the read/write handle above does not carry.
+        try
+        {
+            RestrictToCurrentUser(path);
+            return stream;
+        }
+        catch
+        {
+            // An undisposed handle would hold the lock until the finalizer ran.
+            stream.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -147,11 +157,7 @@ internal static class PrivateFiles
     }
 
     [SupportedOSPlatform("windows")]
-    private static void RestrictToCurrentUser(string path) =>
-        new FileInfo(path).SetAccessControl(CurrentUserOnly());
-
-    [SupportedOSPlatform("windows")]
-    private static FileSecurity CurrentUserOnly()
+    private static void RestrictToCurrentUser(string path)
     {
         SecurityIdentifier user = WindowsIdentity.GetCurrent().User
             ?? throw new UnreachableException("A Windows process always runs as a user.");
@@ -159,7 +165,7 @@ internal static class PrivateFiles
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
-        return security;
+        new FileInfo(path).SetAccessControl(security);
     }
 
     private static void TryDelete(string path)

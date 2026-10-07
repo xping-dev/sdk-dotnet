@@ -19,6 +19,12 @@ namespace Xping.Cli.Auth.Http;
 /// </remarks>
 internal sealed partial class BearerTokenHandler : DelegatingHandler
 {
+    /// <summary>
+    /// Set on the request sent again after a refresh, so the caller can tell a second 401, which
+    /// ends the sign-in, from a first one that never got a refresh (contract §8.2).
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<bool> RetriedAfterRefresh = new("Xping.RetriedAfterRefresh");
+
     private readonly TokenRefresher _refresher;
     private readonly Uri _gateway;
     private readonly ILogger<BearerTokenHandler> _logger;
@@ -60,6 +66,7 @@ internal sealed partial class BearerTokenHandler : DelegatingHandler
         HttpRequestMessage retry = Clone(request);
 #pragma warning restore CA2000
         Authorize(retry, fresh);
+        retry.Options.Set(RetriedAfterRefresh, true);
         return await base.SendAsync(retry, cancellationToken).ConfigureAwait(false);
     }
 
