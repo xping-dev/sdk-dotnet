@@ -4,12 +4,14 @@
  */
 
 using Microsoft.Extensions.Options;
+using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Serialization.Internals;
+using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Services.Environment;
 
@@ -19,70 +21,22 @@ public sealed class EnvironmentDetectorTests
     private static readonly HashSet<string> _platformSpecificCommitKeys =
         ["CI.SHA", "CI.SourceVersion", "CI.GitCommit", "CI.CommitSHA", "CI.Commit"];
 
-    private static readonly string[] _environmentVariables =
-    [
-        "CI",
-        "GITHUB_ACTIONS",
-        "TF_BUILD",
-        "JENKINS_URL",
-        "GITLAB_CI",
-        "CIRCLECI",
-        "TRAVIS",
-        "TEAMCITY_VERSION",
-        "BITBUCKET_PIPELINE_UUID",
-        "APPVEYOR",
-        "GITHUB_SHA",
-        "GITHUB_EVENT_NAME",
-        "GITHUB_REF",
-        "GITHUB_REF_NAME",
-        "GITHUB_HEAD_REF",
-        "GITHUB_BASE_REF",
-        "BUILD_SOURCEVERSION",
-        "BUILD_REASON",
-        "SYSTEM_PULLREQUEST_SOURCECOMMITID",
-        "GIT_COMMIT",
-        "CHANGE_ID",
-        "ghprbPullId",
-        "CI_COMMIT_SHA",
-        "CI_MERGE_REQUEST_IID",
-        "CI_MERGE_REQUEST_SOURCE_BRANCH_SHA",
-        "CIRCLE_SHA1",
-        "CIRCLE_PULL_REQUEST",
-        "TRAVIS_COMMIT",
-        "TRAVIS_PULL_REQUEST",
-        "BUILD_VCS_NUMBER",
-        "BITBUCKET_COMMIT",
-        "BITBUCKET_PR_ID",
-        "APPVEYOR_REPO_COMMIT",
-        "APPVEYOR_PULL_REQUEST_NUMBER",
-        "GITHUB_SERVER_URL",
-        "CI_SERVER_URL",
-        "BUILD_REPOSITORY_URI",
-        "BUILD_REPOSITORY_PROVIDER",
-        "SYSTEM_COLLECTIONURI",
-        "GITHUB_EVENT_PATH",
-        "CI_DEFAULT_BRANCH",
-        "CI_COMMIT_BRANCH",
-        "CI_COMMIT_REF_NAME",
-        "BUILD_SOURCEBRANCH",
-        "BUILD_SOURCEBRANCHNAME",
-        "SYSTEM_PULLREQUEST_SOURCEBRANCH",
-        "GIT_BRANCH",
-        "BRANCH_NAME",
-        "CHANGE_BRANCH",
-        "ghprbSourceBranch",
-        "XPING_ENVIRONMENT",
-        "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT",
-    ];
+    // xUnit builds a new instance per test, so each test starts from an empty environment.
+    private readonly FakeEnvironmentVariableProvider _env = new();
+
+    public EnvironmentDetectorTests()
+    {
+        // Without HOME the detector falls back to the real user profile and would read the
+        // developer's own ~/.gitconfig. Point it at a directory that doesn't exist instead.
+        _env["HOME"] = Path.Combine(Path.GetTempPath(), "xping-tests", "no-home", Guid.NewGuid().ToString("N"));
+    }
 
     [Theory]
     [InlineData("DOTNET_ENVIRONMENT")]
     [InlineData("ASPNETCORE_ENVIRONMENT")]
     public async Task BuildEnvironmentInfoAsync_WithHostingEnvironmentVariable_IgnoresIt(string variable)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var hostingEnvironment = new EnvRestorer(variable, "Production");
+        _env[variable] = "Production";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -98,8 +52,7 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithXpingEnvironmentVariableOnly_IgnoresIt()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var xpingEnvironment = new EnvRestorer("XPING_ENVIRONMENT", "Staging");
+        _env["XPING_ENVIRONMENT"] = "Staging";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -114,7 +67,7 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_InCiWithConfiguredEnvironment_KeepsTheConfiguredName()
     {
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        _env["GITHUB_ACTIONS"] = "true";
 
         IEnvironmentDetector detector = CreateDetector(new XpingConfiguration
         {
@@ -133,15 +86,10 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_InCiAndLocally_ReportsTheSameEnvironmentName()
     {
-        string ciName;
-        using (new EnvRestorer("GITHUB_ACTIONS", "true"))
-        {
-            IEnvironmentDetector inCi = CreateDetector();
-            ciName = (await inCi.BuildEnvironmentInfoAsync()).EnvironmentName;
-        }
+        IEnvironmentDetector inCi = CreateDetector(env: new FakeEnvironmentVariableProvider { ["GITHUB_ACTIONS"] = "true" });
+        string ciName = (await inCi.BuildEnvironmentInfoAsync()).EnvironmentName;
 
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        IEnvironmentDetector onLaptop = CreateDetector();
+        IEnvironmentDetector onLaptop = CreateDetector(env: new FakeEnvironmentVariableProvider());
         EnvironmentInfo local = await onLaptop.BuildEnvironmentInfoAsync();
 
         // The point of the change: a laptop run and a build-agent run of the same suite are the
@@ -152,8 +100,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithLocalExecution_MarksDeveloperMachine()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -167,8 +113,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_OnAnyMachine_CapturesTheLocalOffsetAndZone()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -198,8 +142,6 @@ public sealed class EnvironmentDetectorTests
         // The zone is cached; the offset must not be. A suite running either side of a
         // daylight-saving transition depends on the second reading differing from the first, and a
         // cached offset would silently report the same figure forever.
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo first = await detector.BuildEnvironmentInfoAsync();
@@ -241,14 +183,14 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithGitHubActions_CapturesNormalizedBranchAndCiMetadata()
     {
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/refactor-environment");
-        using var githubRefName = new EnvRestorer("GITHUB_REF_NAME", "17/merge");
-        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/pull/17/merge");
-        using var githubRepository = new EnvRestorer("GITHUB_REPOSITORY", "xping-dev/sdk-dotnet");
-        using var githubRunId = new EnvRestorer("GITHUB_RUN_ID", "42");
-        using var githubSha = new EnvRestorer("GITHUB_SHA", "abc123");
-        using var githubActor = new EnvRestorer("GITHUB_ACTOR", "octocat");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_HEAD_REF"] = "feature/refactor-environment";
+        _env["GITHUB_REF_NAME"] = "17/merge";
+        _env["GITHUB_REF"] = "refs/pull/17/merge";
+        _env["GITHUB_REPOSITORY"] = "xping-dev/sdk-dotnet";
+        _env["GITHUB_RUN_ID"] = "42";
+        _env["GITHUB_SHA"] = "abc123";
+        _env["GITHUB_ACTOR"] = "octocat";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -266,7 +208,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_InsideGitRepository_SetsIsInsideGitRepositoryTrue()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
@@ -283,7 +224,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_OutsideGitRepository_SetsIsInsideGitRepositoryFalse()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempDir = new TempEmptyDirectory();
         using var dirRestorer = new WorkingDirectoryRestorer(tempDir.Path);
 
@@ -299,7 +239,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithDetachedHead_SetsIsDetachedHeadTrueAndNoBranch()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         const string detachedSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
         tempGit.WriteHead(detachedSha);
@@ -317,11 +256,10 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithCIEnvironment_CIBranchPopulatedFromEnvVarNotGit()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "push");
-        using var githubHeadRef = new EnvRestorer("GITHUB_HEAD_REF", "feature/ci-branch");
-        using var githubSha = new EnvRestorer("GITHUB_SHA", "cafebabe");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = "push";
+        _env["GITHUB_HEAD_REF"] = "feature/ci-branch";
+        _env["GITHUB_SHA"] = "cafebabe";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -343,9 +281,8 @@ public sealed class EnvironmentDetectorTests
     public async Task CommitShaIsReadFromThePlatformsCommitVariable(
         string platformVariable, string platformValue, string shaVariable)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var platform = new EnvRestorer(platformVariable, platformValue);
-        using var sha = new EnvRestorer(shaVariable, "0123abcd");
+        _env[platformVariable] = platformValue;
+        _env[shaVariable] = "0123abcd";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -361,9 +298,8 @@ public sealed class EnvironmentDetectorTests
     public async Task ServerUrlIsReadFromThePlatformsServerVariable(
         string platformVariable, string platformValue, string serverVariable, string serverValue, string expected)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var platform = new EnvRestorer(platformVariable, platformValue);
-        using var server = new EnvRestorer(serverVariable, serverValue);
+        _env[platformVariable] = platformValue;
+        _env[serverVariable] = serverValue;
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -382,11 +318,10 @@ public sealed class EnvironmentDetectorTests
     public async Task AzurePipelinesServerUrlMatchesThePullRequestContextsServer(
         string provider, string collectionValue, string repositoryValue, string expected)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var azurePipelines = new EnvRestorer("TF_BUILD", "True");
-        using var repositoryProvider = new EnvRestorer("BUILD_REPOSITORY_PROVIDER", provider);
-        using var collection = new EnvRestorer("SYSTEM_COLLECTIONURI", collectionValue);
-        using var repository = new EnvRestorer("BUILD_REPOSITORY_URI", repositoryValue);
+        _env["TF_BUILD"] = "True";
+        _env["BUILD_REPOSITORY_PROVIDER"] = provider;
+        _env["SYSTEM_COLLECTIONURI"] = collectionValue;
+        _env["BUILD_REPOSITORY_URI"] = repositoryValue;
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -400,9 +335,8 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task ServerUrlIsNotRecordedOnBitbucketPipelines()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var bitbucket = new EnvRestorer("BITBUCKET_PIPELINE_UUID", "{uuid}");
-        using var origin = new EnvRestorer("BITBUCKET_GIT_HTTP_ORIGIN", "http://bitbucket.org/acme/api");
+        _env["BITBUCKET_PIPELINE_UUID"] = "{uuid}";
+        _env["BITBUCKET_GIT_HTTP_ORIGIN"] = "http://bitbucket.org/acme/api";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -416,9 +350,8 @@ public sealed class EnvironmentDetectorTests
     [InlineData("ghes.acme.com")]
     public async Task ServerUrlIsLeftOutWhenThePlatformNamesNoUsableServer(string? serverValue)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var server = new EnvRestorer("GITHUB_SERVER_URL", serverValue);
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_SERVER_URL"] = serverValue;
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -441,9 +374,8 @@ public sealed class EnvironmentDetectorTests
     public async Task IsPullRequestIsTrueForAPullRequestBuild(
         string platformVariable, string platformValue, string markerVariable, string markerValue)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var platform = new EnvRestorer(platformVariable, platformValue);
-        using var marker = new EnvRestorer(markerVariable, markerValue);
+        _env[platformVariable] = platformValue;
+        _env[markerVariable] = markerValue;
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -465,9 +397,9 @@ public sealed class EnvironmentDetectorTests
     public async Task IsPullRequestIsFalseForAPushBuild(
         string platformVariable, string platformValue, string? markerVariable, string? markerValue)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var platform = new EnvRestorer(platformVariable, platformValue);
-        using var marker = markerVariable is null ? null : new EnvRestorer(markerVariable, markerValue);
+        _env[platformVariable] = platformValue;
+        if (markerVariable is not null)
+            _env[markerVariable] = markerValue;
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -481,10 +413,9 @@ public sealed class EnvironmentDetectorTests
     [InlineData("pull_request_review_comment")]
     public async Task GitHubEventsRunningOnAPullRequestMergeRefAreFlaggedAsPullRequests(string eventName)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
-        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/pull/17/merge");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = eventName;
+        _env["GITHUB_REF"] = "refs/pull/17/merge";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -503,11 +434,11 @@ public sealed class EnvironmentDetectorTests
         string platformVariable, string platformValue, string markerVariable, string markerValue,
         string builtShaVariable, string? headVariable)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var platform = new EnvRestorer(platformVariable, platformValue);
-        using var marker = new EnvRestorer(markerVariable, markerValue);
-        using var builtSha = new EnvRestorer(builtShaVariable, "merge0123");
-        using var head = headVariable is null ? null : new EnvRestorer(headVariable, "head4567");
+        _env[platformVariable] = platformValue;
+        _env[markerVariable] = markerValue;
+        _env[builtShaVariable] = "merge0123";
+        if (headVariable is not null)
+            _env[headVariable] = "head4567";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -528,11 +459,10 @@ public sealed class EnvironmentDetectorTests
     [InlineData("PUSH")]
     public async Task GitHubPushLikeEventsSendFalseAndTheBuiltCommit(string eventName)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
-        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
-        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = eventName;
+        _env["GITHUB_REF"] = "refs/heads/main";
+        _env["GITHUB_SHA"] = "0123abcd";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -551,11 +481,10 @@ public sealed class EnvironmentDetectorTests
     [InlineData(null)]
     public async Task GitHubEventsThatDontSayWhatWasBuiltSendNeitherFlagNorCommit(string? eventName)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", eventName);
-        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
-        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = eventName;
+        _env["GITHUB_REF"] = "refs/heads/main";
+        _env["GITHUB_SHA"] = "0123abcd";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -568,11 +497,10 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task GitHubPullRequestTargetOmitsCommitShaBecauseItIsTheBaseBranchTip()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventName = new EnvRestorer("GITHUB_EVENT_NAME", "pull_request_target");
-        using var githubRef = new EnvRestorer("GITHUB_REF", "refs/heads/main");
-        using var githubSha = new EnvRestorer("GITHUB_SHA", "0123abcd");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = "pull_request_target";
+        _env["GITHUB_REF"] = "refs/heads/main";
+        _env["GITHUB_SHA"] = "0123abcd";
 
         IEnvironmentDetector detector = CreateDetector();
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -584,9 +512,8 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task GitLabSendsItsDefaultBranch()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var gitLab = new EnvRestorer("GITLAB_CI", "true");
-        using var defaultBranch = new EnvRestorer("CI_DEFAULT_BRANCH", "develop");
+        _env["GITLAB_CI"] = "true";
+        _env["CI_DEFAULT_BRANCH"] = "develop";
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
 
@@ -600,12 +527,11 @@ public sealed class EnvironmentDetectorTests
     [InlineData("{ not json", null)]
     public async Task GitHubReadsTheDefaultBranchFromTheEventPayload(string payload, string? expected)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempDirectory = new TempEmptyDirectory();
         string eventPath = Path.Combine(tempDirectory.Path, "event.json");
         await File.WriteAllTextAsync(eventPath, payload, new System.Text.UTF8Encoding(false));
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventPath = new EnvRestorer("GITHUB_EVENT_PATH", eventPath);
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_PATH"] = eventPath;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
 
@@ -617,9 +543,8 @@ public sealed class EnvironmentDetectorTests
     [InlineData("/nonexistent/xping/event.json")]
     public async Task GitHubWithoutAReadablePayloadSendsNoDefaultBranch(string? eventPath)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
-        using var githubEventPath = new EnvRestorer("GITHUB_EVENT_PATH", eventPath);
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_PATH"] = eventPath;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
 
@@ -640,12 +565,11 @@ public sealed class EnvironmentDetectorTests
         string? pullRequestSourceBranch,
         string? expected)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var azure = new EnvRestorer("TF_BUILD", "True");
-        using var reason = new EnvRestorer("BUILD_REASON", buildReason);
-        using var source = new EnvRestorer("BUILD_SOURCEBRANCH", sourceBranch);
-        using var sourceName = new EnvRestorer("BUILD_SOURCEBRANCHNAME", sourceBranchName);
-        using var prSource = new EnvRestorer("SYSTEM_PULLREQUEST_SOURCEBRANCH", pullRequestSourceBranch);
+        _env["TF_BUILD"] = "True";
+        _env["BUILD_REASON"] = buildReason;
+        _env["BUILD_SOURCEBRANCH"] = sourceBranch;
+        _env["BUILD_SOURCEBRANCHNAME"] = sourceBranchName;
+        _env["SYSTEM_PULLREQUEST_SOURCEBRANCH"] = pullRequestSourceBranch;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
 
@@ -672,7 +596,7 @@ public sealed class EnvironmentDetectorTests
         await AssertJenkinsBranch("origin/pr/12/merge", null, null, null, "12", "feature/x", "feature/x");
     }
 
-    private static async Task AssertJenkinsBranch(
+    private async Task AssertJenkinsBranch(
         string gitBranch,
         string? branchName,
         string? changeId,
@@ -681,14 +605,13 @@ public sealed class EnvironmentDetectorTests
         string? ghprbSourceBranch,
         string expected)
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var jenkins = new EnvRestorer("JENKINS_URL", "https://jenkins.example");
-        using var git = new EnvRestorer("GIT_BRANCH", gitBranch);
-        using var branch = new EnvRestorer("BRANCH_NAME", branchName);
-        using var change = new EnvRestorer("CHANGE_ID", changeId);
-        using var changeSource = new EnvRestorer("CHANGE_BRANCH", changeBranch);
-        using var ghprbPull = new EnvRestorer("ghprbPullId", ghprbPullId);
-        using var ghprbSource = new EnvRestorer("ghprbSourceBranch", ghprbSourceBranch);
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env["GIT_BRANCH"] = gitBranch;
+        _env["BRANCH_NAME"] = branchName;
+        _env["CHANGE_ID"] = changeId;
+        _env["CHANGE_BRANCH"] = changeBranch;
+        _env["ghprbPullId"] = ghprbPullId;
+        _env["ghprbSourceBranch"] = ghprbSourceBranch;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync()
             .ConfigureAwait(false);
@@ -700,9 +623,8 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task TeamCityOmitsThePullRequestFlag()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var teamCity = new EnvRestorer("TEAMCITY_VERSION", "2025.07");
-        using var sha = new EnvRestorer("BUILD_VCS_NUMBER", "0123abcd");
+        _env["TEAMCITY_VERSION"] = "2025.07";
+        _env["BUILD_VCS_NUMBER"] = "0123abcd";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -715,8 +637,7 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task GenericCiEmitsNeitherCommitShaNorPullRequestFlag()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-        using var ci = new EnvRestorer("CI", "true");
+        _env["CI"] = "true";
 
         IEnvironmentDetector detector = CreateDetector();
 
@@ -730,7 +651,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_InsideGitRepositoryWithUserConfig_SetsActorFromGitConfig()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
@@ -746,7 +666,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_NoLocalUserConfig_FallsBackToGlobalGitConfig()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
@@ -757,12 +676,11 @@ public sealed class EnvironmentDetectorTests
         // Create a temporary HOME directory that contains only a .gitconfig with the user name
         string tempHome = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(tempHome);
-        string? originalHome = System.Environment.GetEnvironmentVariable("HOME");
         try
         {
             await File.WriteAllTextAsync(Path.Combine(tempHome, ".gitconfig"),
                 "[user]\n\tname = Global Author\n\temail = global@example.com\n");
-            System.Environment.SetEnvironmentVariable("HOME", tempHome);
+            _env["HOME"] = tempHome;
 
             IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
             EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -771,15 +689,44 @@ public sealed class EnvironmentDetectorTests
         }
         finally
         {
-            System.Environment.SetEnvironmentVariable("HOME", originalHome);
             try { Directory.Delete(tempHome, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task BuildEnvironmentInfoAsync_NoLocalOrHomeUserConfig_FallsBackToXdgGitConfig()
+    {
+        using var tempGit = new TempGitDirectory();
+        tempGit.WriteHead("ref: refs/heads/main");
+        tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
+        tempGit.WriteConfig("[core]\n\trepositoryformatversion = 0\n");
+        using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
+
+        // HOME has no .gitconfig, so the name can only come from $XDG_CONFIG_HOME/git/config.
+        string tempRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        string home = Directory.CreateDirectory(Path.Combine(tempRoot, "home")).FullName;
+        string xdg = Directory.CreateDirectory(Path.Combine(tempRoot, "xdg", "git")).Parent!.FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(xdg, "git", "config"),
+                "[user]\n\tname = Xdg Author\n");
+            _env["HOME"] = home;
+            _env["XDG_CONFIG_HOME"] = xdg;
+
+            IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+            EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+            Assert.Equal("Xdg Author", info.CustomProperties["Git.Actor"]);
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, recursive: true); } catch { /* best effort */ }
         }
     }
 
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithUserConfigButAuthorCollectionDisabled_OmitsActor()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "0000000000000000000000000000000000000001");
@@ -795,7 +742,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithPackedRefsOnly_ResolvesShaFromPackedRefs()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/release");
         tempGit.WritePackedRefs("# pack-refs with: peeled fully-peeled sorted\naaaa1111bbbb2222cccc3333dddd4444eeee5555 refs/heads/release\n");
@@ -811,7 +757,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithGitWorktree_DetectsRepositoryViaGitFile()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var mainGit = new TempGitDirectory();
         mainGit.WriteHead("ref: refs/heads/main");
         mainGit.WriteRef("main", "1234567890abcdef1234567890abcdef12345678");
@@ -841,7 +786,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithIndexNewerThanRef_SetsStagedChangesTrue()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
@@ -861,7 +805,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithIndexOlderThanRef_SetsStagedChangesFalse()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
@@ -881,7 +824,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithNoIndexFile_OmitsStagedChanges()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/heads/main");
         tempGit.WriteRef("main", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
@@ -897,7 +839,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithNonBranchSymbolicRef_DoesNotSetDetachedHead()
     {
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
         using var tempGit = new TempGitDirectory();
         tempGit.WriteHead("ref: refs/tags/v1.0");
         using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
@@ -912,13 +853,27 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task BuildEnvironmentInfoAsync_WhenTheProviderThrows_TreatsEveryVariableAsUnset()
+    {
+        var env = new Mock<IEnvironmentVariableProvider>();
+        env.Setup(e => e.GetVariable(It.IsAny<string>())).Throws<InvalidOperationException>();
+
+        IEnvironmentDetector detector = CreateDetector(env: env.Object);
+
+        // Twice: the detection lazies would cache a thrown exception and rethrow it on every call.
+        await detector.BuildEnvironmentInfoAsync();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.False(info.IsCIEnvironment);
+        Assert.False(detector.IsCiEnvironment);
+    }
+
+    [Fact]
     public async Task BuildEnvironmentInfoAsync_OnConcurrentCalls_ReturnsIndependentInstances()
     {
         // The detector is a DI singleton so its detection lazies are paid for once. A builder held
         // alongside them would be shared by every caller, and concurrent calls could interleave
         // their Reset()/With...() calls into one another's output.
-        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo[] built = await Task.WhenAll(
@@ -940,51 +895,13 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal(built.Length, built.Distinct(ReferenceEqualityComparer.Instance).Count());
     }
 
-    private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
+    private EnvironmentDetector CreateDetector(
+        XpingConfiguration? configuration = null, IEnvironmentVariableProvider? env = null)
     {
         return new EnvironmentDetector(
             Options.Create(configuration ?? new XpingConfiguration()),
-            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
-    }
-
-    private static CompositeDisposable ClearEnvironmentVariables(IEnumerable<string> variableNames)
-    {
-        List<EnvRestorer> restorers = [];
-        foreach (string variableName in variableNames)
-        {
-            restorers.Add(new EnvRestorer(variableName, null));
-        }
-
-        return new CompositeDisposable(restorers);
-    }
-
-    private sealed class EnvRestorer : IDisposable
-    {
-        private readonly string _name;
-        private readonly string? _originalValue;
-
-        public EnvRestorer(string name, string? value)
-        {
-            _name = name;
-            _originalValue = System.Environment.GetEnvironmentVariable(name);
-            System.Environment.SetEnvironmentVariable(name, value);
-        }
-
-        public void Dispose()
-        {
-            System.Environment.SetEnvironmentVariable(_name, _originalValue);
-        }
-    }
-
-    private sealed class CompositeDisposable(IEnumerable<IDisposable> disposables) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (IDisposable disposable in disposables.Reverse())
-            {
-                disposable.Dispose();
-            }
-        }
+            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
+            env ?? _env);
     }
 
     private sealed class WorkingDirectoryRestorer : IDisposable

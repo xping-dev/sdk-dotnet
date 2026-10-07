@@ -364,6 +364,7 @@ public static class XpingServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
+        services.TryAddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
         services.AddXpingSerialization();
         services.AddSingleton<IEnvironmentDetector, EnvironmentDetector>();
 
@@ -408,7 +409,7 @@ public static class XpingServiceCollectionExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddXpingPullRequest(this IServiceCollection services)
     {
-        services.AddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
+        services.TryAddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
         services.AddXpingSerialization();
         services.AddSingleton<IPlatformPullRequestDetector, GitHubPullRequestDetector>();
         services.AddSingleton<IPlatformPullRequestDetector, GitLabPullRequestDetector>();
