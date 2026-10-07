@@ -6,6 +6,7 @@
 using System.Text.Json;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Store;
+using Xping.Cli.Tests.Auth.Store;
 using Xping.Cli.Tests.Cloud;
 
 namespace Xping.Cli.Tests.Commands.Auth;
@@ -166,6 +167,38 @@ public sealed class AuthStatusCommandTests : IAsyncLifetime, IAsyncDisposable
         JsonElement json = result.Json();
         Assert.Equal("none", json.GetProperty("credential").GetString());
         Assert.Contains("because other users can read it", Assert.Single(json.GetProperty("warnings").EnumerateArray()).GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AuthStatus_FileFallback()
+    {
+        _host.SignIn();
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("Secret Service not running"),
+        };
+
+        CliResult result = _host.Run("auth", "status", "--json");
+
+        Assert.Equal(AuthExitCodes.Success, result.Code);
+        Assert.Equal("file", result.Json().GetProperty("credentialSource").GetString());
+        string warning = Assert.Single(result.Json().GetProperty("warnings").EnumerateArray()).GetString()!;
+        Assert.StartsWith("No OS credential store is available (Secret Service not running)", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AuthStatus_NoKeyringIsNotAStoreFailure()
+    {
+        // A server without a keyring and without a login is "not signed in", not a broken store (§7.4).
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("libsecret not installed"),
+            Fails = true,
+        };
+
+        CliResult result = _host.Run("auth", "status", "--json");
+
+        Assert.Equal(AuthExitCodes.AuthRequired, result.Code);
     }
 
     [Fact]

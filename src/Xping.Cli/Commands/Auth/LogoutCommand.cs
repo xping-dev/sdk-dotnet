@@ -42,7 +42,7 @@ internal sealed class LogoutCommand(
     private async Task<int> SignOutAsync(AuthSession session, CliConfiguration configuration, CancellationToken cancellationToken)
     {
         string cloudUrl = session.CloudUrl;
-        CredentialStores stores = selector.Select();
+        CredentialStores stores = selector.Select(cloudUrl);
         StoredLoginLookup lookup = await stores.ReadAsync(cloudUrl, cancellationToken).ConfigureAwait(false);
 
         string? warning = null;
@@ -53,10 +53,11 @@ internal sealed class LogoutCommand(
 
         // Past this point the sign-out completes: a Ctrl+C that arrives during deletion must not
         // leave half the entries behind.
-        bool deleted = await DeleteEverywhereAsync(stores, cloudUrl).ConfigureAwait(false);
+        CredentialDeletion deletion = await DeleteEverywhereAsync(stores, cloudUrl).ConfigureAwait(false);
+        string? uncheckedWarning = UncheckedWarning(stores, deletion);
 
-        if (lookup.Login is null && !deleted)
-            return NotSignedIn(session, configuration.ApiKey);
+        if (lookup.Login is null && !deletion.Deleted)
+            return NotSignedIn(session, configuration.ApiKey, uncheckedWarning);
 
         AuthText text = session.Text;
         string result;
@@ -82,6 +83,12 @@ internal sealed class LogoutCommand(
             }
 
             text.Done("Signed out locally.");
+        }
+
+        if (uncheckedWarning is not null)
+        {
+            text.Warning(uncheckedWarning);
+            warning = warning is null ? uncheckedWarning : $"{warning} {uncheckedWarning}";
         }
 
         session.Write(new LogoutDocument(AuthJson.SchemaVersion, result, cloudUrl, revoked, warning));
@@ -124,12 +131,23 @@ internal sealed class LogoutCommand(
         return (false, warning);
     }
 
-    private async Task<bool> DeleteEverywhereAsync(CredentialStores stores, string cloudUrl)
+    /// <summary>
+    /// What to tell the user about a keychain that could not be reached in this session, such as
+    /// one locked over SSH: it may still hold a sign-in made in a desktop session.
+    /// </summary>
+    private static string? UncheckedWarning(CredentialStores stores, CredentialDeletion deletion) =>
+        deletion.Unchecked.Count == 0
+            ? null
+            : $"Could not check the {string.Join(" or the ", deletion.Unchecked)} ({stores.FallbackReason}). " +
+              "A sign-in made where it is available, such as a desktop session, may still be stored there; " +
+              "run `xping logout` there to remove it.";
+
+    private async Task<CredentialDeletion> DeleteEverywhereAsync(CredentialStores stores, string cloudUrl)
     {
-        bool deleted;
+        CredentialDeletion deletion;
         try
         {
-            deleted = await stores.DeleteAllAsync(cloudUrl, CancellationToken.None).ConfigureAwait(false);
+            deletion = await stores.DeleteAllAsync(cloudUrl, CancellationToken.None).ConfigureAwait(false);
         }
         catch (CredentialStoreException ex)
         {
@@ -154,12 +172,15 @@ internal sealed class LogoutCommand(
         }
 
         discoveryCache.Delete(cloudUrl);
-        return deleted;
+        return deletion;
     }
 
-    private static int NotSignedIn(AuthSession session, ConfiguredValue? apiKey)
+    private static int NotSignedIn(AuthSession session, ConfiguredValue? apiKey, string? uncheckedWarning)
     {
         session.Text.Line($"You are not signed in to {session.CloudUrl}.");
+
+        if (uncheckedWarning is not null)
+            session.Text.Warning(uncheckedWarning);
 
         if (apiKey is not null)
         {
@@ -168,7 +189,7 @@ internal sealed class LogoutCommand(
                 : $"An API key is set in {apiKey.Origin}; logout does not remove it.");
         }
 
-        session.Write(new LogoutDocument(AuthJson.SchemaVersion, "not-signed-in", session.CloudUrl, Revoked: false, Warning: null));
+        session.Write(new LogoutDocument(AuthJson.SchemaVersion, "not-signed-in", session.CloudUrl, Revoked: false, uncheckedWarning));
         return AuthExitCodes.Success;
     }
 }

@@ -729,11 +729,29 @@ URL. Concretely:
 |---|---|---|
 | `WindowsCredentialStore` | `CredWriteW`, `CredReadW`, `CredDeleteW`, `CredFree`; `CRED_TYPE_GENERIC`, `CRED_PERSIST_LOCAL_MACHINE` | `TargetName = "xping-cli:{cloudUrl}"`, `UserName = "xping-cli"`, `CredentialBlob` = UTF-8 JSON of the record |
 | `MacOsKeychainStore` | `SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate`, `SecItemDelete` with `kSecClassGenericPassword`; CoreFoundation dictionaries built and released in the wrapper | `kSecAttrService = "xping-cli"`, `kSecAttrAccount = cloudUrl`, `kSecValueData` = JSON. `kSecAttrAccessible` is not set (login keychain default). |
-| `LibSecretStore` | `secret_password_store_sync`, `secret_password_lookup_sync`, `secret_password_clear_sync` from `libsecret-1.so.0`, with a `SecretSchema` named `io.xping.cli` and two string attributes `service` = `xping-cli`, `cloud` = cloudUrl; `GError` read and freed with `g_error_free` from `libglib-2.0.so.0` | label `xping-cli ({cloudUrl})`, secret = JSON, collection `SECRET_COLLECTION_DEFAULT` |
+| `LibSecretStore` | `secret_password_storev_sync`, `secret_password_lookupv_sync`, `secret_password_clearv_sync` and `secret_password_free` from `libsecret-1.so.0`, with a `SecretSchema` named `io.xping.cli` and two string attributes `service` = `xping-cli`, `cloud` = cloudUrl passed as a `GHashTable` (`g_hash_table_new`, `g_hash_table_insert`, `g_hash_table_unref`, `g_str_hash`, `g_str_equal`); `GError` read and freed with `g_error_free` from `libglib-2.0.so.0`. The `v` forms are used because the variadic ones cannot be called portably from .NET (variadic arguments follow a different calling convention on arm64). | label `xping-cli ({cloudUrl})`, secret = JSON, collection `SECRET_COLLECTION_DEFAULT` |
 | `FileCredentialStore` | §7.5 | one file for all Cloud URLs |
 
 P/Invoke uses `LibraryImport` with `StringMarshalling.Utf16` (Windows) or `Utf8` (Unix) and
-`SetLastError` where the API defines it. `AnalysisMode=All` will require `[SupportedOSPlatform]`
+`SetLastError` where the API defines it. libsecret is optional on Linux, so `LibSecretStore` binds
+its functions at run time (`NativeLibrary.TryLoad`, `GetExport`, function pointers) instead of with
+`LibraryImport`; a missing library is a fallback reason, not a crash.
+
+The OS backends implement `IKeychainCredentialStore`, which adds what the selector and the size
+rule need:
+
+```csharp
+internal interface IKeychainCredentialStore : ICredentialStore
+{
+    int? MaxSecretBytes { get; }                             // 2560 on Windows, null elsewhere
+    KeychainProbe Probe(string cloudUrl);                    // §7.4
+}
+
+internal sealed record KeychainProbe(bool Available, string? Reason);
+```
+
+The service name (`xping-cli`) is a constructor argument, so the `Category=CredentialStore` tests
+use `xping-cli-tests` (§17.2) and never touch a developer's real entry. `AnalysisMode=All` will require `[SupportedOSPlatform]`
 on each backend and justified suppressions for the few interop analyzers that fire on CoreFoundation
 signatures; the suppressions carry the reason as the code style requires.
 
@@ -754,12 +772,13 @@ signing the tool, which is out of scope.
 
 ### 7.4 Selection and the file fallback
 
-`CredentialStoreSelector.Select()` runs once per process:
+`CredentialStoreSelector.Select(cloudUrl)` probes once per process (later calls return the same
+result):
 
 | OS | First choice | Available when | Otherwise |
 |---|---|---|---|
 | Windows | `WindowsCredentialStore` | always (`CredRead` of a probe name returns `ERROR_NOT_FOUND` or success) | file |
-| macOS | `MacOsKeychainStore` | `SecItemCopyMatching` for a probe returns `errSecItemNotFound` or success | file, when the result is `errSecInteractionNotAllowed` (-25308), `errSecNotAvailable` (-25291), `errSecAuthFailed` (-25293) — typical over SSH with a locked keychain — or any other error |
+| macOS | `MacOsKeychainStore` | `SecItemCopyMatching` for a probe returns `errSecItemNotFound` or success | file, when the result is `errSecInteractionNotAllowed` (-25308) or `errSecAuthFailed` (-25293) — typical over SSH with a locked keychain, reason "keychain locked" — or `errSecNotAvailable` (-25291) or any other error, reason "keychain unavailable" |
 | Linux | `LibSecretStore` | `libsecret-1.so.0` loads **and** `DBUS_SESSION_BUS_ADDRESS` is set or `$XDG_RUNTIME_DIR/bus` exists **and** a probe lookup returns without a `GError` | file |
 
 The probe uses the real entry name for the current Cloud URL, so "available" also means "readable
@@ -768,7 +787,19 @@ shown by `auth status`.
 
 **Read order is always keychain, then file**, regardless of which one the selector chose for
 writes. A developer who logged in over SSH (file) and later runs in a GUI session (keychain
-available) must still be logged in. `logout` deletes from both. `login` writes to the selected
+available) must still be logged in. A keychain whose probe failed is left out of the read order of
+that process: reading it would fail the same way, and every `auth status` on a machine without a
+keyring would then report a store failure (exit 14) instead of "not signed in" (exit 10). The
+reason is already shown as `FallbackReason`. The SSH-then-GUI case is two processes with two
+probes, so it is unaffected. Such a keychain is kept as `CredentialStores.Unreachable` unless the
+probe says it cannot hold anything (libsecret not installed): `logout` still tries to delete from
+it, and when that fails it warns that a sign-in made in a desktop session may remain there, without
+failing the sign-out.
+
+The probe reads the secret (a locked macOS keychain lists items but refuses their content), so the
+backend keeps that result and hands it to the first `ReadAsync` of the same entry; a write or delete
+drops it. One command therefore reads the keychain once: one access dialog after an upgrade, one
+D-Bus round trip. `logout` deletes from both. `login` writes to the selected
 store and, when that is the keychain, also deletes any file entry for the same Cloud URL so the
 two never disagree.
 
@@ -778,10 +809,12 @@ keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns th
 record with the store it came from, plus the warnings of every store it visited and the
 `Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
 the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
-clears the file entry when `Selected` is a keychain; a failure is thrown. `DeleteAllAsync` tries
+clears the file entry when `Selected` is a keychain; a failure to write `Selected` is thrown, a
+failure to clear the file entry is returned as a warning (the sign-in is stored, and the keychain is
+read first, so the old entry is never used). `DeleteAllAsync` tries
 every store, even after one fails, so `logout` removes whatever it can, and then throws one
 `CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
-a backend directly. Until phase 5 the read order is the file store alone.
+a backend directly.
 
 ### 7.5 The file backend
 
@@ -833,7 +866,7 @@ give a `0600` file, and the next read would trust entries that another user coul
   token) the command prints once per process, to stderr: "Stored credentials in
   ~/.xping/credentials.json because no OS credential store is available ({reason}). The file is
   readable only by you." `{reason}` is the selector's reason: "Secret Service not running",
-  "libsecret not installed", "keychain locked", "Credential Manager error".
+  "libsecret not installed", "keychain locked", "keychain unavailable", "Credential Manager error".
 - `report` prints this only under `--verbose`, so a pipeline of `xping report --json` is not
   polluted on every refresh. It is still a line on stderr, never on stdout.
 - `auth status` always shows the store in the `Credential` line and lists the reason under
@@ -1393,23 +1426,31 @@ The Xping skill and the MCP server run the CLI as a child process. Rules:
 
 - Every PR on `ubuntu-latest` (existing `ci.yml`): unit tests, the fake-server flow tests
   (§18.2), the file backend, `LibSecretStore` with the library **absent** (fallback path), and
-  the regression suites. No keyring is installed on the PR runner.
-- Nightly on `main` only (A-7), new workflow `cli-credential-stores.yml`, `schedule: cron
-  '0 3 * * *'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
+  the regression suites. No keyring is installed on the PR runner, and the CLI test step runs with
+  `--filter "Category!=CredentialStore"` so a runner image that ships one never turns them on.
+- Weekly on `main` only (A-7, Q-7), new workflow `cli-credential-stores.yml`, `schedule: cron
+  '0 3 * * 1'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
   `ubuntu-latest`. It runs **only** `tests/Xping.Cli.Tests` filtered to
   `Category=CredentialStore`, about ten tests, on each runner:
   - Windows: `WindowsCredentialStore` round trip, blob-limit rule, delete, corrupt entry.
   - macOS: `MacOsKeychainStore` round trip, update, delete, corrupt entry (the runner's login
     keychain is unlocked).
   - Ubuntu: installs `gnome-keyring` and `libsecret-1-0`, starts `dbus-run-session` with an
-    unlocked keyring, runs the `LibSecretStore` round trip; then a second step without the
-    session bus asserts the fallback.
+    unlocked keyring, runs the `LibSecretStore` round trip; then a second step, outside that
+    session, runs the fallback tests (library missing, no session bus), whose environment is
+    injected.
   The job has `timeout-minutes: 15` and `concurrency` cancel-in-progress. Expected cost:
   under 5 runner minutes on Linux, ~3 on Windows (×2 billing), ~3 on macOS (×10 billing), so
-  roughly 40 billed minutes per run, about 1200 per month if run daily. **Decision (Q-7,
-  answered): it runs weekly**, `'0 3 * * 1'`, about 160 billed minutes per month, plus
+  roughly 40 billed minutes per run, about 1200 per month if it ran daily. **Decision (Q-7,
+  answered): it runs weekly**, about 160 billed minutes per month, plus
   `workflow_dispatch` for a manual run after a backend change. Developers run the same filter
   locally before touching a backend.
+- Code coverage comes from the PR job only, which cannot run the native backends: the Windows and
+  macOS stores never execute on Linux, and `LibSecretStore` needs a keyring the PR runner does not
+  install. The three backend classes, and the OS switch in `ServiceCollectionExtensions` that
+  constructs them, are `[ExcludeFromCodeCoverage]` with that reason; their tests are the weekly run
+  above. Everything they share (`CredentialRecordCodec`, `ProbedSecret`, the selector and
+  `CredentialStores`) stays measured, so keep logic out of the backends.
 - Tests use the service/target name `xping-cli-tests` and a Cloud URL of
   `https://tests.invalid`, and delete what they create in `finally`, so a developer's real login
   is never touched.
@@ -1477,8 +1518,8 @@ stderr), and a test-only hook `Program.Run(..., configureServices)` that replace
 scratch directory so `~/.xping` is isolated, `IBrowserLauncher` with a capturing fake,
 `IHeadlessDetector` with a fixed answer, `TimeProvider` with `FakeTimeProvider`, and the
 environment provider with a dictionary. The environment is always injected: CI runners set
-`CI=true`, which `login` refuses (§3.2). `CredentialStoreSelector` holds the file backend until
-phase 5. Scenarios:
+`CI=true`, which `login` refuses (§3.2). The host registers a `CredentialStoreSelector` without a
+keychain backend, so flow tests never read or write the developer's real keychain. Scenarios:
 
 | Test | Scenario |
 |---|---|

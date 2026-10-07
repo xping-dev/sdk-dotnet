@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Xping.Sdk.Core.Services.Serialization;
 
@@ -60,18 +61,12 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
 
         Dictionary<string, JsonElement>? entries = Parse(content);
         if (entries is null)
-            return new CredentialReadResult(null, CorruptMessage(cloudUrl));
+            return CredentialReadResult.Corrupt(cloudUrl);
 
         if (!entries.TryGetValue(cloudUrl, out JsonElement entry))
             return CredentialReadResult.None;
 
-        CredentialRecord? record = ParseRecord(entry);
-        if (record is null || !record.IsValidFor(cloudUrl))
-            return new CredentialReadResult(null, CorruptMessage(cloudUrl));
-
-        Redaction.AddSecret(record.RefreshToken);
-        Redaction.AddSecret(record.AccessToken);
-        return new CredentialReadResult(record, null);
+        return CredentialRecordCodec.Decode(JsonMarshal.GetRawUtf8Value(entry), cloudUrl, serializer);
     }
 
     /// <inheritdoc/>
@@ -241,21 +236,6 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         }
     }
 
-    private CredentialRecord? ParseRecord(JsonElement entry)
-    {
-        if (entry.ValueKind != JsonValueKind.Object)
-            return null;
-
-        try
-        {
-            return serializer.Deserialize<CredentialRecord>(entry.GetRawText());
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
     private bool IsUnsafe(string path)
     {
         // Windows has no mode bits; the file gets an owner-only ACL when it is written.
@@ -284,9 +264,6 @@ internal sealed class FileCredentialStore(XpingHome home, IXpingSerializer seria
         return $"Refusing to read {file} because other users can read it. " +
             $"Run `chmod 600 {file}` (and `chmod 700 {directory}`) and try again.";
     }
-
-    private static string CorruptMessage(string cloudUrl) =>
-        $"Stored credentials for {cloudUrl} are unreadable and will be replaced at the next `xping login`.";
 
     private enum FileState
     {

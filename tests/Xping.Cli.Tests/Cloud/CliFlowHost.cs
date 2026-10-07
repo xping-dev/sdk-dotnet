@@ -47,6 +47,12 @@ internal sealed class CliFlowHost : IAsyncDisposable
     public bool IsTerminal { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the OS keychain the CLI sees; none by default, so a flow test never reads or
+    /// writes the developer's real keychain.
+    /// </summary>
+    public IKeychainCredentialStore? Keychain { get; set; }
+
+    /// <summary>
     /// Gets or sets whether <c>--cloud-url</c> is added to every command line; off for tests about
     /// the other sources of the Cloud URL.
     /// </summary>
@@ -125,7 +131,7 @@ internal sealed class CliFlowHost : IAsyncDisposable
     public CredentialRecord? StoredRecord()
     {
         using ServiceProvider services = BuildServices();
-        return services.GetRequiredService<CredentialStoreSelector>().Select()
+        return services.GetRequiredService<CredentialStoreSelector>().Select(Cloud.CloudUrl)
             .ReadAsync(Cloud.CloudUrl, CancellationToken.None).GetAwaiter().GetResult().Login?.Record;
     }
 
@@ -154,6 +160,7 @@ internal sealed class CliFlowHost : IAsyncDisposable
         services.AddSingleton<IEnvironmentVariableProvider>(new DictionaryEnvironment(Environment));
         services.AddSingleton<IHeadlessDetector>(new FixedHeadlessDetector(this));
         services.AddSingleton<IBrowserLauncher>(Browser);
+        services.AddSingleton(provider => new CredentialStoreSelector(provider.GetRequiredService<FileCredentialStore>(), Keychain));
     }
 
     private sealed class DictionaryEnvironment(Dictionary<string, string> variables) : IEnvironmentVariableProvider

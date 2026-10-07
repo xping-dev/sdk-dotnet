@@ -56,8 +56,11 @@ jobs:
       # times its uninstrumented runtime: ~10s becomes ~100s on a developer machine, which leaves
       # no headroom inside five minutes on a loaded two-core runner. That is what the intermittent
       # "'Run CLI Tests' has timed out after 5 minutes" on main was, with no test failing.
+      #
+      # The OS keychain tests run in cli-credential-stores.yml (weekly); a runner image that ships an
+      # unlocked keyring must not turn them on here.
       - name: Run CLI Tests
-        run: dotnet test tests/Xping.Cli.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Cli.Tests/ --no-build --filter "Category!=CredentialStore" --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
         timeout-minutes: 10
 
       - name: Run Integration Tests

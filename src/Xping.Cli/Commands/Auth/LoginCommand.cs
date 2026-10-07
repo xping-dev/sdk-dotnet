@@ -69,7 +69,7 @@ internal sealed class LoginCommand(
         }
 
         string cloudUrl = session.CloudUrl;
-        CredentialStores stores = selector.Select();
+        CredentialStores stores = selector.Select(cloudUrl);
         EnsureStoreAvailable(stores);
 
         if (configuration.ApiKey is { } apiKey)
@@ -92,9 +92,10 @@ internal sealed class LoginCommand(
         // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
         cancellationToken.ThrowIfCancellationRequested();
 
+        string? leftover;
         try
         {
-            await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
+            leftover = await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
         }
         catch (CredentialStoreException ex)
         {
@@ -106,6 +107,16 @@ internal sealed class LoginCommand(
         }
 
         session.Text.SignedIn(record, stores.Selected);
+
+        if (leftover is not null)
+            session.Text.Warning(Redaction.Scrub(leftover));
+
+        if (stores.FallbackReason is { } reason)
+        {
+            session.Text.Warning(
+                $"Stored credentials in {stores.Selected.DisplayName} because no OS credential store is available " +
+                $"({reason}). The file is readable only by you.");
+        }
         session.Write(new LoginSucceededDocument(
             AuthJson.SchemaVersion,
             "signed-in",
@@ -132,8 +143,8 @@ internal sealed class LoginCommand(
 
     private void EnsureStoreAvailable(CredentialStores stores)
     {
-        // Only the file store exists until the keychains arrive; it is available when ~/.xping can be
-        // created private to the user.
+        // A keychain was probed when it was selected. The file store is available when ~/.xping can
+        // be created private to the user.
         if (stores.Selected.Kind != CredentialStoreKind.File)
             return;
 

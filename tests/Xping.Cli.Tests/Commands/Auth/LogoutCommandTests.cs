@@ -6,6 +6,7 @@
 using System.Text.Json;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Store;
+using Xping.Cli.Tests.Auth.Store;
 using Xping.Cli.Tests.Cloud;
 
 namespace Xping.Cli.Tests.Commands.Auth;
@@ -100,6 +101,85 @@ public sealed class LogoutCommandTests : IAsyncLifetime, IAsyncDisposable
         JsonElement json = result.Json();
         Assert.Equal("not-signed-in", json.GetProperty("result").GetString());
         Assert.False(json.GetProperty("revoked").GetBoolean());
+    }
+
+    [Fact]
+    public void ASignInInAKeychainThatFailedItsProbeIsStillRemoved()
+    {
+        // Signed in from the desktop, signing out over SSH: before the fix the keychain was skipped
+        // and logout said "not signed in".
+        var keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("keychain locked"),
+        };
+        keychain.Add(CredentialTestData.Record(_host.Cloud.CloudUrl));
+        _host.Keychain = keychain;
+
+        CliResult result = _host.Run("logout", "--json");
+
+        Assert.Equal(0, result.Code);
+        Assert.False(keychain.Contains(_host.Cloud.CloudUrl));
+        Assert.Equal("signed-out-locally", result.Json().GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public void AKeychainThatCannotBeCheckedIsReportedAndDoesNotFailTheSignOut()
+    {
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("keychain locked"),
+            Fails = true,
+        };
+
+        CliResult result = _host.Run("logout", "--json");
+
+        Assert.Equal(0, result.Code);
+        Assert.Contains($"You are not signed in to {_host.Cloud.CloudUrl}.", result.Error, StringComparison.Ordinal);
+        const string Warning = "Could not check the Test Keychain (keychain locked). A sign-in made where it is available, " +
+            "such as a desktop session, may still be stored there; run `xping logout` there to remove it.";
+        Assert.Contains(Warning, result.Error, StringComparison.Ordinal);
+        Assert.Equal(Warning, result.Json().GetProperty("warning").GetString());
+    }
+
+    [Fact]
+    public void ASignOutFromTheFileAlsoReportsAKeychainThatCannotBeChecked()
+    {
+        _host.SignIn();
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("Secret Service not running"),
+            Fails = true,
+        };
+
+        CliResult result = _host.Run("logout", "--json");
+
+        Assert.Equal(0, result.Code);
+        Assert.False(File.Exists(_host.CredentialsFile));
+        Assert.Equal("signed-out", result.Json().GetProperty("result").GetString());
+        Assert.StartsWith("Could not check the Test Keychain (Secret Service not running).",
+            result.Json().GetProperty("warning").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnOfflineSignOutReportsBothTheRevocationAndAnUncheckedKeychain()
+    {
+        _host.SignIn();
+        _host.Cloud.Drop("/connect/revoke", 2);
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("keychain locked"),
+            Fails = true,
+        };
+
+        Task<CliResult> run = _host.Start("logout", "--json");
+        await _host.WaitForTimerAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
+        _host.Time.Advance(TimeSpan.FromSeconds(2));
+        CliResult result = await run.ConfigureAwait(true);
+
+        Assert.Equal(0, result.Code);
+        string warning = result.Json().GetProperty("warning").GetString()!;
+        Assert.StartsWith($"Could not reach {_host.Cloud.CloudUrl} to revoke the session (", warning, StringComparison.Ordinal);
+        Assert.Contains(" Could not check the Test Keychain (keychain locked).", warning, StringComparison.Ordinal);
     }
 
     [Fact]
