@@ -188,6 +188,17 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<IEnvironmentDetector>());
     }
 
+    [Fact]
+    public void AddXpingEnvironmentAndAddXpingPullRequest_RegisterOneEnvironmentVariableProvider()
+    {
+        var services = new ServiceCollection();
+
+        services.AddXpingEnvironment();
+        services.AddXpingPullRequest();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IEnvironmentVariableProvider));
+    }
+
     // ---------------------------------------------------------------------------
     // AddXpingConfigurationFromInstance
     // ---------------------------------------------------------------------------
