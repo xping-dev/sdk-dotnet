@@ -154,7 +154,11 @@ filling the comment-only extension point that exists today at lines 36–41. Two
   `Timeout = 15 s`, no resilience handler; retries are the explicit ones of contract §8.1 (§2.4).
 - `"xping-cloud"`: DataGateway. `AllowAutoRedirect = false`, `Timeout = 30 s` total, resilience
   handler of §10.3, then `BearerTokenHandler` or `ApiKeyHandler` (never both), then the primary
-  handler.
+  handler. The credential is known only once a command resolves it (§8.1), and a handler instance
+  holds that credential's state, which pooled factory handlers must not. So the named client
+  registers only the primary handler; `CloudApiClientFactory` (`Cloud/CloudApiClientFactory.cs`)
+  builds resilience → credential handler → the factory's primary handler for each credential. A
+  fallback (§8.1) therefore always gets a new pipeline.
 
 Both clients set `User-Agent: xping-cli/{XpingVersion.Current} ({RuntimeInformation.OSDescription
 trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept: application/json`.
@@ -1016,7 +1020,9 @@ old refresh token inside that leeway. Design:
 2. Under the lock, **re-read the record from the store**. If the stored `accessToken` is fresh
    (another process refreshed meanwhile), adopt it, release, return.
 3. Otherwise `POST refresh_token` with the stored (re-read) refresh token, write the new pair
-   with the store's atomic `WriteAsync`, update the in-memory record, release.
+   with the store's atomic `WriteAsync`, update the in-memory record, release. The pair is written
+   to the store the record was read from, not to the store `login` would select today: a refresh
+   does not move a file sign-in into a keychain that has since become available.
 
 Because the refresh token is re-read under the lock immediately before use, the time between
 "read" and "present" is milliseconds, far inside the leeway. A long-running process never presents
@@ -1545,6 +1551,14 @@ keychain backend, so flow tests never read or write the developer's real keychai
 | `Logout_Revokes_ThenDeletes`, `Logout_Offline_DeletesAndWarns`, `Logout_NotSignedIn` | §12 |
 | `AuthStatus_*` | each credential state, no request made (asserted) |
 
+The four tests named in phase 6's exit criterion (`Report_Refresh_Rotation`, `Report_ReuseDetected`,
+`Report_TwoProcesses_Refresh`, `Report_BothHeadersNever`) run in phase 6 at the pipeline level,
+because `report` does not call Cloud before phase 7: they drive `CloudApiClientFactory` →
+`CloudApiClient` → `BearerTokenHandler` → `TokenRefresher` against `FakeCloud` and assert the
+store and the request log. Phase 7 extends them to run `xping report` and adds the report-level
+assertions (hint line, exit code, envelope). The fallback decision of §8.1 belongs to the caller,
+`CloudEnricher`, so `Report_Fallback_*` and `Report_NoFallback_OnNetworkError` are phase 7 tests.
+
 ### 18.3 Regression suites
 
 - `X-API-Key`: `tests/Xping.Sdk.Integration.Tests/ApiCommunicationTests` and
@@ -1596,7 +1610,7 @@ without a credential.
 | 3 | `feat/cli-auth-03-loopback-login` | `Pkce`, `LoopbackListener`, pages, `BrowserLauncher`, `HeadlessDetector`, `LoopbackFlow`, `LoginCommand` (loopback only), `AuthStatusCommand`, `LogoutCommand` (§12). | Flow tests `Login_Loopback_*`, `Logout_*`, `AuthStatus_*` green; manual login against production succeeds on the developer machine with the file store. |
 | 4 | `feat/cli-auth-04-device-login` | `DeviceFlow`, `--device`, `--no-browser`, `--workspace`. | `Login_Device_*` green; manual device login over SSH succeeds. |
 | 5 | `feat/cli-auth-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
-| 6 | `feat/cli-auth-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green. |
+| 6 | `feat/cli-auth-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green at the pipeline level (§18.2; phase 7 runs them through `report`). |
 | 7 | `feat/cli-auth-07-report-enrichment` | SDK pin stamp (§11.2 step 3), `ProjectResolver` + cache, `--project`, `CloudEnricher`, envelope `1.22`, the three renderer slots, amendments to the three report specs, `context.cloud`. Depends on the DataGateway `displayName`/`slug` change for step 4; steps 1–3 work without it. | Goldens unchanged; `Report_Enriched`, `Report_CloudDown`, `Report_ApiKey_Precedence`, `Report_NoCredential_NoNetwork` green; `ReportEnvelopeTests` updated for `1.22`. |
 | 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR; remove `feat/cli-auth` from the `pull_request` branches in `.github/workflows/ci.yml` (added in phase 0 so the phase PRs run CI). | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
 
