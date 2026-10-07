@@ -36,6 +36,14 @@ internal sealed class XpingHome(string root)
         Path.Combine(Root, "cache", "projects", CloudUrl.StorageKey(cloudUrl));
 
     /// <summary>
+    /// Returns the lock file that serializes token refreshes for <paramref name="cloudUrl"/> across
+    /// processes (cli-auth-cli-spec §9.4).
+    /// </summary>
+    /// <param name="cloudUrl">The normalized Cloud URL.</param>
+    public string LockFile(string cloudUrl) =>
+        Path.Combine(Root, "locks", CloudUrl.StorageKey(cloudUrl) + ".lock");
+
+    /// <summary>
     /// Gets the file that holds sign-ins when no OS credential store is used (cli-auth-cli-spec §7.5).
     /// </summary>
     public string CredentialsFile => Path.Combine(Root, "credentials.json");

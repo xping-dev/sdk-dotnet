@@ -17,7 +17,7 @@ public sealed class WindowsFactAttribute : FactAttribute
     public WindowsFactAttribute()
     {
         if (!OperatingSystem.IsWindows())
-            Skip = "Windows Credential Manager tests run on Windows only.";
+            Skip = "Windows-only tests run on Windows only.";
     }
 }
 

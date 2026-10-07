@@ -96,6 +96,45 @@ internal static class PrivateFiles
     }
 
     /// <summary>
+    /// Opens <paramref name="path"/> for this handle alone, creating it readable only by the user.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FileShare.None"/> is a lock: Windows enforces it, and .NET on Unix backs it with an
+    /// advisory <c>flock</c>.
+    /// </remarks>
+    /// <exception cref="IOException">Another handle has the file open.</exception>
+    public static FileStream OpenExclusive(string path)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = System.IO.FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None
+        };
+
+        if (!OperatingSystem.IsWindows())
+            options.UnixCreateMode = FileMode;
+
+        var stream = new FileStream(path, options);
+        if (!OperatingSystem.IsWindows())
+            return stream;
+
+        // By path, as WriteAtomically does: the share mode governs data access, and setting an ACL
+        // asks for WRITE_DAC only, which the read/write handle above does not carry.
+        try
+        {
+            RestrictToCurrentUser(path);
+            return stream;
+        }
+        catch
+        {
+            // An undisposed handle would hold the lock until the finalizer ran.
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Makes <paramref name="root"/> a <c>0700</c> directory on Unix, creating it or tightening it.
     /// </summary>
     /// <remarks>

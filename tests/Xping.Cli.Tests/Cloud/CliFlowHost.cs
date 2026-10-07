@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Browser;
 using Xping.Cli.Auth.Store;
+using Xping.Cli.Configuration;
 using Xping.Cli.Hosting;
 using Xping.Sdk.Core.Services.Environment;
 
@@ -94,6 +95,10 @@ internal sealed class CliFlowHost : IAsyncDisposable
     {
         CliResult result = Run("login");
         Assert.True(result.Code == 0, result.Error);
+
+        // The login's own waits (the 5-minute loopback timeout) are over; a test that drives the
+        // clock afterwards must not jump by them.
+        Time.DiscardCreatedTimers();
         return StoredRecord() ?? throw new InvalidOperationException("The sign-in was not stored.");
     }
 
@@ -135,6 +140,23 @@ internal sealed class CliFlowHost : IAsyncDisposable
             .ReadAsync(Cloud.CloudUrl, CancellationToken.None).GetAwaiter().GetResult().Login?.Record;
     }
 
+    /// <summary>
+    /// Resolves the credential a command would use, with <paramref name="apiKeyFlag"/> as <c>--api-key</c>.
+    /// </summary>
+    public Task<ResolvedCredential> ResolveAsync(IServiceProvider services, string? apiKeyFlag = null)
+    {
+        CliConfiguration configuration = CliConfiguration.Load(
+            Cloud.CloudUrl, apiKeyFlag, HomeDirectory, name => Environment.GetValueOrDefault(name));
+
+        return services.GetRequiredService<CredentialResolver>().ResolveAsync(configuration, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Waits for <paramref name="task"/>, moving the fake clock past each wait it starts
+    /// (<see cref="ClockDriver"/>).
+    /// </summary>
+    public Task<T> DriveAsync<T>(Task<T> task) => ClockDriver.DriveAsync(Time, task);
+
     public async ValueTask DisposeAsync()
     {
         await Cloud.DisposeAsync().ConfigureAwait(false);
@@ -144,7 +166,10 @@ internal sealed class CliFlowHost : IAsyncDisposable
             Directory.Delete(scratch, recursive: true);
     }
 
-    private ServiceProvider BuildServices()
+    /// <summary>
+    /// Builds the services one <c>xping</c> process would have, for a test that drives them directly.
+    /// </summary>
+    public ServiceProvider BuildServices()
     {
         var services = new ServiceCollection();
         services.AddLogging();
