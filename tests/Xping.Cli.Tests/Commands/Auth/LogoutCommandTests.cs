@@ -161,6 +161,28 @@ public sealed class LogoutCommandTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
+    public async Task AnOfflineSignOutReportsBothTheRevocationAndAnUncheckedKeychain()
+    {
+        _host.SignIn();
+        _host.Cloud.Drop("/connect/revoke", 2);
+        _host.Keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain")
+        {
+            ProbeResult = KeychainProbe.Unavailable("keychain locked"),
+            Fails = true,
+        };
+
+        Task<CliResult> run = _host.Start("logout", "--json");
+        await _host.WaitForTimerAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
+        _host.Time.Advance(TimeSpan.FromSeconds(2));
+        CliResult result = await run.ConfigureAwait(true);
+
+        Assert.Equal(0, result.Code);
+        string warning = result.Json().GetProperty("warning").GetString()!;
+        Assert.StartsWith($"Could not reach {_host.Cloud.CloudUrl} to revoke the session (", warning, StringComparison.Ordinal);
+        Assert.Contains(" Could not check the Test Keychain (keychain locked).", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LogoutTwiceIsNotSignedInTheSecondTime()
     {
         _host.SignIn();

@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -28,6 +29,8 @@ namespace Xping.Cli.Auth.Store;
 /// architecture, and .NET cannot call them portably.
 /// </para>
 /// </remarks>
+[ExcludeFromCodeCoverage(Justification =
+    "Native libsecret calls; runs only on Linux with a real unlocked Secret Service on a session bus, which the Ubuntu PR runner has not. Covered by cli-credential-stores.yml (cli-auth-cli-spec §17.2).")]
 [SupportedOSPlatform("linux")]
 internal sealed class LibSecretStore : IKeychainCredentialStore
 {

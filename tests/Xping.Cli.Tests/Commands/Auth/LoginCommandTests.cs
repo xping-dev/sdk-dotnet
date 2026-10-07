@@ -112,6 +112,36 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
+    public void AnOldFileEntryThatCannotBeRemovedIsAWarningNotAFailure()
+    {
+        // Mode bits are what make the delete fail; Windows has none.
+        if (OperatingSystem.IsWindows())
+            return;
+
+        CliFlowHost host = _host;
+        host.SignIn();
+        var keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain");
+        host.Keychain = keychain;
+
+        // ~/.xping that can be read but not changed: the file entry cannot be deleted.
+        File.SetUnixFileMode(host.HomeDirectory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        CliResult result;
+        try
+        {
+            result = host.Run("login");
+        }
+        finally
+        {
+            File.SetUnixFileMode(host.HomeDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.True(keychain.Contains(host.Cloud.CloudUrl));
+        Assert.Contains("Stored in  Test Keychain", result.Error, StringComparison.Ordinal);
+        Assert.Contains("An older sign-in could not be removed; it is no longer used.", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WithoutAUsableKeychainTheSignInGoesToTheFileAndTheUserIsToldWhy()
     {
         CliFlowHost host = _host;

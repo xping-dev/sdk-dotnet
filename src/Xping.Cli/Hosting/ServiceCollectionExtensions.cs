@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -120,6 +121,7 @@ internal static class ServiceCollectionExtensions
     /// Returns the OS credential store of <paramref name="os"/>, or <see langword="null"/> where
     /// there is none (cli-auth-cli-spec §7.4).
     /// </summary>
+    [ExcludeFromCodeCoverage(Justification = "Each arm runs only on its own OS; the Ubuntu PR runner reaches one.")]
     private static IKeychainCredentialStore? Keychain(IServiceProvider provider, HostOs os)
     {
         IXpingSerializer serializer = provider.GetRequiredService<IXpingSerializer>();

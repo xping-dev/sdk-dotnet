@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -21,6 +22,8 @@ namespace Xping.Cli.Auth.Store;
 /// </remarks>
 /// <param name="service">The item's service: <c>xping-cli</c>, or a test name.</param>
 /// <param name="serializer">Writes and reads the record.</param>
+[ExcludeFromCodeCoverage(Justification =
+    "Native Keychain calls; runs only on macOS with a real login keychain, which the Ubuntu PR runner has not. Covered by cli-credential-stores.yml (cli-auth-cli-spec §17.2).")]
 [SupportedOSPlatform("macos")]
 internal sealed partial class MacOsKeychainStore(string service, IXpingSerializer serializer) : IKeychainCredentialStore
 {
