@@ -364,6 +364,9 @@ public static class XpingServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
+        // The detector logs configuration warnings. AddLogging only adds what's missing, so a host that
+        // already configured logging (AddXpingInfrastructure) keeps its providers.
+        services.AddLogging();
         services.TryAddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
         services.AddXpingSerialization();
         services.AddSingleton<IEnvironmentDetector, EnvironmentDetector>();

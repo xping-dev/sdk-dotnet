@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
@@ -24,6 +25,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private readonly XpingConfiguration _configuration;
     private readonly IXpingSerializer _serializer;
     private readonly IEnvironmentVariableProvider _env;
+    private readonly ILogger<EnvironmentDetector> _logger;
 
     // Instance-level lazy initialization for thread-safe, cached detection
     private readonly Lazy<string> _machineName;
@@ -44,11 +46,15 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
     /// </summary>
     public EnvironmentDetector(
-        IOptions<XpingConfiguration> options, IXpingSerializer serializer, IEnvironmentVariableProvider env)
+        IOptions<XpingConfiguration> options,
+        IXpingSerializer serializer,
+        IEnvironmentVariableProvider env,
+        ILogger<EnvironmentDetector> logger)
     {
         _configuration = options.Value;
         _serializer = serializer;
         _env = env;
+        _logger = logger;
 
         // Initialize instance-level lazy fields
         _machineName = new Lazy<string>(GetMachineName);
@@ -468,6 +474,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.HeadBranch", GetVariable("GITHUB_HEAD_REF"));
                     AddIfNotNull(properties, "CI.BaseBranch", GetVariable("GITHUB_BASE_REF"));
                     string githubEventName = GetVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(githubEventName))
+                        WarnMissingGitHubEventName();
+
                     bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(GetVariable);
                     if (isGitHubPullRequest is not null)
                     {
@@ -898,6 +907,37 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         return PullRequestEnvironment.TryGetServerRoot(GetVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
             ? serverUrl
             : null;
+    }
+
+    // Actions always sets GITHUB_EVENT_NAME, so an unset value means a container was given only some
+    // GITHUB_* variables. Without it every run - pushes to main included - silently loses its commit in
+    // Xping Cloud. Git.SHA is still read from .git, so the message names CI.CommitSha, not "the commit".
+    // This runs inside the _customProperties lazy, so it logs once per detector, and a lazy caches an
+    // exception: a throwing logger must not fail every later detection call.
+    private void WarnMissingGitHubEventName()
+    {
+        try
+        {
+            if (_configuration.EnablePullRequestDetection)
+            {
+                _logger.LogWarning(
+                    "GITHUB_EVENT_NAME is not set, so Xping can't tell a push from a pull request: PR context " +
+                    "is skipped and, unless GITHUB_REF is refs/pull/*, CI.CommitSha and CI.IsPullRequest are " +
+                    "not sent to Xping Cloud. If tests run in a container, pass GITHUB_EVENT_NAME along with " +
+                    "the other GITHUB_* variables.");
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "GITHUB_EVENT_NAME is not set, so Xping can't tell a push from a pull request: unless " +
+                    "GITHUB_REF is refs/pull/*, CI.CommitSha and CI.IsPullRequest are not sent to Xping Cloud. " +
+                    "If tests run in a container, pass GITHUB_EVENT_NAME along with the other GITHUB_* variables.");
+            }
+        }
+        catch
+        {
+            // Logging is best effort; detection must still succeed.
+        }
     }
 
     private static void AddPullRequestFlag(Dictionary<string, string> dictionary, bool isPullRequest) =>

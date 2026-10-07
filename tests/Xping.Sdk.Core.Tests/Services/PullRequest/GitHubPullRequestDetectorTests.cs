@@ -12,6 +12,7 @@ using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.PullRequest.Internals;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Core.Services.Serialization.Internals;
+using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Services.PullRequest;
 
@@ -354,7 +355,7 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
     public void Detect_ServerUrlNotSet_LogsWarning(string? serverValue)
     {
         // Arrange
-        var logger = new LevelRecordingLogger();
+        var logger = new LevelRecordingLogger<GitHubPullRequestDetector>();
         var detector = CreateDetector(BuildValidEnvMock(serverUrl: serverValue).Object, logger);
 
         // Act
@@ -368,7 +369,7 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
     public void Detect_MalformedServerUrl_DoesNotWarn()
     {
         // Arrange
-        var logger = new LevelRecordingLogger();
+        var logger = new LevelRecordingLogger<GitHubPullRequestDetector>();
         var detector = CreateDetector(BuildValidEnvMock(serverUrl: "github.com").Object, logger);
 
         // Act
@@ -376,23 +377,6 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
 
         // Assert
         Assert.DoesNotContain(LogLevel.Warning, logger.Levels);
-    }
-
-    // Moq can't proxy ILogger<T> for an internal T: Logging.Abstractions is strong-named.
-    private sealed class LevelRecordingLogger : ILogger<GitHubPullRequestDetector>
-    {
-        public List<LogLevel> Levels { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 
     // ---------------------------------------------------------------------------

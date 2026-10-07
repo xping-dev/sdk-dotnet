@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xping.Sdk.Core.Configuration;
@@ -895,13 +897,124 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal(built.Length, built.Distinct(ReferenceEqualityComparer.Instance).Count());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task GitHubWithoutAnEventNameWarnsOnce(string? eventName)
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = eventName;
+        _env["GITHUB_SHA"] = "abc123";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+        await detector.BuildEnvironmentInfoAsync();
+        _ = detector.CustomProperties;
+
+        Assert.Single(logger.Levels, LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task GitHubPullRequestRefWithoutAnEventNameWarnsAndStillFlagsThePullRequest()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_REF"] = "refs/pull/1/merge";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Single(logger.Levels, LogLevel.Warning);
+        Assert.Equal("true", info.CustomProperties["CI.IsPullRequest"]);
+    }
+
+    [Fact]
+    public async Task TheMissingEventNameWarningNamesWhatXpingCloudLoses()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        string message = Assert.Single(logger.Messages);
+        Assert.Contains("PR context is skipped", message, StringComparison.Ordinal);
+        Assert.Contains("CI.CommitSha", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("the commit", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheMissingEventNameWarningOmitsPrContextWhenPrDetectionIsOff()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(
+            new XpingConfiguration { EnablePullRequestDetection = false }, logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        string message = Assert.Single(logger.Messages);
+        Assert.DoesNotContain("PR context", message, StringComparison.Ordinal);
+        Assert.Contains("CI.CommitSha", message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("push")]
+    [InlineData("pull_request")]
+    [InlineData("issue_comment")]
+    public async Task GitHubWithAKnownEventNameDoesNotWarn(string eventName)
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_NAME"] = eventName;
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain(LogLevel.Warning, logger.Levels);
+    }
+
+    [Theory]
+    [InlineData("TF_BUILD", "True")]
+    [InlineData("GITLAB_CI", "true")]
+    public async Task OtherCiPlatformsDoNotWarnAboutTheGitHubEventName(string platformVariable, string platformValue)
+    {
+        _env[platformVariable] = platformValue;
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+        IEnvironmentDetector detector = CreateDetector(logger: logger);
+
+        await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain(LogLevel.Warning, logger.Levels);
+    }
+
+    [Fact]
+    public async Task AThrowingLoggerDoesNotBreakDetection()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_REPOSITORY"] = "octo/repo";
+        IEnvironmentDetector detector = CreateDetector(
+            logger: new LevelRecordingLogger<EnvironmentDetector> { ThrowOnLog = true });
+
+        EnvironmentInfo first = await detector.BuildEnvironmentInfoAsync();
+        EnvironmentInfo second = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("GitHubActions", first.CustomProperties["CIPlatform"]);
+        Assert.Equal("octo/repo", second.CustomProperties["CI.Repository"]);
+    }
+
     private EnvironmentDetector CreateDetector(
-        XpingConfiguration? configuration = null, IEnvironmentVariableProvider? env = null)
+        XpingConfiguration? configuration = null,
+        IEnvironmentVariableProvider? env = null,
+        ILogger<EnvironmentDetector>? logger = null)
     {
         return new EnvironmentDetector(
             Options.Create(configuration ?? new XpingConfiguration()),
             new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
-            env ?? _env);
+            env ?? _env,
+            logger ?? NullLogger<EnvironmentDetector>.Instance);
     }
 
     private sealed class WorkingDirectoryRestorer : IDisposable
