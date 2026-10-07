@@ -5,7 +5,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -81,9 +80,6 @@ internal sealed class GitHubPullRequestDetector(
 
         return _pushEventNames.Contains(eventName) ? false : null;
     }
-
-    // ReadOnlySpan<byte> deserialization doesn't skip a BOM the way the stream overloads do.
-    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
     private static readonly Regex _prRefPattern =
         new(@"^refs/pull/(\d+)/", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -208,11 +204,7 @@ internal sealed class GitHubPullRequestDetector(
         GitHubEventPayload? payload;
         try
         {
-            ReadOnlySpan<byte> json = File.ReadAllBytes(eventPath);
-            if (json.StartsWith(Utf8Bom))
-                json = json.Slice(Utf8Bom.Length);
-
-            payload = serializer.Deserialize<GitHubEventPayload>(json);
+            payload = GitHubEventPayload.Read(eventPath!, serializer);
         }
         catch (Exception ex)
         {
@@ -239,24 +231,4 @@ internal sealed class GitHubPullRequestDetector(
 
     private bool TryGetRequired(string variable, [NotNullWhen(true)] out string? value) =>
         PullRequestEnvironment.TryGetRequired(env, logger, Platform, variable, out value);
-
-    // The serializer's camelCase policy would look for "pullRequest", so the snake_case
-    // payload names are spelled out.
-    private sealed class GitHubEventPayload
-    {
-        [JsonPropertyName("pull_request")]
-        public GitHubEventPullRequest? PullRequest { get; set; }
-    }
-
-    private sealed class GitHubEventPullRequest
-    {
-        [JsonPropertyName("head")]
-        public GitHubEventCommitRef? Head { get; set; }
-    }
-
-    private sealed class GitHubEventCommitRef
-    {
-        [JsonPropertyName("sha")]
-        public string? Sha { get; set; }
-    }
 }

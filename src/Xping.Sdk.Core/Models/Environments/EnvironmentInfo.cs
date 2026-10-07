@@ -136,6 +136,15 @@ public sealed class EnvironmentInfo
     /// The pull request's head commit is <see cref="PullRequests.PullRequestContext.CommitSha"/>.
     /// When a pull request context is present it identifies the run; <c>CI.CommitSha</c> does so
     /// only when <c>CI.IsPullRequest</c> is <c>false</c>.
+    /// <para>
+    /// Two more describe the branch:
+    /// <list type="bullet">
+    /// <item><description><c>CI.Branch</c>: the bare name of the branch built (no <c>refs/heads/</c>,
+    /// no remote); on a pull request build, the PR's source branch.</description></item>
+    /// <item><description><c>CI.DefaultBranch</c>: the repository's default branch, sent only where the
+    /// platform reports it (GitHub Actions, GitLab CI).</description></item>
+    /// </list>
+    /// </para>
     /// </remarks>
     public IReadOnlyDictionary<string, string> CustomProperties { get; init; }
 }

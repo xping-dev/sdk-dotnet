@@ -8,6 +8,8 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Core.Services.Serialization.Internals;
 
 namespace Xping.Sdk.Core.Tests.Services.Environment;
 
@@ -58,6 +60,16 @@ public sealed class EnvironmentDetectorTests
         "BUILD_REPOSITORY_URI",
         "BUILD_REPOSITORY_PROVIDER",
         "SYSTEM_COLLECTIONURI",
+        "GITHUB_EVENT_PATH",
+        "CI_DEFAULT_BRANCH",
+        "CI_COMMIT_BRANCH",
+        "CI_COMMIT_REF_NAME",
+        "BUILD_SOURCEBRANCH",
+        "BUILD_SOURCEBRANCHNAME",
+        "SYSTEM_PULLREQUEST_SOURCEBRANCH",
+        "GIT_BRANCH",
+        "BRANCH_NAME",
+        "CHANGE_BRANCH",
         "XPING_ENVIRONMENT",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
@@ -569,6 +581,99 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task GitLabSendsItsDefaultBranch()
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var gitLab = new EnvRestorer("GITLAB_CI", "true");
+        using var defaultBranch = new EnvRestorer("CI_DEFAULT_BRANCH", "develop");
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Theory]
+    [InlineData("\uFEFF{ \"repository\": { \"default_branch\": \"trunk\" } }", "trunk")]
+    [InlineData("{ \"repository\": { \"default_branch\": \"trunk\" } }", "trunk")]
+    [InlineData("{ \"schedule\": \"0 * * * *\" }", null)]
+    [InlineData("{ not json", null)]
+    public async Task GitHubReadsTheDefaultBranchFromTheEventPayload(string payload, string? expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var tempDirectory = new TempEmptyDirectory();
+        string eventPath = Path.Combine(tempDirectory.Path, "event.json");
+        await File.WriteAllTextAsync(eventPath, payload, new System.Text.UTF8Encoding(false));
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventPath = new EnvRestorer("GITHUB_EVENT_PATH", eventPath);
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties.GetValueOrDefault("CI.DefaultBranch"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("/nonexistent/xping/event.json")]
+    public async Task GitHubWithoutAReadablePayloadSendsNoDefaultBranch(string? eventPath)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var githubActions = new EnvRestorer("GITHUB_ACTIONS", "true");
+        using var githubEventPath = new EnvRestorer("GITHUB_EVENT_PATH", eventPath);
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+
+        Assert.False(info.CustomProperties.ContainsKey("CI.DefaultBranch"));
+    }
+
+    [Theory]
+    [InlineData(null, "refs/heads/feature/main", "main", null, "feature/main")]
+    [InlineData(null, "refs/heads/main", "main", null, "main")]
+    [InlineData(null, "refs/tags/v1", "v1", null, null)]
+    [InlineData("PullRequest", "refs/pull/12/merge", "merge", "refs/heads/feature/x", "feature/x")]
+    public async Task AzurePipelinesSendsTheFullBranchName(
+        string? buildReason,
+        string sourceBranch,
+        string sourceBranchName,
+        string? pullRequestSourceBranch,
+        string? expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var azure = new EnvRestorer("TF_BUILD", "True");
+        using var reason = new EnvRestorer("BUILD_REASON", buildReason);
+        using var source = new EnvRestorer("BUILD_SOURCEBRANCH", sourceBranch);
+        using var sourceName = new EnvRestorer("BUILD_SOURCEBRANCHNAME", sourceBranchName);
+        using var prSource = new EnvRestorer("SYSTEM_PULLREQUEST_SOURCEBRANCH", pullRequestSourceBranch);
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties.GetValueOrDefault("CI.Branch"));
+        Assert.Equal(sourceBranch, info.CustomProperties["CI.SourceBranch"]);
+    }
+
+    [Theory]
+    [InlineData("origin/main", null, null, null, "main")]
+    [InlineData("origin/feature/x", null, null, null, "feature/x")]
+    [InlineData("refs/remotes/origin/main", null, null, null, "main")]
+    [InlineData("feature/x", null, null, null, "feature/x")]
+    [InlineData("main", "main", null, null, "main")]
+    [InlineData("PR-12", "PR-12", "12", "feature/x", "feature/x")]
+    public async Task JenkinsSendsABareBranchName(
+        string gitBranch, string? branchName, string? changeId, string? changeBranch, string expected)
+    {
+        using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
+        using var jenkins = new EnvRestorer("JENKINS_URL", "https://jenkins.example");
+        using var git = new EnvRestorer("GIT_BRANCH", gitBranch);
+        using var branch = new EnvRestorer("BRANCH_NAME", branchName);
+        using var change = new EnvRestorer("CHANGE_ID", changeId);
+        using var changeSource = new EnvRestorer("CHANGE_BRANCH", changeBranch);
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector()).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.Branch"]);
+        Assert.Equal(gitBranch, info.CustomProperties["CI.GitBranch"]);
+    }
+
+    [Fact]
     public async Task TeamCityOmitsThePullRequestFlag()
     {
         using var clearedCiVariables = ClearEnvironmentVariables(_environmentVariables);
@@ -813,7 +918,9 @@ public sealed class EnvironmentDetectorTests
 
     private static EnvironmentDetector CreateDetector(XpingConfiguration? configuration = null)
     {
-        return new EnvironmentDetector(Options.Create(configuration ?? new XpingConfiguration()));
+        return new EnvironmentDetector(
+            Options.Create(configuration ?? new XpingConfiguration()),
+            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
     }
 
     private static CompositeDisposable ClearEnvironmentVariables(IEnumerable<string> variableNames)
