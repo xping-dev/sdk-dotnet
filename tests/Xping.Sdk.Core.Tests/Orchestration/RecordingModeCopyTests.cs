@@ -7,6 +7,7 @@ using System.Reflection;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using Xping.Sdk.Core;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;
@@ -65,6 +66,22 @@ public sealed class RecordingModeCopyTests
     }
 
     [Fact]
+    public async Task TheLocalCopyCarriesTheProjectPin()
+    {
+        EnvironmentInfo copied = await LocalCopyOf(Populated(), o => o.ProjectId = "  shop-tests ");
+
+        Assert.Equal("shop-tests", copied.CustomProperties[LocalSessionProperties.ProjectId]);
+    }
+
+    [Fact]
+    public async Task TheLocalCopyHasNoProjectPinWhenNoneIsConfigured()
+    {
+        EnvironmentInfo copied = await LocalCopyOf(Populated(), o => o.ProjectId = null);
+
+        Assert.False(copied.CustomProperties.ContainsKey(LocalSessionProperties.ProjectId));
+    }
+
+    [Fact]
     public async Task TheLocalCopyLeavesAnUnrecordedTimeZoneUnrecorded()
     {
         // Null must not become a zero offset on the way to disk. Local analysis excludes the first
@@ -99,19 +116,21 @@ public sealed class RecordingModeCopyTests
     /// Runs one environment through the orchestrator's local-copy step.
     /// </summary>
     /// <param name="detected">What the environment detector produced.</param>
+    /// <param name="configure">Changes to the orchestrator's configuration.</param>
     /// <returns>What would be written to the local store.</returns>
     /// <remarks>
     /// Reached by reflection because the step is private and should stay so — it is an
     /// implementation detail of writing a session, not something a caller has any business
     /// invoking. Widening it to be testable would be a worse trade than this lookup.
     /// </remarks>
-    private static async Task<EnvironmentInfo> LocalCopyOf(EnvironmentInfo detected)
+    private static async Task<EnvironmentInfo> LocalCopyOf(
+        EnvironmentInfo detected, Action<XpingConfiguration>? configure = null)
     {
         var uploader = new Mock<IXpingUploader>();
         var detector = new Mock<IEnvironmentDetector>();
         ServiceHelper.SetupDefaultMocks(uploader, detector);
 
-        using IHost host = ServiceHelper.BuildOrchestratorHost(uploader, detector);
+        using IHost host = ServiceHelper.BuildOrchestratorHost(uploader, detector, configure);
         var orchestrator = new Harness(host);
 
         try
