@@ -279,61 +279,61 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private CIPlatform? DetectCiPlatform()
     {
         // GitHub Actions
-        if (_env.GetVariable("GITHUB_ACTIONS") == "true")
+        if (GetVariable("GITHUB_ACTIONS") == "true")
         {
             return CIPlatform.GitHubActions;
         }
 
         // Azure DevOps (Azure Pipelines)
-        if (!string.IsNullOrEmpty(_env.GetVariable("TF_BUILD")))
+        if (!string.IsNullOrEmpty(GetVariable("TF_BUILD")))
         {
             return CIPlatform.AzureDevOps;
         }
 
         // Jenkins
-        if (!string.IsNullOrEmpty(_env.GetVariable("JENKINS_URL")))
+        if (!string.IsNullOrEmpty(GetVariable("JENKINS_URL")))
         {
             return CIPlatform.Jenkins;
         }
 
         // GitLab CI
-        if (_env.GetVariable("GITLAB_CI") == "true")
+        if (GetVariable("GITLAB_CI") == "true")
         {
             return CIPlatform.GitLabCI;
         }
 
         // CircleCI
-        if (_env.GetVariable("CIRCLECI") == "true")
+        if (GetVariable("CIRCLECI") == "true")
         {
             return CIPlatform.CircleCI;
         }
 
         // Travis CI
-        if (_env.GetVariable("TRAVIS") == "true")
+        if (GetVariable("TRAVIS") == "true")
         {
             return CIPlatform.TravisCI;
         }
 
         // TeamCity
-        if (!string.IsNullOrEmpty(_env.GetVariable("TEAMCITY_VERSION")))
+        if (!string.IsNullOrEmpty(GetVariable("TEAMCITY_VERSION")))
         {
             return CIPlatform.TeamCity;
         }
 
         // Bitbucket Pipelines
-        if (_env.GetVariable("BITBUCKET_PIPELINE_UUID") != null)
+        if (GetVariable("BITBUCKET_PIPELINE_UUID") != null)
         {
             return CIPlatform.BitbucketPipelines;
         }
 
         // AppVeyor
-        if (_env.GetVariable("APPVEYOR") == "True")
+        if (GetVariable("APPVEYOR") == "True")
         {
             return CIPlatform.AppVeyor;
         }
 
         // Generic CI indicator
-        if (_env.GetVariable("CI") == "true" || _env.GetVariable("CI") == "True")
+        if (GetVariable("CI") == "true" || GetVariable("CI") == "True")
         {
             return CIPlatform.Generic;
         }
@@ -352,7 +352,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             }
 
             // Kubernetes: Check for kubernetes service environment variables
-            if (!string.IsNullOrEmpty(_env.GetVariable("KUBERNETES_SERVICE_HOST")))
+            if (!string.IsNullOrEmpty(GetVariable("KUBERNETES_SERVICE_HOST")))
             {
                 return true;
             }
@@ -455,20 +455,20 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             switch (ciPlatform.Value)
             {
                 case CIPlatform.GitHubActions:
-                    AddIfNotNull(properties, "CI.Repository", _env.GetVariable("GITHUB_REPOSITORY"));
-                    AddServerUrl(properties, ServerUrlOf(_env.GetVariable("GITHUB_SERVER_URL")));
-                    AddIfNotNull(properties, "CI.RunId", _env.GetVariable("GITHUB_RUN_ID"));
-                    AddIfNotNull(properties, "CI.RunNumber", _env.GetVariable("GITHUB_RUN_NUMBER"));
-                    AddIfNotNull(properties, "CI.Ref", _env.GetVariable("GITHUB_REF"));
+                    AddIfNotNull(properties, "CI.Repository", GetVariable("GITHUB_REPOSITORY"));
+                    AddServerUrl(properties, ServerUrlOf(GetVariable("GITHUB_SERVER_URL")));
+                    AddIfNotNull(properties, "CI.RunId", GetVariable("GITHUB_RUN_ID"));
+                    AddIfNotNull(properties, "CI.RunNumber", GetVariable("GITHUB_RUN_NUMBER"));
+                    AddIfNotNull(properties, "CI.Ref", GetVariable("GITHUB_REF"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
-                        _env.GetVariable("GITHUB_HEAD_REF"),
-                        _env.GetVariable("GITHUB_REF_NAME"),
-                        ExtractBranchName(_env.GetVariable("GITHUB_REF"))));
+                        GetVariable("GITHUB_HEAD_REF"),
+                        GetVariable("GITHUB_REF_NAME"),
+                        ExtractBranchName(GetVariable("GITHUB_REF"))));
                     AddIfNotNull(properties, "CI.DefaultBranch", ReadGitHubDefaultBranch());
-                    AddIfNotNull(properties, "CI.HeadBranch", _env.GetVariable("GITHUB_HEAD_REF"));
-                    AddIfNotNull(properties, "CI.BaseBranch", _env.GetVariable("GITHUB_BASE_REF"));
-                    string githubEventName = _env.GetVariable("GITHUB_EVENT_NAME") ?? string.Empty;
-                    bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(_env.GetVariable);
+                    AddIfNotNull(properties, "CI.HeadBranch", GetVariable("GITHUB_HEAD_REF"));
+                    AddIfNotNull(properties, "CI.BaseBranch", GetVariable("GITHUB_BASE_REF"));
+                    string githubEventName = GetVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+                    bool? isGitHubPullRequest = GitHubPullRequestDetector.PullRequestFlag(GetVariable);
                     if (isGitHubPullRequest is not null)
                     {
                         // CI.CommitSha is the commit the build tested. On pull_request_target GITHUB_SHA is
@@ -476,112 +476,112 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         // built commit is unknown and sending the base tip would tie PR results to main.
                         if (!string.Equals(githubEventName, "pull_request_target", StringComparison.OrdinalIgnoreCase))
                         {
-                            AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("GITHUB_SHA"));
+                            AddIfNotNull(properties, "CI.CommitSha", GetVariable("GITHUB_SHA"));
                         }
 
                         AddPullRequestFlag(properties, isGitHubPullRequest.Value);
                     }
 
-                    AddIfNotNull(properties, "CI.Actor", _env.GetVariable("GITHUB_ACTOR"));
-                    AddIfNotNull(properties, "CI.Workflow", _env.GetVariable("GITHUB_WORKFLOW"));
+                    AddIfNotNull(properties, "CI.Actor", GetVariable("GITHUB_ACTOR"));
+                    AddIfNotNull(properties, "CI.Workflow", GetVariable("GITHUB_WORKFLOW"));
                     break;
 
                 case CIPlatform.AzureDevOps:
-                    AddIfNotNull(properties, "CI.BuildId", _env.GetVariable("BUILD_BUILDID"));
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("BUILD_BUILDNUMBER"));
-                    AddIfNotNull(properties, "CI.Repository", _env.GetVariable("BUILD_REPOSITORY_NAME"));
+                    AddIfNotNull(properties, "CI.BuildId", GetVariable("BUILD_BUILDID"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("BUILD_BUILDNUMBER"));
+                    AddIfNotNull(properties, "CI.Repository", GetVariable("BUILD_REPOSITORY_NAME"));
                     AddServerUrl(properties, AzurePipelinesServerUrl());
-                    bool isAzurePullRequest = AzureDevOpsPullRequestDetector.IsPullRequestBuild(_env.GetVariable);
-                    AddIfNotNull(properties, "CI.SourceBranch", _env.GetVariable("BUILD_SOURCEBRANCH"));
+                    bool isAzurePullRequest = AzureDevOpsPullRequestDetector.IsPullRequestBuild(GetVariable);
+                    AddIfNotNull(properties, "CI.SourceBranch", GetVariable("BUILD_SOURCEBRANCH"));
                     AddIfNotNull(properties, "CI.Branch", AzurePipelinesBranch(isAzurePullRequest));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("BUILD_SOURCEVERSION"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("BUILD_SOURCEVERSION"));
                     AddPullRequestFlag(properties, isAzurePullRequest);
-                    AddIfNotNull(properties, "CI.RequestedFor", _env.GetVariable("BUILD_REQUESTEDFOR"));
+                    AddIfNotNull(properties, "CI.RequestedFor", GetVariable("BUILD_REQUESTEDFOR"));
                     break;
 
                 case CIPlatform.Jenkins:
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("BUILD_NUMBER"));
-                    AddIfNotNull(properties, "CI.JobName", _env.GetVariable("JOB_NAME"));
-                    AddIfNotNull(properties, "CI.BuildUrl", _env.GetVariable("BUILD_URL"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("GIT_COMMIT"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("BUILD_NUMBER"));
+                    AddIfNotNull(properties, "CI.JobName", GetVariable("JOB_NAME"));
+                    AddIfNotNull(properties, "CI.BuildUrl", GetVariable("BUILD_URL"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("GIT_COMMIT"));
                     // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB (flagged, but no PR
                     // context is detected for it). A job built by any other PR plugin reads as a push build.
-                    bool isBranchSourcePullRequest = JenkinsPullRequestDetector.IsPullRequestBuild(_env.GetVariable);
+                    bool isBranchSourcePullRequest = JenkinsPullRequestDetector.IsPullRequestBuild(GetVariable);
                     bool isGhprbPullRequest = HasValue("ghprbPullId");
                     AddPullRequestFlag(properties, isBranchSourcePullRequest || isGhprbPullRequest);
-                    AddIfNotNull(properties, "CI.GitBranch", _env.GetVariable("GIT_BRANCH"));
+                    AddIfNotNull(properties, "CI.GitBranch", GetVariable("GIT_BRANCH"));
                     // On a PR build, GIT_BRANCH names the PR, not its source branch: Branch Source names the job
                     // (BRANCH_NAME, and GIT_BRANCH with it) PR-12, and GHPRB checks out origin/pr/12/merge.
                     AddIfNotNull(properties, "CI.Branch",
-                        isBranchSourcePullRequest ? _env.GetVariable("CHANGE_BRANCH")
-                        : isGhprbPullRequest ? _env.GetVariable("ghprbSourceBranch")
+                        isBranchSourcePullRequest ? GetVariable("CHANGE_BRANCH")
+                        : isGhprbPullRequest ? GetVariable("ghprbSourceBranch")
                         : GetFirstNonEmptyValue(
-                            _env.GetVariable("BRANCH_NAME"),
-                            StripOriginRemote(_env.GetVariable("GIT_BRANCH"))));
+                            GetVariable("BRANCH_NAME"),
+                            StripOriginRemote(GetVariable("GIT_BRANCH"))));
                     break;
 
                 case CIPlatform.GitLabCI:
-                    AddIfNotNull(properties, "CI.JobId", _env.GetVariable("CI_JOB_ID"));
-                    AddIfNotNull(properties, "CI.PipelineId", _env.GetVariable("CI_PIPELINE_ID"));
-                    AddIfNotNull(properties, "CI.ProjectPath", _env.GetVariable("CI_PROJECT_PATH"));
-                    AddServerUrl(properties, ServerUrlOf(_env.GetVariable("CI_SERVER_URL")));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("CI_COMMIT_SHA"));
-                    AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(_env.GetVariable));
-                    AddIfNotNull(properties, "CI.CommitBranch", _env.GetVariable("CI_COMMIT_BRANCH"));
-                    AddIfNotNull(properties, "CI.DefaultBranch", _env.GetVariable("CI_DEFAULT_BRANCH"));
+                    AddIfNotNull(properties, "CI.JobId", GetVariable("CI_JOB_ID"));
+                    AddIfNotNull(properties, "CI.PipelineId", GetVariable("CI_PIPELINE_ID"));
+                    AddIfNotNull(properties, "CI.ProjectPath", GetVariable("CI_PROJECT_PATH"));
+                    AddServerUrl(properties, ServerUrlOf(GetVariable("CI_SERVER_URL")));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("CI_COMMIT_SHA"));
+                    AddPullRequestFlag(properties, GitLabPullRequestDetector.IsPullRequestBuild(GetVariable));
+                    AddIfNotNull(properties, "CI.CommitBranch", GetVariable("CI_COMMIT_BRANCH"));
+                    AddIfNotNull(properties, "CI.DefaultBranch", GetVariable("CI_DEFAULT_BRANCH"));
                     AddIfNotNull(properties, "CI.Branch", GetFirstNonEmptyValue(
-                        _env.GetVariable("CI_COMMIT_BRANCH"),
-                        _env.GetVariable("CI_COMMIT_REF_NAME")));
-                    AddIfNotNull(properties, "CI.CommitAuthor", _env.GetVariable("CI_COMMIT_AUTHOR"));
-                    AddIfNotNull(properties, "CI.Actor", _env.GetVariable("GITLAB_USER_LOGIN"));
+                        GetVariable("CI_COMMIT_BRANCH"),
+                        GetVariable("CI_COMMIT_REF_NAME")));
+                    AddIfNotNull(properties, "CI.CommitAuthor", GetVariable("CI_COMMIT_AUTHOR"));
+                    AddIfNotNull(properties, "CI.Actor", GetVariable("GITLAB_USER_LOGIN"));
                     break;
 
                 case CIPlatform.CircleCI:
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("CIRCLE_BUILD_NUM"));
-                    AddIfNotNull(properties, "CI.WorkflowId", _env.GetVariable("CIRCLE_WORKFLOW_ID"));
-                    AddIfNotNull(properties, "CI.ProjectName", _env.GetVariable("CIRCLE_PROJECT_REPONAME"));
-                    AddIfNotNull(properties, "CI.Branch", _env.GetVariable("CIRCLE_BRANCH"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("CIRCLE_SHA1"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("CIRCLE_BUILD_NUM"));
+                    AddIfNotNull(properties, "CI.WorkflowId", GetVariable("CIRCLE_WORKFLOW_ID"));
+                    AddIfNotNull(properties, "CI.ProjectName", GetVariable("CIRCLE_PROJECT_REPONAME"));
+                    AddIfNotNull(properties, "CI.Branch", GetVariable("CIRCLE_BRANCH"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("CIRCLE_SHA1"));
                     // CircleCI also sets this on a plain branch build whenever the branch has an open PR. That
                     // commit is still unmerged PR code, so counting it as a PR is correct.
                     AddPullRequestFlag(properties, HasValue("CIRCLE_PULL_REQUEST"));
-                    AddIfNotNull(properties, "CI.Username", _env.GetVariable("CIRCLE_USERNAME"));
+                    AddIfNotNull(properties, "CI.Username", GetVariable("CIRCLE_USERNAME"));
                     break;
 
                 case CIPlatform.TravisCI:
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("TRAVIS_BUILD_NUMBER"));
-                    AddIfNotNull(properties, "CI.JobNumber", _env.GetVariable("TRAVIS_JOB_NUMBER"));
-                    AddIfNotNull(properties, "CI.Repository", _env.GetVariable("TRAVIS_REPO_SLUG"));
-                    AddIfNotNull(properties, "CI.Branch", _env.GetVariable("TRAVIS_BRANCH"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("TRAVIS_COMMIT"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("TRAVIS_BUILD_NUMBER"));
+                    AddIfNotNull(properties, "CI.JobNumber", GetVariable("TRAVIS_JOB_NUMBER"));
+                    AddIfNotNull(properties, "CI.Repository", GetVariable("TRAVIS_REPO_SLUG"));
+                    AddIfNotNull(properties, "CI.Branch", GetVariable("TRAVIS_BRANCH"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("TRAVIS_COMMIT"));
                     // Travis sets TRAVIS_PULL_REQUEST to the PR number, or to the literal "false" on a push build.
                     AddPullRequestFlag(properties, HasValue("TRAVIS_PULL_REQUEST") && !string.Equals(
-                        _env.GetVariable("TRAVIS_PULL_REQUEST"), "false", StringComparison.OrdinalIgnoreCase));
+                        GetVariable("TRAVIS_PULL_REQUEST"), "false", StringComparison.OrdinalIgnoreCase));
                     break;
 
                 case CIPlatform.TeamCity:
-                    AddIfNotNull(properties, "CI.BuildId", _env.GetVariable("TEAMCITY_BUILD_ID"));
-                    AddIfNotNull(properties, "CI.Version", _env.GetVariable("TEAMCITY_VERSION"));
-                    AddIfNotNull(properties, "CI.ProjectName", _env.GetVariable("TEAMCITY_PROJECT_NAME"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("BUILD_VCS_NUMBER"));
+                    AddIfNotNull(properties, "CI.BuildId", GetVariable("TEAMCITY_BUILD_ID"));
+                    AddIfNotNull(properties, "CI.Version", GetVariable("TEAMCITY_VERSION"));
+                    AddIfNotNull(properties, "CI.ProjectName", GetVariable("TEAMCITY_PROJECT_NAME"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("BUILD_VCS_NUMBER"));
                     // TeamCity has no reliable PR marker. Omitting the flag means "unknown", which Xping Cloud
                     // treats as possibly a PR; "false" would wrongly vouch for the commit.
                     break;
 
                 case CIPlatform.BitbucketPipelines:
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("BITBUCKET_BUILD_NUMBER"));
-                    AddIfNotNull(properties, "CI.Repository", _env.GetVariable("BITBUCKET_REPO_FULL_NAME"));
-                    AddIfNotNull(properties, "CI.Branch", _env.GetVariable("BITBUCKET_BRANCH"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("BITBUCKET_COMMIT"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("BITBUCKET_BUILD_NUMBER"));
+                    AddIfNotNull(properties, "CI.Repository", GetVariable("BITBUCKET_REPO_FULL_NAME"));
+                    AddIfNotNull(properties, "CI.Branch", GetVariable("BITBUCKET_BRANCH"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("BITBUCKET_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("BITBUCKET_PR_ID"));
                     break;
 
                 case CIPlatform.AppVeyor:
-                    AddIfNotNull(properties, "CI.BuildNumber", _env.GetVariable("APPVEYOR_BUILD_NUMBER"));
-                    AddIfNotNull(properties, "CI.BuildVersion", _env.GetVariable("APPVEYOR_BUILD_VERSION"));
-                    AddIfNotNull(properties, "CI.Repository", _env.GetVariable("APPVEYOR_REPO_NAME"));
-                    AddIfNotNull(properties, "CI.Branch", _env.GetVariable("APPVEYOR_REPO_BRANCH"));
-                    AddIfNotNull(properties, "CI.CommitSha", _env.GetVariable("APPVEYOR_REPO_COMMIT"));
+                    AddIfNotNull(properties, "CI.BuildNumber", GetVariable("APPVEYOR_BUILD_NUMBER"));
+                    AddIfNotNull(properties, "CI.BuildVersion", GetVariable("APPVEYOR_BUILD_VERSION"));
+                    AddIfNotNull(properties, "CI.Repository", GetVariable("APPVEYOR_REPO_NAME"));
+                    AddIfNotNull(properties, "CI.Branch", GetVariable("APPVEYOR_REPO_BRANCH"));
+                    AddIfNotNull(properties, "CI.CommitSha", GetVariable("APPVEYOR_REPO_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("APPVEYOR_PULL_REQUEST_NUMBER"));
                     break;
             }
@@ -752,7 +752,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             return result;
 
         // Global config: $HOME/.gitconfig
-        string? home = _env.GetVariable("HOME")
+        string? home = GetVariable("HOME")
                        ?? System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
         if (!string.IsNullOrEmpty(home))
         {
@@ -761,7 +761,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 return result;
 
             // XDG-compliant location: $XDG_CONFIG_HOME/git/config (defaults to ~/.config/git/config)
-            string xdgConfigHome = _env.GetVariable("XDG_CONFIG_HOME")
+            string xdgConfigHome = GetVariable("XDG_CONFIG_HOME")
                                    ?? Path.Combine(home, ".config");
             result = ReadUserNameFromFile(Path.Combine(xdgConfigHome, "git", "config"));
             if (result is not null)
@@ -889,13 +889,13 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     // PR context files under https://dev.azure.com, and would drop a Server's virtual directory (/tfs).
     private string? AzurePipelinesServerUrl()
     {
-        if (string.Equals(_env.GetVariable("BUILD_REPOSITORY_PROVIDER"), "TfsGit", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(GetVariable("BUILD_REPOSITORY_PROVIDER"), "TfsGit", StringComparison.OrdinalIgnoreCase))
         {
-            string? collectionUri = _env.GetVariable("SYSTEM_COLLECTIONURI");
+            string? collectionUri = GetVariable("SYSTEM_COLLECTIONURI");
             return collectionUri is null ? null : AzureDevOpsPullRequestDetector.ParseCollection(collectionUri)?.ServerUrl;
         }
 
-        return PullRequestEnvironment.TryGetServerRoot(_env.GetVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
+        return PullRequestEnvironment.TryGetServerRoot(GetVariable("BUILD_REPOSITORY_URI"), out string? serverUrl)
             ? serverUrl
             : null;
     }
@@ -904,7 +904,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         dictionary["CI.IsPullRequest"] = isPullRequest ? "true" : "false";
 
     private bool HasValue(string variable) =>
-        !string.IsNullOrEmpty(_env.GetVariable(variable));
+        !string.IsNullOrEmpty(GetVariable(variable));
 
     private static string? GetFirstNonEmptyValue(params string?[] values)
     {
@@ -939,12 +939,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     private string? AzurePipelinesBranch(bool isPullRequest)
     {
         if (isPullRequest)
-            return ExtractBranchName(_env.GetVariable("SYSTEM_PULLREQUEST_SOURCEBRANCH"));
+            return ExtractBranchName(GetVariable("SYSTEM_PULLREQUEST_SOURCEBRANCH"));
 
-        string? sourceBranch = _env.GetVariable("BUILD_SOURCEBRANCH");
+        string? sourceBranch = GetVariable("BUILD_SOURCEBRANCH");
         return sourceBranch is not null && sourceBranch.StartsWith("refs/", StringComparison.OrdinalIgnoreCase)
             ? BranchOrTagOfRef(sourceBranch)
-            : _env.GetVariable("BUILD_SOURCEBRANCHNAME");
+            : GetVariable("BUILD_SOURCEBRANCHNAME");
     }
 
     // A tag build sends the tag name, as GITHUB_REF_NAME and CI_COMMIT_REF_NAME do, so Xping Cloud
@@ -985,7 +985,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     // schedule payload without "repository") just leaves it out.
     private string? ReadGitHubDefaultBranch()
     {
-        string? eventPath = _env.GetVariable("GITHUB_EVENT_PATH");
+        string? eventPath = GetVariable("GITHUB_EVENT_PATH");
         if (string.IsNullOrWhiteSpace(eventPath))
             return null;
 
@@ -999,6 +999,19 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
     }
 
+    // The provider is replaceable, and a lazy caches an exception: one throwing read would fail
+    // every later detection call instead of just leaving that variable out.
+    private string? GetVariable(string variable)
+    {
+        try
+        {
+            return _env.GetVariable(variable);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private enum CIPlatform
     {

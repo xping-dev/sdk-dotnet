@@ -4,6 +4,7 @@
  */
 
 using Microsoft.Extensions.Options;
+using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Services.Environment;
@@ -22,6 +23,13 @@ public sealed class EnvironmentDetectorTests
 
     // xUnit builds a new instance per test, so each test starts from an empty environment.
     private readonly FakeEnvironmentVariableProvider _env = new();
+
+    public EnvironmentDetectorTests()
+    {
+        // Without HOME the detector falls back to the real user profile and would read the
+        // developer's own ~/.gitconfig. Point it at a directory that doesn't exist instead.
+        _env["HOME"] = Path.Combine(Path.GetTempPath(), "xping-tests", "no-home", Guid.NewGuid().ToString("N"));
+    }
 
     [Theory]
     [InlineData("DOTNET_ENVIRONMENT")]
@@ -92,7 +100,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_WithLocalExecution_MarksDeveloperMachine()
     {
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -106,7 +113,6 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task BuildEnvironmentInfoAsync_OnAnyMachine_CapturesTheLocalOffsetAndZone()
     {
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
@@ -136,7 +142,6 @@ public sealed class EnvironmentDetectorTests
         // The zone is cached; the offset must not be. A suite running either side of a
         // daylight-saving transition depends on the second reading differing from the first, and a
         // cached offset would silently report the same figure forever.
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo first = await detector.BuildEnvironmentInfoAsync();
@@ -848,12 +853,27 @@ public sealed class EnvironmentDetectorTests
     }
 
     [Fact]
+    public async Task BuildEnvironmentInfoAsync_WhenTheProviderThrows_TreatsEveryVariableAsUnset()
+    {
+        var env = new Mock<IEnvironmentVariableProvider>();
+        env.Setup(e => e.GetVariable(It.IsAny<string>())).Throws<InvalidOperationException>();
+
+        IEnvironmentDetector detector = CreateDetector(env: env.Object);
+
+        // Twice: the detection lazies would cache a thrown exception and rethrow it on every call.
+        await detector.BuildEnvironmentInfoAsync();
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.False(info.IsCIEnvironment);
+        Assert.False(detector.IsCiEnvironment);
+    }
+
+    [Fact]
     public async Task BuildEnvironmentInfoAsync_OnConcurrentCalls_ReturnsIndependentInstances()
     {
         // The detector is a DI singleton so its detection lazies are paid for once. A builder held
         // alongside them would be shared by every caller, and concurrent calls could interleave
         // their Reset()/With...() calls into one another's output.
-
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo[] built = await Task.WhenAll(
