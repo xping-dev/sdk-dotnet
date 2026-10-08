@@ -11,8 +11,10 @@ namespace Xping.Cli.Cloud.Projects;
 /// The Cloud project an assembly was bound to, and how.
 /// </summary>
 /// <param name="Key">The project key the DataGateway reads by.</param>
-/// <param name="Source"><c>flag</c>, <c>env</c>, <c>session</c> or <c>name-match</c>.</param>
-internal sealed record ProjectBinding(string Key, string Source)
+/// <param name="Source"><c>flag</c>, <c>env</c>, <c>config</c>, <c>session</c> or <c>name-match</c>.</param>
+/// <param name="Origin">Where the key came from, as a user would name it: <c>--project</c>, <c>XPING_PROJECTID</c>.</param>
+/// <param name="FromCache">Whether a name match was remembered rather than listed in this run.</param>
+internal sealed record ProjectBinding(string Key, string Source, string Origin, bool FromCache = false)
 {
     /// <summary>The binding came from matching the assembly name against the project list.</summary>
     public bool IsNameMatch => Source == ProjectResolver.NameMatch;
@@ -46,6 +48,7 @@ internal sealed class ProjectResolver(ProjectCache cache)
     public const string NameMatch = "name-match";
 
     private const int PageSize = 50;
+    private const string ListOrigin = "the Cloud project named after the assembly";
 
     // A workspace with more projects than this is not searched to the end: the enrichment budget
     // would be spent listing, and --project is the documented way out.
@@ -61,20 +64,21 @@ internal sealed class ProjectResolver(ProjectCache cache)
         ArgumentNullException.ThrowIfNull(lookup);
 
         if (lookup.Configured is { } configured)
-            return new ProjectBinding(configured.Value, configured.Source == ConfigurationSource.Flag ? "flag" : "env");
+            return new ProjectBinding(configured.Value, SourceOf(configured.Source), configured.Origin);
 
         if (lookup.SessionPins.TryGetValue(assembly, out string? pin))
-            return new ProjectBinding(pin, "session");
+            return new ProjectBinding(pin, "session", "the project id recorded with the runs");
 
         if (lookup.WorkspaceId is { } workspaceId && cache.Read(lookup.CloudUrl, workspaceId, assembly) is { } cached)
-            return new ProjectBinding(cached.Id, NameMatch);
+            return new ProjectBinding(cached.Id, NameMatch, ListOrigin, FromCache: true);
 
         return await MatchByNameAsync(client, assembly, lookup, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Re-resolves a name match whose project answered 404: the cached match is dropped and the
-    /// project list read again, once. Any other binding is final and returns <see langword="null"/>.
+    /// Re-resolves a remembered name match whose project answered nothing: the cached match is
+    /// dropped and the project list read again, once. Any other binding returns
+    /// <see langword="null"/>: one just listed is as fresh as a second listing would be.
     /// </summary>
     public async Task<ProjectBinding?> RebindAsync(
         ICloudApiClient client, string assembly, ProjectBinding stale, ProjectLookup lookup, CancellationToken cancellationToken)
@@ -82,7 +86,7 @@ internal sealed class ProjectResolver(ProjectCache cache)
         ArgumentNullException.ThrowIfNull(stale);
         ArgumentNullException.ThrowIfNull(lookup);
 
-        if (!stale.IsNameMatch)
+        if (!stale.IsNameMatch || !stale.FromCache)
             return null;
 
         if (lookup.WorkspaceId is { } workspaceId)
@@ -91,6 +95,13 @@ internal sealed class ProjectResolver(ProjectCache cache)
         ProjectBinding? fresh = await MatchByNameAsync(client, assembly, lookup, cancellationToken).ConfigureAwait(false);
         return fresh is not null && fresh.Key != stale.Key ? fresh : null;
     }
+
+    private static string SourceOf(ConfigurationSource source) => source switch
+    {
+        ConfigurationSource.Flag => "flag",
+        ConfigurationSource.AppSettings => "config",
+        _ => "env"
+    };
 
     private async Task<ProjectBinding?> MatchByNameAsync(
         ICloudApiClient client, string assembly, ProjectLookup lookup, CancellationToken cancellationToken)
@@ -107,7 +118,7 @@ internal sealed class ProjectResolver(ProjectCache cache)
                 if (lookup.WorkspaceId is { } workspaceId)
                     cache.Write(lookup.CloudUrl, workspaceId, assembly, match);
 
-                return new ProjectBinding(match.Id, NameMatch);
+                return new ProjectBinding(match.Id, NameMatch, ListOrigin);
             }
 
             if (!projects.HasNextPage)

@@ -22,16 +22,23 @@ internal static class CloudText
     private const string InsufficientData = "insufficient-data";
 
     /// <summary>
+    /// Whether any slot prints something for <paramref name="cloud"/>: a score that is not
+    /// "insufficient data". The header claims Cloud only on the same test the rows use.
+    /// </summary>
+    public static bool HasScore(CloudTestDto? cloud) =>
+        cloud?.Confidence is not null && cloud.Category != InsufficientData;
+
+    /// <summary>
     /// The row-trailer segment, <c>confidence 0.62 · moderately reliable</c> or, without the
     /// category, <c>confidence 0.62</c>; <see langword="null"/> when the Cloud has no score worth
     /// showing.
     /// </summary>
     public static string? Trailer(CloudTestDto? cloud, string separator, bool withCategory)
     {
-        if (cloud?.Confidence is not { } confidence || cloud.Category == InsufficientData)
+        if (!HasScore(cloud))
             return null;
 
-        string score = $"confidence {Score(confidence)}";
+        string score = $"confidence {Score(cloud!.Confidence!.Value)}";
         return withCategory && Words(cloud.Category) is { } category ? $"{score} {separator} {category}" : score;
     }
 
@@ -40,9 +47,7 @@ internal static class CloudText
     /// the local sentence should stay.
     /// </summary>
     public static string? Contrast(CloudTestDto? cloud) =>
-        cloud?.Confidence is { } confidence && cloud.Category != InsufficientData
-            ? $"confidence {Score(confidence)} over {Runs(cloud.Runs)}"
-            : null;
+        HasScore(cloud) ? $"confidence {Score(cloud!.Confidence!.Value)} over {Runs(cloud.Runs)}" : null;
 
     /// <summary>
     /// The detail view's labelled pairs; empty without Cloud data.

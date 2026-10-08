@@ -50,16 +50,16 @@ public sealed class ProjectResolverTests : IDisposable
     [Theory]
     [InlineData(nameof(ConfigurationSource.Flag), "flag")]
     [InlineData(nameof(ConfigurationSource.Environment), "env")]
-    [InlineData(nameof(ConfigurationSource.AppSettings), "env")]
+    [InlineData(nameof(ConfigurationSource.AppSettings), "config")]
     public async Task AConfiguredKeyWinsAndCostsNoRequest(string source, string expected)
     {
         ProjectLookup lookup = Lookup(
-            configured: new ConfiguredValue("configured", Enum.Parse<ConfigurationSource>(source), "x"),
+            configured: new ConfiguredValue("configured", Enum.Parse<ConfigurationSource>(source), "origin"),
             pins: new() { [Assembly] = "pinned" });
 
         ProjectBinding? binding = await _resolver.ResolveAsync(_client, Assembly, lookup, CancellationToken.None);
 
-        Assert.Equal(new ProjectBinding("configured", expected), binding);
+        Assert.Equal(("configured", expected, "origin"), (binding!.Key, binding.Source, binding.Origin));
         Assert.Empty(_client.Pages);
     }
 
@@ -69,7 +69,7 @@ public sealed class ProjectResolverTests : IDisposable
         ProjectBinding? binding = await _resolver.ResolveAsync(
             _client, Assembly, Lookup(pins: new() { [Assembly] = "pinned" }), CancellationToken.None);
 
-        Assert.Equal(new ProjectBinding("pinned", "session"), binding);
+        Assert.Equal(("pinned", "session"), (binding!.Key, binding.Source));
         Assert.Empty(_client.Pages);
     }
 
@@ -80,7 +80,7 @@ public sealed class ProjectResolverTests : IDisposable
 
         ProjectBinding? binding = await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None);
 
-        Assert.Equal(new ProjectBinding("shop", ProjectResolver.NameMatch), binding);
+        Assert.Equal(("shop", ProjectResolver.NameMatch, false), (binding!.Key, binding.Source, binding.FromCache));
         Assert.Equal([1, 2], _client.Pages);
     }
 
@@ -130,16 +130,18 @@ public sealed class ProjectResolverTests : IDisposable
     }
 
     [Fact]
-    public async Task ARebindAfterA404DropsTheCachedMatchAndListsAgain()
+    public async Task ARebindOfACachedMatchDropsItAndListsAgain()
     {
         _client.Add(0, extra: new ProjectSummary("old", Assembly, "old"));
+        await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None);
         ProjectBinding stale = (await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None))!;
+        Assert.True(stale.FromCache);
 
         _client.Projects.Clear();
         _client.Add(0, extra: new ProjectSummary("renamed", Assembly, "renamed"));
         ProjectBinding? fresh = await _resolver.RebindAsync(_client, Assembly, stale, Lookup(), CancellationToken.None);
 
-        Assert.Equal(new ProjectBinding("renamed", ProjectResolver.NameMatch), fresh);
+        Assert.Equal("renamed", fresh!.Key);
         Assert.Equal("renamed", (await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None))!.Key);
     }
 
@@ -147,16 +149,28 @@ public sealed class ProjectResolverTests : IDisposable
     public async Task ARebindThatFindsTheSameProjectGivesNothingNew()
     {
         _client.Add(0, extra: new ProjectSummary("shop", Assembly, "shop"));
+        await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None);
         ProjectBinding stale = (await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None))!;
 
         Assert.Null(await _resolver.RebindAsync(_client, Assembly, stale, Lookup(), CancellationToken.None));
     }
 
     [Fact]
+    public async Task AMatchListedInThisRunIsNotListedAgain()
+    {
+        _client.Add(0, extra: new ProjectSummary("shop", Assembly, "shop"));
+        ProjectBinding listed = (await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None))!;
+
+        Assert.Null(await _resolver.RebindAsync(_client, Assembly, listed, Lookup(), CancellationToken.None));
+        Assert.Single(_client.Pages);
+        Assert.NotNull(_cache.Read(CloudUrl, Workspace, Assembly));
+    }
+
+    [Fact]
     public async Task OnlyANameMatchIsRebound()
     {
         Assert.Null(await _resolver.RebindAsync(
-            _client, Assembly, new ProjectBinding("pinned", "session"), Lookup(), CancellationToken.None));
+            _client, Assembly, new ProjectBinding("pinned", "session", "x"), Lookup(), CancellationToken.None));
         Assert.Empty(_client.Pages);
     }
 

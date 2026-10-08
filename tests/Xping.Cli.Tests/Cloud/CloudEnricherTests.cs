@@ -183,9 +183,10 @@ public sealed class CloudEnricherTests : IDisposable
 
         Assert.Single(_factory.Created);
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
-        Assert.Equal(("stored-login", "login-required", "your sign-in is no longer valid"), (cloud.Credential, cloud.Status, cloud.Reason));
+        Assert.Equal(("stored-login", "login-required"), (cloud.Credential, cloud.Status));
+        Assert.Equal(Assert.Single(result.Hints).Text, "Cloud data unavailable: " + cloud.Reason);
         Assert.Equal(CredentialTestData.Record().WorkspaceId, cloud.WorkspaceId);
-        Assert.True(Assert.Single(result.Hints).Always);
+        Assert.True(result.Hints[0].Always);
     }
 
     [Fact]
@@ -213,10 +214,11 @@ public sealed class CloudEnricherTests : IDisposable
 
         EnrichmentResult result = await EnrichAsync(envelope);
 
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
         Assert.Equal(
-            $"Cloud data unavailable for {assembly}: no matching Cloud project. Use --project <key>.",
+            $"Cloud data unavailable: no matching Cloud project for {assembly}. Use --project <key>.",
             Assert.Single(result.Hints).Text);
-        Assert.Equal("unavailable", result.Envelope.Context!.Cloud!.Status);
+        Assert.Equal(("unavailable", $"no matching Cloud project for {assembly}. Use --project <key>."), (cloud.Status, cloud.Reason));
         Assert.Empty(_factory.Client.Reads);
     }
 
@@ -245,6 +247,25 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.All(_factory.Client.ProjectsRead, key => Assert.Equal("from-flag", key));
     }
 
+    [Theory]
+    [InlineData("--project")]
+    [InlineData("XPING_PROJECTID")]
+    public async Task AConfiguredKeyThatNamesNoProjectIsSaidRatherThanReadAsNoData(string origin)
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Missing = true;
+        _factory.Client.ProjectMissing = true;
+
+        EnrichmentResult result = await EnrichAsync(
+            ReportFixtures.Get("latest-run"), projectFlag: origin == "--project" ? "checkout-tset" : null);
+
+        string key = origin == "--project" ? "checkout-tset" : Project;
+        Assert.Equal(
+            $"Cloud data unavailable: no Cloud project '{key}' (from {origin}). Check the key, or pass --project <key>.",
+            Assert.Single(result.Hints).Text);
+        Assert.Equal("unavailable", result.Envelope.Context!.Cloud!.Status);
+    }
+
     [Fact]
     public async Task ATestCloudHasNoDataForIsAnsweredWithoutData()
     {
@@ -271,10 +292,11 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
-    public void KebabCaseSplitsPascalCaseAndUnderscores()
+    public void KebabCaseSplitsPascalCaseAndKeepsAcronymsWhole()
     {
         Assert.Equal("moderately-reliable", CloudEnricher.Kebab("ModeratelyReliable"));
-        Assert.Equal("insufficient-data", CloudEnricher.Kebab("Insufficient_Data"));
+        Assert.Equal("insufficient-data", CloudEnricher.Kebab("InsufficientData"));
+        Assert.Equal("high", CloudEnricher.Kebab("HIGH"));
         Assert.Equal("robust", CloudEnricher.Kebab("robust"));
         Assert.Null(CloudEnricher.Kebab(" "));
     }
@@ -368,6 +390,8 @@ public sealed class CloudEnricherTests : IDisposable
 
         public bool Missing { get; set; }
 
+        public bool ProjectMissing { get; set; }
+
         public TimeSpan Delay { get; set; }
 
         public int MaxInFlight { get; private set; }
@@ -378,7 +402,7 @@ public sealed class CloudEnricherTests : IDisposable
             Task.FromResult(new PagedResult<ProjectSummary>([], 0, pageNumber, pageSize));
 
         public Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken) =>
-            Task.FromResult<ProjectSummary?>(null);
+            Task.FromResult(ProjectMissing ? null : new ProjectSummary(projectKey, null, null));
 
         public async Task<CloudTest?> GetTestAsync(string projectKey, string testFingerprint, CancellationToken cancellationToken)
         {

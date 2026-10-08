@@ -503,8 +503,9 @@ it. Nothing else changes: the same rows, the same order, the same exit code. Clo
 labelled, so they are never read as local numbers:
 
 - the header ends in `· cloud` when anything on the page came from Cloud;
-- a finding's last line gains `confidence 0.62 · moderately reliable` after its evidence level (the
-  category is dropped when the line has no room for it);
+- a finding's last line gains `confidence 0.62 · moderately reliable` after its evidence level
+  (`confidence 0.62 - moderately reliable` with `--ascii`; the category is dropped when the line has
+  no room for it);
 - a latest-run row says `confidence 0.94 over 812 runs` in place of its local history;
 - `--id` adds `cloud confidence`, `cloud evidence` and `cloud trend` to the detail block.
 
@@ -545,7 +546,7 @@ failures not listed as rows.
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
 `not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
-its `source` (`flag`, `env`, `session` or `name-match`). Each finding and latest-run failure carries a
+its `source` (`flag`, `env`, `config`, `session` or `name-match`). Each finding and latest-run failure carries a
 `cloud` object with Cloud's view of its test, or `null`; `metrics` and `contrast` stay local.
 
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —

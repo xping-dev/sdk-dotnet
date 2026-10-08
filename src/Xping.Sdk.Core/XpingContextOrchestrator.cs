@@ -932,11 +932,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     /// <summary>
     /// Returns a copy of <paramref name="environment"/> carrying the mode this session was recorded
-    /// under.
+    /// under and, when one is configured, the project it was pinned to.
     /// </summary>
     /// <remarks>
     /// The CLI needs to know whether a project is already cloud-connected so it does not pitch the
-    /// cloud to people who pay for it, and the stored session is the only record of it. Applied here
+    /// cloud to people who pay for it, and which Cloud project a pinned run belongs to, since it must
+    /// not derive the key itself; the stored session is the only record of either. Applied here
     /// rather than in the environment detector so it lands on the local copy alone — the uploaded
     /// session keeps the environment exactly as detected.
     /// </remarks>

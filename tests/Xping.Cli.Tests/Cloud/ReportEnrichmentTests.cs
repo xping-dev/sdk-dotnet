@@ -136,6 +136,33 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     }
 
     [Fact]
+    public void APinRemovedSinceIsNotRevivedFromAnOlderRun()
+    {
+        Seed(pin: "legacy-project");
+        Seed(startOrdinal: 8);
+        _host.SignIn();
+
+        JsonElement json = Report("--json").Json();
+
+        Assert.Equal("name-match", json.GetProperty("context").GetProperty("cloud").GetProperty("project").GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public void AReportThatReadCloudDataDoesNotPitchTheCloud()
+    {
+        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
+        Seed();
+        _host.SignIn();
+
+        CliResult enriched = Report();
+        Assert.Equal(0, _host.Run("logout").Code);
+        CliResult local = Report();
+
+        Assert.DoesNotContain("xping.io/start", enriched.Output, StringComparison.Ordinal);
+        Assert.Contains("xping.io/start", local.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheProjectFlagOverridesEverything()
     {
         Seed(pin: "something-else");
@@ -328,7 +355,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult result = Report("--json");
 
         Assert.Equal(
-            "Cloud data unavailable for Unknown.Tests: no matching Cloud project. Use --project <key>.",
+            "Cloud data unavailable: no matching Cloud project for Unknown.Tests. Use --project <key>.",
             Assert.Single(ReportText.Lines(result.Error), l => l.Length > 0));
         Assert.Equal("unavailable", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }
@@ -357,7 +384,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     /// Writes eight runs in which <c>Removed0</c> vanishes after five and whose newest run fails
     /// <c>Stable0</c>: two findings, each about one test.
     /// </summary>
-    private static void Seed(string assembly = Assembly, string? pin = null)
+    private static void Seed(string assembly = Assembly, string? pin = null, int startOrdinal = 0)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
         Dictionary<string, string>? properties = pin is null ? null : new() { [LocalSessionProperties.ProjectId] = pin };
@@ -379,7 +406,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
             if (i < 5)
                 executions.Add(TestSessionFactory.Execution("Removed0", assembly: assembly));
 
-            store.Write(TestSessionFactory.Session(i, executions, customProperties: properties));
+            store.Write(TestSessionFactory.Session(startOrdinal + i, executions, customProperties: properties));
         }
     }
 

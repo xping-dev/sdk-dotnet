@@ -180,7 +180,7 @@ internal sealed class ReportCommand(
         if (pad)
         {
             WriteScopeNotice(source, assembly, options.Assembly != null);
-            WriteCloudInvitation(store, analysis, window.Sessions, capabilities);
+            WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
             // block, and one wedged in the middle of it would separate nothing.
@@ -210,20 +210,27 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
-    /// The project pin of each assembly's newest session that recorded one.
+    /// The project pin of each assembly's newest session, where that session recorded one.
     /// </summary>
+    /// <remarks>
+    /// Only the newest session speaks for an assembly. A pin that was removed since must not be
+    /// revived from an older run: the newer runs went to the project the Cloud derives.
+    /// </remarks>
     private static Dictionary<string, string> SessionPins(IReadOnlyList<TestSession> sessions)
     {
         var pins = new Dictionary<string, string>(StringComparer.Ordinal);
+        var decided = new HashSet<string>(StringComparer.Ordinal);
 
-        // Newest first, so the first pin seen for an assembly is the current one.
+        // Newest first, so the first session seen for an assembly is the one that decides.
         foreach (TestSession session in sessions)
         {
-            if (session.EnvironmentInfo?.CustomProperties?.GetValueOrDefault(LocalSessionProperties.ProjectId) is not { Length: > 0 } pin)
-                continue;
+            string? pin = session.EnvironmentInfo?.CustomProperties?.GetValueOrDefault(LocalSessionProperties.ProjectId);
 
             foreach (string assembly in SessionAssemblies.Of(session))
-                pins.TryAdd(assembly, pin);
+            {
+                if (decided.Add(assembly) && pin is { Length: > 0 })
+                    pins[assembly] = pin;
+            }
         }
 
         return pins;
@@ -419,16 +426,18 @@ internal sealed class ReportCommand(
     /// </summary>
     /// <remarks>
     /// Whether the project is already cloud-connected travels on the newest session's environment
-    /// (<see cref="LocalSessionProperties.Mode"/>). Skipping that check would mean pitching the
-    /// cloud to people who already pay for it.
+    /// (<see cref="LocalSessionProperties.Mode"/>), and a report that just read Cloud data says so
+    /// itself. Skipping either check would mean pitching the cloud to people who already use it.
     /// </remarks>
     private void WriteCloudInvitation(
         ILocalSessionStore store,
         AnalysisResult analysis,
         IReadOnlyList<TestSession> sessions,
+        ReportEnvelope envelope,
         OutputCapabilities capabilities)
     {
-        bool isConnected = sessions.Count > 0 && LocalSessionProperties.IsConnected(sessions[0]);
+        bool isConnected = (sessions.Count > 0 && LocalSessionProperties.IsConnected(sessions[0]))
+            || envelope.Context?.Cloud?.Status is "ok" or "partial";
 
         if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;

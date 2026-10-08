@@ -35,7 +35,7 @@ internal sealed record CloudContextDto(
 /// <param name="Assembly">The test assembly.</param>
 /// <param name="ProjectKey">The Cloud's project key.</param>
 /// <param name="Source">
-/// How the key was found: <c>flag</c>, <c>env</c>, <c>session</c> or <c>name-match</c>.
+/// How the key was found: <c>flag</c>, <c>env</c>, <c>config</c>, <c>session</c> or <c>name-match</c>.
 /// </param>
 internal sealed record CloudProjectDto(string Assembly, string ProjectKey, string Source);
 

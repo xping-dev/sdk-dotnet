@@ -61,10 +61,22 @@ public sealed class CloudRenderingTests
     [Fact]
     public void AsciiUsesItsOwnSeparatorInsideTheSegment()
     {
-        string report = Render(Enriched(Cloud with { Category = "reliable" }), Capabilities(redirected: true));
+        // Not "|": that joins the trailer's own segments, and the category would read as one.
+        ReportEnvelope enriched = Enriched(Cloud with { Category = "reliable" });
+        enriched = enriched with { Findings = [enriched.Findings[0] with { Id = "f_1" }, .. enriched.Findings.Skip(1)] };
 
-        Assert.Contains("confidence 0.62 | reliable", report, StringComparison.Ordinal);
+        string report = Render(enriched, Capabilities(redirected: true));
+
+        Assert.Contains("evidence high | confidence 0.62 - reliable | -env-cluster | f_1", report, StringComparison.Ordinal);
         Assert.DoesNotContain("·", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheHeaderMakesNoCloudClaimWhenNoRowShowsACloudValue()
+    {
+        string header = Lines(Render(Enriched(Cloud with { Confidence = null, Category = null }), Unicode))[0];
+
+        Assert.DoesNotContain("cloud", header, StringComparison.Ordinal);
     }
 
     [Fact]

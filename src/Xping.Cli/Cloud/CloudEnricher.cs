@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
@@ -78,7 +79,7 @@ internal sealed class CloudEnricher(
     public const int MaxConcurrency = 4;
 
     private const string Unavailable = "Cloud data unavailable: ";
-    private const string LoginRequiredReason = "your sign-in is no longer valid";
+    private const string LoginRequiredReason = "your sign-in is no longer valid. Run xping login.";
 
     /// <summary>
     /// Returns <paramref name="envelope"/> with Cloud data added where it could be read.
@@ -148,7 +149,7 @@ internal sealed class CloudEnricher(
 
         if (attempt.LoginRequired && credential.Source == CredentialSource.StoredLogin)
         {
-            hints.Add(new CloudHint(Unavailable + LoginRequiredReason + ". Run xping login.", Always: true));
+            hints.Add(new CloudHint(Unavailable + LoginRequiredReason, Always: true));
 
             ResolvedCredential fallback = credential.FallbackToApiKey();
             if (fallback.Source != CredentialSource.None)
@@ -257,13 +258,27 @@ internal sealed class CloudEnricher(
         attempt.Bind(assembly, binding);
         int found = await FetchAsync(client, binding, targets, attempt, cancellationToken).ConfigureAwait(false);
 
-        // A remembered name match whose project now answers nothing has most likely been renamed or
-        // removed; the match is dropped and the list read again, once (§11.2).
-        if (found == 0 && await projectResolver.RebindAsync(client, assembly, binding, lookup, cancellationToken).ConfigureAwait(false) is { } fresh)
+        if (found > 0)
+            return;
+
+        // Nothing found tells a missing project and tests Cloud has never seen apart only by asking.
+        // A remembered name match is listed again instead (§11.2); a match listed in this run is
+        // known to exist.
+        if (binding.IsNameMatch)
         {
-            attempt.Bind(assembly, fresh);
-            await FetchAsync(client, fresh, targets, attempt, cancellationToken).ConfigureAwait(false);
+            if (await projectResolver.RebindAsync(client, assembly, binding, lookup, cancellationToken).ConfigureAwait(false) is { } fresh)
+            {
+                attempt.Bind(assembly, fresh);
+                await FetchAsync(client, fresh, targets, attempt, cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
         }
+
+        // A key the user typed or the SDK recorded is never checked otherwise, and a typo in it would
+        // read as "Cloud has no data" with no hint at all.
+        if (await client.GetProjectAsync(binding.Key, cancellationToken).ConfigureAwait(false) is null)
+            attempt.Fail($"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
     }
 
     private async Task<int> FetchAsync(
@@ -291,7 +306,7 @@ internal sealed class CloudEnricher(
         new(
             test.ConfidenceScore,
             test.ConfidenceScore is null ? null : Kebab(test.ScoreCategory),
-            Kebab(test.EvidenceLevel) ?? test.EvidenceLevel,
+            Kebab(test.EvidenceLevel)!,
             test.TotalExecutions,
             Kebab(test.ScoreTrend),
             test.ScoreDelta,
@@ -377,33 +392,11 @@ internal sealed class CloudEnricher(
     }
 
     /// <summary>
-    /// <c>ModeratelyReliable</c> → <c>moderately-reliable</c>.
+    /// <c>ModeratelyReliable</c> → <c>moderately-reliable</c>, as every other token in the envelope
+    /// is written.
     /// </summary>
-    internal static string? Kebab(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var text = new StringBuilder(value.Length + 4);
-        for (int i = 0; i < value.Length; i++)
-        {
-            char c = value[i];
-            if (c is '_' or ' ' or '-')
-            {
-                if (text.Length > 0 && text[^1] != '-')
-                    text.Append('-');
-
-                continue;
-            }
-
-            if (char.IsUpper(c) && i > 0 && text.Length > 0 && text[^1] != '-')
-                text.Append('-');
-
-            text.Append(char.ToLowerInvariant(c));
-        }
-
-        return text.ToString();
-    }
+    internal static string? Kebab(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : JsonNamingPolicy.KebabCaseLower.ConvertName(value.Trim());
 
     private sealed record Target(string Assembly, string Fingerprint);
 
@@ -443,9 +436,8 @@ internal sealed class CloudEnricher(
             if (Hint is not null)
                 return;
 
-            Hint = new CloudHint(
-                $"Cloud data unavailable for {assembly}: no matching Cloud project. Use --project <key>.", Always: false);
             Reason = $"no matching Cloud project for {assembly}. Use --project <key>.";
+            Hint = new CloudHint(Unavailable + Reason, Always: false);
         }
 
         public void Fail(string reason)

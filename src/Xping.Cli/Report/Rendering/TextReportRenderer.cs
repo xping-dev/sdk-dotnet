@@ -155,6 +155,15 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         output.Write(builder.ToString());
     }
 
+    /// <summary>
+    /// Gets what joins the score and its category inside the trailer's Cloud segment.
+    /// </summary>
+    /// <remarks>
+    /// The glyph set's separator, except in ASCII, where it is <c>|</c> — the character that joins
+    /// the trailer's own segments, which would make the category read as a field of its own.
+    /// </remarks>
+    private string CloudSeparator => capabilities.Glyphs.Separator == "|" ? "-" : capabilities.Glyphs.Separator;
+
     private void WriteHeader(StringBuilder builder, ReportEnvelope envelope)
     {
         WindowDto window = envelope.Window;
@@ -173,8 +182,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Only when something on the page came from Cloud. A Cloud that could not answer is said on
         // standard error; a header claiming "cloud" over purely local rows would be the lie.
-        if (envelope.Findings.Any(f => f.Cloud != null) || envelope.LatestRun?.Failures.Any(f => f.Cloud != null) == true)
+        if (envelope.Findings.Any(f => CloudText.HasScore(f.Cloud))
+            || envelope.LatestRun?.Failures.Any(f => CloudText.HasScore(f.Cloud)) == true)
+        {
             provenance.Add("cloud");
+        }
 
         builder.AppendLine(string.Join(separator, provenance));
 
@@ -965,12 +977,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Cloud's confidence belongs with the local evidence level: both say how much to believe it.
         // The category goes first when the line is short of room — the detail view always has it —
         // because Fit() would otherwise cut the local evidence word off the front.
-        if (CloudText.Trailer(finding.Cloud, capabilities.Glyphs.Separator, withCategory: true) is { } cloud)
+        if (CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: true) is { } cloud)
         {
             int rest = trailer.Sum(part => part.Length + SeparatorWidth);
             trailer.Insert(1, rest + cloud.Length <= budget
                 ? cloud
-                : CloudText.Trailer(finding.Cloud, capabilities.Glyphs.Separator, withCategory: false)!);
+                : CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: false)!);
         }
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
