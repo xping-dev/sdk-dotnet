@@ -1165,7 +1165,7 @@ key. `ProjectResolver.ResolveAsync(assembly)` therefore tries, in order:
 | # | Source | Cost | Cached? |
 |---|---|---|---|
 | 1 | `report --project <key>` (new option; applies to the whole report) | none | no |
-| 2 | `XPING_PROJECTID` env var, then `Xping:ProjectId` from `appsettings*.json` in the report's directory (§14.2), the same values the SDK reads | none | no |
+| 2 | `XPING_PROJECTID` env var, then `Xping:ProjectId` from `appsettings*.json` in the report's directory (`report --directory`, else the working directory; §14.2), the same values the SDK reads | none | no |
 | 3 | The pin stamped in the session: new custom property `Xping.ProjectId` written by the SDK's orchestrator next to `Xping.Mode` (`LocalSessionProperties`) when `ProjectPin` is set. **SDK change**, `src/Xping.Sdk.Core`, one constant and one line in the environment-info build. Sessions written before this carry no key and fall through. | none | no |
 | 4 | Name match: `ListProjectsAsync` pages of 50 until a project whose `displayName` equals the assembly simple name (ordinal) is found. Needs the additive DataGateway change of A-3: `displayName` and `slug` on `ProjectResponse` (the collector sets `DisplayName` to the assembly name for derived projects). Until that field exists the response has no `displayName` and this step finds nothing. | one to a few requests per workspace | yes |
 | 5 | Nothing: no enrichment for that assembly; hint line §11.6 | — | — |
@@ -1175,9 +1175,14 @@ The CLI MUST NOT reproduce `FromAssemblyName` locally. The Cloud owns that rule 
 `ProjectCache`: `~/.xping/cache/projects/{sha256(cloudUrl) first 16 hex}/{workspaceId}.json`,
 `{ "schemaVersion": 1, "entries": { "<assembly>": { "projectKey": "...", "slug": "...",
 "source": "name-match", "resolvedAt": "..." } } }`, mode `0600`, TTL 24 h from `resolvedAt`.
-Only step 4 results are cached. A `404` on a later `GetTestAsync` for that key evicts the entry
-and the enricher tries step 4 once more in the same run. `logout` deletes the directory for that
-Cloud URL. The cache holds no secrets, but it does reveal project keys, so it lives under
+Only step 4 results are cached, and only for a stored login: an API key carries no workspace id
+to key the file by, so an API-key run repeats step 4. When no reported test is found under a key,
+the key is checked: a name match that came from the cache is evicted and step 4 runs once more in
+the same run (a match listed in this run is known to exist and is not listed twice); a key from
+steps 1–3 is checked with one `GetProjectAsync`, and a 404 there is the "names no project" hint of
+§11.6 rather than silent success. Step 3 uses only the newest session of each assembly: a pin
+removed since must not be revived from an older run. `logout` deletes the directory for that Cloud
+URL. The cache holds no secrets, but it does reveal project keys, so it lives under
 `~/.xping` with the same directory mode as the credentials.
 
 ### 11.3 What is enriched and how it is labelled
@@ -1189,13 +1194,17 @@ amends each spec with an "Amendment — Cloud data" section that quotes this sec
 | Slot | Spec | Content |
 |---|---|---|
 | Header line 1 | report-format §8 | `· cloud` appended when at least one finding was enriched; `· cloud unavailable` is **not** shown (the hint line covers it) |
-| Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` lowercased (`highly reliable`, `reliable`, `moderately reliable`, `unreliable`, `highly unreliable`; `insufficient data` shows no trailer), inserted between the evidence level and the id, exactly as reserved. The Cloud `evidenceLevel` is not on the row: the row already carries the local evidence level, and two evidence words would collide (Q-3, answered) |
-| Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4) |
-| Detail metrics block | finding-detail §8 | labelled pairs built in `EnvelopeBuilder`, rendered as any other metric: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
+| Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` split into lowercase words (`HighlyReliable` → `highly reliable`, `reliable`, `moderately reliable`, `unreliable`, `highly unreliable`; `insufficient data` or no score shows no trailer). It is its own trailer segment directly after `evidence {level}`, before the population token and the id; the `·` is the glyph set's separator, except in ASCII, where it is `-`: ASCII's separator is `|`, which also joins the trailer's segments and would make the category read as a field of its own. When the trailer without its path would pass the 72-column fence, the category is dropped (`confidence 0.62`): the trailer is cut from the left, which would otherwise remove the local evidence level, and the detail view always shows the category. The Cloud `evidenceLevel` is not on the row: the row already carries the local evidence level, and two evidence words would collide (Q-3, answered) |
+| Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`, replacing the local contrast; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4, answered) |
+| Detail metrics block | finding-detail §8 | labelled pairs appended after the local metrics: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
 
 Every Cloud value is labelled "cloud" or "confidence" in text, and lives under a `cloud` object in
-JSON, so it can never be mistaken for a local statistic. Local analysis computes no confidence score
-(fixed decision; `ImpactScorer` stays as it is). Layout is identical with and without Cloud: the
+JSON, so it can never be mistaken for a local statistic. **The text slots are therefore rendered
+from those `cloud` objects by `TextReportRenderer`, not resolved into strings by the builder.**
+The reserving specs put the contrast sentence and the detail pairs in the builder, which would put
+Cloud values into `latestRun.failures[].contrast` and `findings[].metrics`; in JSON those two stay
+purely local, and the three report specs carry an amendment saying so. Local analysis computes no
+confidence score (fixed decision; `ImpactScorer` stays as it is). Layout is identical with and without Cloud: the
 slots are empty strings when there is no data, which is what the specs already require.
 
 ### 11.4 JSON envelope changes (additive, `1.21` → `1.22`)
@@ -1203,11 +1212,18 @@ slots are empty strings when there is no data, which is what the specs already r
 - `context.cloud` (nullable object): `{ "cloudUrl", "credential": "stored-login" | "api-key",
   "workspaceId": "..." | null, "status": "ok" | "partial" | "unavailable" | "login-required" |
   "not-attempted", "reason": "..." | null, "project": { "assembly": "...", "projectKey": "...",
-  "source": "flag" | "env" | "session" | "name-match" } | null }`. `null` when no credential
+  "source": "flag" | "env" | "config" | "session" | "name-match" } | null }`
+  (`env` is `XPING_PROJECTID` or `Xping__ProjectId`, `config` is `Xping:ProjectId` in `appsettings*.json`). `null` when no credential
   resolved, so today's consumers see a new nullable field and nothing else.
-- `findings[].cloud` (nullable object): `{ "confidence": 0.62, "category": "moderate",
-  "evidenceLevel": "high", "runs": 812, "trend": "rising" | null, "delta": -0.03 | null,
-  "flaky": true | null, "lastExecutedAt": "..." | null, "fetchedAt": "..." }`.
+- `context.cloud.reason` is the hint line of §11.6 without its `Cloud data unavailable: ` prefix
+  (`null` when `status` is `ok` or `not-attempted`). `not-attempted` means a credential resolved
+  but the envelope held no test with a fingerprint, so no request was made.
+- `findings[].cloud` (nullable object): `{ "confidence": 0.62, "category": "moderately-reliable",
+  "evidenceLevel": "robust", "runs": 812, "trend": "rising" | null, "delta": -0.03 | null,
+  "flaky": true | null, "lastExecutedAt": "..." | null, "fetchedAt": "..." }`. `category`,
+  `evidenceLevel` and `trend` are the Cloud's values in kebab case (`ModeratelyReliable` →
+  `moderately-reliable`); `confidence` and `category` are `null` when the Cloud has no score.
+  Group findings have no fingerprint and get no `cloud` object.
 - `latestRun.failures[].cloud` (nullable): same shape.
 
 Nothing existing is renamed, removed or re-typed. `schemaVersion` becomes `"1.22"`; the literal is
@@ -1231,7 +1247,8 @@ requests.
 | login required (§9.6) | `Cloud data unavailable: your sign-in is no longer valid. Run xping login.` — always printed (§10.4) |
 | unreachable, TLS, timeout, 5xx | `Cloud data unavailable: could not reach https://api.xping.io ({category}). Showing local results only.` |
 | version mismatch | `Cloud data unavailable: {§2.3 message}` |
-| project not resolved for some assembly | `Cloud data unavailable for {assembly}: no matching Cloud project. Use --project <key>.` |
+| project not resolved for some assembly | `Cloud data unavailable: no matching Cloud project for {assembly}. Use --project <key>.` |
+| a key from steps 1–3 names no project (nothing found under it, and `GetProjectAsync` answers 404) | `Cloud data unavailable: no Cloud project '{key}' (from {origin}). Check the key, or pass --project <key>.` |
 | file refused | `Cloud data unavailable: {§7.5 message}` |
 | plan (API key) | `Cloud data unavailable: {§8.1 plan message}` |
 
@@ -1641,7 +1658,7 @@ finds a contract or spec conflict stops and reports.
 | Q-1 | *Answered 2026-09-29.* Filed as [xping-dev/dashboard#333](https://github.com/xping-dev/dashboard/issues/333): `displayName` and `slug` on `ProjectResponse`. Phase 7 step 4 waits for it; steps 1–3 do not. | — |
 | Q-2 | *Answered 2026-09-29.* The id is enough for the MVP. `login` shows the workspace id and makes no name lookup (§3.2). | — |
 | Q-3 | *Answered 2026-09-30.* Option A: the row trailer uses `scoreCategory`; `evidenceLevel` appears only in the detail block and in JSON (§11.3). | — |
-| Q-4 | **Latest-run contrast.** The reserved sentence includes "failed on this branch"; `TestResponse` has no per-branch data. Leave the clause out for the MVP (this draft) or call the sessions endpoint with `branch=`? | phase 7 |
+| Q-4 | *Answered 2026-10-07.* Leave the clause out: the latest-run contrast is `confidence 0.94 over 812 runs` and no sessions request is made (§11.3). | — |
 | Q-5 | *Answered 2026-09-29.* Yes: `http://[::1]` Cloud URLs are refused (§14.1). | — |
 | Q-6 | *Answered 2026-09-30.* Superseded by A-8: the stored login now takes precedence over the ambient key, so `login` proceeds without a warning (§3.2) and `auth status` reports the key as a fallback (§3.4). | — |
 | Q-7 | *Answered 2026-09-29.* Weekly (§17.2). The owner may raise the frequency later. | — |

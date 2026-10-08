@@ -38,7 +38,7 @@ internal sealed class CloudApiClientFactory(
     IXpingSerializer serializer,
     CliVersion cliVersion,
     TimeProvider timeProvider,
-    ILoggerFactory loggerFactory)
+    ILoggerFactory loggerFactory) : ICloudApiClientFactory
 {
     /// <summary>
     /// Returns a client that reads with <paramref name="credential"/>.

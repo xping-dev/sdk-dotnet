@@ -63,6 +63,7 @@ xping report [options]
 | `--assembly <name>` | newest | Scope the report to one test assembly |
 | `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
+| `--project <key>` | — | Read [Cloud data](#cloud-data) from this Xping Cloud project. Overrides `XPING_PROJECTID` |
 | `--format <f>` | `text` | `text`, `json` or `summary` |
 | `--json` | off | Alias for `--format json` |
 | `--summary` | off | Alias for `--format summary` |
@@ -494,6 +495,30 @@ Analysing them together would pool unrelated suites: one assembly's history woul
 
 Runs recorded before the SDK could name the assembly belong to no suite. They stay in the store and `xping where` still counts them, but no `--assembly` value reaches them.
 
+### Cloud data
+
+When the CLI has a credential — a sign-in from `xping login`, `--api-key`, or `XPING_APIKEY` — the
+report also asks Xping Cloud what it knows about each test it names, across every run uploaded to
+it. Nothing else changes: the same rows, the same order, the same exit code. Cloud values are always
+labelled, so they are never read as local numbers:
+
+- the header ends in `· cloud` when anything on the page came from Cloud;
+- a finding's last line gains `confidence 0.62 · moderately reliable` after its evidence level
+  (`confidence 0.62 - moderately reliable` with `--ascii`; the category is dropped when the line has
+  no room for it);
+- a latest-run row says `confidence 0.94 over 812 runs` in place of its local history;
+- `--id` adds `cloud confidence`, `cloud evidence` and `cloud trend` to the detail block.
+
+The report finds the Cloud project from, in order: `--project`, `XPING_PROJECTID` or `Xping:ProjectId`
+in `appsettings*.json` (read from `--directory` when given), the project id the SDK recorded with the
+runs, and a Cloud project whose name is the test assembly's.
+
+Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at ten
+seconds), a key that cannot read, no matching project — you get the local report and one line on
+stderr saying why, at a terminal or with `--verbose`. The one line printed everywhere, because only a
+person can fix it, is `Cloud data unavailable: your sign-in is no longer valid. Run xping login.`
+`--summary` never asks Cloud.
+
 ### `--format json`
 
 For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
@@ -518,6 +543,12 @@ store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`fa
 `explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
 failures not listed as rows.
 
+`context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
+(`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
+`not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
+its `source` (`flag`, `env`, `config`, `session` or `name-match`). Each finding and latest-run failure carries a
+`cloud` object with Cloud's view of its test, or `null`; `metrics` and `contrast` stay local.
+
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
@@ -531,9 +562,16 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.21",
+  "schemaVersion": "1.22",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
-  "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
+  "context": {
+    "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
+    "cloud": {
+      "cloudUrl": "https://app.xping.io", "credential": "stored-login", "workspaceId": "01J8…",
+      "status": "ok", "reason": null,
+      "project": { "assembly": "Checkout.Tests", "projectKey": "checkout-tests", "source": "name-match" }
+    }
+  },
   "summary": {
     "tests": 412,
     "findings": 3,
@@ -566,7 +604,8 @@ are not each other and `tests` is what they add up to:
         "contrast": "passed the previous 19 runs, failed just now",
         "failureSummary": "NullReferenceException",
         "priorSessions": 19,
-        "priorFailures": 0
+        "priorFailures": 0,
+        "cloud": null
       }
     ],
     "failuresShown": 1,
@@ -595,7 +634,12 @@ are not each other and `tests` is what they add up to:
         { "label": "failure mode 3", "value": "not recorded by the adapter" }
       ],
       "evidence": { "…": "…" },
-      "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests"
+      "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests",
+      "cloud": {
+        "confidence": 0.62, "category": "moderately-reliable", "evidenceLevel": "robust", "runs": 812,
+        "trend": "stable", "delta": -0.03, "flaky": true,
+        "lastExecutedAt": "2026-08-19T12:00:00+00:00", "fetchedAt": "2026-08-19T16:30:00+00:00"
+      }
     }
   ],
   "truncated": { "shown": 3, "total": 3, "command": "xping report --all" }

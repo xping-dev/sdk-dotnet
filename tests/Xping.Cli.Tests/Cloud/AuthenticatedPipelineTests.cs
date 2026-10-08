@@ -16,8 +16,9 @@ namespace Xping.Cli.Tests.Cloud;
 /// A real sign-in, then DataGateway reads through the whole pipeline against <see cref="FakeCloud"/>.
 /// </summary>
 /// <remarks>
-/// Phase 6 runs these at the pipeline level, because <c>report</c> does not call Cloud before
-/// phase 7, which extends them to run <c>xping report</c> (cli-auth-cli-spec §18.2).
+/// The pipeline-level half of these scenarios; <see cref="ReportEnrichmentTests"/> runs the same
+/// ones through <c>xping report</c> and asserts the hint, the exit code and the envelope
+/// (cli-auth-cli-spec §18.2).
 /// </remarks>
 public sealed class AuthenticatedPipelineTests : IAsyncDisposable
 {

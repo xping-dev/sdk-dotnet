@@ -89,7 +89,7 @@ public sealed class ReviewFixesTests : IDisposable
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
         // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true);
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Configure);
         return (code, output.ToString() + error.ToString());
     }
 

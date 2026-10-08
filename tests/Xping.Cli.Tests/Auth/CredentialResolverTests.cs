@@ -261,6 +261,6 @@ public sealed class CredentialResolverTests : IDisposable
 
     private Task<ResolvedCredential> ResolveAsync(string? apiKeyFlag = null) =>
         _resolver.ResolveAsync(
-            CliConfiguration.Load(cloudUrlFlag: null, apiKeyFlag, ProjectDirectory, name => _environment.GetValueOrDefault(name)),
+            CliConfiguration.Load(cloudUrlFlag: null, apiKeyFlag, projectFlag: null, ProjectDirectory, name => _environment.GetValueOrDefault(name)),
             CancellationToken.None);
 }

@@ -160,6 +160,17 @@ Superseded by `cli-finding-detail-spec.md` Amendment 3. The cap line inside the 
 fence, which now counts the failures it withheld. `LatestRunDto.OverflowCommand` is removed. D7's
 block and §4's `OverflowCommand` parameter are read accordingly.
 
+### Amendment 6 — Cloud data
+
+`cli-auth-cli-spec.md` §11.3 fills §8's slot. Quoted:
+
+> | Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`, replacing the local contrast; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4, answered) |
+
+This reverses §8's "already resolved in the builder, so no renderer changes". The Cloud values live
+in `LatestRunFailureDto.Cloud`, and `TextReportRenderer` prints the Cloud sentence in place of
+`Contrast` when it is set. `Contrast` stays the only place the **local** sentence is composed, and
+in JSON it is always the local sentence, so a Cloud value never appears outside a `cloud` object.
+
 ---
 
 ## 1. Ground truth and problem

@@ -58,6 +58,12 @@ internal sealed class ReportOptions
     /// <summary>Gets or sets the directory to resolve the store from. Defaults to the working directory.</summary>
     public string? Directory { get; set; }
 
+    /// <summary>
+    /// Gets or sets the Cloud project key to read the report's tests from (<c>--project</c>),
+    /// overriding <c>XPING_PROJECTID</c> and the key recorded with the sessions.
+    /// </summary>
+    public string? Project { get; set; }
+
     /// <summary>Gets or sets the output format.</summary>
     public ReportFormat Format { get; set; } = ReportFormat.Text;
 

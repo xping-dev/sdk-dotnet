@@ -41,6 +41,20 @@ Per `cli-finding-detail-spec.md` Amendment 3, the truncation line below the fenc
 findings or latest-run failures were cut and names each: `Showing 10 of 21 findings, 10 of 23
 failures · all: xping report --all`. It is the only place the report prints that command.
 
+### Amendment 4 — Cloud data
+
+`cli-auth-cli-spec.md` §11.3 fills §8's two slots. Quoted:
+
+> | Header line 1 | report-format §8 | `· cloud` appended when at least one finding was enriched; `· cloud unavailable` is **not** shown (the hint line covers it) |
+> | Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` split into lowercase words […]; `insufficient data` or no score shows no trailer. It is its own trailer segment directly after `evidence {level}`, before the population token and the id; the `·` is the glyph set's separator. |
+
+§8's `confidence 0.62 · moderate` is read as that rule. "No line above it reflows" holds: when the
+segment would push the trailer past the fence, the category is dropped (`confidence 0.62`) before
+anything local is cut. Both values come from
+`FindingDto.Cloud`, which only `CloudEnricher` sets, and **the renderer** composes the segment: the
+builder never resolves Cloud text, so `findings[].metrics` and every other local JSON field stay
+local. When `Cloud` is null nothing is emitted, so the goldens are unchanged.
+
 ### Amendment 2 — `--id` supersedes D7's rejection; `xping test` is retired
 
 D7 rejected `xping report --id` on the record and said it was "not reserved for later either". That

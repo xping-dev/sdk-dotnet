@@ -73,9 +73,12 @@ internal sealed record ReportEnvelope(
     /// watched a build go red wants answered. 1.21 is where the envelope gained <c>selection</c>,
     /// what <c>xping report --id</c> resolved to; where <c>drillDown</c> became that command for the
     /// finding's own id; and where a <c>Flaky</c> finding's <c>metrics</c> gained one
-    /// <c>failure mode N</c> pair per distinct signature, naming the ways it failed.
+    /// <c>failure mode N</c> pair per distinct signature, naming the ways it failed. 1.22 is where
+    /// <c>context</c>, every finding and every latest-run failure gained a nullable <c>cloud</c>
+    /// object: what Xping Cloud says about the same test when a credential resolved, kept apart
+    /// from every local field so it is never read as a local statistic.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.21";
+    public const string CurrentSchemaVersion = "1.22";
 }
 
 /// <summary>
@@ -108,7 +111,11 @@ internal sealed record WindowDto(
 /// <param name="Sha">Commit the newest analysed session ran at.</param>
 /// <param name="Branch">Branch it ran on.</param>
 /// <param name="Assembly">Test assembly the report covers.</param>
-internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly);
+/// <param name="Cloud">
+/// What happened when the report asked Xping Cloud about its tests, or null when no credential
+/// resolved and nothing was asked.
+/// </param>
+internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly, CloudContextDto? Cloud = null);
 
 /// <summary>
 /// The newest session, read against the sessions before it.
@@ -187,13 +194,18 @@ internal sealed record LatestRunDto(
 /// </param>
 /// <param name="PriorSessions">Sessions before this one in which the test recorded a verdict.</param>
 /// <param name="PriorFailures">Of those, how many it failed in.</param>
+/// <param name="Cloud">
+/// What Xping Cloud says about the test, or null. When set, the text report prints it in place of
+/// <paramref name="Contrast"/>, which stays the local sentence.
+/// </param>
 internal sealed record LatestRunFailureDto(
     string Status,
     SubjectDto Subject,
     string Contrast,
     string? FailureSummary,
     int PriorSessions,
-    int PriorFailures);
+    int PriorFailures,
+    CloudTestDto? Cloud = null);
 
 /// <summary>
 /// Counts describing the run as a whole.
@@ -326,6 +338,9 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
 /// <param name="Evidence">The kind-specific observations.</param>
 /// <param name="DrillDown">The command that expands it.</param>
+/// <param name="Cloud">
+/// What Xping Cloud says about the finding's test, or null. Always null for a group finding.
+/// </param>
 internal sealed record FindingDto(
     string Id,
     string Kind,
@@ -338,7 +353,8 @@ internal sealed record FindingDto(
     string Headline,
     IReadOnlyList<MetricDto> Metrics,
     JsonNode? Evidence,
-    string DrillDown);
+    string DrillDown,
+    CloudTestDto? Cloud = null);
 
 /// <summary>
 /// One labelled observation from a finding's evidence, already formatted.
