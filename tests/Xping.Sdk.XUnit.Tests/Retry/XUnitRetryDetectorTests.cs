@@ -5,6 +5,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Moq;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.XUnit.Retry;
@@ -19,12 +20,18 @@ namespace Xping.Sdk.XUnit.Tests.Retry;
 [Collection("XpingContext")]
 public sealed class XUnitRetryDetectorTests : IAsyncLifetime
 {
+    private readonly string _scratchStore = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
     private IRetryDetector<ITest> _detector = null!;
 
     public async Task InitializeAsync()
     {
         await XpingContext.ShutdownAsync().ConfigureAwait(false);
-        XpingContext.Initialize();
+
+        // LocalOnly, not the ambient config: in CI that carries the pipeline's XPING_APIKEY, and every
+        // test here would upload an empty session to Xping Cloud on shutdown (#260).
+        XpingContext.Initialize(new XpingConfiguration { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore });
         _detector = XpingContext.GetExecutorServices().RetryDetector;
 
         // Register the inner RetryAttribute so the detector recognises it.
@@ -32,7 +39,13 @@ public sealed class XUnitRetryDetectorTests : IAsyncLifetime
         RetryAttributeRegistry.RegisterCustomRetryAttribute("xunit", "Retry");
     }
 
-    public Task DisposeAsync() => XpingContext.ShutdownAsync().AsTask();
+    public async Task DisposeAsync()
+    {
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+
+        if (Directory.Exists(_scratchStore))
+            Directory.Delete(_scratchStore, recursive: true);
+    }
 
     // ---------------------------------------------------------------------------
     // Guard clauses — null/missing test structure

@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Configuration;
+
 namespace Xping.Sdk.XUnit.Tests;
 
 /// <summary>
@@ -11,9 +13,18 @@ namespace Xping.Sdk.XUnit.Tests;
 [Collection("XpingContext")]
 public sealed class XpingExecutorServicesTests : IAsyncLifetime
 {
+    private readonly string _scratchStore = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
     public Task InitializeAsync() => XpingContext.ShutdownAsync().AsTask();
 
-    public Task DisposeAsync() => XpingContext.ShutdownAsync().AsTask();
+    public async Task DisposeAsync()
+    {
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+
+        if (Directory.Exists(_scratchStore))
+            Directory.Delete(_scratchStore, recursive: true);
+    }
 
     // ---------------------------------------------------------------------------
     // Property non-null checks
@@ -22,7 +33,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     [Fact]
     public void ExecutionTracker_ShouldNotBeNull()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         var services = XpingContext.GetExecutorServices();
 
         Assert.NotNull(services.ExecutionTracker);
@@ -31,7 +42,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     [Fact]
     public void RetryDetector_ShouldNotBeNull()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         var services = XpingContext.GetExecutorServices();
 
         Assert.NotNull(services.RetryDetector);
@@ -40,7 +51,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     [Fact]
     public void IdentityGenerator_ShouldNotBeNull()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         var services = XpingContext.GetExecutorServices();
 
         Assert.NotNull(services.IdentityGenerator);
@@ -53,7 +64,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     [Fact]
     public void GetExecutorServices_CalledTwice_ReturnsSameServiceInstances()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         var s1 = XpingContext.GetExecutorServices();
         var s2 = XpingContext.GetExecutorServices();
@@ -63,4 +74,9 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
         Assert.Same(s1.RetryDetector, s2.RetryDetector);
         Assert.Same(s1.IdentityGenerator, s2.IdentityGenerator);
     }
+
+    // LocalOnly for the same reason as XpingContextTests.ScratchConfiguration (#260): building the
+    // host from the ambient config picks up the pipeline's XPING_APIKEY and uploads to Xping Cloud.
+    private XpingConfiguration ScratchConfiguration() =>
+        new() { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore };
 }

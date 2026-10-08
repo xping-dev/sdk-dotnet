@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
+using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Models.Executions;
 using Xunit;
 using Assert = Xunit.Assert;
@@ -22,14 +23,20 @@ using Assert = Xunit.Assert;
 [Collection("XpingContext")]
 public sealed class XpingTrackAttributeTests : IAsyncLifetime
 {
+    private readonly string _scratchStore = Path.Combine(
+        Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
     public Task InitializeAsync()
     {
         return XpingContext.ShutdownAsync().AsTask();
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
-        return XpingContext.ShutdownAsync().AsTask();
+        await XpingContext.ShutdownAsync().ConfigureAwait(false);
+
+        if (Directory.Exists(_scratchStore))
+            Directory.Delete(_scratchStore, recursive: true);
     }
 
     [Fact]
@@ -46,6 +53,10 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
     [Fact]
     public void BeforeTest_WithNullTest_ThrowsArgumentNullException()
     {
+        // BeforeTest builds the host before it checks its argument, and would otherwise initialize
+        // from the ambient config: in CI that is the pipeline's XPING_APIKEY, and the empty session
+        // would be uploaded to Xping Cloud on shutdown (#260).
+        XpingContext.Initialize(new XpingConfiguration { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore });
         var attribute = new XpingTrackAttribute();
 
         Assert.Throws<ArgumentNullException>(() => ((ITestAction)attribute).BeforeTest(null!));

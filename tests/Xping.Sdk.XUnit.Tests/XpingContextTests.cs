@@ -48,7 +48,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public void IsInitialized_AfterInitialize_ReturnsTrue()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         Assert.True(XpingContext.IsInitialized);
     }
@@ -116,7 +116,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public void GetExecutorServices_AfterInitialize_ReturnsNonNull()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         var services = XpingContext.GetExecutorServices();
 
@@ -145,7 +145,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public async Task FlushAsync_AfterInitialize_DoesNotThrow()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         var exception = await Record.ExceptionAsync(() => XpingContext.FlushAsync());
 
@@ -167,7 +167,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public async Task FinalizeAsync_AfterInitialize_DoesNotThrow()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         var exception = await Record.ExceptionAsync(() => XpingContext.FinalizeAsync());
 
@@ -179,7 +179,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     {
         // Initialize registers the Lazy but doesn't build the host.
         // FinalizeAsync short-circuits when !IsValueCreated.
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         var exception = await Record.ExceptionAsync(() => XpingContext.FinalizeAsync());
 
@@ -193,7 +193,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public async Task ShutdownAsync_AfterInitialize_ResetsIsInitialized()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         Assert.True(XpingContext.IsInitialized);
 
         await XpingContext.ShutdownAsync();
@@ -212,7 +212,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public async Task ShutdownAsync_MultipleCallsSafe()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         await XpingContext.ShutdownAsync();
         var exception = await Record.ExceptionAsync(() => XpingContext.ShutdownAsync().AsTask());
@@ -223,11 +223,11 @@ public sealed class XpingContextTests : IAsyncLifetime
     [Fact]
     public async Task ShutdownAsync_AllowsReinitialize()
     {
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
         await XpingContext.ShutdownAsync();
 
         // Should be able to initialize again after shutdown
-        XpingContext.Initialize();
+        XpingContext.Initialize(ScratchConfiguration());
 
         Assert.True(XpingContext.IsInitialized);
     }
@@ -354,6 +354,16 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.IsAssignableFrom<ITestAssemblyFinished>(Assert.Single(received));
     }
 
+    [Fact]
+    public void ScratchConfiguration_StaysLocalWhenThePipelineSuppliesAnApiKey()
+    {
+        // What XPING_APIKEY does to it in CI: the env overlay sets the key on top of the instance.
+        XpingConfiguration configuration = ScratchConfiguration();
+        configuration.ApiKey = "from-the-pipeline";
+
+        Assert.Equal(XpingMode.LocalOnly, configuration.ResolveMode());
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
@@ -375,8 +385,12 @@ public sealed class XpingContextTests : IAsyncLifetime
             assemblyName: "Xping.Sdk.XUnit.Tests");
     }
 
+    // LocalOnly, not left to Auto: CI sets XPING_APIKEY for the whole job and XPING_* overrides
+    // every config path, so Auto would resolve to Cloud and upload these synthetic sessions to the
+    // real Xping Cloud (#260). The parameterless Initialize() reads that ambient config, so it is
+    // only used here where the host is never built.
     private XpingConfiguration ScratchConfiguration() =>
-        new() { LocalStorePath = _scratchStore };
+        new() { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore };
 
     // Port 9 (discard) is closed on loopback, so the upload is refused immediately.
     private XpingConfiguration UnreachableCloudConfiguration(bool strictMode) => new()
