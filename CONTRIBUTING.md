@@ -38,6 +38,14 @@ stay local.
 your shell, they are uploaded too. To keep a run local anyway, set `XPING_MODE=LocalOnly`; to turn
 Xping off, set `XPING_ENABLED=false`.
 
+Local uploads land in the same projects as CI, so tag them to keep your debugging runs out of the
+CI numbers:
+
+```sh
+export XPING_APIKEY=<your local key>
+export XPING_ENVIRONMENT=Local
+```
+
 **Tests that create their own context.** Pass an explicit configuration with
 `Mode = XpingMode.LocalOnly` and a scratch `LocalStorePath`, or a loopback `ApiEndpoint` when the
 test needs the upload path. Never build one from the ambient configuration: in CI it carries the
