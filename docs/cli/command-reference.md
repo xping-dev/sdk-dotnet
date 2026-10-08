@@ -228,7 +228,9 @@ xping report --all --format json \
         | {kind, population, evidence: (.evidence | {
             baselineSessions, baselineSessionCount, currentSessionCount,
             partialSessionsSetAside })}'
-``` Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
+```
+
+Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
 
 Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them too, because an environmental run is still a run the test either was or was not in. What `stopped running` does set aside is the runs that covered part of the suite, which is why it is the one kind marked `-partial` rather than `all runs`.
 
