@@ -12,7 +12,6 @@ internal static class AuthErrorCodes
 {
     public const string AccessDenied = "access_denied";
     public const string Timeout = "timeout";
-    public const string StateMismatch = "state_mismatch";
     public const string InteractiveRequired = "interactive_required";
     public const string CloudUnreachable = "cloud_unreachable";
     public const string VersionMismatch = "version_mismatch";
