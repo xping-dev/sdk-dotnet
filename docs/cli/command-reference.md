@@ -804,7 +804,9 @@ says so:
 ```
 
 The file is created with mode `0600` in a `0700` directory (an owner-only ACL on Windows). The CLI
-refuses to read it when other users can, and every command that needs it says how to fix that:
+refuses to read it when other users can, and says how to fix that: always in `auth status`, and in
+`report` when there is no API key to use instead (at a terminal or with `--verbose`). A new `login`
+replaces the file.
 
 ```
 Refusing to read ~/.xping/credentials.json because other users can read it. Run `chmod 600 ~/.xping/credentials.json` (and `chmod 700 ~/.xping`) and try again.
@@ -901,8 +903,8 @@ never touches an API key; when one is set it says where, so you can unset it.
 `{ "schemaVersion": "1", "result": "signed-out", "cloudUrl": "…", "revoked": true, "warning": null }`;
 `result` is `signed-out`, `signed-out-locally` or `not-signed-in`.
 
-**Exit codes:** `0` signed out, or not signed in · `17` the stored sign-in could not be removed (the
-message names the store) · `130` cancelled.
+**Exit codes:** `0` signed out, or not signed in · `2` invalid configuration · `17` the stored
+sign-in could not be removed (the message names the store) · `130` cancelled.
 
 ---
 
@@ -961,8 +963,9 @@ a sign-in, and `flag`, `env` or `config` for a key. `fallbackApiKey` names a key
 sign-in stops being valid. `warnings` holds full sentences — the file-store notice, a refused or
 unreadable credentials file — for an agent to pass on.
 
-**Exit codes:** `0` a credential is available (a sign-in or a key) · `10` no credential · `17` no
-credential, and a credential store could not be read.
+**Exit codes:** `0` a credential is available (a sign-in or a key) · `2` invalid configuration, such
+as a bad `XPING_CLOUDURL` (with `--json`, a failure document) · `10` no credential · `17` no
+credential, and a credential store could not be read · `130` cancelled.
 
 ---
 
@@ -976,7 +979,7 @@ These work on every command, before or after the command name.
 | `--api-key <key>` | API key for reading Xping Cloud data. Prefer `XPING_APIKEY`, so the key does not land in shell history |
 | `--verbose` | Write diagnostics to stderr: which credential is used, refreshes, why Cloud data is missing. Tokens and keys are never printed |
 
-The Cloud URL comes from, first match wins: `--cloud-url`, `XPING_CLOUDURL`, `Xping:CloudUrl` in
+The Cloud URL comes from, first match wins: `--cloud-url`, `XPING_CLOUDURL` (or `Xping__CloudUrl`), `Xping:CloudUrl` in
 `appsettings.json` (or `appsettings.{environment}.json`) in the working directory, then
 `https://app.xping.io`. It must be `https`; `http` is accepted only for `localhost` and
 `127.0.0.1`. Each Cloud URL has its own sign-in.
@@ -991,7 +994,7 @@ The Cloud URL comes from, first match wins: `--cloud-url`, `XPING_CLOUDURL`, `Xp
 |---|---|---|
 | 1 | `--api-key <key>` | A one-off command with another key |
 | 2 | The sign-in stored by `xping login` | Your machine |
-| 3 | `XPING_APIKEY`, then `Xping:ApiKey` in `appsettings*.json` | CI, where nobody signs in |
+| 3 | `XPING_APIKEY`, then `Xping__ApiKey` / `XPING__APIKEY`, then `Xping:ApiKey` in `appsettings*.json` | CI, where nobody signs in |
 
 The stored sign-in comes before `XPING_APIKEY` because, on a developer machine, that variable
 usually holds the SDK's upload key, which cannot read. When the sign-in stops being valid (revoked
@@ -1009,7 +1012,7 @@ includes API access. Otherwise the report says so and stays local.
 |---|---|---|
 | `0` | Success | all |
 | `1` | A finding reached `--fail-on`; `where` or `clear` failed | `report`, `where`, `clear` |
-| `2` | Invalid option or configuration (including `--cloud-url`, `XPING_CLOUDURL`, `--project`, `--workspace`); no report could be produced | all |
+| `2` | Invalid option (including `--cloud-url`, `--project`, `--workspace`); no report could be produced; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
 | `3` | The `--id` finding is not in the report | `report` |
 | `10` | No credential | `auth status` |
 | `11` | You declined the sign-in | `login` |
@@ -1019,9 +1022,9 @@ includes API access. Otherwise the report says so and stays local.
 | `15` | Xping Cloud could not be reached | `login` |
 | `16` | Xping Cloud does not accept this CLI version | `login` |
 | `17` | The credential store failed | `login`, `logout`, `auth status` |
-| `130` | Cancelled with Ctrl+C | `login`, `logout`, `auth status` |
+| `130` | Cancelled with Ctrl+C | all |
 
-`report` never exits above `3` because of Xping Cloud: Cloud problems are one line on stderr.
+Xping Cloud never changes the exit code of `report`: Cloud problems are one line on stderr.
 
 ---
 

@@ -469,7 +469,8 @@ xping report --no-color --ascii   # for log collectors that mangle ANSI
 > machines that keep their `.xping/` between runs.
 
 To have the CI report add Xping Cloud's confidence for each test, give the report step a key that
-can read Cloud data. `xping login` refuses to run in CI (`CI` is set), so a key is the only way:
+can read Cloud data. `xping login` needs an interactive terminal and refuses to run when `CI` is set, so in a pipeline a
+key is the only way:
 
 ```yaml
 - name: Check reliability findings

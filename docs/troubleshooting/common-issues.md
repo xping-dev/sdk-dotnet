@@ -380,8 +380,8 @@ withdrawn) or it expired. The CLI has already removed it. Run `xping login` agai
 
 ### `xping login` says it needs an interactive terminal
 
-`login` runs only in your own shell: not in CI (`CI=true`), not from a coding agent, not with
-stdin or stderr redirected. CI uses an API key that can read Cloud data
+`login` runs only in your own shell. It refuses when stdin or stderr is not a terminal — every
+pipeline agent and coding agent — and when `CI` is `true`, `1` or `yes`. CI uses an API key that can read Cloud data
 (`XPING_APIKEY`); an agent should ask you to run `xping login` yourself.
 
 ### The browser never returns to the CLI

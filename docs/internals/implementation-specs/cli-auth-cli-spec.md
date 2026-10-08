@@ -877,9 +877,9 @@ give a `0600` file, and the next read would trust entries that another user coul
   ~/.xping/credentials.json because no OS credential store is available ({reason}). The file is
   readable only by you." `{reason}` is the selector's reason: "Secret Service not running",
   "libsecret not installed", "keychain locked", "keychain unavailable", "Credential Manager error".
-- A refresh that rotates the token into the file writes the same notice to the `--verbose` log
-  only, so a pipeline of `xping report --json` is not polluted on every refresh. It is still a
-  line on stderr, never on stdout.
+- A refresh that rotates the token into the file prints nothing about the store, so a pipeline of
+  `xping report --json` is not polluted on every refresh; `--verbose` logs only "Refreshed the
+  access token for {url}".
 - `auth status` always shows the store in the `Credential` line and lists the reason under
   `warnings` in JSON.
 
@@ -1308,7 +1308,7 @@ a `report` meaning and are easy to recognise in scripts:
 |---|---|---|---|
 | 0 | `Success` | as today; also `logout` in every completed case, `auth status` with a credential | all |
 | 1 | — | as today (`report` threshold, `where`/`clear` failures, root without args) | existing |
-| 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; an invalid `XPING_CLOUDURL` or settings file (`"error": "configuration"`); `report` unavailable | all |
+| 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; `report` unavailable. For the auth commands also an invalid `XPING_CLOUDURL` or settings file (`"error": "configuration"`); `report` turns that into a hint (§11.6) | all |
 | 3 | — | `report --id` not reported | existing |
 | 10 | `AuthRequired` | `auth status` with no credential of any kind | `auth status` |
 | 11 | `LoginDeclined` | consent denied in the browser | `login` |
@@ -1318,9 +1318,10 @@ a `report` meaning and are easy to recognise in scripts:
 | 15 | `CloudUnreachable` | discovery, network, TLS, `invalid_client` on an auth command | `login`, (never `report`) |
 | 16 | `CloudVersionMismatch` | contract version or min CLI version, 426 | `login`, (never `report`) |
 | 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure; `auth status` with no credential when a store could not be read | `login`, `logout`, `auth status` |
-| 130 | `Cancelled` | Ctrl+C | `login`, `logout`, `auth status` |
+| 130 | `Cancelled` | Ctrl+C (`Program.Run` maps it for every command) | all |
 
-`report` never returns a code above 3; Cloud problems are hints (§10.4). The table is repeated in
+`report` never returns a code above 3 for a Cloud problem; Cloud problems are hints (§10.4). Ctrl+C
+is 130 for every command. The table is repeated in
 `docs/cli/command-reference.md` (phase 8).
 
 ---
@@ -1332,7 +1333,7 @@ a `report` meaning and are easy to recognise in scripts:
 | Source | Form | Precedence |
 |---|---|---|
 | `--cloud-url <url>` | global option on every command | 1 |
-| `XPING_CLOUDURL` | environment variable, `XPING_` + property name like every SDK variable | 2 |
+| `XPING_CLOUDURL` | environment variable, `XPING_` + property name like every SDK variable; then `Xping__CloudUrl` / `XPING__CLOUDURL`, the nested forms the SDK also reads | 2 |
 | `Xping:CloudUrl` | `appsettings.json` / `appsettings.{env}.json` in the working directory (or `--directory`), read by `CliConfiguration` with the same file and environment rules as `BuildXpingConfiguration` in Core | 3 |
 | default | `https://app.xping.io` (contract OQ-12) | 4 |
 
@@ -1658,7 +1659,7 @@ without a credential.
 | 5 | `feat/cli-auth-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
 | 6 | `feat/cli-auth-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green at the pipeline level (§18.2; phase 7 runs them through `report`). |
 | 7 | `feat/cli-auth-07-report-enrichment` | SDK pin stamp (§11.2 step 3), `ProjectResolver` + cache, `--project`, `CloudEnricher`, envelope `1.22`, the three renderer slots, amendments to the three report specs, `context.cloud`. Depends on the DataGateway `displayName`/`slug` change for step 4; steps 1–3 work without it. | Goldens unchanged; `Report_Enriched`, `Report_CloudDown`, `Report_ApiKey_Precedence`, `Report_NoCredential_NoNetwork` green; `ReportEnvelopeTests` updated for `1.22`. |
-| 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR; remove `feat/cli-auth` from the `pull_request` branches in `.github/workflows/ci.yml` (added in phase 0 so the phase PRs run CI). | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
+| 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR. The `feat/cli-auth` entry in the `pull_request` branches of `.github/workflows/ci.yml` (added in phase 0 so the phase PRs run CI) stays, so this phase and its review fixes run CI too; the `feat/cli-auth` → `main` PR removes it. | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
 
 Each PR names the contract sections it implements and the tests that prove them. A phase that
 finds a contract or spec conflict stops and reports.

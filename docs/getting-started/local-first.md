@@ -246,11 +246,15 @@ xping login
 it is never mistaken for a local number. Offline, it prints the local report as before. See
 [Cloud data](../cli/command-reference.md#cloud-data).
 
-To stay local even with credentials present, set the mode explicitly:
+To keep the SDK from uploading even with credentials present, set the mode explicitly:
 
 ```bash
 export XPING_MODE=LocalOnly
 ```
+
+`XPING_MODE` is an SDK setting; the CLI does not read it. Without a sign-in, `xping report` tries
+the `XPING_APIKEY` in your shell, and an upload key answers that it cannot read: the report stays
+local and, at a terminal, says so in one line. `xping login` replaces that line with Cloud data.
 
 ---
 

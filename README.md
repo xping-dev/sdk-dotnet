@@ -280,7 +280,7 @@ Reading back the team's scored history is a **person's** action, authenticated a
 than as a shared machine credential:
 
 ```bash
-xping login          # once per machine; the sign-in lives in your OS keychain
+xping login          # once per machine; the sign-in goes to your OS credential store
 xping report         # the same report, now with Cloud confidence on each row
 ```
 

@@ -94,7 +94,7 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 
 ## Privacy
 
-Test history lives in a `.xping` folder at your repository root, which hides itself from git automatically. Until you run `xping login` or set an API key, the CLI makes no network calls. After that, `xping report` only reads from Xping Cloud; it never uploads anything. The sign-in is kept in your OS keychain.
+Test history lives in a `.xping` folder at your repository root, which hides itself from git automatically. Until you run `xping login` or set an API key, the CLI makes no network calls. After that, `xping report` only reads from Xping Cloud; it never uploads anything. The sign-in is kept in your OS credential store (Keychain, Credential Manager, Secret Service); where none is available — over SSH, in WSL or a container — it goes to `~/.xping/credentials.json`, readable only by you.
 
 ## Documentation
 
