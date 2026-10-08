@@ -119,7 +119,7 @@ Useful when a key is present in your environment for other reasons but you want 
 ### ApiEndpoint
 
 **Type:** `string`  
-**Default:** `https://api.xping.io`  
+**Default:** `https://upload.xping.io/v1`  
 **Required:** No (uses default if not specified)  
 **Environment Variable:** `XPING_APIENDPOINT`
 
@@ -134,19 +134,19 @@ The base URL for the Xping API. Change this only if you're using a self-hosted o
 ```json
 {
   "Xping": {
-    "ApiEndpoint": "https://api.xping.io"
+    "ApiEndpoint": "https://upload.xping.io/v1"
   }
 }
 ```
 
 ```bash
-export XPING_APIENDPOINT="https://api.xping.io"
+export XPING_APIENDPOINT="https://upload.xping.io/v1"
 ```
 
 ```csharp
 var config = new XpingConfiguration
 {
-    ApiEndpoint = "https://api.xping.io"
+    ApiEndpoint = "https://upload.xping.io/v1"
 };
 XpingContext.Initialize(config);
 ```
@@ -882,7 +882,7 @@ The CLI reads the same environment variable, so an exported `XPING_LOCAL_STORE` 
   "Xping": {
     "ApiKey": "xpg_live_productionkey",
     "ProjectId": "my-application",
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io/v1",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
     "Environment": "Production",

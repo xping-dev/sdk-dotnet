@@ -258,11 +258,14 @@ Check if the Xping API endpoint is accessible from your environment:
 
 ```bash
 # Test connectivity to the API endpoint
-curl -I https://upload.xping.io/v1/health
+curl -I https://upload.xping.io/v1
 
 # Or using PowerShell
-Invoke-WebRequest -Uri https://upload.xping.io/v1/health -Method Head
+Test-NetConnection upload.xping.io -Port 443
 ```
+
+Any HTTP response means the endpoint is reachable. It accepts only uploads, so `curl -I` gets
+`405 Method Not Allowed`.
 
 If the endpoint is unreachable, check:
 - Network connectivity and firewall rules

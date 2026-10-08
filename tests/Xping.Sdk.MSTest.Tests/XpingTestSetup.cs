@@ -23,7 +23,7 @@ public static class XpingTestSetup
     [AssemblyInitialize]
     public static void AssemblyInit(TestContext context)
     {
-        // Initialize Xping context - will load configuration from appsettings.json and environment variables
+        // Initialize Xping context - will load configuration from environment variables
         XpingContext.Initialize();
     }
 

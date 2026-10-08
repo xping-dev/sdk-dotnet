@@ -27,7 +27,7 @@ public class XpingTestSetup
     [OneTimeSetUp]
     public void BeforeAllTests()
     {
-        // Initialize Xping context - will load configuration from appsettings.json and environment variables
+        // Initialize Xping context - will load configuration from environment variables
         XpingContext.Initialize();
     }
 
