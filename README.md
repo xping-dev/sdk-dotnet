@@ -277,10 +277,16 @@ and in CI; never commit it. It can write test runs and nothing else, so the key 
 your CI secrets is not a way into your data.
 
 Reading back the team's scored history is a **person's** action, authenticated as you rather
-than as a shared machine credential ([`xping login`](#roadmap) — landing next). Machines
-write, people read: that's how history pools across a team without anyone sharing a
+than as a shared machine credential:
+
+```bash
+xping login          # once per machine; the sign-in lives in your OS keychain
+xping report         # the same report, now with Cloud confidence on each row
+```
+
+Machines write, people read: that's how history pools across a team without anyone sharing a
 credential, and why a contractor's laptop can contribute runs without getting read access to
-your suite.
+your suite. See [`xping login`](https://docs.xping.io/cli/command-reference.html#xping-login).
 
 ---
 
@@ -301,9 +307,10 @@ Two things are worth reading off that diagram:
   [app.xping.io](https://app.xping.io) and see the same evidence with nothing installed. This
   repo is the developer half — the portal is documented at [docs.xping.io](https://docs.xping.io).
 
-> **Reading cloud history from the CLI** (`xping login`, `xping report --source local|cloud`)
-> is the next thing landing here. Today `xping report` reads the local store; cloud history is
-> read in the portal.
+> **Reading cloud history from the CLI.** After `xping login`, `xping report` asks Xping Cloud
+> about every test it names and labels what came back — `confidence 0.62 · moderately reliable`
+> on a finding, `· cloud` in the header. If Cloud is unreachable you get the local report and one
+> line saying why.
 
 ---
 
@@ -430,7 +437,6 @@ Tracked in [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones):
 
 Currently on the list:
 
-- `xping login` and `xping report --source local|cloud` — one command, both histories
 - Agent integration: a Claude skill and an MCP server over `xping report`
 - Quarantine — mark known-flaky tests so CI stops failing on them
 - `xping watch` — stream new runs as they land, beside `dotnet watch test`

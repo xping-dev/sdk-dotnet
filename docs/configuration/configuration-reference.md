@@ -221,7 +221,7 @@ That means a solution-wide `dotnet test` produces **one project per test project
 | `Api.Tests` | `api-tests` |
 | `Web.Tests` | `web-tests` |
 
-This mirrors how the [`xping` CLI](../guides/local-store.md) already scopes local reports — `xping report --assembly Billing.Tests` — so local and cloud views agree on what a project is.
+This mirrors how the [`xping` CLI](local-store.md) already scopes local reports — `xping report --assembly Billing.Tests` — so local and cloud views agree on what a project is.
 
 **Set `ProjectId` only to override that.** It is a hard pin: every execution in the session lands in that one project regardless of which assembly it came from. The case for it is a monorepo where several test assemblies should report as a single project:
 

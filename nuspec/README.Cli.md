@@ -6,7 +6,7 @@
 
 # Xping CLI
 
-**Find out which of your tests you can trust — with no account and no network access.**
+**Find out which of your tests you can trust — from your own runs, with no account required.**
 
 `xping` reads the local run store written by the [Xping SDK](https://www.nuget.org/packages/Xping.Sdk.Core/) and reports which of your tests are unreliable, based on your own recent test runs.
 
@@ -88,10 +88,13 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 | `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, and the other findings about the same test |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |
+| `xping login` | Sign in to Xping Cloud, so the report adds Cloud confidence to its rows (`--device` for a browser on another machine) |
+| `xping logout` | Revoke the session and remove the stored sign-in |
+| `xping auth status` | Show which Xping Cloud credential is in use, without a network call |
 
 ## Privacy
 
-Everything stays on your machine. The CLI makes no network calls and requires no account. Test history lives in a `.xping` folder at your repository root, which hides itself from git automatically.
+Test history lives in a `.xping` folder at your repository root, which hides itself from git automatically. Until you run `xping login` or set an API key, the CLI makes no network calls. After that, `xping report` only reads from Xping Cloud; it never uploads anything. The sign-in is kept in your OS keychain.
 
 ## Documentation
 
