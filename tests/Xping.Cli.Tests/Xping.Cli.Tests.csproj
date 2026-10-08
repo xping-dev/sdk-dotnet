@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Xping.Cli\Xping.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
   </ItemGroup>
 
 </Project>
