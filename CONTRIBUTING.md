@@ -39,12 +39,24 @@ your shell, they are uploaded too. To keep a run local anyway, set `XPING_MODE=L
 Xping off, set `XPING_ENABLED=false`.
 
 Local uploads land in the same projects as CI, so tag them to keep your debugging runs out of the
-CI numbers:
+CI numbers. Set both variables in your shell profile so they survive a restart. Use a key of your
+own, not the CI one, and keep it out of plain-text dotfiles. On macOS, store it in the Keychain
+once (`-w` with no value prompts for the key, so it stays out of your shell history):
 
 ```sh
-export XPING_APIKEY=<your local key>
+security add-generic-password -a "$USER" -s xping-sdk-dotnet-local -w
+```
+
+and load it from `~/.zshrc`:
+
+```sh
+export XPING_APIKEY="$(security find-generic-password -a "$USER" -s xping-sdk-dotnet-local -w 2>/dev/null)"
 export XPING_ENVIRONMENT=Local
 ```
+
+IDEs started from the Dock, Finder or Start menu (Rider, Visual Studio, VS Code) don't read your
+shell profile, so tests run from their test explorer won't upload. Run `dotnet test` from the
+terminal, or launch the IDE from it (`open -a Rider` on macOS) so it inherits the variables.
 
 **Tests that create their own context.** Pass an explicit configuration with
 `Mode = XpingMode.LocalOnly` and a scratch `LocalStorePath`, or a loopback `ApiEndpoint` when the
