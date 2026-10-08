@@ -9,7 +9,7 @@ This directory contains sample configuration files for the Xping SDK.
   "Xping": {
     "ApiKey": "your-api-key-here",
     "ProjectId": "your-project-id-here",
-    "ApiEndpoint": "https://api.xping.io",
+    "ApiEndpoint": "https://upload.xping.io/v1",
     "BatchSize": 100,
     "FlushInterval": "00:00:30",
     "Environment": "Staging",
@@ -82,7 +82,7 @@ creating one project per test project. Set it to pin every assembly in the run t
 ### API Configuration
 
 - **ApiEndpoint** (string): The Xping API endpoint URL
-  - Default: `"https://api.xping.io"`
+  - Default: `"https://upload.xping.io/v1"`
   
 - **ApiKey** (string): Your API key for authentication
   - **Required**
