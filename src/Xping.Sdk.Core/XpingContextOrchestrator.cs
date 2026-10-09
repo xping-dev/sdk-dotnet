@@ -85,9 +85,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly SortedSet<string> _sessionAssemblies = new(StringComparer.Ordinal);
     private int _unattributedExecutionCount;
 
-    // Whether a project was pinned via configuration. Captured in the constructor because the
-    // finalize-time diagnostic below needs it and IOptions is not read again after startup.
-    private bool _hasProjectPin;
+    // The project pinned via configuration, if any. Captured in the constructor because the
+    // finalize-time diagnostic and the local session stamp need it and IOptions is not read again
+    // after startup.
+    private string? _projectPin;
 
     // Set as soon as the options resolve, so every later failure - in the constructor or at finalize -
     // is judged by the same answer. False only while no options have been read.
@@ -184,7 +185,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
             _mode = configuration.ResolveMode();
             _isHealthy = _mode != XpingMode.Disabled;
-            _hasProjectPin = configuration.ProjectPin != null;
+            _projectPin = configuration.ProjectPin;
 
             // Optional so that hosts composed without the local-store feature still work.
             _localSessionStore = _mode == XpingMode.Disabled
@@ -500,7 +501,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (_mode == XpingMode.Disabled || _unattributedExecutionCount == 0)
             return;
 
-        bool cloudDerivesProject = _mode == XpingMode.Cloud && !_hasProjectPin;
+        bool cloudDerivesProject = _mode == XpingMode.Cloud && _projectPin == null;
 
         if (cloudDerivesProject)
         {
@@ -936,11 +937,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     /// <summary>
     /// Returns a copy of <paramref name="environment"/> carrying the mode this session was recorded
-    /// under.
+    /// under and, when one is configured, the project it was pinned to.
     /// </summary>
     /// <remarks>
     /// The CLI needs to know whether a project is already cloud-connected so it does not pitch the
-    /// cloud to people who pay for it, and the stored session is the only record of it. Applied here
+    /// cloud to people who pay for it, and which Cloud project a pinned run belongs to, since it must
+    /// not derive the key itself; the stored session is the only record of either. Applied here
     /// rather than in the environment detector so it lands on the local copy alone — the uploaded
     /// session keeps the environment exactly as detected.
     /// </remarks>
@@ -955,6 +957,9 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         properties[LocalSessionProperties.Mode] = _mode.ToString();
+
+        if (_projectPin != null)
+            properties[LocalSessionProperties.ProjectId] = _projectPin;
 
         return new EnvironmentInfo
         {

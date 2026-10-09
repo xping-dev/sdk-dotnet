@@ -26,6 +26,17 @@ public static class LocalSessionProperties
     public const string Mode = "Xping.Mode";
 
     /// <summary>
+    /// The property key holding the project id the session was pinned to with
+    /// <see cref="XpingConfiguration.ProjectId"/>. Absent when no project was pinned.
+    /// </summary>
+    /// <remarks>
+    /// The Cloud derives a project key from the assembly name unless a pin is set, and the CLI must
+    /// not reproduce that derivation. A pinned key is the one value the CLI cannot learn any other
+    /// way, so it is recorded with the session the CLI later reads.
+    /// </remarks>
+    public const string ProjectId = "Xping.ProjectId";
+
+    /// <summary>
     /// Returns whether the session was recorded by a cloud-connected project.
     /// </summary>
     /// <param name="session">The session to inspect, or <see langword="null"/>.</param>

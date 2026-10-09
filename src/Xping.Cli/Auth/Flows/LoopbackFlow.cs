@@ -1,0 +1,173 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using System.Text;
+using Microsoft.Extensions.Logging;
+using Xping.Cli.Auth.Browser;
+using Xping.Cli.Auth.Discovery;
+using Xping.Cli.Auth.Loopback;
+using Xping.Cli.Auth.Store;
+
+namespace Xping.Cli.Auth.Flows;
+
+/// <summary>
+/// Shows the authorization link to the user before the browser is opened.
+/// </summary>
+/// <param name="authorizationUrl">The link; printed exactly once, always (contract §3.1 step 4).</param>
+/// <param name="mode">Whether a browser will be opened, which changes the wording.</param>
+/// <param name="timeout">How long the flow waits for the browser.</param>
+internal delegate void ShowAuthorizationLink(Uri authorizationUrl, LinkMode mode, TimeSpan timeout);
+
+/// <summary>
+/// One sign-in through the browser with PKCE and a loopback redirect (cli-auth-cli-spec §4).
+/// </summary>
+/// <remarks>
+/// Discovery is fetched fresh, never from the cache, so a raised minimum CLI version stops an
+/// outdated CLI before it opens a browser (§2.3). The verifier and <c>state</c> live in memory for
+/// the length of this call only.
+/// </remarks>
+internal sealed class LoopbackFlow(
+    DiscoveryClient discovery,
+    OAuthClient oauth,
+    IBrowserLauncher browser,
+    IHeadlessDetector headless,
+    TimeProvider timeProvider,
+    ILogger<LoopbackFlow> logger)
+{
+    /// <summary>
+    /// How long the flow waits for the browser, from the moment the link is shown (contract §3.1).
+    /// </summary>
+    public static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Runs the flow and returns the record to store.
+    /// </summary>
+    /// <param name="cloudUrl">The normalized Cloud URL.</param>
+    /// <param name="workspaceId">A workspace to preselect on the consent page, or <see langword="null"/>.</param>
+    /// <param name="noBrowser">Whether <c>--no-browser</c> was given.</param>
+    /// <param name="showLink">Prints the link and the waiting line.</param>
+    /// <param name="cancellationToken">Ctrl+C.</param>
+    /// <exception cref="AuthFailureException">The sign-in failed; the exit code and message are on it.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired.</exception>
+    public async Task<CredentialRecord> RunAsync(
+        string cloudUrl,
+        string? workspaceId,
+        bool noBrowser,
+        ShowAuthorizationLink showLink,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(showLink);
+
+        DiscoveryDocument document = await discovery.GetAsync(cloudUrl, useCache: false, cancellationToken).ConfigureAwait(false);
+        BrowserChoice choice = BrowserChoice.Make(headless, noBrowser, logger);
+
+        using Pkce pkce = Pkce.Create();
+
+        string redirectUri;
+        CallbackResult callback;
+
+        LoopbackListener listener = LoopbackListener.Start(logger);
+        await using (listener.ConfigureAwait(false))
+        {
+            redirectUri = listener.RedirectUri;
+            Uri authorizationUrl = AuthorizationUrl(document.AuthorizationEndpoint, pkce, redirectUri, workspaceId);
+
+            // Started before the link is shown: the five minutes are the user's, counted from the
+            // moment they can act.
+            using var timeout = new CancellationTokenSource(Timeout, timeProvider);
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+
+            showLink(authorizationUrl, choice.Mode, Timeout);
+            choice.Open(browser, authorizationUrl);
+
+            try
+            {
+                callback = await listener.WaitForCallbackAsync(pkce, wait.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new AuthFailureException(
+                    AuthExitCodes.LoginTimedOut,
+                    AuthErrorCodes.Timeout,
+                    "No sign-in arrived within 5 minutes. Run `xping login` again, or `xping login --device` " +
+                    "if your browser is on another machine.");
+            }
+        }
+
+        string code = callback switch
+        {
+            CallbackResult.Code success => success.Value,
+            CallbackResult.Error error => throw CallbackFailed(error),
+            _ => throw new InvalidOperationException($"Unknown callback result {callback.GetType().Name}.")
+        };
+
+        TokenResponse tokens;
+        try
+        {
+            tokens = await oauth.ExchangeCodeAsync(document, code, redirectUri, pkce.CodeVerifier, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OAuthException ex)
+        {
+            throw ExchangeFailed(cloudUrl, ex.Error);
+        }
+
+        return SignedInRecord.Create(cloudUrl, tokens, document, timeProvider.GetUtcNow());
+    }
+
+    /// <summary>
+    /// Builds the authorization request of contract §4.2 on the server's endpoint.
+    /// </summary>
+    internal static Uri AuthorizationUrl(Uri endpoint, Pkce pkce, string redirectUri, string? workspaceId)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(pkce);
+
+        List<KeyValuePair<string, string>> parameters =
+        [
+            new("response_type", "code"),
+            new("client_id", OAuthProtocol.ClientId),
+            new("redirect_uri", redirectUri),
+            new("scope", OAuthProtocol.Scope),
+            new("state", pkce.State),
+            new("code_challenge", pkce.CodeChallenge),
+            new("code_challenge_method", Pkce.ChallengeMethod)
+        ];
+
+        if (workspaceId is not null)
+            parameters.Add(new("xping_workspace_id", workspaceId));
+
+        var query = new StringBuilder(endpoint.Query.TrimStart('?'));
+        foreach ((string name, string value) in parameters)
+        {
+            if (query.Length > 0)
+                query.Append('&');
+
+            query.Append(Uri.EscapeDataString(name)).Append('=').Append(Uri.EscapeDataString(value));
+        }
+
+        return new UriBuilder(endpoint) { Query = query.ToString() }.Uri;
+    }
+
+    private static AuthFailureException CallbackFailed(CallbackResult.Error error)
+    {
+        if (string.Equals(error.Value, OAuthProtocol.AccessDenied, StringComparison.Ordinal))
+            return FlowFailures.Declined();
+
+        // The description arrived through the browser, so anything could have written it;
+        // Verbatim drops control characters before it reaches the terminal.
+        return FlowFailures.Verbatim(error.Value, error.Description);
+    }
+
+    private static AuthFailureException ExchangeFailed(string cloudUrl, OAuthError error) =>
+        error.Error == OAuthProtocol.InvalidGrant
+            ? new AuthFailureException(
+                AuthExitCodes.LoginFailed,
+                AuthErrorCodes.OAuthError,
+                "The sign-in code was rejected (expired or already used). Run `xping login` again.")
+            {
+                OAuthErrorCode = error.Error
+            }
+            : FlowFailures.ServerRefused(cloudUrl, error);
+}

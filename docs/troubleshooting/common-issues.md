@@ -367,6 +367,57 @@ Action: Reduce test execution frequency or contact support
 
 ---
 
+## CLI Sign-in (`xping login`)
+
+Start with `xping auth status`. It makes no network call and says which credential the CLI would
+use. Add `--verbose` to any command for the details. See the
+[CLI reference](../cli/command-reference.md#xping-login).
+
+### "Cloud data unavailable: your sign-in is no longer valid"
+
+The session was revoked (on Settings → Security → CLI sessions, or when a workspace key was
+withdrawn) or it expired. The CLI has already removed it. Run `xping login` again.
+
+### `xping login` says it needs an interactive terminal
+
+`login` runs only in your own shell. It refuses when stdin or stderr is not a terminal — every
+pipeline agent and coding agent — and when `CI` is `true`, `1` or `yes`. CI uses an API key that can read Cloud data
+(`XPING_APIKEY`); an agent should ask you to run `xping login` yourself.
+
+### The browser never returns to the CLI
+
+The sign-in page sends the browser back to `127.0.0.1` on the machine running the CLI. Over SSH,
+in a container, or in WSL with localhost forwarding turned off, that address is not the CLI's. Press
+Ctrl+C and run `xping login --device`, which works with a browser on any device.
+
+### "Refusing to read ~/.xping/credentials.json because other users can read it"
+
+The sign-in file is only used when no OS credential store is available. Restore its permissions:
+
+```bash
+chmod 700 ~/.xping
+chmod 600 ~/.xping/credentials.json
+```
+
+### "This API key cannot read Cloud data"
+
+The key is upload-only, or the workspace's plan does not include API access. Sign in with
+`xping login` on your machine, or give CI a key with read scope. The report itself is unaffected.
+
+### "Could not write to Windows Credential Manager (error 8…)"
+
+Windows refused to store any credential for your account; `cmdkey /generic:test /user:x /pass:y`
+fails with the same message. `xping login` keeps the sign-in in `~/.xping/credentials.json`
+instead, so the CLI works. The cause is usually a damaged Windows user profile; other apps that save
+passwords on this account are affected too.
+
+### macOS asks for keychain access after every upgrade
+
+The `xping` tool is not signed by Apple, so macOS asks once per installed version. Choose
+**Always Allow**.
+
+---
+
 ## Configuration Issues
 
 ### Configuration Not Loading

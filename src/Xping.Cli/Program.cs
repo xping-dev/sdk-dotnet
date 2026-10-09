@@ -10,7 +10,10 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Xping.Cli.Auth;
 using Xping.Cli.Commands;
+using Xping.Cli.Commands.Auth;
+using Xping.Cli.Configuration;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
@@ -25,7 +28,20 @@ internal static class Program
 {
     internal static int Main(string[] args)
     {
-        return Run(args, Console.Out, Console.Error, Console.In);
+        using var cancellation = new CancellationTokenSource();
+        var cancelKeys = new CancelKeyHandler(cancellation);
+
+        void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e) => e.Cancel = cancelKeys.OnCancelKeyPress();
+
+        Console.CancelKeyPress += OnCancelKeyPress;
+        try
+        {
+            return Run(args, Console.Out, Console.Error, Console.In, cancelKeys: cancelKeys);
+        }
+        finally
+        {
+            Console.CancelKeyPress -= OnCancelKeyPress;
+        }
     }
 
     /// <summary>
@@ -37,19 +53,37 @@ internal static class Program
     /// <param name="error">Where warnings and failures are written.</param>
     /// <param name="input">Where prompts are read from.</param>
     /// <param name="isTerminal">
-    /// Whether <paramref name="output"/> is a terminal. Defaults to what the process can see, and is
-    /// passed explicitly by tests that exercise the parts of the output only a terminal gets.
+    /// Whether stdin, stdout and stderr are terminals. Defaults to what the process can see, stream by
+    /// stream, and is passed explicitly by tests that exercise the parts only a terminal gets.
+    /// </param>
+    /// <param name="configureServices">
+    /// Replaces registrations after the real ones are made. Tests use it to substitute the parts
+    /// that reach outside the process: the browser, the clock, the credential store.
+    /// </param>
+    /// <param name="cancelKeys">
+    /// Ctrl+C handling. Commands that stop on its token mark themselves cooperative while they run;
+    /// <see langword="null"/> means nothing cancels.
     /// </param>
     internal static int Run(
         string[] args,
         TextWriter output,
         TextWriter error,
         TextReader? input = null,
-        bool? isTerminal = null)
+        bool? isTerminal = null,
+        Action<IServiceCollection>? configureServices = null,
+        CancelKeyHandler? cancelKeys = null)
     {
+        CancellationToken cancellationToken = cancelKeys?.Token ?? CancellationToken.None;
+
         using IHost host = BuildHost(
-            output, error, input ?? TextReader.Null, isTerminal ?? !Console.IsOutputRedirected);
-        RootCommand root = BuildRootCommand(host.Services, output);
+            output,
+            error,
+            input ?? TextReader.Null,
+            isTerminal is { } all ? Terminals.All(all) : Terminals.Detect(),
+            configureServices);
+
+        var globals = new GlobalOptionSet();
+        RootCommand root = BuildRootCommand(host.Services, output, globals, cancelKeys);
 
         bool noArgs = args.Length == 0;
 
@@ -63,18 +97,114 @@ internal static class Program
 
         if (parseResult.Errors.Count > 0)
         {
+            // Scrubbed although no message should hold a secret: the parser quotes what it could not
+            // place, and an argument can be one.
             foreach (ParseError parseError in parseResult.Errors)
-                error.WriteLine(parseError.Message);
+                error.WriteLine(Redaction.Scrub(parseError.Message));
 
-            string verb = effectiveArgs.Length > 0 ? effectiveArgs[0] : string.Empty;
-            error.WriteLine(verb is "report" or "where" or "clear"
-                ? $"Run `xping {verb} --help` for usage."
+            // From the parse rather than the first argument: a global option can come first.
+            error.WriteLine(CommandPath(parseResult.CommandResult) is { } path
+                ? $"Run `xping {path} --help` for usage."
                 : "Run `xping --help` for usage.");
             return 2;
         }
 
-        int exitCode = parseResult.Invoke(new InvocationConfiguration { Output = output, Error = error });
+        GlobalOptions options = host.Services.GetRequiredService<GlobalOptions>();
+        options.CloudUrl = parseResult.GetValue(globals.CloudUrl);
+        options.ApiKey = parseResult.GetValue(globals.ApiKey);
+        options.Verbose = parseResult.GetValue(globals.Verbose);
+
+        Redaction.AddSecret(options.ApiKey);
+
+        var configuration = new InvocationConfiguration
+        {
+            Output = output,
+            Error = error,
+
+            // Main owns Ctrl+C; the parser's own handler would race it for the same signal.
+            ProcessTerminationTimeout = null,
+
+            // Escaping exceptions are reported below, scrubbed. The default handler prints the raw
+            // message and stack trace, which is where a token in an exception message would leak.
+            EnableDefaultExceptionHandler = false
+        };
+
+        int exitCode;
+        try
+        {
+            // Blocking is safe here: a console app has no synchronization context to deadlock on,
+            // and keeping Run synchronous keeps every existing caller and test as it is.
+            exitCode = parseResult.InvokeAsync(configuration, cancellationToken).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            error.WriteLine("Cancelled.");
+            return AuthExitCodes.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            error.WriteLine($"xping: {Redaction.Scrub(ex.Message)}");
+            if (options.Verbose)
+                error.WriteLine(Redaction.Scrub(ex.ToString()));
+
+            return 1;
+        }
+
         return noArgs ? 1 : exitCode;
+    }
+
+    /// <summary>
+    /// The words that name a subcommand, such as <c>auth status</c>, or <see langword="null"/> at
+    /// the root.
+    /// </summary>
+    private static string? CommandPath(CommandResult result)
+    {
+        var names = new List<string>();
+
+        for (SymbolResult? current = result; current is CommandResult { Command: not RootCommand } command; current = command.Parent)
+            names.Insert(0, command.Command.Name);
+
+        return names.Count == 0 ? null : string.Join(' ', names);
+    }
+
+    /// <summary>
+    /// The options every command accepts.
+    /// </summary>
+    /// <remarks>
+    /// Recursive on the root, so <c>xping report --cloud-url …</c> and <c>xping --cloud-url … report</c>
+    /// both work, as they do for <c>--help</c>.
+    /// </remarks>
+    private sealed class GlobalOptionSet
+    {
+        public Option<string?> CloudUrl { get; } = new("--cloud-url")
+        {
+            Description = $"Xping Cloud URL (default: {Configuration.CloudUrl.Default})",
+            Recursive = true,
+            CustomParser = result =>
+            {
+                string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+                if (Configuration.CloudUrl.TryNormalize(raw, "--cloud-url", out string? normalized, out string? error))
+                    return normalized;
+
+                result.AddError(error);
+                return null;
+            }
+        };
+
+        public Option<string?> ApiKey { get; } = new("--api-key")
+        {
+            Description =
+                "API key for reading Xping Cloud data; prefer XPING_APIKEY so the key does not land " +
+                "in shell history",
+            Recursive = true
+        };
+
+        public Option<bool> Verbose { get; } = new("--verbose")
+        {
+            Description = "Write diagnostics to stderr",
+            Recursive = true
+        };
     }
 
     /// <summary>
@@ -87,7 +217,11 @@ internal static class Program
     /// root — built, resolved from, and disposed, never started/run.
     /// </remarks>
     private static IHost BuildHost(
-        TextWriter output, TextWriter error, TextReader input, bool isTerminal)
+        TextWriter output,
+        TextWriter error,
+        TextReader input,
+        Terminals terminals,
+        Action<IServiceCollection>? configureServices)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
@@ -100,16 +234,19 @@ internal static class Program
 
         // The default pipeline adds a Console logging provider that writes straight to
         // System.Console, bypassing the output/error test seam and risking interleaving with
-        // --json output on real stdout. Start silent; a future --verbose flag is the place to opt a
-        // provider back in.
+        // --json output on real stdout. The one provider added back is silent unless --verbose was
+        // given, and writes through the same error writer as everything else.
         builder.Logging.ClearProviders();
+        builder.Logging.Services.AddSingleton<ILoggerProvider, VerboseLoggerProvider>();
 
-        builder.Services.AddXpingCliServices(output, error, input, isTerminal);
+        builder.Services.AddXpingCliServices(output, error, input, terminals);
+        configureServices?.Invoke(builder.Services);
 
         return builder.Build();
     }
 
-    private static RootCommand BuildRootCommand(IServiceProvider services, TextWriter output)
+    private static RootCommand BuildRootCommand(
+        IServiceProvider services, TextWriter output, GlobalOptionSet globals, CancelKeyHandler? cancelKeys)
     {
         // The name in the usage line comes from the entry assembly, which the csproj pins to
         // "xping" via AssemblyName. Under `dotnet test` here it is the test host's name instead,
@@ -121,6 +258,13 @@ internal static class Program
         root.Subcommands.Add(BuildReportCommand(services));
         root.Subcommands.Add(BuildWhereCommand(services));
         root.Subcommands.Add(BuildClearCommand(services));
+        root.Subcommands.Add(BuildLoginCommand(services, cancelKeys));
+        root.Subcommands.Add(BuildLogoutCommand(services, cancelKeys));
+        root.Subcommands.Add(BuildAuthCommand(services, cancelKeys));
+
+        root.Options.Add(globals.CloudUrl);
+        root.Options.Add(globals.ApiKey);
+        root.Options.Add(globals.Verbose);
 
         UseCleanVersion(root, output);
 
@@ -224,6 +368,12 @@ internal static class Program
             Description = "Resolve the store from this directory"
         };
 
+        Option<string?> projectOption = new("--project")
+        {
+            Description = "Read Cloud data from this Xping Cloud project key",
+            CustomParser = ParseProjectKey
+        };
+
         Option<bool> asciiOption = new("--ascii")
         {
             Description = "Force ASCII output"
@@ -239,8 +389,8 @@ internal static class Program
         Command command = new("report", "Report test reliability findings from recent local runs")
         {
             runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
-            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, asciiOption,
-            noColorOption
+            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, projectOption,
+            asciiOption, noColorOption
         };
 
         // Presence is tested with GetResult rather than GetValue: an option whose own parser already
@@ -297,7 +447,9 @@ internal static class Program
             }
         });
 
-        command.SetAction(parseResult =>
+        // Not run cooperatively: Ctrl+C ends a report as it always has, and the Cloud enrichment
+        // has a budget of its own.
+        command.SetAction((parseResult, cancellationToken) =>
         {
             bool showAll = parseResult.GetValue(allOption);
 
@@ -312,6 +464,7 @@ internal static class Program
                 Assembly = parseResult.GetValue(assemblyOption),
                 Id = parseResult.GetValue(idOption),
                 Directory = parseResult.GetValue(directoryOption),
+                Project = parseResult.GetValue(projectOption),
                 Format = parseResult.GetValue(jsonOption) ? ReportFormat.Json
                     : parseResult.GetValue(summaryOption) ? ReportFormat.Summary
                     : parseResult.GetValue(formatOption),
@@ -320,7 +473,7 @@ internal static class Program
                 NoColor = parseResult.GetValue(noColorOption)
             };
 
-            return services.GetRequiredService<ReportCommand>().Run(options);
+            return services.GetRequiredService<ReportCommand>().RunAsync(options, cancellationToken);
         });
 
         return command;
@@ -398,6 +551,45 @@ internal static class Program
         return parsed;
     }
 
+    /// <summary>
+    /// Parses a Cloud project key: anything a URL path segment can carry once escaped, but not a
+    /// path, query or fragment of its own.
+    /// </summary>
+    private static string? ParseProjectKey(ArgumentResult result)
+    {
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value.Trim() : string.Empty;
+
+        if (raw.Length == 0 || raw.Length > 200 || raw.Any(c => char.IsControl(c) || c is '/' or '\\' or '?' or '#'))
+        {
+            result.AddError($"--project expects an Xping Cloud project key, got '{raw}'.");
+            return null;
+        }
+
+        return raw;
+    }
+
+    /// <summary>
+    /// Parses a workspace id: a ULID, 26 Crockford base32 characters in either case.
+    /// </summary>
+    /// <remarks>
+    /// Checked here so a typo fails before the browser opens, not as a consent page that silently
+    /// ignores the preselection (cli-auth-cli-spec §3.2).
+    /// </remarks>
+    private static string? ParseWorkspaceId(ArgumentResult result)
+    {
+        const string Crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+        // The first character carries only the top 3 of 128 bits, so it is at most 7.
+        if (raw.Length != 26 || raw[0] > '7' || !raw.All(c => Crockford.Contains(char.ToUpperInvariant(c), StringComparison.Ordinal)))
+        {
+            result.AddError($"--workspace expects a workspace id (26 characters, as `xping auth status` shows it), got '{raw}'.");
+            return null;
+        }
+
+        return raw;
+    }
+
     private static Command BuildWhereCommand(IServiceProvider services)
     {
         Option<string?> directoryOption = new("--directory")
@@ -445,6 +637,92 @@ internal static class Program
             parseResult.GetValue(forceOption)));
 
         return command;
+    }
+
+    private static Command BuildLoginCommand(IServiceProvider services, CancelKeyHandler? cancelKeys)
+    {
+        Option<bool> jsonOption = new("--json")
+        {
+            Description = "Write the result to stdout as JSON"
+        };
+
+        Option<bool> deviceOption = new("--device")
+        {
+            Description = "Sign in with a code on any device, for a browser on another machine"
+        };
+
+        Option<bool> noBrowserOption = new("--no-browser")
+        {
+            Description = "Print the sign-in link without trying to open a browser"
+        };
+
+        Option<string?> workspaceOption = new("--workspace")
+        {
+            Description = "Preselect this workspace id on the consent page",
+            CustomParser = ParseWorkspaceId
+        };
+
+        Command command = new("login", "Sign in to Xping Cloud from your browser")
+        {
+            deviceOption, noBrowserOption, workspaceOption, jsonOption
+        };
+
+        command.SetAction((parseResult, cancellationToken) => RunCooperatively(
+            cancelKeys,
+            () => services.GetRequiredService<LoginCommand>().RunAsync(
+                new LoginOptions(
+                    parseResult.GetValue(jsonOption),
+                    parseResult.GetValue(deviceOption),
+                    parseResult.GetValue(noBrowserOption),
+                    parseResult.GetValue(workspaceOption)),
+                cancellationToken)));
+
+        return command;
+    }
+
+    private static Command BuildLogoutCommand(IServiceProvider services, CancelKeyHandler? cancelKeys)
+    {
+        Option<bool> jsonOption = new("--json")
+        {
+            Description = "Write the result to stdout as JSON"
+        };
+
+        Command command = new("logout", "Sign out of Xping Cloud and remove the stored sign-in") { jsonOption };
+
+        command.SetAction((parseResult, cancellationToken) => RunCooperatively(
+            cancelKeys,
+            () => services.GetRequiredService<LogoutCommand>().RunAsync(parseResult.GetValue(jsonOption), cancellationToken)));
+
+        return command;
+    }
+
+    private static Command BuildAuthCommand(IServiceProvider services, CancelKeyHandler? cancelKeys)
+    {
+        Option<bool> jsonOption = new("--json")
+        {
+            Description = "Write the result to stdout as JSON"
+        };
+
+        Command status = new("status", "Show which Xping Cloud credential is in use, without a network call")
+        {
+            jsonOption
+        };
+
+        status.SetAction((parseResult, cancellationToken) => RunCooperatively(
+            cancelKeys,
+            () => services.GetRequiredService<AuthStatusCommand>().RunAsync(parseResult.GetValue(jsonOption), cancellationToken)));
+
+        return new Command("auth", "Inspect the Xping Cloud sign-in") { status };
+    }
+
+    /// <summary>
+    /// Runs a command that stops on its cancellation token, so Ctrl+C cancels it instead of ending
+    /// the process.
+    /// </summary>
+    private static async Task<int> RunCooperatively(CancelKeyHandler? cancelKeys, Func<Task<int>> run)
+    {
+        using IDisposable? cooperative = cancelKeys?.EnterCooperative();
+        return await run().ConfigureAwait(false);
     }
 
     /// <summary>

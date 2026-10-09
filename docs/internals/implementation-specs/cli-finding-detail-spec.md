@@ -87,6 +87,17 @@ Amendment 2A put caller-typed `--since` and `--directory` values into printed co
 Single quotes read literally in POSIX shells and PowerShell alike, which a trailing `\` inside
 double quotes does not. `cmd.exe` is not served; the docs' commands are POSIX.
 
+### Amendment 5 — Cloud data
+
+`cli-auth-cli-spec.md` §11.3 fills §8's metrics slot. Quoted:
+
+> | Detail metrics block | finding-detail §8 | labelled pairs appended after the local metrics: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
+
+The pairs are **not** resolved in the builder as §8 says: they come from `FindingDto.Cloud` and
+`TextReportRenderer` appends them to the pairs it prints, so `findings[].metrics` in JSON stays
+local. The block's column arithmetic absorbs the longer labels as §8 expected. The
+`selection.sameSubject` cross-branch slot stays unused.
+
 ---
 
 ## 1. Ground truth

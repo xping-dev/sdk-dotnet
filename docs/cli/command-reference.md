@@ -5,7 +5,9 @@ title: Xping CLI Reference
 
 # Xping CLI Reference
 
-`Xping.Cli` reads the local run store written by the Xping SDK and reports on it. It needs no account, no API key, and no network access.
+`Xping.Cli` reads the local run store written by the Xping SDK and reports on it. The report needs no account, no API key, and no network access.
+
+Signing in is optional. With [`xping login`](#xping-login) or an API key, `xping report` adds what Xping Cloud knows about each test to the same rows — see [Cloud data](#cloud-data). Without a credential, the CLI makes no network calls.
 
 The SDK records runs; the CLI interprets them. Keeping analysis out of the test host means your test runs pay no analysis cost and the report never has to compete with the test runner for the terminal.
 
@@ -63,6 +65,7 @@ xping report [options]
 | `--assembly <name>` | newest | Scope the report to one test assembly |
 | `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
+| `--project <key>` | — | Read [Cloud data](#cloud-data) from this Xping Cloud project. Overrides `XPING_PROJECTID` |
 | `--format <f>` | `text` | `text`, `json` or `summary` |
 | `--json` | off | Alias for `--format json` |
 | `--summary` | off | Alias for `--format summary` |
@@ -225,7 +228,9 @@ xping report --all --format json \
         | {kind, population, evidence: (.evidence | {
             baselineSessions, baselineSessionCount, currentSessionCount,
             partialSessionsSetAside })}'
-``` Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
+```
+
+Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
 
 Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them too, because an environmental run is still a run the test either was or was not in. What `stopped running` does set aside is the runs that covered part of the suite, which is why it is the one kind marked `-partial` rather than `all runs`.
 
@@ -494,6 +499,43 @@ Analysing them together would pool unrelated suites: one assembly's history woul
 
 Runs recorded before the SDK could name the assembly belong to no suite. They stay in the store and `xping where` still counts them, but no `--assembly` value reaches them.
 
+### Cloud data
+
+When the CLI has a credential — a sign-in from `xping login`, `--api-key`, or `XPING_APIKEY` — the
+report also asks Xping Cloud what it knows about each test it names, across every run uploaded to
+it. Nothing else changes: the same rows, the same order, the same exit code. Cloud values are always
+labelled, so they are never read as local numbers:
+
+- the header ends in `· cloud` when anything on the page came from Cloud;
+- a finding's last line gains `confidence 0.62 · moderately reliable` after its evidence level
+  (`confidence 0.62 - moderately reliable` with `--ascii`; the category is dropped when the line has
+  no room for it);
+- a latest-run row says `confidence 0.94 over 812 runs` in place of its local history;
+- `--id` adds `cloud confidence`, `cloud evidence` and `cloud trend` to the detail block.
+
+Which credential is used is described in [Credentials](#credentials); `xping auth status` shows it.
+
+The report finds the Cloud project from, in order: `--project`, `XPING_PROJECTID` or `Xping:ProjectId`
+in `appsettings*.json` (read from `--directory` when given), the project id the SDK recorded with the
+runs, and a Cloud project whose name is the test assembly's.
+
+Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at ten
+seconds), a key that cannot read, no matching project — you get the local report and one line on
+stderr saying why, at a terminal or with `--verbose`. The one line printed everywhere, because only a
+person can fix it, is `Cloud data unavailable: your sign-in is no longer valid. Run xping login.`
+`--summary` never asks Cloud. The other lines you may see:
+
+| Line (after `Cloud data unavailable: `) | What to do |
+|---|---|
+| `could not reach https://app.xping.io (timeout). Showing local results only.` | Nothing; the next report tries again |
+| `no matching Cloud project for Checkout.Tests. Use --project <key>.` | Pass `--project`, or set `XPING_PROJECTID` |
+| `no Cloud project 'checkout' (from XPING_PROJECTID). Check the key, or pass --project <key>.` | Fix the project key |
+| ``This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.`` | The key is upload-only; sign in, or use a key with read scope |
+| ``This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.`` | Sign in; the workspace's plan does not allow API keys to read |
+| `Xping Cloud is rate limiting requests; try again in a minute.` | Wait |
+| `Refusing to read ~/.xping/credentials.json because other users can read it. …` | Run the `chmod` it prints |
+| `Xping Cloud no longer accepts this version of the CLI. Please upgrade the xping CLI.` | `dotnet tool update -g Xping.Cli` |
+
 ### `--format json`
 
 For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
@@ -518,6 +560,12 @@ store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`fa
 `explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
 failures not listed as rows.
 
+`context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
+(`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
+`not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
+its `source` (`flag`, `env`, `config`, `session` or `name-match`). Each finding and latest-run failure carries a
+`cloud` object with Cloud's view of its test, or `null`; `metrics` and `contrast` stay local.
+
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
@@ -531,9 +579,16 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.21",
+  "schemaVersion": "1.22",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
-  "context": { "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests" },
+  "context": {
+    "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
+    "cloud": {
+      "cloudUrl": "https://app.xping.io", "credential": "stored-login", "workspaceId": "01J8…",
+      "status": "ok", "reason": null,
+      "project": { "assembly": "Checkout.Tests", "projectKey": "checkout-tests", "source": "name-match" }
+    }
+  },
   "summary": {
     "tests": 412,
     "findings": 3,
@@ -566,7 +621,8 @@ are not each other and `tests` is what they add up to:
         "contrast": "passed the previous 19 runs, failed just now",
         "failureSummary": "NullReferenceException",
         "priorSessions": 19,
-        "priorFailures": 0
+        "priorFailures": 0,
+        "cloud": null
       }
     ],
     "failuresShown": 1,
@@ -595,7 +651,12 @@ are not each other and `tests` is what they add up to:
         { "label": "failure mode 3", "value": "not recorded by the adapter" }
       ],
       "evidence": { "…": "…" },
-      "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests"
+      "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests",
+      "cloud": {
+        "confidence": 0.62, "category": "moderately-reliable", "evidenceLevel": "robust", "runs": 812,
+        "trend": "stable", "delta": -0.03, "flaky": true,
+        "lastExecutedAt": "2026-08-19T12:00:00+00:00", "fetchedAt": "2026-08-19T16:30:00+00:00"
+      }
     }
   ],
   "truncated": { "shown": 3, "total": 3, "command": "xping report --all" }
@@ -660,6 +721,321 @@ Pass `--force` to delete without prompting.
 
 ---
 
+## `xping login`
+
+Signs you in to Xping Cloud, so `xping report` can show [Cloud data](#cloud-data) for your tests.
+
+```bash
+xping login [--device] [--no-browser] [--workspace <id>] [--json]
+```
+
+| Option | Description |
+|---|---|
+| `--device` | Sign in with a code on any device. Use it when your browser is on another machine |
+| `--no-browser` | Print the sign-in link without trying to open a browser |
+| `--workspace <id>` | Preselect this workspace on the consent page. The id is the 26-character value `xping auth status` shows |
+| `--json` | Write the result to stdout as JSON |
+
+The [global options](#global-options) apply too: `--cloud-url` signs in to another Xping Cloud.
+
+`login` opens your browser on the Xping Cloud consent page and waits up to 5 minutes for you to
+approve. It always prints the link as well, in case the browser does not open:
+
+```
+Opening your browser to sign in to Xping Cloud (https://app.xping.io).
+If it does not open, use this link:
+
+  https://app.xping.io/connect/authorize?response_type=code&client_id=xping-cli&...
+
+Waiting for you to finish in the browser (up to 5 minutes)...
+✓ Signed in as jane@example.com
+  Workspace  01J8K2V6XN7Y0Q4R5S6T7U8V9X
+  Session    ...A7F2Q9   (shown on Settings → Security → CLI sessions)
+  Stored in  macOS Keychain
+```
+
+The browser must run on the same machine as the CLI, because Xping Cloud returns you to a
+one-time loopback address (`127.0.0.1`). The CLI does not try to open a browser over SSH, on Linux without
+a display, or in a container (Docker, devcontainers, Codespaces). It prints the link and suggests
+`xping login --device` instead.
+
+With `--device`, open the page on any device — your phone, or the laptop you SSH from — and enter
+the code. The code expires after the time shown:
+
+```
+To sign in, open  https://app.xping.io/device
+and enter the code  ABCD-EFGH
+
+(or open https://app.xping.io/device?user_code=ABCD-EFGH)
+
+Waiting for you to approve in the browser (up to 10 minutes)...
+```
+
+All human text goes to stderr; stdout carries only the `--json` document.
+
+### Only in your own terminal
+
+`login` refuses to run when stdin or stderr is not a terminal, or when `CI` is set to `true`, `1`
+or `yes`:
+
+```
+xping login needs an interactive terminal. Run it in your own shell. Coding agents and CI must use an API key or a login stored earlier; see `xping auth status`.
+```
+
+It exits with `13`, and with `--json` it still writes the failure document. CI uses an API key
+instead ([Credentials](#credentials)). A coding agent runs `xping auth status --json` to learn
+whether Cloud data is available, and asks you to run `xping login` when it is not.
+
+### Where the sign-in is stored
+
+| OS | Store |
+|---|---|
+| Windows | Windows Credential Manager |
+| macOS | macOS Keychain |
+| Linux | Secret Service (GNOME Keyring or another provider) through libsecret |
+
+The entry is named `xping-cli` and keyed by the Cloud URL, so signing in to two Xping Clouds keeps
+two sign-ins. When no OS store can be used — over SSH with a locked keychain, on a server without a
+D-Bus session, without libsecret — the sign-in goes to `~/.xping/credentials.json`, and `login`
+says so:
+
+```
+⚠ Stored credentials in ~/.xping/credentials.json because no OS credential store is available (Secret Service not running). The file is readable only by you.
+```
+
+The same happens when the OS store is there but refuses the write — on Windows, a damaged user
+profile makes every Credential Manager write fail with error 8 (`cmdkey` fails the same way):
+
+```
+⚠ Could not write to Windows Credential Manager (error 8: Not enough memory resources are available to process this command).
+⚠ Stored credentials in ~/.xping/credentials.json instead. The file is readable only by you.
+```
+
+The file is created with mode `0600` in a `0700` directory (an owner-only ACL on Windows). The CLI
+refuses to read it when other users can, and says how to fix that: always in `auth status`, and in
+`report` when there is no API key to use instead (at a terminal or with `--verbose`). A new `login`
+replaces the file.
+
+```
+Refusing to read ~/.xping/credentials.json because other users can read it. Run `chmod 600 ~/.xping/credentials.json` (and `chmod 700 ~/.xping`) and try again.
+```
+
+A sign-in stored in the file is still found later from a desktop session, and a later `login`
+there moves it to the OS store.
+
+> **macOS: one keychain prompt after each upgrade.** The `xping` tool is not signed by Apple, so
+> macOS identifies it by its hash. After `dotnet tool update`, the first command that reads the
+> sign-in shows a dialog saying xping wants to use your confidential information stored in
+> `xping-cli`. Choose **Always Allow**; it stays quiet until the next upgrade.
+
+### WSL and devcontainers
+
+- **WSL 2.** `login` opens your Windows browser through `wslview` (from wslu) or `rundll32`. WSL 2
+  forwards `127.0.0.1` to Windows by default, so the browser can return to the CLI. If the sign-in
+  never arrives — some networking modes turn the forwarding off — use `xping login --device`. WSL
+  usually has no keyring, so expect the file store.
+- **VS Code devcontainers and Codespaces.** The CLI treats them as headless and prints the link.
+  Use `xping login --device`; the loopback sign-in works only if you forward the port it listens on
+  to your machine. The sign-in is stored in the container's `~/.xping/credentials.json` and goes
+  away with the container.
+
+### `--json`
+
+```json
+{
+  "schemaVersion": "1",
+  "result": "signed-in",
+  "cloudUrl": "https://app.xping.io",
+  "flow": "loopback",
+  "email": "jane@example.com",
+  "sub": "01J8K2V6XN7Y0Q4R5S6T7U8V9W",
+  "workspaceId": "01J8K2V6XN7Y0Q4R5S6T7U8V9X",
+  "sessionId": "01J8K2V6XN7Y0Q4R5S6T7U8VA7F2Q9",
+  "store": "keychain",
+  "accessTokenExpiresAt": "2026-09-29T10:15:00Z"
+}
+```
+
+`flow` is `loopback` or `device`; `store` is `keychain` or `file`. Every failure of `login`,
+`logout` and `auth status` under `--json` writes the same document:
+
+```json
+{
+  "schemaVersion": "1",
+  "result": "failed",
+  "cloudUrl": "https://app.xping.io",
+  "error": "access_denied",
+  "message": "You declined the sign-in request. Nothing was stored.",
+  "oauthError": null
+}
+```
+
+`error` is one of `access_denied`, `timeout`, `interactive_required`, `cloud_unreachable`,
+`version_mismatch`, `credential_store`, `oauth_error` (the server's code is in `oauthError`),
+`cancelled`, `configuration` or `local_listener`. No document ever contains a token.
+
+**Exit codes:** `0` signed in · `2` invalid option or configuration · `11` declined · `12` timed out
+· `13` not an interactive terminal · `14` other sign-in failure · `15` Xping Cloud unreachable · `16`
+CLI version not accepted · `17` credential store error · `130` cancelled. See [Exit codes](#exit-codes).
+
+---
+
+## `xping logout`
+
+Revokes the session on Xping Cloud and removes the stored sign-in.
+
+```bash
+xping logout [--json]
+```
+
+There is no prompt.
+
+```
+✓ Signed out of https://app.xping.io (jane@example.com).
+```
+
+When Xping Cloud cannot be reached, the local sign-in is removed anyway and the session stays
+valid on the server until it expires or you revoke it:
+
+```
+⚠ Could not reach https://app.xping.io to revoke the session (connection failed).
+  Your local credentials were removed. The session may still exist on the server; revoke it
+  under Settings → Security → CLI sessions.
+✓ Signed out locally.
+```
+
+Running it again prints `You are not signed in to https://app.xping.io.` and exits `0`. `logout`
+never touches an API key; when one is set it says where, so you can unset it.
+
+`--json` writes
+`{ "schemaVersion": "1", "result": "signed-out", "cloudUrl": "…", "revoked": true, "warning": null }`;
+`result` is `signed-out`, `signed-out-locally` or `not-signed-in`.
+
+**Exit codes:** `0` signed out, or not signed in · `2` invalid configuration · `17` the stored
+sign-in could not be removed (the message names the store) · `130` cancelled.
+
+---
+
+## `xping auth status`
+
+Shows which Xping Cloud credential the CLI would use, without a network call.
+
+```bash
+xping auth status [--json]
+```
+
+```
+Cloud URL     https://app.xping.io
+Credential    stored login (macOS Keychain)
+Signed in     jane@example.com
+Workspace     01J8K2V6XN7Y0Q4R5S6T7U8V9X
+Session       ...A7F2Q9
+Access token  expires in 12 minutes (refreshed automatically)
+```
+
+The access token is refreshed when a command needs it, so an expired one is not a problem. Other
+states:
+
+- An API key is set as well: `API key (XPING_APIKEY) also set; used only when no login is available.`
+- `--api-key` was given: `Credential    API key (--api-key)`, and `A stored login also exists and
+  is not used while --api-key is given.` when there is one.
+- Only an API key: `Credential    API key (XPING_APIKEY)`. The CLI cannot check the key without a
+  network call, so `auth status` does not.
+- Nothing: `Credential    none` and ``Run `xping login` to sign in.``
+
+`--verbose` adds the paths in use under `~/.xping`.
+
+`--json`:
+
+```json
+{
+  "schemaVersion": "1",
+  "cloudUrl": "https://app.xping.io",
+  "credential": "stored-login",
+  "credentialSource": "keychain",
+  "loggedIn": true,
+  "email": "jane@example.com",
+  "sub": "01J8K2V6XN7Y0Q4R5S6T7U8V9W",
+  "workspaceId": "01J8K2V6XN7Y0Q4R5S6T7U8V9X",
+  "sessionId": "01J8K2V6XN7Y0Q4R5S6T7U8VA7F2Q9",
+  "accessTokenExpiresAt": "2026-09-29T10:15:00Z",
+  "storedAt": "2026-09-01T08:00:00Z",
+  "fallbackApiKey": "env",
+  "shadowedLogin": false,
+  "warnings": []
+}
+```
+
+`credential` is `stored-login`, `api-key` or `none`. `credentialSource` is `keychain` or `file` for
+a sign-in, and `flag`, `env` or `config` for a key. `fallbackApiKey` names a key that is used if the
+sign-in stops being valid. `warnings` holds full sentences — the file-store notice, a refused or
+unreadable credentials file — for an agent to pass on.
+
+**Exit codes:** `0` a credential is available (a sign-in or a key) · `2` invalid configuration, such
+as a bad `XPING_CLOUDURL` (with `--json`, a failure document) · `10` no credential · `17` no
+credential, and a credential store could not be read · `130` cancelled.
+
+---
+
+## Global options
+
+These work on every command, before or after the command name.
+
+| Option | Description |
+|---|---|
+| `--cloud-url <url>` | The Xping Cloud to sign in to and read from. Default `https://app.xping.io` |
+| `--api-key <key>` | API key for reading Xping Cloud data. Prefer `XPING_APIKEY`, so the key does not land in shell history |
+| `--verbose` | Write diagnostics to stderr: which credential is used, refreshes, why Cloud data is missing. Tokens and keys are never printed |
+
+The Cloud URL comes from, first match wins: `--cloud-url`, `XPING_CLOUDURL` (or `Xping__CloudUrl`), `Xping:CloudUrl` in
+`appsettings.json` (or `appsettings.{environment}.json`) in the working directory, then
+`https://app.xping.io`. It must be `https`; `http` is accepted only for `localhost` and
+`127.0.0.1`. Each Cloud URL has its own sign-in.
+
+---
+
+## Credentials
+
+`xping report` reads Cloud data with the first of these that exists:
+
+| Order | Credential | Typical use |
+|---|---|---|
+| 1 | `--api-key <key>` | A one-off command with another key |
+| 2 | The sign-in stored by `xping login` | Your machine |
+| 3 | `XPING_APIKEY`, then `Xping__ApiKey` / `XPING__APIKEY`, then `Xping:ApiKey` in `appsettings*.json` | CI, where nobody signs in |
+
+The stored sign-in comes before `XPING_APIKEY` because, on a developer machine, that variable
+usually holds the SDK's upload key, which cannot read. When the sign-in stops being valid (revoked
+or expired), the CLI deletes it, prints the `Run xping login` line, and tries the key
+from row 3 if there is one. It never falls back on a network error.
+
+Upload keys write test runs and nothing else; reading needs a key with read scope, on a plan that
+includes API access. Otherwise the report says so and stays local.
+
+---
+
+## Exit codes
+
+| Code | Meaning | Commands |
+|---|---|---|
+| `0` | Success | all |
+| `1` | A finding reached `--fail-on`; `where` or `clear` failed | `report`, `where`, `clear` |
+| `2` | Invalid option (including `--cloud-url`, `--project`, `--workspace`); no report could be produced; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
+| `3` | The `--id` finding is not in the report | `report` |
+| `10` | No credential | `auth status` |
+| `11` | You declined the sign-in | `login` |
+| `12` | The sign-in timed out, or the device code expired | `login` |
+| `13` | Not an interactive terminal, or `CI` is set | `login` |
+| `14` | Any other sign-in failure | `login` |
+| `15` | Xping Cloud could not be reached | `login` |
+| `16` | Xping Cloud does not accept this CLI version | `login` |
+| `17` | The credential store failed | `login`, `logout`, `auth status` |
+| `130` | Cancelled with Ctrl+C | all |
+
+Xping Cloud never changes the exit code of `report`: Cloud problems are one line on stderr.
+
+---
+
 ## `xping --version`
 
 Prints the tool version, e.g. `1.0.0-rc.5`.
@@ -672,8 +1048,24 @@ Prints the tool version, e.g. `1.0.0-rc.5`.
 |---|---|
 | `XPING_LOCAL_STORE` | Overrides the store location. Must match the value the SDK used. |
 | `XPING_NO_BANNER` | Suppresses the cloud invitation. |
+| `XPING_APIKEY` | API key for Cloud data when you are not signed in. See [Credentials](#credentials). |
+| `XPING_PROJECTID` | The Cloud project to read. `--project` overrides it. |
+| `XPING_CLOUDURL` | The Xping Cloud to use. `--cloud-url` overrides it. |
+| `CI` | When `true`, `1` or `yes`, `xping login` refuses to run. |
 
 See [Local Store](../configuration/local-store.md) for details.
+
+### Files under `~/.xping`
+
+| Path | Content |
+|---|---|
+| `~/.xping/credentials.json` | Sign-ins, only when no OS credential store is available. Mode `0600` |
+| `~/.xping/cache/discovery/` | Xping Cloud's endpoints, kept for 24 hours |
+| `~/.xping/cache/projects/` | Cloud projects per workspace, kept for 24 hours |
+| `~/.xping/locks/` | Lock files that keep two commands from refreshing a sign-in at once |
+
+`xping logout` removes the sign-in; deleting the caches is always safe. This folder is not the local
+run store, which lives in `.xping/` in your repository.
 
 ---
 
@@ -682,3 +1074,4 @@ See [Local Store](../configuration/local-store.md) for details.
 - [Running Without an Account](../getting-started/local-first.md)
 - [Local Store](../configuration/local-store.md)
 - [Configuration Reference](../configuration/configuration-reference.md)
+- [Connecting to Xping Cloud](../index.md#connecting-to-xping-cloud)

@@ -57,7 +57,9 @@ Before calling a change done: build is clean and the affected test projects pass
   and are `internal sealed`.
 - **HTTP resilience** uses `Microsoft.Extensions.Http.Resilience`, not raw Polly.
 - **Serialization** goes through `IXpingSerializer` (System.Text.Json, camelCase, enums as
-  strings). Don't call `JsonSerializer` directly.
+  strings). Don't call `JsonSerializer` directly. Exception: the CLI's documented `--json` output
+  (`ReportJsonOptions`, `AuthJson`) uses its own options, because it writes nulls and must not move
+  with the SDK wire format.
 - The product is **Xping Cloud**, never "Dashboard".
 
 ## Code style

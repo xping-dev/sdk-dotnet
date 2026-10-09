@@ -2,7 +2,7 @@
 
 **Status:** Draft for review, written 2026-09-29 from the CLI P0 inventory of the same day.
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`, plus one small change in `src/Xping.Sdk.Core` (§11.2) and the CLI test projects.
-**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
+**Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29) and re-read at `60a64fc4329b1d5f00766ba7bd53436f32a55dbe` (2026-10-03) for contract OQ-17 to OQ-20 (§20). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
 **Reference only:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-cloud-spec.md`, same commit. Written as "Cloud spec §n". It is not authoritative for the CLI; where it and the contract disagree, the contract wins.
 **Depends on:** `cli-report-format-spec.md` §8, `cli-latest-run-spec.md` §8, `cli-finding-detail-spec.md` §8 (the reserved Cloud slots). §11 amends them.
 **Schema:** report envelope `1.21` → `1.22` (§11.4).
@@ -154,7 +154,11 @@ filling the comment-only extension point that exists today at lines 36–41. Two
   `Timeout = 15 s`, no resilience handler; retries are the explicit ones of contract §8.1 (§2.4).
 - `"xping-cloud"`: DataGateway. `AllowAutoRedirect = false`, `Timeout = 30 s` total, resilience
   handler of §10.3, then `BearerTokenHandler` or `ApiKeyHandler` (never both), then the primary
-  handler.
+  handler. The credential is known only once a command resolves it (§8.1), and a handler instance
+  holds that credential's state, which pooled factory handlers must not. So the named client
+  registers only the primary handler; `CloudApiClientFactory` (`Cloud/CloudApiClientFactory.cs`)
+  builds resilience → credential handler → the factory's primary handler for each credential. A
+  fallback (§8.1) therefore always gets a new pipeline.
 
 Both clients set `User-Agent: xping-cli/{XpingVersion.Current} ({RuntimeInformation.OSDescription
 trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept: application/json`.
@@ -167,9 +171,11 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
    Cloud URL is used without a request (contract §4.1).
 2. Otherwise `GET {cloudUrl}/.well-known/openid-configuration` through `"xping-oauth"`.
 3. Validate, in this order, and fail closed on the first failure with `AuthExitCodes`:
-   - `issuer` equals the normalized Cloud URL exactly, ordinal comparison (contract §3.1 step 1).
+   - `issuer` equals the normalized Cloud URL followed by exactly one `/`, ordinal comparison
+     (contract §3.1 step 1, §4.1, OQ-17). OpenIddict writes the issuer as `Uri.AbsoluteUri`, so
+     `https://app.xping.io` publishes `https://app.xping.io/`; any other value fails closed.
    - `xping_data_gateway_uri` present, absolute, `https` (or `http` on `localhost`/`127.0.0.1`), no
-     trailing slash after normalization.
+     user info, query or fragment, no trailing slash after normalization.
    - `xping_contract_version` equals `1`. Otherwise: "This CLI implements Cloud contract version 1;
      the server reports {n}. {Upgrade the CLI | The server is older than this CLI}." Exit code
      `CloudVersionMismatch` (contract §11).
@@ -177,7 +183,9 @@ trimmed to the OS family: windows, macos, linux})` (contract §7.7) and `Accept:
      precedence rules (prerelease lower than release). A lower CLI stops: "Please upgrade the xping
      CLI: this server requires {min} or newer, you have {current}." Same exit code.
    - `authorization_endpoint`, `token_endpoint`, `revocation_endpoint`,
-     `device_authorization_endpoint` present and absolute. They are used as given, never rebuilt
+     `device_authorization_endpoint` present, absolute, `https` (or `http` on
+     `localhost`/`127.0.0.1`), no user info or fragment: codes and refresh tokens are sent there,
+     so they meet the same rule as the Cloud URL (§14.1). They are used as given, never rebuilt
      from the paths in contract §4.
 4. Unknown members are ignored (contract §11). Deserialization goes through `IXpingSerializer`
    with a DTO that lists only the fields above.
@@ -197,7 +205,7 @@ One class, three operations, all `POST` with `application/x-www-form-urlencoded`
 | `RefreshAsync(refreshToken)` | `refresh_token`, no `scope` parameter | §4.3 |
 | `PollDeviceAsync(deviceCode)` | `urn:ietf:params:oauth:grant-type:device_code` | §4.3 |
 | `StartDeviceAsync(workspaceId?)` | `device_authorization_endpoint`, `scope=user:read offline_access` | §4.5 |
-| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token` | §4.4 |
+| `RevokeAsync(refreshToken)` | `revocation_endpoint`, `token_type_hint=refresh_token`; any `200` succeeds and the body (empty or `{}`) is ignored | §4.4, OQ-19 |
 
 Token responses map to `TokenResponse(AccessToken, ExpiresIn, RefreshToken, Scope)`; extra members
 are ignored. Error responses map to `OAuthError(Error, ErrorDescription, StatusCode)` and are
@@ -206,10 +214,19 @@ delays from an injected `TimeProvider` so tests do not wait:
 
 - `server_error` (500): one retry after 2 s.
 - `temporarily_unavailable` (503): retries after 2 s, 4 s, 8 s.
-- Any network failure (`HttpRequestException`, timeout): treated like `temporarily_unavailable`
-  during device polling (contract §3.2, "retry at the next interval") and like `server_error`
-  elsewhere.
-- Everything else is returned to the caller on the first response.
+- Any network failure (`HttpRequestException`, timeout): treated like `server_error`, except in
+  `ExchangeCodeAsync`. A code works once, and when no answer arrived the server may already have
+  redeemed it; a retry would answer `invalid_grant` and hide the network failure. A 5xx answer
+  means the code was not redeemed, so that is still retried.
+- `PollDeviceAsync` makes none of these retries: a network failure, `server_error`,
+  `temporarily_unavailable`, another 5xx, or a `429` without an OAuth body (a rate limiter in
+  front of the Portal) comes back as a transient result, and the device flow polls again at the
+  next interval (contract §3.2, §6.3). An immediate retry would poll faster
+  than `interval`.
+- When the retries are spent, the failure is `AuthFailureException` with `CloudUnreachable`
+  (§9.6).
+- Everything else is returned to the caller on the first response. A redirect or an error status
+  without an OAuth body is never a success; it is `CloudUnreachable` with the status.
 
 `OAuthClient` never logs a request body or a response body (§15).
 
@@ -224,8 +241,10 @@ delays from an injected `TimeProvider` so tests do not wait:
 - Human text goes to stderr in every mode, including success messages. Stdout carries only the
   `--json` document. This follows the finding-detail spec D8 rule that stdout is data.
 - Decoration follows `OutputCapabilities.Resolve(ascii: false, noColor: false, redirected:
-  !io.IsTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
-  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1).
+  !io.IsErrorTerminal, env)`: colour and Unicode glyphs when stderr is a terminal, plain ASCII when it is
+  redirected, `NO_COLOR` honoured. There is no `rich`/`plain` switch (A-1). `ConsoleIO` carries one
+  terminal flag per stream (`IsInputTerminal`, `IsTerminal` for stdout, `IsErrorTerminal`); the
+  auth commands write their text to stderr, so stderr's flag decides.
 - Every JSON document has `"schemaVersion": "1"` (the auth JSON schema, independent of the report
   envelope) and `"cloudUrl"`. Field names are camelCase. Enum values are lowercase strings.
 - JSON output MUST NOT contain a token, code, verifier or `state` (§15). It MAY contain `sid`,
@@ -240,7 +259,8 @@ delays from an injected `TimeProvider` so tests do not wait:
 
 Options: `--device` (use the device flow), `--no-browser` (loopback flow, do not try to open a
 browser), `--workspace <ulid>` (sent as `xping_workspace_id`, contract §4.2; preselects only),
-`--json`.
+`--json`. `--workspace` must be a ULID: 26 Crockford base32 characters, case-insensitive. Anything
+else is a parse error, exit 2, before any request; a valid value is sent as given.
 
 **Preconditions, checked in this order, before any network call:**
 
@@ -277,7 +297,9 @@ The link line prints the full authorization URL exactly once, always, even when 
 opened (contract §3.1 step 4). When `HeadlessDetector` reports headless (§5.2) the first line is
 replaced by "No browser was found on this machine. Open this link in a browser **on this
 machine**:" followed by the hint "If your browser is on another machine, press Ctrl+C and run
-`xping login --device`."
+`xping login --device`." Under `--no-browser` the first line is "Open this link in a browser **on
+this machine**:" (nothing was looked for, so "No browser was found" would be false), followed by
+the same hint.
 
 **Text output, device flow:**
 
@@ -290,7 +312,9 @@ and enter the code  ABCD-EFGH
 Waiting for you to approve in the browser (up to 10 minutes)...
 ```
 
-followed by the same success block. The code is printed in bold on a terminal, plain otherwise.
+followed by the same success block. The code is printed in bold on a terminal, plain otherwise. The
+waiting line names `expires_in` in whole minutes, or in seconds when it is not a whole number of
+minutes, so a short lifetime never reads "up to 0 minutes".
 
 **JSON result** (`--json`, stdout, exit 0):
 
@@ -313,12 +337,17 @@ On failure (`--json`, stdout, non-zero exit):
 
 ```json
 { "schemaVersion": "1", "result": "failed", "cloudUrl": "https://app.xping.io",
-  "error": "access_denied", "message": "You declined the sign-in request." }
+  "error": "access_denied", "message": "You declined the sign-in request. Nothing was stored." }
 ```
 
-`error` is one of: `access_denied`, `timeout`, `state_mismatch`, `interactive_required`,
+`error` is one of: `access_denied`, `timeout`, `interactive_required`,
 `cloud_unreachable`, `version_mismatch`, `credential_store`, `oauth_error` (with the server's
-`error` code in `oauthError`), `cancelled`.
+`error` code in `oauthError`), `cancelled`, `configuration` (an invalid `XPING_CLOUDURL` or
+settings file; exit 2), `local_listener` (no loopback port could be opened, or the listener
+stopped; exit 14). There is no `state_mismatch`: a callback with the wrong `state` is answered
+400 and the CLI keeps waiting (A-6), so it ends as `timeout` or succeeds. The failure document is the same for all three commands, and every failure
+under `--json` writes one, including `configuration`. Its `message` is scrubbed (§15.2) like the
+stderr text.
 
 The workspace **name** is not in any token claim and not returned by the token endpoint. The
 success block shows the workspace id only (it is in the token and costs nothing); there is no
@@ -335,11 +364,13 @@ Options: `--json`. No prompt. Behaviour in §12. Text:
 or, offline:
 
 ```
-! Could not reach https://app.xping.io to revoke the session (connection refused).
+⚠ Could not reach https://app.xping.io to revoke the session (connection failed).
   Your local credentials were removed. The session may still exist on the server; revoke it
   under Settings → Security → CLI sessions.
 ✓ Signed out locally.
 ```
+
+The glyphs are `✓` and `⚠` when stderr is a terminal, `+` and `!` when it is redirected.
 
 Not logged in: "You are not signed in to https://app.xping.io." exit 0 (idempotent).
 
@@ -351,20 +382,24 @@ JSON: `{ "schemaVersion": "1", "result": "signed-out" | "signed-out-locally" | "
 Options: `--json`. No network call, ever (contract §6.1 allows answering from stored claims). Text:
 
 ```
-Cloud URL   https://app.xping.io
-Credential  stored login (macOS Keychain)
-Signed in   jane@example.com
-Workspace   01J8K2V6XN7Y0Q4R5S6T7U8V9X
-Session     ...A7F2Q9
+Cloud URL     https://app.xping.io
+Credential    stored login (macOS Keychain)
+Signed in     jane@example.com
+Workspace     01J8K2V6XN7Y0Q4R5S6T7U8V9X
+Session       ...A7F2Q9
 Access token  expires in 12 minutes (refreshed automatically)
 ```
+
+Labels share one width. `--verbose` adds `Home`, `Credentials`, `Discovery` and `Projects` rows
+with the §14.4 paths in use.
 
 With a stored login and an ambient key both present: the `Credential` line shows the login and a
 second line reads "API key (XPING_APIKEY) also set; used only when no login is available."
 With `--api-key` given: `Credential  API key (--api-key)` and, when a login exists, "A stored
 login also exists and is not used while --api-key is given." With only a key:
 `Credential  API key (XPING_APIKEY)`. Not logged in and no key: `Credential  none` and "Run
-`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available;
+`xping login` to sign in." Exit code `AuthRequired` when no credential of any kind is available
+(`CredentialStoreError` when, in addition, a credential store could not be read, §8.1);
 `0` otherwise, including when only an API key is set (the CLI cannot verify a key without a
 network call, and `status` makes none).
 
@@ -375,7 +410,7 @@ JSON:
   "schemaVersion": "1",
   "cloudUrl": "https://app.xping.io",
   "credential": "stored-login" | "api-key" | "none",
-  "credentialSource": "keychain" | "file" | "flag" | "env" | null,
+  "credentialSource": "keychain" | "file" | "flag" | "env" | "config" | null,
   "loggedIn": true,
   "email": "jane@example.com",
   "sub": "...",
@@ -391,8 +426,9 @@ JSON:
 
 `fallbackApiKey` names an ambient key that would be used if the login became invalid;
 `shadowedLogin` is `true` only when `--api-key` was given and a login exists. `warnings` carries
-the file-fallback notice and a corrupt-entry notice (§7.7) as strings so an agent can surface
-them.
+the file-fallback notice ("No OS credential store is available ({reason}); sign-ins are kept in
+~/.xping/credentials.json."), the refused-file notice (§7.5) and a corrupt-entry notice (§7.7) as
+full sentences so an agent can relay them as they are.
 
 ### 3.5 Prompts
 
@@ -461,6 +497,12 @@ Binding rules (contract §10.2):
 
 The prefix is never `localhost`, `+`, `*`, `0.0.0.0` or `::`.
 
+Platform note (found in phase 3): the managed `HttpListener` of macOS and Linux rejects a bracketed
+IPv6 prefix (`HttpListenerException`: "Invalid port in prefix"), so step 2 binds only on Windows,
+where `http.sys` accepts it. Elsewhere step 2 fails and step 3 applies. The attempt is kept so the
+order is the same on every OS; the `TcpListener` responder would lift the limit, and is not worth
+its parser while `127.0.0.1` is always present on a loopback interface.
+
 ### 4.4 Callback validation and responses
 
 The listener loop runs until it has one successful callback, the timeout (§4.7) fires, or the
@@ -518,7 +560,7 @@ code `LoginTimedOut`. A code issued later expires on its own (contract §6.4).
 | `invalid_grant` on exchange | `LoginFailed` | §4.6 |
 | `invalid_client` | `CloudUnreachable` | "Xping Cloud did not recognise this CLI. Check `--cloud-url` ({url})." |
 | `invalid_request`, `unauthorized_client`, `unsupported_grant_type`, `invalid_scope` | `LoginFailed` | "Xping Cloud rejected the request ({error}): {error_description}. This is a CLI or server bug; please report it." |
-| Discovery failure, TLS error, network error | `CloudUnreachable` | "Could not reach Xping Cloud at {url}: {reason}." The reason names the exception category only (connection refused, name not resolved, TLS certificate error, timeout). |
+| Discovery failure, TLS error, network error | `CloudUnreachable` | "Could not reach Xping Cloud at {url}: {reason}." The reason names the exception category only (connection failed, name not resolved, TLS error, timeout). "Connection failed" and "TLS error" stay broad on purpose: refused, reset and unreachable share one category in `HttpRequestError`, and so do certificate and handshake failures. |
 | Version checks | `CloudVersionMismatch` | §2.3 |
 | Ctrl+C | 130 | "Cancelled." |
 
@@ -548,7 +590,11 @@ never inserted into a shell command line.
 | Linux | `xdg-open <url>`; if it is not on `PATH`, try `gio open <url>`, then `sensible-browser <url>`; then give up |
 | WSL (§5.2) | `wslview <url>` when present (wslu); otherwise `/mnt/c/Windows/System32/rundll32.exe url.dll,FileProtocolHandler <url>` |
 
-`stdout` and `stderr` of the launcher are discarded. A non-zero exit of `open`/`xdg-open` within the
+`stdin`, `stdout` and `stderr` of the launcher are `/dev/null` on Unix, set by running it through
+the constant script `sh -c 'exec "$0" "$@" </dev/null >/dev/null 2>&1' <launcher> <args…>`, so the
+URL is an argument and never script text. Pipes would close when the CLI exits and fail the
+browser's next write (the launcher often execs the browser, which inherits them), and the CLI's own
+streams would let the browser write into a `--json` document on stdout. A non-zero exit of `open`/`xdg-open` within the
 2 seconds counts as "not opened", and the URL hint is shown (it is shown anyway, §3.2).
 
 WSL note: with the default WSL 2 configuration Windows forwards `127.0.0.1:{port}` to the WSL
@@ -564,12 +610,13 @@ the 5-minute timeout message names `--device` (§4.7).
 | `WSL_DISTRO_NAME` or `WSL_INTEROP` set | `Wsl` (browser launch via §5.1 WSL row) |
 | `SSH_CLIENT`, `SSH_TTY` or `SSH_CONNECTION` set | `Headless("SSH session")` |
 | Linux, not WSL, neither `DISPLAY` nor `WAYLAND_DISPLAY` set | `Headless("no display")` |
-| `/.dockerenv` or `/run/.containerenv` exists, or `REMOTE_CONTAINERS`, `CODESPACES` or `DEVCONTAINER` set | `Headless("container")` |
+| `/.dockerenv` or `/run/.containerenv` exists, or `REMOTE_CONTAINERS`, `CODESPACES` or `DEVCONTAINER` set (any OS) | `Headless("container")` |
 | otherwise | `Interactive` |
 
 When headless, `login` does not try to open a browser, prints the URL with the "on this machine"
 wording of §3.2, and adds the `--device` suggestion. It keeps waiting (contract §3.1: not a
-failure). `--no-browser` forces the same behaviour without the detection.
+failure). `--no-browser` forces the same behaviour without the detection, with the first line of
+§3.2 for `--no-browser`.
 
 The detector only reads environment variables and two file paths, all through injectable
 providers, so tests cover every row (§18.1).
@@ -582,7 +629,9 @@ providers, so tests cover every row (§18.1).
 
 After discovery, `OAuthClient.StartDeviceAsync(workspaceId)` (contract §4.5). The response DTO:
 `DeviceAuthorization(DeviceCode, UserCode, VerificationUri, VerificationUriComplete, ExpiresIn,
-Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required.
+Interval)`. `Interval` defaults to 5 when absent; `ExpiresIn` is required. A `user_code` with a
+control character is an incomplete response (`CloudUnreachable`): it is printed as sent, and
+nobody could type it. Errors are mapped as §4.8.
 
 ### 6.2 Prompt
 
@@ -596,7 +645,7 @@ and `--no-browser` is absent; failure to open changes nothing (contract §3.2 st
 interval = response.interval
 deadline = now + response.expires_in
 loop:
-  wait interval (TimeProvider-based delay; cancellable)
+  wait min(interval, deadline - now) (TimeProvider-based delay; cancellable)
   if now >= deadline: fail LoginTimedOut ("The sign-in code expired. Run xping login --device again.")
   r = PollDeviceAsync(device_code)
   success            → store (§7), print success block, exit 0
@@ -605,9 +654,16 @@ loop:
   access_denied      → LoginDeclined
   expired_token      → LoginTimedOut, same message as the deadline
   invalid_grant      → LoginFailed ("The device code was rejected. Run xping login --device again.")
-  network error / 5xx → continue at the next interval (never faster; contract §3.2)
-  any other error    → LoginFailed with error and error_description verbatim
+  network error / 5xx / 429 → continue at the next interval (never faster; contract §3.2);
+                       the first one prints a warning on stderr
+  any other error    → as §4.8 (invalid_client → CloudUnreachable; invalid_request and the
+                       other client-bug codes → LoginFailed "please report it"); otherwise
+                       LoginFailed with error and error_description, control characters dropped
 ```
+
+The warning reads "! Could not reach Xping Cloud ({reason}). Still waiting; an approval made in
+the meantime is not lost." Without it a user whose network dropped waits out the code's lifetime
+with no sign of trouble.
 
 The CLI MUST NOT poll faster than `interval`, including after a network error; the delay is
 always waited before the next request. `device_code` is held in memory only and cleared after
@@ -664,11 +720,18 @@ internal interface ICredentialStore
 {
     CredentialStoreKind Kind { get; }                        // Keychain, File
     string DisplayName { get; }                              // "macOS Keychain", "Windows Credential Manager", "Secret Service", "~/.xping/credentials.json"
-    Task<CredentialRecord?> ReadAsync(string cloudUrl, CancellationToken ct);
+    Task<CredentialReadResult> ReadAsync(string cloudUrl, CancellationToken ct);
     Task WriteAsync(CredentialRecord record, CancellationToken ct);   // create or replace, atomic per Cloud URL
     Task<bool> DeleteAsync(string cloudUrl, CancellationToken ct);
 }
+
+internal sealed record CredentialReadResult(CredentialRecord? Record, string? Warning);
 ```
+
+A corrupt entry (§7.7) and a refused file (§7.5) both read as "no record" with one `Warning` for
+the user; `auth status` and `report` need that text, so it travels with the result instead of
+being logged. A failure to reach the backend at all (I/O error, access denied) throws
+`CredentialStoreException`; §7.4 says what the callers of a backend do with it.
 
 Entry naming (contract §10.4): service/label `xping-cli`, account/target = the normalized Cloud
 URL. Concretely:
@@ -677,11 +740,29 @@ URL. Concretely:
 |---|---|---|
 | `WindowsCredentialStore` | `CredWriteW`, `CredReadW`, `CredDeleteW`, `CredFree`; `CRED_TYPE_GENERIC`, `CRED_PERSIST_LOCAL_MACHINE` | `TargetName = "xping-cli:{cloudUrl}"`, `UserName = "xping-cli"`, `CredentialBlob` = UTF-8 JSON of the record |
 | `MacOsKeychainStore` | `SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate`, `SecItemDelete` with `kSecClassGenericPassword`; CoreFoundation dictionaries built and released in the wrapper | `kSecAttrService = "xping-cli"`, `kSecAttrAccount = cloudUrl`, `kSecValueData` = JSON. `kSecAttrAccessible` is not set (login keychain default). |
-| `LibSecretStore` | `secret_password_store_sync`, `secret_password_lookup_sync`, `secret_password_clear_sync` from `libsecret-1.so.0`, with a `SecretSchema` named `io.xping.cli` and two string attributes `service` = `xping-cli`, `cloud` = cloudUrl; `GError` read and freed with `g_error_free` from `libglib-2.0.so.0` | label `xping-cli ({cloudUrl})`, secret = JSON, collection `SECRET_COLLECTION_DEFAULT` |
+| `LibSecretStore` | `secret_password_storev_sync`, `secret_password_lookupv_sync`, `secret_password_clearv_sync` and `secret_password_free` from `libsecret-1.so.0`, with a `SecretSchema` named `io.xping.cli` and two string attributes `service` = `xping-cli`, `cloud` = cloudUrl passed as a `GHashTable` (`g_hash_table_new`, `g_hash_table_insert`, `g_hash_table_unref`, `g_str_hash`, `g_str_equal`); `GError` read and freed with `g_error_free` from `libglib-2.0.so.0`. The `v` forms are used because the variadic ones cannot be called portably from .NET (variadic arguments follow a different calling convention on arm64). | label `xping-cli ({cloudUrl})`, secret = JSON, collection `SECRET_COLLECTION_DEFAULT` |
 | `FileCredentialStore` | §7.5 | one file for all Cloud URLs |
 
 P/Invoke uses `LibraryImport` with `StringMarshalling.Utf16` (Windows) or `Utf8` (Unix) and
-`SetLastError` where the API defines it. `AnalysisMode=All` will require `[SupportedOSPlatform]`
+`SetLastError` where the API defines it. libsecret is optional on Linux, so `LibSecretStore` binds
+its functions at run time (`NativeLibrary.TryLoad`, `GetExport`, function pointers) instead of with
+`LibraryImport`; a missing library is a fallback reason, not a crash.
+
+The OS backends implement `IKeychainCredentialStore`, which adds what the selector and the size
+rule need:
+
+```csharp
+internal interface IKeychainCredentialStore : ICredentialStore
+{
+    int? MaxSecretBytes { get; }                             // 2560 on Windows, null elsewhere
+    KeychainProbe Probe(string cloudUrl);                    // §7.4
+}
+
+internal sealed record KeychainProbe(bool Available, string? Reason);
+```
+
+The service name (`xping-cli`) is a constructor argument, so the `Category=CredentialStore` tests
+use `xping-cli-tests` (§17.2) and never touch a developer's real entry. `AnalysisMode=All` will require `[SupportedOSPlatform]`
 on each backend and justified suppressions for the few interop analyzers that fire on CoreFoundation
 signatures; the suppressions carry the reason as the code style requires.
 
@@ -702,12 +783,13 @@ signing the tool, which is out of scope.
 
 ### 7.4 Selection and the file fallback
 
-`CredentialStoreSelector.Select()` runs once per process:
+`CredentialStoreSelector.Select(cloudUrl)` probes once per process (later calls return the same
+result):
 
 | OS | First choice | Available when | Otherwise |
 |---|---|---|---|
 | Windows | `WindowsCredentialStore` | always (`CredRead` of a probe name returns `ERROR_NOT_FOUND` or success) | file |
-| macOS | `MacOsKeychainStore` | `SecItemCopyMatching` for a probe returns `errSecItemNotFound` or success | file, when the result is `errSecInteractionNotAllowed` (-25308), `errSecNotAvailable` (-25291), `errSecAuthFailed` (-25293) — typical over SSH with a locked keychain — or any other error |
+| macOS | `MacOsKeychainStore` | `SecItemCopyMatching` for a probe returns `errSecItemNotFound` or success | file, when the result is `errSecInteractionNotAllowed` (-25308) or `errSecAuthFailed` (-25293) — typical over SSH with a locked keychain, reason "keychain locked" — or `errSecNotAvailable` (-25291) or any other error, reason "keychain unavailable" |
 | Linux | `LibSecretStore` | `libsecret-1.so.0` loads **and** `DBUS_SESSION_BUS_ADDRESS` is set or `$XDG_RUNTIME_DIR/bus` exists **and** a probe lookup returns without a `GError` | file |
 
 The probe uses the real entry name for the current Cloud URL, so "available" also means "readable
@@ -716,17 +798,53 @@ shown by `auth status`.
 
 **Read order is always keychain, then file**, regardless of which one the selector chose for
 writes. A developer who logged in over SSH (file) and later runs in a GUI session (keychain
-available) must still be logged in. `logout` deletes from both. `login` writes to the selected
+available) must still be logged in. A keychain whose probe failed is left out of the read order of
+that process: reading it would fail the same way, and every `auth status` on a machine without a
+keyring would then report a store failure (exit 17) instead of "not signed in" (exit 10). The
+reason is already shown as `FallbackReason`. The SSH-then-GUI case is two processes with two
+probes, so it is unaffected. Such a keychain is kept as `CredentialStores.Unreachable` unless the
+probe says it cannot hold anything (libsecret not installed): `logout` still tries to delete from
+it, and when that fails it warns that a sign-in made in a desktop session may remain there, without
+failing the sign-out.
+
+The probe reads the secret (a locked macOS keychain lists items but refuses their content), so the
+backend keeps that result and hands it to the first `ReadAsync` of the same entry; a write or delete
+drops it. One command therefore reads the keychain once: one access dialog after an upgrade, one
+D-Bus round trip. `logout` deletes from both. `login` writes to the selected
 store and, when that is the keychain, also deletes any file entry for the same Cloud URL so the
 two never disagree.
+
+These rules live in one place: `Select()` returns `CredentialStores`, which holds the selected
+store (`Selected`, with its `DisplayName` and the selector's `FallbackReason`, `null` when the
+keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns the first valid
+record with the store it came from, plus the warnings of every store it visited and the
+`Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
+the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
+clears the file entry when `Selected` is a keychain; a failure to clear the file entry is returned
+as a warning (the sign-in is stored, and the keychain is read first, so the old entry is never
+used). When `Selected` is a keychain and its write throws, the record goes to the file instead and
+the keychain entry for that Cloud URL is deleted, because the keychain is read first and an older
+entry there would shadow the new sign-in; a failed delete is returned as a warning. The probe only
+reads, so it cannot catch a keychain that refuses writes: a damaged Windows profile answers every
+`CredWrite` with error 8 (`cmdkey` fails the same way) while `CredRead` works, and the sign-in has
+already been issued when the write fails. Only when the file write fails too is
+`CredentialStoreException` thrown, naming both failures. `WriteAsync` returns the store that took
+the record and the keychain failure, if any. Windows failure messages carry the system text of the
+error (`error 8: Not enough memory resources are available to process this command`). `DeleteAllAsync` tries
+every store, even after one fails, so `logout` removes whatever it can, and then throws one
+`CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
+a backend directly.
 
 ### 7.5 The file backend
 
 Path: `~/.xping/credentials.json`, where `~` is `Environment.GetFolderPath(UserProfile)`. The
 directory `~/.xping` is created with mode `0700` and the file with `0600` (contract §10.4):
 
-- Unix: `Directory.CreateDirectory` followed by `File.SetUnixFileMode(dir,
-  UserReadWriteExecute)`; the file is created with `new FileStream(tmp, new FileStreamOptions {
+- Unix: each missing directory level is created with `Directory.CreateDirectory(dir,
+  UserReadWriteExecute)` (the overload applies the mode to the last level only). An existing
+  `~/.xping` with group or other bits is tightened to `0700` before anything is written: the SDK
+  puts its local store at `<repo>/.xping`, so a home directory that is a repository (a dotfiles
+  repo) already has a `0755` `~/.xping`, and the store works the same at `0700`. The file is created with `new FileStream(tmp, new FileStreamOptions {
   Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, UnixCreateMode =
   UnixFileMode.UserRead | UnixFileMode.UserWrite })`, so the mode is `0600` from the first byte
   and no separate chmod step exists.
@@ -734,12 +852,19 @@ directory `~/.xping` is created with mode `0700` and the file with `0600` (contr
   current user `FullControl` (`FileSystemAclExtensions.SetAccessControl`). On Windows the file
   backend is only reached when Credential Manager fails, so this path is rare.
 
-Writes are atomic: serialize to `credentials.json.tmp-{pid}` in the same directory, set its mode,
+Writes are atomic: serialize to `credentials.json.tmp-{pid}-{random}` in the same directory
+(unique per write, so two writers in one process never touch each other's file), set its mode,
 then `File.Move(tmp, path, overwrite: true)`. The file holds every Cloud URL:
 
 ```json
 { "schemaVersion": 1, "credentials": { "https://app.xping.io": { ...record... } } }
 ```
+
+Each entry is parsed on its own when it is looked up. A write or delete for one Cloud URL carries
+every other entry over verbatim, a corrupt one included (§7.7: nothing is deleted
+automatically). Read-modify-write is serialized within the process; across processes the last
+move wins, which only matters for two concurrent logins to different Cloud URLs (refresh is
+serialized by §9.4).
 
 **Refusing unsafe files (contract §10.4).** Before reading on Unix, `File.GetUnixFileMode(path)`
 is checked; if any group or other bit is set, the store does not read the file and the command
@@ -749,15 +874,24 @@ reports `credential: none` with that warning; `report` degrades to local with th
 hint; `login` overwrites the file with a correct mode and does not need the check. On Windows the
 mode check is skipped; the ACL is set on write only.
 
+An unsafe file's content is never carried into a safe one: a write on a refused file starts from
+an empty file, so entries for other Cloud URLs are dropped, and a delete removes the file and
+reports that it deleted something (nothing in it is trusted for any Cloud URL). Carrying them over would
+give a `0600` file, and the next read would trust entries that another user could have written.
+
 ### 7.6 Warning the user about the fallback
 
-- On every `WriteAsync` to the file store (that is, at `login` and at each refresh that rotates the
-  token) the command prints once per process, to stderr: "Stored credentials in
+- `login` prints, to stderr, after it stores to the file: "Stored credentials in
   ~/.xping/credentials.json because no OS credential store is available ({reason}). The file is
   readable only by you." `{reason}` is the selector's reason: "Secret Service not running",
-  "libsecret not installed", "keychain locked", "Credential Manager error".
-- `report` prints this only under `--verbose`, so a pipeline of `xping report --json` is not
-  polluted on every refresh. It is still a line on stderr, never on stdout.
+  "libsecret not installed", "keychain locked", "keychain unavailable", "Credential Manager error".
+- When the keychain was selected but refused the write (§7.4), `login` prints the keychain's error,
+  then "Stored credentials in ~/.xping/credentials.json instead. The file is readable only by
+  you." The success block names the file, and `--json` reports `"store": "file"`. Later commands
+  read the file as usual; the next `login` tries the keychain again.
+- A refresh that rotates the token into the file prints nothing about the store, so a pipeline of
+  `xping report --json` is not polluted on every refresh; `--verbose` logs only "Refreshed the
+  access token for {url}".
 - `auth status` always shows the store in the `Credential` line and lists the reason under
   `warnings` in JSON.
 
@@ -765,7 +899,11 @@ mode check is skipped; the ACL is set on write only.
 
 - There is nothing to migrate: no credentials exist before this feature.
 - A keychain entry or file record that fails to deserialize, has a `schemaVersion` other than `1`,
-  or lacks `refreshToken` is **corrupt**. The store returns `null` and reports a warning "Stored
+  lacks `refreshToken` or `dataGatewayUri`, or whose `cloudUrl` is missing or differs from the
+  Cloud URL it is stored under, is **corrupt**. A credentials file that does not parse, or whose
+  top-level `schemaVersion` is not `1`, makes every lookup in it corrupt; `login` replaces it, and
+  a delete leaves it untouched and reports nothing deleted (it may hold another Cloud URL's login
+  written by a newer CLI). The store returns `null` and reports a warning "Stored
   credentials for {url} are unreadable and will be replaced at the next `xping login`."
   Nothing is deleted automatically, so a bug in a new CLI version cannot wipe a login; `login`
   overwrites and `logout` deletes.
@@ -780,7 +918,14 @@ mode check is skipped; the ACL is set on write only.
 
 ### 8.1 Precedence
 
-`CredentialResolver.ResolveAsync(cloudUrl)` returns one `ResolvedCredential`:
+`CredentialResolver.ResolveAsync(configuration)` takes the `CliConfiguration` (§14), because it
+needs the API key and where it came from as well as the Cloud URL, and returns one
+`ResolvedCredential`. It makes no request and writes nothing. A corrupt or refused stored login
+counts as "no stored login" and its warning is carried in `ResolvedCredential.Warnings`. A store
+that cannot be read also counts as "no stored login", so `report` still degrades to the next row
+or to local; its message is carried in `ResolvedCredential.StoreFailures`, and `auth status`
+exits `CredentialStoreError` instead of `AuthRequired` when no credential was found and a store
+failed (§3.4).
 
 | Order | Source | `CredentialSource` | Header used |
 |---|---|---|---|
@@ -807,6 +952,10 @@ is Cloud down for all, and a second try only doubles the wait):
 | API key: 403 `Error.ApiKey.InsufficientScope` (upload-only key) or `Error.ApiKey.FeatureNotAvailable` (plan without `ApiAccess`, contract §7.4) | nothing left to try; hint "This API key cannot read Cloud data ({scope or plan}). Sign in with `xping login` instead." |
 | API key: any other 401/403 | nothing left; hint with `title` |
 | Network error, timeout, 5xx, version mismatch | stop; `Cloud data unavailable` hint; no fallback |
+
+The resolver owns *where* to fall back: `ResolvedCredential.FallbackToApiKey()` returns the row-3
+credential (or `None`) for a stored login. The caller owns *when*: only the authenticated pipeline
+(§9) sees the outcome, so the "definitive outcome only" rule is enforced and tested there.
 
 The fallback happens at most once per command, and a rebuilt `HttpClient` pipeline is used for
 the second credential so no header from the first can leak into it. An API key is used as-is; the
@@ -840,7 +989,8 @@ comment in `Program.BuildHost` anticipates.
 
 ### 9.1 `BearerTokenHandler`
 
-A `DelegatingHandler` registered on `"xping-cloud"` when the resolved credential is a stored login:
+A `DelegatingHandler` that `CloudApiClientFactory` places in the `"xping-cloud"` pipeline (§2.2)
+when the resolved credential is a stored login:
 
 1. **Host guard.** If `request.RequestUri` is not under `record.dataGatewayUri` (scheme, host,
    port, and path prefix), throw `InvalidOperationException` before sending. The token is sent only
@@ -850,8 +1000,9 @@ A `DelegatingHandler` registered on `"xping-cloud"` when the resolved credential
 3. Send. If the response is `401` and `WWW-Authenticate` contains `error="invalid_token"`
    (contract §7.3), call `refresher.ForceRefreshAsync(ct)` once, rebuild the request (a new
    `HttpRequestMessage` with the same method, URI and headers; bodies are never present on
-   reads), and send once more. A second `401` is returned to the caller unchanged; `CloudApiClient`
-   then maps it (§10.3) and deletes the stored tokens (contract §8.2).
+   reads), and send once more. The retried request carries the request option
+   `BearerTokenHandler.RetriedAfterRefresh`. A second `401` is returned to the caller unchanged;
+   `CloudApiClient` sees the option, maps it (§9.7) and deletes the stored tokens (contract §8.2).
 4. `403` is never retried. `WWW-Authenticate` values are never logged verbatim; only the `error`
    parameter name.
 
@@ -885,12 +1036,23 @@ agent and a human). Contract §6.6 gives a 30-second reuse leeway; the CLI MUST 
 old refresh token inside that leeway. Design:
 
 1. `CrossProcessLock`: a lock file `~/.xping/locks/{sha256(cloudUrl) first 16 hex}.lock` opened
-   with `FileShare.None`. Acquire with retry every 100 ms for up to 15 s; on timeout proceed
-   without the lock (the leeway still protects) and log at verbose.
+   with `FileShare.None`. Acquire with retry every 100 ms for up to 5 s; on timeout proceed
+   without the lock (the leeway still protects) and log at verbose. The wait runs inside the
+   10-second per-attempt timeout (§10.2), so it must be shorter than that, or the attempt would
+   time out before the "proceed without the lock" rule could apply.
 2. Under the lock, **re-read the record from the store**. If the stored `accessToken` is fresh
    (another process refreshed meanwhile), adopt it, release, return.
 3. Otherwise `POST refresh_token` with the stored (re-read) refresh token, write the new pair
-   with the store's atomic `WriteAsync`, update the in-memory record, release.
+   with the store's atomic `WriteAsync`, update the in-memory record, release. The pair is written
+   to the store the record was read from, not to the store `login` would select today: a refresh
+   does not move a file sign-in into a keychain that has since become available.
+
+Once the lock is held, the refresh request and the write of the new pair run to the end with no
+cancellation token, even if the caller cancels or its attempt times out: after the server has
+rotated the token, the new pair must reach the store, or the next process presents the old token
+outside the leeway and the session is revoked. The caller stops waiting; the next caller waits for
+that refresh. A stored record older than the one in memory (a refresh whose write failed, §9.5)
+is not adopted; records are compared by `storedAt`.
 
 Because the refresh token is re-read under the lock immediately before use, the time between
 "read" and "present" is milliseconds, far inside the leeway. A long-running process never presents
@@ -927,7 +1089,8 @@ Handled in `CloudApiClient` after the handler's single retry:
 
 | Response | Action |
 |---|---|
-| 401 `Error.AccessToken.Invalid`, `Error.AccessToken.Expired` (second time) | delete tokens (§9.6 step 2), `LoginRequiredException` |
+| 401 `Error.AccessToken.Invalid`, `Error.AccessToken.Expired` (second time) | delete tokens (§9.6 step 2) unless the store now holds a newer sign-in (a login in another terminal), `LoginRequiredException` |
+| any other bearer 401 that was not retried after a refresh (no `invalid_token` challenge: a proxy page, a stripped header) | `CloudApiException` with `title`; tokens kept, no fallback |
 | 401 `Error.Authentication.MissingCredentials` | `LoginRequiredException` without deleting (nothing was sent; CLI bug or no credential) |
 | 400 `Error.Authentication.AmbiguousCredentials` | `CloudApiException("CLI bug: two credentials sent")`, surfaced as a bug message |
 | 403 `Error.AccessToken.InsufficientScope` | `CloudApiException`, never retried, message from `detail` |
@@ -970,12 +1133,15 @@ clock (§11.5) so a slow Cloud cannot make a local report slow.
 
 ### 10.3 Retries
 
-`AddResilienceHandler("xping-cloud-resilience")` on `"xping-cloud"`, mirroring `AddXpingUploader`
-but without a circuit breaker (the process is short-lived):
+A `ResilienceHandler` that `CloudApiClientFactory` places first in each `"xping-cloud"` pipeline
+(§2.2), built from `HttpRetryStrategyOptions` and `HttpTimeoutStrategyOptions` with
+`HttpClientResiliencePredicates.IsTransient`, mirroring `AddXpingUploader` but without a circuit
+breaker (the process is short-lived):
 
-- Retry: `MaxRetryAttempts = 3`, exponential from 2 s with jitter, on `5xx`, `HttpRequestException`
-  and `TimeoutRejectedException`; on `429` a **single** retry after `Retry-After` (contract §8.2),
-  capped at 10 s, else give up.
+- Retry: `MaxRetryAttempts = 3`, exponential from 2 s with jitter, on what `IsTransient` accepts
+  (`5xx`, `408`, `HttpRequestException`, `TimeoutRejectedException`); on `429` a **single** retry
+  after `Retry-After` (contract §8.2) when it is 10 s or less, else give up. `Retry-After` is not
+  honoured on other statuses (`ShouldRetryAfterHeader = false`), so a 5xx cannot stall the command.
 - Never on `401`, `403`, `404`, `400`.
 - Timeout per attempt as §10.2.
 
@@ -1018,7 +1184,7 @@ key. `ProjectResolver.ResolveAsync(assembly)` therefore tries, in order:
 | # | Source | Cost | Cached? |
 |---|---|---|---|
 | 1 | `report --project <key>` (new option; applies to the whole report) | none | no |
-| 2 | `XPING_PROJECTID` env var, then `Xping:ProjectId` from `appsettings*.json` in the report's directory (§14.2), the same values the SDK reads | none | no |
+| 2 | `XPING_PROJECTID` env var, then `Xping:ProjectId` from `appsettings*.json` in the report's directory (`report --directory`, else the working directory; §14.2), the same values the SDK reads | none | no |
 | 3 | The pin stamped in the session: new custom property `Xping.ProjectId` written by the SDK's orchestrator next to `Xping.Mode` (`LocalSessionProperties`) when `ProjectPin` is set. **SDK change**, `src/Xping.Sdk.Core`, one constant and one line in the environment-info build. Sessions written before this carry no key and fall through. | none | no |
 | 4 | Name match: `ListProjectsAsync` pages of 50 until a project whose `displayName` equals the assembly simple name (ordinal) is found. Needs the additive DataGateway change of A-3: `displayName` and `slug` on `ProjectResponse` (the collector sets `DisplayName` to the assembly name for derived projects). Until that field exists the response has no `displayName` and this step finds nothing. | one to a few requests per workspace | yes |
 | 5 | Nothing: no enrichment for that assembly; hint line §11.6 | — | — |
@@ -1028,9 +1194,14 @@ The CLI MUST NOT reproduce `FromAssemblyName` locally. The Cloud owns that rule 
 `ProjectCache`: `~/.xping/cache/projects/{sha256(cloudUrl) first 16 hex}/{workspaceId}.json`,
 `{ "schemaVersion": 1, "entries": { "<assembly>": { "projectKey": "...", "slug": "...",
 "source": "name-match", "resolvedAt": "..." } } }`, mode `0600`, TTL 24 h from `resolvedAt`.
-Only step 4 results are cached. A `404` on a later `GetTestAsync` for that key evicts the entry
-and the enricher tries step 4 once more in the same run. `logout` deletes the directory for that
-Cloud URL. The cache holds no secrets, but it does reveal project keys, so it lives under
+Only step 4 results are cached, and only for a stored login: an API key carries no workspace id
+to key the file by, so an API-key run repeats step 4. When no reported test is found under a key,
+the key is checked: a name match that came from the cache is evicted and step 4 runs once more in
+the same run (a match listed in this run is known to exist and is not listed twice); a key from
+steps 1–3 is checked with one `GetProjectAsync`, and a 404 there is the "names no project" hint of
+§11.6 rather than silent success. Step 3 uses only the newest session of each assembly: a pin
+removed since must not be revived from an older run. `logout` deletes the directory for that Cloud
+URL. The cache holds no secrets, but it does reveal project keys, so it lives under
 `~/.xping` with the same directory mode as the credentials.
 
 ### 11.3 What is enriched and how it is labelled
@@ -1042,13 +1213,17 @@ amends each spec with an "Amendment — Cloud data" section that quotes this sec
 | Slot | Spec | Content |
 |---|---|---|
 | Header line 1 | report-format §8 | `· cloud` appended when at least one finding was enriched; `· cloud unavailable` is **not** shown (the hint line covers it) |
-| Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` lowercased (`highly reliable`, `reliable`, `moderately reliable`, `unreliable`, `highly unreliable`; `insufficient data` shows no trailer), inserted between the evidence level and the id, exactly as reserved. The Cloud `evidenceLevel` is not on the row: the row already carries the local evidence level, and two evidence words would collide (Q-3, answered) |
-| Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4) |
-| Detail metrics block | finding-detail §8 | labelled pairs built in `EnvelopeBuilder`, rendered as any other metric: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
+| Row trailer | report-format §8 | `confidence 0.62 · moderately reliable` from `confidenceScore` (two decimals) and `scoreCategory` split into lowercase words (`HighlyReliable` → `highly reliable`, `reliable`, `moderately reliable`, `unreliable`, `highly unreliable`; `insufficient data` or no score shows no trailer). It is its own trailer segment directly after `evidence {level}`, before the population token and the id; the `·` is the glyph set's separator, except in ASCII, where it is `-`: ASCII's separator is `|`, which also joins the trailer's segments and would make the category read as a field of its own. When the trailer without its path would pass the 72-column fence, the category is dropped (`confidence 0.62`): the trailer is cut from the left, which would otherwise remove the local evidence level, and the detail view always shows the category. The Cloud `evidenceLevel` is not on the row: the row already carries the local evidence level, and two evidence words would collide (Q-3, answered) |
+| Latest-run contrast | latest-run §8 | `confidence 0.94 over 812 runs` from `confidenceScore` and `totalExecutions`, replacing the local contrast; the "failed on this branch" clause is **not** available from `TestResponse` and is left out (Q-4, answered) |
+| Detail metrics block | finding-detail §8 | labelled pairs appended after the local metrics: `cloud confidence  0.62 (moderately reliable)`, `cloud evidence  robust, 812 runs`, `cloud trend  stable` when present |
 
 Every Cloud value is labelled "cloud" or "confidence" in text, and lives under a `cloud` object in
-JSON, so it can never be mistaken for a local statistic. Local analysis computes no confidence score
-(fixed decision; `ImpactScorer` stays as it is). Layout is identical with and without Cloud: the
+JSON, so it can never be mistaken for a local statistic. **The text slots are therefore rendered
+from those `cloud` objects by `TextReportRenderer`, not resolved into strings by the builder.**
+The reserving specs put the contrast sentence and the detail pairs in the builder, which would put
+Cloud values into `latestRun.failures[].contrast` and `findings[].metrics`; in JSON those two stay
+purely local, and the three report specs carry an amendment saying so. Local analysis computes no
+confidence score (fixed decision; `ImpactScorer` stays as it is). Layout is identical with and without Cloud: the
 slots are empty strings when there is no data, which is what the specs already require.
 
 ### 11.4 JSON envelope changes (additive, `1.21` → `1.22`)
@@ -1056,11 +1231,18 @@ slots are empty strings when there is no data, which is what the specs already r
 - `context.cloud` (nullable object): `{ "cloudUrl", "credential": "stored-login" | "api-key",
   "workspaceId": "..." | null, "status": "ok" | "partial" | "unavailable" | "login-required" |
   "not-attempted", "reason": "..." | null, "project": { "assembly": "...", "projectKey": "...",
-  "source": "flag" | "env" | "session" | "name-match" } | null }`. `null` when no credential
+  "source": "flag" | "env" | "config" | "session" | "name-match" } | null }`
+  (`env` is `XPING_PROJECTID` or `Xping__ProjectId`, `config` is `Xping:ProjectId` in `appsettings*.json`). `null` when no credential
   resolved, so today's consumers see a new nullable field and nothing else.
-- `findings[].cloud` (nullable object): `{ "confidence": 0.62, "category": "moderate",
-  "evidenceLevel": "high", "runs": 812, "trend": "rising" | null, "delta": -0.03 | null,
-  "flaky": true | null, "lastExecutedAt": "..." | null, "fetchedAt": "..." }`.
+- `context.cloud.reason` is the hint line of §11.6 without its `Cloud data unavailable: ` prefix
+  (`null` when `status` is `ok` or `not-attempted`). `not-attempted` means a credential resolved
+  but the envelope held no test with a fingerprint, so no request was made.
+- `findings[].cloud` (nullable object): `{ "confidence": 0.62, "category": "moderately-reliable",
+  "evidenceLevel": "robust", "runs": 812, "trend": "rising" | null, "delta": -0.03 | null,
+  "flaky": true | null, "lastExecutedAt": "..." | null, "fetchedAt": "..." }`. `category`,
+  `evidenceLevel` and `trend` are the Cloud's values in kebab case (`ModeratelyReliable` →
+  `moderately-reliable`); `confidence` and `category` are `null` when the Cloud has no score.
+  Group findings have no fingerprint and get no `cloud` object.
 - `latestRun.failures[].cloud` (nullable): same shape.
 
 Nothing existing is renamed, removed or re-typed. `schemaVersion` becomes `"1.22"`; the literal is
@@ -1076,7 +1258,10 @@ budget ran out are enriched; `context.cloud.status` is `partial` when at least o
 default report has at most 10 findings (`--top`), so the usual cost is one round of parallel
 requests.
 
-### 11.6 Hint lines (stderr, one line, terminal or `--verbose` only)
+### 11.6 Hint lines (stderr, one line)
+
+Every line is printed when stderr is a terminal or under `--verbose`; the login-required line is
+printed always.
 
 | Condition | Line |
 |---|---|
@@ -1084,9 +1269,14 @@ requests.
 | login required (§9.6) | `Cloud data unavailable: your sign-in is no longer valid. Run xping login.` — always printed (§10.4) |
 | unreachable, TLS, timeout, 5xx | `Cloud data unavailable: could not reach https://api.xping.io ({category}). Showing local results only.` |
 | version mismatch | `Cloud data unavailable: {§2.3 message}` |
-| project not resolved for some assembly | `Cloud data unavailable for {assembly}: no matching Cloud project. Use --project <key>.` |
+| project not resolved for some assembly | `Cloud data unavailable: no matching Cloud project for {assembly}. Use --project <key>.` |
+| a key from steps 1–3 names no project (nothing found under it, and `GetProjectAsync` answers 404) | `Cloud data unavailable: no Cloud project '{key}' (from {origin}). Check the key, or pass --project <key>.` |
 | file refused | `Cloud data unavailable: {§7.5 message}` |
-| plan (API key) | `Cloud data unavailable: {§8.1 plan message}` |
+| plan (API key, 403 `ApiKeyFeatureNotAvailable`) | `Cloud data unavailable: This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.` |
+| scope (API key, 403 `ApiKeyInsufficientScope`) | `Cloud data unavailable: This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.` |
+| 429 | `Cloud data unavailable: Xping Cloud is rate limiting requests; try again in a minute.` |
+| other refusal | `Cloud data unavailable: Xping Cloud refused the request ({title}): {detail}` |
+| defect in the enricher | `Cloud data unavailable: an unexpected error occurred. Showing local results only.` (the exception goes to the `--verbose` log) |
 
 ### 11.7 Existing behaviour that must not change
 
@@ -1130,19 +1320,20 @@ a `report` meaning and are easy to recognise in scripts:
 |---|---|---|---|
 | 0 | `Success` | as today; also `logout` in every completed case, `auth status` with a credential | all |
 | 1 | — | as today (`report` threshold, `where`/`clear` failures, root without args) | existing |
-| 2 | — | parse or validation error, including an invalid `--cloud-url` or `--project`; `report` unavailable | existing + new options |
+| 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; `report` unavailable. For the auth commands also an invalid `XPING_CLOUDURL` or settings file (`"error": "configuration"`); `report` turns that into a hint (§11.6) | all |
 | 3 | — | `report --id` not reported | existing |
 | 10 | `AuthRequired` | `auth status` with no credential of any kind | `auth status` |
 | 11 | `LoginDeclined` | consent denied in the browser | `login` |
 | 12 | `LoginTimedOut` | 5-minute loopback wait or device code expiry | `login` |
 | 13 | `InteractiveRequired` | `login` without a TTY or with `CI` set | `login` |
-| 14 | `LoginFailed` | any other flow failure: bind, `invalid_grant`, other OAuth error | `login` |
+| 14 | `LoginFailed` | any other flow failure: bind or listener (`local_listener`), `invalid_grant`, other OAuth error | `login` |
 | 15 | `CloudUnreachable` | discovery, network, TLS, `invalid_client` on an auth command | `login`, (never `report`) |
 | 16 | `CloudVersionMismatch` | contract version or min CLI version, 426 | `login`, (never `report`) |
-| 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure | `login`, `logout` |
-| 130 | `Cancelled` | Ctrl+C | `login`, `logout` |
+| 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure; `auth status` with no credential when a store could not be read | `login`, `logout`, `auth status` |
+| 130 | `Cancelled` | Ctrl+C (`Program.Run` maps it for every command) | all |
 
-`report` never returns a code above 3; Cloud problems are hints (§10.4). The table is repeated in
+`report` never returns a code above 3 for a Cloud problem; Cloud problems are hints (§10.4). Ctrl+C
+is 130 for every command. The table is repeated in
 `docs/cli/command-reference.md` (phase 8).
 
 ---
@@ -1154,14 +1345,14 @@ a `report` meaning and are easy to recognise in scripts:
 | Source | Form | Precedence |
 |---|---|---|
 | `--cloud-url <url>` | global option on every command | 1 |
-| `XPING_CLOUDURL` | environment variable, `XPING_` + property name like every SDK variable | 2 |
+| `XPING_CLOUDURL` | environment variable, `XPING_` + property name like every SDK variable; then `Xping__CloudUrl` / `XPING__CLOUDURL`, the nested forms the SDK also reads | 2 |
 | `Xping:CloudUrl` | `appsettings.json` / `appsettings.{env}.json` in the working directory (or `--directory`), read by `CliConfiguration` with the same file and environment rules as `BuildXpingConfiguration` in Core | 3 |
 | default | `https://app.xping.io` (contract OQ-12) | 4 |
 
 Validation (parse-time, exit 2): absolute URI; scheme `https`, or `http` only when the host is
 `localhost` or `127.0.0.1` (contract §10.1; `[::1]` is not in the contract's list and is refused,
 Q-5, answered); no user info, query or fragment; a path is allowed only as `/` (the issuer must equal the URL
-exactly, and the Portal issuer has no path). Normalization: lowercase scheme and host, default port
+followed by one `/`, contract OQ-17, so the Portal issuer has no other path). Normalization: lowercase scheme and host, default port
 removed, trailing slash removed. The normalized string is the key for the credential store, the
 discovery cache and the project cache. `https://App.Xping.io/` and `https://app.xping.io` are the
 same login.
@@ -1230,9 +1421,16 @@ The existing local store (`<repo>/.xping/`) is unrelated and unchanged.
 `--verbose` line. It replaces:
 
 - The value of `Authorization` and `X-API-Key` headers when they appear as `Name: value`.
-- Form fields `code=`, `refresh_token=`, `device_code=`, `code_verifier=`, `token=`, `state=`
-  up to the next `&` or whitespace.
-- Any string that looks like a JWT (`[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`).
+- Form fields `code=`, `refresh_token=`, `access_token=`, `id_token=`, `device_code=`,
+  `code_verifier=`, `client_secret=`, `token=`, `state=` up to the next `&` or whitespace.
+- The same names, and their camelCase forms (`refreshToken`, `accessToken`, …, as in the stored
+  record of §7.2), as JSON members: the string value of `"name": "value"`. A token response body
+  is the likeliest place for an opaque, non-JWT token to reach a message.
+- Any string that looks like a JWT (`eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+`).
+  Both the header and the payload are Base64URL JSON objects, so both start `eyJ`. A looser
+  pattern (three dot-separated runs of 10+ characters) also matches .NET type names such as
+  `Microsoft.Extensions.Configuration.FileConfigurationProvider` and would mangle the stack traces
+  `--verbose` prints.
 - The current refresh token, access token and API key values themselves, when known to the
   process (exact substring match).
 
@@ -1243,7 +1441,7 @@ disabled even under `--verbose`, because their messages include full URLs and he
 
 §7.5 and §14.4. Every file the CLI creates under `~/.xping` is `0600` in a `0700` directory on
 Unix, with an owner-only ACL on Windows, created with the mode before content is written, never
-chmod-ed afterwards.
+chmod-ed afterwards. The only chmod is the tightening of an existing `~/.xping` itself (§7.5).
 
 ### 15.4 Loopback listener
 
@@ -1293,23 +1491,31 @@ The Xping skill and the MCP server run the CLI as a child process. Rules:
 
 - Every PR on `ubuntu-latest` (existing `ci.yml`): unit tests, the fake-server flow tests
   (§18.2), the file backend, `LibSecretStore` with the library **absent** (fallback path), and
-  the regression suites. No keyring is installed on the PR runner.
-- Nightly on `main` only (A-7), new workflow `cli-credential-stores.yml`, `schedule: cron
-  '0 3 * * *'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
+  the regression suites. No keyring is installed on the PR runner, and the CLI test step runs with
+  `--filter "Category!=CredentialStore"` so a runner image that ships one never turns them on.
+- Weekly on `main` only (A-7, Q-7), new workflow `cli-credential-stores.yml`, `schedule: cron
+  '0 3 * * 1'` plus `workflow_dispatch`, matrix `windows-latest`, `macos-latest`,
   `ubuntu-latest`. It runs **only** `tests/Xping.Cli.Tests` filtered to
   `Category=CredentialStore`, about ten tests, on each runner:
   - Windows: `WindowsCredentialStore` round trip, blob-limit rule, delete, corrupt entry.
   - macOS: `MacOsKeychainStore` round trip, update, delete, corrupt entry (the runner's login
     keychain is unlocked).
   - Ubuntu: installs `gnome-keyring` and `libsecret-1-0`, starts `dbus-run-session` with an
-    unlocked keyring, runs the `LibSecretStore` round trip; then a second step without the
-    session bus asserts the fallback.
+    unlocked keyring, runs the `LibSecretStore` round trip; then a second step, outside that
+    session, runs the fallback tests (library missing, no session bus), whose environment is
+    injected.
   The job has `timeout-minutes: 15` and `concurrency` cancel-in-progress. Expected cost:
   under 5 runner minutes on Linux, ~3 on Windows (×2 billing), ~3 on macOS (×10 billing), so
-  roughly 40 billed minutes per run, about 1200 per month if run daily. **Decision (Q-7,
-  answered): it runs weekly**, `'0 3 * * 1'`, about 160 billed minutes per month, plus
+  roughly 40 billed minutes per run, about 1200 per month if it ran daily. **Decision (Q-7,
+  answered): it runs weekly**, about 160 billed minutes per month, plus
   `workflow_dispatch` for a manual run after a backend change. Developers run the same filter
   locally before touching a backend.
+- Code coverage comes from the PR job only, which cannot run the native backends: the Windows and
+  macOS stores never execute on Linux, and `LibSecretStore` needs a keyring the PR runner does not
+  install. The three backend classes, and the OS switch in `ServiceCollectionExtensions` that
+  constructs them, are `[ExcludeFromCodeCoverage]` with that reason; their tests are the weekly run
+  above. Everything they share (`CredentialRecordCodec`, `ProbedSecret`, the selector and
+  `CredentialStores`) stays measured, so keep logic out of the backends.
 - Tests use the service/target name `xping-cli-tests` and a Cloud URL of
   `https://tests.invalid`, and delete what they create in `finally`, so a developer's real login
   is never touched.
@@ -1334,11 +1540,11 @@ by the fake-server tests with the environment providers stubbed.
 | `OAuthClientTests` | form encoding, `client_id` on every grant, no `scope` on refresh, error mapping and retry delays with `FakeTimeProvider` |
 | `LoopbackListenerTests` | real `HttpListener` on an ephemeral port: 404 for other paths, 400 for wrong state, keeps waiting, success page has no code/state, stops after success, cancellation, bind retry (port occupied by a `TcpListener` the test holds) |
 | `HeadlessDetectorTests`, `BrowserLauncherTests` | every row of §5.2; launcher argument construction per OS with a fake process starter |
-| `DeviceFlowTests` | polling state machine with a fake `OAuthClient` and `FakeTimeProvider`: pending, slow_down accumulation, denied, expired, network error keeps interval |
+| `DeviceFlowTests` | polling state machine against `FakeCloud` (§18.2) with the real `OAuthClient`, as the loopback flow is tested, and `FakeTimeProvider`: pending, slow_down accumulation, denied, expired, network error keeps interval |
 | `CredentialRecordTests`, `FileCredentialStoreTests` | round trip, atomic write, mode 0600/0700 (the mode assertions are skipped on Windows through a trait), refusal of group/world-readable file, corrupt record, multi-cloud file |
 | `CredentialStoreSelectorTests` | selection with fake availability probes; read order keychain → file |
 | `WindowsCredentialStoreTests`, `MacOsKeychainStoreTests`, `LibSecretStoreTests` | `Category=CredentialStore` (§17.2); on other OSes they are skipped, not failed |
-| `CredentialResolverTests` | precedence table of §8.1, both fallback rows (no login → key; login invalid → key), no fallback on network error, shadowed-login and fallback-key reporting |
+| `CredentialResolverTests` | precedence table of §8.1, both fallback rows (no login → key; login invalid → key through `FallbackToApiKey`), corrupt or refused login → next row with its warning, shadowed-login and fallback-key reporting. "No fallback on network error" is the pipeline's decision and is tested by `Report_NoFallback_OnNetworkError` (phase 6) |
 | `TokenRefresherTests` | proactive margin, single-flight (N concurrent callers, one refresh), re-read under lock adopts a fresher record, `invalid_grant` with a rotated stored token retries once, `invalid_grant` otherwise deletes and throws, store write failure keeps in-memory tokens |
 | `BearerTokenHandlerTests` | host guard, header set, 401 `invalid_token` → one refresh and retry, second 401 passes through, 403 not retried, no `X-API-Key` |
 | `CloudApiClientTests` | DTO mapping, 404 → null, status-then-title mapping table of §9.7, 429 `Retry-After` |
@@ -1372,11 +1578,13 @@ by the fake-server tests with the environment providers stubbed.
 - Records every request (method, path, headers, form) so tests assert, for example, that the
   access token was never sent to the Portal and the refresh token was never in a URL.
 
-Flow tests run `Program.Run` in-process with `isTerminal: true`, `XPING_LOCAL_STORE` pointing at
-a scratch store, `HOME`/`USERPROFILE` redirected to a scratch directory so `~/.xping` is
-isolated, and a test-only hook `Program.Run(..., configureServices)` that replaces
-`BrowserLauncher` with a capturing fake, `HeadlessDetector` with a fixed answer, `TimeProvider`
-with `FakeTimeProvider`, and `CredentialStoreSelector` with the file backend. Scenarios:
+Flow tests run `Program.Run` in-process with `isTerminal: true` (one flag for stdin, stdout and
+stderr), and a test-only hook `Program.Run(..., configureServices)` that replaces `XpingHome` with a
+scratch directory so `~/.xping` is isolated, `IBrowserLauncher` with a capturing fake,
+`IHeadlessDetector` with a fixed answer, `TimeProvider` with `FakeTimeProvider`, and the
+environment provider with a dictionary. The environment is always injected: CI runners set
+`CI=true`, which `login` refuses (§3.2). The host registers a `CredentialStoreSelector` without a
+keychain backend, so flow tests never read or write the developer's real keychain. Scenarios:
 
 | Test | Scenario |
 |---|---|
@@ -1401,6 +1609,14 @@ with `FakeTimeProvider`, and `CredentialStoreSelector` with the file backend. Sc
 | `Report_BothHeadersNever` | request log shows never both headers in any test (asserted in the fake's dispose) |
 | `Logout_Revokes_ThenDeletes`, `Logout_Offline_DeletesAndWarns`, `Logout_NotSignedIn` | §12 |
 | `AuthStatus_*` | each credential state, no request made (asserted) |
+
+The four tests named in phase 6's exit criterion (`Report_Refresh_Rotation`, `Report_ReuseDetected`,
+`Report_TwoProcesses_Refresh`, `Report_BothHeadersNever`) run in phase 6 at the pipeline level,
+because `report` does not call Cloud before phase 7: they drive `CloudApiClientFactory` →
+`CloudApiClient` → `BearerTokenHandler` → `TokenRefresher` against `FakeCloud` and assert the
+store and the request log. Phase 7 extends them to run `xping report` and adds the report-level
+assertions (hint line, exit code, envelope). The fallback decision of §8.1 belongs to the caller,
+`CloudEnricher`, so `Report_Fallback_*` and `Report_NoFallback_OnNetworkError` are phase 7 tests.
 
 ### 18.3 Regression suites
 
@@ -1439,20 +1655,23 @@ without any token or code:
 ## 19. Implementation phases
 
 Integration branch: `feat/cli-auth`, created from `main` in phase 0. One sub-branch per phase,
-merged back by PR when its exit criterion holds. Every merge leaves `feat/cli-auth` building,
-green, and behaving exactly as `main` for anyone without a credential.
+merged back by PR when its exit criterion holds. Sub-branches are named `feat/cli-auth-NN-<name>`
+(for example `feat/cli-auth-00-scaffold`): git cannot hold `feat/cli-auth` and
+`feat/cli-auth/…` at the same time, because a ref cannot be both a branch and a directory.
+Every merge leaves `feat/cli-auth` building, green, and behaving exactly as `main` for anyone
+without a credential.
 
 | # | Branch | Work | Exit criterion |
 |---|---|---|---|
-| 0 | `feat/cli-auth/cli-00-scaffold` | Global options `--cloud-url`, `--api-key`, `--verbose`; `CliConfiguration` (§14) with env and appsettings reading; `AuthExitCodes`; `Redaction`; `Program.Run` test hook and Ctrl+C token; `auth`, `login`, `logout` command shells that print "not implemented" and exit 14; docs rows of §14.3. | Build green; all existing tests green unchanged; `xping --help` lists the new commands; `CloudUrlTests`, `RedactionTests` green. |
-| 1 | `feat/cli-auth/cli-01-discovery-oauth` | `DiscoveryClient` + cache, `OAuthClient` with the §2.4 retries, DTOs, `"xping-oauth"` client; `FakeCloud` with discovery, token, device, revoke. | `DiscoveryClientTests`, `OAuthClientTests` green against `FakeCloud`; every §2.3 failure row has a test. |
-| 2 | `feat/cli-auth/cli-02-file-store` | `CredentialRecord`, `ICredentialStore`, `FileCredentialStore` with modes and atomic write, `CredentialStoreSelector` with the file backend only, `CredentialResolver`. | `FileCredentialStoreTests`, `CredentialResolverTests` green on Linux and macOS locally; the refusal message verified by a test that chmods the file. |
-| 3 | `feat/cli-auth/cli-03-loopback-login` | `Pkce`, `LoopbackListener`, pages, `BrowserLauncher`, `HeadlessDetector`, `LoopbackFlow`, `LoginCommand` (loopback only), `AuthStatusCommand`, `LogoutCommand` (§12). | Flow tests `Login_Loopback_*`, `Logout_*`, `AuthStatus_*` green; manual login against production succeeds on the developer machine with the file store. |
-| 4 | `feat/cli-auth/cli-04-device-login` | `DeviceFlow`, `--device`, `--no-browser`, `--workspace`. | `Login_Device_*` green; manual device login over SSH succeeds. |
-| 5 | `feat/cli-auth/cli-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
-| 6 | `feat/cli-auth/cli-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green. |
-| 7 | `feat/cli-auth/cli-07-report-enrichment` | SDK pin stamp (§11.2 step 3), `ProjectResolver` + cache, `--project`, `CloudEnricher`, envelope `1.22`, the three renderer slots, amendments to the three report specs, `context.cloud`. Depends on the DataGateway `displayName`/`slug` change for step 4; steps 1–3 work without it. | Goldens unchanged; `Report_Enriched`, `Report_CloudDown`, `Report_ApiKey_Precedence`, `Report_NoCredential_NoNetwork` green; `ReportEnvelopeTests` updated for `1.22`. |
-| 8 | `feat/cli-auth/cli-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR. | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
+| 0 | `feat/cli-auth-00-scaffold` | Global options `--cloud-url`, `--api-key`, `--verbose`; `CliConfiguration` (§14) with env and appsettings reading; `AuthExitCodes`; `Redaction`; `Program.Run` test hook and Ctrl+C token; `auth`, `login`, `logout` command shells that print "not implemented" and exit 14; docs rows of §14.3. | Build green; all existing tests green unchanged; `xping --help` lists the new commands; `CloudUrlTests`, `RedactionTests` green. |
+| 1 | `feat/cli-auth-01-discovery-oauth` | `DiscoveryClient` + cache, `OAuthClient` with the §2.4 retries, DTOs, `"xping-oauth"` client; `FakeCloud` with discovery, token, device, revoke. | `DiscoveryClientTests`, `OAuthClientTests` green against `FakeCloud`; every §2.3 failure row has a test. |
+| 2 | `feat/cli-auth-02-file-store` | `CredentialRecord`, `ICredentialStore`, `FileCredentialStore` with modes and atomic write, `CredentialStoreSelector` and `CredentialStores` (read order) with the file backend only, `CredentialResolver`. | `FileCredentialStoreTests`, `CredentialResolverTests` green on Linux and macOS locally; the refusal message verified by a test that chmods the file. |
+| 3 | `feat/cli-auth-03-loopback-login` | `Pkce`, `LoopbackListener`, pages, `BrowserLauncher`, `HeadlessDetector`, `LoopbackFlow`, `LoginCommand` (loopback only), `AuthStatusCommand`, `LogoutCommand` (§12). | Flow tests `Login_Loopback_*`, `Logout_*`, `AuthStatus_*` green; manual login against production succeeds on the developer machine with the file store. |
+| 4 | `feat/cli-auth-04-device-login` | `DeviceFlow`, `--device`, `--no-browser`, `--workspace`. | `Login_Device_*` green; manual device login over SSH succeeds. |
+| 5 | `feat/cli-auth-05-keychains` | `WindowsCredentialStore`, `MacOsKeychainStore`, `LibSecretStore`, selector probes, size-limit rule, read-order rule, `cli-credential-stores.yml` (weekly, A-7). | `Category=CredentialStore` tests green on all three runners in one manual `workflow_dispatch` run; PR CI unchanged in duration (±1 min). |
+| 6 | `feat/cli-auth-06-authenticated-pipeline` | `TokenRefresher`, `CrossProcessLock`, `BearerTokenHandler`, `ApiKeyHandler`, `"xping-cloud"` client with resilience, `CloudApiClient`, error mapping, `FakeCloud` gateway routes. | `TokenRefresherTests`, `BearerTokenHandlerTests`, `CloudApiClientTests`, `Report_Refresh_Rotation`, `Report_ReuseDetected`, `Report_TwoProcesses_Refresh`, `Report_BothHeadersNever` green at the pipeline level (§18.2; phase 7 runs them through `report`). |
+| 7 | `feat/cli-auth-07-report-enrichment` | SDK pin stamp (§11.2 step 3), `ProjectResolver` + cache, `--project`, `CloudEnricher`, envelope `1.22`, the three renderer slots, amendments to the three report specs, `context.cloud`. Depends on the DataGateway `displayName`/`slug` change for step 4; steps 1–3 work without it. | Goldens unchanged; `Report_Enriched`, `Report_CloudDown`, `Report_ApiKey_Precedence`, `Report_NoCredential_NoNetwork` green; `ReportEnvelopeTests` updated for `1.22`. |
+| 8 | `feat/cli-auth-08-docs-verification` | `docs/cli/command-reference.md` (commands, exit codes, macOS prompt note, WSL and devcontainer notes), `README.md` roadmap lines, adapter READMEs where they mention `xping login`, `nuspec/README.Cli.md`; §18.4 manual verification recorded in the PR. The `feat/cli-auth` entry in the `pull_request` branches of `.github/workflows/ci.yml` (added in phase 0 so the phase PRs run CI) stays, so this phase and its review fixes run CI too; the `feat/cli-auth` → `main` PR removes it. | Docs build (`docfx`) green; verification record attached; `feat/cli-auth` ready for one PR to `main`. |
 
 Each PR names the contract sections it implements and the tests that prove them. A phase that
 finds a contract or spec conflict stops and reports.
@@ -1466,7 +1685,7 @@ finds a contract or spec conflict stops and reports.
 | Q-1 | *Answered 2026-09-29.* Filed as [xping-dev/dashboard#333](https://github.com/xping-dev/dashboard/issues/333): `displayName` and `slug` on `ProjectResponse`. Phase 7 step 4 waits for it; steps 1–3 do not. | — |
 | Q-2 | *Answered 2026-09-29.* The id is enough for the MVP. `login` shows the workspace id and makes no name lookup (§3.2). | — |
 | Q-3 | *Answered 2026-09-30.* Option A: the row trailer uses `scoreCategory`; `evidenceLevel` appears only in the detail block and in JSON (§11.3). | — |
-| Q-4 | **Latest-run contrast.** The reserved sentence includes "failed on this branch"; `TestResponse` has no per-branch data. Leave the clause out for the MVP (this draft) or call the sessions endpoint with `branch=`? | phase 7 |
+| Q-4 | *Answered 2026-10-07.* Leave the clause out: the latest-run contrast is `confidence 0.94 over 812 runs` and no sessions request is made (§11.3). | — |
 | Q-5 | *Answered 2026-09-29.* Yes: `http://[::1]` Cloud URLs are refused (§14.1). | — |
 | Q-6 | *Answered 2026-09-30.* Superseded by A-8: the stored login now takes precedence over the ambient key, so `login` proceeds without a warning (§3.2) and `auth status` reports the key as a fallback (§3.4). | — |
 | Q-7 | *Answered 2026-09-29.* Weekly (§17.2). The owner may raise the frequency later. | — |
@@ -1474,6 +1693,11 @@ finds a contract or spec conflict stops and reports.
 | Q-9 | *Answered 2026-09-29.* Yes: the `login-required` hint is always printed; other hints stay terminal-or-verbose only (§10.4, §11.6). | — |
 
 ### Contract observations recorded while writing (no conflict found)
+
+- Contract amendments of 2026-10-02/03, applied in phase 1: OQ-17 (`issuer` is `{Cloud URL}/`,
+  §2.3), OQ-19 (revocation body may be `{}`, §2.4). OQ-18 (authorize request errors render a page
+  and never redirect) needs no CLI change: the loopback flow meets them as its timeout (§4.7).
+  OQ-20 (key withdrawal ends sessions with `invalid_grant`) is already §9.6.
 
 - Contract §3.1 step 8 versus the failure table: resolved as A-6 ("one successful callback").
 - Contract §3.1 step 2 says "port 0, then read the assigned port"; with `HttpListener` this is a

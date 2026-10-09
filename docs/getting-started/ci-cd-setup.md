@@ -489,6 +489,21 @@ xping report --no-color --ascii   # for log collectors that mangle ANSI
 > cross-run history that makes findings meaningful accumulates in Xping Cloud, or on developer
 > machines that keep their `.xping/` between runs.
 
+To have the CI report add Xping Cloud's confidence for each test, give the report step a key that
+can read Cloud data. `xping login` needs an interactive terminal and refuses to run when `CI` is set, so in a pipeline a
+key is the only way:
+
+```yaml
+- name: Check reliability findings
+  if: always()
+  env:
+    XPING_APIKEY: ${{ secrets.XPING_READ_APIKEY }}
+  run: xping report --fail-on high
+```
+
+An upload-only key cannot read; the report then says so on stderr and stays local. Cloud data never
+changes the exit code. See [Credentials](../cli/command-reference.md#credentials).
+
 Full flag list: [CLI Command Reference](../cli/command-reference.md).
 
 ---

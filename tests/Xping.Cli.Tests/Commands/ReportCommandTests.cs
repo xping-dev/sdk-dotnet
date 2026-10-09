@@ -87,7 +87,7 @@ public sealed class ReportCommandTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error);
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
         return (code, output.ToString() + error.ToString());
     }
 

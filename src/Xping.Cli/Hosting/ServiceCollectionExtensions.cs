@@ -3,12 +3,30 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Xping.Cli.Auth;
+using Xping.Cli.Auth.Browser;
+using Xping.Cli.Auth.Discovery;
+using Xping.Cli.Auth.Flows;
+using Xping.Cli.Auth.Http;
+using Xping.Cli.Auth.Store;
+using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Projects;
 using Xping.Cli.Commands;
+using Xping.Cli.Commands.Auth;
+using Xping.Cli.Configuration;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Services;
+using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.Serialization;
+using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Hosting;
 
@@ -17,14 +35,18 @@ namespace Xping.Cli.Hosting;
 /// </summary>
 internal static class ServiceCollectionExtensions
 {
+    // The keychain entry name of contract §10.4; tests use their own so a real sign-in is never touched.
+    private const string KeychainService = "xping-cli";
+
     public static IServiceCollection AddXpingCliServices(
         this IServiceCollection services,
         TextWriter output,
         TextWriter error,
         TextReader input,
-        bool isTerminal)
+        Terminals terminals)
     {
-        services.AddSingleton(new ConsoleIO(output, error, input, isTerminal));
+        services.AddSingleton(new ConsoleIO(output, error, input, terminals));
+        services.AddSingleton<GlobalOptions>();
         services.AddSingleton<ILocalSessionStoreFactory, LocalSessionStoreFactory>();
 
         services.AddXpingLocalAnalysis();
@@ -33,14 +55,101 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<WhereCommand>();
         services.AddTransient<ClearCommand>();
 
-        // Extension point for the Xping Cloud work: an authenticated HTTP client with Polly
-        // resilience (mirroring XpingServiceCollectionExtensions.AddXpingUploader in
-        // Xping.Sdk.Core) and token-storage services will register here, e.g.:
-        //   services.AddHttpClient<ICloudClient, CloudClient>((sp, client) => { ... })
-        //       .AddResilienceHandler("xping-cloud-resilience", (builder, context) => { ... });
-        //   services.AddXpingCloudAuth();
+        services.AddXpingCliAuth();
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers <c>login</c>, <c>logout</c> and <c>auth status</c>, and the services behind them.
+    /// </summary>
+    /// <remarks>
+    /// The Cloud HTTP clients, the credential stores and the DataGateway client factory
+    /// (cli-auth-cli-spec §2.2). None of it is added to the SDK uploader's client.
+    /// </remarks>
+    private static IServiceCollection AddXpingCliAuth(this IServiceCollection services)
+    {
+        services.AddTransient<LoginCommand>();
+        services.AddTransient<LogoutCommand>();
+        services.AddTransient<AuthStatusCommand>();
+
+        services.AddXpingSerialization();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(new CliVersion(XpingVersion.Current));
+        services.AddSingleton(_ => XpingHome.ForCurrentUser());
+        services.AddSingleton<DiscoveryCache>();
+        services.AddSingleton<DiscoveryClient>();
+        services.AddSingleton<OAuthClient>();
+        services.AddSingleton<FileCredentialStore>();
+        services.AddSingleton(provider => new CredentialStoreSelector(
+            provider.GetRequiredService<FileCredentialStore>(),
+            Keychain(provider, HostOsDetector.Current)));
+        services.AddSingleton<CredentialResolver>();
+
+        services.TryAddSingleton<IEnvironmentVariableProvider, ProcessEnvironment>();
+        services.AddSingleton<CliConfigurationLoader>();
+        services.AddTransient<AuthCommandRunner>();
+        services.AddSingleton<ILauncherProcess, LauncherProcess>();
+        services.AddSingleton<IBrowserLauncher>(provider => new BrowserLauncher(
+            provider.GetRequiredService<ILauncherProcess>(),
+            HostOsDetector.Current,
+            provider.GetRequiredService<ILogger<BrowserLauncher>>()));
+        services.AddSingleton<IHeadlessDetector>(provider => new HeadlessDetector(
+            provider.GetRequiredService<IEnvironmentVariableProvider>(),
+            HostOsDetector.Current,
+            File.Exists));
+        services.AddTransient<LoopbackFlow>();
+        services.AddTransient<DeviceFlow>();
+        services.AddSingleton<CrossProcessLock>();
+        services.AddSingleton<CloudApiClientFactory>();
+        services.AddSingleton<ICloudApiClientFactory>(provider => provider.GetRequiredService<CloudApiClientFactory>());
+        services.AddSingleton<ProjectCache>();
+        services.AddSingleton<ProjectResolver>();
+        services.AddSingleton<CloudEnricher>();
+
+        services
+            .AddHttpClient(AuthHttpClients.OAuth, (provider, client) =>
+            {
+                client.Timeout = AuthHttpClients.OAuthTimeout;
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(provider.GetRequiredService<CliVersion>().UserAgent);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            })
+
+            // A redirect on the back channel is never followed (contract §10.2), and no cookie the
+            // Portal sets for its browser session belongs in a CLI request.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+
+            // The factory's logging handlers write full URLs and headers. They would be silenced by
+            // the verbose logger's category filter anyway; removing them means no filter has to hold.
+            .RemoveAllLoggers();
+
+        // Only the primary handler: the resilience and credential handlers are composed per
+        // credential by CloudApiClientFactory (§2.2).
+        services
+            .AddHttpClient(CloudHttp.ClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+            .RemoveAllLoggers();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Returns the OS credential store of <paramref name="os"/>, or <see langword="null"/> where
+    /// there is none (cli-auth-cli-spec §7.4).
+    /// </summary>
+    [ExcludeFromCodeCoverage(Justification = "Each arm runs only on its own OS; the Ubuntu PR runner reaches one.")]
+    private static IKeychainCredentialStore? Keychain(IServiceProvider provider, HostOs os)
+    {
+        IXpingSerializer serializer = provider.GetRequiredService<IXpingSerializer>();
+
+        return os switch
+        {
+            HostOs.Windows when OperatingSystem.IsWindows() => new WindowsCredentialStore(KeychainService, serializer),
+            HostOs.MacOS when OperatingSystem.IsMacOS() => new MacOsKeychainStore(KeychainService, serializer),
+            HostOs.Linux when OperatingSystem.IsLinux() => new LibSecretStore(
+                KeychainService, serializer, provider.GetRequiredService<IEnvironmentVariableProvider>(), File.Exists),
+            _ => null,
+        };
     }
 
     /// <summary>
