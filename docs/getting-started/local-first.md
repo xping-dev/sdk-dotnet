@@ -236,11 +236,25 @@ Keep the key out of your repository: export it from your shell or a secret store
 
 The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `xping report` continues to work offline and on your own machine.
 
-To stay local even with credentials present, set the mode explicitly:
+To see Cloud's view in the same report, sign in once on your machine:
+
+```bash
+xping login
+```
+
+`xping report` then adds Xping Cloud's confidence score to the rows it already prints, labelled so
+it is never mistaken for a local number. Offline, it prints the local report as before. See
+[Cloud data](../cli/command-reference.md#cloud-data).
+
+To keep the SDK from uploading even with credentials present, set the mode explicitly:
 
 ```bash
 export XPING_MODE=LocalOnly
 ```
+
+`XPING_MODE` is an SDK setting; the CLI does not read it. Without a sign-in, `xping report` tries
+the `XPING_APIKEY` in your shell, and an upload key answers that it cannot read: the report stays
+local and, at a terminal, says so in one line. `xping login` replaces that line with Cloud data.
 
 ---
 

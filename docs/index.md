@@ -263,6 +263,17 @@ that only fails on a teammate's laptop still counts.
 in CI; never commit it. It can write test runs and nothing else, so the key sitting in your CI
 secrets is not a way into your data.
 
+Reading the team's scored history is a person's action. Sign in once per machine, and
+`xping report` adds Cloud confidence to the rows it already prints:
+
+```bash
+xping login
+xping report
+```
+
+See [`xping login`](cli/command-reference.md#xping-login) and
+[Cloud data](cli/command-reference.md#cloud-data).
+
 For CI setup (GitHub Actions, Azure DevOps, Jenkins, GitLab), see
 [CI/CD Integration](getting-started/ci-cd-setup.md).
 
@@ -447,7 +458,6 @@ Runnable examples per framework:
 Tracked in [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones). Currently on the
 list:
 
-- `xping login` and `xping report --source local|cloud` — one command, both histories
 - Agent integration: a Claude skill and an MCP server over `xping report`
 - Quarantine — mark known-flaky tests so CI stops failing on them
 - `xping watch` — stream new runs as they land, beside `dotnet watch test`
