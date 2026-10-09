@@ -92,10 +92,10 @@ internal sealed class LoginCommand(
         // The last point a Ctrl+C is honoured. Once stored, the sign-in is complete.
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? leftover;
+        CredentialWrite written;
         try
         {
-            leftover = await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
+            written = await stores.WriteAsync(record, CancellationToken.None).ConfigureAwait(false);
         }
         catch (CredentialStoreException ex)
         {
@@ -106,12 +106,17 @@ internal sealed class LoginCommand(
                 ex);
         }
 
-        session.Text.SignedIn(record, stores.Selected);
+        session.Text.SignedIn(record, written.Store);
 
-        if (leftover is not null)
-            session.Text.Warning(Redaction.Scrub(leftover));
+        if (written.Warning is not null)
+            session.Text.Warning(Redaction.Scrub(written.Warning));
 
-        if (stores.FallbackReason is { } reason)
+        if (written.KeychainFailure is { } failure)
+        {
+            session.Text.Warning(Redaction.Scrub(failure));
+            session.Text.Warning($"Stored credentials in {written.Store.DisplayName} instead. The file is readable only by you.");
+        }
+        else if (stores.FallbackReason is { } reason)
         {
             session.Text.Warning(
                 $"Stored credentials in {stores.Selected.DisplayName} because no OS credential store is available " +
@@ -126,7 +131,7 @@ internal sealed class LoginCommand(
             record.Sub,
             record.WorkspaceId,
             record.Sid,
-            AuthJson.StoreName(stores.Selected.Kind),
+            AuthJson.StoreName(written.Store.Kind),
             AuthJson.Timestamp(record.AccessTokenExpiresAt)));
 
         return AuthExitCodes.Success;

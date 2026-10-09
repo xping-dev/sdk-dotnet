@@ -404,6 +404,13 @@ chmod 600 ~/.xping/credentials.json
 The key is upload-only, or the workspace's plan does not include API access. Sign in with
 `xping login` on your machine, or give CI a key with read scope. The report itself is unaffected.
 
+### "Could not write to Windows Credential Manager (error 8…)"
+
+Windows refused to store any credential for your account; `cmdkey /generic:test /user:x /pass:y`
+fails with the same message. `xping login` keeps the sign-in in `~/.xping/credentials.json`
+instead, so the CLI works. The cause is usually a damaged Windows user profile; other apps that save
+passwords on this account are affected too.
+
 ### macOS asks for keychain access after every upgrade
 
 The `xping` tool is not signed by Apple, so macOS asks once per installed version. Choose
