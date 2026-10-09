@@ -4,9 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    # feat/cli-auth: the CLI auth integration branch, so its phase PRs run CI. Removed by the
-    # feat/cli-auth -> main PR (cli-auth-cli-spec §19, phase 8).
-    branches: [main, feat/cli-auth]
+    branches: [main]
 
 jobs:
   test:
