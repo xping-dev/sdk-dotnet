@@ -803,6 +803,14 @@ says so:
 ⚠ Stored credentials in ~/.xping/credentials.json because no OS credential store is available (Secret Service not running). The file is readable only by you.
 ```
 
+The same happens when the OS store is there but refuses the write — on Windows, a damaged user
+profile makes every Credential Manager write fail with error 8 (`cmdkey` fails the same way):
+
+```
+⚠ Could not write to Windows Credential Manager (error 8: Not enough memory resources are available to process this command).
+⚠ Stored credentials in ~/.xping/credentials.json instead. The file is readable only by you.
+```
+
 The file is created with mode `0600` in a `0700` directory (an owner-only ACL on Windows). The CLI
 refuses to read it when other users can, and says how to fix that: always in `auth status`, and in
 `report` when there is no API key to use instead (at a terminal or with `--verbose`). A new `login`

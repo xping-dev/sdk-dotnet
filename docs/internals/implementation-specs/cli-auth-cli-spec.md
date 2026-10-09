@@ -820,9 +820,17 @@ keychain was chosen) and the read order. `CredentialStores.ReadAsync` returns th
 record with the store it came from, plus the warnings of every store it visited and the
 `Failures` of every store that threw `CredentialStoreException`. A failing store does not stop
 the lookup: a locked keychain must not hide a file login. `WriteAsync` writes to `Selected` and
-clears the file entry when `Selected` is a keychain; a failure to write `Selected` is thrown, a
-failure to clear the file entry is returned as a warning (the sign-in is stored, and the keychain is
-read first, so the old entry is never used). `DeleteAllAsync` tries
+clears the file entry when `Selected` is a keychain; a failure to clear the file entry is returned
+as a warning (the sign-in is stored, and the keychain is read first, so the old entry is never
+used). When `Selected` is a keychain and its write throws, the record goes to the file instead and
+the keychain entry for that Cloud URL is deleted, because the keychain is read first and an older
+entry there would shadow the new sign-in; a failed delete is returned as a warning. The probe only
+reads, so it cannot catch a keychain that refuses writes: a damaged Windows profile answers every
+`CredWrite` with error 8 (`cmdkey` fails the same way) while `CredRead` works, and the sign-in has
+already been issued when the write fails. Only when the file write fails too is
+`CredentialStoreException` thrown, naming both failures. `WriteAsync` returns the store that took
+the record and the keychain failure, if any. Windows failure messages carry the system text of the
+error (`error 8: Not enough memory resources are available to process this command`). `DeleteAllAsync` tries
 every store, even after one fails, so `logout` removes whatever it can, and then throws one
 `CredentialStoreException` naming each store that failed. Commands and the resolver use `CredentialStores`, never
 a backend directly.
@@ -877,6 +885,10 @@ give a `0600` file, and the next read would trust entries that another user coul
   ~/.xping/credentials.json because no OS credential store is available ({reason}). The file is
   readable only by you." `{reason}` is the selector's reason: "Secret Service not running",
   "libsecret not installed", "keychain locked", "keychain unavailable", "Credential Manager error".
+- When the keychain was selected but refused the write (§7.4), `login` prints the keychain's error,
+  then "Stored credentials in ~/.xping/credentials.json instead. The file is readable only by
+  you." The success block names the file, and `--json` reports `"store": "file"`. Later commands
+  read the file as usual; the next `login` tries the keychain again.
 - A refresh that rotates the token into the file prints nothing about the store, so a pipeline of
   `xping report --json` is not polluted on every refresh; `--verbose` logs only "Refreshed the
   access token for {url}".

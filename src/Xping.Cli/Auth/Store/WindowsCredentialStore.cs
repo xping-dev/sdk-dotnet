@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -146,8 +147,12 @@ internal sealed partial class WindowsCredentialStore(string service, IXpingSeria
 
     private string Target(string cloudUrl) => $"{service}:{cloudUrl}";
 
+    // The system text is what separates "this profile cannot store credentials" (8, also from
+    // cmdkey) from a bug in the call, without a lookup table of codes.
     private CredentialStoreException Failure(string verb, int error) =>
-        new(string.Create(CultureInfo.InvariantCulture, $"Could not {verb} {DisplayName} (error {error})."));
+        new(string.Create(
+            CultureInfo.InvariantCulture,
+            $"Could not {verb} {DisplayName} (error {error}: {new Win32Exception(error).Message.TrimEnd('.', ' ')})."));
 
     // CREDENTIALW. Only the members the store sets or reads are named; the rest stay zero.
     [StructLayout(LayoutKind.Sequential)]

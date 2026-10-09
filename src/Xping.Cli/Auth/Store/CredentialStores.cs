@@ -31,6 +31,17 @@ internal sealed record StoredLoginLookup(StoredLogin? Login, IReadOnlyList<strin
 internal sealed record CredentialDeletion(bool Deleted, IReadOnlyList<string> Unchecked);
 
 /// <summary>
+/// Where a sign-in was stored.
+/// </summary>
+/// <param name="Store">The store that holds it now.</param>
+/// <param name="KeychainFailure">
+/// Why the selected keychain refused it, worded for the user, when it went to the file instead;
+/// otherwise <see langword="null"/>.
+/// </param>
+/// <param name="Warning">An older entry that could not be removed, worded for the user; otherwise <see langword="null"/>.</param>
+internal sealed record CredentialWrite(ICredentialStore Store, string? KeychainFailure, string? Warning);
+
+/// <summary>
 /// The credential stores of this process: the one sign-ins are written to, and the order they are
 /// read in (cli-auth-cli-spec §7.4).
 /// </summary>
@@ -121,23 +132,41 @@ internal sealed class CredentialStores
     }
 
     /// <summary>
-    /// Stores <paramref name="record"/> in <see cref="Selected"/>.
+    /// Stores <paramref name="record"/> in <see cref="Selected"/>, or in the file when the selected
+    /// keychain refuses it.
     /// </summary>
     /// <remarks>
-    /// When that is a keychain, a file entry for the same Cloud URL is removed, so the two never
+    /// <para>
+    /// When the keychain takes it, a file entry for the same Cloud URL is removed, so the two never
     /// disagree about who is signed in. Failing to remove it does not fail the write: the sign-in is
     /// stored, and the keychain is read first, so the old entry is never used.
+    /// </para>
+    /// <para>
+    /// A keychain can pass its probe, which only reads, and still refuse every write: a damaged
+    /// Windows profile answers <c>CredWrite</c> with error 8 while <c>CredRead</c> works. The sign-in
+    /// has already been issued by then, so it goes to the file rather than being lost.
+    /// </para>
     /// </remarks>
-    /// <returns>Why an older entry could not be removed, worded for the user; otherwise <see langword="null"/>.</returns>
-    /// <exception cref="CredentialStoreException">The selected store could not be written.</exception>
-    public async Task<string?> WriteAsync(CredentialRecord record, CancellationToken cancellationToken)
+    /// <returns>Where the sign-in went, and anything the user should know about it.</returns>
+    /// <exception cref="CredentialStoreException">No store could be written.</exception>
+    public async Task<CredentialWrite> WriteAsync(CredentialRecord record, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        await Selected.WriteAsync(record, cancellationToken).ConfigureAwait(false);
-
         if (Selected.Kind == CredentialStoreKind.File)
-            return null;
+        {
+            await Selected.WriteAsync(record, cancellationToken).ConfigureAwait(false);
+            return new CredentialWrite(Selected, null, null);
+        }
+
+        try
+        {
+            await Selected.WriteAsync(record, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CredentialStoreException ex) when (ReadOrder.FirstOrDefault(s => s.Kind == CredentialStoreKind.File) is { } file)
+        {
+            return await FallBackToFileAsync(file, record, ex, cancellationToken).ConfigureAwait(false);
+        }
 
         List<string> leftovers = [];
         foreach (ICredentialStore store in ReadOrder.Where(s => s.Kind == CredentialStoreKind.File))
@@ -152,9 +181,37 @@ internal sealed class CredentialStores
             }
         }
 
-        return leftovers.Count == 0
-            ? null
-            : $"An older sign-in could not be removed; it is no longer used. {string.Join(" ", leftovers)}";
+        return new CredentialWrite(
+            Selected,
+            null,
+            leftovers.Count == 0 ? null : $"An older sign-in could not be removed; it is no longer used. {string.Join(" ", leftovers)}");
+    }
+
+    private async Task<CredentialWrite> FallBackToFileAsync(
+        ICredentialStore file, CredentialRecord record, CredentialStoreException keychainFailure, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await file.WriteAsync(record, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CredentialStoreException ex)
+        {
+            throw new CredentialStoreException($"{keychainFailure.Message} {ex.Message}", new AggregateException(keychainFailure, ex));
+        }
+
+        // The keychain is read first, so an entry left there from an earlier sign-in would be used
+        // instead of the one just stored.
+        string? warning = null;
+        try
+        {
+            await Selected.DeleteAsync(record.CloudUrl, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CredentialStoreException ex)
+        {
+            warning = $"An older sign-in in {Selected.DisplayName} could not be removed and may be used instead of this one. {ex.Message}";
+        }
+
+        return new CredentialWrite(file, keychainFailure.Message, warning);
     }
 
     /// <summary>

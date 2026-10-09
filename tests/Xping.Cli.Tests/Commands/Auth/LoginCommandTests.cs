@@ -142,6 +142,27 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
+    public void AKeychainThatRefusesTheWriteSendsTheSignInToTheFile()
+    {
+        // A damaged Windows profile passes the read-only probe and answers every CredWrite with
+        // error 8. Before the fix, login exited 17 "signed in, but the sign-in could not be stored".
+        CliFlowHost host = _host;
+        var keychain = new FakeCredentialStore(CredentialStoreKind.Keychain, "Test Keychain") { WriteFails = true };
+        host.Keychain = keychain;
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.False(keychain.Contains(host.Cloud.CloudUrl));
+        Assert.True(File.Exists(host.CredentialsFile));
+        Assert.Equal(FakeCloud.Email, host.StoredRecord()?.Email);
+        Assert.DoesNotContain("Stored in  Test Keychain", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Could not write to Test Keychain.", result.Error, StringComparison.Ordinal);
+        Assert.Contains("credentials.json instead. The file is readable only by you.", result.Error, StringComparison.Ordinal);
+        Assert.Equal("file", result.Json().GetProperty("store").GetString());
+    }
+
+    [Fact]
     public void WithoutAUsableKeychainTheSignInGoesToTheFileAndTheUserIsToldWhy()
     {
         CliFlowHost host = _host;

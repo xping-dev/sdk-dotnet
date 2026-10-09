@@ -99,21 +99,80 @@ public sealed class CredentialStoresTests
         _file.Fails = true;
         var stores = new CredentialStores(_keychain, [_keychain, _file], null);
 
-        string? warning = await stores.WriteAsync(Record(), CancellationToken.None);
+        CredentialWrite written = await stores.WriteAsync(Record(), CancellationToken.None);
 
         Assert.True(_keychain.Contains(CloudUrl));
+        Assert.Same(_keychain, written.Store);
+        Assert.Null(written.KeychainFailure);
         Assert.Equal(
             "An older sign-in could not be removed; it is no longer used. Could not delete from ~/.xping/credentials.json.",
-            warning);
+            written.Warning);
     }
 
     [Fact]
-    public async Task AFailureToWriteTheSelectedStoreIsThrown()
+    public async Task AKeychainThatRefusesTheWriteSendsTheSignInToTheFile()
     {
         var stores = new CredentialStores(_keychain, [_keychain, _file], null);
         _keychain.WriteFails = true;
 
+        CredentialWrite written = await stores.WriteAsync(Record(), CancellationToken.None);
+
+        Assert.Same(_file, written.Store);
+        Assert.True(_file.Contains(CloudUrl));
+        Assert.Equal("Could not write to Test Keychain.", written.KeychainFailure);
+        Assert.Null(written.Warning);
+    }
+
+    [Fact]
+    public async Task AnOlderKeychainEntryIsRemovedWhenTheSignInGoesToTheFile()
+    {
+        // The keychain is read first; a stale entry there would shadow the sign-in just stored.
+        _keychain.Add(Record(refreshToken: "keychain-refresh-token-01"));
+        var stores = new CredentialStores(_keychain, [_keychain, _file], null);
+        _keychain.WriteFails = true;
+
+        await stores.WriteAsync(Record(refreshToken: "file-refresh-token-0123456"), CancellationToken.None);
+
+        StoredLoginLookup lookup = await stores.ReadAsync(CloudUrl, CancellationToken.None);
+        Assert.Same(_file, lookup.Login?.Store);
+        Assert.Equal("file-refresh-token-0123456", lookup.Login?.Record.RefreshToken);
+    }
+
+    [Fact]
+    public async Task AnOlderKeychainEntryThatCannotBeRemovedIsAWarning()
+    {
+        var stores = new CredentialStores(_keychain, [_keychain, _file], null);
+        _keychain.WriteFails = true;
+        _keychain.Fails = true;
+
+        CredentialWrite written = await stores.WriteAsync(Record(), CancellationToken.None);
+
+        Assert.Same(_file, written.Store);
+        Assert.Equal(
+            "An older sign-in in Test Keychain could not be removed and may be used instead of this one. Could not delete from Test Keychain.",
+            written.Warning);
+    }
+
+    [Fact]
+    public async Task WhenNoStoreTakesTheSignInBothFailuresAreThrown()
+    {
+        var stores = new CredentialStores(_keychain, [_keychain, _file], null);
+        _keychain.WriteFails = true;
+        _file.WriteFails = true;
+
+        CredentialStoreException ex = await Assert.ThrowsAsync<CredentialStoreException>(() => stores.WriteAsync(Record(), CancellationToken.None));
+
+        Assert.Equal("Could not write to Test Keychain. Could not write to ~/.xping/credentials.json.", ex.Message);
+    }
+
+    [Fact]
+    public async Task AFailureToWriteTheSelectedFileIsThrown()
+    {
+        var stores = new CredentialStores(_file, [_keychain, _file], "keychain locked");
+        _file.WriteFails = true;
+
         await Assert.ThrowsAsync<CredentialStoreException>(() => stores.WriteAsync(Record(), CancellationToken.None));
+        Assert.False(_keychain.Contains(CloudUrl));
     }
 
     [Fact]
