@@ -210,7 +210,9 @@ public static class StackFrameLookup
     /// <summary>
     /// Rewrites a compiler-generated identifier back to the method the author declared.
     /// </summary>
-    private static string Normalize(string frame)
+    /// <param name="frame">A frame identifier with no argument list.</param>
+    /// <returns>The identifier of the declared method.</returns>
+    internal static string Normalize(string frame)
     {
         // Async and iterator methods compile to a nested type: "Type+<Setup>d__1.MoveNext", and
         // lambdas to "Type.<>c__DisplayClass4_0.<Setup>b__0". Both name the original method between

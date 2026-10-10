@@ -672,6 +672,9 @@ public sealed class TestIdentityGeneratorTests
         "Request started at 2026-10-09T08:15:30Z timed out",
         "Request started at 2026-10-10T17:42:01Z timed out")]
     [InlineData("Expected:\r\nTrue\r\nActual:\r\nFalse", "Expected:\nTrue\nActual:\nFalse")]
+    [InlineData(
+        "Could not find file '/home/runner/work/app/app/data.json'.",
+        "Could not find file '/Users/adrian/Dev/app/data.json'.")]
     public void GenerateErrorMessageHash_IsEqualWhenOnlyRunVaryingDetailDiffers(string first, string second)
     {
         var generator = BuildGenerator();
@@ -706,6 +709,20 @@ public sealed class TestIdentityGeneratorTests
 
         Assert.NotNull(ci);
         Assert.Equal(ci, local);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsEqualWhenOnlyCompilerGeneratedOrdinalsDiffer()
+    {
+        // Adding an async method above renumbers the state machine from d__5 to d__6.
+        var generator = BuildGenerator();
+
+        var before = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__5.MoveNext() in /src/OrderTests.cs:line 12");
+        var after = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__6.MoveNext() in /src/OrderTests.cs:line 19");
+
+        Assert.Equal(before, after);
     }
 
     [Fact]

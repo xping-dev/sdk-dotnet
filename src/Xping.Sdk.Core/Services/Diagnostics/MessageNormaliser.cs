@@ -36,6 +36,15 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// </remarks>
 public static class MessageNormaliser
 {
+    /// <summary>
+    /// The most characters of a message that are normalised (4096).
+    /// </summary>
+    /// <remarks>
+    /// An assertion library that dumps an object graph can produce megabytes of message, and every
+    /// rule below is a full pass over it. What identifies a failure is at the front.
+    /// </remarks>
+    public const int MaxLength = 4096;
+
     private const string GuidToken = "<guid>";
     private const string UriToken = "<uri>";
     private const string PathToken = "<path>";
@@ -60,9 +69,16 @@ public static class MessageNormaliser
     private static readonly Regex Uris = new(@"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s""'<>]+", Options);
 
     // Anchored on a boundary so that "and/or" and a bare "/" are not read as paths. Two segments are
-    // required for the same reason.
+    // required so that a route or resource name such as "/orders" stays as written.
     private static readonly Regex Paths = new(
-        @"(?<=^|[\s(\[=,:;])(?:[A-Za-z]:[\\/]|\\\\|/)[A-Za-z0-9_.~%+$\-]+(?:[\\/][A-Za-z0-9_.~%+$\-]+)*",
+        @"(?<=^|[\s(\[=,:;""'])(?:[A-Za-z]:[\\/]|\\\\|/)[A-Za-z0-9_.~%+$\-]+(?:[\\/][A-Za-z0-9_.~%+$\-]+)+",
+        Options);
+
+    // A quoted literal that is nothing but a path, spaces included. .NET quotes the path in its own
+    // I/O messages ("Could not find file '…'"), and a user's home directory often has a space in it,
+    // which the unquoted rule above cannot see past.
+    private static readonly Regex QuotedPath = new(
+        @"^([""'])(?:[A-Za-z]:[\\/]|\\\\|/)[^\\/""']+[\\/][^""']*\1$",
         Options);
 
     // ISO-8601 first, then a bare date, then a clock or TimeSpan reading. Ordered longest-first so a
@@ -96,7 +112,8 @@ public static class MessageNormaliser
         // Line endings first. The xUnit adapter joins an exception's messages with
         // Environment.NewLine, so the same failure recorded on Windows and on macOS differs by a
         // carriage return before anything else has had a chance to run.
-        string text = message!.Replace("\r\n", "\n").Replace('\r', '\n');
+        string text = message!.Length > MaxLength ? message.Substring(0, MaxLength) : message;
+        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
 
         text = WhitespaceRuns.Replace(text, " ").Trim();
 
@@ -108,13 +125,17 @@ public static class MessageNormaliser
         // literals with placeholders avoids the placeholders themselves matching a later rule.
         foreach (Match literal in QuotedLiteral.Matches(text))
         {
-            // A quoted literal containing a digit is left to the rules: an id or a timestamp inside
-            // quotes varies between runs exactly like one outside them.
-            if (ContainsDigit.IsMatch(literal.Value))
+            string value = literal.Value;
+
+            // A quoted literal containing a digit, a URI or a path is left to the rules: an id, a
+            // timestamp or a checkout location inside quotes varies between runs and machines exactly
+            // like one outside them.
+            bool wholePath = QuotedPath.IsMatch(value);
+            if (!wholePath && (ContainsDigit.IsMatch(value) || Uris.IsMatch(value) || Paths.IsMatch(value)))
                 continue;
 
             result.Append(Substitute(text.Substring(position, literal.Index - position)));
-            result.Append(literal.Value);
+            result.Append(wholePath ? value[0] + PathToken + value[0] : value);
             position = literal.Index + literal.Length;
         }
 

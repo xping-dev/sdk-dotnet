@@ -245,6 +245,13 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
     /// </remarks>
     public string? GenerateErrorMessageHash(string? errorMessage)
     {
+        // Every adapter calls this for passing tests too. Returning before the normaliser is touched
+        // keeps its regexes from being built until the run's first failure.
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return null;
+        }
+
         string normalised = MessageNormaliser.Normalise(errorMessage);
         return normalised.Length == 0 ? null : ComputeSha256Hash(normalised);
     }
@@ -257,12 +264,17 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
     /// A 64-character lowercase hex string (SHA256 hash), or null if the trace has no frames.
     /// </returns>
     /// <remarks>
-    /// Only method signatures are hashed. File paths differ between machines and line numbers move
-    /// with every edit above the failure, so hashing them split one failure into a group per CI agent
-    /// and per commit.
+    /// Only method signatures are hashed, with compiler-generated names rewritten to the declared
+    /// method. File paths differ between machines and line numbers move with every edit above the
+    /// failure, so hashing them split one failure into a group per CI agent and per commit.
     /// </remarks>
     public string? GenerateStackTraceHash(string? stackTrace)
     {
+        if (string.IsNullOrWhiteSpace(stackTrace))
+        {
+            return null;
+        }
+
         FrameExtraction extraction = StackFrameExtractor.Extract(stackTrace);
         return extraction.Frames.Count == 0
             ? null
