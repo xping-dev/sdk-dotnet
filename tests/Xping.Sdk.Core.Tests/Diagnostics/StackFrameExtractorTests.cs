@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report;
-using Xping.Cli.Report.Signatures;
+using Xping.Sdk.Core.Services.Diagnostics;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Sdk.Core.Tests.Diagnostics;
 
 public sealed class StackFrameExtractorTests
 {
@@ -88,7 +87,7 @@ public sealed class StackFrameExtractorTests
 
         FrameExtraction extraction = StackFrameExtractor.Extract(trace);
 
-        Assert.Equal(LocalAnalysisConstants.SignatureFrameCount, extraction.Frames.Count);
+        Assert.Equal(StackFrameExtractor.MaxFrames, extraction.Frames.Count);
         Assert.Equal("MyApp.Deep.Level0.Call()", extraction.Frames[0]);
     }
 
@@ -155,4 +154,48 @@ public sealed class StackFrameExtractorTests
             ["MyApp.Tests.OrderTests.Placing()", "MyApp.Tests.OrderTests.Other()"],
             extraction.Frames);
     }
+
+    [Theory]
+    [InlineData(@"   bei MyApp.Services.OrderService.Place(Order order) in C:\src\OrderService.cs:Zeile 88")]
+    [InlineData(@"   à MyApp.Services.OrderService.Place(Order order) dans C:\src\OrderService.cs:ligne 88")]
+    [InlineData("   at MyApp.Services.OrderService.Place(Order order) in /src/OrderService.cs:line 88")]
+    [InlineData("   at MyApp.Services.OrderService.Place(Order order)")]
+    public void FramesAreReadWhateverLanguageTheRuntimeWritesThemIn(string trace)
+    {
+        // .NET Framework with a language pack localizes "at", "in" and "line".
+        FrameExtraction extraction = StackFrameExtractor.Extract(trace);
+
+        Assert.Equal(["MyApp.Services.OrderService.Place(Order order)"], extraction.Frames);
+    }
+
+    [Theory]
+    [InlineData("Expected MyApp.Order.Total(x) to be 42")]
+    [InlineData("Assert.Equal() Failure")]
+    public void AProseLineIsNotReadAsAFrame(string line) =>
+        Assert.Empty(StackFrameExtractor.Extract(line).Frames);
+
+    [Theory]
+    [InlineData("   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__5.MoveNext() in /src/OrderTests.cs:line 12")]
+    [InlineData("   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__6.MoveNext() in /src/OrderTests.cs:line 14")]
+    [InlineData("   at MyApp.Tests.OrderTests+<PlacingAnOrder>d__5.MoveNext()")]
+    public void AsyncStateMachineFramesAreRewrittenToTheDeclaredMethod(string trace)
+    {
+        // The ordinal renumbers when a method is added above, which would change the frame.
+        FrameExtraction extraction = StackFrameExtractor.Extract(trace);
+
+        Assert.Equal(["MyApp.Tests.OrderTests.PlacingAnOrder()"], extraction.Frames);
+    }
+
+    [Fact]
+    public void LambdaFramesAreRewrittenToTheDeclaredMethod()
+    {
+        FrameExtraction first = StackFrameExtractor.Extract(
+            "   at MyApp.Services.OrderService.<>c__DisplayClass4_0.<Place>b__0(Order o)");
+        FrameExtraction second = StackFrameExtractor.Extract(
+            "   at MyApp.Services.OrderService.<>c__DisplayClass7_0.<Place>b__2(Order o)");
+
+        Assert.Equal(["MyApp.Services.OrderService.Place(Order o)"], first.Frames);
+        Assert.Equal(first.Frames, second.Frames);
+    }
 }
+

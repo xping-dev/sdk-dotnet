@@ -5,6 +5,7 @@
 
 using Xping.Cli.Report.Signatures;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Tests.Diagnostics;
 
 namespace Xping.Cli.Tests.Report;
 

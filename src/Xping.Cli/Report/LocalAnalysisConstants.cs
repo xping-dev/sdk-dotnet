@@ -445,11 +445,6 @@ internal static class LocalAnalysisConstants
     public const int EnvironmentalSessionMinFailures = 10;
 
     /// <summary>
-    /// Stack frames contributing to a failure signature (5).
-    /// </summary>
-    public const int SignatureFrameCount = 5;
-
-    /// <summary>
     /// Characters of raw message text an exemplar may carry before elision (500).
     /// </summary>
     public const int ExemplarCharBudget = 500;

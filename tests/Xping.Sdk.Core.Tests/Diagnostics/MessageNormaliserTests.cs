@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report.Signatures;
+using Xping.Sdk.Core.Services.Diagnostics;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Sdk.Core.Tests.Diagnostics;
 
 public sealed class MessageNormaliserTests
 {
@@ -151,4 +151,39 @@ public sealed class MessageNormaliserTests
 
         Assert.Equal(once, MessageNormaliser.Normalise(once));
     }
+
+    [Theory]
+    [InlineData("Could not find file '/home/runner/work/app/app/data.json'.")]
+    [InlineData("Could not find file '/Users/adrian/Dev/app/data.json'.")]
+    [InlineData(@"Could not find file 'C:\Users\John Smith\source\app\data.json'.")]
+    public void AQuotedPathIsReplacedWholeEvenWithoutDigitsOrWithSpaces(string message)
+    {
+        // .NET quotes the path in its own I/O messages, and the path is the part that differs between
+        // a CI agent and a laptop.
+        Assert.Equal("could not find file '<path>'.", MessageNormaliser.Normalise(message));
+    }
+
+    [Fact]
+    public void APathInsideALongerQuotedLiteralIsReplaced() =>
+        Assert.Equal(
+            "failed: 'cannot open <path> now'",
+            MessageNormaliser.Normalise("failed: 'cannot open /tmp/app/lock now'"));
+
+    [Theory]
+    [InlineData("Route /orders returned 404", "route /orders returned <num>")]
+    [InlineData("Key '/customers' was missing", "key '/customers' was missing")]
+    public void ASingleSegmentRouteIsNotAPath(string input, string expected) =>
+        Assert.Equal(expected, MessageNormaliser.Normalise(input));
+
+    [Fact]
+    public void OnlyTheFirstMaxLengthCharactersAreNormalised()
+    {
+        // An object dump can run to megabytes; only its front identifies the failure.
+        string head = "Expected collection to be empty, but found " + new string('a', MessageNormaliser.MaxLength);
+
+        Assert.Equal(
+            MessageNormaliser.Normalise(head + " first tail"),
+            MessageNormaliser.Normalise(head + " second tail"));
+    }
 }
+

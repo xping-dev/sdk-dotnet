@@ -3,9 +3,10 @@
  * License: [MIT]
  */
 
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace Xping.Cli.Report.Signatures;
+namespace Xping.Sdk.Core.Services.Diagnostics;
 
 /// <summary>
 /// The frames a signature was built from, and whether they are as good as intended.
@@ -15,7 +16,7 @@ namespace Xping.Cli.Report.Signatures;
 /// Whether the frames are worse than intended: framework frames used because no user frame was
 /// found, or no frames at all.
 /// </param>
-internal sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
+public sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
 {
     /// <summary>Gets the result for a failure that carried no usable stack trace.</summary>
     public static FrameExtraction None { get; } = new([], true);
@@ -36,8 +37,24 @@ internal sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degrad
 /// suite into one cause.
 /// </para>
 /// </remarks>
-internal static partial class StackFrameExtractor
+public static class StackFrameExtractor
 {
+    /// <summary>
+    /// The most frames a failure is grouped by (5).
+    /// </summary>
+    public const int MaxFrames = 5;
+
+    private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
+
+    // "at Type.Method(args) in /file.cs:line 12". The words "at", "in" and "line" are localized
+    // ("bei … in …:Zeile 12", "à … dans …:ligne 12"), so the shape is matched instead: one word, an
+    // identifier containing a dot, an argument list, and then either nothing or a location ending
+    // ":word number". The location is what keeps a prose line such as "Expected Foo.Bar(x) to …"
+    // from being read as a frame.
+    private static readonly Regex FrameLine = new(
+        @"^\p{L}+\s+(?<identifier>[^\s(]*\.[^\s(]+)(?<arguments>\([^)]*\))(?:$|\s+\S+\s+.*:\S+\s+\d+$)",
+        Options);
+
     /// <summary>
     /// Extracts the frames a signature should be built from.
     /// </summary>
@@ -48,41 +65,44 @@ internal static partial class StackFrameExtractor
         if (string.IsNullOrWhiteSpace(stackTrace))
             return FrameExtraction.None;
 
-        List<string> all = [];
+        List<string> user = [];
+        List<string> framework = [];
 
-        foreach (string line in stackTrace.Split('\n'))
+        foreach (string line in stackTrace!.Split('\n'))
         {
             // Anything that is not a frame is skipped rather than parsed: a real trace carries
             // "--- End of stack trace from previous location ---" between the halves of an awaited
             // call, and an exception's own message can precede the frames.
-            Match match = FrameLine().Match(line.Trim());
+            Match match = FrameLine.Match(line.Trim());
             if (!match.Success)
                 continue;
 
-            string frame = SourceLocation().Replace(match.Groups["frame"].Value, string.Empty).Trim();
-            if (frame.Length > 0)
-                all.Add(frame);
+            // Compiler-generated names carry ordinals ("<Place>d__5", "<>c__DisplayClass4_0") that
+            // renumber when a method or lambda is added above, so they are rewritten to the method
+            // the author declared. Generic arity stays: Repo`1 and Repo`2 are different types.
+            string frame = StackFrameLookup.DeclaredMethod(match.Groups["identifier"].Value) +
+                           match.Groups["arguments"].Value;
+
+            if (!FrameworkNamespaces.IsFramework(frame))
+            {
+                user.Add(frame);
+
+                // A stack overflow can leave thousands of frames, and nothing past these is used.
+                if (user.Count == MaxFrames)
+                    break;
+            }
+            else if (framework.Count < MaxFrames)
+            {
+                framework.Add(frame);
+            }
         }
-
-        if (all.Count == 0)
-            return FrameExtraction.None;
-
-        List<string> user = [.. all
-            .Where(f => !FrameworkNamespaces.IsFramework(f))
-            .Take(LocalAnalysisConstants.SignatureFrameCount)];
 
         // A trace made entirely of framework frames still says something — an assertion helper in a
         // shared base class, a failure inside the runner itself — so it is used rather than
         // discarded, and flagged so a reader knows the grouping is coarser than usual.
-        return user.Count > 0
-            ? new FrameExtraction(user, false)
-            : new FrameExtraction(
-                [.. all.Take(LocalAnalysisConstants.SignatureFrameCount)], true);
+        if (user.Count > 0)
+            return new FrameExtraction(user, false);
+
+        return framework.Count > 0 ? new FrameExtraction(framework, true) : FrameExtraction.None;
     }
-
-    [GeneratedRegex(@"^at\s+(?<frame>.+)$", RegexOptions.CultureInvariant)]
-    private static partial Regex FrameLine();
-
-    [GeneratedRegex(@"\s+in\s+.+:line\s+\d+$", RegexOptions.CultureInvariant)]
-    private static partial Regex SourceLocation();
 }

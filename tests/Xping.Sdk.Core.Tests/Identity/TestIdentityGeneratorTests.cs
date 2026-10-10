@@ -3,11 +3,13 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Extensions;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Tests.Diagnostics;
 using Xping.Sdk.Core.Tests.Helpers;
 
 namespace Xping.Sdk.Core.Tests.Identity;
@@ -647,4 +649,133 @@ public sealed class TestIdentityGeneratorTests
         // Assert
         Assert.Equal(h1, h2);
     }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsEqualForTwoRunsOfTheSameFailureWithDifferentTimings()
+    {
+        // Two recorded runs of one xUnit test, differing only in their millisecond readings.
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateErrorMessageHash(RealFailureSamples.XunitWatchdogFirstRun);
+        var second = generator.GenerateErrorMessageHash(RealFailureSamples.XunitWatchdogSecondRun);
+
+        Assert.Equal(first, second);
+    }
+
+    [Theory]
+    [InlineData(
+        "Order 3f2504e0-4f89-11d3-9a0c-0305e82c3301 was not found",
+        "Order 9b2c1d7e-0a6f-4e2b-8c3d-5f6a7b8c9d0e was not found")]
+    [InlineData(
+        "Could not read /home/runner/work/app/data.json",
+        "Could not read C:\\agent\\_work\\app\\data.json")]
+    [InlineData(
+        "Request started at 2026-10-09T08:15:30Z timed out",
+        "Request started at 2026-10-10T17:42:01Z timed out")]
+    [InlineData("Expected:\r\nTrue\r\nActual:\r\nFalse", "Expected:\nTrue\nActual:\nFalse")]
+    [InlineData(
+        "Could not find file '/home/runner/work/app/app/data.json'.",
+        "Could not find file '/Users/adrian/Dev/app/data.json'.")]
+    public void GenerateErrorMessageHash_IsEqualWhenOnlyRunVaryingDetailDiffers(string first, string second)
+    {
+        var generator = BuildGenerator();
+
+        Assert.Equal(generator.GenerateErrorMessageHash(first), generator.GenerateErrorMessageHash(second));
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsDifferentWhenAQuotedLiteralDiffers()
+    {
+        // Quoted literals without digits are the diagnostic signal and must survive normalisation.
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateErrorMessageHash("Key 'customerId' was missing");
+        var second = generator.GenerateErrorMessageHash("Key 'orderId' was missing");
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsEqualWhenOnlyPathsAndLineNumbersDiffer()
+    {
+        var generator = BuildGenerator();
+
+        var ci = generator.GenerateStackTraceHash(
+            "   at MyApp.Services.OrderService.Place(Order order) in /home/runner/work/app/OrderService.cs:line 88\n" +
+            "   at MyApp.Tests.OrderTests.PlacingAnOrderSucceeds() in /home/runner/work/app/OrderTests.cs:line 12");
+        var local = generator.GenerateStackTraceHash(
+            "   at MyApp.Services.OrderService.Place(Order order) in C:\\src\\app\\OrderService.cs:line 91\r\n" +
+            "   at MyApp.Tests.OrderTests.PlacingAnOrderSucceeds() in C:\\src\\app\\OrderTests.cs:line 12\r\n" +
+            "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)");
+
+        Assert.NotNull(ci);
+        Assert.Equal(ci, local);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsEqualWhenOnlyCompilerGeneratedOrdinalsDiffer()
+    {
+        // Adding an async method above renumbers the state machine from d__5 to d__6.
+        var generator = BuildGenerator();
+
+        var before = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__5.MoveNext() in /src/OrderTests.cs:line 12");
+        var after = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__6.MoveNext() in /src/OrderTests.cs:line 19");
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsDifferentWhenTheFailingMethodDiffers()
+    {
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateStackTraceHash("   at MyApp.Services.OrderService.Place(Order order)");
+        var second = generator.GenerateStackTraceHash("   at MyApp.Services.OrderService.Cancel(Order order)");
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_WhenTheTraceHasNoFrames()
+    {
+        var generator = BuildGenerator();
+
+        Assert.Null(generator.GenerateStackTraceHash("no frames here, just prose"));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_WhenEveryFrameBelongsToTheFramework()
+    {
+        // Framework frames vary with runtime warm-up, so they must not become a grouping key.
+        var generator = BuildGenerator();
+
+        Assert.Null(generator.GenerateStackTraceHash(RealFailureSamples.FrameworkOnlyStackTrace));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsDifferentForTypesThatDifferOnlyInGenericArity()
+    {
+        var generator = BuildGenerator();
+
+        var one = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`1.Get(Int32 id)");
+        var two = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`2.Get(Int32 id)");
+
+        Assert.NotEqual(one, two);
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsEqualForALongMessageWhateverItsLineEndings()
+    {
+        // Truncating before unifying line endings cut a CRLF message earlier than the LF one.
+        var generator = BuildGenerator();
+        string lines = string.Concat(Enumerable.Repeat("Expected item to be empty{0}", 400));
+
+        var windows = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\r\n"));
+        var unix = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\n"));
+
+        Assert.Equal(unix, windows);
+    }
 }
+
