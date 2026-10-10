@@ -112,8 +112,13 @@ public static class MessageNormaliser
         // Line endings first. The xUnit adapter joins an exception's messages with
         // Environment.NewLine, so the same failure recorded on Windows and on macOS differs by a
         // carriage return before anything else has had a chance to run.
-        string text = message!.Length > MaxLength ? message.Substring(0, MaxLength) : message;
-        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        string text = message!.Replace("\r\n", "\n").Replace('\r', '\n');
+
+        // Cut after the line endings are unified, or a Windows message would reach the limit earlier
+        // than the same message from macOS and the two would hash differently.
+        if (text.Length > MaxLength)
+            text = text.Substring(0, MaxLength);
+
 
         text = WhitespaceRuns.Replace(text, " ").Trim();
 

@@ -261,7 +261,8 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
     /// </summary>
     /// <param name="stackTrace">The stack trace to hash.</param>
     /// <returns>
-    /// A 64-character lowercase hex string (SHA256 hash), or null if the trace has no frames.
+    /// A 64-character lowercase hex string (SHA256 hash), or null if the trace has no frame outside
+    /// the test framework and the runtime.
     /// </returns>
     /// <remarks>
     /// Only method signatures are hashed, with compiler-generated names rewritten to the declared
@@ -275,8 +276,12 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
             return null;
         }
 
+        // A trace with no user frame falls back to framework frames, which the CLI shows a reader
+        // but which change with how warm the runtime is (reflection invokes interpreted first, through
+        // an emitted stub later). Hashing them would split one failure, so it gets no hash and Xping
+        // Cloud groups it by exception type instead.
         FrameExtraction extraction = StackFrameExtractor.Extract(stackTrace);
-        return extraction.Frames.Count == 0
+        return extraction.Degraded
             ? null
             : ComputeSha256Hash(string.Join(FrameSeparator, extraction.Frames));
     }

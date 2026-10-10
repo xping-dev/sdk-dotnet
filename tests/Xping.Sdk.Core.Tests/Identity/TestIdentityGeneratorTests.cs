@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Sdk.Core.Attributes;
 using Xping.Sdk.Core.Extensions;
@@ -743,4 +744,38 @@ public sealed class TestIdentityGeneratorTests
 
         Assert.Null(generator.GenerateStackTraceHash("no frames here, just prose"));
     }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_WhenEveryFrameBelongsToTheFramework()
+    {
+        // Framework frames vary with runtime warm-up, so they must not become a grouping key.
+        var generator = BuildGenerator();
+
+        Assert.Null(generator.GenerateStackTraceHash(RealFailureSamples.FrameworkOnlyStackTrace));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsDifferentForTypesThatDifferOnlyInGenericArity()
+    {
+        var generator = BuildGenerator();
+
+        var one = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`1.Get(Int32 id)");
+        var two = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`2.Get(Int32 id)");
+
+        Assert.NotEqual(one, two);
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsEqualForALongMessageWhateverItsLineEndings()
+    {
+        // Truncating before unifying line endings cut a CRLF message earlier than the LF one.
+        var generator = BuildGenerator();
+        string lines = string.Concat(Enumerable.Repeat("Expected item to be empty{0}", 400));
+
+        var windows = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\r\n"));
+        var unix = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\n"));
+
+        Assert.Equal(unix, windows);
+    }
 }
+

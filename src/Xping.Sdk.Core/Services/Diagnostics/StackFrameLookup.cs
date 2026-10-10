@@ -210,9 +210,15 @@ public static class StackFrameLookup
     /// <summary>
     /// Rewrites a compiler-generated identifier back to the method the author declared.
     /// </summary>
+    private static string Normalize(string frame) => Canonicalize(DeclaredMethod(frame));
+
+    /// <summary>
+    /// Rewrites a compiler-generated identifier back to the method the author declared, leaving
+    /// every other part of the identifier as the runtime printed it.
+    /// </summary>
     /// <param name="frame">A frame identifier with no argument list.</param>
     /// <returns>The identifier of the declared method.</returns>
-    internal static string Normalize(string frame)
+    internal static string DeclaredMethod(string frame)
     {
         // Async and iterator methods compile to a nested type: "Type+<Setup>d__1.MoveNext", and
         // lambdas to "Type.<>c__DisplayClass4_0.<Setup>b__0". Both name the original method between
@@ -230,7 +236,7 @@ public static class StackFrameLookup
             }
         }
 
-        return Canonicalize(frame);
+        return frame;
     }
 
     /// <summary>

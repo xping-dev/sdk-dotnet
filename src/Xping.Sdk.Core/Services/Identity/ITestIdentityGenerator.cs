@@ -102,8 +102,8 @@ public interface ITestIdentityGenerator
     /// </summary>
     /// <param name="stackTrace">The stack trace to hash, or <see langword="null"/> if unavailable.</param>
     /// <returns>
-    /// A stable hash string if <paramref name="stackTrace"/> contains at least one frame;
-    /// otherwise <see langword="null"/>.
+    /// A stable hash string if <paramref name="stackTrace"/> contains at least one non-framework
+    /// frame; otherwise <see langword="null"/>.
     /// </returns>
     string? GenerateStackTraceHash(string? stackTrace);
 }

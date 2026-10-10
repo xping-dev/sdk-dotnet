@@ -79,8 +79,8 @@ public static class StackFrameExtractor
 
             // Compiler-generated names carry ordinals ("<Place>d__5", "<>c__DisplayClass4_0") that
             // renumber when a method or lambda is added above, so they are rewritten to the method
-            // the author declared.
-            string frame = StackFrameLookup.Normalize(match.Groups["identifier"].Value) +
+            // the author declared. Generic arity stays: Repo`1 and Repo`2 are different types.
+            string frame = StackFrameLookup.DeclaredMethod(match.Groups["identifier"].Value) +
                            match.Groups["arguments"].Value;
 
             if (!FrameworkNamespaces.IsFramework(frame))

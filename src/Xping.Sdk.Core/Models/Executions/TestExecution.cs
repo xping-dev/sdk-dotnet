@@ -185,8 +185,9 @@ public sealed class TestExecution
     /// SHA256 of the method signatures of up to five non-framework frames. File paths and line
     /// numbers are left out, so the hash survives a different checkout path or an edit above the
     /// failing line.
-    /// Will be <see langword="null"/> when the test passed, when no stack frames were available,
-    /// or when collection was intentionally disabled (see <see cref="StackTraceOmitted"/>).
+    /// Will be <see langword="null"/> when the test passed, when the trace had no frame outside the
+    /// test framework and the runtime, or when collection was intentionally disabled (see
+    /// <see cref="StackTraceOmitted"/>).
     /// </remarks>
     public string? StackTraceHash { get; init; }
 
