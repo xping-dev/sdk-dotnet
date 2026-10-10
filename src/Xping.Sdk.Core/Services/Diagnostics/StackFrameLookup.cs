@@ -21,8 +21,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// place rather than in three.
 /// </para>
 /// <para>
-/// Distinct from <c>StackFrameExtractor</c> in the CLI, which selects frames for a failure signature
-/// and lives in a different assembly. That one discards framework frames to find something worth
+/// Distinct from <see cref="StackFrameExtractor"/>, which selects frames for a failure signature. That one discards framework frames to find something worth
 /// grouping on; this one looks for one specific member and keeps the trace's order intact.
 /// </para>
 /// </remarks>

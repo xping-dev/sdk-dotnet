@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Sdk.Core.Tests.Diagnostics;
 
 /// <summary>
 /// Failure text copied verbatim out of recorded sessions.

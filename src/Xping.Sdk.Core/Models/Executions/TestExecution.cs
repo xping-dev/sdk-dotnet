@@ -172,9 +172,9 @@ public sealed class TestExecution
     /// Gets a stable hash of the error message for grouping similar failures.
     /// </summary>
     /// <remarks>
-    /// This hash enables grouping of test failures with identical or similar error messages,
-    /// helping identify common failure patterns across test runs and environments.
-    /// The hash is computed using SHA256 for stability and collision resistance.
+    /// SHA256 of the message after run-varying detail (numbers, GUIDs, timestamps, paths, URIs) is
+    /// replaced by tokens, so repeats of one failure hash equal across runs and machines. Unequal
+    /// hashes mean the messages differ in something other than that detail.
     /// </remarks>
     public string? ErrorMessageHash { get; init; }
 
@@ -182,10 +182,10 @@ public sealed class TestExecution
     /// Gets a stable hash of the stack trace for grouping similar failures.
     /// </summary>
     /// <remarks>
-    /// This hash enables grouping of test failures with identical or similar stack traces,
-    /// helping identify common failure locations and patterns in the codebase.
-    /// The hash is computed using SHA256 for stability and collision resistance.
-    /// Will be <see langword="null"/> when the test passed, when no stack trace was available,
+    /// SHA256 of the method signatures of up to five non-framework frames. File paths and line
+    /// numbers are left out, so the hash survives a different checkout path or an edit above the
+    /// failing line.
+    /// Will be <see langword="null"/> when the test passed, when no stack frames were available,
     /// or when collection was intentionally disabled (see <see cref="StackTraceOmitted"/>).
     /// </remarks>
     public string? StackTraceHash { get; init; }

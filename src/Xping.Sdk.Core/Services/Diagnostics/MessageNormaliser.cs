@@ -7,7 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Xping.Cli.Report.Signatures;
+namespace Xping.Sdk.Core.Services.Diagnostics;
 
 /// <summary>
 /// Strips the detail that varies between runs out of a failure message.
@@ -34,7 +34,7 @@ namespace Xping.Cli.Report.Signatures;
 /// ones.
 /// </para>
 /// </remarks>
-internal static partial class MessageNormaliser
+public static class MessageNormaliser
 {
     private const string GuidToken = "<guid>";
     private const string UriToken = "<uri>";
@@ -42,6 +42,43 @@ internal static partial class MessageNormaliser
     private const string TimeToken = "<time>";
     private const string HexToken = "<hex>";
     private const string NumberToken = "<num>";
+
+    // Compiled because the CLI runs these over every failure in the local history, and the SDK only
+    // pays the one-off compile on a run's first failure.
+    private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
+
+    private static readonly Regex WhitespaceRuns = new(@"\s+", Options);
+
+    private static readonly Regex QuotedLiteral = new("\"[^\"]*\"|'[^']*'", Options);
+
+    private static readonly Regex ContainsDigit = new(@"\d", Options);
+
+    private static readonly Regex Guids = new(
+        @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        Options);
+
+    private static readonly Regex Uris = new(@"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s""'<>]+", Options);
+
+    // Anchored on a boundary so that "and/or" and a bare "/" are not read as paths. Two segments are
+    // required for the same reason.
+    private static readonly Regex Paths = new(
+        @"(?<=^|[\s(\[=,:;])(?:[A-Za-z]:[\\/]|\\\\|/)[A-Za-z0-9_.~%+$\-]+(?:[\\/][A-Za-z0-9_.~%+$\-]+)*",
+        Options);
+
+    // ISO-8601 first, then a bare date, then a clock or TimeSpan reading. Ordered longest-first so a
+    // full timestamp is never left as a date followed by a stray <time>.
+    private static readonly Regex Timestamps = new(
+        @"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?" +
+        @"|\d{4}-\d{2}-\d{2}" +
+        @"|\b\d{1,2}/\d{1,2}/\d{2,4}\b" +
+        @"|\b\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\b",
+        Options);
+
+    private static readonly Regex HexLiterals = new(@"\b0[xX][0-9a-fA-F]+\b|\b[0-9a-fA-F]{16,}\b", Options);
+
+    // The lookarounds keep digits that belong to a name: the 1 in Nullable`1, the 256 in SHA256, the
+    // 47 in a compiler-generated DisplayClass47_0. Those identify the code, not the run.
+    private static readonly Regex Numbers = new(@"(?<![\w.`])\d+(?:[.,]\d+)*(?![\w])", Options);
 
     /// <summary>
     /// Reduces a raw failure message to its stable form.
@@ -59,10 +96,9 @@ internal static partial class MessageNormaliser
         // Line endings first. The xUnit adapter joins an exception's messages with
         // Environment.NewLine, so the same failure recorded on Windows and on macOS differs by a
         // carriage return before anything else has had a chance to run.
-        string text = message.Replace("\r\n", "\n", StringComparison.Ordinal)
-                             .Replace('\r', '\n');
+        string text = message!.Replace("\r\n", "\n").Replace('\r', '\n');
 
-        text = WhitespaceRuns().Replace(text, " ").Trim();
+        text = WhitespaceRuns.Replace(text, " ").Trim();
 
         var result = new StringBuilder(text.Length);
         int position = 0;
@@ -70,19 +106,19 @@ internal static partial class MessageNormaliser
         // Quoted literals are copied through untouched rather than substituted into. Everything
         // between them goes through the rules. Splitting the string this way rather than masking the
         // literals with placeholders avoids the placeholders themselves matching a later rule.
-        foreach (Match literal in QuotedLiteral().Matches(text))
+        foreach (Match literal in QuotedLiteral.Matches(text))
         {
             // A quoted literal containing a digit is left to the rules: an id or a timestamp inside
             // quotes varies between runs exactly like one outside them.
-            if (ContainsDigit().IsMatch(literal.Value))
+            if (ContainsDigit.IsMatch(literal.Value))
                 continue;
 
-            result.Append(Substitute(text.AsSpan(position, literal.Index - position).ToString()));
+            result.Append(Substitute(text.Substring(position, literal.Index - position)));
             result.Append(literal.Value);
             position = literal.Index + literal.Length;
         }
 
-        result.Append(Substitute(text[position..]));
+        result.Append(Substitute(text.Substring(position)));
 
         return result.ToString();
     }
@@ -101,59 +137,17 @@ internal static partial class MessageNormaliser
         if (text.Length == 0)
             return text;
 
-        text = Guids().Replace(text, GuidToken);
+        text = Guids.Replace(text, GuidToken);
 
         // URIs before paths: a file:// URI ends in something the path rule would happily claim half
         // of, leaving <uri> and <path> glued together where one token belongs.
-        text = Uris().Replace(text, UriToken);
-        text = Paths().Replace(text, PathToken);
+        text = Uris.Replace(text, UriToken);
+        text = Paths.Replace(text, PathToken);
 
-        text = Timestamps().Replace(text, TimeToken);
-        text = HexLiterals().Replace(text, HexToken);
-        text = Numbers().Replace(text, NumberToken);
+        text = Timestamps.Replace(text, TimeToken);
+        text = HexLiterals.Replace(text, HexToken);
+        text = Numbers.Replace(text, NumberToken);
 
         return text.ToLowerInvariant();
     }
-
-    [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
-    private static partial Regex WhitespaceRuns();
-
-    [GeneratedRegex("\"[^\"]*\"|'[^']*'", RegexOptions.CultureInvariant)]
-    private static partial Regex QuotedLiteral();
-
-    [GeneratedRegex(@"\d", RegexOptions.CultureInvariant)]
-    private static partial Regex ContainsDigit();
-
-    [GeneratedRegex(
-        @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex Guids();
-
-    [GeneratedRegex(@"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s""'<>]+", RegexOptions.CultureInvariant)]
-    private static partial Regex Uris();
-
-    // Anchored on a boundary so that "and/or" and a bare "/" are not read as paths. Two segments are
-    // required for the same reason.
-    [GeneratedRegex(
-        @"(?<=^|[\s(\[=,:;])(?:[A-Za-z]:[\\/]|\\\\|/)[A-Za-z0-9_.~%+$\-]+(?:[\\/][A-Za-z0-9_.~%+$\-]+)*",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex Paths();
-
-    // ISO-8601 first, then a bare date, then a clock or TimeSpan reading. Ordered longest-first so a
-    // full timestamp is never left as a date followed by a stray <time>.
-    [GeneratedRegex(
-        @"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?" +
-        @"|\d{4}-\d{2}-\d{2}" +
-        @"|\b\d{1,2}/\d{1,2}/\d{2,4}\b" +
-        @"|\b\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\b",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex Timestamps();
-
-    [GeneratedRegex(@"\b0[xX][0-9a-fA-F]+\b|\b[0-9a-fA-F]{16,}\b", RegexOptions.CultureInvariant)]
-    private static partial Regex HexLiterals();
-
-    // The lookarounds keep digits that belong to a name: the 1 in Nullable`1, the 256 in SHA256, the
-    // 47 in a compiler-generated DisplayClass47_0. Those identify the code, not the run.
-    [GeneratedRegex(@"(?<![\w.`])\d+(?:[.,]\d+)*(?![\w])", RegexOptions.CultureInvariant)]
-    private static partial Regex Numbers();
 }

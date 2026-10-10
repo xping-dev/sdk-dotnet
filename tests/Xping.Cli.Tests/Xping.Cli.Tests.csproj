@@ -27,4 +27,10 @@
     <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The recorded failure text lives with the normaliser it was collected for; the CLI's
+         signature tests use the same samples. -->
+    <Compile Include="..\Xping.Sdk.Core.Tests\Diagnostics\RealFailureSamples.cs" Link="Report\RealFailureSamples.cs" />
+  </ItemGroup>
+
 </Project>

@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report;
-using Xping.Cli.Report.Signatures;
+using Xping.Sdk.Core.Services.Diagnostics;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Sdk.Core.Tests.Diagnostics;
 
 public sealed class StackFrameExtractorTests
 {
@@ -88,7 +87,7 @@ public sealed class StackFrameExtractorTests
 
         FrameExtraction extraction = StackFrameExtractor.Extract(trace);
 
-        Assert.Equal(LocalAnalysisConstants.SignatureFrameCount, extraction.Frames.Count);
+        Assert.Equal(StackFrameExtractor.MaxFrames, extraction.Frames.Count);
         Assert.Equal("MyApp.Deep.Level0.Call()", extraction.Frames[0]);
     }
 

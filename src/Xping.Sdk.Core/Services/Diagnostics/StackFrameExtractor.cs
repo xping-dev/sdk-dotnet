@@ -3,9 +3,11 @@
  * License: [MIT]
  */
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace Xping.Cli.Report.Signatures;
+namespace Xping.Sdk.Core.Services.Diagnostics;
 
 /// <summary>
 /// The frames a signature was built from, and whether they are as good as intended.
@@ -15,7 +17,7 @@ namespace Xping.Cli.Report.Signatures;
 /// Whether the frames are worse than intended: framework frames used because no user frame was
 /// found, or no frames at all.
 /// </param>
-internal sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
+public sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
 {
     /// <summary>Gets the result for a failure that carried no usable stack trace.</summary>
     public static FrameExtraction None { get; } = new([], true);
@@ -36,8 +38,19 @@ internal sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degrad
 /// suite into one cause.
 /// </para>
 /// </remarks>
-internal static partial class StackFrameExtractor
+public static class StackFrameExtractor
 {
+    /// <summary>
+    /// The most frames a failure is grouped by (5).
+    /// </summary>
+    public const int MaxFrames = 5;
+
+    private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
+
+    private static readonly Regex FrameLine = new(@"^at\s+(?<frame>.+)$", Options);
+
+    private static readonly Regex SourceLocation = new(@"\s+in\s+.+:line\s+\d+$", Options);
+
     /// <summary>
     /// Extracts the frames a signature should be built from.
     /// </summary>
@@ -50,16 +63,16 @@ internal static partial class StackFrameExtractor
 
         List<string> all = [];
 
-        foreach (string line in stackTrace.Split('\n'))
+        foreach (string line in stackTrace!.Split('\n'))
         {
             // Anything that is not a frame is skipped rather than parsed: a real trace carries
             // "--- End of stack trace from previous location ---" between the halves of an awaited
             // call, and an exception's own message can precede the frames.
-            Match match = FrameLine().Match(line.Trim());
+            Match match = FrameLine.Match(line.Trim());
             if (!match.Success)
                 continue;
 
-            string frame = SourceLocation().Replace(match.Groups["frame"].Value, string.Empty).Trim();
+            string frame = SourceLocation.Replace(match.Groups["frame"].Value, string.Empty).Trim();
             if (frame.Length > 0)
                 all.Add(frame);
         }
@@ -69,7 +82,7 @@ internal static partial class StackFrameExtractor
 
         List<string> user = [.. all
             .Where(f => !FrameworkNamespaces.IsFramework(f))
-            .Take(LocalAnalysisConstants.SignatureFrameCount)];
+            .Take(MaxFrames)];
 
         // A trace made entirely of framework frames still says something — an assertion helper in a
         // shared base class, a failure inside the runner itself — so it is used rather than
@@ -77,12 +90,6 @@ internal static partial class StackFrameExtractor
         return user.Count > 0
             ? new FrameExtraction(user, false)
             : new FrameExtraction(
-                [.. all.Take(LocalAnalysisConstants.SignatureFrameCount)], true);
+                [.. all.Take(MaxFrames)], true);
     }
-
-    [GeneratedRegex(@"^at\s+(?<frame>.+)$", RegexOptions.CultureInvariant)]
-    private static partial Regex FrameLine();
-
-    [GeneratedRegex(@"\s+in\s+.+:line\s+\d+$", RegexOptions.CultureInvariant)]
-    private static partial Regex SourceLocation();
 }

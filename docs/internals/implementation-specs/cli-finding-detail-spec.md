@@ -378,7 +378,7 @@ format spec's OQ-1 has not admitted. `EvidenceSessions` is already the denominat
 
 **Exemplars, stack frames, signature messages: deferred, and not because of the fence.** The prompt
 that led to this spec framed the width and charset rules as the obstacle. They are real —
-`ExemplarCharBudget` (`LocalAnalysisConstants.cs:448`) bounds a message at 500 characters, which is
+`ExemplarCharBudget` (`LocalAnalysisConstants.cs:450`) bounds a message at 500 characters, which is
 seven fenced lines, and a user's error text is the one input the ASCII rule cannot be asserted over —
 but they are solvable with a wrap and a charset pass. The actual reason is architectural: the
 evidence payloads are thirteen records (§1.1) whose exemplar shapes differ per kind

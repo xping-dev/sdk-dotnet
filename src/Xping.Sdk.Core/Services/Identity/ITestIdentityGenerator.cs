@@ -85,6 +85,7 @@ public interface ITestIdentityGenerator
     /// <summary>
     /// Generates a deterministic hash of a test failure error message, enabling grouping of
     /// tests that fail with the same error across runs without storing the full message.
+    /// Run-varying detail (numbers, GUIDs, timestamps, paths, URIs) is normalised before hashing.
     /// </summary>
     /// <param name="errorMessage">The error message to hash, or <see langword="null"/> for passing tests.</param>
     /// <returns>
@@ -96,10 +97,12 @@ public interface ITestIdentityGenerator
     /// <summary>
     /// Generates a deterministic hash of a stack trace, enabling deduplication of failures
     /// originating from the same code path across runs without storing the full trace.
+    /// Only the method signatures of up to five non-framework frames are hashed; file paths and
+    /// line numbers are not.
     /// </summary>
     /// <param name="stackTrace">The stack trace to hash, or <see langword="null"/> if unavailable.</param>
     /// <returns>
-    /// A stable hash string if <paramref name="stackTrace"/> is non-null and non-empty;
+    /// A stable hash string if <paramref name="stackTrace"/> contains at least one frame;
     /// otherwise <see langword="null"/>.
     /// </returns>
     string? GenerateStackTraceHash(string? stackTrace);

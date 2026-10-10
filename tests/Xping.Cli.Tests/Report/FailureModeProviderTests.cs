@@ -10,6 +10,7 @@ using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Tests.Diagnostics;
 
 namespace Xping.Cli.Tests.Report;
 

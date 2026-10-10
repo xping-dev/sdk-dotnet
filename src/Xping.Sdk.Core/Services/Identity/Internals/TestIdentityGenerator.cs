@@ -8,12 +8,17 @@ using System.Security.Cryptography;
 using System.Text;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Diagnostics;
 
 namespace Xping.Sdk.Core.Services.Identity.Internals;
 
 /// <inheritdoc/>
 internal sealed class TestIdentityGenerator : ITestIdentityGenerator
 {
+    // The record separator cannot appear in a frame signature, so no two frame lists join to the
+    // same string.
+    private const string FrameSeparator = "\u001e";
+
     private readonly TestIdentityBuilder _builder = new();
 
     /// <inheritdoc/>
@@ -229,43 +234,39 @@ internal sealed class TestIdentityGenerator : ITestIdentityGenerator
     }
 
     /// <summary>
-    /// Generates a stable SHA256 hash for an error message to enable grouping of similar failures.
+    /// Generates a SHA256 hash of an error message with its run-varying detail normalised away.
     /// </summary>
     /// <param name="errorMessage">The error message to hash.</param>
     /// <returns>A 64-character lowercase hex string (SHA256 hash), or null if input is null/empty.</returns>
     /// <remarks>
-    /// This method creates a stable hash that can be used to group test failures with
-    /// identical error messages, enabling analysis of failure patterns across test runs.
+    /// Durations, ids, GUIDs, timestamps and paths change between runs of the same failure. Hashed
+    /// raw, every repeat of a failure would look new to Xping Cloud. The normalisation is the one the
+    /// CLI groups local failures by, so both sides agree on what "the same message" means.
     /// </remarks>
     public string? GenerateErrorMessageHash(string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(errorMessage))
-        {
-            return null;
-        }
-
-        // Non-null after the check above
-        return ComputeSha256Hash(errorMessage!);
+        string normalised = MessageNormaliser.Normalise(errorMessage);
+        return normalised.Length == 0 ? null : ComputeSha256Hash(normalised);
     }
 
     /// <summary>
-    /// Generates a stable SHA256 hash for a stack trace to enable grouping of similar failures.
+    /// Generates a SHA256 hash of the frames a stack trace would be grouped by.
     /// </summary>
     /// <param name="stackTrace">The stack trace to hash.</param>
-    /// <returns>A 64-character lowercase hex string (SHA256 hash), or null if input is null/empty.</returns>
+    /// <returns>
+    /// A 64-character lowercase hex string (SHA256 hash), or null if the trace has no frames.
+    /// </returns>
     /// <remarks>
-    /// This method creates a stable hash that can be used to group test failures with
-    /// identical stack traces, enabling analysis of failure locations and patterns in the codebase.
+    /// Only method signatures are hashed. File paths differ between machines and line numbers move
+    /// with every edit above the failure, so hashing them split one failure into a group per CI agent
+    /// and per commit.
     /// </remarks>
     public string? GenerateStackTraceHash(string? stackTrace)
     {
-        if (string.IsNullOrWhiteSpace(stackTrace))
-        {
-            return null;
-        }
-
-        // Non-null after the check above
-        return ComputeSha256Hash(stackTrace!);
+        FrameExtraction extraction = StackFrameExtractor.Extract(stackTrace);
+        return extraction.Frames.Count == 0
+            ? null
+            : ComputeSha256Hash(string.Join(FrameSeparator, extraction.Frames));
     }
 
     /// <summary>

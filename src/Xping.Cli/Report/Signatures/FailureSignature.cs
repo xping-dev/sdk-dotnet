@@ -16,9 +16,9 @@ namespace Xping.Cli.Report.Signatures;
 /// </para>
 /// <para>
 /// Computed from the raw <c>ErrorMessage</c> and <c>StackTrace</c>, never from the SDK's
-/// <c>ErrorMessageHash</c> / <c>StackTraceHash</c>. Those exist so the cloud can group failures it
-/// is not allowed to see the text of; using them locally would throw away the entire advantage of
-/// running on the machine that has the text.
+/// <c>ErrorMessageHash</c> / <c>StackTraceHash</c>. Those go through the same normalisation, but a
+/// hash cannot be shown to a developer or a model; running on the machine that has the text is what
+/// lets the signature carry its readable components.
 /// </para>
 /// </remarks>
 /// <param name="Hash">Stable identity used to group failures. Never <see cref="object.GetHashCode"/>.</param>

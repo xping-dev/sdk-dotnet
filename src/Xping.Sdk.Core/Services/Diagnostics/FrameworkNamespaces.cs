@@ -3,7 +3,9 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Signatures;
+using System;
+
+namespace Xping.Sdk.Core.Services.Diagnostics;
 
 /// <summary>
 /// The namespace roots a stack frame is not worth signing a failure with.
