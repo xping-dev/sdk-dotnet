@@ -2,12 +2,14 @@
 """
 Periodic Command Runner
 
-Executes a given command at specified intervals until interrupted.
+Executes a given command at specified intervals until interrupted,
+or until an optional run limit is reached.
 Provides real-time feedback and execution summaries.
 
 Usage:
     python3 periodic_runner.py "command to run" --interval 30
     python3 periodic_runner.py "dotnet test ./samples/SampleApp.XUnit/" --interval 30
+    python3 periodic_runner.py "dotnet test ./samples/SampleApp.XUnit/" --interval 30 --count 20
 """
 
 import argparse
@@ -20,9 +22,10 @@ from typing import Optional
 
 
 class PeriodicRunner:
-    def __init__(self, command: str, interval: int):
+    def __init__(self, command: str, interval: int, max_runs: Optional[int] = None):
         self.command = command
         self.interval = interval
+        self.max_runs = max_runs
         self.execution_count = 0
         self.success_count = 0
         self.failure_count = 0
@@ -74,7 +77,10 @@ class PeriodicRunner:
         print(f"{'='*60}")
         print(f"Command: {self.command}")
         print(f"Interval: {self.interval} seconds")
-        print(f"Total executions: {self.execution_count}")
+        if self.max_runs:
+            print(f"Total executions: {self.execution_count}/{self.max_runs}")
+        else:
+            print(f"Total executions: {self.execution_count}")
         print(f"Successful: {self.success_count} ✅")
         print(f"Failed: {self.failure_count} ❌")
         
@@ -94,9 +100,11 @@ class PeriodicRunner:
         """Main execution loop"""
         print(f"🔄 Starting periodic execution of: {self.command}")
         print(f"⏱️  Interval: {self.interval} seconds")
+        print(f"🔢 Runs: {self.max_runs if self.max_runs else 'unlimited'}")
         print(f"🕐 Started at: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"💡 Press Ctrl+C to stop\n")
-        
+
+        limit_reached = False
         while self.running:
             # Execute command
             self.execution_count += 1
@@ -109,7 +117,12 @@ class PeriodicRunner:
             
             if not self.running:
                 break
-                
+
+            # Stop right after the last run instead of waiting out another interval
+            if self.max_runs and self.execution_count >= self.max_runs:
+                limit_reached = True
+                break
+
             # Calculate next run time
             next_run = datetime.now() + timedelta(seconds=self.interval)
             self._print_summary(next_run)
@@ -125,7 +138,10 @@ class PeriodicRunner:
                 sleep_remaining -= sleep_time
         
         # Final summary
-        print(f"\n🏁 Execution stopped.")
+        if limit_reached:
+            print(f"\n🏁 Completed {self.max_runs} runs.")
+        else:
+            print(f"\n🏁 Execution stopped.")
         self._print_summary()
 
 
@@ -136,6 +152,7 @@ def main():
         epilog="""
 Examples:
   python3 periodic_runner.py "echo Hello World" --interval 10
+  python3 periodic_runner.py "echo Hello World" --interval 10 --count 20
   python3 periodic_runner.py "dotnet run --project ./samples/ConsoleAppTesting/" --interval 30
   python3 periodic_runner.py "curl -s https://example.com > /dev/null" --interval 60
         """
@@ -154,6 +171,13 @@ Examples:
     )
     
     parser.add_argument(
+        "--count", "-n",
+        type=int,
+        default=None,
+        help="Stop after this many executions (default: run until interrupted)"
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="Periodic Runner 1.0.0"
@@ -164,8 +188,12 @@ Examples:
     if args.interval <= 0:
         print("❌ Error: Interval must be greater than 0 seconds")
         sys.exit(1)
-    
-    runner = PeriodicRunner(args.command, args.interval)
+
+    if args.count is not None and args.count <= 0:
+        print("❌ Error: Count must be greater than 0")
+        sys.exit(1)
+
+    runner = PeriodicRunner(args.command, args.interval, args.count)
     
     try:
         runner.run()
