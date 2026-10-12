@@ -582,14 +582,16 @@ The default branch of a run is resolved in this order:
 Notes:
 
 - It is sent only from CI. Local runs are never Canonical, so it has no use there.
-- A leading `refs/heads/` is removed; `origin/` is kept. Branch names are compared case-sensitively.
+- It is reduced to a bare branch name, as the branch of the run is: a leading `refs/heads/`,
+  `refs/remotes/origin/` or `origin/` is removed, so Jenkins' `GIT_BRANCH` (`origin/main`) can be
+  passed through as is. Branch names are compared case-sensitively.
 - It changes nothing on TeamCity: the SDK reports no branch there, so Xping Cloud can't place the run.
 - It applies to new runs only. Runs already recorded keep their classification.
 
 **Use with care.** On GitHub Actions and GitLab CI it replaces a value read from the platform itself.
 A stale setting - a repository renamed `master` to `main`, or a value copied into a shared pipeline
 template - silently stops every Canonical run. When the setting differs from what the platform
-reports, the SDK logs both values at Information level, so check the build log. Two pipelines of one
+reports, the SDK logs a warning naming both values, so check the build log. Two pipelines of one
 project with different values both produce Canonical runs, so the confidence evidence mixes both
 branches at full weight. The setting also beats the project setting in Xping Cloud, so it can't be
 overridden from there.

@@ -551,7 +551,7 @@ public sealed class EnvironmentDetectorTests
             new XpingConfiguration { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
 
         Assert.Equal("release", info.CustomProperties["CI.DefaultBranch"]);
-        Assert.Single(logger.Levels, LogLevel.Information);
+        Assert.Single(logger.Levels, LogLevel.Warning);
         Assert.Contains("'release'", logger.Messages[0], StringComparison.Ordinal);
         Assert.Contains("'develop'", logger.Messages[0], StringComparison.Ordinal);
     }
@@ -577,14 +577,41 @@ public sealed class EnvironmentDetectorTests
     public async Task TheConfiguredDefaultBranchIsSentWhereThePlatformReportsNone(string variable, string value)
     {
         _env[variable] = value;
-        var logger = new LevelRecordingLogger<EnvironmentDetector>();
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "refs/heads/develop" }, logger: logger))
-            .BuildEnvironmentInfoAsync();
+            new XpingConfiguration { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
 
         Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
-        Assert.DoesNotContain(LogLevel.Information, logger.Levels);
+    }
+
+    [Theory]
+    [InlineData("refs/heads/develop", "develop")]
+    [InlineData("Refs/Heads/develop", "develop")]
+    [InlineData("refs/heads/release/2.3", "release/2.3")]
+    [InlineData("origin/main", "main")]
+    [InlineData("refs/remotes/origin/main", "main")]
+    [InlineData("upstream/main", "upstream/main")]
+    public async Task TheConfiguredDefaultBranchIsReducedAsTheReportedBranchIs(string defaultBranch, string expected)
+    {
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env["GIT_BRANCH"] = "origin/main";
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Fact]
+    public async Task OnJenkinsGitBranchPassedThroughMatchesTheReportedBranch()
+    {
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env["GIT_BRANCH"] = "origin/main";
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "origin/main" })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(info.CustomProperties["CI.Branch"], info.CustomProperties["CI.DefaultBranch"]);
     }
 
     [Fact]
@@ -621,7 +648,7 @@ public sealed class EnvironmentDetectorTests
             new XpingConfiguration { DefaultBranch = "develop" }, logger: logger)).BuildEnvironmentInfoAsync();
 
         Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
-        Assert.DoesNotContain(LogLevel.Information, logger.Levels);
+        Assert.Empty(logger.Levels);
     }
 
     [Fact]

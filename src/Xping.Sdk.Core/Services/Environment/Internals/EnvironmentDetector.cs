@@ -948,7 +948,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     // disagreement is logged where the build log shows it.
     private void ApplyDefaultBranchOverride(Dictionary<string, string> properties)
     {
-        string? configured = _configuration.ResolvedDefaultBranch;
+        // Reduced as CI.Branch is, because Xping Cloud compares the two ordinally: refs/heads/develop
+        // would never match a run's develop, nor origin/main (Jenkins' GIT_BRANCH, a likely value to
+        // pass through) a Jenkins run's main. Trimming and blank-as-unset happen at binding.
+        string? configured = StripOriginRemote(ExtractBranchName(_configuration.DefaultBranch));
         if (configured is null)
             return;
 
@@ -961,13 +964,14 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         properties["CI.DefaultBranch"] = configured;
     }
 
-    // Runs inside the _customProperties lazy, like WarnMissingGitHubEventName: a throwing logger must
-    // not fail every later detection call.
+    // A warning, not information: it is the only sign of a stale value, which otherwise stops every
+    // Canonical run without a trace. Runs inside the _customProperties lazy, like
+    // WarnMissingGitHubEventName: a throwing logger must not fail every later detection call.
     private void LogDefaultBranchOverride(string detected, string configured)
     {
         try
         {
-            _logger.LogInformation(
+            _logger.LogWarning(
                 "Sending the configured default branch '{ConfiguredBranch}' (DefaultBranch / " +
                 "XPING_DEFAULTBRANCH) in place of '{DetectedBranch}', which the CI platform reports. " +
                 "Xping Cloud counts only pushes to the configured branch as Canonical runs.",

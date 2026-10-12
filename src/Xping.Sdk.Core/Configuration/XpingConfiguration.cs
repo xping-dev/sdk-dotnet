@@ -4,7 +4,6 @@
  */
 
 using System.ComponentModel.DataAnnotations;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
 
 namespace Xping.Sdk.Core.Configuration;
 
@@ -175,9 +174,10 @@ public sealed class XpingConfiguration
     /// <para>
     /// When set, it is sent as <c>CI.DefaultBranch</c> in place of the detected value on every CI
     /// platform, so it also beats the project's setting in Xping Cloud. It is not sent outside CI, and
-    /// it changes nothing on TeamCity, which reports no branch. It applies to new runs only. A leading
-    /// <c>refs/heads/</c> is removed. Can also be set with the <c>XPING_DEFAULTBRANCH</c> environment
-    /// variable.
+    /// it changes nothing on TeamCity, which reports no branch. It applies to new runs only. It is
+    /// reduced to a bare branch name the way the SDK reduces the branch it reports: a leading
+    /// <c>refs/heads/</c>, <c>refs/remotes/origin/</c> or <c>origin/</c> is removed. Can also be set
+    /// with the <c>XPING_DEFAULTBRANCH</c> environment variable.
     /// </para>
     /// </remarks>
     public string? DefaultBranch { get; set; }
@@ -413,25 +413,4 @@ public sealed class XpingConfiguration
     /// (<c>"ProjectId": ""</c>) means "derive" rather than "pin the empty string".
     /// </remarks>
     internal string? ProjectPin => string.IsNullOrWhiteSpace(ProjectId) ? null : ProjectId!.Trim();
-
-    /// <summary>
-    /// Gets the default branch to send, as a bare branch name, or <see langword="null"/> when none is
-    /// configured.
-    /// </summary>
-    /// <remarks>
-    /// The SDK sends bare branch names and Xping Cloud compares them ordinally, so
-    /// <c>refs/heads/develop</c> left as typed would never match a run's <c>develop</c>. A remote
-    /// prefix (<c>origin/</c>) is kept: it can't be told apart from a branch named that way.
-    /// </remarks>
-    internal string? ResolvedDefaultBranch
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(DefaultBranch))
-                return null;
-
-            string branch = PullRequestEnvironment.StripHeadsPrefix(DefaultBranch!.Trim()).Trim();
-            return branch.Length == 0 ? null : branch;
-        }
-    }
 }
