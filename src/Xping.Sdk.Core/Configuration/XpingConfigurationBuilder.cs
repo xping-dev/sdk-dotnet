@@ -100,6 +100,18 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets the branch Xping Cloud treats as the repository's default branch for CI runs.
+    /// </summary>
+    /// <param name="defaultBranch">The bare branch name, for example <c>develop</c>.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    /// <seealso cref="XpingConfiguration.DefaultBranch"/>
+    public XpingConfigurationBuilder WithDefaultBranch(string defaultBranch)
+    {
+        _configuration.DefaultBranch = defaultBranch;
+        return this;
+    }
+
+    /// <summary>
     /// Sets whether the SDK is enabled.
     /// </summary>
     /// <param name="enabled">Whether the SDK is enabled.</param>

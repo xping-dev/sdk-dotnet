@@ -97,6 +97,7 @@ Or use environment variables:
 - `XPING_PROJECTID` (optional: pins every test assembly to one project instead of one project each)
 - `XPING_API_ENDPOINT`
 - `XPING_ENVIRONMENT`
+- `XPING_DEFAULTBRANCH` (optional: the default branch Xping Cloud uses for CI runs, on platforms that don't report one)
 
 ## Metadata Extraction
 

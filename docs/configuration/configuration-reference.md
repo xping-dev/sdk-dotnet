@@ -53,6 +53,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
+| `DefaultBranch` | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch for this pipeline's CI runs. Replaces the value the platform reports |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 | `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
 | `CloudUrl` | string | `https://app.xping.io` | `XPING_CLOUDURL` | CLI only. Xping Cloud (Portal) URL used by `xping login` and Cloud-enriched reports |
@@ -552,6 +553,60 @@ Dropping the CI-vs-local distinction from `Environment` does not stop Xping dete
 still records `IsCIEnvironment`, an `ExecutionContext` custom property (`"CI"` or `"Local"`), the
 detected platform, and its build metadata - branch, commit SHA, run ID, actor. Those are
 diagnostics attached to the run rather than a second scoring axis.
+
+---
+
+### DefaultBranch
+
+**Type:** `string`  
+**Default:** *(none)*  
+**Environment Variable:** `XPING_DEFAULTBRANCH`
+
+The branch Xping Cloud treats as the repository's default branch for this pipeline's runs. Xping
+Cloud counts a CI push to the default branch as a **Canonical** run, which carries full weight in
+confidence scoring; a push to any other branch counts for less.
+
+The SDK reads the default branch from the platform on GitHub Actions and GitLab CI. Other platforms
+don't report one, so Xping Cloud uses the project's default branch setting, then `main` or
+`master`. Set `DefaultBranch` when that guess is wrong and you'd rather configure it in the
+pipeline - a repository whose default branch is `develop` or `trunk` on Azure DevOps or Jenkins, for
+example - or when a pipeline should treat another branch as its baseline.
+
+The default branch of a run is resolved in this order:
+
+1. `DefaultBranch` / `XPING_DEFAULTBRANCH`
+2. The value the CI platform reports (GitHub Actions, GitLab CI)
+3. The project's default branch setting in Xping Cloud
+4. `main` or `master`
+
+Notes:
+
+- It is sent only from CI. Local runs are never Canonical, so it has no use there.
+- A leading `refs/heads/` is removed; `origin/` is kept. Branch names are compared case-sensitively.
+- It changes nothing on TeamCity: the SDK reports no branch there, so Xping Cloud can't place the run.
+- It applies to new runs only. Runs already recorded keep their classification.
+
+**Use with care.** On GitHub Actions and GitLab CI it replaces a value read from the platform itself.
+A stale setting - a repository renamed `master` to `main`, or a value copied into a shared pipeline
+template - silently stops every Canonical run. When the setting differs from what the platform
+reports, the SDK logs both values at Information level, so check the build log. Two pipelines of one
+project with different values both produce Canonical runs, so the confidence evidence mixes both
+branches at full weight. The setting also beats the project setting in Xping Cloud, so it can't be
+overridden from there.
+
+**Examples:**
+
+```bash
+export XPING_DEFAULTBRANCH="develop"
+```
+
+```json
+{
+  "Xping": {
+    "DefaultBranch": "develop"
+  }
+}
+```
 
 ---
 

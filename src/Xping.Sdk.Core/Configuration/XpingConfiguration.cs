@@ -4,6 +4,7 @@
  */
 
 using System.ComponentModel.DataAnnotations;
+using Xping.Sdk.Core.Services.PullRequest.Internals;
 
 namespace Xping.Sdk.Core.Configuration;
 
@@ -159,6 +160,27 @@ public sealed class XpingConfiguration
     /// Disabled by default to prevent unintentional collection of developer PII.
     /// </summary>
     public bool CollectLocalGitAuthor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the branch Xping Cloud treats as the repository's default branch for runs of this
+    /// pipeline. Optional.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Xping Cloud counts a CI push to the default branch as a Canonical run, which carries full
+    /// weight in confidence scoring. The SDK reads the default branch from the platform only on GitHub
+    /// Actions and GitLab CI; elsewhere Xping Cloud uses the project's setting, then <c>main</c> or
+    /// <c>master</c>. Set this to name it from the pipeline instead.
+    /// </para>
+    /// <para>
+    /// When set, it is sent as <c>CI.DefaultBranch</c> in place of the detected value on every CI
+    /// platform, so it also beats the project's setting in Xping Cloud. It is not sent outside CI, and
+    /// it changes nothing on TeamCity, which reports no branch. It applies to new runs only. A leading
+    /// <c>refs/heads/</c> is removed. Can also be set with the <c>XPING_DEFAULTBRANCH</c> environment
+    /// variable.
+    /// </para>
+    /// </remarks>
+    public string? DefaultBranch { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
@@ -391,4 +413,25 @@ public sealed class XpingConfiguration
     /// (<c>"ProjectId": ""</c>) means "derive" rather than "pin the empty string".
     /// </remarks>
     internal string? ProjectPin => string.IsNullOrWhiteSpace(ProjectId) ? null : ProjectId!.Trim();
+
+    /// <summary>
+    /// Gets the default branch to send, as a bare branch name, or <see langword="null"/> when none is
+    /// configured.
+    /// </summary>
+    /// <remarks>
+    /// The SDK sends bare branch names and Xping Cloud compares them ordinally, so
+    /// <c>refs/heads/develop</c> left as typed would never match a run's <c>develop</c>. A remote
+    /// prefix (<c>origin/</c>) is kept: it can't be told apart from a branch named that way.
+    /// </remarks>
+    internal string? ResolvedDefaultBranch
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(DefaultBranch))
+                return null;
+
+            string branch = PullRequestEnvironment.StripHeadsPrefix(DefaultBranch!.Trim()).Trim();
+            return branch.Length == 0 ? null : branch;
+        }
+    }
 }

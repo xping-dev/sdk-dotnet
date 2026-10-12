@@ -731,6 +731,10 @@ public static class XpingServiceCollectionExtensions
             && bool.TryParse(strictMode, out var sm))
             config.StrictMode = sm;
 
+        // Default Branch Options
+        if (GetEnv("DEFAULTBRANCH") is { } defaultBranch)
+            config.DefaultBranch = defaultBranch;
+
         // Local Store Options. The same variable the CLI reads, so one export moves both sides.
         if (GetEnv("LOCAL_STORE") is { } localStore)
             config.LocalStorePath = localStore;
@@ -787,6 +791,11 @@ public static class XpingServiceCollectionExtensions
         else
             config.Environment = config.Environment!.Trim();
 
+        if (string.IsNullOrWhiteSpace(config.DefaultBranch))
+            config.DefaultBranch = null;
+        else
+            config.DefaultBranch = config.DefaultBranch!.Trim();
+
         if (string.IsNullOrWhiteSpace(config.LocalStorePath))
             config.LocalStorePath = null;
         else
@@ -832,6 +841,7 @@ public static class XpingServiceCollectionExtensions
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
         target.CollectLocalGitAuthor = source.CollectLocalGitAuthor;
         target.StrictMode = source.StrictMode;
+        target.DefaultBranch = source.DefaultBranch;
         target.LocalStorePath = source.LocalStorePath;
     }
 

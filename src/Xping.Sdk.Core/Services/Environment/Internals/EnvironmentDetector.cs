@@ -594,6 +594,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddPullRequestFlag(properties, HasValue("APPVEYOR_PULL_REQUEST_NUMBER"));
                     break;
             }
+
+            ApplyDefaultBranchOverride(properties);
         }
 
         // Add processor architecture
@@ -933,6 +935,43 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     "GITHUB_REF is refs/pull/*, CI.CommitSha and CI.IsPullRequest are not sent to Xping Cloud. " +
                     "If tests run in a container, pass GITHUB_EVENT_NAME along with the other GITHUB_* variables.");
             }
+        }
+        catch
+        {
+            // Logging is best effort; detection must still succeed.
+        }
+    }
+
+    // The configured default branch wins over the platform's own answer, so a pipeline can name its
+    // baseline where the platform reports none, or treat another branch as it. Overriding a reliable
+    // value is the risk: a stale setting in a shared template silently stops every Canonical run, so a
+    // disagreement is logged where the build log shows it.
+    private void ApplyDefaultBranchOverride(Dictionary<string, string> properties)
+    {
+        string? configured = _configuration.ResolvedDefaultBranch;
+        if (configured is null)
+            return;
+
+        if (properties.TryGetValue("CI.DefaultBranch", out string? detected)
+            && !string.Equals(detected, configured, StringComparison.Ordinal))
+        {
+            LogDefaultBranchOverride(detected, configured);
+        }
+
+        properties["CI.DefaultBranch"] = configured;
+    }
+
+    // Runs inside the _customProperties lazy, like WarnMissingGitHubEventName: a throwing logger must
+    // not fail every later detection call.
+    private void LogDefaultBranchOverride(string detected, string configured)
+    {
+        try
+        {
+            _logger.LogInformation(
+                "Sending the configured default branch '{ConfiguredBranch}' (DefaultBranch / " +
+                "XPING_DEFAULTBRANCH) in place of '{DetectedBranch}', which the CI platform reports. " +
+                "Xping Cloud counts only pushes to the configured branch as Canonical runs.",
+                configured, detected);
         }
         catch
         {

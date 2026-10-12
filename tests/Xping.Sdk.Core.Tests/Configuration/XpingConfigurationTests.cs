@@ -152,6 +152,22 @@ public sealed class XpingConfigurationTests
         Assert.Equal("my-project", config.ProjectPin);
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("refs/heads/", null)]
+    [InlineData("  develop  ", "develop")]
+    [InlineData("refs/heads/develop", "develop")]
+    [InlineData("refs/heads/release/2.3", "release/2.3")]
+    [InlineData("origin/develop", "origin/develop")]
+    public void ResolvedDefaultBranchIsTheBareBranchName(string? defaultBranch, string? expected)
+    {
+        var config = new XpingConfiguration { DefaultBranch = defaultBranch };
+
+        Assert.Equal(expected, config.ResolvedDefaultBranch);
+    }
+
     [Fact]
     public void ResolveModeShouldHonorExplicitModeOverCredentials()
     {

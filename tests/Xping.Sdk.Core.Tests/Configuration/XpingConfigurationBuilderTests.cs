@@ -38,6 +38,7 @@ public sealed class XpingConfigurationBuilderTests
             .WithBatchSize(50)
             .WithFlushInterval(TimeSpan.FromMinutes(1))
             .WithEnvironment("Production")
+            .WithDefaultBranch("develop")
             .WithEnabled(false)
             .WithCaptureStackTraces(false)
             .WithEnableCompression(false)
@@ -55,6 +56,7 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Equal(50, config.BatchSize);
         Assert.Equal(TimeSpan.FromMinutes(1), config.FlushInterval);
         Assert.Equal("Production", config.Environment);
+        Assert.Equal("develop", config.DefaultBranch);
         Assert.False(config.Enabled);
         Assert.False(config.CaptureStackTraces);
         Assert.False(config.EnableCompression);
