@@ -161,6 +161,28 @@ public sealed class XpingConfiguration
     public bool CollectLocalGitAuthor { get; set; }
 
     /// <summary>
+    /// Gets or sets the branch Xping Cloud treats as the repository's default branch for runs of this
+    /// pipeline. Optional.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Xping Cloud counts a CI push to the default branch as a Canonical run, which carries full
+    /// weight in confidence scoring. The SDK reads the default branch from the platform only on GitHub
+    /// Actions and GitLab CI; elsewhere Xping Cloud uses the project's setting, then <c>main</c> or
+    /// <c>master</c>. Set this to name it from the pipeline instead.
+    /// </para>
+    /// <para>
+    /// When set, it is sent as <c>CI.DefaultBranch</c> in place of the detected value on every CI
+    /// platform, so it also beats the project's setting in Xping Cloud. It is not sent outside CI, and
+    /// it changes nothing on TeamCity, which reports no branch. It applies to new runs only. It is
+    /// reduced to a bare branch name the way the SDK reduces the branch it reports: a leading
+    /// <c>refs/heads/</c>, <c>refs/remotes/origin/</c> or <c>origin/</c> is removed. Can also be set
+    /// with the <c>XPING_DEFAULTBRANCH</c> environment variable.
+    /// </para>
+    /// </remarks>
+    public string? DefaultBranch { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether strict mode is enabled.
     /// When <see langword="true"/>, configuration errors cause the SDK to throw a
     /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> during initialization, allowing callers to

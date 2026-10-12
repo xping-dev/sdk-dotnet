@@ -128,7 +128,7 @@ Xping automatically captures:
 - `GITHUB_RUN_ID` - Unique workflow run ID
 - `GITHUB_RUN_NUMBER` - Sequential run number
 - `GITHUB_SHA` - Normalized into `CI.CommitSha`, omitted on `pull_request_target` and on events outside the list below (see [Which Commit Is Recorded](#which-commit-is-recorded))
-- `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit; `repository.default_branch` becomes `CI.DefaultBranch`
+- `GITHUB_EVENT_PATH` - Event payload; on a pull request, `pull_request.head.sha` becomes the PR context's commit; `repository.default_branch` becomes `CI.DefaultBranch` unless `XPING_DEFAULTBRANCH` is set (see [Setting the Default Branch](#setting-the-default-branch))
 - `GITHUB_EVENT_NAME` / `GITHUB_REF` - Normalized into `CI.IsPullRequest`: `true` for `pull_request`, `pull_request_target`, or any run on `refs/pull/*`; `false` for `push`, `schedule`, `workflow_dispatch`, `merge_group`, `release`, `create`, `deployment` and `deployment_status`; not sent for any other event
 - `GITHUB_REF` - Branch or tag ref
 - `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
@@ -286,7 +286,7 @@ Xping automatically captures:
 - `CI_COMMIT_SHA` - Normalized into `CI.CommitSha` (see [Which Commit Is Recorded](#which-commit-is-recorded))
 - `CI_MERGE_REQUEST_IID` - Normalized into `CI.IsPullRequest` (`true` in merge request pipelines)
 - `CI_COMMIT_BRANCH` / `CI_COMMIT_REF_NAME` - Normalized into `CI.Branch`
-- `CI_DEFAULT_BRANCH` - Normalized into `CI.DefaultBranch`
+- `CI_DEFAULT_BRANCH` - Normalized into `CI.DefaultBranch` unless `XPING_DEFAULTBRANCH` is set (see [Setting the Default Branch](#setting-the-default-branch))
 - `CI_PROJECT_PATH` - Repository path
 - `CI_SERVER_URL` - Normalized into `CI.ServerUrl`
 - `GITLAB_USER_LOGIN` - User who triggered the pipeline
@@ -715,6 +715,25 @@ it came from. Leave it unset unless you specifically want that.
 > `PullRequestValidation` separates them from the identical runs on a developer's machine, which
 > halves the evidence behind every score on both sides. `XPING_ENVIRONMENT` is for naming
 > deployments - `Staging`, `Production` - and nothing else.
+
+### Setting the Default Branch
+
+Xping Cloud counts a CI push to the repository's default branch as a Canonical run, the strongest
+evidence behind a confidence score. GitHub Actions and GitLab CI report the default branch; the other
+platforms don't, so Xping Cloud uses the project's setting, then `main` or `master`. If your default
+branch is something else, set it in the pipeline:
+
+```yaml
+# Azure DevOps
+- script: dotnet test
+  env:
+    XPING_APIKEY: $(XPING_APIKEY)
+    XPING_DEFAULTBRANCH: develop
+```
+
+The value replaces what the platform reports, including on GitHub Actions and GitLab CI, and beats
+the project setting in Xping Cloud. See [DefaultBranch](../configuration/configuration-reference.md#defaultbranch)
+for the precedence and the risks of a stale value.
 
 ---
 

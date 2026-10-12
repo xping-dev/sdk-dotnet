@@ -1025,6 +1025,38 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
+    public void BindEnvVars_DEFAULTBRANCH_ShouldBeTrimmed()
+    {
+        using var _ = WithEnv("XPING_DEFAULTBRANCH", "  develop  ");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { DefaultBranch = "main" });
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal("develop", bound.DefaultBranch);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BindStandardFormat_WithBlankDefaultBranch_ShouldBeUnset(string value)
+    {
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:DefaultBranch"] = value,
+            }).Build());
+
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Null(bound.DefaultBranch);
+    }
+
+    [Fact]
     public void AddXpingPullRequest_RegistersTheGitHubGitLabAzurePipelinesAndJenkinsDetectorsInOrder()
     {
         using ServiceProvider provider = new ServiceCollection()

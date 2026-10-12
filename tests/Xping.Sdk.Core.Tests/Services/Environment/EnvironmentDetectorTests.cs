@@ -540,6 +540,130 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal(expected, info.CustomProperties.GetValueOrDefault("CI.DefaultBranch"));
     }
 
+    [Fact]
+    public async Task TheConfiguredDefaultBranchReplacesTheOneGitLabReports()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_DEFAULT_BRANCH"] = "develop";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("release", info.CustomProperties["CI.DefaultBranch"]);
+        Assert.Single(logger.Levels, LogLevel.Warning);
+        Assert.Contains("'release'", logger.Messages[0], StringComparison.Ordinal);
+        Assert.Contains("'develop'", logger.Messages[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheConfiguredDefaultBranchReplacesTheOneTheGitHubPayloadNames()
+    {
+        using var tempDirectory = new TempEmptyDirectory();
+        string eventPath = Path.Combine(tempDirectory.Path, "event.json");
+        await File.WriteAllTextAsync(eventPath, "{ \"repository\": { \"default_branch\": \"trunk\" } }");
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_EVENT_PATH"] = eventPath;
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "main" })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("main", info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Theory]
+    [InlineData("TF_BUILD", "True")]
+    [InlineData("JENKINS_URL", "https://jenkins.example")]
+    public async Task TheConfiguredDefaultBranchIsSentWhereThePlatformReportsNone(string variable, string value)
+    {
+        _env[variable] = value;
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Theory]
+    [InlineData("refs/heads/develop", "develop")]
+    [InlineData("Refs/Heads/develop", "develop")]
+    [InlineData("refs/heads/release/2.3", "release/2.3")]
+    [InlineData("origin/main", "main")]
+    [InlineData("refs/remotes/origin/main", "main")]
+    [InlineData("upstream/main", "upstream/main")]
+    public async Task TheConfiguredDefaultBranchIsReducedAsTheReportedBranchIs(string defaultBranch, string expected)
+    {
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env["GIT_BRANCH"] = "origin/main";
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(expected, info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Fact]
+    public async Task OnJenkinsGitBranchPassedThroughMatchesTheReportedBranch()
+    {
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env["GIT_BRANCH"] = "origin/main";
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "origin/main" })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal(info.CustomProperties["CI.Branch"], info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Fact]
+    public async Task TheConfiguredDefaultBranchIsNotSentOutsideCi()
+    {
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
+
+        Assert.False(info.CustomProperties.ContainsKey("CI.DefaultBranch"));
+    }
+
+    [Theory]
+    [InlineData("  ")]
+    [InlineData("refs/heads/")]
+    public async Task ABlankConfiguredDefaultBranchKeepsTheDetectedOne(string defaultBranch)
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_DEFAULT_BRANCH"] = "develop";
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
+    }
+
+    [Fact]
+    public async Task AConfiguredDefaultBranchMatchingTheDetectedOneLogsNothing()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_DEFAULT_BRANCH"] = "develop";
+        var logger = new LevelRecordingLogger<EnvironmentDetector>();
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "develop" }, logger: logger)).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
+        Assert.Empty(logger.Levels);
+    }
+
+    [Fact]
+    public async Task AThrowingLoggerDoesNotStopTheConfiguredDefaultBranch()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_DEFAULT_BRANCH"] = "develop";
+        var logger = new LevelRecordingLogger<EnvironmentDetector> { ThrowOnLog = true };
+
+        EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
+            new XpingConfiguration { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
+
+        Assert.Equal("release", info.CustomProperties["CI.DefaultBranch"]);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("/nonexistent/xping/event.json")]
