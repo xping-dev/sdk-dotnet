@@ -9,6 +9,7 @@ using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Rendering;
+using Xping.Cli.Report.Windowing;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -92,7 +93,8 @@ internal static class ReportFixtures
             Findings =
             [
                 .. envelope.Findings.Select(finding =>
-                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, new ReportScope(envelope.Context?.Assembly)) })
+                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, new ReportScope(
+                        envelope.Context?.Assembly, WindowResolution.Default, envelope.Window.SessionCount)) })
             ]
         };
     }

@@ -8,6 +8,7 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Tests.Diagnostics;
@@ -1692,7 +1693,8 @@ public sealed class FailureModeProviderTests
 
         ReportEnvelope typed = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
-            scope: new ReportScope("My App.Tests", AssemblyGiven: false, Runs: 7, Directory: "../svc"));
+            scope: new ReportScope(
+                "My App.Tests", WindowResolution.Runs, 7, AssemblyGiven: false, Runs: 7, Directory: "../svc"));
 
         Assert.NotEmpty(typed.Findings);
         Assert.All(typed.Findings, finding => Assert.Equal(
@@ -1702,7 +1704,8 @@ public sealed class FailureModeProviderTests
 
         ReportEnvelope named = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
-            scope: new ReportScope("MyApp.Tests", AssemblyGiven: true, Since: "2026-08-01"));
+            scope: new ReportScope(
+                "MyApp.Tests", WindowResolution.SinceDate, 20, AssemblyGiven: true, Since: "2026-08-01"));
 
         Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
     }

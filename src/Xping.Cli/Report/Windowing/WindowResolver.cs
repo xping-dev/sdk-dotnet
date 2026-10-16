@@ -147,7 +147,9 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         {
             { Since: { Length: > 0 } since } => ResolveSince(source, request, since),
             { Runs: { } runs } => ResolveCount(source, request, runs, WindowResolution.Runs, runs.ToString(CultureInfo.InvariantCulture)),
-            { WholeStore: true } => ResolveStore(source, request),
+            // No age bound, unlike the default: a reader who named one test wants all of its
+            // history, and retention has already decided how much of it there is.
+            { WholeStore: true } => ResolveCount(source, request, UnboundedReadCeiling, WindowResolution.Store, null),
             _ => ResolveDefault(source, request)
         };
     }
@@ -210,23 +212,6 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         IReadOnlyList<TestSession> selected = withinAge.Count > 0 ? withinAge : read.Sessions;
 
         return Build(selected, WindowResolution.Default, null, read);
-    }
-
-    /// <summary>
-    /// Takes every session the store holds for the assembly.
-    /// </summary>
-    /// <remarks>
-    /// No age bound, unlike the default: a reader who named one test wants all of its history, and
-    /// retention has already decided how much of it there is.
-    /// </remarks>
-    private WindowResult ResolveStore(ISessionSource source, WindowRequest request)
-    {
-        DatableRead read = Read(source, UnboundedReadCeiling, request.Assembly);
-
-        if (read.Sessions.Count == 0)
-            return Failed(WindowFailure.EmptyStore, null, read);
-
-        return Build(read.Sessions, WindowResolution.Store, null, read);
     }
 
     /// <summary>
@@ -381,7 +366,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
             ? read
             : source.Read(UnboundedReadCeiling, assembly);
 
-        var selected = new List<TestSession>(maxSessions);
+        var selected = new List<TestSession>(Math.Min(maxSessions, deep.Sessions.Count));
         int skewed = 0;
 
         // Counted over the runs walked past to fill the window, and not over the whole store: this

@@ -4,6 +4,7 @@
  */
 
 using Xping.Cli.Report;
+using Xping.Cli.Report.Windowing;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -23,7 +24,7 @@ public sealed class DrillDownTests
     {
         Assert.Equal(
             $"xping report --all --directory {printed}",
-            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", Directory: directory)));
+            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, Directory: directory)));
     }
 
     [Fact]
@@ -31,6 +32,6 @@ public sealed class DrillDownTests
     {
         Assert.Equal(
             "xping report --id f_2a91c0de --assembly MyApp.Tests --since 2026-08-01",
-            DrillDown.ForFinding("f_2a91c0de", new ReportScope("MyApp.Tests", Since: "2026-08-01")));
+            DrillDown.ForFinding("f_2a91c0de", new ReportScope("MyApp.Tests", WindowResolution.SinceDate, 20, Since: "2026-08-01")));
     }
 }
