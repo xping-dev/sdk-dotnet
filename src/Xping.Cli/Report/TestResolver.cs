@@ -9,6 +9,7 @@ using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Report;
 
@@ -130,31 +131,15 @@ internal static class TestResolver
     /// </summary>
     /// <param name="sessions">The sessions, newest first.</param>
     /// <param name="query">The name the reader typed.</param>
-    /// <param name="assembly">The assembly the sessions were restricted to, when one was given.</param>
+    /// <param name="assembly">The assembly to restrict the lookup to, or <see langword="null"/> for all.</param>
     /// <returns>The resolution.</returns>
     public static TestResolution Resolve(IReadOnlyList<TestSession> sessions, string query, string? assembly)
     {
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(query);
 
-        List<Entry> entries = Index(sessions);
-
-        List<Entry> matched = entries.Where(e => string.Equals(e.FullyQualifiedName, query, StringComparison.Ordinal)).ToList();
-
-        if (matched.Count == 0)
-        {
-            string segments = Normalise(query);
-            matched = entries.Where(e => EndsWithSegments(e.FullyQualifiedName, segments)).ToList();
-        }
-
-        if (matched.Count == 0)
-            matched = ByFingerprint(entries, query);
-
-        // A computed fingerprint is lower-case hex, so a prefix copied from somewhere that upper-cases
-        // it is still the reader's intent. Only for hex: a pinned fingerprint is any case, and
-        // lowering one would match a different pin.
-        if (matched.Count == 0 && IsHex(query))
-            matched = ByFingerprint(entries, Lower(query));
+        List<Entry> entries = Index(sessions, assembly);
+        List<Entry> matched = Match(entries, query);
 
         TestResolutionKind kind = matched.Count switch
         {
@@ -163,6 +148,8 @@ internal static class TestResolver
             _ => TestResolutionKind.Ambiguous
         };
 
+        var siblings = new ShortFingerprints(entries);
+
         List<TestMatch> candidates = matched
             .OrderBy(e => e.NewestPosition)
             .ThenBy(e => e.Assembly, StringComparer.Ordinal)
@@ -170,7 +157,7 @@ internal static class TestResolver
             .ThenBy(e => e.Fingerprint, StringComparer.Ordinal)
             .Select(e => new TestMatch(
                 e.Fingerprint,
-                ShortFingerprint(e, entries),
+                siblings.For(e),
                 e.Assembly,
                 e.FullyQualifiedName,
                 e.LastSeen,
@@ -179,7 +166,11 @@ internal static class TestResolver
 
         int assemblyCount = entries.Select(e => e.Assembly).Distinct(StringComparer.Ordinal).Count();
 
-        return new TestResolution(kind, query, assembly, candidates, assemblyCount, sessions.Count);
+        int runCount = assembly == null
+            ? sessions.Count
+            : sessions.Count(s => SessionAssemblies.Covers(s, assembly));
+
+        return new TestResolution(kind, query, assembly, candidates, assemblyCount, runCount);
     }
 
     /// <summary>
@@ -252,7 +243,7 @@ internal static class TestResolver
     /// <see cref="Indexes.TestIndex"/> takes it: a renamed test is found under what it is called now.
     /// An execution with no assembly is left out, since the view that follows has to be scoped to one.
     /// </remarks>
-    private static List<Entry> Index(IReadOnlyList<TestSession> sessions)
+    private static List<Entry> Index(IReadOnlyList<TestSession> sessions, string? assembly)
     {
         var entries = new Dictionary<(string Assembly, string Fingerprint), Entry>();
         var ordered = new List<Entry>();
@@ -265,6 +256,9 @@ internal static class TestResolver
             {
                 TestIdentity identity = execution.Identity;
                 if (string.IsNullOrEmpty(identity.TestFingerprint) || string.IsNullOrEmpty(identity.Assembly))
+                    continue;
+
+                if (assembly != null && !string.Equals(identity.Assembly, assembly, StringComparison.Ordinal))
                     continue;
 
                 var key = (identity.Assembly, identity.TestFingerprint);
@@ -288,6 +282,41 @@ internal static class TestResolver
         return ordered;
     }
 
+    /// <summary>
+    /// Runs the three tiers; the first that matches anything wins.
+    /// </summary>
+    private static List<Entry> Match(List<Entry> entries, string query)
+    {
+        List<Entry> matched = ByName(entries, query);
+
+        if (matched.Count == 0)
+            matched = ByFingerprint(entries, query);
+
+        // A computed fingerprint is lower-case hex, so a prefix copied from somewhere that upper-cases
+        // it is still the reader's intent. Only for hex, and only at a length that can prefix a
+        // computed fingerprint: a pin is any case, and lowering one would match a different pin.
+        if (matched.Count == 0 && query.Length >= MinimumPrefix && IsHex(query))
+            matched = ByFingerprint(entries, Lower(query));
+
+        return matched;
+    }
+
+    /// <summary>
+    /// Runs the first two tiers: the exact name, then a run of trailing segments.
+    /// </summary>
+    private static List<Entry> ByName(List<Entry> entries, string query)
+    {
+        List<Entry> matched = entries
+            .Where(e => string.Equals(e.FullyQualifiedName, query, StringComparison.Ordinal))
+            .ToList();
+
+        if (matched.Count > 0)
+            return matched;
+
+        string segments = Normalise(query);
+        return entries.Where(e => EndsWithSegments(e.FullyQualifiedName, segments)).ToList();
+    }
+
     private static List<Entry> ByFingerprint(List<Entry> entries, string query)
     {
         // A whole fingerprint names its test alone, even when it is a prefix of another: a pinned
@@ -298,34 +327,6 @@ internal static class TestResolver
             return exact;
 
         return entries.Where(e => e.Fingerprint.StartsWith(query, StringComparison.Ordinal)).ToList();
-    }
-
-    /// <summary>
-    /// Returns the shortest prefix, from eight characters, that names one fingerprint in its assembly.
-    /// </summary>
-    /// <remarks>
-    /// Within the assembly only, because every command that prints it also carries
-    /// <c>--assembly</c>. A prefix that never becomes unique — the fingerprint is a prefix of another —
-    /// widens to the whole fingerprint, which still resolves under the third tier's exact rule.
-    /// </remarks>
-    private static string ShortFingerprint(Entry entry, List<Entry> entries)
-    {
-        string fingerprint = entry.Fingerprint;
-
-        var siblings = entries
-            .Where(e => string.Equals(e.Assembly, entry.Assembly, StringComparison.Ordinal))
-            .Select(e => e.Fingerprint)
-            .ToList();
-
-        for (int length = Math.Min(MinimumPrefix, fingerprint.Length); length < fingerprint.Length; length++)
-        {
-            string prefix = fingerprint[..length];
-
-            if (siblings.Count(f => f.StartsWith(prefix, StringComparison.Ordinal)) == 1)
-                return prefix;
-        }
-
-        return fingerprint;
     }
 
     /// <summary>
@@ -348,34 +349,62 @@ internal static class TestResolver
         name.EndsWith(segments, StringComparison.Ordinal)
         && (name.Length == segments.Length || name[name.Length - segments.Length - 1] == '.');
 
-    // NUnit and MSTest write a nested type as Outer+Inner; a reader types the dot.
-    private static string Normalise(string name) => name.Replace('+', '.');
+    /// <summary>
+    /// Reads a nested type's <c>+</c> as <c>.</c>, outside argument lists only.
+    /// </summary>
+    /// <remarks>
+    /// NUnit and MSTest write a nested type as <c>Outer+Inner</c>, and a reader types the dot. Inside
+    /// an argument list a <c>+</c> is data: rewriting it would make <c>Concat("a+b")</c> and
+    /// <c>Concat("a.b")</c> one case.
+    /// </remarks>
+    private static string Normalise(string name)
+    {
+        if (!name.Contains('+', StringComparison.Ordinal))
+            return name;
+
+        char[] chars = name.ToCharArray();
+        var scanner = new NameScanner();
+
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (scanner.Next(chars[i]) && scanner.Depth == 0 && chars[i] == '+')
+                chars[i] = '.';
+        }
+
+        return new string(chars);
+    }
 
     /// <summary>
     /// Removes the argument list that closes a name, or returns <see langword="null"/> when there is none.
     /// </summary>
     /// <remarks>
-    /// Matched from the closing parenthesis back to its opener rather than cut at the first one, so a
-    /// parameterised fixture's arguments survive: <c>Fixture(1).Method(2)</c> becomes
-    /// <c>Fixture(1).Method</c>, and arguments that hold parentheses of their own stay whole.
+    /// Walked forward with string and character literals skipped, so an argument holding a
+    /// parenthesis of its own — <c>Smile(":)")</c> — does not hide where the list opens. Only the list
+    /// that closes the name is removed, so a parameterised fixture's arguments survive:
+    /// <c>Fixture(1).Method(2)</c> becomes <c>Fixture(1).Method</c>.
     /// </remarks>
     private static string? WithoutArguments(string name)
     {
         if (!name.EndsWith(')'))
             return null;
 
-        int depth = 0;
+        var scanner = new NameScanner();
+        int open = -1;
 
-        for (int i = name.Length - 1; i >= 0; i--)
+        for (int i = 0; i < name.Length; i++)
         {
-            if (name[i] == ')')
-            {
-                depth++;
-            }
-            else if (name[i] == '(' && --depth == 0)
-            {
-                return name[..i];
-            }
+            char c = name[i];
+            int depth = scanner.Depth;
+
+            if (!scanner.Next(c))
+                continue;
+
+            if (c == '(' && depth == 0)
+                open = i;
+            else if (c == ')' && scanner.Depth == 0 && i == name.Length - 1)
+                return name[..open];
+            else if (scanner.Depth < 0)
+                return null;
         }
 
         return null;
@@ -392,6 +421,114 @@ internal static class TestResolver
 
     private static string Count(int count, string noun, string? plural = null) =>
         string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? noun : plural ?? noun + "s")}");
+
+    /// <summary>
+    /// Works out each candidate's short fingerprint: the shortest prefix, from eight characters, that
+    /// <c>--test</c> resolves back to that test alone within its assembly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Within the assembly only, because every command that prints it also carries
+    /// <c>--assembly</c>. Uniqueness among fingerprints comes from the sorted neighbours: a prefix
+    /// one longer than the longer common prefix with either neighbour is unique, and a fingerprint
+    /// that is a prefix of another widens to the whole of it, which the third tier's exact rule still
+    /// resolves.
+    /// </para>
+    /// <para>
+    /// Unique is not enough. The name tiers run first, so a prefix that happens to be a method name,
+    /// or a pin equal to one, would resolve to that method. Such a prefix is widened until the name
+    /// tiers no longer take it. A whole pin that still collides is printed anyway: no fingerprint
+    /// alone can name that test, and <c>--test</c> then answers with the ambiguity.
+    /// </para>
+    /// </remarks>
+    private sealed class ShortFingerprints(List<Entry> entries)
+    {
+        private readonly Dictionary<string, (string[] Sorted, List<Entry> Entries)> _byAssembly = entries
+            .GroupBy(e => e.Assembly, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => (g.Select(e => e.Fingerprint).Order(StringComparer.Ordinal).ToArray(), g.ToList()),
+                StringComparer.Ordinal);
+
+        public string For(Entry entry)
+        {
+            (string[] sorted, List<Entry> siblings) = _byAssembly[entry.Assembly];
+            string fingerprint = entry.Fingerprint;
+            int index = Array.BinarySearch(sorted, fingerprint, StringComparer.Ordinal);
+
+            int shared = 0;
+            if (index > 0)
+                shared = CommonPrefix(fingerprint, sorted[index - 1]);
+            if (index < sorted.Length - 1)
+                shared = Math.Max(shared, CommonPrefix(fingerprint, sorted[index + 1]));
+
+            int from = Math.Max(Math.Min(MinimumPrefix, fingerprint.Length), shared + 1);
+
+            for (int length = Math.Min(from, fingerprint.Length); length < fingerprint.Length; length++)
+            {
+                string prefix = fingerprint[..length];
+                List<Entry> named = ByName(siblings, prefix);
+
+                if (named.Count == 0 || (named.Count == 1 && ReferenceEquals(named[0], entry)))
+                    return prefix;
+            }
+
+            return fingerprint;
+        }
+
+        private static int CommonPrefix(string a, string b)
+        {
+            int length = Math.Min(a.Length, b.Length);
+            int i = 0;
+            while (i < length && a[i] == b[i])
+                i++;
+            return i;
+        }
+    }
+
+    /// <summary>
+    /// Tracks parenthesis depth through a name, skipping string and character literals.
+    /// </summary>
+    private struct NameScanner
+    {
+        private char _quote;
+        private bool _escaped;
+
+        /// <summary>Gets the parenthesis depth after the last structural character.</summary>
+        public int Depth { get; private set; }
+
+        /// <summary>
+        /// Advances over one character.
+        /// </summary>
+        /// <returns><see langword="true"/> when the character is outside every literal.</returns>
+        public bool Next(char c)
+        {
+            if (_quote != '\0')
+            {
+                if (_escaped)
+                    _escaped = false;
+                else if (c == '\\')
+                    _escaped = true;
+                else if (c == _quote)
+                    _quote = '\0';
+
+                return false;
+            }
+
+            if (c is '"' or '\'')
+            {
+                _quote = c;
+                return false;
+            }
+
+            if (c == '(')
+                Depth++;
+            else if (c == ')')
+                Depth--;
+
+            return true;
+        }
+    }
 
     /// <summary>
     /// One assembly and fingerprint, accumulated over the read.

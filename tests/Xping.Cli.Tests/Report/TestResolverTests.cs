@@ -269,6 +269,73 @@ public sealed class TestResolverTests
     }
 
     [Fact]
+    public void AShortFingerprintThatIsAlsoAMethodNameWidensUntilItNamesItsOwnTest()
+    {
+        TestExecution[] tests =
+        [
+            Test("Ns.Codes.deadbeef", "11111111aa"),
+            Test("Ns.Calc.Add", "deadbeef22")
+        ];
+
+        TestMatch add = Resolve("Add", tests).Match!;
+        TestResolution again = Resolve(add.ShortFingerprint, tests);
+
+        Assert.Equal("deadbeef2", add.ShortFingerprint);
+        Assert.Equal("deadbeef22", again.Match!.Fingerprint);
+    }
+
+    [Fact]
+    public void AShortUpperCaseQueryDoesNotMatchALowerCasePin()
+    {
+        TestResolution resolution = Resolve("CAFE", Test("Ns.Shop.Pays", "cafe"));
+
+        Assert.Equal(TestResolutionKind.NotFound, resolution.Kind);
+    }
+
+    [Theory]
+    [InlineData("Ns.T.Smile(\":)\")")]
+    [InlineData("Ns.T.Smile(\"(\")")]
+    [InlineData("Ns.T.Smile('(')")]
+    [InlineData("Ns.T.Smile(\"\\\")\")")]
+    public void AParenthesisInsideALiteralDoesNotHideTheArgumentList(string fullyQualifiedName)
+    {
+        TestResolution resolution = Resolve(
+            "Smile",
+            Test(fullyQualifiedName, "aaaaaaaa1"),
+            Test("Ns.T.Smile(\"a\")", "bbbbbbbb1"));
+
+        Assert.Equal(TestResolutionKind.Ambiguous, resolution.Kind);
+    }
+
+    [Fact]
+    public void APlusInsideTheArgumentsIsNotReadAsADot()
+    {
+        TestResolution resolution = Resolve(
+            "Concat(\"a.b\")",
+            Test("Ns.S.Concat(\"a+b\")", "aaaaaaaa1"),
+            Test("Ns.S.Concat(\"a.b\")", "bbbbbbbb1"));
+
+        Assert.Equal(TestResolutionKind.Found, resolution.Kind);
+        Assert.Equal("bbbbbbbb1", resolution.Match!.Fingerprint);
+    }
+
+    [Fact]
+    public void AnAssemblyGivenWithAnUnscopedReadStillRestrictsTheLookup()
+    {
+        IReadOnlyList<TestSession> store = Store(
+            Session(0, Test("Ns.A.Foo", "aaaaaaaa1", Other)),
+            Session(1, Test("Ns.A.Foo", "bbbbbbbb1"), Test("Ns.A.Bar", "cccccccc1", Other)),
+            Session(2, Test("Ns.A.Bar", "dddddddd1", Other)));
+
+        TestResolution found = TestResolver.Resolve(store, "Foo", Assembly);
+        TestResolution missing = TestResolver.Resolve(store, "Nope", Assembly);
+
+        Assert.Equal("bbbbbbbb1", found.Match!.Fingerprint);
+        Assert.Equal(1, missing.RunCount);
+        Assert.Equal(1, missing.AssemblyCount);
+    }
+
+    [Fact]
     public void ARenamedTestIsFoundUnderItsNewestNameOnly()
     {
         IReadOnlyList<TestSession> store = Store(
