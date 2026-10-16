@@ -105,8 +105,8 @@ amendment records the changes it makes here, committed with that spec.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | D3, §7: the third not-found tier, *the test is in the window and carries no finding*, is out of scope | Added. When no finding and no same-subject finding matches, `FindingId.Compute(kind, fingerprint)` runs for every fingerprint in the window and every kind. On a hit, the message adds `Its test has no findings in this window: xping report --test <fp8> --assembly <assembly>` | D3, §7 |
-| B | The detail view ends with "Also about this test" | For a single-test subject, one more line follows: `History: xping report --test <fp8> --assembly <assembly>`, from `DrillDown.ForTest` | §3, §4.5 |
+| A | D3, §7: the third not-found tier, *the test is in the window and carries no finding*, is out of scope | Added. When no finding and no same-subject finding matches, `FindingId.Compute(kind, fingerprint)` runs for every fingerprint in the window and every kind. On a hit, the message adds `Its test has no findings in this window: xping report --test <fp> --assembly <assembly>` | D3, §7 |
+| B | The detail view ends with "Also about this test" | For a single-test subject, one more line follows: `History: xping report --test <fp> --assembly <assembly>`, from `DrillDown.ForTest` | §3, §4.5 |
 | C | `ExitCodes.FindingNotReported` = 3 | Renamed `ExitCodes.NotFound`, still 3; it covers `--test` too | §4.5 |
 
 ---

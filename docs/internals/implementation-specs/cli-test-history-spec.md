@@ -130,11 +130,18 @@ every window and store flag `report` already parses.
 later tiers are not tried.
 
 1. **Exact FQN.** Ordinal, case-sensitive, against `FullyQualifiedName`.
-2. **Segment suffix.** The FQN, with any trailing `(args)` removed, ends with `.` + `<name>`, ordinal,
-   case-sensitive. This covers `Method`, `Class.Method` and `Namespace.Class.Method` without reading
-   `ClassName`. A nested or generic class therefore needs no special case.
-3. **Fingerprint prefix.** `<name>` is 8 to 64 hex characters and prefixes the fingerprint,
-   case-insensitive.
+2. **Segment suffix.** Ordinal, case-sensitive. Before comparing, `+` is read as `.` on both sides:
+   NUnit and MSTest write a nested type as `Outer+Inner`, so `--test Inner.Method` matches it. The test
+   matches when its FQN ends with `.` + `<name>`, either as stored or with a trailing `(args)` removed.
+   So `Add` matches every case of `Add(…)`, and `Add(1,2)` matches that one case. This covers `Method`,
+   `Class.Method` and `Namespace.Class.Method` without reading `ClassName`. Generic arity markers
+   (`` `1 ``) are not normalised; the bare method name or the full FQN still matches.
+3. **Fingerprint prefix.** `<name>` is a prefix of the fingerprint, ordinal and case-sensitive, at
+   least 8 characters long or the whole fingerprint when it is shorter. When nothing matches and
+   `<name>` is all hex, it is retried lower-cased, since a computed fingerprint is lower-case SHA-256 hex.
+   A fingerprint pinned with `[XpingFingerprint]` is any `[a-zA-Z0-9_-]{1,100}`, plus `:<paramHash>`
+   for each parameterised case (`TestIdentityGenerator.cs:61-63`,
+   `XpingFingerprintAttribute.cs:69-71`). That is why this tier compares text rather than hex.
 
 Matching uses each fingerprint's **newest** identity, so a renamed test is found under its current name.
 
@@ -156,17 +163,21 @@ When the winning tier matches two or more fingerprints, nothing is rendered. Ins
 - stderr lists the candidates, newest run first, up to 10, then `+N more` (§3.3);
 - each candidate gives its fingerprint prefix, its assembly and its FQN; the FQN is broken with the
   existing `Break` rules (`TextReportRenderer.cs:556-580`) and fits the fence;
-- one ready-to-run line closes the list: `xping report --test <fp8> --assembly <assembly>` for the
+- one ready-to-run line closes the list: `xping report --test <fp> --assembly <assembly>` for the
   first candidate;
-- `--format json` writes the envelope to stdout with `test.candidates` populated and `test.sessions`
-  empty;
+- `--format json` writes the envelope to stdout with `test.query` set, `test.candidates` populated,
+  `test.test` null and `test.sessions` empty;
 - the command exits **`4`, `ExitCodes.TestAmbiguous`**.
 
 Parameterised tests are the common case. `--test Add` matches `Add(1,2)` and `Add(2,3)`, by design. The
 fingerprint prefix is how a reader names one case.
 
-The prefix shown is 8 characters. If two candidates share 8, both are widened to the shortest length
-that tells them apart.
+**Short fingerprint.** Every command this spec prints names a test by its short fingerprint, written
+`<fp>`. It is the shortest prefix of at least 8 characters that matches exactly one fingerprint in the
+assembly; the whole fingerprint when it is shorter than 8. A computed fingerprint almost always stops at
+8. The parameterised cases of a pinned test share the pin, so their short fingerprints run past the `:`
+into the parameter hash. That is what lets `--test <fp>` name one case. Candidates in D3 print it, and
+`DrillDown.ForTest` (D11) emits it.
 
 **Rejected:** picking the newest match. The command would silently answer about a different test on
 another day.
@@ -183,8 +194,10 @@ both selections. One line on stderr, in one of two tiers:
   this tier can name the flag:
   `No run of 'Foo' in this window (--runs 5). It ran in 12 earlier runs; drop --runs to see them.`
 
-With `--format json`, stdout carries the envelope with `test: null` and `selection: null`, as `--id`'s
-not-reported path writes an envelope (`ReportCommand.cs:127-135`).
+With `--format json`, stdout carries the envelope, as `--id`'s not-reported path does
+(`ReportCommand.cs:127-135`). `selection` is null. `test` is present with `query` set, `test.test` and
+`counts` and `duration` null, and `sessions` and `candidates` empty, so a script can see what was asked
+for. Not found and ambiguous differ by `candidates` and by the exit code.
 
 ### D5 — Window
 
@@ -222,9 +235,9 @@ columns, with widths in display columns:
 | gap | 2 | |
 | outcome | 4 | The first attempt's glyph, then the deciding attempt's glyph if they differ: `✗→✓` (ASCII `x->+`). One glyph when they agree |
 | gap | 2 | |
-| detail | 12 | `attempt N` when the deciding attempt is > 1. Otherwise the outcome word for a deciding outcome other than Passed or Failed: `timeout`, `skipped`, `not run`, `inconclusive`. Both: `timeout @2`. Else blank |
+| detail | 12 | `attempt N` when the deciding attempt is > 1. Otherwise the outcome word for a deciding outcome other than Passed or Failed: `timeout`, `skipped`, `not run`, `inconcl.` (Inconclusive, abbreviated so every word fits). Both: `<word> @N`, e.g. `timeout @2`. Else blank. The longest value at attempt 99 is `inconcl. @99`, 12 columns. A higher attempt widens the row, like a long duration |
 | gap | 2 | |
-| duration | 8, right-aligned | Deciding attempt, integer `ms`, as `EvidenceHeadline` prints durations. A longer value widens the row; it still fits (below) |
+| duration | 8, right-aligned | Deciding attempt, formatted by `DurationFormatter.Format` (`src/Xping.Sdk.Shared/DurationFormatter.cs`) as `EvidenceHeadline` formats every duration (`EvidenceHeadline.cs:780`): `12ms`, `1.2s`, and so on. A longer value widens the row; it still fits (below) |
 | gap | 2 | |
 | sha | 7 | First 7 characters, or blank |
 | gap | 2 | |
@@ -245,7 +258,7 @@ Sessions in the window that do not contain the test are never rows. Each maximal
 absent sessions collapses into one line, in its place in the timeline:
 
 ```
-               ─     absent from 16 runs, 16 partial
+               ─     absent from 14 runs, 14 partial
 ```
 
 The `─` (ASCII `-`) sits in the outcome column. The count clause `, N partial` appears only when N > 0.
@@ -261,7 +274,7 @@ The JSON lists every session in the window in one `sessions` array, each with `a
 Two lines under the identity, before the timeline:
 
 ```
-ran in 4 of 20 runs: 0 passed, 4 passed on retry, 0 failed
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
 duration p50 12ms · p95 13ms · range 11-13ms
 ```
 
@@ -270,7 +283,7 @@ duration p50 12ms · p95 13ms · range 11-13ms
   Skipped, NotExecuted or Inconclusive still counts in `ran in` and is never an absence, because the
   framework saw the test (OQ-1). Such runs add a `, N other` clause only when N > 0.
 - Duration is over the deciding attempt of each run with a verdict, using `Quantile.Interpolated` on
-  raw milliseconds. The range is min to max. The duration line is omitted when there are no such runs.
+  raw milliseconds, printed with `DurationFormatter.Format` as D7's column is. The range is min to max. The duration line is omitted when there are no such runs.
 - `RobustDispersion.Of` goes into the JSON as `dispersion` only. It is unitless and reads as noise in
   text.
 
@@ -298,13 +311,13 @@ row's id is one command away.
 ### D11 — Links between the two views
 
 - `--id`'s detail view gains one line after "Also about this test", for single-test subjects:
-  `History: xping report --test <fp8> --assembly <assembly>`, built by a new `DrillDown.ForTest`.
+  `History: xping report --test <fp> --assembly <assembly>`, built by a new `DrillDown.ForTest`.
   It repeats `--assembly` and `--directory`, not `--runs` or `--since`: the history view's default
   window is already what a reader following this link wants.
 - `--id`'s not-found message gains the third tier that the detail spec's D3 deferred. When no finding
   matches and no same-subject finding is reported, recompute `FindingId.Compute(kind, fingerprint)`
   for every fingerprint in the window and every kind. On a hit the message adds:
-  `Its test has no findings in this window: xping report --test <fp8> --assembly <assembly>`.
+  `Its test has no findings in this window: xping report --test <fp> --assembly <assembly>`.
   `cli-finding-detail-spec.md` Amendment 6 records this.
 
 ---
@@ -325,27 +338,29 @@ SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
 source  tests/SampleApp.MSTest/CalculatorTests.cs:42
 window  20 runs, 2026-08-20 → 2026-08-21
 
-ran in 4 of 20 runs: 0 passed, 4 passed on retry, 0 failed
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
 duration p50 12ms · p95 13ms · range 11-13ms
 
 RUNS                                                        newest first
 ────────────────────────────────────────────────────────────────────────
 
-               ─     absent from 16 runs, 16 partial
+               ─     absent from 14 runs, 14 partial
   08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
   08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
   08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
   08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
 
 FINDINGS                                                      2 findings
 ────────────────────────────────────────────────────────────────────────
 
 HIGH  flaky
-      failed 4 of 8 executions (50%) in 4 of 20 runs, 1 failure mode
+      failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
       evidence low | f_8f042eab
 
 MED   masked by retry
-      passed on retry 4 times in 4 of 20 runs, up to attempt 2
+      passed on retry 6 times in 6 of 20 runs, up to attempt 2
       evidence low | f_a2b61c2f
 
 Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
@@ -353,7 +368,9 @@ Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs
 
 **Measured against the rules.**
 - **Width:** the widest line is the rule (72).
-- **Absences:** the absent line is D8. All 16 runs were partial, so the `stopped running` finding that
+- **Floors:** the test ran in 6 runs, which clears `MinimumSessionsPerTestToReport` (5), so findings are
+  reported. At 4 runs the block would carry D6's reason instead.
+- **Absences:** the absent line is D8. All 14 runs were partial, so the `stopped running` finding that
   #140 produced is gone. `Vanished` excludes partial runs (`excludesPartialRuns`), and the view shows
   why.
 - **Drill-down:** the closing `Detail of row 1:` line is row 1's `drillDown` (D10). It carries
@@ -544,7 +561,8 @@ One prompt per phase. Each phase ends green: `dotnet build -c Release` is clean 
   and `WindowRuns`. Unit tests in `WindowResolverTests`.
 - **P2 — `TestResolver`.** D2's three tiers, the unscoped read, ambiguity with widening prefixes (D3),
   and the not-found tiers (D4). Pure and unit-tested in a new `TestResolverTests`, including
-  parameterised FQNs, renamed tests and hex-looking method names.
+  parameterised FQNs with and without typed args, `Outer+Inner` nested types, pinned and pinned
+  parameterised fingerprints, renamed tests and hex-looking method names.
 - **P3 — Contract.** `TestHistoryBuilder` builds §4.2 from `AnalysisContext`, and `EnvelopeBuilder`
   takes it. Schema 1.23. D10's findings filter and `DrillDown` changes. Envelope tests.
 - **P4 — CLI surface.** The `--test` option and its validators (D1), the `ExitCodes` changes, and the
