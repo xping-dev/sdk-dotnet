@@ -580,7 +580,32 @@ how a reader shortens it. Revisit only by amendment, if the retention defaults c
 One prompt per phase. Each phase ends green: `dotnet build -c Release` is clean and
 `dotnet test tests/Xping.Cli.Tests -c Release` passes.
 
-- **P0 — Inventory.** Read-only. Re-verify every §1.1 citation. Confirm:
+### 6.1 Branches and review
+
+This feature is built on a long-lived feature branch, **`feat/141-report-test`**, and reaches `main`
+in one merge at the end. Each phase is reviewed on its own, as the diff of one PR. An agent picking up
+a phase in a new session follows these steps exactly:
+
+1. **Start from the feature branch, not `main`.** `git fetch`, check out `feat/141-report-test`,
+   and pull it. The previous phase must already be merged into it. If it is not, stop and say so.
+2. **Branch per phase:** `feat/141-p<N>-<slug>`, e.g. `feat/141-p1-window`.
+3. **Do the phase,** and only that phase. A conflict with this spec is an amendment committed to the
+   phase branch first, before the code that needs it (amendment protocol).
+4. **Commit:** conventional, with the issue and phase, e.g.
+   `feat(cli): add the whole-store window for report --test (#141, P1)`. One or more commits; the
+   reviewer sees the PR diff.
+5. **Push and open a PR into `feat/141-report-test`**, never into `main`. Title as the commit subject.
+   The body lists what the phase did, any amendment it made, and what the next phase starts from.
+   CI runs on it (`ci.yml` triggers on PRs into `feat/**`).
+6. **Stop.** Do not start the next phase and do not merge. The user reviews, CI passes, and the user
+   merges the phase PR into the feature branch.
+7. **After the last phase (P7),** open one PR from `feat/141-report-test` into `main`, with
+   `Closes #141`. It is merged by the user.
+
+P0 is the exception: it is read-only and opens no PR. Its amendment (Amendment 1) was committed
+directly to `feat/141-report-test`.
+
+- **P0 — Inventory.** Done; see Amendment 1. Read-only. Re-verify every §1.1 citation. Confirm:
   1. That `SubjectDto` for a single test carries everything §3.1's identity block prints.
   2. How `report` renders a finding row without its subject.
   3. The pass/fail colors in `OutputCapabilities`.

@@ -4,7 +4,8 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    # feat/** so that a phase PR into a long-lived feature branch runs CI before it merges.
+    branches: [main, 'feat/**']
 
 jobs:
   test:
