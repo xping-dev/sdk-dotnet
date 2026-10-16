@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Text;
+using Xping.Cli.Report.Windowing;
 
 namespace Xping.Cli.Report;
 
@@ -18,9 +19,10 @@ namespace Xping.Cli.Report;
 /// test is unreliable but not how to look closer forces the reader to guess at a command.
 /// </para>
 /// <para>
-/// Every command produced here is one the tool accepts today. The target is
-/// <c>xping report --id</c>, the detail view of one finding; nothing here names a verb that does
-/// not exist, because this is the field a reader is most likely to run.
+/// Every command produced here is one the tool accepts today. The targets are
+/// <c>xping report --id</c>, the detail view of one finding, and <c>xping report --test</c>, the
+/// history of one test; nothing here names a verb that does not exist, because this is the field a
+/// reader is most likely to run.
 /// </para>
 /// <para>
 /// No command here carries <c>--format</c>. A caller that wants the envelope adds the flag, having
@@ -66,6 +68,32 @@ internal static class DrillDown
         return Scoped("xping report --all", scope, scope.AssemblyGiven ? scope.Assembly : null);
     }
 
+    /// <summary>
+    /// Builds the invocation that shows one test's run-by-run history.
+    /// </summary>
+    /// <param name="fingerprint">The test's short fingerprint.</param>
+    /// <param name="scope">What the report was scoped to; its assembly is the test's.</param>
+    /// <returns>The command.</returns>
+    /// <remarks>
+    /// Repeats the assembly and the directory, and not the window: the history's default window is
+    /// the whole store, which is what a reader following this link wants, and a <c>--runs</c> copied
+    /// from a finding's window would cut the history to the runs that finding was judged on.
+    /// </remarks>
+    public static string ForTest(string fingerprint, ReportScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+
+        var builder = new StringBuilder("xping report --test ").Append(Quote(fingerprint));
+
+        if (!string.IsNullOrEmpty(scope.Assembly))
+            builder.Append(" --assembly ").Append(Quote(scope.Assembly));
+
+        if (!string.IsNullOrEmpty(scope.Directory))
+            builder.Append(" --directory ").Append(Quote(scope.Directory));
+
+        return builder.ToString();
+    }
+
     private static string Scoped(string command, ReportScope scope, string? assembly)
     {
         var builder = new StringBuilder(command);
@@ -73,7 +101,12 @@ internal static class DrillDown
         if (!string.IsNullOrEmpty(assembly))
             builder.Append(" --assembly ").Append(Quote(assembly));
 
-        if (scope.Runs is { } runs)
+        // A whole-store window has no flag of its own, and a bare command would open report's
+        // default window instead. Its size is pinned, not its sessions: a run stored in between
+        // joins the window and the oldest drops out (Amendment 2A).
+        int? pinned = scope.Runs ?? (scope.Resolution == WindowResolution.Store ? scope.WindowRuns : null);
+
+        if (pinned is { } runs)
             builder.Append(" --runs ").Append(runs.ToString(CultureInfo.InvariantCulture));
 
         if (!string.IsNullOrEmpty(scope.Since))

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 
@@ -45,6 +46,12 @@ internal static class EnvelopeBuilder
     /// What the report was scoped to, which every command it prints repeats; by default the
     /// assembly the window covers and nothing the caller typed.
     /// </param>
+    /// <param name="test">
+    /// What <c>--test</c> resolved to, from <see cref="TestHistoryBuilder"/>, or
+    /// <see langword="null"/> for the full report. When it names a test, the findings shown are the
+    /// ones about that test; when it does not, none. Everything else is built exactly as the full
+    /// report builds it.
+    /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
         AnalysisContext context,
@@ -55,8 +62,12 @@ internal static class EnvelopeBuilder
         int? top,
         LatestRunAnalysis? latestRun,
         string? id = null,
-        ReportScope? scope = null)
+        ReportScope? scope = null,
+        TestHistoryDto? test = null)
     {
+        if (id != null && test != null)
+            throw new ArgumentException("--id and --test are mutually exclusive.", nameof(test));
+
         scope ??= new ReportScope(
             context.Revision?.Assembly, context.Window.Resolution, context.Window.SessionCount);
 
@@ -71,9 +82,14 @@ internal static class EnvelopeBuilder
 
         IReadOnlyList<Finding> shown = selection != null
             ? selection.Finding is { } selected ? [selected] : []
-            : top is { } limit && limit < ordered.Count
-                ? [.. ordered.Take(limit)]
-                : ordered;
+            : test != null
+                ? AboutTest(ordered, test)
+                : top is { } limit && limit < ordered.Count
+                    ? [.. ordered.Take(limit)]
+                    : ordered;
+
+        if (test?.Test?.Fingerprint is { } fingerprint)
+            test = WithFindings(test, fingerprint, shown, ordered, context);
 
         Dictionary<string, string> annotations = Annotations(ordered);
 
@@ -88,8 +104,8 @@ internal static class EnvelopeBuilder
         var flagged = new HashSet<string>(StringComparer.Ordinal);
         foreach (Finding finding in result.Findings)
         {
-            foreach (TestReference test in finding.Subject.Tests)
-                flagged.Add(test.TestFingerprint);
+            foreach (TestReference reference in finding.Subject.Tests)
+                flagged.Add(reference.TestFingerprint);
 
             // Counted over every finding produced, not over the truncated list: `--top` decides how
             // much is shown and must never decide what the report says it found.
@@ -129,6 +145,7 @@ internal static class EnvelopeBuilder
                 result.FailedProviders),
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
             selection == null ? null : BuildSelection(selection),
+            test,
             [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
     }
@@ -173,6 +190,71 @@ internal static class EnvelopeBuilder
             analysis.Failures.Count,
             analysis.FailuresTotal);
     }
+
+    /// <summary>
+    /// Picks the findings about the test <c>--test</c> resolved to.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <param name="test">What the name resolved to.</param>
+    /// <returns>
+    /// Its single-test findings, then the clusters it is a member of, each in report order; none when
+    /// the name resolved to no test.
+    /// </returns>
+    private static List<Finding> AboutTest(IReadOnlyList<Finding> ordered, TestHistoryDto test)
+    {
+        if (test.Test?.Fingerprint is not { } fingerprint)
+            return [];
+
+        List<Finding> about = [.. ordered.Where(f => FindingOrder.IsAbout(f, fingerprint))];
+
+        return [.. about.Where(f => FindingOrder.Test(f) != null), .. about.Where(f => FindingOrder.Test(f) == null)];
+    }
+
+    /// <summary>
+    /// Completes a resolved history with its findings' rows and, when there are none, the reason.
+    /// </summary>
+    /// <remarks>
+    /// The rows are positions in the full ordered list, which is what the full report and
+    /// <c>--id</c> number a finding by, so a row read here is the row a reader finds there. The
+    /// reason is given only when the floors explain the empty block: a test that cleared them and
+    /// has no finding is simply healthy, and saying "too little history" would be false.
+    /// </remarks>
+    private static TestHistoryDto WithFindings(
+        TestHistoryDto test,
+        string fingerprint,
+        IReadOnlyList<Finding> shown,
+        IReadOnlyList<Finding> ordered,
+        AnalysisContext context)
+    {
+        var rows = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int index = 0; index < ordered.Count; index++)
+            rows[ordered[index].Id] = index + 1;
+
+        int ran = context.Tests.SessionsRunIn(fingerprint);
+        int window = context.Window.SessionCount;
+
+        string? withheld = shown.Count == 0 && !EvidenceLevelResolver.MeetsReportingFloor(ran, window)
+            ? WithheldReason(ran)
+            : null;
+
+        return test with
+        {
+            FindingsWithheld = withheld,
+            FindingRows = [.. shown.Select(f => new SameSubjectDto(f.Id, f.Kind.ToString(), rows[f.Id]))]
+        };
+    }
+
+    /// <summary>
+    /// Says why the findings block is empty (D6).
+    /// </summary>
+    /// <remarks>
+    /// Always counted in the test's runs. A test cannot run in more sessions than the window holds,
+    /// so the sentence stays true when it is the window that fell short.
+    /// </remarks>
+    private static string WithheldReason(int ran) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"too little history to judge: findings need {LocalAnalysisConstants.MinimumSessionsPerTestToReport} runs, this test has {ran}");
 
     private static SelectionDto BuildSelection(FindingSelection selection) =>
         new(
@@ -378,7 +460,12 @@ internal static class EnvelopeBuilder
             _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
         };
 
-    private static SubjectDto ForTest(TestReference test) =>
+    /// <summary>
+    /// Projects one test into the envelope, with the name it is shown under resolved.
+    /// </summary>
+    /// <param name="test">The test.</param>
+    /// <returns>A single-test subject.</returns>
+    internal static SubjectDto ForTest(TestReference test) =>
         new(
             "test",
             test.TestFingerprint,
