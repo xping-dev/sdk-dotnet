@@ -56,6 +56,13 @@ footer's `--all` command included. `DrillDown.ForTest` is the one exception (D11
 `--since <oldest session's timestamp>` would keep every original run, but the window would grow with
 each new one, so the header's run count would stop matching the view it came from.
 
+### Amendment 3 — from P2
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D2 tier 3 is a pure prefix match | A query equal to a whole fingerprint matches that fingerprint alone. Otherwise a fingerprint that is a prefix of another (a pinned `login` that later became parameterised, `login:3f2a…`) matches both, and D3's short fingerprint of `login`, which is the whole fingerprint, could never name it | D2, D3 |
+| B | D2 tier 2 matches when the FQN ends with `.` + `<name>` | It also matches when the whole FQN equals `<name>`, after the same `+` and `(args)` normalisation. Otherwise the full name of a nested type typed with dots (`Ns.Outer.Inner.Method` for `Ns.Outer+Inner.Method`), or of a parameterised test without its arguments (`Ns.Calc.Add` for `Ns.Calc.Add(1,2)`), matches nothing, though D2 says tier 2 covers `Namespace.Class.Method` | D2 |
+
 ---
 
 ## 1. Ground truth
@@ -157,12 +164,14 @@ later tiers are not tried.
 1. **Exact FQN.** Ordinal, case-sensitive, against `FullyQualifiedName`.
 2. **Segment suffix.** Ordinal, case-sensitive. Before comparing, `+` is read as `.` on both sides:
    NUnit and MSTest write a nested type as `Outer+Inner`, so `--test Inner.Method` matches it. The test
-   matches when its FQN ends with `.` + `<name>`, either as stored or with a trailing `(args)` removed.
+   matches when its FQN ends with `.` + `<name>`, or equals `<name>` (Amendment 3B), either as stored
+   or with a trailing `(args)` removed.
    So `Add` matches every case of `Add(…)`, and `Add(1,2)` matches that one case. This covers `Method`,
    `Class.Method` and `Namespace.Class.Method` without reading `ClassName`. Generic arity markers
    (`` `1 ``) are not normalised; the bare method name or the full FQN still matches.
 3. **Fingerprint prefix.** `<name>` is a prefix of the fingerprint, ordinal and case-sensitive, at
-   least 8 characters long or the whole fingerprint when it is shorter. When nothing matches and
+   least 8 characters long or the whole fingerprint when it is shorter. A query equal to a whole
+   fingerprint matches that fingerprint alone (Amendment 3A). When nothing matches and
    `<name>` is all hex, it is retried lower-cased, since a computed fingerprint is lower-case SHA-256 hex.
    A fingerprint pinned with `[XpingFingerprint]` is any `[a-zA-Z0-9_-]{1,100}`, plus `:<paramHash>`
    for each parameterised case (`TestIdentityGenerator.cs:61-63`,
@@ -199,8 +208,8 @@ fingerprint prefix is how a reader names one case.
 
 **Short fingerprint.** Every command this spec prints names a test by its short fingerprint, written
 `<fp>`. It is the shortest prefix of at least 8 characters that matches exactly one fingerprint in the
-assembly; the whole fingerprint when it is shorter than 8. A computed fingerprint almost always stops at
-8. The parameterised cases of a pinned test share the pin, so their short fingerprints run past the `:`
+assembly; the whole fingerprint when it is shorter than 8, or when no shorter prefix is unique, which
+still names it alone (Amendment 3A). A computed fingerprint almost always stops at 8. The parameterised cases of a pinned test share the pin, so their short fingerprints run past the `:`
 into the parameter hash. That is what lets `--test <fp>` name one case. Candidates in D3 print it, and
 `DrillDown.ForTest` (D11) emits it.
 
