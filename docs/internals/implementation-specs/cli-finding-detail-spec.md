@@ -9,7 +9,7 @@ D7's rejection of `--id` and extends D8's below-fence order. Also its D1 (`Short
 (example/rule authority, width and charset discipline). `cli-latest-run-spec.md` D2 and D15
 (`LatestRun` on the envelope, schema `1.20`). **Do not start P1 of this spec until the format spec's
 Amendment 2 is committed.**
-**Blocks:** nothing
+**Blocks:** `cli-test-history-spec.md` (depends on D3, D6, §4 and Amendment 6)
 
 ---
 
@@ -97,6 +97,17 @@ The pairs are **not** resolved in the builder as §8 says: they come from `Findi
 `TextReportRenderer` appends them to the pairs it prints, so `findings[].metrics` in JSON stays
 local. The block's column arithmetic absorbs the longer labels as §8 expected. The
 `selection.sameSubject` cross-branch slot stays unused.
+
+### Amendment 6 — `--test` takes the third not-found tier
+
+`cli-test-history-spec.md` (#141) adds `xping report --test`, and its D11 links the two views. This
+amendment records the changes it makes here, committed with that spec.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D3, §7: the third not-found tier, *the test is in the window and carries no finding*, is out of scope | Added. When no finding and no same-subject finding matches, `FindingId.Compute(kind, fingerprint)` runs for every fingerprint in the window and every kind. On a hit, the message adds `Its test has no findings in this window: xping report --test <fp> --assembly <assembly>` | D3, §7 |
+| B | The detail view ends with "Also about this test" | For a single-test subject, one more line follows: `History: xping report --test <fp> --assembly <assembly>`, from `DrillDown.ForTest` | §3, §4.5 |
+| C | `ExitCodes.FindingNotReported` = 3 | Renamed `ExitCodes.NotFound`, still 3; it covers `--test` too | §4.5 |
 
 ---
 
