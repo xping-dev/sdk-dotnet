@@ -31,6 +31,21 @@ is what this document builds on, and every phase below reads source, not that sp
 | `DrillDown.ForFinding(id, assembly)` | `DrillDown.ForFinding(id, ReportScope)` | `src/Xping.Cli/Report/DrillDown.cs:44-49` |
 | 50 golden files | 82: 41 fixtures × 2 glyph sets | `ReportFixtures.Keys`, `GoldenReportTests.Modes` |
 
+### Amendment 1 — from the P0 inventory
+
+P0 read this document against source and found four conflicts, all in how §3 and D7/D10 describe
+the rendering. Resolved here and committed before P1.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3: the assembly and fingerprint sit in the `TEST` heading annotation, a `window` line follows the name, and nothing is printed outside the fence | The view keeps `report`'s frame (`TextReportRenderer.Render`, `:128-156`): the two header lines (`WriteHeader`, `:167`), the ```` ``` ```` fence, the legend and the footer. The header already names the assembly, run count, period and revision, so the `window` line is dropped. The heading annotation is `fp <fp>`. The identity is the detail view's labelled pairs, `test` and `source`. The footer is always printed and reads `N findings about this test · all: <ForFullReport>`, with `no findings` for zero | §3.1, §3.2, D10 |
+| B | D10: a finding renders "as `report` renders a row, with the subject name omitted" | No such row exists. Each finding renders as `WriteFinding` does (`:~940`), keeping its **full-report row number** (`1.  HIGH  flaky`) so the number matches `report` and `--id`, and keeping the evidence line (marker, id, location). Only the name line and the `same test as #N` annotation are dropped: the view is the subject, and every sibling is on screen | D10, §3.1 |
+| C | D7: outcome glyphs "colored as the report colors pass and fail" | `OutputCapabilities` has no pass/fail colours, only severity (`Colorize`, `:108`) and `Dim` (`:88`). Glyphs are not coloured; only the `partial` tag is dimmed. New colours are a UI change outside this spec | D7 |
+| D | D10: "whose `FindingOrder.Test` is this fingerprint", with clusters listed too | `FindingOrder.Test` returns null for a cluster (`FindingOrder.cs:124-131`). A single-test finding matches through `FindingOrder.Test`; a cluster matches when `FindingSubject.Group.Members` contains the fingerprint. Behaviour unchanged | D10 |
+
+Under `Store`, every command `DrillDown.Scoped` builds carries `--runs <window session count>`, the
+footer's `--all` command included. `DrillDown.ForTest` is the one exception (D11).
+
 ---
 
 ## 1. Ground truth
@@ -244,7 +259,7 @@ columns, with widths in display columns:
 | tag | 7 | `partial` when the session view is partial, else nothing |
 
 That is 61 columns, which leaves 11 for a duration overflow inside the 72-column fence. Trailing blanks
-are trimmed. Outcome glyphs are colored as the report colors pass and fail. The tag is dimmed.
+are trimmed. Glyphs are not coloured (Amendment 1C). The tag is dimmed.
 
 The year is omitted. Retention caps the store at 30 days, and the heading's period line (§3.1) carries
 the full dates.
@@ -292,10 +307,11 @@ session", which is a finding's question, not a history's.
 
 ### D10 — Findings block
 
-Under a `FINDINGS` heading, every finding the coordinator produced over the D5 window whose
-`FindingOrder.Test` is this fingerprint (`FindingOrder.cs:124`), in report order. Each is rendered as
-`report` renders a row, with the subject name omitted, since the view is the subject. The id stays on
-the evidence line.
+Under a `FINDINGS` heading, every finding the coordinator produced over the D5 window that is about
+this test, in report order: a single-test finding whose `FindingOrder.Test` is this fingerprint
+(`FindingOrder.cs:124`), or a cluster whose members include it (Amendment 1D). Each is rendered as
+`WriteFinding` renders it, keeping its full-report row number and evidence line. Only the name line
+and the `same test as #N` annotation are dropped (Amendment 1B).
 
 Each finding's `drillDown` must reproduce the window it was found in. `ReportScope` gains the window
 resolution, and when it is `Store`, `DrillDown.ForFinding` appends `--runs <window session count>`.
@@ -328,15 +344,17 @@ Illustrative. Where a block and §2 disagree, §2 wins.
 
 ### 3.1 A flaky test with a filtered gap
 
-```
+````
 $ xping report --test FlakyTest_PassesOnRetry
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
 
-TEST                                      SampleApp.MSTest · fp 3a597eb2
+```
+TEST                                                         fp 3a597eb2
 ────────────────────────────────────────────────────────────────────────
 
-SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
-source  tests/SampleApp.MSTest/CalculatorTests.cs:42
-window  20 runs, 2026-08-20 → 2026-08-21
+    test    SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:42
 
 ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
 duration p50 12ms · p95 13ms · range 11-13ms
@@ -355,39 +373,47 @@ RUNS                                                        newest first
 FINDINGS                                                      2 findings
 ────────────────────────────────────────────────────────────────────────
 
-HIGH  flaky
-      failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
-      evidence low | f_8f042eab
+1.  HIGH  flaky
+    failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
+    evidence low | f_8f042eab | .../CalculatorTests.cs:42
 
-MED   masked by retry
-      passed on retry 6 times in 6 of 20 runs, up to attempt 2
-      evidence low | f_a2b61c2f
-
-Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
+2.  MED   masked by retry
+    passed on retry 6 times in 6 of 20 runs, up to attempt 2
+    evidence low | f_a2b61c2f | .../CalculatorTests.cs:42
 ```
 
+2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
+Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
+````
+
 **Measured against the rules.**
-- **Width:** the widest line is the rule (72).
+- **Frame:** the two header lines, the fence, the footer and the `Detail of row 1` line are
+  `report`'s (Amendment 1A). Only the lines between the fences are held to 72 columns.
+- **Rows:** `1.` and `2.` are the findings' row numbers in the full report, where siblings are
+  adjacent (`FindingOrder.WithSiblingsAdjacent`) (Amendment 1B).
+- **Width:** inside the fence, the widest line is the rule (72).
 - **Floors:** the test ran in 6 runs, which clears `MinimumSessionsPerTestToReport` (5), so findings are
   reported. At 4 runs the block would carry D6's reason instead.
 - **Absences:** the absent line is D8. All 14 runs were partial, so the `stopped running` finding that
   #140 produced is gone. `Vanished` excludes partial runs (`excludesPartialRuns`), and the view shows
   why.
-- **Drill-down:** the closing `Detail of row 1:` line is row 1's `drillDown` (D10). It carries
-  `--runs 20` because the window is `Store`. It sits below the fence, like `report`'s
-  (`TextReportRenderer.cs:1103-1112`), so the 72-column rule doesn't apply to it.
+- **Drill-down:** the `Detail of row 1:` line is the first finding's `drillDown` (D10), and the
+  footer's `--all` is `ForFullReport`. Both carry `--runs 20` because the window is `Store`. Both sit
+  below the fence (`TextReportRenderer.cs:1056-1112`).
 
 ### 3.2 A healthy test
 
-```
+````
 $ xping report --test Add_ReturnsSum
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
 
-TEST                                      SampleApp.MSTest · fp 91c0de44
+```
+TEST                                                         fp 91c0de44
 ────────────────────────────────────────────────────────────────────────
 
-SampleApp.MSTest.CalculatorTests.Add_ReturnsSum
-source  tests/SampleApp.MSTest/CalculatorTests.cs:18
-window  20 runs, 2026-08-20 → 2026-08-21
+    test    SampleApp.MSTest.CalculatorTests.Add_ReturnsSum
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:18
 
 ran in 20 of 20 runs: 20 passed, 0 passed on retry, 0 failed
 duration p50 4ms · p95 6ms · range 3-9ms
@@ -404,6 +430,9 @@ FINDINGS
 
 no findings
 ```
+
+no findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
+````
 
 Every row is rendered; nothing is truncated. A store capped at ~50 runs fits on a scrolled terminal,
 and a truncated history would hide the run a reader came for.
