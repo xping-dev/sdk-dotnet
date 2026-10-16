@@ -19,7 +19,8 @@ namespace Xping.Cli.Report;
 /// <param name="Resolution">How the report's window was chosen.</param>
 /// <param name="WindowRuns">
 /// How many sessions the window held. A <see cref="WindowResolution.Store"/> window has no flag to
-/// repeat, and the store keeps growing, so a printed command pins it with <c>--runs</c> instead.
+/// repeat, so a printed command pins its size with <c>--runs</c> instead. Its size, not its
+/// sessions: a run stored in between joins the window and the oldest drops out.
 /// Required, like <paramref name="Resolution"/>: a scope that defaulted them would print a command
 /// for some other window without anything failing.
 /// </param>
