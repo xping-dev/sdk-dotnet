@@ -22,7 +22,13 @@ internal enum WindowResolution
     SinceSha,
 
     /// <summary>A starting date was requested with <c>--since</c>.</summary>
-    SinceDate
+    SinceDate,
+
+    /// <summary>
+    /// Every session the store holds for the assembly. The default under <c>--test</c>, where the
+    /// reader has named one test and wants its whole history; retention already bounds it.
+    /// </summary>
+    Store
 }
 
 /// <summary>

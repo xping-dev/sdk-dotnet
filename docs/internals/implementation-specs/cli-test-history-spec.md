@@ -46,6 +46,16 @@ the rendering. Resolved here and committed before P1.
 Under `Store`, every command `DrillDown.Scoped` builds carries `--runs <window session count>`, the
 footer's `--all` command included. `DrillDown.ForTest` is the one exception (D11).
 
+### Amendment 2 — from the P1 review
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D10: each finding's `drillDown` "must reproduce the window it was found in" | Under `Store`, the drill-down keeps the window's **size**, not its sessions. `--runs N` takes the newest N sessions when the command runs. When a run is stored in between, the window includes it and drops the oldest, and a finding can change or disappear. This is expected, and it is how `--runs` already behaves in every drill-down `report` prints | D10 |
+
+**Rejected:** pinning the exact sessions. `report` has no flag that names a set of sessions.
+`--since <oldest session's timestamp>` would keep every original run, but the window would grow with
+each new one, so the header's run count would stop matching the view it came from.
+
 ---
 
 ## 1. Ground truth
@@ -313,8 +323,9 @@ this test, in report order: a single-test finding whose `FindingOrder.Test` is t
 `WriteFinding` renders it, keeping its full-report row number and evidence line. Only the name line
 and the `same test as #N` annotation are dropped (Amendment 1B).
 
-Each finding's `drillDown` must reproduce the window it was found in. `ReportScope` gains the window
-resolution, and when it is `Store`, `DrillDown.ForFinding` appends `--runs <window session count>`.
+Each finding's `drillDown` must reproduce the window it was found in: under `Store`, its size, not
+its sessions (Amendment 2A). `ReportScope` gains the window resolution, and when it is `Store`,
+`DrillDown.ForFinding` appends `--runs <window session count>`.
 Clusters (`SubjectGroup`) that contain the test are listed too, after single-test findings, with their
 member count. Their id resolves under `--id` like any other.
 

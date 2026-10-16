@@ -57,7 +57,8 @@ internal static class EnvelopeBuilder
         string? id = null,
         ReportScope? scope = null)
     {
-        scope ??= new ReportScope(context.Revision?.Assembly);
+        scope ??= new ReportScope(
+            context.Revision?.Assembly, context.Window.Resolution, context.Window.SessionCount);
 
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test
