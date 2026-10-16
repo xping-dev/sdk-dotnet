@@ -5,7 +5,8 @@
 **Schema:** `1.18` → `1.19`
 **Depends on:** nothing
 **Blocks:** `cli-latest-run-spec.md` (reuses D1 and D5 of this document);
-`cli-finding-detail-spec.md` (depends on Amendment 2 of this document, and on D1, D3, D5, D6, D7, D10)
+`cli-finding-detail-spec.md` (depends on Amendment 2 of this document, and on D1, D3, D5, D6, D7, D10);
+`cli-test-history-spec.md` (depends on D1, D5, D10)
 
 ---
 
