@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Report.Windowing;
+
 namespace Xping.Cli.Report;
 
 /// <summary>
@@ -18,9 +20,16 @@ namespace Xping.Cli.Report;
 /// <param name="Runs">The <c>--runs</c> the caller gave, or <see langword="null"/>.</param>
 /// <param name="Since">The <c>--since</c> the caller gave, or <see langword="null"/>.</param>
 /// <param name="Directory">The <c>--directory</c> the caller gave, or <see langword="null"/>.</param>
+/// <param name="Resolution">How the report's window was chosen.</param>
+/// <param name="WindowRuns">
+/// How many sessions the window held. A <see cref="WindowResolution.Store"/> window has no flag to
+/// repeat, and the store keeps growing, so a printed command pins it with <c>--runs</c> instead.
+/// </param>
 internal sealed record ReportScope(
     string? Assembly,
     bool AssemblyGiven = false,
     int? Runs = null,
     string? Since = null,
-    string? Directory = null);
+    string? Directory = null,
+    WindowResolution Resolution = WindowResolution.Default,
+    int WindowRuns = 0);

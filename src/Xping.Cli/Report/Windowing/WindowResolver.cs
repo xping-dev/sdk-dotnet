@@ -16,7 +16,11 @@ namespace Xping.Cli.Report.Windowing;
 /// <param name="Runs">Session count requested with <c>--runs</c>.</param>
 /// <param name="Since">Commit or date requested with <c>--since</c>.</param>
 /// <param name="Assembly">Test assembly to scope to, when one was chosen.</param>
-internal sealed record WindowRequest(int? Runs, string? Since, string? Assembly);
+/// <param name="WholeStore">
+/// Whether to cover every session the store holds instead of the default bounds. <c>--runs</c> and
+/// <c>--since</c> still replace it.
+/// </param>
+internal sealed record WindowRequest(int? Runs, string? Since, string? Assembly, bool WholeStore = false);
 
 /// <summary>
 /// Why a window could not be resolved.
@@ -116,8 +120,9 @@ internal interface IWindowResolver
 /// </remarks>
 internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolver
 {
-    // Bounds the read when --since selects by date or commit: we do not know how many sessions fall
-    // inside the boundary until we have looked, but retention caps the store well below this.
+    // Bounds the read when --since selects by date or commit, or the window is the whole store: we do
+    // not know how many sessions fall inside until we have looked, but retention caps the store well
+    // below this.
     private const int UnboundedReadCeiling = 1000;
 
     // A generous probe used only to discover which assembly to scope to, never to bound analysis.
@@ -142,6 +147,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         {
             { Since: { Length: > 0 } since } => ResolveSince(source, request, since),
             { Runs: { } runs } => ResolveCount(source, request, runs, WindowResolution.Runs, runs.ToString(CultureInfo.InvariantCulture)),
+            { WholeStore: true } => ResolveStore(source, request),
             _ => ResolveDefault(source, request)
         };
     }
@@ -204,6 +210,23 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         IReadOnlyList<TestSession> selected = withinAge.Count > 0 ? withinAge : read.Sessions;
 
         return Build(selected, WindowResolution.Default, null, read);
+    }
+
+    /// <summary>
+    /// Takes every session the store holds for the assembly.
+    /// </summary>
+    /// <remarks>
+    /// No age bound, unlike the default: a reader who named one test wants all of its history, and
+    /// retention has already decided how much of it there is.
+    /// </remarks>
+    private WindowResult ResolveStore(ISessionSource source, WindowRequest request)
+    {
+        DatableRead read = Read(source, UnboundedReadCeiling, request.Assembly);
+
+        if (read.Sessions.Count == 0)
+            return Failed(WindowFailure.EmptyStore, null, read);
+
+        return Build(read.Sessions, WindowResolution.Store, null, read);
     }
 
     /// <summary>

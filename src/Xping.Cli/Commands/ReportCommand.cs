@@ -114,7 +114,14 @@ internal sealed class ReportCommand(
             options.Id,
 
             // What every printed command has to repeat to land on this report again.
-            new ReportScope(assembly, options.Assembly != null, options.Runs, options.Since, options.Directory));
+            new ReportScope(
+                assembly,
+                options.Assembly != null,
+                options.Runs,
+                options.Since,
+                options.Directory,
+                resolved.Window.Resolution,
+                resolved.Window.SessionCount));
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
