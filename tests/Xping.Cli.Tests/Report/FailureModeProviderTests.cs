@@ -1710,6 +1710,25 @@ public sealed class FailureModeProviderTests
         Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
     }
 
+    /// <summary>
+    /// With no scope given and no revision to take an assembly from, a drill-down names no assembly
+    /// rather than failing.
+    /// </summary>
+    [Fact]
+    public void ADrillDownWithoutARevisionNamesNoAssembly()
+    {
+        AnalysisContext scoped = TestSessionFactory.Context(MixedFixture());
+        var context = new AnalysisContext(scoped.Window, revision: null);
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null);
+
+        Assert.NotEmpty(envelope.Findings);
+        Assert.All(envelope.Findings, finding =>
+            Assert.Equal($"xping report --id {finding.Id}", finding.DrillDown));
+    }
+
     private static string Json<T>(T value) => JsonSerializer.Serialize(value, ReportJsonOptions.Default);
 
     private static AnalysisResult Run(AnalysisContext context) =>
