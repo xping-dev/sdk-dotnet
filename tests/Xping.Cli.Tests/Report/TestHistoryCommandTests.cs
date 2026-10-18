@@ -352,6 +352,63 @@ public sealed class TestHistoryCommandTests : IDisposable
         Assert.Equal(JsonValueKind.Null, root.GetProperty("test").GetProperty("test").ValueKind);
     }
 
+    /// <summary>
+    /// A <c>--since</c> later than every run of the test's assembly opens no window, and is still a
+    /// test outside the window rather than an empty store.
+    /// </summary>
+    [Fact]
+    public void ASinceLaterThanEveryRunNamesTheFlagRatherThanAnEmptyStore()
+    {
+        SeedVanishing();
+
+        var (code, output, error) = Run("--test", "Removed0", "--since", "2026-08-02", "--format", "json");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.Equal(
+            "No run of 'Removed0' in this window (--since 2026-08-02). It ran in 5 earlier runs; drop --since to see them." +
+            Environment.NewLine,
+            error);
+    }
+
+    /// <summary>
+    /// The answer to an ambiguous name is about the store, so a <c>--since</c> that only another
+    /// assembly's runs can resolve does not replace it.
+    /// </summary>
+    [Theory]
+    [InlineData("text")]
+    [InlineData("json")]
+    public void ASinceThatTheNewestAssemblyCannotResolveDoesNotHideTheCandidates(string format)
+    {
+        SeedParameterised(2, sha: "abc1234");
+        SeedOtherAssembly();
+
+        var (code, _, error) = Run("--test", "Add", "--since", "abc1234", "--format", format);
+
+        Assert.Equal(ExitCodes.TestAmbiguous, code);
+        Assert.StartsWith("'Add' matches 2 tests.", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A test whose runs sit only in unreadable files is reported absent with the count beside it,
+    /// so the reader is not told it never ran.
+    /// </summary>
+    [Fact]
+    public void ANameThatMatchesNothingCountsTheUnreadableRuns()
+    {
+        SeedVanishing();
+
+        string sessions = Path.GetDirectoryName(
+            Directory.GetFiles(_root, "session-*.json.gz", SearchOption.AllDirectories)[0])!;
+        File.WriteAllBytes(Path.Combine(sessions, "session-0699999999999999999-deadbeef.json.gz"), [1, 2, 3]);
+
+        var (code, _, error) = Run("--test", "Nope");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.StartsWith("warning: 1 unreadable run(s) skipped." + Environment.NewLine, error, StringComparison.Ordinal);
+        Assert.EndsWith("No test matching 'Nope' in this store (1 assembly, 8 runs)." + Environment.NewLine, error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AnEmptyStoreCannotBeReportedOn()
     {
@@ -455,7 +512,7 @@ public sealed class TestHistoryCommandTests : IDisposable
     }
 
     /// <summary>Writes eight runs of a parameterised <c>Add</c> with the given number of cases.</summary>
-    private static void SeedParameterised(int cases)
+    private static void SeedParameterised(int cases, string? sha = null)
     {
         ILocalSessionStore store = LocalSessionStore.Create();
 
@@ -468,7 +525,8 @@ public sealed class TestHistoryCommandTests : IDisposable
                         $"Add{c}",
                         fingerprint: $"fp-Add-{c}",
                         fullyQualifiedName: $"MyApp.Tests.SampleTests.Add({c},{c + 1})"))
-                ]));
+                ],
+                sha: sha));
         }
     }
 

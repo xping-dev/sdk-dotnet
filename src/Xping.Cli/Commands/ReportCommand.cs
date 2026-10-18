@@ -76,7 +76,7 @@ internal sealed class ReportCommand(
             source, new WindowRequest(options.Runs, options.Since, assembly));
 
         if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, options);
+            return ReportUnavailable(resolved, store, options.Assembly);
 
         (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
             options, resolved, assembly, assemblyGiven: options.Assembly != null);
@@ -115,10 +115,9 @@ internal sealed class ReportCommand(
     /// with the findings about that test in it.
     /// </para>
     /// <para>
-    /// A name that resolves to no test still opens a window, so a bad <c>--since</c> is reported as
-    /// such in every format. Only a script reading JSON gets a report around the answer
-    /// (Amendment 5A); in text the one line on standard error is the whole answer, and nothing is
-    /// analysed for it.
+    /// A name that resolves to no test is answered from the lookup alone. Only a script reading JSON
+    /// gets a report around the answer (Amendment 5A), and a window that cannot be opened for that
+    /// report never replaces the answer: it is about the name, and the window is not.
     /// </para>
     /// </remarks>
     private async Task<int> RunTestAsync(
@@ -131,8 +130,8 @@ internal sealed class ReportCommand(
     {
         TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
 
-        if (lookup.Read.Window == null || lookup.Resolution is not { } resolution)
-            return ReportUnavailable(lookup.Read, store, options);
+        if (lookup.Read.Window is not { } read || lookup.Resolution is not { } resolution)
+            return ReportUnavailable(lookup.Read, store, options.Assembly);
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
         // scoped, so "no test matching" would blame the name for what is a property of the store.
@@ -140,33 +139,17 @@ internal sealed class ReportCommand(
             return ReportNothingAttributable(store);
 
         if (resolution.Match is not { } match)
-        {
-            // Every candidate's command names its own assembly and nothing of the window, so the
-            // scope it is built from needs only the directory.
-            TestHistoryDto history = resolution.Kind == TestResolutionKind.Ambiguous
-                ? TestHistoryBuilder.Ambiguous(
-                    resolution,
-                    new ReportScope(
-                        options.Assembly, lookup.Read.Window.Resolution, lookup.Read.Window.SessionCount,
-                        AssemblyGiven: true, Directory: options.Directory))
-                : TestHistoryBuilder.NotFound(query);
-
-            return Unresolved(
-                options,
-                history,
-                options.Assembly ?? windowResolver.ScopeAssembly(source),
-                store,
-                source,
-                resolution.Kind == TestResolutionKind.Ambiguous
-                    ? () => WriteAmbiguous(query, history.Candidates)
-                    : () => io.Error.WriteLine(TestResolver.NotFoundMessage(resolution)),
-                resolution.Kind == TestResolutionKind.Ambiguous ? ExitCodes.TestAmbiguous : ExitCodes.NotFound);
-        }
+            return Unresolved(options, resolution, lookup.Read, read, source);
 
         WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, match.Assembly));
 
+        // A --since later than every run of the assembly opens no window at all. That is still a
+        // test outside the window: the lookup just found it, so "no runs recorded" would be false.
+        if (resolved.Failure == WindowFailure.EmptyStore && options.Since != null)
+            return OutsideWindow(options, query, match, resolved);
+
         if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, options);
+            return ReportUnavailable(resolved, store, match.Assembly);
 
         if (!TestResolver.InWindow(match, resolved.Window))
             return OutsideWindow(options, query, match, resolved);
@@ -193,17 +176,19 @@ internal sealed class ReportCommand(
     /// </summary>
     /// <remarks>
     /// Over the test's own assembly and that window, which are what the reader asked about: the
-    /// name chose the assembly, and the flag chose the window (Amendment 5A).
+    /// name chose the assembly, and the flag chose the window (Amendment 5A). When the flag left no
+    /// session at all there is no report to write around the answer, so a script gets the exit
+    /// code and nothing on standard output.
     /// </remarks>
     private int OutsideWindow(ReportOptions options, string query, TestMatch match, WindowResult resolved)
     {
-        AnalysisWindow window = resolved.Window
-            ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
+        WriteReadWarnings(resolved);
 
-        WriteClockWarning(resolved);
-        io.Error.WriteLine(TestResolver.OutsideWindowMessage(query, match, window));
+        io.Error.WriteLine(resolved.Window is { } window
+            ? TestResolver.OutsideWindowMessage(query, match, window)
+            : TestResolver.OutsideWindowMessage(query, match, "--since", options.Since));
 
-        if (options.Format == ReportFormat.Json)
+        if (options.Format == ReportFormat.Json && resolved.Window != null)
             RenderUnresolved(options, resolved, match.Assembly, TestHistoryBuilder.NotFound(query));
 
         return ExitCodes.NotFound;
@@ -213,35 +198,52 @@ internal sealed class ReportCommand(
     /// Answers a name that resolved to no test: the message, and for a script the report around it.
     /// </summary>
     /// <param name="options">Parsed command-line options.</param>
-    /// <param name="history">The history that records what was asked and what matched.</param>
-    /// <param name="assembly">The assembly <c>report</c> would scope to, or <see langword="null"/>.</param>
-    /// <param name="store">The store, for the messages that name it.</param>
+    /// <param name="resolution">The ambiguous or empty resolution.</param>
+    /// <param name="lookup">The whole-store read the name was resolved over.</param>
+    /// <param name="read">That read's window.</param>
     /// <param name="source">Where sessions are read from.</param>
-    /// <param name="writeMessage">Writes the answer to standard error.</param>
-    /// <param name="exitCode">The code the answer exits with.</param>
     /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// The lookup's warnings are repeated because they can be the whole explanation: a test whose
+    /// every run sits in an unreadable file is not found, and saying so without the count would
+    /// tell the reader it never ran.
+    /// </remarks>
     private int Unresolved(
         ReportOptions options,
-        TestHistoryDto history,
-        string? assembly,
-        ILocalSessionStore store,
-        LocalSessionSource source,
-        Action writeMessage,
-        int exitCode)
+        TestResolution resolution,
+        WindowResult lookup,
+        AnalysisWindow read,
+        LocalSessionSource source)
     {
-        if (assembly == null)
-            return ReportNothingAttributable(store);
+        // Every candidate's command names its own assembly and nothing of the window, so the scope
+        // it is built from needs only the directory.
+        (TestHistoryDto history, int exitCode) = resolution.Kind == TestResolutionKind.Ambiguous
+            ? (TestHistoryBuilder.Ambiguous(
+                    resolution,
+                    new ReportScope(
+                        options.Assembly, read.Resolution, read.SessionCount,
+                        AssemblyGiven: true, Directory: options.Directory)),
+                ExitCodes.TestAmbiguous)
+            : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
-        WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, assembly));
+        WriteReadWarnings(lookup);
 
-        if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, options);
+        if (history.Candidates.Count > 0)
+            WriteAmbiguous(resolution.Query, history.Candidates);
+        else
+            io.Error.WriteLine(TestResolver.NotFoundMessage(resolution));
 
-        WriteClockWarning(resolved);
-        writeMessage();
+        if (options.Format != ReportFormat.Json)
+            return exitCode;
 
-        if (options.Format == ReportFormat.Json)
+        // Report's own scope over the --test window (Amendment 5A). Where that scope has no window to
+        // open, the answer above stands alone rather than being replaced by a failure about a window
+        // the reader never asked a question of.
+        if ((options.Assembly ?? windowResolver.ScopeAssembly(source)) is { } assembly
+            && windowResolver.Resolve(source, TestWindow(options, assembly)) is { Window: not null } resolved)
+        {
             RenderUnresolved(options, resolved, assembly, history);
+        }
 
         return exitCode;
     }
@@ -484,7 +486,7 @@ internal sealed class ReportCommand(
     /// Always exit code 2, never 1. A build step has to tell "I looked and found problems" apart
     /// from "I could not look", and every case here is the second.
     /// </remarks>
-    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, ReportOptions options)
+    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly)
     {
         TextWriter error = io.Error;
 
@@ -501,9 +503,9 @@ internal sealed class ReportCommand(
                 break;
 
             default:
-                error.WriteLine(options.Assembly == null
+                error.WriteLine(assembly == null
                     ? $"No runs recorded yet in {store.StorePath}"
-                    : $"No runs recorded for assembly '{options.Assembly}' in {store.StorePath}");
+                    : $"No runs recorded for assembly '{assembly}' in {store.StorePath}");
 
                 if (result.FailureDetail is { Length: > 0 } detail)
                     error.WriteLine(detail);
@@ -512,12 +514,20 @@ internal sealed class ReportCommand(
                 break;
         }
 
-        if (result.UnreadableSessions > 0)
-            error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
-
-        WriteClockWarning(result);
+        WriteReadWarnings(result);
 
         return ExitCodes.InsufficientData;
+    }
+
+    /// <summary>
+    /// Says what a read could not use: files it could not read, and runs it could not date.
+    /// </summary>
+    private void WriteReadWarnings(WindowResult result)
+    {
+        if (result.UnreadableSessions > 0)
+            io.Error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
+
+        WriteClockWarning(result);
     }
 
     /// <summary>

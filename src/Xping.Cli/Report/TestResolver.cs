@@ -228,11 +228,31 @@ internal static class TestResolver
             _ => null
         };
 
+        return OutsideWindowMessage(query, match, flag, window.ResolutionArgument);
+    }
+
+    /// <summary>
+    /// Builds the line that says a test matched but the narrowed window holds none of its runs, for a
+    /// window that could not be opened at all.
+    /// </summary>
+    /// <param name="query">The name the reader typed.</param>
+    /// <param name="match">The test it matched.</param>
+    /// <param name="flag">The flag that narrowed the window, or <see langword="null"/> for none.</param>
+    /// <param name="argument">The value the reader gave that flag.</param>
+    /// <returns>The message.</returns>
+    /// <remarks>
+    /// A <c>--since</c> later than every run of the assembly leaves no session to open a window
+    /// over. That is still this answer: the test is in the store, and the flag is what hid it.
+    /// </remarks>
+    public static string OutsideWindowMessage(string query, TestMatch match, string? flag, string? argument)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+
         string earlier = $"It ran in {Count(match.Runs, "earlier run")}";
 
         return flag == null
             ? $"No run of '{query}' in this window. {earlier}."
-            : $"No run of '{query}' in this window ({flag} {window.ResolutionArgument}). {earlier}; drop {flag} to see them.";
+            : $"No run of '{query}' in this window ({flag} {argument}). {earlier}; drop {flag} to see them.";
     }
 
     /// <summary>

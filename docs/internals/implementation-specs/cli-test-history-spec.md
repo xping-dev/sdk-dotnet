@@ -73,7 +73,7 @@ each new one, so the header's run count would stop matching the view it came fro
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | D3 and D4 write an envelope under `--format json` when the name resolves to no test, but no test chose its assembly or window | That envelope is the report over `report`'s own scope, `--assembly` or else the newest assembly, and the `--test` window: `Store`, unless `--runs` or `--since` replaces it. When the name matched a test but the narrowed window holds none of its runs (D4 b), the envelope is over that test's assembly and that window. In text, only stderr is written and nothing is analysed | D3, D4 |
+| A | D3 and D4 write an envelope under `--format json` when the name resolves to no test, but no test chose its assembly or window | That envelope is the report over `report`'s own scope, `--assembly` or else the newest assembly, and the `--test` window: `Store`, unless `--runs` or `--since` replaces it. When the name matched a test but the narrowed window holds none of its runs (D4 b), the envelope is over that test's assembly and that window. In text, only stderr is written and nothing is analysed. The answer is about the name, so a window that cannot be opened for the envelope never replaces it: stderr and the exit code stand, and stdout is empty. A `--since` later than every run of the matched test's assembly opens no window at all, and is D4 (b), not an empty store | D3, D4 |
 | B | `ReportScope.AssemblyGiven` is whether the reader typed `--assembly` | Under `--test` it is always true. The assembly came from the name, and a bare `xping report --all` scopes itself to whichever assembly ran last, so every command the view prints names it, under `--runs` and `--since` too | D10, D11 |
 
 ---

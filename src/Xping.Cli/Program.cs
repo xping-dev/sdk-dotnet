@@ -426,58 +426,38 @@ internal static class Program
                     result.AddError("--summary conflicts with --format.");
             }
 
-            // `--id` is its own selection, and every flag here would either change which findings
-            // exist or say something about more than one of them.
-            if (result.GetResult(idOption) != null)
+            // `--id` and `--test` are selections, and neither wins over the other.
+            if (result.GetResult(idOption) != null && result.GetResult(testOption) != null)
+                result.AddError("--test and --id are mutually exclusive.");
+
+            // Each selection answers about one finding or one test, and every flag here would change
+            // which findings exist, say something about more than one of them, or fail on a ranked
+            // list the view does not show. One list for both, so a flag added later cannot be refused
+            // beside one selection and silently accepted beside the other.
+            foreach ((Option selection, string name) in new (Option, string)[] { (idOption, "--id"), (testOption, "--test") })
             {
-                if (result.GetResult(kindOption) != null)
-                    result.AddError("--id and --kind are mutually exclusive.");
-
-                if (result.GetResult(topOption) != null)
-                    result.AddError("--id and --top are mutually exclusive.");
-
-                if (result.GetResult(allOption) != null)
-                    result.AddError("--id and --all are mutually exclusive.");
-
-                if (result.GetResult(failOnOption) is { Implicit: false })
-                    result.AddError("--id and --fail-on are mutually exclusive.");
-
-                if (result.GetResult(summaryOption) != null)
-                    result.AddError("--id and --summary are mutually exclusive.");
-
-                if (result.GetResult(formatOption) is { Implicit: false } idFormat
-                    && idFormat.GetValueOrDefault<ReportFormat>() == ReportFormat.Summary)
-                {
-                    result.AddError("--id and --format summary are mutually exclusive.");
-                }
-            }
-
-            // `--test` is a selection too, and a history is not a ranked list: every flag here would
-            // narrow, widen or fail on a list the view does not show.
-            if (result.GetResult(testOption) != null)
-            {
-                if (result.GetResult(idOption) != null)
-                    result.AddError("--test and --id are mutually exclusive.");
+                if (result.GetResult(selection) == null)
+                    continue;
 
                 if (result.GetResult(kindOption) != null)
-                    result.AddError("--test and --kind are mutually exclusive.");
+                    result.AddError($"{name} and --kind are mutually exclusive.");
 
                 if (result.GetResult(topOption) != null)
-                    result.AddError("--test and --top are mutually exclusive.");
+                    result.AddError($"{name} and --top are mutually exclusive.");
 
                 if (result.GetResult(allOption) != null)
-                    result.AddError("--test and --all are mutually exclusive.");
+                    result.AddError($"{name} and --all are mutually exclusive.");
 
                 if (result.GetResult(failOnOption) is { Implicit: false })
-                    result.AddError("--test and --fail-on are mutually exclusive.");
+                    result.AddError($"{name} and --fail-on are mutually exclusive.");
 
                 if (result.GetResult(summaryOption) != null)
-                    result.AddError("--test and --summary are mutually exclusive.");
+                    result.AddError($"{name} and --summary are mutually exclusive.");
 
-                if (result.GetResult(formatOption) is { Implicit: false } testFormat
-                    && testFormat.GetValueOrDefault<ReportFormat>() == ReportFormat.Summary)
+                if (result.GetResult(formatOption) is { Implicit: false } selectionFormat
+                    && selectionFormat.GetValueOrDefault<ReportFormat>() == ReportFormat.Summary)
                 {
-                    result.AddError("--test and --format summary are mutually exclusive.");
+                    result.AddError($"{name} and --format summary are mutually exclusive.");
                 }
             }
         });
