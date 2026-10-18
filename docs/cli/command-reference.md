@@ -377,7 +377,8 @@ that is both flaky and masked by a retry produces two findings and two ids.
 `--format json` is that command, scoped to the report it came from. The id prefix and digits are
 accepted in either case. The detail view prints the row as the report does, every
 member of a cluster with where it lives, the test's full name and source location, each metric
-behind the headline, and the other findings about the same test:
+behind the headline, the other findings about the same test, and, for a finding about one test,
+the command that shows that test's run-by-run history:
 
 <!-- xping:sample detail-test -->
 ````
@@ -412,6 +413,7 @@ counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 Showing 1 of 5 findings · all: xping report --all
+History: xping report --test fp-Sampl --assembly SampleApp.XUnit
 ````
 
 Because the kind is half of the id, **an id moves when its claim changes kind.** A shared

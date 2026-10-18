@@ -174,6 +174,29 @@ internal static class TestResolver
     }
 
     /// <summary>
+    /// Works out the short fingerprint of every test one assembly ran in sessions already read.
+    /// </summary>
+    /// <param name="sessions">The assembly's whole-store read, newest first.</param>
+    /// <param name="assembly">The assembly.</param>
+    /// <returns>Each fingerprint's short fingerprint, keyed by the full one.</returns>
+    /// <remarks>
+    /// The prefixes <see cref="Resolve(IReadOnlyList{TestSession}, string, string?)"/> gives its
+    /// candidates, over the same read, so a command printed from any other view names the test the
+    /// way <c>--test</c> resolves it.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> ShortFingerprintsIn(
+        IReadOnlyList<TestSession> sessions, string assembly)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        List<Entry> entries = Index(sessions, assembly);
+        var siblings = new ShortFingerprints(entries);
+
+        return entries.ToDictionary(e => e.Fingerprint, siblings.For, StringComparer.Ordinal);
+    }
+
+    /// <summary>
     /// Returns whether a window holds any run of a matched test.
     /// </summary>
     /// <param name="match">The test.</param>

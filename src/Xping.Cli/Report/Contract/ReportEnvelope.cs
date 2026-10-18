@@ -85,7 +85,9 @@ internal sealed record ReportEnvelope(
     /// object: what Xping Cloud says about the same test when a credential resolved, kept apart
     /// from every local field so it is never read as a local statistic. 1.23 is where the envelope
     /// gained <c>test</c>, written by <c>xping report --test</c>: one test's every run in the window,
-    /// what it did in each, and the rows its findings hold in the full report.
+    /// what it did in each, its short fingerprint, and the rows its findings hold in the full report;
+    /// and where <c>selection</c> gained <c>history</c>, the command that opens that view for the
+    /// test an id is about.
     /// </remarks>
     public const string CurrentSchemaVersion = "1.23";
 }
@@ -451,12 +453,18 @@ internal sealed record SubjectDto(
 /// Every other finding about the subject this id names, in envelope order. When reported, its
 /// siblings; when not, where the claim went. Empty when there are none or the subject is unknown.
 /// </param>
+/// <param name="History">
+/// The command that shows the history of the test this id is about: for a reported finding about
+/// one test, and for an id no finding carries whose test ran in the window with no finding at all.
+/// Null for a cluster, and when the id names no test in the window.
+/// </param>
 internal sealed record SelectionDto(
     string Id,
     bool Reported,
     string? Kind,
     int? Row,
-    IReadOnlyList<SameSubjectDto> SameSubject);
+    IReadOnlyList<SameSubjectDto> SameSubject,
+    string? History);
 
 /// <summary>
 /// Another finding about the subject a selection names.
@@ -484,6 +492,10 @@ internal sealed record TruncationDto(int Shown, int Total, string Command);
 /// </remarks>
 /// <param name="Query">The name as the reader typed it.</param>
 /// <param name="Test">The test, or null when the name was ambiguous or matched nothing.</param>
+/// <param name="ShortFingerprint">
+/// The shortest prefix of the test's fingerprint, from eight characters, that <c>--test</c> resolves
+/// to this test alone in its assembly; null when no test was resolved.
+/// </param>
 /// <param name="Sessions">
 /// Every session in the window, newest first, whether or not the test appeared in it. Empty when no
 /// test was resolved.
@@ -504,6 +516,7 @@ internal sealed record TruncationDto(int Shown, int Total, string Command);
 internal sealed record TestHistoryDto(
     string Query,
     SubjectDto? Test,
+    string? ShortFingerprint,
     IReadOnlyList<TestSessionDto> Sessions,
     TestRunCountsDto? Counts,
     TestDurationDto? Duration,

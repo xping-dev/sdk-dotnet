@@ -200,6 +200,64 @@ public sealed class FindingDetailCommandTests : IDisposable
         Assert.Contains(id, output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheHistoryCommandOfAReportedIdOpensItsTest()
+    {
+        SeedVanishing();
+
+        JsonElement finding = Json().GetProperty("findings")[0];
+        JsonElement selection = Json("--id", finding.GetProperty("id").GetString()!).GetProperty("selection");
+        string[] args = selection.GetProperty("history").GetString()!.Split(' ');
+
+        Assert.Equal(["xping", "report", "--test"], args[..3]);
+
+        var (code, output, _) = Run([.. args[2..], "--format", "json"]);
+
+        Assert.Equal(0, code);
+
+        using JsonDocument history = JsonDocument.Parse(output);
+        Assert.Equal(
+            finding.GetProperty("subject").GetProperty("fingerprint").GetString(),
+            history.RootElement.GetProperty("test").GetProperty("test").GetProperty("fingerprint").GetString());
+    }
+
+    [Fact]
+    public void ATextDetailEndsWithTheHistoryCommandBelowTheFence()
+    {
+        SeedVanishing();
+
+        string[] lines = Run("--id", FirstId()).Output.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        string history = Assert.Single(lines, l => l.StartsWith("History: ", StringComparison.Ordinal));
+
+        Assert.StartsWith("History: xping report --test ", history, StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests", history, StringComparison.Ordinal);
+        Assert.True(Array.IndexOf(lines, history) > Array.FindLastIndex(lines, l => l == "```"));
+    }
+
+    /// <summary>
+    /// An id no finding carries, computed for a test that ran with no finding, points at its history.
+    /// </summary>
+    [Fact]
+    public void AnIdOfAHealthyTestPointsAtItsHistory()
+    {
+        SeedVanishing();
+
+        string fingerprint = Json("--test", "Stable0")
+            .GetProperty("test").GetProperty("test").GetProperty("fingerprint").GetString()!;
+        string id = FindingId.Compute(FindingKind.Flaky, fingerprint);
+
+        var (code, output, error) = Run("--id", id);
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.StartsWith(
+            $"Finding {id} (flaky) is not reported in this window (MyApp.Tests, 8 runs). " +
+            "Its test has no findings in this window: xping report --test ",
+            error,
+            StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests" + Environment.NewLine, error, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// An absent id exits 3 with the envelope still on standard output for a script to read.
     /// </summary>

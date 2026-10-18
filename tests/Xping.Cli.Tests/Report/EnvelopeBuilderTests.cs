@@ -205,7 +205,7 @@ public sealed class EnvelopeBuilderTests
 
         JsonElement test = root.GetProperty("test");
         Assert.Equal(
-            ["query", "test", "sessions", "counts", "duration", "findingsWithheld", "findingRows", "candidates"],
+            ["query", "test", "shortFingerprint", "sessions", "counts", "duration", "findingsWithheld", "findingRows", "candidates"],
             test.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             ["notExecuted", "timeout"],

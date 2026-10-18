@@ -128,11 +128,18 @@ internal static class ReportFixtures
 
         return full with
         {
-            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings),
+            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings, History(finding.Subject)),
             Findings = [finding],
             Truncated = full.Truncated with { Shown = 1 }
         };
     }
+
+    // The command the builder would print for a single-test subject. A fixture's fingerprints are
+    // the only ones in its assembly, so the first eight characters already name each one alone.
+    private static string? History(SubjectDto subject) =>
+        subject.Members == null && subject.Fingerprint is { } fingerprint
+            ? $"xping report --test {fingerprint[..Math.Min(8, fingerprint.Length)]} --assembly {subject.Assembly}"
+            : null;
 
     private static ReportEnvelope Build(string name) => name switch
     {
@@ -478,7 +485,10 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun,
-            ordered[0].Id);
+            ordered[0].Id,
+
+            // The fixture's window is its whole store, which is what the command reads them over.
+            shortFingerprints: TestResolver.ShortFingerprintsIn(context.Window.Sessions, context.Revision!.Assembly!));
     }
 
     /// <summary>

@@ -79,7 +79,11 @@ internal sealed class ReportCommand(
             return ReportUnavailable(resolved, store, options.Assembly);
 
         (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
-            options, resolved, assembly, assemblyGiven: options.Assembly != null);
+            options,
+            resolved,
+            assembly,
+            assemblyGiven: options.Assembly != null,
+            shortFingerprints: options.Id != null && assembly != null ? ShortFingerprints(source, assembly) : null);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -264,6 +268,20 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
+    /// Works out the short fingerprint of every test the assembly ran, for <c>--id</c>'s history
+    /// command.
+    /// </summary>
+    /// <remarks>
+    /// Over the whole store and not the report's window, because that is what <c>--test</c> resolves
+    /// the printed prefix over: one unique among the window's tests could match an older test too.
+    /// </remarks>
+    private IReadOnlyDictionary<string, string>? ShortFingerprints(LocalSessionSource source, string assembly) =>
+        windowResolver.Resolve(source, new WindowRequest(Runs: null, Since: null, assembly, WholeStore: true)).Window
+            is { } store
+            ? TestResolver.ShortFingerprintsIn(store.Sessions, assembly)
+            : null;
+
+    /// <summary>
     /// The window <c>--test</c> reads: the whole store, unless <c>--runs</c> or <c>--since</c>
     /// replaces it.
     /// </summary>
@@ -281,6 +299,10 @@ internal sealed class ReportCommand(
     /// Builds what <c>--test</c> resolved to over the window, or <see langword="null"/> when the
     /// command is not <c>--test</c>.
     /// </param>
+    /// <param name="shortFingerprints">
+    /// Every test's short fingerprint over the assembly's whole store, for <c>--id</c>'s history
+    /// command; <see langword="null"/> otherwise.
+    /// </param>
     /// <returns>The envelope, and the analysis behind it.</returns>
     /// <remarks>
     /// One sequence for <c>report</c>, <c>--id</c> and <c>--test</c>, so the findings a selection
@@ -291,7 +313,8 @@ internal sealed class ReportCommand(
         WindowResult resolved,
         string? assembly,
         bool assemblyGiven,
-        Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null)
+        Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null,
+        IReadOnlyDictionary<string, string>? shortFingerprints = null)
     {
         AnalysisWindow window = resolved.Window
             ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
@@ -343,7 +366,8 @@ internal sealed class ReportCommand(
             latestRun,
             options.Id,
             scope,
-            history?.Invoke(context, scope));
+            history?.Invoke(context, scope),
+            shortFingerprints);
 
         return (envelope, analysis);
     }
@@ -654,6 +678,10 @@ internal sealed class ReportCommand(
                    .AppendJoin(", ", selection.SameSubject.Select(same =>
                        $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
                    .Append('.');
+        }
+        else if (selection.History is { } history)
+        {
+            message.Append(" Its test has no findings in this window: ").Append(history);
         }
 
         int others = OtherAssemblies(source, assembly);

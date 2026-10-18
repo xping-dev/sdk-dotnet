@@ -86,6 +86,7 @@ internal static class TestHistoryBuilder
         return new TestHistoryDto(
             query,
             EnvelopeBuilder.ForTest(reference),
+            match.ShortFingerprint,
             sessions,
             Counts(runs.Values, context.Window.SessionCount),
             Duration(tests.VerdictRunsOf(fingerprint)),
@@ -139,7 +140,7 @@ internal static class TestHistoryBuilder
     }
 
     private static TestHistoryDto Empty(string query) =>
-        new(query, null, [], null, null, null, [], []);
+        new(query, null, null, [], null, null, null, [], []);
 
     /// <summary>
     /// Counts the runs by how their deciding attempt ended.
