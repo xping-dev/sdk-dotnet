@@ -80,16 +80,20 @@ internal static class EnvelopeBuilder
         // numbers, and cannot come from an ordering computed somewhere else.
         FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id);
 
+        // Numbered over the same list, for the same reason: the row --test reports for a finding is
+        // the row the full report and --id give it.
+        List<(Finding Finding, int Row)>? about = test == null ? null : AboutTest(ordered, test);
+
         IReadOnlyList<Finding> shown = selection != null
             ? selection.Finding is { } selected ? [selected] : []
-            : test != null
-                ? AboutTest(ordered, test)
+            : about != null
+                ? [.. about.Select(a => a.Finding)]
                 : top is { } limit && limit < ordered.Count
                     ? [.. ordered.Take(limit)]
                     : ordered;
 
-        if (test?.Test?.Fingerprint is { } fingerprint)
-            test = WithFindings(test, fingerprint, shown, ordered, context);
+        if (about != null && test?.Test?.Fingerprint is { } fingerprint)
+            test = WithFindings(test, fingerprint, about, context);
 
         Dictionary<string, string> annotations = Annotations(ordered);
 
@@ -200,47 +204,40 @@ internal static class EnvelopeBuilder
     /// Its single-test findings, then the clusters it is a member of, each in report order; none when
     /// the name resolved to no test.
     /// </returns>
-    private static List<Finding> AboutTest(IReadOnlyList<Finding> ordered, TestHistoryDto test)
+    private static List<(Finding Finding, int Row)> AboutTest(IReadOnlyList<Finding> ordered, TestHistoryDto test)
     {
         if (test.Test?.Fingerprint is not { } fingerprint)
             return [];
 
-        List<Finding> about = [.. ordered.Where(f => FindingOrder.IsAbout(f, fingerprint))];
+        List<(Finding Finding, int Row)> about = FindingSelector.About(ordered, f => FindingOrder.IsAbout(f, fingerprint));
 
-        return [.. about.Where(f => FindingOrder.Test(f) != null), .. about.Where(f => FindingOrder.Test(f) == null)];
+        return [.. about.Where(a => a.Finding.Subject is FindingSubject.SingleTest), .. about.Where(a => a.Finding.Subject is not FindingSubject.SingleTest)];
     }
 
     /// <summary>
     /// Completes a resolved history with its findings' rows and, when there are none, the reason.
     /// </summary>
     /// <remarks>
-    /// The rows are positions in the full ordered list, which is what the full report and
-    /// <c>--id</c> number a finding by, so a row read here is the row a reader finds there. The
-    /// reason is given only when the floors explain the empty block: a test that cleared them and
+    /// The reason is given only when the floors explain the empty block: a test that cleared them and
     /// has no finding is simply healthy, and saying "too little history" would be false.
     /// </remarks>
     private static TestHistoryDto WithFindings(
         TestHistoryDto test,
         string fingerprint,
-        IReadOnlyList<Finding> shown,
-        IReadOnlyList<Finding> ordered,
+        List<(Finding Finding, int Row)> about,
         AnalysisContext context)
     {
-        var rows = new Dictionary<string, int>(StringComparer.Ordinal);
-        for (int index = 0; index < ordered.Count; index++)
-            rows[ordered[index].Id] = index + 1;
-
         int ran = context.Tests.SessionsRunIn(fingerprint);
         int window = context.Window.SessionCount;
 
-        string? withheld = shown.Count == 0 && !EvidenceLevelResolver.MeetsReportingFloor(ran, window)
+        string? withheld = about.Count == 0 && !EvidenceLevelResolver.MeetsReportingFloor(ran, window)
             ? WithheldReason(ran)
             : null;
 
         return test with
         {
             FindingsWithheld = withheld,
-            FindingRows = [.. shown.Select(f => new SameSubjectDto(f.Id, f.Kind.ToString(), rows[f.Id]))]
+            FindingRows = [.. about.Select(a => new SameSubjectDto(a.Finding.Id, a.Finding.Kind.ToString(), a.Row))]
         };
     }
 

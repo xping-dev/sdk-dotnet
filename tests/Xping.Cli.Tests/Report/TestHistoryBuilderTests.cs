@@ -211,6 +211,15 @@ public sealed class TestHistoryBuilderTests
     }
 
     [Fact]
+    public void OnlyAnAmbiguousResolutionBuildsCandidates()
+    {
+        var found = new TestResolution(TestResolutionKind.Found, Target, null, [Match], 1, 5);
+
+        Assert.Throws<ArgumentException>(() => TestHistoryBuilder.Ambiguous(
+            found, new ReportScope(null, WindowResolution.Store, 5)));
+    }
+
+    [Fact]
     public void NotFoundCarriesTheQueryAndNothingElse()
     {
         TestHistoryDto history = TestHistoryBuilder.NotFound("Foo");

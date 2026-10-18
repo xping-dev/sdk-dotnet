@@ -136,7 +136,8 @@ public sealed class EnvelopeBuilderTests
         ReportEnvelope envelope = Build(context, Findings(), History(context), scope);
 
         Assert.All(envelope.Findings, f => Assert.EndsWith(" --runs 5", f.DrillDown, StringComparison.Ordinal));
-        Assert.Equal("xping report --all --runs 5", envelope.Truncated.Command);
+        // The assembly too, though the caller did not type it: under --test it came from the name.
+        Assert.Equal("xping report --all --assembly MyApp.Tests --runs 5", envelope.Truncated.Command);
     }
 
     /// <summary>

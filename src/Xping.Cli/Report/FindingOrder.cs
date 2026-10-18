@@ -144,14 +144,8 @@ internal sealed class FindingOrder : IComparer<Finding>
     {
         ArgumentNullException.ThrowIfNull(finding);
 
-        return finding.Subject switch
-        {
-            FindingSubject.SingleTest single =>
-                string.Equals(single.Test.TestFingerprint, fingerprint, StringComparison.Ordinal),
-            FindingSubject.Group group =>
-                group.Members.Any(m => string.Equals(m.TestFingerprint, fingerprint, StringComparison.Ordinal)),
-            _ => false
-        };
+        return finding.Subject.Tests.Any(
+            test => string.Equals(test.TestFingerprint, fingerprint, StringComparison.Ordinal));
     }
 
     /// <summary>

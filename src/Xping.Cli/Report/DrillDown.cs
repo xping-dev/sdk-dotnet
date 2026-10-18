@@ -59,13 +59,17 @@ internal static class DrillDown
     /// This is the "show me the other eleven" affordance, and a reader who wants eleven more of what
     /// they are already looking at should get exactly that. It repeats only what the caller typed:
     /// an auto-scoped report's bare <c>--all</c> scopes itself the same way, and one opened from a
-    /// drill-down, which always names the assembly, gets the assembly back.
+    /// drill-down, which always names the assembly, gets the assembly back. A whole-store window
+    /// names it too: only <c>--test</c> reads one, and its assembly came from the test's name, which
+    /// the bare command does not carry — it would scope itself to whichever assembly ran last.
     /// </remarks>
     public static string ForFullReport(ReportScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        return Scoped("xping report --all", scope, scope.AssemblyGiven ? scope.Assembly : null);
+        bool named = scope.AssemblyGiven || scope.Resolution == WindowResolution.Store;
+
+        return Scoped("xping report --all", scope, named ? scope.Assembly : null);
     }
 
     /// <summary>

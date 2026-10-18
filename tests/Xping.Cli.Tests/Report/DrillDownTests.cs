@@ -41,7 +41,7 @@ public sealed class DrillDownTests
         var scope = new ReportScope("MyApp.Tests", WindowResolution.Store, 48);
 
         Assert.Equal("xping report --id f_2a91c0de --assembly MyApp.Tests --runs 48", DrillDown.ForFinding("f_2a91c0de", scope));
-        Assert.Equal("xping report --all --runs 48", DrillDown.ForFullReport(scope));
+        Assert.Equal("xping report --all --assembly MyApp.Tests --runs 48", DrillDown.ForFullReport(scope));
     }
 
     [Fact]

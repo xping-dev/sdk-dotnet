@@ -15,8 +15,10 @@ namespace Xping.Cli.Report.Contract;
 /// Builds what <c>xping report --test</c> publishes about one test.
 /// </summary>
 /// <remarks>
-/// Reads the same index the providers read, so a run this history counts as passed on retry is one
-/// the retry findings count too. The findings' rows and the floor's reason are left for
+/// Reads the same index the providers read, so its runs and deciding attempts are theirs. Its counts
+/// are not the retry findings' counts: a run passed on retry here is any run decided by a passing
+/// attempt after the first (D9), where <c>RetryMasked</c> also needs the adapter to have recorded
+/// that the retry is what passed. The findings' rows and the floor's reason are left for
 /// <see cref="EnvelopeBuilder"/>, which holds the ordered findings they are read from.
 /// </remarks>
 internal static class TestHistoryBuilder
@@ -31,6 +33,7 @@ internal static class TestHistoryBuilder
     public static TestHistoryDto Found(AnalysisContext context, string query, TestMatch match)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(match);
 
         string fingerprint = match.Fingerprint;
@@ -104,6 +107,11 @@ internal static class TestHistoryBuilder
         ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(scope);
 
+        // Found and ambiguous differ only in the candidate list and the exit code, so a resolution
+        // of the wrong kind would build an answer that looks valid and contradicts the exit code.
+        if (resolution.Kind != TestResolutionKind.Ambiguous)
+            throw new ArgumentException($"Expected an ambiguous resolution, got {resolution.Kind}.", nameof(resolution));
+
         return Empty(resolution.Query) with
         {
             Candidates =
@@ -123,7 +131,12 @@ internal static class TestHistoryBuilder
     /// </summary>
     /// <param name="query">The name the reader typed.</param>
     /// <returns>The query, and nothing else.</returns>
-    public static TestHistoryDto NotFound(string query) => Empty(query);
+    public static TestHistoryDto NotFound(string query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return Empty(query);
+    }
 
     private static TestHistoryDto Empty(string query) =>
         new(query, null, [], null, null, null, [], []);
