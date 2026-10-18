@@ -210,7 +210,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         var (code, output, error) = Run("--id", "f_00000000", "--format", "json");
 
-        Assert.Equal(ExitCodes.FindingNotReported, code);
+        Assert.Equal(ExitCodes.NotFound, code);
 
         using JsonDocument detail = JsonDocument.Parse(output);
         JsonElement root = detail.RootElement;
@@ -239,7 +239,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         var (code, output, error) = Run("--id", "f_00000000");
 
-        Assert.Equal(ExitCodes.FindingNotReported, code);
+        Assert.Equal(ExitCodes.NotFound, code);
         Assert.Empty(output);
         Assert.Contains("is not reported in this window", error, StringComparison.Ordinal);
     }
@@ -258,7 +258,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         var (code, _, error) = Run("--id", moved);
 
-        Assert.Equal(ExitCodes.FindingNotReported, code);
+        Assert.Equal(ExitCodes.NotFound, code);
         Assert.Equal(
             $"Finding {moved} (flaky) is not reported in this window (MyApp.Tests, 8 runs). " +
             $"Its subject is reported as {finding.GetProperty("id").GetString()} (stopped running, row 1)." +
@@ -276,7 +276,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         var (code, _, error) = Run("--id", id, "--assembly", Other);
 
-        Assert.Equal(ExitCodes.FindingNotReported, code);
+        Assert.Equal(ExitCodes.NotFound, code);
         Assert.Contains($"({Other}, ", error, StringComparison.Ordinal);
         Assert.EndsWith(
             " 1 other assembly in this store (use --assembly to switch)." + Environment.NewLine,
@@ -295,7 +295,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         var (code, _, error) = Run("--id", id, "--runs", "3");
 
-        Assert.Equal(ExitCodes.FindingNotReported, code);
+        Assert.Equal(ExitCodes.NotFound, code);
         Assert.Contains("(MyApp.Tests, 3 runs)", error, StringComparison.Ordinal);
     }
 

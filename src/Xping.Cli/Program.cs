@@ -363,6 +363,12 @@ internal static class Program
             CustomParser = ParseFindingId
         };
 
+        Option<string?> testOption = new("--test")
+        {
+            Description = "Show one test's run history, by its name or fingerprint",
+            CustomParser = ParseTestName
+        };
+
         Option<string?> directoryOption = new("--directory")
         {
             Description = "Resolve the store from this directory"
@@ -389,8 +395,8 @@ internal static class Program
         Command command = new("report", "Report test reliability findings from recent local runs")
         {
             runsOption, sinceOption, topOption, allOption, kindOption, formatOption, jsonOption,
-            summaryOption, failOnOption, assemblyOption, idOption, directoryOption, projectOption,
-            asciiOption, noColorOption
+            summaryOption, failOnOption, assemblyOption, idOption, testOption, directoryOption,
+            projectOption, asciiOption, noColorOption
         };
 
         // Presence is tested with GetResult rather than GetValue: an option whose own parser already
@@ -445,6 +451,35 @@ internal static class Program
                     result.AddError("--id and --format summary are mutually exclusive.");
                 }
             }
+
+            // `--test` is a selection too, and a history is not a ranked list: every flag here would
+            // narrow, widen or fail on a list the view does not show.
+            if (result.GetResult(testOption) != null)
+            {
+                if (result.GetResult(idOption) != null)
+                    result.AddError("--test and --id are mutually exclusive.");
+
+                if (result.GetResult(kindOption) != null)
+                    result.AddError("--test and --kind are mutually exclusive.");
+
+                if (result.GetResult(topOption) != null)
+                    result.AddError("--test and --top are mutually exclusive.");
+
+                if (result.GetResult(allOption) != null)
+                    result.AddError("--test and --all are mutually exclusive.");
+
+                if (result.GetResult(failOnOption) is { Implicit: false })
+                    result.AddError("--test and --fail-on are mutually exclusive.");
+
+                if (result.GetResult(summaryOption) != null)
+                    result.AddError("--test and --summary are mutually exclusive.");
+
+                if (result.GetResult(formatOption) is { Implicit: false } testFormat
+                    && testFormat.GetValueOrDefault<ReportFormat>() == ReportFormat.Summary)
+                {
+                    result.AddError("--test and --format summary are mutually exclusive.");
+                }
+            }
         });
 
         // Not run cooperatively: Ctrl+C ends a report as it always has, and the Cloud enrichment
@@ -463,6 +498,7 @@ internal static class Program
                 Kinds = parseResult.GetValue(kindOption) ?? [],
                 Assembly = parseResult.GetValue(assemblyOption),
                 Id = parseResult.GetValue(idOption),
+                Test = parseResult.GetValue(testOption),
                 Directory = parseResult.GetValue(directoryOption),
                 Project = parseResult.GetValue(projectOption),
                 Format = parseResult.GetValue(jsonOption) ? ReportFormat.Json
@@ -525,6 +561,27 @@ internal static class Program
         if (raw.Length != 10 || !raw.StartsWith("f_", StringComparison.OrdinalIgnoreCase) || !raw[2..].All(char.IsAsciiHexDigit))
         {
             result.AddError($"--id expects a finding id of the form f_ followed by 8 hex digits, got '{raw}'.");
+            return null;
+        }
+
+        return raw;
+    }
+
+    /// <summary>
+    /// Parses a test name: anything but blank, kept exactly as typed.
+    /// </summary>
+    /// <remarks>
+    /// Not trimmed. Every tier matches ordinally, and a reader who quoted a space into a name meant
+    /// it. A blank name would match no tier and be reported absent, which reads as if the store
+    /// were missing a test rather than the command a name.
+    /// </remarks>
+    private static string? ParseTestName(ArgumentResult result)
+    {
+        string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            result.AddError("--test expects a test name or fingerprint.");
             return null;
         }
 

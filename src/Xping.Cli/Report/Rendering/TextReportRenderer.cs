@@ -46,7 +46,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// Narrow enough to survive a phone, and to leave room for the <c>&gt;</c> a reader adds when
     /// quoting the block back at someone.
     /// </remarks>
-    private const int FenceWidth = 72;
+    internal const int FenceWidth = 72;
 
     // Kinds named on the unmeasured line before the rest become a count. Three is what fits beside
     // the glyph and the prefix at the widths `ReportVocabulary` labels take; a fourth pushes the
@@ -513,7 +513,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// where a dot is a decimal point.
     /// </para>
     /// </remarks>
-    private static List<string> WrapValue(string value, int width)
+    internal static List<string> WrapValue(string value, int width)
     {
         var lines = new List<string>();
         var line = new StringBuilder();
