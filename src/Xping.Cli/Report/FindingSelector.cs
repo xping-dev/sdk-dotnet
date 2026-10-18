@@ -115,7 +115,14 @@ internal static class FindingSelector
         return new FindingSelection(requested, Finding: null, Row: null, Kind: null, SameSubject: []);
     }
 
-    private static List<(Finding Finding, int Row)> About(
+    /// <summary>
+    /// Picks the findings that match, each with its row: its position, from 1, in the full ordered
+    /// list, which is the number the full report prints for it.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <param name="matches">Which findings to keep.</param>
+    /// <returns>The matches, in report order.</returns>
+    internal static List<(Finding Finding, int Row)> About(
         IReadOnlyList<Finding> ordered, Func<Finding, bool> matches)
     {
         var found = new List<(Finding Finding, int Row)>();

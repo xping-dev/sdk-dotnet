@@ -63,6 +63,12 @@ each new one, so the header's run count would stop matching the view it came fro
 | A | D2 tier 3 is a pure prefix match | A query equal to a whole fingerprint matches that fingerprint alone. Otherwise a fingerprint that is a prefix of another (a pinned `login` that later became parameterised, `login:3f2a…`) matches both, and D3's short fingerprint of `login`, which is the whole fingerprint, could never name it | D2, D3 |
 | B | D2 tier 2 matches when the FQN ends with `.` + `<name>` | It also matches when the whole FQN equals `<name>`, after the same `+` and `(args)` normalisation. Otherwise the full name of a nested type typed with dots (`Ns.Outer.Inner.Method` for `Ns.Outer+Inner.Method`), or of a parameterised test without its arguments (`Ns.Calc.Add` for `Ns.Calc.Add(1,2)`), matches nothing, though D2 says tier 2 covers `Namespace.Class.Method` | D2 |
 
+### Amendment 4 — from P3
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §4.2 has no field for a finding's full-report row, which D10 and §3.1 print (`1.`, `2.`). Under `--test`, `findings` is filtered, so a finding's index there is not its row | `TestHistoryDto` gains `FindingRows`, one `SameSubjectDto` (id, kind, row) per entry of `findings`, in the same order, as `SelectionDto.SameSubject` carries rows. `FindingDto` is unchanged, so `report` and `--id` do not move | D10, §4.2 |
+
 ---
 
 ## 1. Ground truth
@@ -527,6 +533,7 @@ internal sealed record TestHistoryDto(                    // NEW
     TestRunCountsDto? Counts,
     TestDurationDto? Duration,                            // null when no run has a verdict
     string? FindingsWithheld,                             // D6 reason, else null
+    IReadOnlyList<SameSubjectDto> FindingRows,            // Amendment 4A; one per findings entry
     IReadOnlyList<TestCandidateDto> Candidates);          // D3; empty unless ambiguous
 
 internal sealed record TestSessionDto(                    // NEW

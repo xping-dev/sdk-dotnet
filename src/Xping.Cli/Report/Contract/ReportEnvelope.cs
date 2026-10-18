@@ -4,6 +4,7 @@
  */
 
 using System.Text.Json.Nodes;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Report.Contract;
 
@@ -34,6 +35,11 @@ namespace Xping.Cli.Report.Contract;
 /// qualifies: under <c>--id</c> they hold the selected finding alone, or nothing when it is not
 /// reported.
 /// </param>
+/// <param name="Test">
+/// What <c>--test</c> resolved to and that test's run-by-run history; null unless one was given.
+/// Positioned before the findings, which it qualifies: under <c>--test</c> they hold the findings
+/// about that test alone.
+/// </param>
 /// <param name="Findings">The findings, most severe first, after any truncation.</param>
 /// <param name="Truncated">How much of the finding list is shown.</param>
 internal sealed record ReportEnvelope(
@@ -43,6 +49,7 @@ internal sealed record ReportEnvelope(
     SummaryDto Summary,
     LatestRunDto? LatestRun,
     SelectionDto? Selection,
+    TestHistoryDto? Test,
     IReadOnlyList<FindingDto> Findings,
     TruncationDto Truncated)
 {
@@ -76,9 +83,11 @@ internal sealed record ReportEnvelope(
     /// <c>failure mode N</c> pair per distinct signature, naming the ways it failed. 1.22 is where
     /// <c>context</c>, every finding and every latest-run failure gained a nullable <c>cloud</c>
     /// object: what Xping Cloud says about the same test when a credential resolved, kept apart
-    /// from every local field so it is never read as a local statistic.
+    /// from every local field so it is never read as a local statistic. 1.23 is where the envelope
+    /// gained <c>test</c>, written by <c>xping report --test</c>: one test's every run in the window,
+    /// what it did in each, and the rows its findings hold in the full report.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.22";
+    public const string CurrentSchemaVersion = "1.23";
 }
 
 /// <summary>
@@ -464,3 +473,112 @@ internal sealed record SameSubjectDto(string Id, string Kind, int Row);
 /// <param name="Total">Findings produced.</param>
 /// <param name="Command">The invocation that shows all of them.</param>
 internal sealed record TruncationDto(int Shown, int Total, string Command);
+
+/// <summary>
+/// What <c>xping report --test</c> resolved to, and that test's history over the window.
+/// </summary>
+/// <remarks>
+/// Present whether or not the name resolved, so a script can see what was asked for without
+/// reading standard error. Found, ambiguous and not found differ by <see cref="Test"/>, by
+/// <see cref="Candidates"/> and by the exit code.
+/// </remarks>
+/// <param name="Query">The name as the reader typed it.</param>
+/// <param name="Test">The test, or null when the name was ambiguous or matched nothing.</param>
+/// <param name="Sessions">
+/// Every session in the window, newest first, whether or not the test appeared in it. Empty when no
+/// test was resolved.
+/// </param>
+/// <param name="Counts">How its runs ended, or null when no test was resolved.</param>
+/// <param name="Duration">
+/// Its durations over the runs that reached a verdict, or null when none did or no test was resolved.
+/// </param>
+/// <param name="FindingsWithheld">
+/// Why no finding could be reported about the test — too few runs to clear the reporting floors —
+/// or null when the floors are not the explanation.
+/// </param>
+/// <param name="FindingRows">
+/// Each entry of the envelope's <c>findings</c>, in the same order, with the row the full report
+/// numbers it. Under <c>--test</c> the findings are filtered, so their position is not their row.
+/// </param>
+/// <param name="Candidates">Every test the name matched when it matched more than one; else empty.</param>
+internal sealed record TestHistoryDto(
+    string Query,
+    SubjectDto? Test,
+    IReadOnlyList<TestSessionDto> Sessions,
+    TestRunCountsDto? Counts,
+    TestDurationDto? Duration,
+    string? FindingsWithheld,
+    IReadOnlyList<SameSubjectDto> FindingRows,
+    IReadOnlyList<TestCandidateDto> Candidates);
+
+/// <summary>
+/// One session of the window, as the resolved test saw it.
+/// </summary>
+/// <param name="SessionId">The session.</param>
+/// <param name="StartedAt">When it started.</param>
+/// <param name="Sha">Commit it ran at, when one was recorded. Never invented.</param>
+/// <param name="Appeared">
+/// Whether the test was in the session. A run whose deciding attempt was skipped or not executed
+/// still appeared: the framework saw the test.
+/// </param>
+/// <param name="Partial">Whether the session covered only part of the suite, as the window judges it.</param>
+/// <param name="Outcome">The deciding attempt's outcome, or null when the test did not appear.</param>
+/// <param name="DecidingAttempt">The deciding attempt's number, or null when the test did not appear.</param>
+/// <param name="DurationMs">The deciding attempt's duration, or null when the test did not appear.</param>
+/// <param name="Attempts">Every attempt in the session, in attempt order; empty when the test did not appear.</param>
+internal sealed record TestSessionDto(
+    Guid SessionId,
+    DateTime StartedAt,
+    string? Sha,
+    bool Appeared,
+    bool Partial,
+    TestOutcome? Outcome,
+    int? DecidingAttempt,
+    long? DurationMs,
+    IReadOnlyList<TestAttemptDto> Attempts);
+
+/// <summary>
+/// One attempt of the test within a session.
+/// </summary>
+/// <param name="Attempt">Its number, from 1.</param>
+/// <param name="Outcome">How it ended.</param>
+/// <param name="DurationMs">How long it took.</param>
+internal sealed record TestAttemptDto(int Attempt, TestOutcome Outcome, long DurationMs);
+
+/// <summary>
+/// How the test's runs ended, each counted once by its deciding attempt.
+/// </summary>
+/// <param name="Ran">Sessions the test appeared in.</param>
+/// <param name="WindowRuns">Sessions in the window.</param>
+/// <param name="Passed">Runs that passed on the first attempt.</param>
+/// <param name="PassedOnRetry">Runs that passed on a later attempt.</param>
+/// <param name="Failed">Runs that ended failed or timed out.</param>
+/// <param name="Other">Runs that ended skipped, not executed or inconclusive.</param>
+internal sealed record TestRunCountsDto(
+    int Ran, int WindowRuns, int Passed, int PassedOnRetry, int Failed, int Other);
+
+/// <summary>
+/// The test's durations, over the deciding attempt of every run that reached a verdict.
+/// </summary>
+/// <param name="P50Ms">Median, interpolated, in milliseconds.</param>
+/// <param name="P95Ms">95th percentile, interpolated, in milliseconds.</param>
+/// <param name="MinMs">Shortest.</param>
+/// <param name="MaxMs">Longest.</param>
+/// <param name="Dispersion">
+/// Spread relative to the median, unitless. Published here and not in the text view, where it reads
+/// as noise.
+/// </param>
+/// <param name="Samples">Runs the figures were taken over.</param>
+internal sealed record TestDurationDto(
+    long P50Ms, long P95Ms, long MinMs, long MaxMs, double Dispersion, int Samples);
+
+/// <summary>
+/// One test an ambiguous <c>--test</c> name matched.
+/// </summary>
+/// <param name="FingerprintPrefix">The shortest prefix that names this test alone in its assembly.</param>
+/// <param name="Assembly">The assembly it belongs to.</param>
+/// <param name="FullyQualifiedName">Its newest fully qualified name.</param>
+/// <param name="LastSeen">When the newest session it ran in started.</param>
+/// <param name="Command">The invocation that shows this test's history.</param>
+internal sealed record TestCandidateDto(
+    string FingerprintPrefix, string Assembly, string FullyQualifiedName, DateTime LastSeen, string Command);

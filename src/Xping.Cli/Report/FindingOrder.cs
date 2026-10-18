@@ -131,6 +131,24 @@ internal sealed class FindingOrder : IComparer<Finding>
     }
 
     /// <summary>
+    /// Returns whether a finding is about a test, alone or as a member of a cluster.
+    /// </summary>
+    /// <param name="finding">The finding.</param>
+    /// <param name="fingerprint">The test's fingerprint.</param>
+    /// <returns><see langword="true"/> when the finding names the test.</returns>
+    /// <remarks>
+    /// Not <see cref="Test"/>, which answers null for a cluster: a broken fixture that took the
+    /// test down is about it too (Amendment 1D).
+    /// </remarks>
+    public static bool IsAbout(Finding finding, string fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+
+        return finding.Subject.Tests.Any(
+            test => string.Equals(test.TestFingerprint, fingerprint, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Rounds a rate to the precision the report actually publishes.
     /// </summary>
     /// <param name="value">The value to round.</param>

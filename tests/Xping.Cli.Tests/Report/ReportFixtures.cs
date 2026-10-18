@@ -1193,6 +1193,7 @@ internal static class ReportFixtures
             // from the envelope is absent from the page. The latest-run fixtures carry their own.
             null,
             null,
+            null,
             findings,
             new TruncationDto(shown, total, "xping report --all"));
     }
