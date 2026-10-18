@@ -109,6 +109,9 @@ amendment records the changes it makes here, committed with that spec.
 | B | The detail view ends with "Also about this test" | For a single-test subject, one more line follows: `History: xping report --test <fp> --assembly <assembly>`, from `DrillDown.ForTest` | §3, §4.5 |
 | C | `ExitCodes.FindingNotReported` = 3 | Renamed `ExitCodes.NotFound`, still 3; it covers `--test` too | §4.5 |
 
+B is refined by `cli-test-history-spec.md` Amendment 6B: the `History:` line is printed below the
+fence, after the footer, and `SelectionDto` carries it as `history`.
+
 ---
 
 ## 1. Ground truth

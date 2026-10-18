@@ -76,6 +76,17 @@ each new one, so the header's run count would stop matching the view it came fro
 | A | D3 and D4 write an envelope under `--format json` when the name resolves to no test, but no test chose its assembly or window | That envelope is the report over `report`'s own scope, `--assembly` or else the newest assembly, and the `--test` window: `Store`, unless `--runs` or `--since` replaces it. When the name matched a test but the narrowed window holds none of its runs (D4 b), the envelope is over that test's assembly and that window. In text, only stderr is written and nothing is analysed. The answer is about the name, so a window that cannot be opened for the envelope never replaces it: stderr and the exit code stand, and stdout is empty. A `--since` later than every run of the matched test's assembly opens no window at all, and is D4 (b), not an empty store | D3, D4 |
 | B | `ReportScope.AssemblyGiven` is whether the reader typed `--assembly` | Under `--test` it is always true. The assembly came from the name, and a bare `xping report --all` scopes itself to whichever assembly ran last, so every command the view prints names it, under `--runs` and `--since` too | D10, D11 |
 
+### Amendment 6 — from P5
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | The `TEST` heading prints `fp <fp>`, but §4.2 carries only the full fingerprint, and the short one depends on every other fingerprint in the assembly | `TestHistoryDto` gains `ShortFingerprint` (`string?`, null when the name resolved to no test), the `<fp>` D3 defines | §3.1, §4.2 |
+| B | D11: `--id`'s `History:` line follows "Also about this test", inside the fence | It is printed dimmed **below the fence**, after the footer, as `Detail of row 1:` is. Inside the fence a command with a long assembly or `--directory` would wrap across lines or overflow the 72 columns, and every other command the report prints sits below the fence so it is never cut. `SelectionDto` gains `History` (`string?`): `DrillDown.ForTest` for a reported single-test finding, and for D11's third not-found tier; null otherwise. Its `<fp>` is the short fingerprint over the assembly's whole-store read, so it is the one `--test` accepts | D11, §4.2 |
+| C | §3.1: the line below the footer reads `Detail of row 1:` | `Detail of row N:`, where N is the first finding's full-report row. Under `--test` the first finding shown is often not row 1, and D10 keeps the full report's numbers | D10, §3.1 |
+| D | D10 drops each finding's name line | Only a single-test finding's. A cluster keeps its name line, which is its cause and member count, and its member list: the cluster is not the view's subject | D10 |
+
+The schema stays `1.23`, which is unreleased; its remarks entry names both new fields.
+
 ---
 
 ## 1. Ground truth
