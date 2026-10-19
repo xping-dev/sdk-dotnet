@@ -52,10 +52,10 @@ internal static class EnvelopeBuilder
     /// ones about that test; when it does not, none. Everything else is built exactly as the full
     /// report builds it.
     /// </param>
-    /// <param name="shortFingerprints">
-    /// The short fingerprint of every test in the assembly's whole-store read, keyed by the full
-    /// one, which the selection's history command names its test by; <see langword="null"/> leaves
-    /// that command out.
+    /// <param name="shortFingerprint">
+    /// Works out the short fingerprint the selection's history command names its test by, from the
+    /// full one. Called at most once, and only when the selection is about one test;
+    /// <see langword="null"/> leaves that command out.
     /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
@@ -69,7 +69,7 @@ internal static class EnvelopeBuilder
         string? id = null,
         ReportScope? scope = null,
         TestHistoryDto? test = null,
-        IReadOnlyDictionary<string, string>? shortFingerprints = null)
+        Func<string, string?>? shortFingerprint = null)
     {
         if (id != null && test != null)
             throw new ArgumentException("--id and --test are mutually exclusive.", nameof(test));
@@ -154,7 +154,7 @@ internal static class EnvelopeBuilder
                 skewedSessions,
                 result.FailedProviders),
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
-            selection == null ? null : BuildSelection(selection, History(selection, shortFingerprints, scope)),
+            selection == null ? null : BuildSelection(selection, History(selection, shortFingerprint, scope)),
             test,
             [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
@@ -277,9 +277,9 @@ internal static class EnvelopeBuilder
     /// a different test once <c>--test</c> reads it.
     /// </remarks>
     private static string? History(
-        FindingSelection selection, IReadOnlyDictionary<string, string>? shortFingerprints, ReportScope scope) =>
-        selection.Test is { } test && shortFingerprints?.GetValueOrDefault(test) is { } shortFingerprint
-            ? DrillDown.ForTest(shortFingerprint, scope)
+        FindingSelection selection, Func<string, string?>? shortFingerprint, ReportScope scope) =>
+        selection.Test is { } test && shortFingerprint?.Invoke(test) is { } prefix
+            ? DrillDown.ForTest(prefix, scope)
             : null;
 
     private static LatestRunFailureDto BuildLatestRunFailure(LatestRunFailure failure) =>

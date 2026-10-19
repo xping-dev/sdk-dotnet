@@ -225,7 +225,7 @@ public sealed class TestResolverTests
     /// A view that only names a test prints the prefix <c>--test</c> would give it as a candidate.
     /// </summary>
     [Fact]
-    public void ShortFingerprintsInAnAssemblyAreTheOnesItsCandidatesCarry()
+    public void AShortFingerprintIsTheOneItsCandidateCarries()
     {
         IReadOnlyList<TestSession> store = Store(Session(
             0,
@@ -233,12 +233,18 @@ public sealed class TestResolverTests
             Test("Ns.Auth.SignsIn(\"b\")", "login:9c0d22"),
             Test("Ns.Auth.SignsOut", "login:3f2a11", Other)));
 
-        IReadOnlyDictionary<string, string> shortFingerprints = TestResolver.ShortFingerprintsIn(store, Assembly);
         TestResolution resolution = TestResolver.Resolve(store, "SignsIn", Assembly);
 
-        Assert.Equal(2, shortFingerprints.Count);
         foreach (TestMatch candidate in resolution.Candidates)
-            Assert.Equal(candidate.ShortFingerprint, shortFingerprints[candidate.Fingerprint]);
+            Assert.Equal(candidate.ShortFingerprint, TestResolver.ShortFingerprintOf(store, Assembly, candidate.Fingerprint));
+    }
+
+    [Fact]
+    public void ATestThatDidNotRunInTheAssemblyHasNoShortFingerprint()
+    {
+        IReadOnlyList<TestSession> store = Store(Session(0, Test("Ns.Auth.SignsOut", "login:3f2a11", Other)));
+
+        Assert.Null(TestResolver.ShortFingerprintOf(store, Assembly, "login:3f2a11"));
     }
 
     [Fact]

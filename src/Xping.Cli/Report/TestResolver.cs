@@ -174,26 +174,29 @@ internal static class TestResolver
     }
 
     /// <summary>
-    /// Works out the short fingerprint of every test one assembly ran in sessions already read.
+    /// Works out one test's short fingerprint over sessions already read.
     /// </summary>
     /// <param name="sessions">The assembly's whole-store read, newest first.</param>
     /// <param name="assembly">The assembly.</param>
-    /// <returns>Each fingerprint's short fingerprint, keyed by the full one.</returns>
+    /// <param name="fingerprint">The test's full fingerprint.</param>
+    /// <returns>Its short fingerprint, or <see langword="null"/> when it did not run in the read.</returns>
     /// <remarks>
-    /// The prefixes <see cref="Resolve(IReadOnlyList{TestSession}, string, string?)"/> gives its
-    /// candidates, over the same read, so a command printed from any other view names the test the
-    /// way <c>--test</c> resolves it.
+    /// The prefix <see cref="Resolve(IReadOnlyList{TestSession}, string, string?)"/> gives the same
+    /// test as a candidate over the same read, so a command printed from any other view names the
+    /// test the way <c>--test</c> resolves it. Only the one entry is worked out: each costs a name
+    /// match over the whole assembly.
     /// </remarks>
-    public static IReadOnlyDictionary<string, string> ShortFingerprintsIn(
-        IReadOnlyList<TestSession> sessions, string assembly)
+    public static string? ShortFingerprintOf(
+        IReadOnlyList<TestSession> sessions, string assembly, string fingerprint)
     {
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(fingerprint);
 
         List<Entry> entries = Index(sessions, assembly);
-        var siblings = new ShortFingerprints(entries);
+        Entry? entry = entries.Find(e => string.Equals(e.Fingerprint, fingerprint, StringComparison.Ordinal));
 
-        return entries.ToDictionary(e => e.Fingerprint, siblings.For, StringComparer.Ordinal);
+        return entry == null ? null : new ShortFingerprints(entries).For(entry);
     }
 
     /// <summary>

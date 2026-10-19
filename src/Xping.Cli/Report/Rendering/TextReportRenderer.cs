@@ -198,7 +198,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         builder.AppendLine(Fence);
 
         WriteLegend(builder, envelope);
-        bool truncated = envelope.Test != null ? WriteHistoryFooter(builder, envelope) : WriteFooter(builder, envelope);
+        bool truncated = envelope.Test is { } test ? WriteHistoryFooter(builder, envelope, test) : WriteFooter(builder, envelope);
 
         if (envelope.Selection == null && detailCommand)
             WriteDetailCommand(builder, envelope, truncated);
@@ -598,7 +598,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     }
 
     /// <summary>
-    /// Formats a range of durations, writing a unit both ends share once: <c>11-13ms</c>.
+    /// Formats a range of durations, writing a unit both ends share once: <c>11-13ms</c>, or one
+    /// value when both ends read the same.
     /// </summary>
     /// <remarks>
     /// Only a single-unit value folds. <c>1m 5s</c> carries two units, and <c>1m 5-2m</c> would read
@@ -608,6 +609,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     {
         string min = DurationFormatter.Format(minMs);
         string max = DurationFormatter.Format(maxMs);
+
+        // Every run took the same time, or there was one: "12-12ms" would read as a typo.
+        if (string.Equals(min, max, StringComparison.Ordinal))
+            return min;
 
         string unit = Unit(min);
 
@@ -806,9 +811,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// Writes the line under a history that says how many findings are about the test, and how to
     /// see every finding.
     /// </summary>
-    /// <returns>Always <see langword="true"/>: the line is the way back to the full report.</returns>
-    private bool WriteHistoryFooter(StringBuilder builder, ReportEnvelope envelope)
+    /// <returns>Whether the line was written.</returns>
+    /// <remarks>
+    /// Written for every resolved test, as the way back to the full report. Not for a name that
+    /// resolved to none: there is no test for it to count findings about.
+    /// </remarks>
+    private bool WriteHistoryFooter(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history)
     {
+        if (history.Test == null)
+            return false;
+
         int count = envelope.Findings.Count;
         string about = count == 0 ? "no findings" : FindingCount(count);
 

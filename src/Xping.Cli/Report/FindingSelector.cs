@@ -125,13 +125,20 @@ internal static class FindingSelector
 
         // Last, and only when no finding's subject matched: a test with no finding has no id on
         // screen, but an id computed for it — read off an older report, or a script — still names
-        // it, and its history is where the reader goes next (D11).
+        // it, and its history is where the reader goes next (D11). A test inside a reported cluster
+        // is not one of those: the cluster is about it, so that is where the claim went.
         foreach (string fingerprint in tested ?? [])
         {
             foreach (FindingKind kind in Enum.GetValues<FindingKind>())
             {
-                if (string.Equals(FindingId.Compute(kind, fingerprint), requested, StringComparison.Ordinal))
-                    return new FindingSelection(requested, Finding: null, Row: null, kind, SameSubject: [], fingerprint);
+                if (!string.Equals(FindingId.Compute(kind, fingerprint), requested, StringComparison.Ordinal))
+                    continue;
+
+                List<(Finding Finding, int Row)> about = About(ordered, other => FindingOrder.IsAbout(other, fingerprint));
+
+                return about.Count > 0
+                    ? new FindingSelection(requested, Finding: null, Row: null, kind, about)
+                    : new FindingSelection(requested, Finding: null, Row: null, kind, SameSubject: [], fingerprint);
             }
         }
 

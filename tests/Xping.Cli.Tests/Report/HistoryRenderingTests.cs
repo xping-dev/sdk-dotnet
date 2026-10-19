@@ -71,6 +71,7 @@ public sealed class HistoryRenderingTests
 
     [Theory]
     [InlineData(11, 13, "11-13ms")]
+    [InlineData(12, 12, "12ms")]
     [InlineData(1200, 3000, "1.2-3s")]
     [InlineData(900, 1200, "900ms-1.2s")]
     [InlineData(65_000, 120_000, "1m 5s-2m")]
@@ -243,7 +244,10 @@ public sealed class HistoryRenderingTests
     {
         ReportEnvelope envelope = Envelope() with { Test = TestHistoryBuilder.NotFound("Ad") };
 
-        Assert.Equal(["'Ad' names no one test in this window."], Fenced(Render(envelope)));
+        string report = Render(envelope);
+
+        Assert.Equal(["'Ad' names no one test in this window."], Fenced(report));
+        Assert.DoesNotContain("about this test", report, StringComparison.Ordinal);
     }
 
     private static TestSessionDto Ran(int index, TestOutcome outcome = TestOutcome.Passed, int attempt = 1) =>

@@ -250,12 +250,35 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         Assert.Equal(ExitCodes.NotFound, code);
         Assert.Empty(output);
-        Assert.StartsWith(
-            $"Finding {id} (flaky) is not reported in this window (MyApp.Tests, 8 runs). " +
-            "Its test has no findings in this window: xping report --test ",
-            error,
-            StringComparison.Ordinal);
-        Assert.EndsWith(" --assembly MyApp.Tests" + Environment.NewLine, error, StringComparison.Ordinal);
+
+        string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal($"Finding {id} (flaky) is not reported in this window (MyApp.Tests, 8 runs).", lines[0]);
+        Assert.StartsWith("Its test has no findings in this window: xping report --test ", lines[1], StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests", lines[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The history command ends its line even when the message names other assemblies, so copying it
+    /// copies nothing else.
+    /// </summary>
+    [Fact]
+    public void TheHistoryCommandOfAHealthyTestEndsItsLineBesideOtherAssemblies()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        string fingerprint = Json("--test", "Stable0")
+            .GetProperty("test").GetProperty("test").GetProperty("fingerprint").GetString()!;
+        string id = FindingId.Compute(FindingKind.Flaky, fingerprint);
+
+        var (code, _, error) = Run("--id", id, "--assembly", "MyApp.Tests");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+
+        string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.EndsWith("1 other assembly in this store (use --assembly to switch).", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests", lines[1], StringComparison.Ordinal);
     }
 
     /// <summary>

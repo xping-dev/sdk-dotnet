@@ -488,7 +488,8 @@ internal static class ReportFixtures
             ordered[0].Id,
 
             // The fixture's window is its whole store, which is what the command reads them over.
-            shortFingerprints: TestResolver.ShortFingerprintsIn(context.Window.Sessions, context.Revision!.Assembly!));
+            shortFingerprint: fingerprint =>
+                TestResolver.ShortFingerprintOf(context.Window.Sessions, context.Revision!.Assembly!, fingerprint));
     }
 
     /// <summary>

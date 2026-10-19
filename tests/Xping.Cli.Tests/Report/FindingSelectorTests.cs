@@ -182,6 +182,22 @@ public sealed class FindingSelectorTests
         Assert.Null(selection.Test);
     }
 
+    /// <summary>
+    /// A test inside a reported cluster has a finding about it: the cluster, not a history with none.
+    /// </summary>
+    [Fact]
+    public void AnIdOfAClusterMemberNamesTheCluster()
+    {
+        Finding cluster = Group(FindingKind.BrokenFixture, "sig_1", "fp-Beta", "fp-Gamma");
+        string member = FindingId.Compute(FindingKind.Flaky, "fp-Beta");
+
+        FindingSelection selection = FindingSelector.Select([cluster], member, ["fp-Beta", "fp-Gamma"]);
+
+        Assert.Equal(FindingKind.Flaky, selection.Kind);
+        Assert.Equal(cluster, Assert.Single(selection.SameSubject).Finding);
+        Assert.Null(selection.Test);
+    }
+
     [Fact]
     public void AReportedFindingNamesItsTestAndAClusterNone()
     {

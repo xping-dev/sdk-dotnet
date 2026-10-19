@@ -83,7 +83,9 @@ internal sealed class ReportCommand(
             resolved,
             assembly,
             assemblyGiven: options.Assembly != null,
-            shortFingerprints: options.Id != null && assembly != null ? ShortFingerprints(source, assembly) : null);
+            shortFingerprint: options.Id != null && assembly != null
+                ? fingerprint => ShortFingerprintOf(source, assembly, fingerprint)
+                : null);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -268,17 +270,17 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
-    /// Works out the short fingerprint of every test the assembly ran, for <c>--id</c>'s history
-    /// command.
+    /// Works out one test's short fingerprint, for <c>--id</c>'s history command.
     /// </summary>
     /// <remarks>
     /// Over the whole store and not the report's window, because that is what <c>--test</c> resolves
     /// the printed prefix over: one unique among the window's tests could match an older test too.
+    /// Read only when the selection is about one test, so any other <c>--id</c> pays nothing.
     /// </remarks>
-    private IReadOnlyDictionary<string, string>? ShortFingerprints(LocalSessionSource source, string assembly) =>
+    private string? ShortFingerprintOf(LocalSessionSource source, string assembly, string fingerprint) =>
         windowResolver.Resolve(source, new WindowRequest(Runs: null, Since: null, assembly, WholeStore: true)).Window
             is { } store
-            ? TestResolver.ShortFingerprintsIn(store.Sessions, assembly)
+            ? TestResolver.ShortFingerprintOf(store.Sessions, assembly, fingerprint)
             : null;
 
     /// <summary>
@@ -299,9 +301,9 @@ internal sealed class ReportCommand(
     /// Builds what <c>--test</c> resolved to over the window, or <see langword="null"/> when the
     /// command is not <c>--test</c>.
     /// </param>
-    /// <param name="shortFingerprints">
-    /// Every test's short fingerprint over the assembly's whole store, for <c>--id</c>'s history
-    /// command; <see langword="null"/> otherwise.
+    /// <param name="shortFingerprint">
+    /// Works out a test's short fingerprint over the assembly's whole store, for <c>--id</c>'s
+    /// history command; <see langword="null"/> otherwise.
     /// </param>
     /// <returns>The envelope, and the analysis behind it.</returns>
     /// <remarks>
@@ -314,7 +316,7 @@ internal sealed class ReportCommand(
         string? assembly,
         bool assemblyGiven,
         Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null,
-        IReadOnlyDictionary<string, string>? shortFingerprints = null)
+        Func<string, string?>? shortFingerprint = null)
     {
         AnalysisWindow window = resolved.Window
             ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
@@ -367,7 +369,7 @@ internal sealed class ReportCommand(
             options.Id,
             scope,
             history?.Invoke(context, scope),
-            shortFingerprints);
+            shortFingerprint);
 
         return (envelope, analysis);
     }
@@ -679,11 +681,6 @@ internal sealed class ReportCommand(
                        $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
                    .Append('.');
         }
-        else if (selection.History is { } history)
-        {
-            message.Append(" Its test has no findings in this window: ").Append(history);
-        }
-
         int others = OtherAssemblies(source, assembly);
 
         if (others > 0)
@@ -695,6 +692,11 @@ internal sealed class ReportCommand(
         }
 
         io.Error.WriteLine(message.ToString());
+
+        // A line of its own, ending on the command: anything after it would be copied with it and
+        // run as arguments.
+        if (selection.SameSubject.Count == 0 && selection.History is { } history)
+            io.Error.WriteLine($"Its test has no findings in this window: {history}");
     }
 
     /// <summary>
