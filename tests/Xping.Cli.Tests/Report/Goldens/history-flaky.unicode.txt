@@ -1,5 +1,6 @@
 Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
 16 tests · 10 healthy · 6 flagged
+⚠ 14 of 20 runs covered part of the suite
 
 ```
 TEST                                                         fp 3a597eb2

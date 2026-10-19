@@ -521,6 +521,9 @@ internal static class ReportFixtures
 
     private const string HistorySha = "c670fc3a91";
 
+    /// <summary>The suite every hand-built history belongs to: §3.1's sixteen tests.</summary>
+    private const int HistoryTests = 16;
+
     /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
     private static ReportScope HistoryScope(string? assembly, int runs) =>
         new(assembly, WindowResolution.Store, runs, AssemblyGiven: true);
@@ -537,7 +540,7 @@ internal static class ReportFixtures
 
         TestSessionDto[] sessions =
         [
-            .. Enumerable.Range(0, 14).Select(i => HistoryAbsent(newest.AddMinutes(-7 * i), partial: true)),
+            .. Enumerable.Range(0, 14).Select(i => HistoryAbsent(newest.AddMinutes(-7 * i))),
             .. new (int Hour, int Minute, long Ms)[] { (15, 35, 12), (15, 34, 11), (14, 2, 13), (14, 2, 11), (13, 20, 12), (13, 19, 12) }
                 .Select(r => HistoryRan(
                     day.AddHours(r.Hour).AddMinutes(r.Minute), TestOutcome.Failed, TestOutcome.Passed, 2, r.Ms))
@@ -555,7 +558,7 @@ internal static class ReportFixtures
 
         return History(
             name, "3a597eb2c0ffee11", "tests/SampleApp.MSTest/CalculatorTests.cs", 42,
-            sessions, findings, [1, 2], tests: 16, flagged: 6);
+            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
     }
 
     /// <summary>
@@ -574,7 +577,7 @@ internal static class ReportFixtures
 
         return History(
             "SampleApp.MSTest.CalculatorTests.Add_ReturnsSum", "91c0de4417aa", "tests/SampleApp.MSTest/CalculatorTests.cs", 18,
-            sessions, [], [], tests: 16, flagged: 6);
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
     }
 
     /// <summary>
@@ -612,7 +615,7 @@ internal static class ReportFixtures
 
         return History(
             name, "b07e5c2d9f31", "tests/SampleApp.MSTest/GatewayTests.cs", 57,
-            sessions, findings, [2], tests: 16, flagged: 3);
+            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0));
     }
 
     /// <summary>
@@ -621,18 +624,25 @@ internal static class ReportFixtures
     private static ReportEnvelope HistoryNoSha()
     {
         var newest = new DateTime(2026, 8, 21, 6, 0, 0, DateTimeKind.Utc);
-        long[] durations = [120, 118, 131, 0, 125, 119];
+        (TestOutcome Outcome, long Ms)[] runs =
+        [
+            (TestOutcome.Passed, 120),
+            (TestOutcome.Passed, 118),
+            (TestOutcome.Passed, 131),
+            (TestOutcome.Failed, 140),
+            (TestOutcome.Passed, 125),
+            (TestOutcome.Passed, 119)
+        ];
 
         TestSessionDto[] sessions =
         [
-            .. durations.Select((ms, i) => (ms == 0
-                ? HistoryRan(newest.AddHours(-6 * i), TestOutcome.Failed, TestOutcome.Failed, 1, 140)
-                : HistoryRan(newest.AddHours(-6 * i), TestOutcome.Passed, TestOutcome.Passed, 1, ms)) with { Sha = null })
+            .. runs.Select((r, i) =>
+                HistoryRan(newest.AddHours(-6 * i), r.Outcome, r.Outcome, 1, r.Ms) with { Sha = null })
         ];
 
         return History(
             "SampleApp.MSTest.InvoiceTests.Total_IncludesTax", "5d02e8a1c4b7", "tests/SampleApp.MSTest/InvoiceTests.cs", 31,
-            sessions, [], [], tests: 16, flagged: 6, sha: null, branch: null);
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null);
     }
 
     /// <summary>
@@ -668,7 +678,7 @@ internal static class ReportFixtures
 
         return History(
             name, "e4a90c1f3b28", "tests/SampleApp.MSTest/FixtureTests.cs", 19,
-            sessions, findings, [3, 1], tests: 16, flagged: 5);
+            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0));
     }
 
     /// <summary>
@@ -742,8 +752,16 @@ internal static class ReportFixtures
     /// Builds a history envelope around sessions given newest first.
     /// </summary>
     /// <remarks>
-    /// The counts and the duration line are derived from the rows by D9's rules, so a fixture cannot
-    /// pin a summary its own timeline contradicts.
+    /// <para>
+    /// The counts, the duration line and the partial-run caveat are derived from the rows by D9's
+    /// rules, so a fixture cannot pin a summary its own timeline contradicts. Session ids follow the
+    /// rows' positions, oldest first, as the store's would.
+    /// </para>
+    /// <para>
+    /// <paramref name="produced"/> is every finding over the window, by severity, of which
+    /// <paramref name="findings"/> are the ones about this test: the header and the footer's
+    /// <c>--all</c> describe the whole report, the block only its rows.
+    /// </para>
     /// </remarks>
     private static ReportEnvelope History(
         string name,
@@ -753,14 +771,20 @@ internal static class ReportFixtures
         TestSessionDto[] sessions,
         FindingDto[] findings,
         int[] rows,
-        int tests,
         int flagged,
+        SeverityCountsDto produced,
         string? sha = HistorySha,
         string? branch = "main")
     {
         var subject = new SubjectDto(
             "test", fingerprint, name, name, SubjectNames.ShortName(name, name), null,
             sourceFile, line, HistoryAssembly, null, null, null);
+
+        sessions =
+        [
+            .. sessions.Select((session, i) =>
+                session with { SessionId = TestSessionFactory.SessionIdFor(sessions.Length - 1 - i) })
+        ];
 
         TestSessionDto[] ran = [.. sessions.Where(s => s.Appeared)];
         List<double> timed =
@@ -786,7 +810,7 @@ internal static class ReportFixtures
                 (long)Math.Round(Quantile.Interpolated(timed, 0.95), MidpointRounding.AwayFromZero),
                 (long)timed[0],
                 (long)timed[^1],
-                0,
+                FindingOrder.Round(RobustDispersion.Of(timed)),
                 timed.Count);
 
         FindingDto[] about =
@@ -806,7 +830,7 @@ internal static class ReportFixtures
             []);
 
         ReportEnvelope envelope = Envelope(about);
-        int produced = Math.Max(rows.DefaultIfEmpty(0).Max(), flagged);
+        int total = produced.High + produced.Medium + produced.Low;
 
         return envelope with
         {
@@ -814,33 +838,31 @@ internal static class ReportFixtures
             Context = new ContextDto(sha, branch, HistoryAssembly),
             Summary = envelope.Summary with
             {
-                Tests = tests,
-                Findings = produced,
+                Tests = HistoryTests,
+                Findings = total,
+                Counts = produced,
                 Flagged = flagged,
-                Healthy = tests - flagged
+                Healthy = HistoryTests - flagged,
+                PartialSessions = sessions.Count(s => s.Partial)
             },
             Test = history,
             Truncated = new TruncationDto(
-                about.Length, produced, DrillDown.ForFullReport(HistoryScope(HistoryAssembly, sessions.Length)))
+                about.Length, total, DrillDown.ForFullReport(HistoryScope(HistoryAssembly, sessions.Length)))
         };
     }
 
-    private static TestSessionDto HistoryRan(DateTime at, TestOutcome first, TestOutcome deciding, int attempt, long ms)
-    {
-        TestAttemptDto[] attempts = attempt == 1
-            ? [new TestAttemptDto(1, deciding, ms)]
-            : [new TestAttemptDto(1, first, ms), new TestAttemptDto(attempt, deciding, ms)];
+    // Every attempt before the deciding one ended as the first did: a retry chain has no gaps, and
+    // the row only reads the first attempt and the deciding one. The id is set by History.
+    private static TestSessionDto HistoryRan(DateTime at, TestOutcome first, TestOutcome deciding, int attempt, long ms) =>
+        new(
+            Guid.Empty, at, HistorySha, Appeared: true, Partial: false, deciding, attempt, ms,
+            [
+                .. Enumerable.Range(1, attempt).Select(n => new TestAttemptDto(n, n == attempt ? deciding : first, ms))
+            ]);
 
-        return new TestSessionDto(
-            SessionIdOf(at), at, HistorySha, Appeared: true, Partial: false, deciding, attempt, ms, attempts);
-    }
-
-    private static TestSessionDto HistoryAbsent(DateTime at, bool partial) =>
-        new(SessionIdOf(at), at, HistorySha, Appeared: false, partial, null, null, null, []);
-
-    // Stable across runs, so the JSON of a history fixture would not move; the text never shows it.
-    private static Guid SessionIdOf(DateTime at) =>
-        new(at.Ticks.ToString("x32", CultureInfo.InvariantCulture));
+    // Absent because the run was filtered, the case D8's partial count exists for.
+    private static TestSessionDto HistoryAbsent(DateTime at) =>
+        new(Guid.Empty, at, HistorySha, Appeared: false, Partial: true, null, null, null, []);
 
     /// <summary>
     /// The row the latest-run spec's §3.1 opens with: a test that had always passed.
