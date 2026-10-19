@@ -154,6 +154,24 @@ public sealed class DetailRenderingTests
     {
         ReportEnvelope full = Get(fixture);
 
+        // A history is already a selection, and --id beside --test is refused: its findings are a
+        // filtered list, so selecting a row of it would claim a row the full report never gave it.
+        // The view itself is what a reader pastes, in both glyph sets.
+        if (full.Test != null)
+        {
+            foreach (ReportGlyphs glyphs in new[] { ReportGlyphs.Ascii, ReportGlyphs.Unicode })
+            {
+                foreach (string line in Fenced(Render(full, Drawn(glyphs, color: false))))
+                {
+                    Assert.True(
+                        line.Length <= FenceWidth || IsOneUnbreakableToken(line),
+                        $"{fixture}: '{line}' is {line.Length} columns and could have been broken");
+                }
+            }
+
+            return;
+        }
+
         for (int row = 1; row <= full.Findings.Count; row++)
         {
             foreach (string line in Fenced(Render(Detail(full, row))))

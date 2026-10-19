@@ -1,0 +1,42 @@
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
+
+```
+TEST                                                         fp 3a597eb2
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:42
+
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
+FINDINGS                                                      2 findings
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
+    evidence low | -env-cluster | f_8f042eab | .../CalculatorTests.cs:42
+
+2.  MED   masked by retry
+    passed on retry 6 times in 6 of 20 runs, up to attempt 2
+    evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
+Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20

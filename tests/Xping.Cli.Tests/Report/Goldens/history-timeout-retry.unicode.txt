@@ -1,0 +1,40 @@
+Xping · SampleApp.MSTest · 8 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 13 healthy · 3 flagged
+
+```
+TEST                                                         fp b07e5c2d
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.GatewayTests.
+            Charge_CompletesWithinTheBudget
+    source  tests/SampleApp.MSTest/GatewayTests.cs:57
+
+ran in 8 of 8 runs: 3 passed, 1 passed on retry, 4 failed
+duration p50 3s · p95 5s · range 780ms-5s
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-21 17:40  ✗     timeout @2          5s  c670fc3
+  08-21 14:40  ✓                      840ms  c670fc3
+  08-21 11:40  ✗     timeout @2          5s  c670fc3
+  08-21 08:40  ✗→✓   attempt 2        910ms  c670fc3
+  08-21 05:40  ✗     timeout             5s  c670fc3
+  08-21 02:40  ✓                      780ms  c670fc3
+  08-20 23:40  ✗     timeout @3          5s  c670fc3
+  08-20 20:40  ✓                      805ms  c670fc3
+
+FINDINGS                                                       1 finding
+────────────────────────────────────────────────────────────────────────
+
+2.  HIGH  timing out
+    timed out 4 of 8 runs (50%), killed at its 5s limit
+    evidence moderate | -env-cluster | f_6e1d0b7a | ...atewayTests.cs:57
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+1 finding about this test · all: xping report --all --assembly SampleApp.MSTest --runs 8
+Detail of row 2: xping report --id f_6e1d0b7a --assembly SampleApp.MSTest --runs 8
