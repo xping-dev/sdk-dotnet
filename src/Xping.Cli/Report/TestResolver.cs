@@ -174,6 +174,32 @@ internal static class TestResolver
     }
 
     /// <summary>
+    /// Works out one test's short fingerprint over sessions already read.
+    /// </summary>
+    /// <param name="sessions">The assembly's whole-store read, newest first.</param>
+    /// <param name="assembly">The assembly.</param>
+    /// <param name="fingerprint">The test's full fingerprint.</param>
+    /// <returns>Its short fingerprint, or <see langword="null"/> when it did not run in the read.</returns>
+    /// <remarks>
+    /// The prefix <see cref="Resolve(IReadOnlyList{TestSession}, string, string?)"/> gives the same
+    /// test as a candidate over the same read, so a command printed from any other view names the
+    /// test the way <c>--test</c> resolves it. Only the one entry is worked out: each costs a name
+    /// match over the whole assembly.
+    /// </remarks>
+    public static string? ShortFingerprintOf(
+        IReadOnlyList<TestSession> sessions, string assembly, string fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(fingerprint);
+
+        List<Entry> entries = Index(sessions, assembly);
+        Entry? entry = entries.Find(e => string.Equals(e.Fingerprint, fingerprint, StringComparison.Ordinal));
+
+        return entry == null ? null : new ShortFingerprints(entries).For(entry);
+    }
+
+    /// <summary>
     /// Returns whether a window holds any run of a matched test.
     /// </summary>
     /// <param name="match">The test.</param>

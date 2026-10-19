@@ -94,6 +94,23 @@ public sealed class DetailRenderingTests
         Assert.DoesNotContain(fenced, l => l.Contains("Also about", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The history command follows the way back, below the fence, where a command is never cut.
+    /// </summary>
+    [Fact]
+    public void ASingleTestEndsWithItsHistoryCommandBelowTheFence()
+    {
+        ReportEnvelope detail = Detail(Get("spec-section-3"), 5);
+        string[] lines = Lines(Render(detail));
+
+        Assert.Equal("History: " + detail.Selection!.History, lines[^2]);
+        Assert.DoesNotContain(Fenced(Render(detail)), l => l.Contains("History:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AClusterHasNoHistoryCommand() =>
+        Assert.DoesNotContain("History:", Render(Detail(Get("spec-section-3"), 3)), StringComparison.Ordinal);
+
     [Fact]
     public void AFortyMemberClusterPrintsFortyMembersWithTheirLocations()
     {
@@ -245,7 +262,7 @@ public sealed class DetailRenderingTests
         ReportEnvelope full = Get("spec-section-3");
         ReportEnvelope absent = full with
         {
-            Selection = new SelectionDto("f_00000000", false, null, null, []),
+            Selection = new SelectionDto("f_00000000", false, null, null, [], null),
             Findings = [],
             Truncated = full.Truncated with { Shown = 0 }
         };

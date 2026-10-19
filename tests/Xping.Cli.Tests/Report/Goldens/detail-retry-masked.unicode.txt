@@ -30,3 +30,4 @@ counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 Showing 1 of 1 finding · all: xping report --all
+History: xping report --test fp-MyApp --assembly MyApp.Tests

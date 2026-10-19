@@ -52,6 +52,11 @@ internal static class EnvelopeBuilder
     /// ones about that test; when it does not, none. Everything else is built exactly as the full
     /// report builds it.
     /// </param>
+    /// <param name="shortFingerprint">
+    /// Works out the short fingerprint the selection's history command names its test by, from the
+    /// full one. Called at most once, and only when the selection is about one test;
+    /// <see langword="null"/> leaves that command out.
+    /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
         AnalysisContext context,
@@ -63,7 +68,8 @@ internal static class EnvelopeBuilder
         LatestRunAnalysis? latestRun,
         string? id = null,
         ReportScope? scope = null,
-        TestHistoryDto? test = null)
+        TestHistoryDto? test = null,
+        Func<string, string?>? shortFingerprint = null)
     {
         if (id != null && test != null)
             throw new ArgumentException("--id and --test are mutually exclusive.", nameof(test));
@@ -78,7 +84,7 @@ internal static class EnvelopeBuilder
 
         // Over this list and no other, so the row a selection reports is the row this envelope
         // numbers, and cannot come from an ordering computed somewhere else.
-        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id);
+        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id, context.Tests.Fingerprints);
 
         // Numbered over the same list, for the same reason: the row --test reports for a finding is
         // the row the full report and --id give it.
@@ -148,7 +154,7 @@ internal static class EnvelopeBuilder
                 skewedSessions,
                 result.FailedProviders),
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
-            selection == null ? null : BuildSelection(selection),
+            selection == null ? null : BuildSelection(selection, History(selection, shortFingerprint, scope)),
             test,
             [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
@@ -253,13 +259,28 @@ internal static class EnvelopeBuilder
             CultureInfo.InvariantCulture,
             $"too little history to judge: findings need {LocalAnalysisConstants.MinimumSessionsPerTestToReport} runs, this test has {ran}");
 
-    private static SelectionDto BuildSelection(FindingSelection selection) =>
+    private static SelectionDto BuildSelection(FindingSelection selection, string? history) =>
         new(
             selection.Id,
             selection.Finding != null,
             selection.Kind?.ToString(),
             selection.Row,
-            [.. selection.SameSubject.Select(same => new SameSubjectDto(same.Finding.Id, same.Finding.Kind.ToString(), same.Row))]);
+            [.. selection.SameSubject.Select(same => new SameSubjectDto(same.Finding.Id, same.Finding.Kind.ToString(), same.Row))],
+            history);
+
+    /// <summary>
+    /// Builds the command that shows the history of the test a selection is about (D11).
+    /// </summary>
+    /// <remarks>
+    /// Left out rather than guessed when the test has no short fingerprint: a full fingerprint would
+    /// still resolve, but a prefix computed over anything but the assembly's whole store might name
+    /// a different test once <c>--test</c> reads it.
+    /// </remarks>
+    private static string? History(
+        FindingSelection selection, Func<string, string?>? shortFingerprint, ReportScope scope) =>
+        selection.Test is { } test && shortFingerprint?.Invoke(test) is { } prefix
+            ? DrillDown.ForTest(prefix, scope)
+            : null;
 
     private static LatestRunFailureDto BuildLatestRunFailure(LatestRunFailure failure) =>
         new(

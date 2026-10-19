@@ -7,6 +7,8 @@ using System.Globalization;
 using System.Text;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Shared;
 
 namespace Xping.Cli.Report.Rendering;
 
@@ -124,6 +126,53 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
     private const int PairGap = 2;
 
+    // The history view's three sections, and what the runs heading says about their order.
+    private const string TestLabel = "TEST";
+
+    private const string RunsLabel = "RUNS";
+
+    private const string RunsNote = "newest first";
+
+    private const string FindingsLabel = "FINDINGS";
+
+    // A history row's columns (D7), in display columns. The gaps between them are two wide. The
+    // detail column holds "inconcl. @99"; a longer value, or a duration past eight, widens its own
+    // row only, and the fence still has eleven columns spare.
+    private const int RunIndent = 2;
+
+    private const int RunGap = 2;
+
+    private const int RunWhenWidth = 11;
+
+    private const int RunOutcomeWidth = 4;
+
+    private const int RunDetailWidth = 12;
+
+    private const int RunDurationWidth = 8;
+
+    private const int ShaWidth = 7;
+
+    // Where the outcome column starts, which is where an absence line puts its rule glyph.
+    private const int RunOutcomeColumn = RunIndent + RunWhenWidth + RunGap;
+
+    /// <summary>
+    /// Which view a finding's row is written for.
+    /// </summary>
+    private enum RowView
+    {
+        /// <summary>The full report's list.</summary>
+        List,
+
+        /// <summary>The detail view, which lists every member of a cluster with its location.</summary>
+        Detail,
+
+        /// <summary>
+        /// The history view, whose subject is the test: a finding about it alone drops the name line
+        /// and the sibling annotation, because every sibling is on screen.
+        /// </summary>
+        History
+    }
+
     /// <inheritdoc/>
     public void Render(ReportEnvelope envelope, TextWriter output)
     {
@@ -141,16 +190,24 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         if (envelope.Selection is { } selection)
             WriteDetail(builder, envelope, selection);
+        else if (envelope.Test is { } history)
+            WriteHistory(builder, envelope, history);
         else
             WriteFindings(builder, envelope);
 
         builder.AppendLine(Fence);
 
         WriteLegend(builder, envelope);
-        bool truncated = WriteFooter(builder, envelope);
+        bool truncated = envelope.Test is { } test ? WriteHistoryFooter(builder, envelope, test) : WriteFooter(builder, envelope);
 
         if (envelope.Selection == null && detailCommand)
             WriteDetailCommand(builder, envelope, truncated);
+
+        // Below the fence with the other commands, never wrapped inside it: a long assembly or
+        // --directory would break it across lines, and a command cut to fit does not run
+        // (Amendment 6B).
+        if (envelope.Selection?.History is { } command)
+            builder.AppendLine(capabilities.Dim("History: " + command));
 
         output.Write(builder.ToString());
     }
@@ -429,7 +486,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             $"row {row.ToString(CultureInfo.InvariantCulture)} of " +
             envelope.Summary.Findings.ToString(CultureInfo.InvariantCulture));
 
-        WriteFinding(builder, finding, row, detail: true);
+        WriteFinding(builder, finding, row, RowView.Detail);
 
         SubjectDto subject = finding.Subject;
 
@@ -464,6 +521,319 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     }
 
     /// <summary>
+    /// Writes one test's history: who it is, how its runs ended, each run, and its findings.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The report, holding the findings about this test alone.</param>
+    /// <param name="history">What <c>--test</c> resolved to.</param>
+    /// <remarks>
+    /// <para>
+    /// Every run in the window is a row, uncapped (OQ-2). A truncated history would hide the run the
+    /// reader came for, and <c>--runs</c> is how they shorten it.
+    /// </para>
+    /// <para>
+    /// No latest-run section, for the reason the detail view gives: it is an account of the newest
+    /// run, and the reader asked about one test. Its newest run is the first row.
+    /// </para>
+    /// </remarks>
+    private void WriteHistory(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history)
+    {
+        // The command prints nothing on standard output for this, and says why on standard error.
+        // Rendered anyway, the envelope says so rather than drawing an empty history.
+        if (history.Test is not { } test || history.Counts is not { } counts)
+        {
+            builder.Append('\'').Append(history.Query).AppendLine("' names no one test in this window.");
+            return;
+        }
+
+        WriteHeading(
+            builder, TestLabel, history.ShortFingerprint is { Length: > 0 } fingerprint ? "fp " + fingerprint : string.Empty);
+
+        // No assembly pair: the header above the fence names it.
+        WritePairs(builder, [("test", test.FullyQualifiedName), ("source", Location(test))], separate: false);
+
+        builder.AppendLine();
+
+        foreach (string line in Wrap(RunCounts(counts), FenceWidth))
+            builder.AppendLine(line);
+
+        if (history.Duration is { } duration)
+        {
+            foreach (string line in Wrap(Durations(duration), FenceWidth))
+                builder.AppendLine(line);
+        }
+
+        builder.AppendLine();
+        WriteHeading(builder, RunsLabel, RunsNote);
+        WriteRuns(builder, history.Sessions);
+
+        builder.AppendLine();
+        WriteHistoryFindings(builder, envelope, history);
+    }
+
+    /// <summary>
+    /// Says how many runs the test appeared in and how each ended (D9).
+    /// </summary>
+    private static string RunCounts(TestRunCountsDto counts)
+    {
+        string line =
+            $"ran in {Count(counts.Ran)} of {Runs(counts.WindowRuns)}: {Count(counts.Passed)} passed, " +
+            $"{Count(counts.PassedOnRetry)} passed on retry, {Count(counts.Failed)} failed";
+
+        // Only when there is one: a skipped run is the exception, and "0 other" on every healthy
+        // test would ask the reader what other outcome there could have been.
+        return counts.Other > 0 ? $"{line}, {Count(counts.Other)} other" : line;
+    }
+
+    /// <summary>
+    /// Says how long the test's runs took, formatted as every duration in the report is.
+    /// </summary>
+    private string Durations(TestDurationDto duration)
+    {
+        string separator = $" {capabilities.Glyphs.Separator} ";
+
+        return $"duration p50 {DurationFormatter.Format(duration.P50Ms)}{separator}" +
+               $"p95 {DurationFormatter.Format(duration.P95Ms)}{separator}" +
+               $"range {Range(duration.MinMs, duration.MaxMs)}";
+    }
+
+    /// <summary>
+    /// Formats a range of durations, writing a unit both ends share once: <c>11-13ms</c>, or one
+    /// value when both ends read the same.
+    /// </summary>
+    /// <remarks>
+    /// Only a single-unit value folds. <c>1m 5s</c> carries two units, and <c>1m 5-2m</c> would read
+    /// as a range of seconds.
+    /// </remarks>
+    internal static string Range(long minMs, long maxMs)
+    {
+        string min = DurationFormatter.Format(minMs);
+        string max = DurationFormatter.Format(maxMs);
+
+        // Every run took the same time, or there was one: "12-12ms" would read as a typo.
+        if (string.Equals(min, max, StringComparison.Ordinal))
+            return min;
+
+        string unit = Unit(min);
+
+        return unit.Length > 0 && unit.Length < min.Length && string.Equals(unit, Unit(max), StringComparison.Ordinal)
+               && !min.Contains(' ', StringComparison.Ordinal) && !max.Contains(' ', StringComparison.Ordinal)
+            ? $"{min[..^unit.Length]}-{max}"
+            : $"{min}-{max}";
+
+        static string Unit(string value)
+        {
+            int start = value.Length;
+            while (start > 0 && char.IsAsciiLetter(value[start - 1]))
+                start--;
+
+            return value[start..];
+        }
+    }
+
+    /// <summary>
+    /// Writes one row per run the test appeared in, with each stretch of runs it was absent from
+    /// collapsed into one line in its place (D8).
+    /// </summary>
+    private void WriteRuns(StringBuilder builder, IReadOnlyList<TestSessionDto> sessions)
+    {
+        int absent = 0;
+        int partial = 0;
+
+        foreach (TestSessionDto session in sessions)
+        {
+            if (!session.Appeared)
+            {
+                absent++;
+                if (session.Partial)
+                    partial++;
+
+                continue;
+            }
+
+            WriteAbsence(builder, absent, partial);
+            absent = 0;
+            partial = 0;
+
+            WriteRun(builder, session);
+        }
+
+        WriteAbsence(builder, absent, partial);
+    }
+
+    /// <summary>
+    /// Writes the line that stands for a stretch of runs the test was absent from.
+    /// </summary>
+    /// <remarks>
+    /// The partial count is the point of the line. When it equals the run count, the test was not
+    /// deleted: the runs were filtered, which is the reading #140 needed and the report could not give.
+    /// </remarks>
+    private void WriteAbsence(StringBuilder builder, int absent, int partial)
+    {
+        if (absent == 0)
+            return;
+
+        builder.Append(' ', RunOutcomeColumn)
+               .Append(capabilities.Glyphs.HorizontalRule)
+               .Append(' ', RunOutcomeWidth - 1 + RunGap)
+               .Append("absent from ")
+               .Append(Runs(absent));
+
+        if (partial > 0)
+            builder.Append(", ").Append(Count(partial)).Append(" partial");
+
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Writes one run: when, how it ended, what that took, and at which commit (D7).
+    /// </summary>
+    /// <remarks>
+    /// Padded to fixed columns so the runs read down as a table. Glyphs are not coloured; the report
+    /// spends colour on severity alone (Amendment 1C). The partial tag is dim, and a row without one
+    /// ends on its last value rather than on padding.
+    /// </remarks>
+    private void WriteRun(StringBuilder builder, TestSessionDto session)
+    {
+        string duration = session.DurationMs is { } milliseconds ? DurationFormatter.Format(milliseconds) : string.Empty;
+        string sha = session.Sha is { Length: > ShaWidth } full ? full[..ShaWidth] : session.Sha ?? string.Empty;
+
+        var row = new StringBuilder()
+            .Append(' ', RunIndent)
+            .Append(Format(session.StartedAt, "MM-dd HH:mm"))
+            .Append(' ', RunGap)
+            .Append(Padded(RunOutcome(session), RunOutcomeWidth))
+            .Append(' ', RunGap)
+            .Append(Padded(RunDetail(session), RunDetailWidth))
+            .Append(' ', RunGap)
+            .Append(' ', Math.Max(0, RunDurationWidth - duration.Length))
+            .Append(duration)
+            .Append(' ', RunGap)
+            .Append(Padded(sha, ShaWidth))
+            .Append(' ', RunGap);
+
+        builder.AppendLine(session.Partial
+            ? row.Append(capabilities.Dim("partial")).ToString()
+            : row.ToString().TrimEnd());
+
+        static string Padded(string value, int width) => value.PadRight(width);
+    }
+
+    /// <summary>
+    /// Reads how a run ended as glyphs: the first attempt's, then the deciding attempt's when they
+    /// differ.
+    /// </summary>
+    /// <remarks>
+    /// By glyph, not by outcome: a timeout retried into a failure is a failure throughout, and
+    /// <c>✗→✗</c> would say something changed.
+    /// </remarks>
+    private string RunOutcome(TestSessionDto session)
+    {
+        string deciding = Glyph(session.Outcome);
+
+        if (session.Attempts is not [var first, ..])
+            return deciding;
+
+        string started = Glyph(first.Outcome);
+
+        return string.Equals(started, deciding, StringComparison.Ordinal)
+            ? deciding
+            : started + capabilities.Glyphs.Arrow + deciding;
+    }
+
+    /// <summary>
+    /// Reads an outcome as a glyph. A timeout is a failure, as the run counts count it.
+    /// </summary>
+    private string Glyph(TestOutcome? outcome) => outcome switch
+    {
+        TestOutcome.Passed => capabilities.Glyphs.Pass,
+        TestOutcome.Failed or TestOutcome.Timeout => capabilities.Glyphs.Fail,
+        _ => capabilities.Glyphs.Skip
+    };
+
+    /// <summary>
+    /// Reads what the glyphs leave out: the attempt that decided the run, and an outcome other than
+    /// passed or failed.
+    /// </summary>
+    private static string RunDetail(TestSessionDto session)
+    {
+        // Abbreviated so every word fits the column with an attempt beside it: "inconcl. @99".
+        string? word = session.Outcome switch
+        {
+            TestOutcome.Timeout => "timeout",
+            TestOutcome.Skipped => "skipped",
+            TestOutcome.NotExecuted => "not run",
+            TestOutcome.Inconclusive => "inconcl.",
+            _ => null
+        };
+
+        int attempt = session.DecidingAttempt ?? 1;
+
+        if (attempt <= 1)
+            return word ?? string.Empty;
+
+        return word == null ? $"attempt {Count(attempt)}" : $"{word} @{Count(attempt)}";
+    }
+
+    /// <summary>
+    /// Writes the findings about the test, each keeping the row the full report gives it (D10).
+    /// </summary>
+    /// <remarks>
+    /// An empty block says why it is empty. "too little history to judge" when the floors explain
+    /// it, because "no findings" would read as a clean bill the report never gave (D6).
+    /// </remarks>
+    private void WriteHistoryFindings(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history)
+    {
+        IReadOnlyList<FindingDto> findings = envelope.Findings;
+
+        WriteHeading(builder, FindingsLabel, findings.Count == 0 ? string.Empty : FindingCount(findings.Count));
+
+        if (findings.Count == 0)
+        {
+            foreach (string line in Wrap(history.FindingsWithheld ?? "no findings", FenceWidth))
+                builder.AppendLine(line);
+
+            return;
+        }
+
+        for (int index = 0; index < findings.Count; index++)
+        {
+            if (index > 0)
+                builder.AppendLine();
+
+            int row = index < history.FindingRows.Count ? history.FindingRows[index].Row : index + 1;
+
+            WriteFinding(builder, findings[index], row, RowView.History);
+        }
+    }
+
+    /// <summary>
+    /// Writes the line under a history that says how many findings are about the test, and how to
+    /// see every finding.
+    /// </summary>
+    /// <returns>Whether the line was written.</returns>
+    /// <remarks>
+    /// Written for every resolved test, as the way back to the full report. Not for a name that
+    /// resolved to none: there is no test for it to count findings about.
+    /// </remarks>
+    private bool WriteHistoryFooter(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history)
+    {
+        if (history.Test == null)
+            return false;
+
+        int count = envelope.Findings.Count;
+        string about = count == 0 ? "no findings" : FindingCount(count);
+
+        builder.AppendLine();
+        builder.AppendLine(capabilities.Dim(
+            $"{about} about this test {capabilities.Glyphs.Separator} all: {envelope.Truncated.Command}"));
+
+        return true;
+    }
+
+    private static string FindingCount(int count) => $"{Count(count)} {Plural(count, "finding")}";
+
+    /// <summary>
     /// Writes a block of labelled pairs, after a blank line, omitting any whose value is missing.
     /// </summary>
     /// <remarks>
@@ -472,7 +842,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// the remaining columns rather than being cut: this is the view a reader asked for in full, and
     /// <see cref="FitName"/> and <see cref="FitPath"/> exist to cut.
     /// </remarks>
-    private static void WritePairs(StringBuilder builder, IReadOnlyList<(string Label, string? Value)> pairs)
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="pairs">The pairs, in order.</param>
+    /// <param name="separate">
+    /// Whether to open with a blank line. Not directly under a heading, which already ends in one.
+    /// </param>
+    private static void WritePairs(
+        StringBuilder builder, IReadOnlyList<(string Label, string? Value)> pairs, bool separate = true)
     {
         List<(string Label, string Value)> present =
             [.. pairs.Where(pair => pair.Value is { Length: > 0 }).Select(pair => (pair.Label, pair.Value!))];
@@ -483,7 +859,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         int column = present.Max(pair => pair.Label.Length) + PairGap;
         int width = FenceWidth - PairIndent - column;
 
-        builder.AppendLine();
+        if (separate)
+            builder.AppendLine();
 
         foreach ((string label, string value) in present)
         {
@@ -609,9 +986,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private void WriteHeading(StringBuilder builder, string label, string annotation)
     {
-        builder.Append(label)
-               .Append(' ', Math.Max(1, FenceWidth - label.Length - annotation.Length))
-               .AppendLine(annotation);
+        builder.Append(label);
+
+        if (annotation.Length > 0)
+            builder.Append(' ', Math.Max(1, FenceWidth - label.Length - annotation.Length)).Append(annotation);
+
+        builder.AppendLine();
 
         builder.Append(capabilities.Glyphs.HorizontalRule, FenceWidth).AppendLine();
         builder.AppendLine();
@@ -926,10 +1306,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// short of the edge on a terminal and at it in a pipe.
     /// </para>
     /// </remarks>
-    /// <param name="detail">
-    /// Whether this is the detail view, which lists every member of a cluster with its location.
-    /// </param>
-    private void WriteFinding(StringBuilder builder, FindingDto finding, int row, bool detail = false)
+    /// <param name="view">Which view the row is written for.</param>
+    private void WriteFinding(StringBuilder builder, FindingDto finding, int row, RowView view = RowView.List)
     {
         string number = row.ToString(CultureInfo.InvariantCulture) + ".";
         string marker = ReportVocabulary.MarkerFor(finding.Severity);
@@ -942,7 +1320,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                .Append("  ")
                .Append(label);
 
-        if (finding.Annotation is { Length: > 0 } annotation)
+        // A single-test finding in the history view is about the view's own subject. Its name is the
+        // heading's, and every finding it could be a sibling of is on screen.
+        bool aboutTheView = view == RowView.History && finding.Subject.Members == null;
+
+        if (!aboutTheView && finding.Annotation is { Length: > 0 } annotation)
         {
             int written = number.Length + spacing + marker.Length + 2 + label.Length;
 
@@ -952,10 +1334,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.AppendLine();
 
-        builder.Append(' ', ContinuationIndent)
-               .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
+        if (!aboutTheView)
+        {
+            builder.Append(' ', ContinuationIndent)
+                   .AppendLine(FitName(Name(finding.Subject), ContinuationBudget));
+        }
 
-        if (detail)
+        if (view == RowView.Detail)
             WriteAllMembers(builder, finding.Subject);
         else
             WriteMembers(builder, finding.Subject);
@@ -1099,6 +1484,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// the fence's width when an assembly name forces it, because it is outside the fence and a
     /// command cut to fit is a command that does not run.
     /// </para>
+    /// <para>
+    /// Under <c>--test</c> the first finding shown keeps its full-report row, which need not be 1, and
+    /// the line names that row (Amendment 6C).
+    /// </para>
     /// </remarks>
     private void WriteDetailCommand(StringBuilder builder, ReportEnvelope envelope, bool truncated)
     {
@@ -1108,7 +1497,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (!truncated)
             builder.AppendLine();
 
-        builder.AppendLine(capabilities.Dim("Detail of row 1: " + envelope.Findings[0].DrillDown));
+        int row = envelope.Test?.FindingRows is [var first, ..] ? first.Row : 1;
+
+        builder.AppendLine(capabilities.Dim(
+            $"Detail of row {Count(row)}: {envelope.Findings[0].DrillDown}"));
     }
 
     /// <summary>

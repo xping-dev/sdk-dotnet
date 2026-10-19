@@ -221,6 +221,32 @@ public sealed class TestResolverTests
         Assert.Equal(["login:3f", "login:9c"], resolution.Candidates.Select(c => c.ShortFingerprint));
     }
 
+    /// <summary>
+    /// A view that only names a test prints the prefix <c>--test</c> would give it as a candidate.
+    /// </summary>
+    [Fact]
+    public void AShortFingerprintIsTheOneItsCandidateCarries()
+    {
+        IReadOnlyList<TestSession> store = Store(Session(
+            0,
+            Test("Ns.Auth.SignsIn(\"a\")", "login:3f2a11"),
+            Test("Ns.Auth.SignsIn(\"b\")", "login:9c0d22"),
+            Test("Ns.Auth.SignsOut", "login:3f2a11", Other)));
+
+        TestResolution resolution = TestResolver.Resolve(store, "SignsIn", Assembly);
+
+        foreach (TestMatch candidate in resolution.Candidates)
+            Assert.Equal(candidate.ShortFingerprint, TestResolver.ShortFingerprintOf(store, Assembly, candidate.Fingerprint));
+    }
+
+    [Fact]
+    public void ATestThatDidNotRunInTheAssemblyHasNoShortFingerprint()
+    {
+        IReadOnlyList<TestSession> store = Store(Session(0, Test("Ns.Auth.SignsOut", "login:3f2a11", Other)));
+
+        Assert.Null(TestResolver.ShortFingerprintOf(store, Assembly, "login:3f2a11"));
+    }
+
     [Fact]
     public void AShortFingerprintOfAPinnedCaseNamesThatCaseAlone()
     {

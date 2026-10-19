@@ -197,6 +197,36 @@ public sealed class TestHistoryCommandTests : IDisposable
     }
 
     [Fact]
+    public void AHistoryInTextShowsTheTestItsRunsAndItsFindings()
+    {
+        SeedVanishing();
+
+        string id = Json("--test", "Removed1").GetProperty("findings")[0].GetProperty("id").GetString()!;
+        int row = Json("--test", "Removed1").GetProperty("test").GetProperty("findingRows")[0].GetProperty("row").GetInt32();
+
+        string[] lines = Run("--test", "Removed1").Output.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+        Assert.Contains(lines, l => l.StartsWith("TEST ", StringComparison.Ordinal) && l.EndsWith(" fp fp-Removed1", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("ran in 5 of 8 runs: 5 passed", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("RUNS ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("absent from 3 runs", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("FINDINGS ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains(id, StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("1 finding about this test ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith($"Detail of row {row}: xping report --id {id}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AHistoryInJsonCarriesTheShortFingerprint()
+    {
+        SeedVanishing();
+
+        Assert.Equal(
+            "fp-Removed1",
+            Json("--test", "Removed1").GetProperty("test").GetProperty("shortFingerprint").GetString());
+    }
+
+    [Fact]
     public void AnAmbiguousNameListsTheCandidatesAndExitsFour()
     {
         SeedParameterised(2);
