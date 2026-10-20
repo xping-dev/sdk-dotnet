@@ -1,0 +1,29 @@
+Xping | MyApp.Tests | 8 runs | 2026-08-01 09:00 -> 09:07 | main@eab9867
+7 tests | 7 healthy | 0 flagged | 1 awaiting more runs
+* nothing to measure: concurrency 7 | time sensitive 7
+
+```
+TEST                                                         fp fp-Refun
+------------------------------------------------------------------------
+
+    test    MyApp.Tests.SampleTests.Refund_IsIssuedOnce
+    source  SampleTests.cs:10
+
+ran in 3 of 8 runs: 2 passed, 0 passed on retry, 1 failed
+duration p50 100ms | p95 100ms | range 100ms
+
+RUNS                                                        newest first
+------------------------------------------------------------------------
+
+  08-01 09:07  +                      100ms  eab9867
+  08-01 09:06  x                      100ms  eab9867
+  08-01 09:05  +                      100ms  eab9867
+               -     absent from 5 runs
+
+FINDINGS
+------------------------------------------------------------------------
+
+too little history to judge: findings need 5 runs, this test has 3
+```
+
+no findings about this test | all: xping report --all --assembly MyApp.Tests --runs 8

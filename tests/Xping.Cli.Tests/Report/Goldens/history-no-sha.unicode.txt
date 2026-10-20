@@ -1,0 +1,30 @@
+Xping · SampleApp.MSTest · 6 runs · 2026-08-20 → 2026-08-21
+16 tests · 10 healthy · 6 flagged
+
+```
+TEST                                                         fp 5d02e8a1
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.InvoiceTests.Total_IncludesTax
+    source  tests/SampleApp.MSTest/InvoiceTests.cs:31
+
+ran in 6 of 6 runs: 5 passed, 0 passed on retry, 1 failed
+duration p50 123ms · p95 138ms · range 118-140ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-21 06:00  ✓                      120ms
+  08-21 00:00  ✓                      118ms
+  08-20 18:00  ✓                      131ms
+  08-20 12:00  ✗                      140ms
+  08-20 06:00  ✓                      125ms
+  08-20 00:00  ✓                      119ms
+
+FINDINGS
+────────────────────────────────────────────────────────────────────────
+
+no findings
+```
+
+no findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 6
