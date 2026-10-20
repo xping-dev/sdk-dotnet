@@ -57,13 +57,14 @@ xping report [options]
 
 | Option | Default | Description |
 |---|---|---|
-| `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last` |
+| `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last`. Under `--test` the default is every run in the store |
 | `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
 | `--top <n>` | `10` | Findings to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
 | `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each |
 | `--kind <Kind>...` | all | Restrict to one or more finding kinds |
 | `--assembly <name>` | newest | Scope the report to one test assembly |
-| `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
+| `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--test`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
+| `--test <name>` | — | Show one test's run-by-run history, by its name or fingerprint — see [Test history](#test-history). Excludes `--id`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
 | `--project <key>` | — | Read [Cloud data](#cloud-data) from this Xping Cloud project. Overrides `XPING_PROJECTID` |
 | `--format <f>` | `text` | `text`, `json` or `summary` |
@@ -75,7 +76,7 @@ xping report [options]
 
 > `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
 
-**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error) · `3` with `--id`, the report was produced and that finding is not in it.
+**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test.
 
 The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
 
@@ -441,6 +442,132 @@ xping report | wl-copy         # Linux (Wayland)
 When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
 
 
+### Test history
+
+`report` answers *what is wrong here*, and `--id` *tell me about this finding*. `--test` answers
+*tell me about this test*: every run the store holds for it, what it did in each, and what the
+report concludes from them. It works for any test, including one with no findings.
+
+```bash
+xping report --test FlakyTest_PassesOnRetry
+```
+
+<!-- xping:sample history-flaky -->
+````
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
+⚠ 14 of 20 runs covered part of the suite
+
+```
+TEST                                                         fp 3a597eb2
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:42
+
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
+FINDINGS                                                      2 findings
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
+    evidence low | -env-cluster | f_8f042eab | .../CalculatorTests.cs:42
+
+2.  MED   masked by retry
+    passed on retry 6 times in 6 of 20 runs, up to attempt 2
+    evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
+Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
+````
+
+Above the runs, two lines sum them up. `ran in` counts the runs the test appeared in, by each run's
+deciding attempt: `passed on retry` passed after attempt 1, `failed` includes timeouts, and a run
+that was skipped, not executed or inconclusive adds `, N other`. The duration line is over the runs
+that passed or failed.
+
+Each row under `RUNS` is one run, newest first, in UTC: the first attempt's outcome and, when the
+deciding attempt differs, an arrow to it (`✗→✓`); then `attempt N` when a retry decided it, or the
+outcome when it was not a pass or a fail (`timeout`, `skipped`, `not run`, `inconcl.`, with `@N`
+for a retry); the deciding attempt's duration; the commit; and `partial` when the run covered only
+part of the suite. Every run in the window is printed.
+
+Runs that do not contain the test are not rows. Each stretch of them is one line,
+`absent from 14 runs, 14 partial`. When the partial count equals the run count, the test was not
+deleted: those runs were filtered to other tests.
+
+`FINDINGS` lists every finding about the test, including clusters it belongs to. Each keeps its row
+number from the full report over the same assembly and window: the `all:` command in the footer
+prints that report. The command below the fence opens the first finding with `--id`. When the test has too little history for any finding, the
+block says so instead of `no findings`: `too little history to judge: findings need 5 runs, this
+test has 3`.
+
+**Naming the test.** The name is matched in three tiers, and the first tier that matches anything
+wins:
+
+1. The exact fully qualified name.
+2. A suffix that ends on a `.`: `Method`, `Class.Method` or `Namespace.Class.Method`. A nested type
+   written `Outer+Inner` matches with a `.` too, and a parameterised test's `(args)` can be left
+   off: `Add` matches every case of `Add(…)`, `Add(1,2)` only that one.
+3. A prefix of the test's fingerprint, at least 8 characters, or the whole fingerprint.
+
+Matching is case-sensitive, except that a fingerprint prefix made only of hex digits is retried in
+lower case, since a computed fingerprint is lower-case hex. It uses each test's newest name, so a renamed test is found under its
+current one. Without `--assembly`, every assembly in the store is searched; the history itself is
+always one assembly's.
+
+When the name matches more than one test, no history is rendered. stderr lists the candidates, up
+to ten, with the fingerprint that names each one, and the command for the first. The exit code is
+`4`. With `--format json`, stdout still carries the envelope, with the candidates in `test` (see
+[`--format json`](#--format-json)):
+
+```
+'Add' matches 3 tests. Name one by its fingerprint:
+  7e41c9a0  SampleApp.MSTest
+    SampleApp.MSTest.ParameterizedTests.Add(1,2)
+  5b1e09fd  SampleApp.MSTest
+    SampleApp.MSTest.ParameterizedTests.Add(2,3)
+  c4d2aa10  SampleApp.NUnit
+    SampleApp.NUnit.CalculatorTests.Add
+xping report --test 7e41c9a0 --assembly SampleApp.MSTest
+```
+
+When it matches none, the exit code is `3`, and stderr says whether the store has no such test or
+the window hides its runs:
+
+```
+No test matching 'Ad' in this store (3 assemblies, 48 runs).
+No run of 'Login' in this window (--runs 5). It ran in 12 earlier runs; drop --runs to see them.
+```
+
+**The window** is every run the store holds for the assembly, not the last 20: once you name a
+test you want its history, and retention already caps the store. `--runs` and `--since` narrow it
+as they do for `report`. The findings are computed over the same window, so a narrower one can
+change them. Every command the view prints repeats the window: `--since` as you gave it, otherwise
+`--runs` with the window's size, so it reopens a window of the same size.
+
+The two views link to each other. `--id` on a finding about one test ends with a `History:` line,
+as the [`--id` sample](#finding-ids) shows. When an id is not reported and its test has no other
+finding in the window, stderr gives that test's `--test` command.
+
 ### Source locations
 
 The last segment of a finding's trailer is where the test is declared:
@@ -562,6 +689,21 @@ store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`fa
 `explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
 failures not listed as rows.
 
+`test` is `null` unless [`--test`](#test-history) was given, and `window.resolution` is then `store`
+unless `--runs` or `--since` narrowed it. `test` carries the `query` you typed; the `test` it
+resolved to, as the same `subject` a finding carries, and its `shortFingerprint`, the value
+`--test` accepts; one entry in `sessions` per run in the window, newest first, each with
+`sessionId`, `startedAt`, `sha`, `appeared`, `partial`, the deciding `outcome`, `decidingAttempt`
+and `durationMs`, and every attempt in `attempts`; the `counts` and `duration` (with `dispersion`,
+which the text omits) behind the two summary lines; `findingsWithheld`, the reason when the floor
+left the block empty; and `findingRows`, the full-report row of each entry in `findings`, which
+holds only the findings about this test. When the name matches more than one test, `candidates`
+lists them, each with `fingerprintPrefix`, `assembly`, `fullyQualifiedName`, `lastSeen` and the
+`command` that names it, and `test.test` is `null`. When it matches none, `test.test` is `null` and
+`candidates` is empty. The exit code tells the two apart too. When there is no window to report
+over, such as a `--since` later than every run, stdout is empty and only the exit code and stderr
+answer.
+
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
 `not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
@@ -631,6 +773,7 @@ are not each other and `tests` is what they add up to:
     "failuresTotal": 1
   },
   "selection": null,
+  "test": null,
   "findings": [
     {
       "id": "f_2a91c0de",
@@ -1023,7 +1166,8 @@ includes API access. Otherwise the report says so and stays local.
 | `0` | Success | all |
 | `1` | A finding reached `--fail-on`; `where` or `clear` failed | `report`, `where`, `clear` |
 | `2` | Invalid option (including `--cloud-url`, `--project`, `--workspace`); no report could be produced; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
-| `3` | The `--id` finding is not in the report | `report` |
+| `3` | The `--id` finding is not in the report; no test matches `--test`, or none of its runs is in the window | `report` |
+| `4` | `--test` matches more than one test | `report` |
 | `10` | No credential | `auth status` |
 | `11` | You declined the sign-in | `login` |
 | `12` | The sign-in timed out, or the device code expired | `login` |

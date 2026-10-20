@@ -86,6 +86,7 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 | `xping report --all` | Show every finding and every latest-run row, not only the first ten of each |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
 | `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, and the other findings about the same test |
+| `xping report --test <name>` | Show one test's history, run by run, and the findings about it. Works for any test, healthy or not |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |
 | `xping login` | Sign in to Xping Cloud, so the report adds Cloud confidence to its rows (`--device` for a browser on another machine) |
