@@ -252,9 +252,9 @@ public sealed class GoldenReportTests
     {
         ReportEnvelope envelope = ReportFixtures.Get(fixture);
 
-        // A detail view has no findings heading, and --summary is refused beside --id: there is no
-        // one-line report of a selection for the two to disagree about.
-        if (envelope.Selection != null)
+        // A detail view and a history have no findings heading, and --summary is refused beside --id
+        // and --test: there is no one-line report of either for the two to disagree about.
+        if (envelope.Selection != null || envelope.Test != null)
             return;
 
         using var writer = new StringWriter();

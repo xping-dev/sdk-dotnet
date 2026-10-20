@@ -96,6 +96,105 @@ public sealed class WindowResolverTests
     }
 
     [Fact]
+    public void WholeStoreReadsPastTheDefaultSessionCap()
+    {
+        var source = new FakeSessionSource(Sessions(40));
+
+        WindowResult result = CreateResolver()
+            .Resolve(source, new WindowRequest(null, null, null, WholeStore: true));
+
+        Assert.Equal(40, result.Window!.SessionCount);
+        Assert.Equal(WindowResolution.Store, result.Window.Resolution);
+        Assert.Null(result.Window.ResolutionArgument);
+    }
+
+    [Fact]
+    public void WholeStoreIgnoresTheDefaultAgeBound()
+    {
+        var source = new FakeSessionSource(Sessions(10));
+
+        // The same clock under which the default window keeps three of these.
+        DateTime now = TestSessionFactory.Epoch
+            .AddDays(LocalAnalysisConstants.DefaultWindowDays)
+            .AddMinutes(7);
+
+        WindowResult result = CreateResolver(now)
+            .Resolve(source, new WindowRequest(null, null, null, WholeStore: true));
+
+        Assert.Equal(10, result.Window!.SessionCount);
+    }
+
+    [Fact]
+    public void RunsReplacesTheWholeStore()
+    {
+        var source = new FakeSessionSource(Sessions(10));
+
+        WindowResult result = CreateResolver()
+            .Resolve(source, new WindowRequest(5, null, null, WholeStore: true));
+
+        Assert.Equal(5, result.Window!.SessionCount);
+        Assert.Equal(WindowResolution.Runs, result.Window.Resolution);
+    }
+
+    [Fact]
+    public void SinceReplacesTheWholeStore()
+    {
+        var source = new FakeSessionSource(Sessions(10));
+        string boundary = TestSessionFactory.Epoch
+            .AddMinutes(6)
+            .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+        WindowResult result = CreateResolver()
+            .Resolve(source, new WindowRequest(null, boundary, null, WholeStore: true));
+
+        Assert.Equal(4, result.Window!.SessionCount);
+        Assert.Equal(WindowResolution.SinceDate, result.Window.Resolution);
+    }
+
+    [Fact]
+    public void WholeStoreOnAnEmptyStoreIsAnEmptyStore()
+    {
+        WindowResult result = CreateResolver()
+            .Resolve(new FakeSessionSource(), new WindowRequest(null, null, null, WholeStore: true));
+
+        Assert.Null(result.Window);
+        Assert.Equal(WindowFailure.EmptyStore, result.Failure);
+    }
+
+    [Fact]
+    public void WholeStoreStillLeavesOutSessionsStampedAheadOfTheClock()
+    {
+        TestSession skewed = Skewed(0);
+        var source = new FakeSessionSource([.. Sessions(10), skewed]);
+
+        WindowResult result = CreateResolver()
+            .Resolve(source, new WindowRequest(null, null, null, WholeStore: true));
+
+        Assert.Equal(10, result.Window!.SessionCount);
+        Assert.DoesNotContain(result.Window.Sessions, s => s.SessionId == skewed.SessionId);
+        Assert.Equal(1, result.SkewedSessions);
+    }
+
+    [Fact]
+    public void WholeStoreIsScopedToTheAssembly()
+    {
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution("Beta", assembly: "Beta.Tests")]),
+            TestSessionFactory.Session(2, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")])
+        ];
+
+        WindowResult result = CreateResolver().Resolve(
+            new FakeSessionSource(sessions), new WindowRequest(null, null, "Alpha.Tests", WholeStore: true));
+
+        Assert.Equal(2, result.Window!.SessionCount);
+        Assert.All(
+            result.Window.Sessions.SelectMany(s => s.Executions),
+            e => Assert.Equal("Alpha.Tests", e.Identity.Assembly));
+    }
+
+    [Fact]
     public void RunsTakesTheMostRecentSessions()
     {
         var source = new FakeSessionSource(Sessions(10));

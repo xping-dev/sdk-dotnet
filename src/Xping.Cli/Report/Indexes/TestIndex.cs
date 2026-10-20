@@ -470,7 +470,7 @@ internal sealed class TestIndex
     /// The same reading <see cref="SessionOutcomes"/> takes. An adapter that never retried records no
     /// retry block at all, and that run is its own deciding attempt.
     /// </remarks>
-    private static int AttemptOf(TestExecution execution) => execution.Retry?.AttemptNumber ?? 1;
+    internal static int AttemptOf(TestExecution execution) => execution.Retry?.AttemptNumber ?? 1;
 
     private static TestReference ToReference(TestExecution execution)
     {

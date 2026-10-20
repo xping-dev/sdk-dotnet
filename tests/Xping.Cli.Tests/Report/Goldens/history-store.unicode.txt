@@ -1,0 +1,53 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-01 09:00 → 09:19 · main@eab9867
+15 tests · 13 healthy · 2 flagged · 1 awaiting more runs
+◷ nothing to measure: concurrency 15 · time sensitive 15
+
+```
+TEST                                                  fp fp-Checkout_Req
+────────────────────────────────────────────────────────────────────────
+
+    test    MyApp.Tests.SampleTests.Checkout_RequiresProvisionedDatabase
+    source  SampleTests.cs:10
+
+ran in 20 of 20 runs: 0 passed, 0 passed on retry, 20 failed
+duration p50 100ms · p95 100ms · range 100ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-01 09:19  ✗                      100ms  eab9867
+  08-01 09:18  ✗                      100ms  eab9867
+  08-01 09:17  ✗                      100ms  eab9867
+  08-01 09:16  ✗                      100ms  eab9867
+  08-01 09:15  ✗                      100ms  eab9867
+  08-01 09:14  ✗                      100ms  eab9867
+  08-01 09:13  ✗                      100ms  eab9867
+  08-01 09:12  ✗                      100ms  eab9867
+  08-01 09:11  ✗                      100ms  eab9867
+  08-01 09:10  ✗                      100ms  eab9867
+  08-01 09:09  ✗                      100ms  eab9867
+  08-01 09:08  ✗                      100ms  eab9867
+  08-01 09:07  ✗                      100ms  eab9867
+  08-01 09:06  ✗                      100ms  eab9867
+  08-01 09:05  ✗                      100ms  eab9867
+  08-01 09:04  ✗                      100ms  eab9867
+  08-01 09:03  ✗                      100ms  eab9867
+  08-01 09:02  ✗                      100ms  eab9867
+  08-01 09:01  ✗                      100ms  eab9867
+  08-01 09:00  ✗                      100ms  eab9867
+
+FINDINGS                                                       1 finding
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  always failing
+    failed 20 of 20 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+1 finding about this test · all: xping report --all --assembly MyApp.Tests --runs 20
+Detail of row 1: xping report --id f_87ef5c9a --assembly MyApp.Tests --runs 20

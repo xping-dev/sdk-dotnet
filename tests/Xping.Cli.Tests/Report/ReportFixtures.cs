@@ -9,6 +9,9 @@ using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Rendering;
+using Xping.Cli.Report.Scoring;
+using Xping.Cli.Report.Windowing;
+using Xping.Sdk.Core.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -66,7 +69,14 @@ internal static class ReportFixtures
         "detail-test",
         "detail-group",
         .. Enum.GetValues<FindingKind>().Select(DetailKey),
-        "detail-store"
+        "detail-store",
+        "history-flaky",
+        "history-healthy",
+        "history-timeout-retry",
+        "history-no-sha",
+        "history-below-floor",
+        "history-cluster-member",
+        "history-store"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -87,12 +97,18 @@ internal static class ReportFixtures
     {
         ReportEnvelope envelope = Build(name);
 
+        // A history reads the whole store and names the assembly its test came from, so every
+        // command it prints carries both, as the command builds them (Amendments 1 and 5B).
+        ReportScope scope = envelope.Test != null
+            ? HistoryScope(envelope.Context?.Assembly, envelope.Window.SessionCount)
+            : new ReportScope(envelope.Context?.Assembly, WindowResolution.Default, envelope.Window.SessionCount);
+
         return envelope with
         {
             Findings =
             [
                 .. envelope.Findings.Select(finding =>
-                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, new ReportScope(envelope.Context?.Assembly)) })
+                    finding with { DrillDown = DrillDown.ForFinding(finding.Id, scope) })
             ]
         };
     }
@@ -126,11 +142,18 @@ internal static class ReportFixtures
 
         return full with
         {
-            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings),
+            Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings, History(finding.Subject)),
             Findings = [finding],
             Truncated = full.Truncated with { Shown = 1 }
         };
     }
+
+    // The command the builder would print for a single-test subject. A fixture's fingerprints are
+    // the only ones in its assembly, so the first eight characters already name each one alone.
+    private static string? History(SubjectDto subject) =>
+        subject.Members == null && subject.Fingerprint is { } fingerprint
+            ? $"xping report --test {fingerprint[..Math.Min(8, fingerprint.Length)]} --assembly {subject.Assembly}"
+            : null;
 
     private static ReportEnvelope Build(string name) => name switch
     {
@@ -226,6 +249,13 @@ internal static class ReportFixtures
         "detail-test" => Detail(SpecSection3Measured(), 5),
         "detail-group" => Detail(SpecSection3Measured(), 3),
         "detail-store" => DetailFromStore(),
+        "history-flaky" => HistoryFlaky(),
+        "history-healthy" => HistoryHealthy(),
+        "history-timeout-retry" => HistoryTimeoutRetry(),
+        "history-no-sha" => HistoryNoSha(),
+        "history-below-floor" => HistoryBelowFloor(),
+        "history-cluster-member" => HistoryClusterMember(),
+        "history-store" => HistoryFromStore(),
         _ when DetailKind(name) is { } kind => Detail(Envelope(Measured(kind)), 1),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
@@ -476,8 +506,363 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun,
-            ordered[0].Id);
+            ordered[0].Id,
+
+            // The fixture's window is its whole store, which is what the command reads them over.
+            shortFingerprint: fingerprint =>
+                TestResolver.ShortFingerprintOf(context.Window.Sessions, context.Revision!.Assembly!, fingerprint));
     }
+
+    // ---------------------------------------------------------------------
+    // Histories — report --test
+    // ---------------------------------------------------------------------
+
+    private const string HistoryAssembly = "SampleApp.MSTest";
+
+    private const string HistorySha = "c670fc3a91";
+
+    /// <summary>The suite every hand-built history belongs to: §3.1's sixteen tests.</summary>
+    private const int HistoryTests = 16;
+
+    /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
+    private static ReportScope HistoryScope(string? assembly, int runs) =>
+        new(assembly, WindowResolution.Store, runs, AssemblyGiven: true);
+
+    /// <summary>
+    /// The spec's §3.1: a flaky test the retry hides, absent from the fourteen newest runs, all of
+    /// them partial.
+    /// </summary>
+    private static ReportEnvelope HistoryFlaky()
+    {
+        const string name = "SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry";
+        var newest = new DateTime(2026, 8, 21, 9, 12, 0, DateTimeKind.Utc);
+        var day = new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc);
+
+        TestSessionDto[] sessions =
+        [
+            .. Enumerable.Range(0, 14).Select(i => HistoryAbsent(newest.AddMinutes(-7 * i))),
+            .. new (int Hour, int Minute, long Ms)[] { (15, 35, 12), (15, 34, 11), (14, 2, 13), (14, 2, 11), (13, 20, 12), (13, 19, 12) }
+                .Select(r => HistoryRan(
+                    day.AddHours(r.Hour).AddMinutes(r.Minute), TestOutcome.Failed, TestOutcome.Passed, 2, r.Ms))
+        ];
+
+        FindingDto[] findings =
+        [
+            Finding(nameof(FindingKind.Flaky), "high", name,
+                "failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode") with
+            { Id = "f_8f042eab", EvidenceLevel = "low" },
+            Finding(nameof(FindingKind.RetryMasked), "medium", name,
+                "passed on retry 6 times in 6 of 20 runs, up to attempt 2") with
+            { Id = "f_a2b61c2f", EvidenceLevel = "low" }
+        ];
+
+        return History(
+            name, "3a597eb2c0ffee11", "tests/SampleApp.MSTest/CalculatorTests.cs", 42,
+            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+    }
+
+    /// <summary>
+    /// The spec's §3.2: every run passed, so the block says there is nothing to say.
+    /// </summary>
+    private static ReportEnvelope HistoryHealthy()
+    {
+        long[] durations = [4, 5, 4, 3, 6, 4, 4, 5, 9, 4, 3, 4, 5, 4, 6, 4, 3, 4, 5, 4];
+        var newest = new DateTime(2026, 8, 21, 9, 12, 0, DateTimeKind.Utc);
+
+        TestSessionDto[] sessions =
+        [
+            .. durations.Select((ms, i) => HistoryRan(
+                newest.AddMinutes(-53 * i), TestOutcome.Passed, TestOutcome.Passed, 1, ms))
+        ];
+
+        return History(
+            "SampleApp.MSTest.CalculatorTests.Add_ReturnsSum", "91c0de4417aa", "tests/SampleApp.MSTest/CalculatorTests.cs", 18,
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+    }
+
+    /// <summary>
+    /// A test that hangs and is retried into another hang: <c>timeout @2</c>, beside a retry that
+    /// passed and a hang on the first attempt that was never retried.
+    /// </summary>
+    private static ReportEnvelope HistoryTimeoutRetry()
+    {
+        const string name = "SampleApp.MSTest.GatewayTests.Charge_CompletesWithinTheBudget";
+        var newest = new DateTime(2026, 8, 21, 17, 40, 0, DateTimeKind.Utc);
+
+        (TestOutcome First, TestOutcome Deciding, int Attempt, long Ms)[] runs =
+        [
+            (TestOutcome.Failed, TestOutcome.Timeout, 2, 5_000),
+            (TestOutcome.Passed, TestOutcome.Passed, 1, 840),
+            (TestOutcome.Failed, TestOutcome.Timeout, 2, 5_000),
+            (TestOutcome.Failed, TestOutcome.Passed, 2, 910),
+            (TestOutcome.Timeout, TestOutcome.Timeout, 1, 5_000),
+            (TestOutcome.Passed, TestOutcome.Passed, 1, 780),
+            (TestOutcome.Failed, TestOutcome.Timeout, 3, 5_000),
+            (TestOutcome.Passed, TestOutcome.Passed, 1, 805)
+        ];
+
+        TestSessionDto[] sessions =
+        [
+            .. runs.Select((r, i) => HistoryRan(newest.AddHours(-3 * i), r.First, r.Deciding, r.Attempt, r.Ms))
+        ];
+
+        FindingDto[] findings =
+        [
+            Finding(nameof(FindingKind.TimingOut), "high", name,
+                "timed out 4 of 8 runs (50%), killed at its 5s limit") with
+            { Id = "f_6e1d0b7a", EvidenceLevel = "moderate" }
+        ];
+
+        return History(
+            name, "b07e5c2d9f31", "tests/SampleApp.MSTest/GatewayTests.cs", 57,
+            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0));
+    }
+
+    /// <summary>
+    /// Runs a CI agent recorded without a checkout: no sha on any row, and none in the header.
+    /// </summary>
+    private static ReportEnvelope HistoryNoSha()
+    {
+        var newest = new DateTime(2026, 8, 21, 6, 0, 0, DateTimeKind.Utc);
+        (TestOutcome Outcome, long Ms)[] runs =
+        [
+            (TestOutcome.Passed, 120),
+            (TestOutcome.Passed, 118),
+            (TestOutcome.Passed, 131),
+            (TestOutcome.Failed, 140),
+            (TestOutcome.Passed, 125),
+            (TestOutcome.Passed, 119)
+        ];
+
+        TestSessionDto[] sessions =
+        [
+            .. runs.Select((r, i) =>
+                HistoryRan(newest.AddHours(-6 * i), r.Outcome, r.Outcome, 1, r.Ms) with { Sha = null })
+        ];
+
+        return History(
+            "SampleApp.MSTest.InvoiceTests.Total_IncludesTax", "5d02e8a1c4b7", "tests/SampleApp.MSTest/InvoiceTests.cs", 31,
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null);
+    }
+
+    /// <summary>
+    /// A test from a cluster's member list: its own finding first, then the cluster, which keeps its
+    /// cause and its members because the cluster is not the view's subject.
+    /// </summary>
+    private static ReportEnvelope HistoryClusterMember()
+    {
+        const string name = "SampleApp.MSTest.FixtureTests.SecondTestNeedingTheDatabase";
+        var newest = new DateTime(2026, 8, 21, 16, 21, 0, DateTimeKind.Utc);
+
+        TestSessionDto[] sessions =
+        [
+            .. Enumerable.Range(0, 10).Select(i => HistoryRan(
+                newest.AddMinutes(-41 * i), TestOutcome.Failed, TestOutcome.Failed, 1, 3))
+        ];
+
+        FindingDto[] findings =
+        [
+            Finding(nameof(FindingKind.AlwaysFailing), "high", name,
+                "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
+            { Id = "f_1b44e0c9", EvidenceLevel = "moderate" },
+            Cluster(
+                "UnprovisionedDatabase..ctor",
+                "UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10 runs",
+                [
+                    "SampleApp.MSTest.FixtureTests.FirstTestNeedingTheDatabase",
+                    name,
+                    "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
+                ]) with
+            { Id = "f_7c905f05", EvidenceLevel = "high" }
+        ];
+
+        return History(
+            name, "e4a90c1f3b28", "tests/SampleApp.MSTest/FixtureTests.cs", 19,
+            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0));
+    }
+
+    /// <summary>
+    /// A test that has run three times: findings need five, and the block says so.
+    /// </summary>
+    /// <remarks>
+    /// Through the pipeline, because the reason is a sentence the builder writes and a hand-built
+    /// envelope would pin a copy of it rather than it.
+    /// </remarks>
+    private static ReportEnvelope HistoryBelowFloor()
+    {
+        Sdk.Core.Models.TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 8).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 6).Select(i =>
+                        TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}")),
+                    .. ordinal >= 5
+                        ? [TestSessionFactory.Execution(
+                            "Refund_IsIssuedOnce",
+                            ordinal == 6 ? TestOutcome.Failed : TestOutcome.Passed,
+                            exceptionType: ordinal == 6 ? "System.InvalidOperationException" : null,
+                            errorMessage: ordinal == 6 ? "The refund was issued twice." : null)]
+                        : Array.Empty<Sdk.Core.Models.Executions.TestExecution>()
+                ],
+                sha: "eab9867a1c40",
+                branch: "main"))
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        return HistoryThroughPipeline(context, Analyze(context), "Refund_IsIssuedOnce");
+    }
+
+    /// <summary>
+    /// A history the whole pipeline produced, as <c>detail-store</c> is a detail view.
+    /// </summary>
+    /// <remarks>
+    /// The store behind <see cref="LatestRunFromStore"/>, the name resolved and the history built as
+    /// <c>xping report --test</c> does both. Pins everything downstream of the sessions, where the
+    /// other history fixtures pin the renderer.
+    /// </remarks>
+    private static ReportEnvelope HistoryFromStore()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeStore();
+
+        return HistoryThroughPipeline(context, analysis, "Checkout_RequiresProvisionedDatabase");
+    }
+
+    private static ReportEnvelope HistoryThroughPipeline(AnalysisContext context, AnalysisResult analysis, string query)
+    {
+        string assembly = context.Revision!.Assembly!;
+        TestMatch match = TestResolver.Resolve(context.Window.Sessions, query, assembly).Match
+            ?? throw new InvalidOperationException($"'{query}' resolves to no one test in the fixture's store.");
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            id: null,
+            HistoryScope(assembly, context.Window.SessionCount),
+            TestHistoryBuilder.Found(context, query, match));
+    }
+
+    /// <summary>
+    /// Builds a history envelope around sessions given newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The counts, the duration line and the partial-run caveat are derived from the rows by D9's
+    /// rules, so a fixture cannot pin a summary its own timeline contradicts. Session ids follow the
+    /// rows' positions, oldest first, as the store's would.
+    /// </para>
+    /// <para>
+    /// <paramref name="produced"/> is every finding over the window, by severity, of which
+    /// <paramref name="findings"/> are the ones about this test: the header and the footer's
+    /// <c>--all</c> describe the whole report, the block only its rows.
+    /// </para>
+    /// </remarks>
+    private static ReportEnvelope History(
+        string name,
+        string fingerprint,
+        string sourceFile,
+        int line,
+        TestSessionDto[] sessions,
+        FindingDto[] findings,
+        int[] rows,
+        int flagged,
+        SeverityCountsDto produced,
+        string? sha = HistorySha,
+        string? branch = "main")
+    {
+        var subject = new SubjectDto(
+            "test", fingerprint, name, name, SubjectNames.ShortName(name, name), null,
+            sourceFile, line, HistoryAssembly, null, null, null);
+
+        sessions =
+        [
+            .. sessions.Select((session, i) =>
+                session with { SessionId = TestSessionFactory.SessionIdFor(sessions.Length - 1 - i) })
+        ];
+
+        TestSessionDto[] ran = [.. sessions.Where(s => s.Appeared)];
+        List<double> timed =
+        [
+            .. ran
+                .Where(s => s.Outcome is TestOutcome.Passed or TestOutcome.Failed or TestOutcome.Timeout)
+                .Select(s => (double)s.DurationMs!.Value)
+                .Order()
+        ];
+
+        var counts = new TestRunCountsDto(
+            ran.Length,
+            sessions.Length,
+            ran.Count(s => s.Outcome == TestOutcome.Passed && s.DecidingAttempt == 1),
+            ran.Count(s => s.Outcome == TestOutcome.Passed && s.DecidingAttempt > 1),
+            ran.Count(s => s.Outcome is TestOutcome.Failed or TestOutcome.Timeout),
+            ran.Count(s => s.Outcome is not (TestOutcome.Passed or TestOutcome.Failed or TestOutcome.Timeout)));
+
+        TestDurationDto? duration = timed.Count == 0
+            ? null
+            : new TestDurationDto(
+                (long)Math.Round(Quantile.Interpolated(timed, 0.50), MidpointRounding.AwayFromZero),
+                (long)Math.Round(Quantile.Interpolated(timed, 0.95), MidpointRounding.AwayFromZero),
+                (long)timed[0],
+                (long)timed[^1],
+                FindingOrder.Round(RobustDispersion.Of(timed)),
+                timed.Count);
+
+        FindingDto[] about =
+        [
+            .. findings.Select(f => f.Subject.Members == null ? f with { Subject = subject } : f)
+        ];
+
+        var history = new TestHistoryDto(
+            name,
+            subject,
+            fingerprint[..8],
+            sessions,
+            counts,
+            duration,
+            FindingsWithheld: null,
+            [.. about.Select((f, i) => new SameSubjectDto(f.Id, f.Kind, rows[i]))],
+            []);
+
+        ReportEnvelope envelope = Envelope(about);
+        int total = produced.High + produced.Medium + produced.Low;
+
+        return envelope with
+        {
+            Window = new WindowDto(sessions[^1].StartedAt, sessions[0].StartedAt, sessions.Length, "store", null, 3, []),
+            Context = new ContextDto(sha, branch, HistoryAssembly),
+            Summary = envelope.Summary with
+            {
+                Tests = HistoryTests,
+                Findings = total,
+                Counts = produced,
+                Flagged = flagged,
+                Healthy = HistoryTests - flagged,
+                PartialSessions = sessions.Count(s => s.Partial)
+            },
+            Test = history,
+            Truncated = new TruncationDto(
+                about.Length, total, DrillDown.ForFullReport(HistoryScope(HistoryAssembly, sessions.Length)))
+        };
+    }
+
+    // Every attempt before the deciding one ended as the first did: a retry chain has no gaps, and
+    // the row only reads the first attempt and the deciding one. The id is set by History.
+    private static TestSessionDto HistoryRan(DateTime at, TestOutcome first, TestOutcome deciding, int attempt, long ms) =>
+        new(
+            Guid.Empty, at, HistorySha, Appeared: true, Partial: false, deciding, attempt, ms,
+            [
+                .. Enumerable.Range(1, attempt).Select(n => new TestAttemptDto(n, n == attempt ? deciding : first, ms))
+            ]);
+
+    // Absent because the run was filtered, the case D8's partial count exists for.
+    private static TestSessionDto HistoryAbsent(DateTime at) =>
+        new(Guid.Empty, at, HistorySha, Appeared: false, Partial: true, null, null, null, []);
 
     /// <summary>
     /// The row the latest-run spec's §3.1 opens with: a test that had always passed.
@@ -578,6 +963,12 @@ internal static class ReportFixtures
 
         AnalysisContext context = TestSessionFactory.Context([.. sessions]);
 
+        return (context, Analyze(context));
+    }
+
+    /// <summary>Runs every provider over a fixture's sessions, as the command does.</summary>
+    private static AnalysisResult Analyze(AnalysisContext context)
+    {
         var coordinator = new FindingCoordinator(
         [
             new FailureModeProvider(),
@@ -588,7 +979,7 @@ internal static class ReportFixtures
             new TimeSensitiveProvider()
         ]);
 
-        return (context, coordinator.Run(context, kinds: null, TextWriter.Null));
+        return coordinator.Run(context, kinds: null, TextWriter.Null);
     }
 
     /// <summary>
@@ -1189,6 +1580,7 @@ internal static class ReportFixtures
 
             // No latest run yet: the fixtures pin the findings block, and a section that is absent
             // from the envelope is absent from the page. The latest-run fixtures carry their own.
+            null,
             null,
             null,
             findings,

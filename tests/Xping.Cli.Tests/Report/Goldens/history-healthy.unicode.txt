@@ -1,0 +1,44 @@
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
+
+```
+TEST                                                         fp 91c0de44
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.CalculatorTests.Add_ReturnsSum
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:18
+
+ran in 20 of 20 runs: 20 passed, 0 passed on retry, 0 failed
+duration p50 4ms · p95 6ms · range 3-9ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-21 09:12  ✓                        4ms  c670fc3
+  08-21 08:19  ✓                        5ms  c670fc3
+  08-21 07:26  ✓                        4ms  c670fc3
+  08-21 06:33  ✓                        3ms  c670fc3
+  08-21 05:40  ✓                        6ms  c670fc3
+  08-21 04:47  ✓                        4ms  c670fc3
+  08-21 03:54  ✓                        4ms  c670fc3
+  08-21 03:01  ✓                        5ms  c670fc3
+  08-21 02:08  ✓                        9ms  c670fc3
+  08-21 01:15  ✓                        4ms  c670fc3
+  08-21 00:22  ✓                        3ms  c670fc3
+  08-20 23:29  ✓                        4ms  c670fc3
+  08-20 22:36  ✓                        5ms  c670fc3
+  08-20 21:43  ✓                        4ms  c670fc3
+  08-20 20:50  ✓                        6ms  c670fc3
+  08-20 19:57  ✓                        4ms  c670fc3
+  08-20 19:04  ✓                        3ms  c670fc3
+  08-20 18:11  ✓                        4ms  c670fc3
+  08-20 17:18  ✓                        5ms  c670fc3
+  08-20 16:25  ✓                        4ms  c670fc3
+
+FINDINGS
+────────────────────────────────────────────────────────────────────────
+
+no findings
+```
+
+no findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20

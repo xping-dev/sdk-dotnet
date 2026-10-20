@@ -22,12 +22,18 @@ namespace Xping.Cli.Report;
 /// Every other finding about the subject the id names, with its row, in list order. When reported,
 /// its siblings; when not, where the claim went.
 /// </param>
+/// <param name="Test">
+/// The fingerprint of the one test the id is about: the finding's own test when reported and about
+/// a single test; when not reported, a test that ran in the window with no finding whose id it is.
+/// Null for a cluster and when the id names no test.
+/// </param>
 internal sealed record FindingSelection(
     string Id,
     Finding? Finding,
     int? Row,
     FindingKind? Kind,
-    IReadOnlyList<(Finding Finding, int Row)> SameSubject);
+    IReadOnlyList<(Finding Finding, int Row)> SameSubject,
+    string? Test = null);
 
 /// <summary>
 /// Picks the finding a reader asked to see out of the coordinator's output.
@@ -56,13 +62,18 @@ internal static class FindingSelector
     /// Every finding produced, as <see cref="FindingOrder.WithSiblingsAdjacent"/> orders them.
     /// </param>
     /// <param name="id">The requested id, already known to be well formed.</param>
+    /// <param name="tested">
+    /// Every test that ran in the window, by fingerprint, for an id no finding carries. Empty skips
+    /// that last lookup.
+    /// </param>
     /// <returns>The selection.</returns>
     [SuppressMessage(
         "Globalization",
         "CA1308:Normalize strings to uppercase",
         Justification = "FindingId renders the hash in lower-case hex, so lower case is the form ids " +
                         "are compared in and the form the selection reports back.")]
-    public static FindingSelection Select(IReadOnlyList<Finding> ordered, string id)
+    public static FindingSelection Select(
+        IReadOnlyList<Finding> ordered, string id, IReadOnlyList<string>? tested = null)
     {
         ArgumentNullException.ThrowIfNull(ordered);
         ArgumentNullException.ThrowIfNull(id);
@@ -88,7 +99,7 @@ internal static class FindingSelector
                     !ReferenceEquals(other, finding)
                     && string.Equals(FindingOrder.Test(other), test, StringComparison.Ordinal));
 
-            return new FindingSelection(requested, finding, i + 1, finding.Kind, siblings);
+            return new FindingSelection(requested, finding, i + 1, finding.Kind, siblings, test);
         }
 
         foreach (Finding finding in ordered)
@@ -112,10 +123,36 @@ internal static class FindingSelector
             }
         }
 
+        // Last, and only when no finding's subject matched: a test with no finding has no id on
+        // screen, but an id computed for it — read off an older report, or a script — still names
+        // it, and its history is where the reader goes next (D11). A test inside a reported cluster
+        // is not one of those: the cluster is about it, so that is where the claim went.
+        foreach (string fingerprint in tested ?? [])
+        {
+            foreach (FindingKind kind in Enum.GetValues<FindingKind>())
+            {
+                if (!string.Equals(FindingId.Compute(kind, fingerprint), requested, StringComparison.Ordinal))
+                    continue;
+
+                List<(Finding Finding, int Row)> about = About(ordered, other => FindingOrder.IsAbout(other, fingerprint));
+
+                return about.Count > 0
+                    ? new FindingSelection(requested, Finding: null, Row: null, kind, about)
+                    : new FindingSelection(requested, Finding: null, Row: null, kind, SameSubject: [], fingerprint);
+            }
+        }
+
         return new FindingSelection(requested, Finding: null, Row: null, Kind: null, SameSubject: []);
     }
 
-    private static List<(Finding Finding, int Row)> About(
+    /// <summary>
+    /// Picks the findings that match, each with its row: its position, from 1, in the full ordered
+    /// list, which is the number the full report prints for it.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <param name="matches">Which findings to keep.</param>
+    /// <returns>The matches, in report order.</returns>
+    internal static List<(Finding Finding, int Row)> About(
         IReadOnlyList<Finding> ordered, Func<Finding, bool> matches)
     {
         var found = new List<(Finding Finding, int Row)>();

@@ -48,6 +48,9 @@ internal sealed class ReportCommand(
         ILocalSessionStore store = sessionStoreFactory.Create(startDirectory: startDirectory);
         var source = new LocalSessionSource(store);
 
+        if (options.Test is { } query)
+            return await RunTestAsync(options, query, startDirectory, store, source, cancellationToken).ConfigureAwait(false);
+
         // Auto-scope to the newest assembly unless the caller named one. Every test project in a
         // solution shares one store, so an unscoped report would pool unrelated suites: one
         // assembly's history would contain another's tests and its session count would be the
@@ -73,48 +76,16 @@ internal sealed class ReportCommand(
             source, new WindowRequest(options.Runs, options.Since, assembly));
 
         if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, options);
+            return ReportUnavailable(resolved, store, options.Assembly);
 
-        var context = new AnalysisContext(
-            resolved.Window, RevisionContext.FromNewest(resolved.Window.Sessions, assembly));
-
-        // Never narrowed under --id. The parser rejects --kind beside it, and this holds whatever
-        // built the options: narrowing only ever removes findings — a handover silenced by a filter
-        // on its alternative's kind is one — so a narrowed run could miss a finding the full report
-        // reports, and --id has to answer for the full report.
-        IReadOnlySet<FindingKind>? kinds =
-            options.Id != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
-
-        AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
-
-        // Beside the coordinator and not inside it: these rows are observations of one session,
-        // not hypotheses, and must never be ranked, corrected or graded with the findings. A null
-        // --top is --all, and --all lifts this section's cap along with the findings'.
-        //
-        // The findings passed here are the ones --kind asked for, so --kind narrows what the
-        // section defers to rather than what it reports: a test whose only finding was filtered
-        // out is listed as a row instead of counted on the closing line. The row states a true
-        // thing either way, and recovering the unfiltered set would mean running every provider a
-        // second time to change one line of prose.
-        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
-            context, analysis.Findings, showAll: options.Top == null);
-
-        ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context,
-            analysis,
-
-            // A session that never finalised is never written, so the only way to lose one is for
-            // its file to be unreadable — which is counted separately. This stays zero until the
-            // store gains a way to persist a run that did not finish.
-            incompleteSessions: 0,
-            resolved.UnreadableSessions,
-            resolved.SkewedSessions,
-            options.Top,
-            latestRun,
-            options.Id,
-
-            // What every printed command has to repeat to land on this report again.
-            new ReportScope(assembly, options.Assembly != null, options.Runs, options.Since, options.Directory));
+        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
+            options,
+            resolved,
+            assembly,
+            assemblyGiven: options.Assembly != null,
+            shortFingerprint: options.Id != null && assembly != null
+                ? fingerprint => ShortFingerprintOf(source, assembly, fingerprint)
+                : null);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -131,21 +102,308 @@ internal sealed class ReportCommand(
             if (options.Format == ReportFormat.Json)
                 new JsonReportRenderer().Render(envelope, io.Output);
 
-            return ExitCodes.FindingNotReported;
+            return ExitCodes.NotFound;
         }
+
+        return await EnrichAndRenderAsync(
+            options, envelope, analysis, resolved, startDirectory, store, source, assembly, options.Assembly != null, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows the history of the one test a name resolves to, or says why it resolves to none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name is looked up across the whole store before any window is chosen, because the name
+    /// is what picks the assembly: a test is reached by what it is called, not by which suite ran
+    /// last. Once it resolves, the command is that assembly's report over the whole-store window,
+    /// with the findings about that test in it.
+    /// </para>
+    /// <para>
+    /// A name that resolves to no test is answered from the lookup alone. Only a script reading JSON
+    /// gets a report around the answer (Amendment 5A), and a window that cannot be opened for that
+    /// report never replaces the answer: it is about the name, and the window is not.
+    /// </para>
+    /// </remarks>
+    private async Task<int> RunTestAsync(
+        ReportOptions options,
+        string query,
+        string startDirectory,
+        ILocalSessionStore store,
+        LocalSessionSource source,
+        CancellationToken cancellationToken)
+    {
+        TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
+
+        if (lookup.Read.Window is not { } read || lookup.Resolution is not { } resolution)
+            return ReportUnavailable(lookup.Read, store, options.Assembly);
+
+        // The same refusal report makes, for the same reason: runs that name no assembly cannot be
+        // scoped, so "no test matching" would blame the name for what is a property of the store.
+        if (options.Assembly == null && resolution.AssemblyCount == 0)
+            return ReportNothingAttributable(store);
+
+        if (resolution.Match is not { } match)
+            return Unresolved(options, resolution, lookup.Read, read, source);
+
+        WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, match.Assembly));
+
+        // A --since later than every run of the assembly opens no window at all. That is still a
+        // test outside the window: the lookup just found it, so "no runs recorded" would be false.
+        if (resolved.Failure == WindowFailure.EmptyStore && options.Since != null)
+            return OutsideWindow(options, query, match, resolved);
+
+        if (resolved.Window == null)
+            return ReportUnavailable(resolved, store, match.Assembly);
+
+        if (!TestResolver.InWindow(match, resolved.Window))
+            return OutsideWindow(options, query, match, resolved);
+
+        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
+            options,
+            resolved,
+            match.Assembly,
+
+            // The assembly came from the name. A printed command that left it out would scope
+            // itself to whichever assembly ran last (Amendment 5B).
+            assemblyGiven: true,
+            (context, _) => TestHistoryBuilder.Found(context, query, match));
+
+        WriteClockWarning(resolved);
+
+        return await EnrichAndRenderAsync(
+            options, envelope, analysis, resolved, startDirectory, store, source, match.Assembly, assemblyGiven: true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Answers a name whose test ran, but in none of the runs the narrowed window holds.
+    /// </summary>
+    /// <remarks>
+    /// Over the test's own assembly and that window, which are what the reader asked about: the
+    /// name chose the assembly, and the flag chose the window (Amendment 5A). When the flag left no
+    /// session at all there is no report to write around the answer, so a script gets the exit
+    /// code and nothing on standard output.
+    /// </remarks>
+    private int OutsideWindow(ReportOptions options, string query, TestMatch match, WindowResult resolved)
+    {
+        WriteReadWarnings(resolved);
+
+        io.Error.WriteLine(resolved.Window is { } window
+            ? TestResolver.OutsideWindowMessage(query, match, window)
+            : TestResolver.OutsideWindowMessage(query, match, "--since", options.Since));
+
+        if (options.Format == ReportFormat.Json && resolved.Window != null)
+            RenderUnresolved(options, resolved, match.Assembly, TestHistoryBuilder.NotFound(query));
+
+        return ExitCodes.NotFound;
+    }
+
+    /// <summary>
+    /// Answers a name that resolved to no test: the message, and for a script the report around it.
+    /// </summary>
+    /// <param name="options">Parsed command-line options.</param>
+    /// <param name="resolution">The ambiguous or empty resolution.</param>
+    /// <param name="lookup">The whole-store read the name was resolved over.</param>
+    /// <param name="read">That read's window.</param>
+    /// <param name="source">Where sessions are read from.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// The lookup's warnings are repeated because they can be the whole explanation: a test whose
+    /// every run sits in an unreadable file is not found, and saying so without the count would
+    /// tell the reader it never ran.
+    /// </remarks>
+    private int Unresolved(
+        ReportOptions options,
+        TestResolution resolution,
+        WindowResult lookup,
+        AnalysisWindow read,
+        LocalSessionSource source)
+    {
+        // Every candidate's command names its own assembly and nothing of the window, so the scope
+        // it is built from needs only the directory.
+        (TestHistoryDto history, int exitCode) = resolution.Kind == TestResolutionKind.Ambiguous
+            ? (TestHistoryBuilder.Ambiguous(
+                    resolution,
+                    new ReportScope(
+                        options.Assembly, read.Resolution, read.SessionCount,
+                        AssemblyGiven: true, Directory: options.Directory)),
+                ExitCodes.TestAmbiguous)
+            : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
+
+        WriteReadWarnings(lookup);
+
+        if (history.Candidates.Count > 0)
+            WriteAmbiguous(resolution.Query, history.Candidates);
+        else
+            io.Error.WriteLine(TestResolver.NotFoundMessage(resolution));
+
+        if (options.Format != ReportFormat.Json)
+            return exitCode;
+
+        // Report's own scope over the --test window (Amendment 5A). Where that scope has no window to
+        // open, the answer above stands alone rather than being replaced by a failure about a window
+        // the reader never asked a question of.
+        if ((options.Assembly ?? windowResolver.ScopeAssembly(source)) is { } assembly
+            && windowResolver.Resolve(source, TestWindow(options, assembly)) is { Window: not null } resolved)
+        {
+            RenderUnresolved(options, resolved, assembly, history);
+        }
+
+        return exitCode;
+    }
+
+    /// <summary>
+    /// Writes the report around a name that resolved to no test, for a script to read.
+    /// </summary>
+    /// <remarks>
+    /// The full report over that scope, as <c>--id</c>'s not-reported path writes it, so the summary
+    /// and truncation describe the same report a script would get without the name.
+    /// </remarks>
+    private void RenderUnresolved(ReportOptions options, WindowResult resolved, string assembly, TestHistoryDto history)
+    {
+        (ReportEnvelope envelope, _) = Analyze(
+            options, resolved, assembly, assemblyGiven: true, (_, _) => history);
+
+        new JsonReportRenderer().Render(envelope, io.Output);
+    }
+
+    /// <summary>
+    /// Works out one test's short fingerprint, for <c>--id</c>'s history command.
+    /// </summary>
+    /// <remarks>
+    /// Over the whole store and not the report's window, because that is what <c>--test</c> resolves
+    /// the printed prefix over: one unique among the window's tests could match an older test too.
+    /// Read only when the selection is about one test, so any other <c>--id</c> pays nothing.
+    /// </remarks>
+    private string? ShortFingerprintOf(LocalSessionSource source, string assembly, string fingerprint) =>
+        windowResolver.Resolve(source, new WindowRequest(Runs: null, Since: null, assembly, WholeStore: true)).Window
+            is { } store
+            ? TestResolver.ShortFingerprintOf(store.Sessions, assembly, fingerprint)
+            : null;
+
+    /// <summary>
+    /// The window <c>--test</c> reads: the whole store, unless <c>--runs</c> or <c>--since</c>
+    /// replaces it.
+    /// </summary>
+    private static WindowRequest TestWindow(ReportOptions options, string assembly) =>
+        new(options.Runs, options.Since, assembly, WholeStore: options.Runs == null && options.Since == null);
+
+    /// <summary>
+    /// Runs the providers over a resolved window and builds the envelope.
+    /// </summary>
+    /// <param name="options">Parsed command-line options.</param>
+    /// <param name="resolved">The window, which must have resolved.</param>
+    /// <param name="assembly">The assembly the report covers.</param>
+    /// <param name="assemblyGiven">Whether every printed command has to name the assembly.</param>
+    /// <param name="history">
+    /// Builds what <c>--test</c> resolved to over the window, or <see langword="null"/> when the
+    /// command is not <c>--test</c>.
+    /// </param>
+    /// <param name="shortFingerprint">
+    /// Works out a test's short fingerprint over the assembly's whole store, for <c>--id</c>'s
+    /// history command; <see langword="null"/> otherwise.
+    /// </param>
+    /// <returns>The envelope, and the analysis behind it.</returns>
+    /// <remarks>
+    /// One sequence for <c>report</c>, <c>--id</c> and <c>--test</c>, so the findings a selection
+    /// answers about are always the full report's findings, computed the same way.
+    /// </remarks>
+    private (ReportEnvelope Envelope, AnalysisResult Analysis) Analyze(
+        ReportOptions options,
+        WindowResult resolved,
+        string? assembly,
+        bool assemblyGiven,
+        Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null,
+        Func<string, string?>? shortFingerprint = null)
+    {
+        AnalysisWindow window = resolved.Window
+            ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
+
+        var context = new AnalysisContext(window, RevisionContext.FromNewest(window.Sessions, assembly));
+
+        // Never narrowed under --id or --test. The parser rejects --kind beside either, and this
+        // holds whatever built the options: narrowing only ever removes findings — a handover
+        // silenced by a filter on its alternative's kind is one — so a narrowed run could miss a
+        // finding the full report reports, and a selection has to answer for the full report.
+        IReadOnlySet<FindingKind>? kinds =
+            options.Id != null || options.Test != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
+
+        AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
+
+        // Beside the coordinator and not inside it: these rows are observations of one session,
+        // not hypotheses, and must never be ranked, corrected or graded with the findings. A null
+        // --top is --all, and --all lifts this section's cap along with the findings'.
+        //
+        // The findings passed here are the ones --kind asked for, so --kind narrows what the
+        // section defers to rather than what it reports: a test whose only finding was filtered
+        // out is listed as a row instead of counted on the closing line. The row states a true
+        // thing either way, and recovering the unfiltered set would mean running every provider a
+        // second time to change one line of prose.
+        LatestRunAnalysis? latestRun = LatestRunAnalyzer.Analyze(
+            context, analysis.Findings, showAll: options.Top == null);
+
+        // What every printed command has to repeat to land on this report again.
+        var scope = new ReportScope(
+            assembly,
+            window.Resolution,
+            window.SessionCount,
+            assemblyGiven,
+            options.Runs,
+            options.Since,
+            options.Directory);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context,
+            analysis,
+
+            // A session that never finalised is never written, so the only way to lose one is for
+            // its file to be unreadable — which is counted separately. This stays zero until the
+            // store gains a way to persist a run that did not finish.
+            incompleteSessions: 0,
+            resolved.UnreadableSessions,
+            resolved.SkewedSessions,
+            options.Top,
+            latestRun,
+            options.Id,
+            scope,
+            history?.Invoke(context, scope),
+            shortFingerprint);
+
+        return (envelope, analysis);
+    }
+
+    /// <summary>
+    /// Adds Cloud data to a report the local analysis has finished deciding, then writes it.
+    /// </summary>
+    private async Task<int> EnrichAndRenderAsync(
+        ReportOptions options,
+        ReportEnvelope envelope,
+        AnalysisResult analysis,
+        WindowResult resolved,
+        string startDirectory,
+        ILocalSessionStore store,
+        LocalSessionSource source,
+        string? assembly,
+        bool assemblyGiven,
+        CancellationToken cancellationToken)
+    {
+        AnalysisWindow window = resolved.Window
+            ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
 
         // After every exit path the local analysis decides, so Cloud can never change one. The
         // one-line summary has no slot for Cloud data, so it is not worth a request.
         if (options.Format != ReportFormat.Summary)
         {
-            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(resolved.Window.Sessions));
+            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions));
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints);
             envelope = enriched.Envelope;
         }
 
-        return Render(options, envelope, analysis, resolved.Window, store, source, assembly);
+        return Render(options, envelope, analysis, window, store, source, assembly, assemblyGiven);
     }
 
     /// <summary>
@@ -158,7 +416,8 @@ internal sealed class ReportCommand(
         AnalysisWindow window,
         ILocalSessionStore store,
         LocalSessionSource source,
-        string? assembly)
+        string? assembly,
+        bool assemblyGiven)
     {
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
@@ -179,7 +438,7 @@ internal sealed class ReportCommand(
         // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
         if (pad)
         {
-            WriteScopeNotice(source, assembly, options.Assembly != null);
+            WriteScopeNotice(source, assembly, assemblyGiven);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
@@ -187,8 +446,8 @@ internal sealed class ReportCommand(
             io.Output.WriteLine();
         }
 
-        // --fail-on is rejected beside --id, so a selected finding never fails the command.
-        return envelope.Selection != null
+        // --fail-on is rejected beside --id and --test, so neither selection ever fails the command.
+        return envelope.Selection != null || envelope.Test != null
             ? ExitCodes.Success
             : ExitCodes.ForReport(analysis.Findings, options.FailOn);
     }
@@ -253,7 +512,7 @@ internal sealed class ReportCommand(
     /// Always exit code 2, never 1. A build step has to tell "I looked and found problems" apart
     /// from "I could not look", and every case here is the second.
     /// </remarks>
-    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, ReportOptions options)
+    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly)
     {
         TextWriter error = io.Error;
 
@@ -270,9 +529,9 @@ internal sealed class ReportCommand(
                 break;
 
             default:
-                error.WriteLine(options.Assembly == null
+                error.WriteLine(assembly == null
                     ? $"No runs recorded yet in {store.StorePath}"
-                    : $"No runs recorded for assembly '{options.Assembly}' in {store.StorePath}");
+                    : $"No runs recorded for assembly '{assembly}' in {store.StorePath}");
 
                 if (result.FailureDetail is { Length: > 0 } detail)
                     error.WriteLine(detail);
@@ -281,12 +540,20 @@ internal sealed class ReportCommand(
                 break;
         }
 
-        if (result.UnreadableSessions > 0)
-            error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
-
-        WriteClockWarning(result);
+        WriteReadWarnings(result);
 
         return ExitCodes.InsufficientData;
+    }
+
+    /// <summary>
+    /// Says what a read could not use: files it could not read, and runs it could not date.
+    /// </summary>
+    private void WriteReadWarnings(WindowResult result)
+    {
+        if (result.UnreadableSessions > 0)
+            io.Error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
+
+        WriteClockWarning(result);
     }
 
     /// <summary>
@@ -341,6 +608,42 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
+    /// Lists the tests a name matched, and the command that names the first of them alone.
+    /// </summary>
+    /// <param name="query">The name the reader typed.</param>
+    /// <param name="candidates">Every test it matched, newest run first.</param>
+    /// <remarks>
+    /// Capped, because a name like <c>Add</c> can match a parameterised test's every case, and past
+    /// ten the reader needs a longer name rather than a longer list. Each name is broken as the
+    /// report breaks one, so the list survives being pasted into a chat.
+    /// </remarks>
+    private void WriteAmbiguous(string query, IReadOnlyList<TestCandidateDto> candidates)
+    {
+        const int Shown = 10;
+        const int NameIndent = 4;
+
+        TextWriter error = io.Error;
+
+        error.WriteLine($"'{query}' matches {candidates.Count} tests. Name one by its fingerprint:");
+
+        foreach (TestCandidateDto candidate in candidates.Take(Shown))
+        {
+            error.WriteLine($"  {candidate.FingerprintPrefix}  {candidate.Assembly}");
+
+            foreach (string line in TextReportRenderer.WrapValue(
+                candidate.FullyQualifiedName, TextReportRenderer.FenceWidth - NameIndent))
+            {
+                error.WriteLine(new string(' ', NameIndent) + line);
+            }
+        }
+
+        if (candidates.Count > Shown)
+            error.WriteLine($"  +{candidates.Count - Shown} more");
+
+        error.WriteLine(candidates[0].Command);
+    }
+
+    /// <summary>
     /// Says that the finding <c>--id</c> named is not in this report, and where its subject went.
     /// </summary>
     /// <remarks>
@@ -378,7 +681,6 @@ internal sealed class ReportCommand(
                        $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
                    .Append('.');
         }
-
         int others = OtherAssemblies(source, assembly);
 
         if (others > 0)
@@ -390,6 +692,11 @@ internal sealed class ReportCommand(
         }
 
         io.Error.WriteLine(message.ToString());
+
+        // A line of its own, ending on the command: anything after it would be copied with it and
+        // run as arguments.
+        if (selection.SameSubject.Count == 0 && selection.History is { } history)
+            io.Error.WriteLine($"Its test has no findings in this window: {history}");
     }
 
     /// <summary>

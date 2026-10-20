@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models;
 
@@ -45,6 +46,17 @@ internal static class EnvelopeBuilder
     /// What the report was scoped to, which every command it prints repeats; by default the
     /// assembly the window covers and nothing the caller typed.
     /// </param>
+    /// <param name="test">
+    /// What <c>--test</c> resolved to, from <see cref="TestHistoryBuilder"/>, or
+    /// <see langword="null"/> for the full report. When it names a test, the findings shown are the
+    /// ones about that test; when it does not, none. Everything else is built exactly as the full
+    /// report builds it.
+    /// </param>
+    /// <param name="shortFingerprint">
+    /// Works out the short fingerprint the selection's history command names its test by, from the
+    /// full one. Called at most once, and only when the selection is about one test;
+    /// <see langword="null"/> leaves that command out.
+    /// </param>
     /// <returns>The envelope.</returns>
     public static ReportEnvelope Build(
         AnalysisContext context,
@@ -55,9 +67,15 @@ internal static class EnvelopeBuilder
         int? top,
         LatestRunAnalysis? latestRun,
         string? id = null,
-        ReportScope? scope = null)
+        ReportScope? scope = null,
+        TestHistoryDto? test = null,
+        Func<string, string?>? shortFingerprint = null)
     {
-        scope ??= new ReportScope(context.Revision?.Assembly);
+        if (id != null && test != null)
+            throw new ArgumentException("--id and --test are mutually exclusive.", nameof(test));
+
+        scope ??= new ReportScope(
+            context.Revision?.Assembly, context.Window.Resolution, context.Window.SessionCount);
 
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test
@@ -66,13 +84,22 @@ internal static class EnvelopeBuilder
 
         // Over this list and no other, so the row a selection reports is the row this envelope
         // numbers, and cannot come from an ordering computed somewhere else.
-        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id);
+        FindingSelection? selection = id == null ? null : FindingSelector.Select(ordered, id, context.Tests.Fingerprints);
+
+        // Numbered over the same list, for the same reason: the row --test reports for a finding is
+        // the row the full report and --id give it.
+        List<(Finding Finding, int Row)>? about = test == null ? null : AboutTest(ordered, test);
 
         IReadOnlyList<Finding> shown = selection != null
             ? selection.Finding is { } selected ? [selected] : []
-            : top is { } limit && limit < ordered.Count
-                ? [.. ordered.Take(limit)]
-                : ordered;
+            : about != null
+                ? [.. about.Select(a => a.Finding)]
+                : top is { } limit && limit < ordered.Count
+                    ? [.. ordered.Take(limit)]
+                    : ordered;
+
+        if (about != null && test?.Test?.Fingerprint is { } fingerprint)
+            test = WithFindings(test, fingerprint, about, context);
 
         Dictionary<string, string> annotations = Annotations(ordered);
 
@@ -87,8 +114,8 @@ internal static class EnvelopeBuilder
         var flagged = new HashSet<string>(StringComparer.Ordinal);
         foreach (Finding finding in result.Findings)
         {
-            foreach (TestReference test in finding.Subject.Tests)
-                flagged.Add(test.TestFingerprint);
+            foreach (TestReference reference in finding.Subject.Tests)
+                flagged.Add(reference.TestFingerprint);
 
             // Counted over every finding produced, not over the truncated list: `--top` decides how
             // much is shown and must never decide what the report says it found.
@@ -127,7 +154,8 @@ internal static class EnvelopeBuilder
                 skewedSessions,
                 result.FailedProviders),
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
-            selection == null ? null : BuildSelection(selection),
+            selection == null ? null : BuildSelection(selection, History(selection, shortFingerprint, scope)),
+            test,
             [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
     }
@@ -173,13 +201,86 @@ internal static class EnvelopeBuilder
             analysis.FailuresTotal);
     }
 
-    private static SelectionDto BuildSelection(FindingSelection selection) =>
+    /// <summary>
+    /// Picks the findings about the test <c>--test</c> resolved to.
+    /// </summary>
+    /// <param name="ordered">Every finding produced, already adjacent.</param>
+    /// <param name="test">What the name resolved to.</param>
+    /// <returns>
+    /// Its single-test findings, then the clusters it is a member of, each in report order; none when
+    /// the name resolved to no test.
+    /// </returns>
+    private static List<(Finding Finding, int Row)> AboutTest(IReadOnlyList<Finding> ordered, TestHistoryDto test)
+    {
+        if (test.Test?.Fingerprint is not { } fingerprint)
+            return [];
+
+        List<(Finding Finding, int Row)> about = FindingSelector.About(ordered, f => FindingOrder.IsAbout(f, fingerprint));
+
+        return [.. about.Where(a => a.Finding.Subject is FindingSubject.SingleTest), .. about.Where(a => a.Finding.Subject is not FindingSubject.SingleTest)];
+    }
+
+    /// <summary>
+    /// Completes a resolved history with its findings' rows and, when there are none, the reason.
+    /// </summary>
+    /// <remarks>
+    /// The reason is given only when the floors explain the empty block: a test that cleared them and
+    /// has no finding is simply healthy, and saying "too little history" would be false.
+    /// </remarks>
+    private static TestHistoryDto WithFindings(
+        TestHistoryDto test,
+        string fingerprint,
+        List<(Finding Finding, int Row)> about,
+        AnalysisContext context)
+    {
+        int ran = context.Tests.SessionsRunIn(fingerprint);
+        int window = context.Window.SessionCount;
+
+        string? withheld = about.Count == 0 && !EvidenceLevelResolver.MeetsReportingFloor(ran, window)
+            ? WithheldReason(ran)
+            : null;
+
+        return test with
+        {
+            FindingsWithheld = withheld,
+            FindingRows = [.. about.Select(a => new SameSubjectDto(a.Finding.Id, a.Finding.Kind.ToString(), a.Row))]
+        };
+    }
+
+    /// <summary>
+    /// Says why the findings block is empty (D6).
+    /// </summary>
+    /// <remarks>
+    /// Always counted in the test's runs. A test cannot run in more sessions than the window holds,
+    /// so the sentence stays true when it is the window that fell short.
+    /// </remarks>
+    private static string WithheldReason(int ran) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"too little history to judge: findings need {LocalAnalysisConstants.MinimumSessionsPerTestToReport} runs, this test has {ran}");
+
+    private static SelectionDto BuildSelection(FindingSelection selection, string? history) =>
         new(
             selection.Id,
             selection.Finding != null,
             selection.Kind?.ToString(),
             selection.Row,
-            [.. selection.SameSubject.Select(same => new SameSubjectDto(same.Finding.Id, same.Finding.Kind.ToString(), same.Row))]);
+            [.. selection.SameSubject.Select(same => new SameSubjectDto(same.Finding.Id, same.Finding.Kind.ToString(), same.Row))],
+            history);
+
+    /// <summary>
+    /// Builds the command that shows the history of the test a selection is about (D11).
+    /// </summary>
+    /// <remarks>
+    /// Left out rather than guessed when the test has no short fingerprint: a full fingerprint would
+    /// still resolve, but a prefix computed over anything but the assembly's whole store might name
+    /// a different test once <c>--test</c> reads it.
+    /// </remarks>
+    private static string? History(
+        FindingSelection selection, Func<string, string?>? shortFingerprint, ReportScope scope) =>
+        selection.Test is { } test && shortFingerprint?.Invoke(test) is { } prefix
+            ? DrillDown.ForTest(prefix, scope)
+            : null;
 
     private static LatestRunFailureDto BuildLatestRunFailure(LatestRunFailure failure) =>
         new(
@@ -377,7 +478,12 @@ internal static class EnvelopeBuilder
             _ => throw new NotSupportedException($"Unknown subject type '{subject.GetType().Name}'.")
         };
 
-    private static SubjectDto ForTest(TestReference test) =>
+    /// <summary>
+    /// Projects one test into the envelope, with the name it is shown under resolved.
+    /// </summary>
+    /// <param name="test">The test.</param>
+    /// <returns>A single-test subject.</returns>
+    internal static SubjectDto ForTest(TestReference test) =>
         new(
             "test",
             test.TestFingerprint,

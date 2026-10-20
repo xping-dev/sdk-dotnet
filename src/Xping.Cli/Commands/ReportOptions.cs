@@ -55,6 +55,12 @@ internal sealed class ReportOptions
     /// </summary>
     public string? Id { get; set; }
 
+    /// <summary>
+    /// Gets or sets the name or fingerprint of the test to show the history of, or
+    /// <see langword="null"/> for the full report.
+    /// </summary>
+    public string? Test { get; set; }
+
     /// <summary>Gets or sets the directory to resolve the store from. Defaults to the working directory.</summary>
     public string? Directory { get; set; }
 

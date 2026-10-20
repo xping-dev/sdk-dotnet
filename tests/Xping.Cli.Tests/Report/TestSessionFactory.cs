@@ -104,6 +104,8 @@ internal static class TestSessionFactory
     /// before this field existed looks like.
     /// </param>
     /// <param name="failureSiteMember">The lifecycle member that failed, when one was named.</param>
+    /// <param name="fingerprint">The fingerprint, when it must not derive from the name.</param>
+    /// <param name="fullyQualifiedName">The FQN, when it must not derive from the name.</param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -125,11 +127,13 @@ internal static class TestSessionFactory
         int? concurrency = null,
         int? timeoutBudgetMs = null,
         FailureSite? failureSite = null,
-        string? failureSiteMember = null)
+        string? failureSiteMember = null,
+        string? fingerprint = null,
+        string? fullyQualifiedName = null)
     {
         TestIdentity identity = new TestIdentityBuilder()
-            .WithTestFingerprint($"fp-{name}")
-            .WithFullyQualifiedName($"MyApp.Tests.SampleTests.{name}")
+            .WithTestFingerprint(fingerprint ?? $"fp-{name}")
+            .WithFullyQualifiedName(fullyQualifiedName ?? $"MyApp.Tests.SampleTests.{name}")
             .WithAssembly(assembly)
             .WithNamespace("MyApp.Tests")
             .WithClassName("SampleTests")

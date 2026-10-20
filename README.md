@@ -189,6 +189,7 @@ xping report --fail-on high     # exit non-zero when a high finding shows up
 xping report --runs 50          # widen the window (or --since <sha|yyyy-MM-dd>)
 xping report --kind flaky       # restrict to one or more finding kinds
 xping report --id f_445c562e    # one finding in detail, by the id on its row
+xping report --test Login       # one test's history, run by run
 xping where                     # show where local runs are stored
 xping clear                     # delete recorded runs
 ```

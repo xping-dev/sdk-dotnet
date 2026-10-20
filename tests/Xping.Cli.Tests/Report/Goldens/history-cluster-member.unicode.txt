@@ -1,0 +1,51 @@
+Xping · SampleApp.MSTest · 10 runs · 2026-08-21 10:12 → 16:21 · main@c670fc3
+16 tests · 11 healthy · 5 flagged
+
+```
+TEST                                                         fp e4a90c1f
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.FixtureTests.SecondTestNeedingTheDatabase
+    source  tests/SampleApp.MSTest/FixtureTests.cs:19
+
+ran in 10 of 10 runs: 0 passed, 0 passed on retry, 10 failed
+duration p50 3ms · p95 3ms · range 3ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-21 16:21  ✗                        3ms  c670fc3
+  08-21 15:40  ✗                        3ms  c670fc3
+  08-21 14:59  ✗                        3ms  c670fc3
+  08-21 14:18  ✗                        3ms  c670fc3
+  08-21 13:37  ✗                        3ms  c670fc3
+  08-21 12:56  ✗                        3ms  c670fc3
+  08-21 12:15  ✗                        3ms  c670fc3
+  08-21 11:34  ✗                        3ms  c670fc3
+  08-21 10:53  ✗                        3ms  c670fc3
+  08-21 10:12  ✗                        3ms  c670fc3
+
+FINDINGS                                                      2 findings
+────────────────────────────────────────────────────────────────────────
+
+3.  HIGH  always failing
+    failed 10 of 10 executions (100%), one failure mode:
+    System.InvalidOperationException
+    evidence moderate | -env-cluster | f_1b44e0c9 | ...ixtureTests.cs:19
+
+1.  HIGH  broken fixture
+    UnprovisionedDatabase..ctor (3 tests)
+      FixtureTests.FirstTestNeedingTheDatabase
+      FixtureTests.SecondTestNeedingTheDatabase
+      FixtureTests.ThirdTestNeedingTheDatabase
+    UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10
+    runs
+    evidence high | all runs | f_7c905f05
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 10
+Detail of row 3: xping report --id f_1b44e0c9 --assembly SampleApp.MSTest --runs 10

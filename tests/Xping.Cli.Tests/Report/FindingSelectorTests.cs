@@ -153,6 +153,61 @@ public sealed class FindingSelectorTests
         }
     }
 
+    /// <summary>
+    /// An id no finding's subject carries still names a test that ran with no finding (D11).
+    /// </summary>
+    [Fact]
+    public void AnIdOfATestWithNoFindingNamesThatTest()
+    {
+        Finding alpha = Test(FindingKind.Flaky, "fp-Alpha");
+        string healthy = FindingId.Compute(FindingKind.Vanished, "fp-Healthy");
+
+        FindingSelection selection = FindingSelector.Select([alpha], healthy, ["fp-Alpha", "fp-Healthy"]);
+
+        Assert.Null(selection.Finding);
+        Assert.Equal(FindingKind.Vanished, selection.Kind);
+        Assert.Empty(selection.SameSubject);
+        Assert.Equal("fp-Healthy", selection.Test);
+    }
+
+    [Fact]
+    public void AnIdOfAReportedSubjectGoesToItsFindingAndNotToTheTest()
+    {
+        Finding alpha = Test(FindingKind.Flaky, "fp-Alpha");
+        string moved = FindingId.Compute(FindingKind.Vanished, "fp-Alpha");
+
+        FindingSelection selection = FindingSelector.Select([alpha], moved, ["fp-Alpha"]);
+
+        Assert.Equal(alpha, Assert.Single(selection.SameSubject).Finding);
+        Assert.Null(selection.Test);
+    }
+
+    /// <summary>
+    /// A test inside a reported cluster has a finding about it: the cluster, not a history with none.
+    /// </summary>
+    [Fact]
+    public void AnIdOfAClusterMemberNamesTheCluster()
+    {
+        Finding cluster = Group(FindingKind.BrokenFixture, "sig_1", "fp-Beta", "fp-Gamma");
+        string member = FindingId.Compute(FindingKind.Flaky, "fp-Beta");
+
+        FindingSelection selection = FindingSelector.Select([cluster], member, ["fp-Beta", "fp-Gamma"]);
+
+        Assert.Equal(FindingKind.Flaky, selection.Kind);
+        Assert.Equal(cluster, Assert.Single(selection.SameSubject).Finding);
+        Assert.Null(selection.Test);
+    }
+
+    [Fact]
+    public void AReportedFindingNamesItsTestAndAClusterNone()
+    {
+        Finding alpha = Test(FindingKind.Flaky, "fp-Alpha");
+        Finding cluster = Group(FindingKind.BrokenFixture, "sig_1", "fp-Beta", "fp-Gamma");
+
+        Assert.Equal("fp-Alpha", FindingSelector.Select([alpha, cluster], alpha.Id).Test);
+        Assert.Null(FindingSelector.Select([alpha, cluster], cluster.Id).Test);
+    }
+
     private static Finding Test(FindingKind kind, string fingerprint) =>
         Build(kind, new FindingSubject.SingleTest(Reference(fingerprint)));
 
