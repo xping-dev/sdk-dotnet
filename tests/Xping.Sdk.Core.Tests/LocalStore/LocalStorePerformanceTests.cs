@@ -62,7 +62,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
         }
     }
 
-    private static TestSession BuildSession(int count, DateTime startedAt)
+    private static TestSession BuildSession(int count, DateTime startedAt, string? assembly = null)
     {
         var executions = Enumerable.Range(0, count).Select(i => new TestExecutionBuilder()
             .WithExecutionId(Guid.NewGuid())
@@ -91,6 +91,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
                 .WithEnvironmentName("Local")
                 .Build())
             .AddExecutions(executions)
+            .WithAssemblies(assembly == null ? null : [assembly])
             .WithSessionState(TestSessionState.Finalized)
             .Build();
     }
@@ -152,18 +153,54 @@ public sealed class LocalStorePerformanceTests : IDisposable
         // Arrange — a full analysis window of large runs, the worst realistic read.
         // This cost is paid by `xping report`, not by a test run: the SDK only writes.
         var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
-        for (int i = 0; i < 12; i++)
+        for (int i = 0; i < ReportWindow.DefaultRuns; i++)
             store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
 
         // Act
         var sw = Stopwatch.StartNew();
-        var sessions = store.ReadRecent(12).Sessions;
+        var sessions = store.ReadRecent(ReportWindow.DefaultRuns).Sessions;
         sw.Stop();
 
         // Assert
-        _output.WriteLine(FormatMs("Read 12 x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
-        Assert.Equal(12, sessions.Count);
+        _output.WriteLine(FormatMs(
+            $"Read {ReportWindow.DefaultRuns} x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
+        Assert.Equal(ReportWindow.DefaultRuns, sessions.Count);
         Assert.True(sw.ElapsedMilliseconds < 5000, $"Read took {sw.ElapsedMilliseconds}ms.");
+    }
+
+    [Fact]
+    public void WritingIntoAFullStoreStaysWellInsideBudget()
+    {
+        // Arrange — a store at its run limit, every file a 2,000-test run, so the next write pays
+        // the per-assembly count over all of them. Copies of one file stand in for distinct runs:
+        // retention reads names, not contents.
+        var options = new LocalStoreOptions();
+        var store = new JsonSessionStore(options, NullLogger.Instance);
+        DateTime start = DateTime.UtcNow.AddHours(-1);
+
+        store.Write(BuildSession(SuiteSize, start, "MyCompany.Product.Tests"));
+
+        string directory = LocalStorePathResolver.GetSessionsDirectory(_root);
+        string template = Directory.GetFiles(directory).Single();
+
+        for (int i = 1; i < options.MaxRuns; i++)
+        {
+            string name = SessionFileName.Build(start.AddSeconds(i), Guid.NewGuid(), ["MyCompany.Product.Tests"]);
+            File.Copy(template, Path.Combine(directory, name));
+        }
+
+        TestSession session = BuildSession(SuiteSize, DateTime.UtcNow, "MyCompany.Product.Tests");
+
+        // Act
+        var sw = Stopwatch.StartNew();
+        store.Write(session);
+        sw.Stop();
+
+        // Assert
+        _output.WriteLine(FormatMs(
+            $"Write into a full store of {options.MaxRuns} x 2,000-test runs", sw.Elapsed.TotalMilliseconds));
+        Assert.Equal(options.MaxRuns, Directory.GetFiles(directory).Length);
+        Assert.True(sw.ElapsedMilliseconds < 1000, $"Write took {sw.ElapsedMilliseconds}ms.");
     }
 
     [Fact]

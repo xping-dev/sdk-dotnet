@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services.LocalStore;
+
 namespace Xping.Cli.Report;
 
 /// <summary>
@@ -57,9 +59,10 @@ internal static class LocalAnalysisConstants
     /// </summary>
     /// <remarks>
     /// Enough for a rate to mean something, few enough that a fix made last week is not drowned by
-    /// the month before it.
+    /// the month before it. Defined in Core as <see cref="ReportWindow.DefaultRuns"/>, because
+    /// retention has to keep at least this many runs of every assembly.
     /// </remarks>
-    public const int DefaultWindowSessions = 20;
+    public const int DefaultWindowSessions = ReportWindow.DefaultRuns;
 
     /// <summary>
     /// Days in the default window (14).
@@ -67,8 +70,9 @@ internal static class LocalAnalysisConstants
     /// <remarks>
     /// Applied together with <see cref="DefaultWindowSessions"/>, whichever yields fewer sessions.
     /// A developer returning from leave should not have last month's flakiness reported as current.
+    /// Defined in Core as <see cref="ReportWindow.DefaultDays"/>, alongside the session count.
     /// </remarks>
-    public const int DefaultWindowDays = 14;
+    public const int DefaultWindowDays = ReportWindow.DefaultDays;
 
     /// <summary>
     /// Hours a session may be stamped ahead of this machine's clock and still be believed (24).

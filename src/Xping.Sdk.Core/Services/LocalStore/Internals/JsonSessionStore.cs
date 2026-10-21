@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -31,10 +30,6 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </remarks>
 internal sealed class JsonSessionStore : ILocalSessionStore
 {
-    private const string FilePrefix = "session-";
-    private const string FileSuffix = ".json.gz";
-    private const string SearchPattern = FilePrefix + "*" + FileSuffix;
-
     private readonly LocalStoreOptions _options;
     private readonly ILogger _logger;
     private readonly Lazy<string?> _storePath;
@@ -81,10 +76,14 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             LocalStorePathResolver.EnsureCreated(root);
 
             string directory = LocalStorePathResolver.GetSessionsDirectory(root);
-            string path = Path.Combine(directory, BuildFileName(session));
+
+            session = SessionAssemblies.WithDerivedAssemblies(session);
+            string path = Path.Combine(
+                directory,
+                SessionFileName.Build(session.StartedAt, session.SessionId, session.Assemblies));
 
             WriteFile(path, session);
-            StoreRetention.Apply(directory, SearchPattern, _options, _logger);
+            StoreRetention.Apply(directory, _options, TagsOf, _logger);
 
             return true;
         }
@@ -115,17 +114,27 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             // newest-first and stop once enough matching sessions are found, so a store shared by
             // several test projects does not force reading every file.
             var files = Directory
-                .GetFiles(directory, SearchPattern)
+                .GetFiles(directory, SessionFileName.SearchPattern)
                 .OrderByDescending(f => f, StringComparer.Ordinal)
                 .ToList();
 
             var sessions = new List<TestSession>(Math.Min(maxSessions, files.Count));
             int unreadable = 0;
+            string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
 
             foreach (string file in files)
             {
                 if (sessions.Count >= maxSessions)
                     break;
+
+                // A tagged name that lacks this assembly's tag is another assembly's run, and is
+                // skipped without being opened. An untagged one says nothing, so it is read.
+                if (tag != null
+                    && SessionFileName.ParseTags(Path.GetFileName(file)) is { } tags
+                    && !tags.Contains(tag, StringComparer.Ordinal))
+                {
+                    continue;
+                }
 
                 TestSession? session = TryReadFile(file);
                 if (session == null)
@@ -173,6 +182,57 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
+    public LocalStoreSummary Summarize()
+    {
+        // Directory.Exists is false for a null path, so an unavailable store lands here too.
+        string? directory = SessionsPath;
+        if (!Directory.Exists(directory))
+            return LocalStoreSummary.Empty;
+
+        try
+        {
+            var runs = new Dictionary<string, (int Runs, DateTime Last)>(StringComparer.Ordinal);
+            int unattributed = 0;
+
+            // Names come from each file's head rather than its tags, which are hashes. The start time
+            // comes from the name, so no session is loaded.
+            // Oldest first, so the last run seen for an assembly is its newest.
+            IEnumerable<string> files = Directory
+                .GetFiles(directory!, SessionFileName.SearchPattern)
+                .OrderBy(f => f, StringComparer.Ordinal);
+
+            foreach (string file in files)
+            {
+                IReadOnlyList<string>? assemblies = SessionFileHeader.ReadAssemblies(file);
+
+                if (assemblies is not { Count: > 0 }
+                    || !SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt))
+                {
+                    unattributed++;
+                    continue;
+                }
+
+                foreach (string assembly in assemblies)
+                {
+                    runs.TryGetValue(assembly, out var entry);
+                    runs[assembly] = (entry.Runs + 1, startedAt);
+                }
+            }
+
+            var summary = runs
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new LocalStoreAssembly(pair.Key, pair.Value.Runs, pair.Value.Last))
+                .ToList();
+
+            return new LocalStoreSummary(summary, unattributed);
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            _logger.LogDebug("Local session store summary skipped: {Message}", ex.Message);
+            return LocalStoreSummary.Empty;
+        }
+    }
+
     public int Delete(string? assembly = null)
     {
         string? root = _storePath.Value;
@@ -187,7 +247,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
             int cleared = 0;
 
-            foreach (string file in Directory.GetFiles(directory, SearchPattern))
+            foreach (string file in Directory.GetFiles(directory, SessionFileName.SearchPattern))
             {
                 if (assembly == null)
                 {
@@ -242,18 +302,6 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             left.SessionId.ToString("N"), right.SessionId.ToString("N"));
     }
 
-    private static string BuildFileName(TestSession session)
-    {
-        string ticks = session.StartedAt.Ticks.ToString("D19", CultureInfo.InvariantCulture);
-        string id = session.SessionId.ToString("N");
-
-        string suffix = id.Length >= 8
-            ? id.Substring(0, 8)
-            : Guid.NewGuid().ToString("N").Substring(0, 8);
-
-        return FilePrefix + ticks + "-" + suffix + FileSuffix;
-    }
-
     private static void WriteFile(string path, TestSession session)
     {
         JsonSerializerOptions options = XpingSerializerOptions.FileOptions;
@@ -290,10 +338,10 @@ internal sealed class JsonSessionStore : ILocalSessionStore
     /// Replaces a session file with a stripped copy of the run it holds.
     /// </summary>
     /// <remarks>
-    /// The name is unchanged: it encodes the run's start ticks and session id, and stripping one
-    /// assembly out of a run alters neither. Writing through <see cref="WriteFile"/> keeps the
-    /// temp-file-then-move guarantee, so a crash mid-rewrite leaves the original run in place rather
-    /// than a half-written file under a name the reader trusts.
+    /// Rewritten in place through <see cref="WriteFile"/>, which keeps the temp-file-then-move
+    /// guarantee, then renamed to carry the tags of the assemblies it still covers. A crash between
+    /// the two leaves the stripped run under its old tags, which only makes a scoped read open it and
+    /// find nothing for the removed assembly: nothing is lost, and nothing wrong is read.
     /// </remarks>
     /// <returns><see langword="true"/> when the file was rewritten.</returns>
     private bool TryRewriteFile(string path, TestSession session)
@@ -301,6 +349,14 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         try
         {
             WriteFile(path, session);
+
+            string renamed = Path.Combine(
+                Path.GetDirectoryName(path)!,
+                SessionFileName.Build(session.StartedAt, session.SessionId, session.Assemblies));
+
+            if (!string.Equals(renamed, path, StringComparison.Ordinal))
+                File.Move(path, renamed);
+
             return true;
         }
         catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
@@ -312,6 +368,17 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             return false;
         }
     }
+
+    /// <summary>
+    /// Returns the keys retention counts a session file under: its name's tags, or, for an untagged
+    /// name, the tags of the assemblies at the head of the file.
+    /// </summary>
+    /// <remarks>
+    /// An unreadable head covers none, and is counted with the other runs that name no assembly.
+    /// </remarks>
+    private static IReadOnlyList<string> TagsOf(FileInfo file) =>
+        SessionFileName.ParseTags(file.Name)
+        ?? (SessionFileHeader.ReadAssemblies(file.FullName) ?? []).Select(SessionFileName.Tag).ToList();
 
     private TestSession? TryReadFile(string path)
     {

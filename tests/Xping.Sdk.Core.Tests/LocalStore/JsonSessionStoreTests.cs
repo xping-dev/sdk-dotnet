@@ -4,6 +4,7 @@
  */
 
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core.Models;
@@ -328,6 +329,260 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void RetentionCountsRunsPerAssembly()
+    {
+        // Three test projects sharing one store must each keep their own history: a store-wide count
+        // would leave each with a third of it, and the report's default window could never fill.
+        JsonSessionStore store = CreateStore();
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        string[] assemblies = ["Alpha.Tests", "Beta.Tests", "Gamma.Tests"];
+
+        for (int i = 0; i < 40; i++)
+        {
+            foreach (string assembly in assemblies)
+                store.Write(BuildSession(baseTime.AddMinutes(i), assembly: assembly));
+        }
+
+        Assert.Equal(120, store.ReadRecent(int.MaxValue).Sessions.Count);
+        foreach (string assembly in assemblies)
+            Assert.Equal(ReportWindow.DefaultRuns, store.ReadRecent(ReportWindow.DefaultRuns, assembly).Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionPrunesTheBusiestAssemblyWithoutTouchingTheOthers()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 3 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildSession(baseTime.AddMinutes(1), assembly: "Beta.Tests"));
+
+        for (int i = 0; i < 6; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(2 + i), assembly: "Alpha.Tests"));
+
+        IReadOnlyList<TestSession> alpha = store.ReadRecent(20, "Alpha.Tests").Sessions;
+        Assert.Equal(3, alpha.Count);
+        Assert.Equal(baseTime.AddMinutes(5), alpha[2].StartedAt);
+        Assert.Equal(2, store.ReadRecent(20, "Beta.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionKeepsAMixedRunWhileAnyOfItsAssembliesStillNeedsIt()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 2 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        // Alpha moves past the mixed run; Beta has run nothing since, so it is still Beta's history.
+        for (int i = 1; i <= 4; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(i), assembly: "Alpha.Tests"));
+
+        Assert.Single(store.ReadRecent(20, "Beta.Tests").Sessions);
+        Assert.Equal(3, store.ReadRecent(20, "Alpha.Tests").Sessions.Count);
+
+        // Once Beta has two newer runs of its own, nothing needs the mixed run any more.
+        store.Write(BuildSession(baseTime.AddMinutes(5), assembly: "Beta.Tests"));
+        store.Write(BuildSession(baseTime.AddMinutes(6), assembly: "Beta.Tests"));
+
+        Assert.Equal(2, store.ReadRecent(20, "Beta.Tests").Sessions.Count);
+        Assert.Equal(2, store.ReadRecent(20, "Alpha.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionDeletesRunsOlderThanTheAgeLimit()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxAge = TimeSpan.FromDays(1) });
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+        string first = Assert.Single(Directory.GetFiles(SessionsDirectory));
+        File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddDays(-2));
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+
+        Assert.Single(store.ReadRecent(20).Sessions);
+        Assert.False(File.Exists(first));
+    }
+
+    [Fact]
+    public void RetentionBySizeSparesEveryAssemblysReportWindowFirst()
+    {
+        // Beta's runs are the oldest in the store. Oldest-first size pruning would delete them all
+        // for Alpha's sake; Alpha's runs beyond its own window have to go first.
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        JsonSessionStore unbounded = CreateStore();
+
+        for (int i = 0; i < ReportWindow.DefaultRuns; i++)
+            unbounded.Write(BuildSession(baseTime.AddMinutes(i), assembly: "Beta.Tests"));
+
+        for (int i = 0; i < 30; i++)
+            unbounded.Write(BuildSession(baseTime.AddMinutes(100 + i), assembly: "Alpha.Tests"));
+
+        FileInfo[] files = new DirectoryInfo(SessionsDirectory).GetFiles();
+        long total = files.Sum(f => f.Length);
+        long largest = files.Max(f => f.Length);
+
+        JsonSessionStore bounded = CreateStore(new LocalStoreOptions { MaxBytes = total - (5 * largest) });
+        bounded.Write(BuildSession(baseTime.AddMinutes(200), assembly: "Alpha.Tests"));
+
+        Assert.Equal(ReportWindow.DefaultRuns, bounded.ReadRecent(100, "Beta.Tests").Sessions.Count);
+
+        int alpha = bounded.ReadRecent(100, "Alpha.Tests").Sessions.Count;
+        Assert.InRange(alpha, ReportWindow.DefaultRuns, 25);
+    }
+
+    [Fact]
+    public void RetentionCountsAnUntaggedWideRunUnderEveryAssemblyItCovers()
+    {
+        // Too many assemblies to tag in its name, so retention reads them from the file's head.
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 1 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        var wide = Enumerable.Range(0, 9).Select(i => ($"Wide{i}.Tests", 1)).ToArray();
+
+        store.Write(BuildMixedSession(baseTime, wide));
+        Assert.Null(SessionFileName.ParseTags(Path.GetFileName(Directory.GetFiles(SessionsDirectory).Single())));
+
+        // Wide0 moves on; the other eight still need the wide run.
+        store.Write(BuildSession(baseTime.AddMinutes(1), assembly: "Wide0.Tests"));
+        Assert.Single(store.ReadRecent(10, "Wide8.Tests").Sessions);
+
+        // A second wide run replaces the first for all nine.
+        store.Write(BuildMixedSession(baseTime.AddMinutes(2), wide));
+        Assert.Equal(baseTime.AddMinutes(2), Assert.Single(store.ReadRecent(10, "Wide8.Tests").Sessions).StartedAt);
+    }
+
+    [Fact]
+    public void ScopedReadSkipsAnotherAssemblysFileWithoutOpeningIt()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Alpha.Tests"));
+
+        // Damaged, but named as Beta's: an Alpha read never opens it, so it is not reported.
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, SessionFileName.Build(baseTime.AddMinutes(1), Guid.NewGuid(), ["Beta.Tests"])),
+            [0x1f, 0x8b, 0x08, 0x00]);
+
+        LocalSessionReadResult alpha = store.ReadRecent(10, "Alpha.Tests");
+        Assert.Single(alpha.Sessions);
+        Assert.Equal(0, alpha.UnreadableCount);
+
+        Assert.Equal(1, store.ReadRecent(10, "Beta.Tests").UnreadableCount);
+    }
+
+    [Fact]
+    public void WriteNamesTheFileAfterTheAssembliesItsExecutionsCover()
+    {
+        // BuildMixedSession leaves TestSession.Assemblies empty: the store derives it.
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), ("Beta.Tests", 1), ("Alpha.Tests", 1)));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        Assert.Equal(
+            [SessionFileName.Tag("Alpha.Tests"), SessionFileName.Tag("Beta.Tests")],
+            SessionFileName.ParseTags(Path.GetFileName(file)));
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], SessionFileHeader.ReadAssemblies(file));
+    }
+
+    [Fact]
+    public void SummarizeCountsEveryRunByAssemblyAndReportsTheUnreadable()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+        store.Write(BuildSession(baseTime.AddMinutes(2), assembly: "Alpha.Tests"));
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, "session-0000000000000000009-deadbeef.json.gz"), [0x00]);
+
+        LocalStoreSummary summary = store.Summarize();
+
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], summary.Assemblies.Select(a => a.Name));
+        Assert.Equal(2, summary.Assemblies[0].Runs);
+        Assert.Equal(baseTime.AddMinutes(2), summary.Assemblies[0].LastStartedAt);
+        Assert.Equal(2, summary.Assemblies[1].Runs);
+        Assert.Equal(baseTime.AddMinutes(1), summary.Assemblies[1].LastStartedAt);
+        Assert.Equal(1, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeIsEmptyBeforeAnyRunIsWritten()
+    {
+        LocalStoreSummary summary = CreateStore().Summarize();
+
+        Assert.Empty(summary.Assemblies);
+        Assert.Equal(0, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeCountsAFileWhoseNameCarriesNoStartTimeAsUnattributed()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        File.Move(file, Path.Combine(SessionsDirectory, "session-notaticks.json.gz"));
+
+        LocalStoreSummary summary = store.Summarize();
+
+        Assert.Empty(summary.Assemblies);
+        Assert.Equal(1, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeDegradesToEmptyWhenTheDirectoryCannotBeListed()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return; // chmod semantics differ; the behaviour is verified on Unix CI.
+
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        File.SetUnixFileMode(SessionsDirectory, UnixFileMode.None);
+
+        try
+        {
+            Assert.Empty(store.Summarize().Assemblies);
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                SessionsDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
+    public void RetentionOnAnEmptyDirectoryDoesNothing()
+    {
+        Directory.CreateDirectory(SessionsDirectory);
+
+        StoreRetention.Apply(SessionsDirectory, new LocalStoreOptions(), _ => [], NullLogger.Instance);
+
+        Assert.Empty(Directory.GetFiles(SessionsDirectory));
+    }
+
+    [Fact]
+    public void DeleteScopedToAnAssemblyRenamesAMixedRunToTheAssembliesLeft()
+    {
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        Assert.Equal([SessionFileName.Tag("Beta.Tests")], SessionFileName.ParseTags(Path.GetFileName(file)));
+        Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
+        Assert.Empty(store.ReadRecent(10, "Alpha.Tests").Sessions);
+    }
+
+    [Fact]
     public void DeleteScopedToAnAssemblyLeavesOtherAssembliesAlone()
     {
         JsonSessionStore store = CreateStore();
@@ -474,9 +729,13 @@ public sealed class JsonSessionStoreTests : IDisposable
 
         store.Delete("Alpha.Tests");
 
-        // Same path, still there, and actually rewritten rather than left alone.
-        Assert.True(File.Exists(path));
-        Assert.True(File.GetLastWriteTimeUtc(path) >= before);
+        // Still one file, actually rewritten rather than left alone, and renamed in place to the
+        // assemblies it still covers — a rename, never a delete-then-write.
+        string renamed = Assert.Single(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+        Assert.Equal([SessionFileName.Tag("Beta.Tests")], SessionFileName.ParseTags(Path.GetFileName(renamed)));
+        Assert.True(SessionFileName.TryParseStartedAt(Path.GetFileName(renamed), out DateTime startedAt));
+        Assert.Equal(baseTime, startedAt);
+        Assert.True(File.GetLastWriteTimeUtc(renamed) >= before);
         Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
     }
 
