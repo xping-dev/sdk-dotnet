@@ -28,4 +28,11 @@ public sealed class LocalStoreOptionsTests
         Assert.True(options.MaxRuns >= ReportWindow.DefaultRuns);
         Assert.True(options.MaxAge >= TimeSpan.FromDays(ReportWindow.DefaultDays));
     }
+
+    [Fact]
+    public void SummaryTypesRejectNullArguments()
+    {
+        Assert.Throws<ArgumentNullException>(() => new LocalStoreAssembly(null!, 1, DateTime.UtcNow));
+        Assert.Throws<ArgumentNullException>(() => new LocalStoreSummary(null!, 0));
+    }
 }

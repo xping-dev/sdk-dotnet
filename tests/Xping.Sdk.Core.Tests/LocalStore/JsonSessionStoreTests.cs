@@ -4,6 +4,7 @@
  */
 
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core.Models;
@@ -506,6 +507,63 @@ public sealed class JsonSessionStoreTests : IDisposable
         Assert.Equal(2, summary.Assemblies[1].Runs);
         Assert.Equal(baseTime.AddMinutes(1), summary.Assemblies[1].LastStartedAt);
         Assert.Equal(1, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeIsEmptyBeforeAnyRunIsWritten()
+    {
+        LocalStoreSummary summary = CreateStore().Summarize();
+
+        Assert.Empty(summary.Assemblies);
+        Assert.Equal(0, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeCountsAFileWhoseNameCarriesNoStartTimeAsUnattributed()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        File.Move(file, Path.Combine(SessionsDirectory, "session-notaticks.json.gz"));
+
+        LocalStoreSummary summary = store.Summarize();
+
+        Assert.Empty(summary.Assemblies);
+        Assert.Equal(1, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void SummarizeDegradesToEmptyWhenTheDirectoryCannotBeListed()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return; // chmod semantics differ; the behaviour is verified on Unix CI.
+
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        File.SetUnixFileMode(SessionsDirectory, UnixFileMode.None);
+
+        try
+        {
+            Assert.Empty(store.Summarize().Assemblies);
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                SessionsDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
+    public void RetentionOnAnEmptyDirectoryDoesNothing()
+    {
+        Directory.CreateDirectory(SessionsDirectory);
+
+        StoreRetention.Apply(SessionsDirectory, new LocalStoreOptions(), _ => [], NullLogger.Instance);
+
+        Assert.Empty(Directory.GetFiles(SessionsDirectory));
     }
 
     [Fact]

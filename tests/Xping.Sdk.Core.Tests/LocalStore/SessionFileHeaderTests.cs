@@ -101,6 +101,36 @@ public sealed class SessionFileHeaderTests : IDisposable
         Assert.Null(SessionFileHeader.ReadAssemblies(path));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("[]")]
+    [InlineData("{\"assemblies\":{}}")]
+    [InlineData("{\"assemblies\":[\"Alpha.Tests\",1]}")]
+    public void ReadAssembliesReturnsNullForAHeadOfTheWrongShape(string json)
+    {
+        Assert.Null(SessionFileHeader.ReadAssemblies(WriteGzip(json)));
+    }
+
+    [Fact]
+    public void ReadAssembliesReadsTheHeadOfAFileLargerThanItReads()
+    {
+        string path = WriteGzip(
+            "{\"assemblies\":[\"Alpha.Tests\"],\"padding\":\"" + new string('x', 200 * 1024) + "\"}");
+
+        Assert.Equal(["Alpha.Tests"], SessionFileHeader.ReadAssemblies(path));
+    }
+
+    [Fact]
+    public void ReadAssembliesReturnsNullWhenTheListRunsPastTheHead()
+    {
+        string[] names = [.. Enumerable.Range(0, 5000).Select(i => $"Company.Product.Feature{i:D4}.Tests")];
+
+        string path = WriteGzip(
+            "{\"assemblies\":[" + string.Join(",", names.Select(n => $"\"{n}\"")) + "]}");
+
+        Assert.Null(SessionFileHeader.ReadAssemblies(path));
+    }
+
     [Fact]
     public void ReadAssembliesReturnsNullForACorruptFile()
     {

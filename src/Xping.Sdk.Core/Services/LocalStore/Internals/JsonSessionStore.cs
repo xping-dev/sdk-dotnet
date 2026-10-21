@@ -184,22 +184,24 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
     public LocalStoreSummary Summarize()
     {
-        string? root = _storePath.Value;
-        if (root == null)
+        // Directory.Exists is false for a null path, so an unavailable store lands here too.
+        string? directory = SessionsPath;
+        if (!Directory.Exists(directory))
             return LocalStoreSummary.Empty;
 
         try
         {
-            string directory = LocalStorePathResolver.GetSessionsDirectory(root);
-            if (!Directory.Exists(directory))
-                return LocalStoreSummary.Empty;
-
             var runs = new Dictionary<string, (int Runs, DateTime Last)>(StringComparer.Ordinal);
             int unattributed = 0;
 
             // Names come from each file's head rather than its tags, which are hashes. The start time
             // comes from the name, so no session is loaded.
-            foreach (string file in Directory.GetFiles(directory, SessionFileName.SearchPattern))
+            // Oldest first, so the last run seen for an assembly is its newest.
+            IEnumerable<string> files = Directory
+                .GetFiles(directory!, SessionFileName.SearchPattern)
+                .OrderBy(f => f, StringComparer.Ordinal);
+
+            foreach (string file in files)
             {
                 IReadOnlyList<string>? assemblies = SessionFileHeader.ReadAssemblies(file);
 
@@ -212,9 +214,8 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
                 foreach (string assembly in assemblies)
                 {
-                    runs[assembly] = runs.TryGetValue(assembly, out var entry)
-                        ? (entry.Runs + 1, startedAt > entry.Last ? startedAt : entry.Last)
-                        : (1, startedAt);
+                    runs.TryGetValue(assembly, out var entry);
+                    runs[assembly] = (entry.Runs + 1, startedAt);
                 }
             }
 

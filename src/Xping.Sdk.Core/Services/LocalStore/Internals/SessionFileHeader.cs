@@ -29,11 +29,9 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </remarks>
 internal static class SessionFileHeader
 {
-    private const int InitialBufferSize = 4 * 1024;
-
-    // A header is a list of assembly names. One that has not ended by here is not a header worth
-    // finishing; the full read decides instead.
-    private const int MaxHeaderBytes = 1024 * 1024;
+    // The head is read in one bounded piece. A list of assembly names that has not ended within it
+    // is not a header worth finishing — 64 KB holds a thousand names — and is reported as unknown.
+    private const int HeaderBytes = 64 * 1024;
 
     private static readonly byte[] AssembliesProperty = Encoding.UTF8.GetBytes("assemblies");
 
@@ -66,73 +64,44 @@ internal static class SessionFileHeader
 
     private static List<string>? Read(Stream stream)
     {
-        byte[] buffer = new byte[InitialBufferSize];
+        byte[] buffer = new byte[HeaderBytes];
         int length = 0;
-        int total = 0;
-        bool isFinal = false;
-        JsonReaderState state = default;
+        int read;
 
-        bool inArray = false;
-        var assemblies = new List<string>();
-
-        while (!isFinal)
-        {
-            // A token larger than what is left of the buffer: make room rather than stall on it.
-            if (length == buffer.Length)
-                Array.Resize(ref buffer, buffer.Length * 2);
-
-            int read = stream.Read(buffer, length, buffer.Length - length);
+        while (length < buffer.Length && (read = stream.Read(buffer, length, buffer.Length - length)) > 0)
             length += read;
-            total += read;
-            isFinal = read == 0;
 
-            if (total > MaxHeaderBytes)
-                return null;
+        // A file shorter than the buffer has been read whole, so the reader may treat it as final
+        // and report truncation as an error rather than as a request for more data.
+        var reader = new Utf8JsonReader(
+            new ReadOnlySpan<byte>(buffer, 0, length), isFinalBlock: length < buffer.Length, state: default);
 
-            var reader = new Utf8JsonReader(new ReadOnlySpan<byte>(buffer, 0, length), isFinal, state);
-
-            while (reader.Read())
-            {
-                if (inArray)
-                {
-                    switch (reader.TokenType)
-                    {
-                        case JsonTokenType.String:
-                            assemblies.Add(reader.GetString()!);
-                            break;
-                        case JsonTokenType.EndArray:
-                            return assemblies;
-                        default:
-                            return null;
-                    }
-
-                    continue;
-                }
-
-                switch (reader.TokenType)
-                {
-                    case JsonTokenType.StartObject when reader.CurrentDepth == 0:
-                        break;
-                    case JsonTokenType.PropertyName when reader.CurrentDepth == 1:
-                        // Only the first property is looked at; see the class remarks.
-                        if (!reader.ValueTextEquals(AssembliesProperty))
-                            return null;
-                        break;
-                    case JsonTokenType.StartArray when reader.CurrentDepth == 1:
-                        inArray = true;
-                        break;
-                    default:
-                        return null;
-                }
-            }
-
-            state = reader.CurrentState;
-
-            int consumed = (int)reader.BytesConsumed;
-            Buffer.BlockCopy(buffer, consumed, buffer, 0, length - consumed);
-            length -= consumed;
+        // Only the first property is looked at; see the class remarks.
+        if (!Next(ref reader, JsonTokenType.StartObject)
+            || !Next(ref reader, JsonTokenType.PropertyName)
+            || !reader.ValueTextEquals(AssembliesProperty)
+            || !Next(ref reader, JsonTokenType.StartArray))
+        {
+            return null;
         }
 
+        var assemblies = new List<string>();
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+                return assemblies;
+
+            if (reader.TokenType != JsonTokenType.String)
+                return null;
+
+            assemblies.Add(reader.GetString()!);
+        }
+
+        // The list ran past the bounded head.
         return null;
     }
+
+    private static bool Next(ref Utf8JsonReader reader, JsonTokenType expected) =>
+        reader.Read() && reader.TokenType == expected;
 }
