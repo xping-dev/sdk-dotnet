@@ -93,9 +93,9 @@ The schema stays `1.23`, which is unreleased; its remarks entry names both new f
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | `LocalStoreOptions` keeps 50 runs, 50 MB, 30 days, the run limit counted across the whole store | 100 runs **per assembly**, 100 MB and 30 days store-wide. A run covering several assemblies counts towards each and is pruned only once none of them needs it. A whole-store read for one assembly is therefore at most ~100 sessions | §1.1 |
-| B | Lookup across every assembly reads a store capped at ~50 sessions | It reads up to `UnboundedReadCeiling` (1000) sessions. That covers ten assemblies at full retention, and the 100 MB limit binds well before that on any suite large enough to matter. The read stays one pass, so D2's rejection of auto-scoping stands | D2 |
-| C | OQ-2: revisit the timeline's row cap if retention changes | Revisited: still no cap. ~100 rows fits on a scrolled terminal, and `--runs`/`--since` shorten it | §3.2, OQ-2 |
+| A | `LocalStoreOptions` keeps 50 runs, 50 MB, 30 days, the run limit counted across the whole store | 50 runs **per assembly**, 100 MB and 30 days store-wide. A run covering several assemblies counts towards each and is pruned only once none of them needs it. The size limit removes runs outside every assembly's newest 20 first. A whole-store read for one assembly is therefore at most ~50 sessions | §1.1 |
+| B | Lookup across every assembly reads a store capped at ~50 sessions | It reads up to `UnboundedReadCeiling` (1000) sessions. That covers twenty assemblies at full retention, and the 100 MB limit binds well before that on any suite large enough to matter. The read stays one pass, so D2's rejection of auto-scoping stands | D2 |
+| C | OQ-2: revisit the timeline's row cap if retention changes | Revisited: still no cap. A run limit counted per assembly keeps one test's timeline at ~50 rows, as before | §3.2, OQ-2 |
 
 The report's default window (20 runs / 14 days) is unchanged. It now comes from `ReportWindow` in Core, which retention is tested against, so the store always holds at least one full default window per assembly.
 
@@ -112,9 +112,9 @@ Every claim here was read in source at the cited line.
   through `Read(source, maxSessions, assembly)` (`:346`), and the unbounded modes read up to
   `UnboundedReadCeiling` = 1000 (`:121`). `WindowResolution` has `Default`, `Runs`, `SinceSha`,
   `SinceDate` (`AnalysisWindow.cs:13-26`).
-- **Retention bounds the store, not the CLI.** `LocalStoreOptions` keeps 100 runs per assembly, and
+- **Retention bounds the store, not the CLI.** `LocalStoreOptions` keeps 50 runs per assembly, and
   100 MB and 30 days store-wide (`src/Xping.Sdk.Core/Services/LocalStore/LocalStoreOptions.cs`;
-  Amendment 7A). A whole-store read for one assembly is therefore at most ~100 sessions in the default
+  Amendment 7A). A whole-store read for one assembly is therefore at most ~50 sessions in the default
   configuration.
 - **Per-test index.** `TestIndex` (`Report/Indexes/TestIndex.cs`) gives `ExecutionsOf` (every attempt,
   newest first, `:96`), `RunsOf` (one deciding attempt per session, `:119`), `SessionsRunIn` (`:161`),
@@ -491,7 +491,7 @@ no findings
 no findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
 ````
 
-Every row is rendered; nothing is truncated. A store capped at ~100 runs per assembly fits on a
+Every row is rendered; nothing is truncated. A store capped at ~50 runs per assembly fits on a
 scrolled terminal, and a truncated history would hide the run a reader came for.
 
 ### 3.3 An ambiguous name
@@ -704,5 +704,5 @@ directly to `feat/141-report-test`.
 
 ## 8. Reserved for Cloud
 
-- History beyond local retention. Cloud keeps more than 30 days and 100 runs; a Cloud-backed `--test`
+- History beyond local retention. Cloud keeps more than 30 days and 50 runs; a Cloud-backed `--test`
   could extend the timeline past what the local store holds. Not specified here.
