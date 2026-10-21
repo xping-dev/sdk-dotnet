@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Text.Json.Serialization;
 using Xping.Sdk.Core.Models.Environments;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.PullRequests;
@@ -105,7 +106,12 @@ public sealed class TestSession
     /// executions of its own, so a per-batch value would be empty on exactly the upload that closes
     /// the run — the one that also carries <see cref="QuickStatistics"/>.
     /// </para>
+    /// <para>
+    /// Serialized first so the local store's retention can read it from the head of a session file
+    /// without decompressing the executions behind it.
+    /// </para>
     /// </remarks>
+    [JsonPropertyOrder(-1)]
     public IReadOnlyList<string> Assemblies { get; init; }
 
     /// <summary>

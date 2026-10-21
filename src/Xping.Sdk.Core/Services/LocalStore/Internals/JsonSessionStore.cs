@@ -84,7 +84,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             string path = Path.Combine(directory, BuildFileName(session));
 
             WriteFile(path, session);
-            StoreRetention.Apply(directory, SearchPattern, _options, _logger);
+            StoreRetention.Apply(directory, SearchPattern, _options, ReadAssemblies, _logger);
 
             return true;
         }
@@ -312,6 +312,20 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             return false;
         }
     }
+
+    /// <summary>
+    /// Returns the assemblies a session file covers, for retention.
+    /// </summary>
+    /// <remarks>
+    /// The head of the file answers for every session the SDK writes. The full read is the fallback
+    /// for a file that does not open with its assemblies, or opens with an empty list: a session built
+    /// without <see cref="TestSession.Assemblies"/> still names its assemblies on its executions. An
+    /// unreadable file covers none.
+    /// </remarks>
+    private IReadOnlyList<string> ReadAssemblies(string path) =>
+        SessionFileHeader.ReadAssemblies(path) is { Count: > 0 } assemblies
+            ? assemblies
+            : SessionAssemblies.Of(TryReadFile(path));
 
     private TestSession? TryReadFile(string path)
     {

@@ -56,13 +56,17 @@ You do not need to do anything. If you prefer an explicit entry, adding `.xping/
 
 Applied after every write, oldest run first, until all three limits hold:
 
-| Limit | Default |
-|---|---|
-| Maximum runs | 50 |
-| Maximum total size | 50 MB |
-| Maximum age | 30 days |
+| Limit | Default | Applies to |
+|---|---|---|
+| Maximum runs | 100 | Each test project |
+| Maximum total size | 100 MB | The whole store |
+| Maximum age | 30 days | The whole store |
 
-A 2,000-test suite stores roughly 170 KB per run, so 50 runs is about 8.5 MB. A 200-test suite is well under 1 MB.
+The run limit is counted per test project, so a busy project never pushes another project's history out. A run that covered several projects counts for each of them and is kept while any of them still needs it.
+
+A 2,000-test suite stores roughly 170 KB per run, so 100 runs is about 17 MB. A 200-test suite is well under 2 MB.
+
+`xping report` reads the newest 20 runs from the last 14 days by default. The store keeps more than that so `--runs`, `--since` and `--test` can look further back.
 
 To delete history manually, use [`xping clear`](../cli/command-reference.md#xping-clear).
 

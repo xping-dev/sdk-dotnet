@@ -328,6 +328,82 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void RetentionCountsRunsPerAssembly()
+    {
+        // Three test projects sharing one store must each keep their own history: a store-wide count
+        // would leave each with a third of it, and the report's default window could never fill.
+        JsonSessionStore store = CreateStore();
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        string[] assemblies = ["Alpha.Tests", "Beta.Tests", "Gamma.Tests"];
+
+        for (int i = 0; i < 40; i++)
+        {
+            foreach (string assembly in assemblies)
+                store.Write(BuildSession(baseTime.AddMinutes(i), assembly: assembly));
+        }
+
+        Assert.Equal(120, store.ReadRecent(int.MaxValue).Sessions.Count);
+        foreach (string assembly in assemblies)
+            Assert.Equal(ReportWindow.DefaultRuns, store.ReadRecent(ReportWindow.DefaultRuns, assembly).Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionPrunesTheBusiestAssemblyWithoutTouchingTheOthers()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 3 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildSession(baseTime.AddMinutes(1), assembly: "Beta.Tests"));
+
+        for (int i = 0; i < 6; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(2 + i), assembly: "Alpha.Tests"));
+
+        IReadOnlyList<TestSession> alpha = store.ReadRecent(20, "Alpha.Tests").Sessions;
+        Assert.Equal(3, alpha.Count);
+        Assert.Equal(baseTime.AddMinutes(5), alpha[2].StartedAt);
+        Assert.Equal(2, store.ReadRecent(20, "Beta.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionKeepsAMixedRunWhileAnyOfItsAssembliesStillNeedsIt()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 2 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+
+        store.Write(BuildMixedSession(baseTime, ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        // Alpha moves past the mixed run; Beta has run nothing since, so it is still Beta's history.
+        for (int i = 1; i <= 4; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(i), assembly: "Alpha.Tests"));
+
+        Assert.Single(store.ReadRecent(20, "Beta.Tests").Sessions);
+        Assert.Equal(3, store.ReadRecent(20, "Alpha.Tests").Sessions.Count);
+
+        // Once Beta has two newer runs of its own, nothing needs the mixed run any more.
+        store.Write(BuildSession(baseTime.AddMinutes(5), assembly: "Beta.Tests"));
+        store.Write(BuildSession(baseTime.AddMinutes(6), assembly: "Beta.Tests"));
+
+        Assert.Equal(2, store.ReadRecent(20, "Beta.Tests").Sessions.Count);
+        Assert.Equal(2, store.ReadRecent(20, "Alpha.Tests").Sessions.Count);
+    }
+
+    [Fact]
+    public void RetentionDeletesRunsOlderThanTheAgeLimit()
+    {
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxAge = TimeSpan.FromDays(1) });
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+        string first = Assert.Single(Directory.GetFiles(SessionsDirectory));
+        File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddDays(-2));
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+
+        Assert.Single(store.ReadRecent(20).Sessions);
+        Assert.False(File.Exists(first));
+    }
+
+    [Fact]
     public void DeleteScopedToAnAssemblyLeavesOtherAssembliesAlone()
     {
         JsonSessionStore store = CreateStore();
