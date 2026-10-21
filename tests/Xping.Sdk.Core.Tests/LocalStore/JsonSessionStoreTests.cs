@@ -404,6 +404,127 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void RetentionBySizeSparesEveryAssemblysReportWindowFirst()
+    {
+        // Beta's runs are the oldest in the store. Oldest-first size pruning would delete them all
+        // for Alpha's sake; Alpha's runs beyond its own window have to go first.
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        JsonSessionStore unbounded = CreateStore();
+
+        for (int i = 0; i < ReportWindow.DefaultRuns; i++)
+            unbounded.Write(BuildSession(baseTime.AddMinutes(i), assembly: "Beta.Tests"));
+
+        for (int i = 0; i < 30; i++)
+            unbounded.Write(BuildSession(baseTime.AddMinutes(100 + i), assembly: "Alpha.Tests"));
+
+        FileInfo[] files = new DirectoryInfo(SessionsDirectory).GetFiles();
+        long total = files.Sum(f => f.Length);
+        long largest = files.Max(f => f.Length);
+
+        JsonSessionStore bounded = CreateStore(new LocalStoreOptions { MaxBytes = total - (5 * largest) });
+        bounded.Write(BuildSession(baseTime.AddMinutes(200), assembly: "Alpha.Tests"));
+
+        Assert.Equal(ReportWindow.DefaultRuns, bounded.ReadRecent(100, "Beta.Tests").Sessions.Count);
+
+        int alpha = bounded.ReadRecent(100, "Alpha.Tests").Sessions.Count;
+        Assert.InRange(alpha, ReportWindow.DefaultRuns, 25);
+    }
+
+    [Fact]
+    public void RetentionCountsAnUntaggedWideRunUnderEveryAssemblyItCovers()
+    {
+        // Too many assemblies to tag in its name, so retention reads them from the file's head.
+        JsonSessionStore store = CreateStore(new LocalStoreOptions { MaxRuns = 1 });
+        var baseTime = DateTime.UtcNow.AddHours(-6);
+        var wide = Enumerable.Range(0, 9).Select(i => ($"Wide{i}.Tests", 1)).ToArray();
+
+        store.Write(BuildMixedSession(baseTime, wide));
+        Assert.Null(SessionFileName.ParseTags(Path.GetFileName(Directory.GetFiles(SessionsDirectory).Single())));
+
+        // Wide0 moves on; the other eight still need the wide run.
+        store.Write(BuildSession(baseTime.AddMinutes(1), assembly: "Wide0.Tests"));
+        Assert.Single(store.ReadRecent(10, "Wide8.Tests").Sessions);
+
+        // A second wide run replaces the first for all nine.
+        store.Write(BuildMixedSession(baseTime.AddMinutes(2), wide));
+        Assert.Equal(baseTime.AddMinutes(2), Assert.Single(store.ReadRecent(10, "Wide8.Tests").Sessions).StartedAt);
+    }
+
+    [Fact]
+    public void ScopedReadSkipsAnotherAssemblysFileWithoutOpeningIt()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Alpha.Tests"));
+
+        // Damaged, but named as Beta's: an Alpha read never opens it, so it is not reported.
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, SessionFileName.Build(baseTime.AddMinutes(1), Guid.NewGuid(), ["Beta.Tests"])),
+            [0x1f, 0x8b, 0x08, 0x00]);
+
+        LocalSessionReadResult alpha = store.ReadRecent(10, "Alpha.Tests");
+        Assert.Single(alpha.Sessions);
+        Assert.Equal(0, alpha.UnreadableCount);
+
+        Assert.Equal(1, store.ReadRecent(10, "Beta.Tests").UnreadableCount);
+    }
+
+    [Fact]
+    public void WriteNamesTheFileAfterTheAssembliesItsExecutionsCover()
+    {
+        // BuildMixedSession leaves TestSession.Assemblies empty: the store derives it.
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), ("Beta.Tests", 1), ("Alpha.Tests", 1)));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        Assert.Equal(
+            [SessionFileName.Tag("Alpha.Tests"), SessionFileName.Tag("Beta.Tests")],
+            SessionFileName.ParseTags(Path.GetFileName(file)));
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], SessionFileHeader.ReadAssemblies(file));
+    }
+
+    [Fact]
+    public void SummarizeCountsEveryRunByAssemblyAndReportsTheUnreadable()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+        store.Write(BuildSession(baseTime.AddMinutes(2), assembly: "Alpha.Tests"));
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, "session-0000000000000000009-deadbeef.json.gz"), [0x00]);
+
+        LocalStoreSummary summary = store.Summarize();
+
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], summary.Assemblies.Select(a => a.Name));
+        Assert.Equal(2, summary.Assemblies[0].Runs);
+        Assert.Equal(baseTime.AddMinutes(2), summary.Assemblies[0].LastStartedAt);
+        Assert.Equal(2, summary.Assemblies[1].Runs);
+        Assert.Equal(baseTime.AddMinutes(1), summary.Assemblies[1].LastStartedAt);
+        Assert.Equal(1, summary.UnattributedRuns);
+    }
+
+    [Fact]
+    public void DeleteScopedToAnAssemblyRenamesAMixedRunToTheAssembliesLeft()
+    {
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildMixedSession(
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), ("Alpha.Tests", 1), ("Beta.Tests", 1)));
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+
+        string file = Directory.GetFiles(SessionsDirectory).Single();
+        Assert.Equal([SessionFileName.Tag("Beta.Tests")], SessionFileName.ParseTags(Path.GetFileName(file)));
+        Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
+        Assert.Empty(store.ReadRecent(10, "Alpha.Tests").Sessions);
+    }
+
+    [Fact]
     public void DeleteScopedToAnAssemblyLeavesOtherAssembliesAlone()
     {
         JsonSessionStore store = CreateStore();
@@ -550,9 +671,13 @@ public sealed class JsonSessionStoreTests : IDisposable
 
         store.Delete("Alpha.Tests");
 
-        // Same path, still there, and actually rewritten rather than left alone.
-        Assert.True(File.Exists(path));
-        Assert.True(File.GetLastWriteTimeUtc(path) >= before);
+        // Still one file, actually rewritten rather than left alone, and renamed in place to the
+        // assemblies it still covers — a rename, never a delete-then-write.
+        string renamed = Assert.Single(Directory.GetFiles(SessionsDirectory, "session-*.json.gz"));
+        Assert.Equal([SessionFileName.Tag("Beta.Tests")], SessionFileName.ParseTags(Path.GetFileName(renamed)));
+        Assert.True(SessionFileName.TryParseStartedAt(Path.GetFileName(renamed), out DateTime startedAt));
+        Assert.Equal(baseTime, startedAt);
+        Assert.True(File.GetLastWriteTimeUtc(renamed) >= before);
         Assert.Single(store.ReadRecent(10, "Beta.Tests").Sessions);
     }
 

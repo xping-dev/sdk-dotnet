@@ -147,6 +147,37 @@ public static class SessionAssemblies
         Filter(session, assembly, keepMatches: false);
 
     /// <summary>
+    /// Returns the session with <see cref="TestSession.Assemblies"/> derived from its executions.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <returns>The session itself when it already agrees, otherwise a copy that does.</returns>
+    /// <remarks>
+    /// The local store names and summarizes a file by the assemblies at its head, so what is written
+    /// there has to be what the executions say, whoever built the session.
+    /// </remarks>
+    internal static TestSession WithDerivedAssemblies(TestSession session)
+    {
+        IReadOnlyList<string> derived = Of(session);
+        if (session.Assemblies.SequenceEqual(derived, StringComparer.Ordinal))
+            return session;
+
+        return new TestSession
+        {
+            SessionId = session.SessionId,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            EnvironmentInfo = session.EnvironmentInfo,
+            Executions = session.Executions,
+            Assemblies = derived,
+            SessionState = session.SessionState,
+            PullRequestContext = session.PullRequestContext,
+            SdkVersion = session.SdkVersion,
+            QuickStatistics = session.QuickStatistics,
+            StatisticsByAssembly = session.StatisticsByAssembly
+        };
+    }
+
+    /// <summary>
     /// Builds the session that remains when executions are kept or dropped by assembly.
     /// </summary>
     private static TestSession? Filter(TestSession? session, string assembly, bool keepMatches)

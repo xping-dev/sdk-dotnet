@@ -15,15 +15,16 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Retention counts runs per assembly, so it has to know which assemblies every file covers, on every
-/// write. Deserializing each session for that would decompress every execution in the store — up to
-/// megabytes of JSON per file — to read a handful of names. <see cref="TestSession.Assemblies"/> is
-/// serialized first, so the names sit in the first few hundred bytes and the read stops there.
+/// Used where a file's name does not say which assemblies it covers — a session too wide to tag, see
+/// <see cref="SessionFileName"/> — and where the names themselves are needed rather than their tags,
+/// as <c>xping where</c> needs them. Deserializing the session for that would decompress every
+/// execution in it, up to megabytes of JSON, to read a handful of names.
+/// <see cref="TestSession.Assemblies"/> is serialized first, so the names sit in the first few
+/// hundred bytes and the read stops there.
 /// </para>
 /// <para>
-/// A file whose first property is anything else was not written in that order, and is reported as
-/// unknown rather than scanned: the caller falls back to a full read, which is always correct, just
-/// slower.
+/// A file whose first property is anything else, or that cannot be read, is reported as unknown
+/// rather than scanned. The caller counts it as naming no assembly.
 /// </para>
 /// </remarks>
 internal static class SessionFileHeader
@@ -53,8 +54,11 @@ internal static class SessionFileHeader
 
             return Read(gzip);
         }
+        // InvalidOperationException is GetString on a name holding an invalid escape: a damaged
+        // file, which has to cost one unknown header rather than escape into retention.
         catch (Exception ex) when (
-            StoreRetention.IsStorageFailure(ex) || ex is InvalidDataException or JsonException)
+            StoreRetention.IsStorageFailure(ex)
+            || ex is InvalidDataException or JsonException or InvalidOperationException)
         {
             return null;
         }

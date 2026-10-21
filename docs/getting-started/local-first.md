@@ -192,7 +192,7 @@ xping where
 
 The store lives in a `.xping` folder at your repository root and **ignores itself** — it contains a `.gitignore` that hides the whole directory, so nothing appears in `git status` and your own `.gitignore` is never modified.
 
-It keeps the last 100 runs of each test project and prunes automatically. See [Local Store](../configuration/local-store.md) for retention settings and how to relocate it.
+It keeps the last 50 runs of each test project and prunes automatically. See [Local Store](../configuration/local-store.md) for retention settings and how to relocate it.
 
 To delete history:
 

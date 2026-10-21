@@ -53,13 +53,15 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             files.Length == 1 ? "run" : "runs",
             FormatSize(bytes)));
 
-        // A large window: this is a diagnostic, so completeness beats speed.
-        IReadOnlyList<TestSession> sessions = store.ReadRecent(500).Sessions;
+        // The summary covers every file and loads no session, so the listing below always accounts
+        // for the whole store however many runs it holds.
+        LocalStoreSummary summary = store.Summarize();
 
         // The SDK no longer writes a run that named no assembly, but a store can still hold some
-        // from before it stopped. They fit no listing below, so without this line the run count
-        // above and the list would disagree until retention evicts them.
-        int unattributed = sessions.Count(session => SessionAssemblies.Of(session).Count == 0);
+        // from before it stopped, or a file too damaged to read. They fit no listing below, so
+        // without this line the run count above and the list would disagree until retention evicts
+        // them.
+        int unattributed = summary.UnattributedRuns;
         if (unattributed > 0)
         {
             output.WriteLine(string.Format(
@@ -75,23 +77,19 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // solution is one run of each test project it covered, and each of them has that much
         // history. Collapsing it to a single arbitrary assembly is what this listing exists to
         // stop the reader believing.
-        var byAssembly = sessions
-            .SelectMany(session => SessionAssemblies.Of(session).Select(a => (Assembly: a, Session: session)))
-            .GroupBy(pair => pair.Assembly, pair => pair.Session, StringComparer.Ordinal)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key, StringComparer.Ordinal);
+        var byAssembly = summary.Assemblies
+            .OrderByDescending(a => a.Runs)
+            .ThenBy(a => a.Name, StringComparer.Ordinal);
 
-        foreach (var group in byAssembly)
+        foreach (LocalStoreAssembly assembly in byAssembly)
         {
-            DateTime newest = group.Max(s => s.StartedAt);
-
             output.WriteLine(string.Format(
                 CultureInfo.InvariantCulture,
                 "  {0,-40} {1,4} {2}  last {3:yyyy-MM-dd HH:mm} UTC",
-                Truncate(group.Key, 40),
-                group.Count(),
-                group.Count() == 1 ? "run " : "runs",
-                newest));
+                Truncate(assembly.Name, 40),
+                assembly.Runs,
+                assembly.Runs == 1 ? "run " : "runs",
+                assembly.LastStartedAt));
         }
 
         return 0;

@@ -43,6 +43,64 @@ public sealed class LocalSessionReadResult
 }
 
 /// <summary>
+/// One test assembly's history in the local store.
+/// </summary>
+public sealed class LocalStoreAssembly
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalStoreAssembly"/> class.
+    /// </summary>
+    /// <param name="name">The assembly name.</param>
+    /// <param name="runs">The number of stored runs that covered it.</param>
+    /// <param name="lastStartedAt">When the newest of those runs started, in UTC.</param>
+    public LocalStoreAssembly(string name, int runs, DateTime lastStartedAt)
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Runs = runs;
+        LastStartedAt = lastStartedAt;
+    }
+
+    /// <summary>Gets the assembly name.</summary>
+    public string Name { get; }
+
+    /// <summary>Gets the number of stored runs that covered this assembly.</summary>
+    public int Runs { get; }
+
+    /// <summary>Gets when the newest of those runs started, in UTC.</summary>
+    public DateTime LastStartedAt { get; }
+}
+
+/// <summary>
+/// What the local store holds, by assembly, read without loading any session.
+/// </summary>
+public sealed class LocalStoreSummary
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalStoreSummary"/> class.
+    /// </summary>
+    /// <param name="assemblies">Every assembly with at least one stored run, ordered by name.</param>
+    /// <param name="unattributedRuns">Stored runs that name no assembly or could not be read.</param>
+    public LocalStoreSummary(IReadOnlyList<LocalStoreAssembly> assemblies, int unattributedRuns)
+    {
+        Assemblies = assemblies ?? throw new ArgumentNullException(nameof(assemblies));
+        UnattributedRuns = unattributedRuns;
+    }
+
+    /// <summary>Gets an empty summary.</summary>
+    public static LocalStoreSummary Empty { get; } = new(new List<LocalStoreAssembly>(), 0);
+
+    /// <summary>Gets every assembly with at least one stored run, ordered by name.</summary>
+    /// <remarks>
+    /// A run that covered several assemblies is counted under each, so the run counts can add up to
+    /// more than the number of files in the store.
+    /// </remarks>
+    public IReadOnlyList<LocalStoreAssembly> Assemblies { get; }
+
+    /// <summary>Gets the number of stored runs that name no assembly or could not be read.</summary>
+    public int UnattributedRuns { get; }
+}
+
+/// <summary>
 /// Persists and retrieves complete test sessions on the developer's machine.
 /// </summary>
 /// <remarks>
@@ -106,6 +164,16 @@ public interface ILocalSessionStore
     /// </para>
     /// </remarks>
     LocalSessionReadResult ReadRecent(int maxSessions, string? assembly = null);
+
+    /// <summary>
+    /// Summarizes the whole store by assembly, without loading any session.
+    /// </summary>
+    /// <returns>Every assembly's run count and newest run, and the runs that name none.</returns>
+    /// <remarks>
+    /// Covers every file, however many the store holds, which <see cref="ReadRecent"/> with a
+    /// bound cannot promise. Cheap enough to call whenever the full list of assemblies is needed.
+    /// </remarks>
+    LocalStoreSummary Summarize();
 
     /// <summary>
     /// Deletes stored sessions.

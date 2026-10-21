@@ -54,9 +54,6 @@ internal interface ISessionSource
 /// </summary>
 internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSource
 {
-    // A generous probe used only to discover which assemblies exist, never to bound analysis.
-    private const int DiscoveryWindow = 200;
-
     public bool IsAvailable => store.IsAvailable;
 
     public string? StorePath => store.StorePath;
@@ -68,14 +65,10 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
     }
 
     /// <remarks>
-    /// Flattened across each session rather than one name per session: a solution-wide run records
-    /// every test project it executed, and counting only the first would undercount what the store
-    /// holds — which is the number the scope notice reports.
+    /// Read from the store's summary, which covers every file: the scope notice reports how many
+    /// other assemblies the store holds, and an assembly whose runs are all older than some probe
+    /// would silently drop out of that count.
     /// </remarks>
     public IReadOnlyList<string> KnownAssemblies() =>
-        store.ReadRecent(DiscoveryWindow).Sessions
-            .SelectMany(SessionAssemblies.Of)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(a => a, StringComparer.Ordinal)
-            .ToList();
+        [.. store.Summarize().Assemblies.Select(a => a.Name)];
 }

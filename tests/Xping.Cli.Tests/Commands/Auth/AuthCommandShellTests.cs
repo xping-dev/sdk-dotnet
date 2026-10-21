@@ -194,6 +194,8 @@ public sealed class AuthCommandShellTests
         public LocalSessionReadResult ReadRecent(int maxSessions, string? assembly = null) =>
             LocalSessionReadResult.Empty;
 
+        public LocalStoreSummary Summarize() => LocalStoreSummary.Empty;
+
         public int Delete(string? assembly = null) => 0;
     }
 

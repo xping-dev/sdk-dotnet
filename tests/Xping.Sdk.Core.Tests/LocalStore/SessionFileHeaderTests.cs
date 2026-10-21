@@ -94,6 +94,14 @@ public sealed class SessionFileHeaderTests : IDisposable
     }
 
     [Fact]
+    public void ReadAssembliesReturnsNullForAnInvalidEscapeInAName()
+    {
+        string path = WriteGzip("{\"assemblies\":[\"\\ud800\"],\"executions\":[]}");
+
+        Assert.Null(SessionFileHeader.ReadAssemblies(path));
+    }
+
+    [Fact]
     public void ReadAssembliesReturnsNullForACorruptFile()
     {
         string path = Path.Combine(_directory, "corrupt.json.gz");

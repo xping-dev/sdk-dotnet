@@ -173,7 +173,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
     {
         // Arrange — a store at its run limit, every file a 2,000-test run, so the next write pays
         // the per-assembly count over all of them. Copies of one file stand in for distinct runs:
-        // retention reads names and headers, not contents.
+        // retention reads names, not contents.
         var options = new LocalStoreOptions();
         var store = new JsonSessionStore(options, NullLogger.Instance);
         DateTime start = DateTime.UtcNow.AddHours(-1);
@@ -185,8 +185,8 @@ public sealed class LocalStorePerformanceTests : IDisposable
 
         for (int i = 1; i < options.MaxRuns; i++)
         {
-            string ticks = start.AddSeconds(i).Ticks.ToString("D19", CultureInfo.InvariantCulture);
-            File.Copy(template, Path.Combine(directory, $"session-{ticks}-{i:D8}.json.gz"));
+            string name = SessionFileName.Build(start.AddSeconds(i), Guid.NewGuid(), ["MyCompany.Product.Tests"]);
+            File.Copy(template, Path.Combine(directory, name));
         }
 
         TestSession session = BuildSession(SuiteSize, DateTime.UtcNow, "MyCompany.Product.Tests");
