@@ -695,7 +695,7 @@ directly to `feat/141-report-test`.
 
 - Failure-mode exemplars (message, frames, first seen, counts): #270, which adds a block to this view.
 - The repro line: #271, after #139.
-- Executing tests (#139).
+- Executing tests: never. #139 prints the command (`repro`, `cli-repro-spec.md`).
 - Joining across assemblies. Lookup spans assemblies; the view never does.
 - More than one test per invocation, or a filter expression.
 - `--new` and delta framing (#143).
