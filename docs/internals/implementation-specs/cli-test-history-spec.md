@@ -103,7 +103,7 @@ The report's default window (20 runs / 14 days) is unchanged. It now comes from 
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | Lookup across every assembly reads the store once, unscoped, up to `UnboundedReadCeiling` (Amendment 7B) | One whole-store read per assembly the store summary names, one at a time, so memory peaks at one assembly's history and nothing is truncated. The clock-skew drop applies per assembly, as it already did under `--assembly`, so `--test Foo` and `--test Foo --assembly X` agree. Candidates are ordered by their newest run (start time descending, then session id ascending), then assembly, FQN and fingerprint. "N runs" in D4(a) counts distinct runs, so a run covering two assemblies counts once. Read warnings count each file and each run once | D2, D4 |
+| A | Lookup across every assembly reads the store once, unscoped, up to `UnboundedReadCeiling` (Amendment 7B) | One pass over every file, newest first, holding one session at a time and keeping only identities, so nothing is truncated and no run is read twice. The clock-skew drop applies per assembly, as it already does under `--assembly`, so `--test Foo` and `--test Foo --assembly X` agree: an assembly's runs ahead of the clock are left out while it has a datable run, and kept when it has none. Such an assembly is named in its own warning (`every run of <assembly> is stamped ahead of this machine's clock`). "Every recorded run is ahead" is said only when no run in the store, attributed or not, can be dated. Candidates are ordered by their newest run (start time descending, then session id ascending), then assembly, FQN and fingerprint. "N runs" in D4(a) counts distinct runs, so a run covering two assemblies counts once. Each unreadable file is counted once, including when it is the only thing the store holds | D2, D4 |
 | B | The `--test` window is read up to `UnboundedReadCeiling` | The ceiling is gone. Every unbounded read is scoped to one assembly, which the writer's retention bounds | §1.1, D5 |
 | C | Amendment 7B | Replaced by A | D2 |
 
@@ -117,9 +117,9 @@ The report's default window (20 runs / 14 days) is unchanged. It now comes from 
 
 Every claim here was read in source at the cited line.
 
-- **Three window modes, unbounded reads scoped.** `WindowResolver.Resolve` (`Report/Windowing/WindowResolver.cs:136-147`)
+- **Three window modes, unbounded reads scoped.** `WindowResolver.Resolve` (`Report/Windowing/WindowResolver.cs:150-163`)
   picks `--since`, then `--runs`, then the default (20 sessions, kept to 14 days). Every read goes
-  through `Read(source, maxSessions, assembly)` (`:346`). The unbounded modes read every session
+  through `Read(source, maxSessions, assembly)` (`:383`). The unbounded modes read every session
   of one assembly; retention, not the CLI, bounds them (Amendment 8B). `WindowResolution` has `Default`, `Runs`, `SinceSha`,
   `SinceDate` (`AnalysisWindow.cs:13-26`).
 - **Retention bounds the store, not the CLI.** `LocalStoreOptions` keeps 50 runs per assembly, and
@@ -227,15 +227,15 @@ later tiers are not tried.
 Matching uses each fingerprint's **newest** identity, so a renamed test is found under its current name.
 
 **Where it looks.** With `--assembly`, only that assembly. Without it, every assembly in the store:
-`ResolveTest` reads the store one assembly at a time, each read whole and subject to the clock-skew
-drop, and groups executions by `(Assembly, TestFingerprint)` (Amendment 8A). A single match scopes the
+`ResolveTest` reads every file once, one session at a time, applies the clock-skew drop per assembly,
+and groups executions by `(Assembly, TestFingerprint)` (Amendment 8A). A single match scopes the
 rest of the command to that test's assembly, and its window is then resolved as D5 describes. Nothing
 is ever joined across assemblies.
 
 **Rejected:** case-insensitive matching, globs and fuzzy matching. Each makes "matched one test" depend
 on what else happens to be in the store, and the ambiguity path (D3) already handles typing less.
 **Rejected:** using `report`'s auto-scoping (newest assembly only). A name is a stronger scope than
-"whatever ran last", and lookup across every assembly costs one read per assembly, each bounded by retention (Amendment 8A).
+"whatever ran last", and lookup across every assembly costs one pass over the store, holding one session at a time (Amendment 8A).
 
 ### D3 — Ambiguity
 
@@ -276,7 +276,7 @@ both selections. One line on stderr, in one of two tiers:
   `No run of 'Foo' in this window (--runs 5). It ran in 12 earlier runs; drop --runs to see them.`
 
 With `--format json`, stdout carries the envelope, as `--id`'s not-reported path does
-(`ReportCommand.cs:127-135`). `selection` is null. `test` is present with `query` set, `test.test` and
+(`ReportCommand.cs:97-107`). `selection` is null. `test` is present with `query` set, `test.test` and
 `counts` and `duration` null, and `sessions` and `candidates` empty, so a script can see what was asked
 for. Not found and ambiguous differ by `candidates` and by the exit code.
 
