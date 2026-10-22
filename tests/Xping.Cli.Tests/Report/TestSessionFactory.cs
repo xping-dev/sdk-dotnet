@@ -366,14 +366,17 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// <summary>Gets the store location.</summary>
     public string? StorePath => "/fake/store";
 
-    /// <summary>
-    /// Gets or sets the unreadable files every read reports, as a file that names no assembly would
-    /// be reported by every scoped read.
-    /// </summary>
-    public IReadOnlyList<string> UnreadableFiles { get; set; } = [];
+    /// <summary>Gets or sets the unreadable-file count every read reports.</summary>
+    public int UnreadableCount { get; set; }
 
-    /// <summary>Gets every read asked of the source, in order.</summary>
+    /// <summary>Gets every bounded read asked of the source, in order.</summary>
     public List<(int MaxSessions, string? Assembly)> Reads { get; } = [];
+
+    /// <summary>Gets the assembly of every one-at-a-time read asked of the source, in order.</summary>
+    public List<string?> Scans { get; } = [];
+
+    /// <summary>Gets how many sessions one-at-a-time reads have handed out.</summary>
+    public int SessionsRead { get; private set; }
 
     /// <summary>Gets how many headers have been enumerated.</summary>
     public int HeadersRead { get; private set; }
@@ -392,7 +395,27 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
             ? _sessions
             : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
 
-        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableFiles);
+        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableCount);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Unreadable files come last, as files whose name carries no start time do.</remarks>
+    public IEnumerable<LocalSessionFile> ReadEach(string? assembly)
+    {
+        Scans.Add(assembly);
+
+        IEnumerable<TestSession> matching = assembly == null
+            ? _sessions
+            : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
+
+        foreach (TestSession session in matching)
+        {
+            SessionsRead++;
+            yield return new LocalSessionFile(session);
+        }
+
+        for (int i = 0; i < UnreadableCount; i++)
+            yield return new LocalSessionFile(null);
     }
 
     /// <inheritdoc/>

@@ -119,7 +119,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 .ToList();
 
             var sessions = new List<TestSession>(Math.Min(maxSessions, files.Count));
-            var unreadable = new List<string>();
+            int unreadable = 0;
             string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
 
             foreach (string file in files)
@@ -141,7 +141,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 {
                     // Only files we actually attempted are counted. Files beyond the window were
                     // never opened, so claiming them as unreadable would overstate the damage.
-                    unreadable.Add(Path.GetFileName(file));
+                    unreadable++;
                     continue;
                 }
 
@@ -233,22 +233,35 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
-    public IEnumerable<LocalSessionHeader> ReadHeaders()
+    public IEnumerable<LocalSessionHeader> ReadHeaders() =>
+        Headers(ListNewestFirst().Where(f => f.Dated));
+
+    public IEnumerable<LocalSessionFile> ReadEach(string? assembly = null) =>
+        Files(ListNewestFirst(), assembly);
+
+    /// <summary>
+    /// Lists the session files newest first, ordered as <see cref="CompareNewestFirst"/> orders
+    /// sessions. Files whose name carries no start time come last, as ordinal order puts them.
+    /// </summary>
+    /// <remarks>
+    /// Listed eagerly so the lazy readers built on it stay iterators: an iterator cannot yield inside
+    /// a try that catches, and listing is the only step that can fail. Each file read degrades on
+    /// its own.
+    /// </remarks>
+    private List<(DateTime StartedAt, bool Dated, string Path)> ListNewestFirst()
     {
-        // Listed here and enumerated in Headers: an iterator cannot yield inside a try that catches,
-        // and listing is the only step that can fail. Each header read degrades on its own.
         string? directory = SessionsPath;
         if (!Directory.Exists(directory))
             return [];
 
         try
         {
-            var files = new List<(DateTime StartedAt, string Path)>();
+            var files = new List<(DateTime StartedAt, bool Dated, string Path)>();
 
             foreach (string file in Directory.GetFiles(directory!, SessionFileName.SearchPattern))
             {
-                if (SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt))
-                    files.Add((startedAt, file));
+                bool dated = SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt);
+                files.Add((startedAt, dated, file));
             }
 
             // Not the reverse of the name order ReadRecent walks: that breaks same-tick ties by id
@@ -260,11 +273,11 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 return byTime != 0 ? byTime : string.CompareOrdinal(left.Path, right.Path);
             });
 
-            return Headers(files);
+            return files;
         }
         catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
         {
-            _logger.LogDebug("Local session store header read skipped: {Message}", ex.Message);
+            _logger.LogDebug("Local session store listing skipped: {Message}", ex.Message);
             return [];
         }
     }
@@ -321,10 +334,50 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
-    private static IEnumerable<LocalSessionHeader> Headers(List<(DateTime StartedAt, string Path)> files)
+    private static IEnumerable<LocalSessionHeader> Headers(
+        IEnumerable<(DateTime StartedAt, bool Dated, string Path)> files)
     {
-        foreach ((DateTime startedAt, string path) in files)
+        foreach ((DateTime startedAt, _, string path) in files)
             yield return new LocalSessionHeader(startedAt, SessionFileHeader.ReadAssemblies(path) ?? []);
+    }
+
+    /// <remarks>
+    /// Skips and narrows exactly as <see cref="ReadRecent"/> does, so the two never disagree about
+    /// which runs an assembly has.
+    /// </remarks>
+    private IEnumerable<LocalSessionFile> Files(
+        List<(DateTime StartedAt, bool Dated, string Path)> files, string? assembly)
+    {
+        string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
+
+        foreach ((_, _, string path) in files)
+        {
+            if (tag != null
+                && SessionFileName.ParseTags(Path.GetFileName(path)) is { } tags
+                && !tags.Contains(tag, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            TestSession? session = TryReadFile(path);
+            if (session == null)
+            {
+                yield return new LocalSessionFile(null);
+                continue;
+            }
+
+            if (session.Executions.Count == 0)
+                continue;
+
+            if (assembly != null)
+            {
+                session = SessionAssemblies.Project(session, assembly);
+                if (session == null)
+                    continue;
+            }
+
+            yield return new LocalSessionFile(session);
+        }
     }
 
     /// <summary>

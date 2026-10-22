@@ -69,14 +69,31 @@ internal sealed record TestResolution(
 }
 
 /// <summary>
-/// What a <c>--test</c> name resolved to, and what the reads behind it skipped.
+/// What the lookup's read of the store could not use.
 /// </summary>
-/// <param name="Read">
-/// The reads' failure and what they skipped. It never carries a window: the lookup reads one
-/// assembly at a time and keeps none of them.
+/// <param name="Unreadable">Files that could not be read.</param>
+/// <param name="Skewed">Runs left out as stamped ahead of this machine's clock.</param>
+/// <param name="AheadAssemblies">
+/// Assemblies whose every run is stamped ahead of the clock, and whose runs were therefore kept,
+/// while the rest of the store could be dated. Empty when <paramref name="WholeStoreSkewed"/> is set.
 /// </param>
+/// <param name="WholeStoreSkewed">
+/// Whether every run read was stamped ahead of the clock, so none could be left out.
+/// </param>
+internal sealed record LookupWarnings(
+    int Unreadable, int Skewed, IReadOnlyList<string> AheadAssemblies, bool WholeStoreSkewed)
+{
+    /// <summary>Gets warnings that say nothing.</summary>
+    public static LookupWarnings None { get; } = new(0, 0, [], false);
+}
+
+/// <summary>
+/// What a <c>--test</c> name resolved to, and what the read behind it could not use.
+/// </summary>
 /// <param name="Resolution">The resolution, or <see langword="null"/> when the read failed.</param>
-internal sealed record TestLookup(WindowResult Read, TestResolution? Resolution);
+/// <param name="Failure">Why the read failed, when it did.</param>
+/// <param name="Warnings">What the read could not use.</param>
+internal sealed record TestLookup(TestResolution? Resolution, WindowFailure? Failure, LookupWarnings Warnings);
 
 /// <summary>
 /// Resolves the name a reader passed to <c>--test</c> to one test in the store.
@@ -104,26 +121,23 @@ internal static class TestResolver
     /// <summary>
     /// Reads the whole store and resolves a name over it.
     /// </summary>
-    /// <param name="resolver">The window resolver, which applies the clock-skew drop to the read.</param>
+    /// <param name="resolver">The window resolver, which owns the clock rule the read applies.</param>
     /// <param name="source">Where sessions are read from.</param>
     /// <param name="query">The name the reader typed.</param>
     /// <param name="assembly">The assembly to restrict the lookup to, or <see langword="null"/> for all.</param>
-    /// <returns>The read and the resolution.</returns>
+    /// <returns>The resolution, or why there is none, and what the read could not use.</returns>
     /// <remarks>
     /// <para>
-    /// Read through the resolver rather than from the source directly, so the lookup sees the same
-    /// sessions a window would: a session stamped ahead of this machine's clock must not name the
-    /// test a reader gets an answer about. Every assembly unless the reader named one, because a name
-    /// is a stronger scope than the assembly that happened to run last.
+    /// Every assembly unless the reader named one, because a name is a stronger scope than the
+    /// assembly that happened to run last. One pass over the store, one session held at a time: only
+    /// identities survive a session, and they are all the name needs. Holding the sessions instead
+    /// costs gigabytes on a store shared by many suites, and reading them per assembly would load a
+    /// run that covers several assemblies once for each.
     /// </para>
     /// <para>
-    /// One assembly at a time, each read whole and dropped before the next, so memory peaks at one
-    /// assembly's history however many share the store, and no fixed ceiling cuts the oldest runs
-    /// off. Only identities survive a read, and they are all the name needs.
-    /// </para>
-    /// <para>
-    /// What the reads skipped is counted by file and by run, not summed per read: a file that names no
-    /// assembly is opened by every scoped read, and a run covering two assemblies is read twice.
+    /// The clock rule is the one a window applies, judged per assembly, so a name resolves the same
+    /// with or without <c>--assembly</c>: an assembly's runs stamped ahead of the clock are left out
+    /// while it has any run this machine can date, and kept, with a warning, when it has none.
     /// </para>
     /// </remarks>
     public static TestLookup Resolve(
@@ -134,57 +148,74 @@ internal static class TestResolver
         ArgumentNullException.ThrowIfNull(query);
 
         if (!source.IsAvailable)
-            return new TestLookup(WindowResult.Failed(WindowFailure.NoStore), null);
+            return new TestLookup(null, WindowFailure.NoStore, LookupWarnings.None);
 
-        IReadOnlyList<string> assemblies = assembly is null ? source.KnownAssemblies() : [assembly];
+        var scopes = new SortedDictionary<string, Scope>(StringComparer.Ordinal);
+        var unattributed = new Scope();
+        int unreadable = 0;
+        bool anyDatable = false;
 
-        var entries = new List<Entry>();
-        var runs = new HashSet<Guid>();
-        var unreadable = new HashSet<string>(StringComparer.Ordinal);
-        var skewed = new HashSet<Guid>();
-        bool anyRead = false;
-        bool everyReadSkewed = true;
-
-        foreach (string scope in assemblies)
+        foreach (LocalSessionFile file in source.ReadEach(assembly))
         {
-            StoreRead read = resolver.ReadStore(source, scope);
-
-            unreadable.UnionWith(read.UnreadableFiles);
-            skewed.UnionWith(read.SkewedSessionIds);
-
-            if (read.Sessions.Count == 0)
-                continue;
-
-            anyRead = true;
-            everyReadSkewed &= read.WholeStoreSkewed;
-
-            entries.AddRange(Index(read.Sessions, scope));
-            runs.UnionWith(read.Sessions.Select(s => s.SessionId));
-        }
-
-        // A run left out of one assembly's read but kept in another's, whose every run was ahead of
-        // the clock, was not left out of the lookup.
-        skewed.ExceptWith(runs);
-
-        bool wholeStoreSkewed = anyRead && everyReadSkewed;
-
-        if (!anyRead)
-        {
-            // Runs that name no assembly have no read of their own. They are told apart from an empty
-            // store so the caller can say which it is: "nothing attributable", not "no runs".
-            if (assembly is null && source.Read(1, null).Sessions.Count > 0)
+            if (file.Session is not { } session)
             {
-                return new TestLookup(
-                    Warnings(null, unreadable, skewed, wholeStoreSkewed),
-                    Resolve(entries, query, assembly, runCount: 0));
+                unreadable++;
+                continue;
             }
 
-            return new TestLookup(Warnings(WindowFailure.EmptyStore, unreadable, skewed, wholeStoreSkewed), null);
+            bool ahead = resolver.IsAhead(session.StartedAt);
+            anyDatable |= !ahead;
+
+            IReadOnlyList<string> covered = SessionAssemblies.Of(session);
+            if (covered.Count == 0)
+                unattributed.Add(session, null, ahead);
+
+            foreach (string covering in covered)
+            {
+                if (!scopes.TryGetValue(covering, out Scope? scope))
+                    scopes[covering] = scope = new Scope();
+
+                scope.Add(session, covering, ahead);
+            }
         }
 
+        if (scopes.Count == 0 && unattributed.IsEmpty)
+        {
+            return new TestLookup(
+                null, WindowFailure.EmptyStore, new LookupWarnings(unreadable, 0, [], false));
+        }
+
+        // A run counts as datable or not for the whole store at once, so "every recorded run is
+        // ahead" holds only when no run at all, attributed or not, can be dated.
+        bool wholeStoreSkewed = !anyDatable;
+
+        var entries = new List<Entry>();
+        var kept = new HashSet<Guid>();
+        var excluded = new HashSet<Guid>();
+        var aheadAssemblies = new List<string>();
+
+        foreach ((string name, Scope scope) in scopes)
+        {
+            entries.AddRange(scope.Kept.Entries);
+            kept.UnionWith(scope.KeptRuns);
+            excluded.UnionWith(scope.ExcludedRuns);
+
+            if (scope.WhollyAhead && !wholeStoreSkewed)
+                aheadAssemblies.Add(name);
+        }
+
+        kept.UnionWith(unattributed.KeptRuns);
+        excluded.UnionWith(unattributed.ExcludedRuns);
+
+        // A run left out of one assembly but kept by another, whose every run is ahead, was read.
+        excluded.ExceptWith(kept);
+
+        // Runs that name no assembly yield no entry, so a store holding only those resolves to no
+        // assembly, which the caller reports as nothing attributable rather than as no runs.
         return new TestLookup(
-            Warnings(null, unreadable, skewed, wholeStoreSkewed),
-            Resolve(entries, query, assembly, runs.Count));
+            Resolve(entries, query, assembly, kept.Count),
+            null,
+            new LookupWarnings(unreadable, excluded.Count, aheadAssemblies, wholeStoreSkewed));
     }
 
     /// <summary>
@@ -205,10 +236,6 @@ internal static class TestResolver
 
         return Resolve(Index(sessions, assembly), query, assembly, runCount);
     }
-
-    private static WindowResult Warnings(
-        WindowFailure? failure, HashSet<string> unreadable, HashSet<Guid> skewed, bool wholeStoreSkewed) =>
-        new(null, failure, null, unreadable.Count, skewed.Count, wholeStoreSkewed);
 
     private static TestResolution Resolve(List<Entry> entries, string query, string? assembly, int runCount)
     {
@@ -363,41 +390,12 @@ internal static class TestResolver
     /// </remarks>
     private static List<Entry> Index(IReadOnlyList<TestSession> sessions, string? assembly)
     {
-        var entries = new Dictionary<(string Assembly, string Fingerprint), Entry>();
-        var ordered = new List<Entry>();
+        var index = new EntryIndex();
 
-        for (int position = 0; position < sessions.Count; position++)
-        {
-            TestSession session = sessions[position];
+        foreach (TestSession session in sessions)
+            index.Add(session, assembly);
 
-            foreach (TestExecution execution in session.Executions)
-            {
-                TestIdentity identity = execution.Identity;
-                if (string.IsNullOrEmpty(identity.TestFingerprint) || string.IsNullOrEmpty(identity.Assembly))
-                    continue;
-
-                if (assembly != null && !string.Equals(identity.Assembly, assembly, StringComparison.Ordinal))
-                    continue;
-
-                var key = (identity.Assembly, identity.TestFingerprint);
-
-                if (!entries.TryGetValue(key, out Entry? entry))
-                {
-                    entry = new Entry(identity.Assembly, identity.TestFingerprint, identity.FullyQualifiedName, session.SessionId, session.StartedAt);
-                    entries[key] = entry;
-                    ordered.Add(entry);
-                }
-
-                // Retries put several executions of one test in a session; a run is a session.
-                if (entry.LastPosition != position)
-                {
-                    entry.Runs++;
-                    entry.LastPosition = position;
-                }
-            }
-        }
-
-        return ordered;
+        return index.Entries;
     }
 
     /// <summary>
@@ -666,6 +664,77 @@ internal static class TestResolver
 
         public int Runs { get; set; }
 
-        public int LastPosition { get; set; } = -1;
+        public Guid? LastSessionId { get; set; }
+    }
+
+    /// <summary>
+    /// One entry per assembly and fingerprint, built from sessions handed over newest first.
+    /// </summary>
+    private sealed class EntryIndex
+    {
+        private readonly Dictionary<(string Assembly, string Fingerprint), Entry> _byKey = [];
+
+        public List<Entry> Entries { get; } = [];
+
+        public void Add(TestSession session, string? assembly)
+        {
+            foreach (TestExecution execution in session.Executions)
+            {
+                TestIdentity identity = execution.Identity;
+                if (string.IsNullOrEmpty(identity.TestFingerprint) || string.IsNullOrEmpty(identity.Assembly))
+                    continue;
+
+                if (assembly != null && !string.Equals(identity.Assembly, assembly, StringComparison.Ordinal))
+                    continue;
+
+                var key = (identity.Assembly, identity.TestFingerprint);
+
+                if (!_byKey.TryGetValue(key, out Entry? entry))
+                {
+                    entry = new Entry(identity.Assembly, identity.TestFingerprint, identity.FullyQualifiedName, session.SessionId, session.StartedAt);
+                    _byKey[key] = entry;
+                    Entries.Add(entry);
+                }
+
+                // Retries put several executions of one test in a session; a run is a session.
+                if (entry.LastSessionId != session.SessionId)
+                {
+                    entry.Runs++;
+                    entry.LastSessionId = session.SessionId;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// One assembly's runs as the lookup reads them, split by whether this machine can date them.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are indexed because which one survives is known only once the store has been read:
+    /// the runs ahead of the clock are left out if any run can be dated, and are all there is if none
+    /// can. Only identities are held, so the half that is dropped costs little.
+    /// </remarks>
+    private sealed class Scope
+    {
+        private readonly EntryIndex _datable = new();
+        private readonly EntryIndex _ahead = new();
+        private readonly HashSet<Guid> _datableRuns = [];
+        private readonly HashSet<Guid> _aheadRuns = [];
+
+        public bool IsEmpty => _datableRuns.Count == 0 && _aheadRuns.Count == 0;
+
+        public bool WhollyAhead => _datableRuns.Count == 0 && _aheadRuns.Count > 0;
+
+        public EntryIndex Kept => WhollyAhead ? _ahead : _datable;
+
+        public IReadOnlyCollection<Guid> KeptRuns => WhollyAhead ? _aheadRuns : _datableRuns;
+
+        public IReadOnlyCollection<Guid> ExcludedRuns => WhollyAhead ? [] : _aheadRuns;
+
+        public void Add(TestSession session, string? assembly, bool ahead)
+        {
+            (ahead ? _ahead : _datable).Add(session, assembly);
+            (ahead ? _aheadRuns : _datableRuns).Add(session.SessionId);
+        }
     }
 }

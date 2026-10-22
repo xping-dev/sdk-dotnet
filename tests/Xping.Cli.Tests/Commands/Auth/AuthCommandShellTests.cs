@@ -198,6 +198,8 @@ public sealed class AuthCommandShellTests
 
         public IEnumerable<LocalSessionHeader> ReadHeaders() => [];
 
+        public IEnumerable<LocalSessionFile> ReadEach(string? assembly = null) => [];
+
         public int Delete(string? assembly = null) => 0;
     }
 

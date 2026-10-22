@@ -334,7 +334,7 @@ public sealed class WindowResolverTests
     [Fact]
     public void UnreadableFilesAreCarriedOntoTheResult()
     {
-        var source = new FakeSessionSource(Sessions(3)) { UnreadableFiles = ["a.json.gz", "b.json.gz"] };
+        var source = new FakeSessionSource(Sessions(3)) { UnreadableCount = 2 };
 
         WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, null, null));
 

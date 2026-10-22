@@ -439,6 +439,48 @@ public sealed class TestHistoryCommandTests : IDisposable
         Assert.EndsWith("No test matching 'Nope' in this store (1 assembly, 8 runs)." + Environment.NewLine, error, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A store holding nothing but damaged files has no runs to name, and says how many it skipped,
+    /// rather than claiming no test ever ran.
+    /// </summary>
+    [Fact]
+    public void AStoreOfUnreadableFilesCountsThem()
+    {
+        string sessions = Path.Combine(_root, "sessions");
+        Directory.CreateDirectory(sessions);
+        File.WriteAllBytes(Path.Combine(sessions, "session-0699999999999999998-deadbeef.json.gz"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(sessions, "session-0699999999999999999-feedface.json.gz"), [1, 2, 3]);
+
+        var (code, _, error) = Run("--test", "Nope");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains("No runs recorded yet", error, StringComparison.Ordinal);
+        Assert.Contains("warning: 2 unreadable run(s) skipped.", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A suite recorded by a machine whose clock runs ahead is searched, as <c>--assembly</c> would
+    /// search it, and named, since its runs were kept rather than left out.
+    /// </summary>
+    [Fact]
+    public void ASuiteWhoseEveryRunIsAheadOfTheClockIsNamed()
+    {
+        SeedVanishing();
+        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+            40,
+            [TestSessionFactory.Execution("Elsewhere", assembly: Other)],
+            startedAt: DateTime.UtcNow.AddDays(10)));
+
+        var (code, _, error) = Run("--test", "Nope");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Contains(
+            $"warning: every run of {Other} is stamped ahead of this machine's clock. " +
+            "Check the clock on the machine that recorded them.",
+            error,
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AnEmptyStoreCannotBeReportedOn()
     {

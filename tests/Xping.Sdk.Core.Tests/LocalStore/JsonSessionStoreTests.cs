@@ -288,13 +288,7 @@ public sealed class JsonSessionStoreTests : IDisposable
         LocalSessionReadResult result = store.ReadRecent(10);
 
         Assert.Single(result.Sessions);
-        Assert.Equal(
-            [
-                "session-0000000000000000003-cccccccc.json.gz",
-                "session-0000000000000000002-bbbbbbbb.json.gz",
-                "session-0000000000000000001-aaaaaaaa.json.gz"
-            ],
-            result.UnreadableFiles);
+        Assert.Equal(3, result.UnreadableCount);
     }
 
     [Fact]
@@ -622,6 +616,48 @@ public sealed class JsonSessionStoreTests : IDisposable
         Assert.Equal(2, headers.Count);
         Assert.Empty(headers[1].Assemblies);
     }
+
+    [Fact]
+    public void ReadEachReturnsEveryRunInReadRecentsOrderWithAnEntryPerUnreadableFile()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 4; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(i % 2), assembly: i < 2 ? "Alpha.Tests" : "Beta.Tests"));
+
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, "session-0000000000000000009-deadbeef.json.gz"), [0x00]);
+
+        List<LocalSessionFile> files = [.. store.ReadEach()];
+
+        Assert.Equal(
+            store.ReadRecent(10).Sessions.Select(s => s.SessionId),
+            files.Where(f => f.Session != null).Select(f => f.Session!.SessionId));
+        Assert.Null(files[^1].Session);
+    }
+
+    [Fact]
+    public void ReadEachNarrowsToAnAssemblyAsReadRecentDoes()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Alpha.Tests", 1), ("Beta.Tests", 2)));
+        store.Write(BuildSession(baseTime.AddMinutes(2), assembly: "Alpha.Tests"));
+
+        List<TestSession> each = [.. store.ReadEach("Beta.Tests").Select(f => f.Session!)];
+        IReadOnlyList<TestSession> recent = store.ReadRecent(10, "Beta.Tests").Sessions;
+
+        Assert.Equal(recent.Select(s => s.SessionId), each.Select(s => s.SessionId));
+        Assert.Equal(recent.Select(s => s.Executions.Count), each.Select(s => s.Executions.Count));
+        Assert.All(each.SelectMany(s => s.Executions), e => Assert.Equal("Beta.Tests", e.Identity.Assembly));
+    }
+
+    [Fact]
+    public void ReadEachIsEmptyBeforeAnyRunIsWritten() =>
+        Assert.Empty(CreateStore().ReadEach());
 
     [Fact]
     public void ReadHeadersIsEmptyBeforeAnyRunIsWritten() =>

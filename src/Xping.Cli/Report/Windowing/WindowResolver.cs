@@ -89,22 +89,6 @@ internal sealed record WindowResult(
 }
 
 /// <summary>
-/// Every session the store holds for one assembly, once the sessions this machine cannot date were
-/// set aside.
-/// </summary>
-/// <param name="Sessions">Sessions the bounds may be taken from, newest first.</param>
-/// <param name="UnreadableFiles">Names of the files that could not be read.</param>
-/// <param name="SkewedSessionIds">Sessions left out as stamped ahead of the clock.</param>
-/// <param name="WholeStoreSkewed">
-/// Whether every session read was stamped ahead of the clock, so none could be left out.
-/// </param>
-internal sealed record StoreRead(
-    IReadOnlyList<TestSession> Sessions,
-    IReadOnlyList<string> UnreadableFiles,
-    IReadOnlyList<Guid> SkewedSessionIds,
-    bool WholeStoreSkewed);
-
-/// <summary>
 /// Chooses which sessions a report covers.
 /// </summary>
 internal interface IWindowResolver
@@ -118,12 +102,15 @@ internal interface IWindowResolver
     WindowResult Resolve(ISessionSource source, WindowRequest request);
 
     /// <summary>
-    /// Reads every session the store holds for one assembly, under the same clock rule as a window.
+    /// Whether a session started later than this machine's clock allows.
     /// </summary>
-    /// <param name="source">Where sessions are read from.</param>
-    /// <param name="assembly">The assembly to read.</param>
-    /// <returns>The sessions, and what was left out of them.</returns>
-    StoreRead ReadStore(ISessionSource source, string assembly);
+    /// <param name="startedAt">When the session says it started.</param>
+    /// <returns><see langword="true"/> when the stamp is past the clock-skew tolerance.</returns>
+    /// <remarks>
+    /// For a caller that reads sessions one at a time and so cannot hand a list to
+    /// <see cref="Resolve"/>, but must still apply the one clock rule every read here applies.
+    /// </remarks>
+    bool IsAhead(DateTime startedAt);
 
     /// <summary>
     /// Returns the assembly to scope to when the caller named none, or <see langword="null"/>.
@@ -150,6 +137,16 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     // restate it here. A fixed ceiling would only ever cut history off silently.
     private const int Unbounded = int.MaxValue;
 
+    /// <summary>
+    /// What a read yielded, once the sessions this machine cannot date were set aside.
+    /// </summary>
+    /// <param name="Sessions">Sessions the bounds may be taken from, newest first.</param>
+    /// <param name="Unreadable">Files that could not be read.</param>
+    /// <param name="Skewed">Sessions left out as stamped ahead of the clock.</param>
+    /// <param name="WholeStoreSkewed">Whether every session read was stamped ahead of it.</param>
+    private sealed record DatableRead(
+        IReadOnlyList<TestSession> Sessions, int Unreadable, int Skewed, bool WholeStoreSkewed);
+
     public WindowResult Resolve(ISessionSource source, WindowRequest request)
     {
         if (!source.IsAvailable)
@@ -167,8 +164,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     }
 
     /// <inheritdoc/>
-    public StoreRead ReadStore(ISessionSource source, string assembly) =>
-        Read(source, Unbounded, assembly);
+    public bool IsAhead(DateTime startedAt) => startedAt > Horizon();
 
     /// <inheritdoc/>
     /// <remarks>
@@ -228,7 +224,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// </summary>
     private WindowResult ResolveDefault(ISessionSource source, WindowRequest request)
     {
-        StoreRead read = Read(
+        DatableRead read = Read(
             source, LocalAnalysisConstants.DefaultWindowSessions, request.Assembly);
 
         if (read.Sessions.Count == 0)
@@ -257,7 +253,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         WindowResolution resolution,
         string? argument)
     {
-        StoreRead read = Read(source, count, request.Assembly);
+        DatableRead read = Read(source, count, request.Assembly);
 
         if (read.Sessions.Count == 0)
             return Failed(WindowFailure.EmptyStore, null, read);
@@ -290,7 +286,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     private WindowResult ResolveSinceDate(
         ISessionSource source, WindowRequest request, string argument, DateTime boundary)
     {
-        StoreRead read = Read(source, Unbounded, request.Assembly);
+        DatableRead read = Read(source, Unbounded, request.Assembly);
 
         var selected = read.Sessions.Where(s => s.StartedAt >= boundary).ToList();
 
@@ -316,7 +312,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     private WindowResult ResolveSinceSha(
         ISessionSource source, WindowRequest request, string sha)
     {
-        StoreRead read = Read(source, Unbounded, request.Assembly);
+        DatableRead read = Read(source, Unbounded, request.Assembly);
 
         // Sessions arrive newest first, so the last match is the oldest one.
         int anchor = -1;
@@ -384,14 +380,14 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// clock and a warning saying so.
     /// </para>
     /// </remarks>
-    private StoreRead Read(ISessionSource source, int maxSessions, string? assembly)
+    private DatableRead Read(ISessionSource source, int maxSessions, string? assembly)
     {
         SessionReadResult read = source.Read(maxSessions, assembly);
 
         DateTime horizon = Horizon();
 
         if (read.Sessions.All(s => s.StartedAt <= horizon))
-            return new StoreRead(read.Sessions, read.UnreadableFiles, [], WholeStoreSkewed: false);
+            return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: false);
 
         // Already the whole store, so there is nothing deeper to read.
         SessionReadResult deep = maxSessions == Unbounded
@@ -399,7 +395,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
             : source.Read(Unbounded, assembly);
 
         var selected = new List<TestSession>(Math.Min(maxSessions, deep.Sessions.Count));
-        var skewed = new List<Guid>();
+        int skewed = 0;
 
         // Counted over the runs walked past to fill the window, and not over the whole store: this
         // is what the report left out of the window it is about to publish.
@@ -409,15 +405,15 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
                 break;
 
             if (session.StartedAt > horizon)
-                skewed.Add(session.SessionId);
+                skewed++;
             else
                 selected.Add(session);
         }
 
         if (selected.Count == 0)
-            return new StoreRead(read.Sessions, read.UnreadableFiles, [], WholeStoreSkewed: true);
+            return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: true);
 
-        return new StoreRead(selected, deep.UnreadableFiles, skewed, WholeStoreSkewed: false);
+        return new DatableRead(selected, deep.UnreadableCount, skewed, WholeStoreSkewed: false);
     }
 
     /// <summary>
@@ -430,7 +426,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         IReadOnlyList<TestSession> sessions,
         WindowResolution resolution,
         string? argument,
-        StoreRead read)
+        DatableRead read)
     {
         // Sessions are newest first, so the bounds come from the ends of the list.
         DateTime to = sessions[0].StartedAt;
@@ -438,8 +434,8 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
 
         return WindowResult.Success(
             AnalysisWindow.Create(sessions, from, to, resolution, argument),
-            read.UnreadableFiles.Count,
-            read.SkewedSessionIds.Count,
+            read.Unreadable,
+            read.Skewed,
             read.WholeStoreSkewed);
     }
 
@@ -452,9 +448,9 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// dated where this machine cannot see them.
     /// </remarks>
     private static WindowResult Failed(
-        WindowFailure failure, string? detail, StoreRead read) =>
+        WindowFailure failure, string? detail, DatableRead read) =>
         WindowResult.Failed(
-            failure, detail, read.UnreadableFiles.Count, read.SkewedSessionIds.Count, read.WholeStoreSkewed);
+            failure, detail, read.Unreadable, read.Skewed, read.WholeStoreSkewed);
 
     private static bool MatchesSha(TestSession session, string prefix) =>
         RevisionContext.ReadSha(session) is { } sha &&

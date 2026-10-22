@@ -137,7 +137,14 @@ internal sealed class ReportCommand(
         TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
 
         if (lookup.Resolution is not { } resolution)
-            return ReportUnavailable(lookup.Read, store, options.Assembly);
+        {
+            LookupWarnings skipped = lookup.Warnings;
+            return ReportUnavailable(
+                WindowResult.Failed(
+                    lookup.Failure!.Value, null, skipped.Unreadable, skipped.Skewed, skipped.WholeStoreSkewed),
+                store,
+                options.Assembly);
+        }
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
         // scoped, so "no test matching" would blame the name for what is a property of the store.
@@ -145,7 +152,7 @@ internal sealed class ReportCommand(
             return ReportNothingAttributable(store);
 
         if (resolution.Match is not { } match)
-            return Unresolved(options, resolution, lookup.Read, source);
+            return Unresolved(options, resolution, lookup.Warnings, source);
 
         WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, match.Assembly));
 
@@ -205,7 +212,7 @@ internal sealed class ReportCommand(
     /// </summary>
     /// <param name="options">Parsed command-line options.</param>
     /// <param name="resolution">The ambiguous or empty resolution.</param>
-    /// <param name="lookup">What the reads the name was resolved over skipped.</param>
+    /// <param name="lookup">What the read the name was resolved over could not use.</param>
     /// <param name="source">Where sessions are read from.</param>
     /// <returns>The exit code.</returns>
     /// <remarks>
@@ -216,7 +223,7 @@ internal sealed class ReportCommand(
     private int Unresolved(
         ReportOptions options,
         TestResolution resolution,
-        WindowResult lookup,
+        LookupWarnings lookup,
         LocalSessionSource source)
     {
         // Every candidate's command names its own assembly and nothing of the window, so the scope
@@ -230,7 +237,7 @@ internal sealed class ReportCommand(
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
-        WriteReadWarnings(lookup);
+        WriteLookupWarnings(lookup);
 
         if (history.Candidates.Count > 0)
             WriteAmbiguous(resolution.Query, history.Candidates);
@@ -548,10 +555,35 @@ internal sealed class ReportCommand(
     /// </summary>
     private void WriteReadWarnings(WindowResult result)
     {
-        if (result.UnreadableSessions > 0)
-            io.Error.WriteLine($"warning: {result.UnreadableSessions} unreadable run(s) skipped.");
-
+        WriteUnreadableWarning(result.UnreadableSessions);
         WriteClockWarning(result);
+    }
+
+    /// <summary>
+    /// Says what the <c>--test</c> lookup could not use.
+    /// </summary>
+    /// <remarks>
+    /// The lookup writes no report, so the clock is named as the thing to check rather than as the
+    /// one the report is dated against. An assembly whose every run is ahead is named on its own: its
+    /// runs were kept, so no count of excluded runs says anything about it.
+    /// </remarks>
+    private void WriteLookupWarnings(LookupWarnings warnings)
+    {
+        WriteUnreadableWarning(warnings.Unreadable);
+        WriteClockWarning(warnings.WholeStoreSkewed, warnings.Skewed, reportWritten: false);
+
+        foreach (string assembly in warnings.AheadAssemblies)
+        {
+            io.Error.WriteLine(
+                $"warning: every run of {assembly} is stamped ahead of this machine's clock. " +
+                "Check the clock on the machine that recorded them.");
+        }
+    }
+
+    private void WriteUnreadableWarning(int unreadable)
+    {
+        if (unreadable > 0)
+            io.Error.WriteLine($"warning: {unreadable} unreadable run(s) skipped.");
     }
 
     /// <summary>
@@ -563,25 +595,28 @@ internal sealed class ReportCommand(
     /// future is not a corrupt file to be shrugged at; it is a machine writing into this store whose
     /// time is wrong, and until that is fixed the same runs will keep arriving undatable.
     /// </remarks>
-    private void WriteClockWarning(WindowResult result)
+    private void WriteClockWarning(WindowResult result) =>
+        WriteClockWarning(result.WholeStoreSkewed, result.SkewedSessions, reportWritten: result.Window != null);
+
+    private void WriteClockWarning(bool wholeStoreSkewed, int skewed, bool reportWritten)
     {
-        if (result.WholeStoreSkewed)
+        if (wholeStoreSkewed)
         {
             // Said two ways, because this runs on the failure path too. There is no report to be
             // dated against anything when no window resolved, and a warning that describes one is
             // the wrong thing to hand a developer who was just told they have nothing to look at.
             io.Error.WriteLine(
                 "warning: every recorded run is stamped ahead of this machine's clock. " +
-                (result.Window == null
-                    ? "Check the clock on the machine that recorded them."
-                    : "The report is dated against the clock that recorded them."));
+                (reportWritten
+                    ? "The report is dated against the clock that recorded them."
+                    : "Check the clock on the machine that recorded them."));
             return;
         }
 
-        if (result.SkewedSessions > 0)
+        if (skewed > 0)
         {
             io.Error.WriteLine(
-                $"warning: {result.SkewedSessions} run(s) stamped ahead of this machine's clock " +
+                $"warning: {skewed} run(s) stamped ahead of this machine's clock " +
                 "were excluded. Check the clock on the machine that recorded them.");
         }
     }

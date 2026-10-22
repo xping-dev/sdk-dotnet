@@ -11,17 +11,10 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// The result of reading sessions from the local store.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The unreadable files travel with the sessions because a report has to state how much history it
+/// The unreadable count travels with the sessions because a report has to state how much history it
 /// could not see. Returning only the sessions would make a store that is half corrupt
 /// indistinguishable from a store that is half empty, and the difference matters: the first is a
 /// problem to investigate, the second is a normal new project.
-/// </para>
-/// <para>
-/// Named rather than counted, so a caller combining several scoped reads can count a file once. A
-/// file that names no assembly in its name is opened by every scoped read, and summing their counts
-/// would report one damaged file as several.
-/// </para>
 /// </remarks>
 public sealed class LocalSessionReadResult
 {
@@ -29,15 +22,15 @@ public sealed class LocalSessionReadResult
     /// Initializes a new instance of the <see cref="LocalSessionReadResult"/> class.
     /// </summary>
     /// <param name="sessions">The sessions that were read.</param>
-    /// <param name="unreadableFiles">The names of files skipped because they could not be read.</param>
-    public LocalSessionReadResult(IReadOnlyList<TestSession> sessions, IReadOnlyList<string> unreadableFiles)
+    /// <param name="unreadableCount">The number of files skipped because they could not be read.</param>
+    public LocalSessionReadResult(IReadOnlyList<TestSession> sessions, int unreadableCount)
     {
         Sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        UnreadableFiles = unreadableFiles ?? throw new ArgumentNullException(nameof(unreadableFiles));
+        UnreadableCount = unreadableCount;
     }
 
     /// <summary>Gets an empty result.</summary>
-    public static LocalSessionReadResult Empty { get; } = new(new List<TestSession>(), new List<string>());
+    public static LocalSessionReadResult Empty { get; } = new(new List<TestSession>(), 0);
 
     /// <summary>
     /// Gets the sessions read, ordered newest first by <see cref="TestSession.StartedAt"/> with
@@ -45,11 +38,26 @@ public sealed class LocalSessionReadResult
     /// </summary>
     public IReadOnlyList<TestSession> Sessions { get; }
 
-    /// <summary>Gets the names of the files skipped because they could not be read.</summary>
-    public IReadOnlyList<string> UnreadableFiles { get; }
-
     /// <summary>Gets the number of files skipped because they could not be read.</summary>
-    public int UnreadableCount => UnreadableFiles.Count;
+    public int UnreadableCount { get; }
+}
+
+/// <summary>
+/// One stored file, read: the session it holds, or nothing when it could not be read.
+/// </summary>
+public sealed class LocalSessionFile
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalSessionFile"/> class.
+    /// </summary>
+    /// <param name="session">The session, or <see langword="null"/> when the file could not be read.</param>
+    public LocalSessionFile(TestSession? session)
+    {
+        Session = session;
+    }
+
+    /// <summary>Gets the session, or <see langword="null"/> when the file could not be read.</summary>
+    public TestSession? Session { get; }
 }
 
 /// <summary>
@@ -229,6 +237,24 @@ public interface ILocalSessionStore
     /// </para>
     /// </remarks>
     IEnumerable<LocalSessionHeader> ReadHeaders();
+
+    /// <summary>
+    /// Reads every stored session, newest first, one file at a time.
+    /// </summary>
+    /// <param name="assembly">
+    /// When supplied, only sessions that recorded this test assembly, each narrowed to it, exactly as
+    /// <see cref="ReadRecent"/> scopes them.
+    /// </param>
+    /// <returns>
+    /// One entry per file opened, read only as the sequence is enumerated. An unreadable file is an
+    /// entry with no session; a session with no executions, or none for the assembly, is no entry.
+    /// </returns>
+    /// <remarks>
+    /// For a caller that needs every session but only a little of each. Holding them all, as
+    /// <see cref="ReadRecent"/> does, costs many times the store's size on disk; enumerating holds
+    /// one at a time. Ordered as <see cref="ReadRecent"/> and <see cref="ReadHeaders"/> are.
+    /// </remarks>
+    IEnumerable<LocalSessionFile> ReadEach(string? assembly = null);
 
     /// <summary>
     /// Deletes stored sessions.

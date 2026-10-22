@@ -535,19 +535,22 @@ public sealed class TestResolverTests
 
         Assert.Equal(TestResolutionKind.Found, lookup.Resolution!.Kind);
         Assert.Equal(Other, lookup.Resolution.Match!.Assembly);
-        Assert.Null(lookup.Read.Window);
     }
 
     [Fact]
-    public void TheUnscopedLookupNeverReadsTheStoreUnscoped()
+    public void TheLookupReadsTheStoreOnceOneSessionAtATime()
     {
+        // The run covering both suites is read once, not once per suite, and nothing is held as a
+        // list: a store shared by many suites is gigabytes once loaded (#283).
         var source = new FakeSessionSource(
-            Session(0, Test("Ns.A.Foo", "aaaaaaaa1", Other)),
+            Session(0, Test("Ns.A.Foo", "aaaaaaaa1", Other), Test("Ns.A.Baz", "cccccccc1")),
             Session(1, Test("Ns.A.Bar", "bbbbbbbb1")));
 
         TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Equal([Assembly, Other], source.Reads.Select(r => r.Assembly));
+        Assert.Empty(source.Reads);
+        Assert.Equal([null], source.Scans);
+        Assert.Equal(2, source.SessionsRead);
     }
 
     [Fact]
@@ -609,19 +612,31 @@ public sealed class TestResolverTests
     }
 
     [Fact]
-    public void AnUnreadableFileIsCountedOnceAcrossAssemblies()
+    public void AnUnreadableFileIsCountedOnce()
     {
-        // A file whose name carries no assembly is opened by every suite's read.
         var source = new FakeSessionSource(
             Session(0, Test("Ns.A.Foo", "aaaaaaaa1")),
             Session(1, Test("Ns.A.Bar", "bbbbbbbb1", Other)))
         {
-            UnreadableFiles = ["session-damaged.json.gz"]
+            UnreadableCount = 1
         };
 
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Equal(1, lookup.Read.UnreadableSessions);
+        Assert.Equal(1, lookup.Warnings.Unreadable);
+    }
+
+    [Fact]
+    public void AStoreOfUnreadableFilesFailsAsEmptyAndCountsThem()
+    {
+        // Every file is damaged, so no assembly can be named and nothing can be resolved. The count
+        // is the whole explanation, and an empty store without it would say no tests ever ran.
+        var source = new FakeSessionSource { UnreadableCount = 2 };
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal(WindowFailure.EmptyStore, lookup.Failure);
+        Assert.Equal(2, lookup.Warnings.Unreadable);
     }
 
     [Fact]
@@ -637,16 +652,16 @@ public sealed class TestResolverTests
 
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Equal(1, lookup.Read.SkewedSessions);
-        Assert.False(lookup.Read.WholeStoreSkewed);
+        Assert.Equal(1, lookup.Warnings.Skewed);
+        Assert.False(lookup.Warnings.WholeStoreSkewed);
         Assert.Equal(TestResolutionKind.NotFound, lookup.Resolution!.Kind);
     }
 
     [Fact]
     public void AnAssemblyWhoseEveryRunIsAheadIsStillSearched()
     {
-        // Other's only run is ahead of the clock. Its read keeps it, as --assembly Other would, so the
-        // name resolves the same with or without the assembly.
+        // Other's only run is ahead of the clock. It is kept, as --assembly Other would keep it, so
+        // the name resolves the same with or without the assembly, and so is the warning about it.
         var source = new FakeSessionSource(
             Session(0, Test("Ns.A.Bar", "bbbbbbbb1")),
             TestSessionFactory.Session(
@@ -655,8 +670,39 @@ public sealed class TestResolverTests
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
         Assert.Equal(Other, lookup.Resolution!.Match!.Assembly);
-        Assert.Equal(0, lookup.Read.SkewedSessions);
-        Assert.False(lookup.Read.WholeStoreSkewed);
+        Assert.Equal(0, lookup.Warnings.Skewed);
+        Assert.Equal([Other], lookup.Warnings.AheadAssemblies);
+        Assert.False(lookup.Warnings.WholeStoreSkewed);
+    }
+
+    [Fact]
+    public void AStoreWhoseEveryRunIsAheadSaysSoOnce()
+    {
+        var source = new FakeSessionSource(
+            TestSessionFactory.Session(
+                100, [Test("Ns.A.Bar", "bbbbbbbb1")], startedAt: TestSessionFactory.Epoch.AddDays(4)),
+            TestSessionFactory.Session(
+                101, [Test("Ns.B.Foo", "aaaaaaaa1", Other)], startedAt: TestSessionFactory.Epoch.AddDays(4)));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.True(lookup.Warnings.WholeStoreSkewed);
+        Assert.Empty(lookup.Warnings.AheadAssemblies);
+        Assert.Equal(Other, lookup.Resolution!.Match!.Assembly);
+    }
+
+    [Fact]
+    public void DatableRunsThatNameNoAssemblyKeepTheStoreFromBeingCalledWhollyAhead()
+    {
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Bar", "bbbbbbbb1", "")),
+            TestSessionFactory.Session(
+                100, [Test("Ns.B.Foo", "aaaaaaaa1", Other)], startedAt: TestSessionFactory.Epoch.AddDays(4)));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.False(lookup.Warnings.WholeStoreSkewed);
+        Assert.Equal([Other], lookup.Warnings.AheadAssemblies);
     }
 
     [Fact]
@@ -666,7 +712,7 @@ public sealed class TestResolverTests
 
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Null(lookup.Read.Failure);
+        Assert.Null(lookup.Failure);
         Assert.Equal(0, lookup.Resolution!.AssemblyCount);
     }
 
@@ -675,7 +721,7 @@ public sealed class TestResolverTests
     {
         TestLookup lookup = TestResolver.Resolve(Resolver(), new FakeSessionSource(), "Foo", null);
 
-        Assert.Equal(WindowFailure.EmptyStore, lookup.Read.Failure);
+        Assert.Equal(WindowFailure.EmptyStore, lookup.Failure);
         Assert.Null(lookup.Resolution);
     }
 
@@ -702,7 +748,7 @@ public sealed class TestResolverTests
 
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Equal(1, lookup.Read.SkewedSessions);
+        Assert.Equal(1, lookup.Warnings.Skewed);
         Assert.Equal(TestResolutionKind.NotFound, lookup.Resolution!.Kind);
     }
 
@@ -713,7 +759,7 @@ public sealed class TestResolverTests
 
         TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
 
-        Assert.Equal(WindowFailure.NoStore, lookup.Read.Failure);
+        Assert.Equal(WindowFailure.NoStore, lookup.Failure);
         Assert.Null(lookup.Resolution);
     }
 
