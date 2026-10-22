@@ -69,9 +69,12 @@ internal sealed record TestResolution(
 }
 
 /// <summary>
-/// The store read a <c>--test</c> name was resolved over, and what it resolved to.
+/// What a <c>--test</c> name resolved to, and what the reads behind it skipped.
 /// </summary>
-/// <param name="Read">The whole-store read, carrying its failure and what it skipped.</param>
+/// <param name="Read">
+/// The reads' failure and what they skipped. It never carries a window: the lookup reads one
+/// assembly at a time and keeps none of them.
+/// </param>
 /// <param name="Resolution">The resolution, or <see langword="null"/> when the read failed.</param>
 internal sealed record TestLookup(WindowResult Read, TestResolution? Resolution);
 
@@ -107,23 +110,81 @@ internal static class TestResolver
     /// <param name="assembly">The assembly to restrict the lookup to, or <see langword="null"/> for all.</param>
     /// <returns>The read and the resolution.</returns>
     /// <remarks>
-    /// Read through the resolver's whole-store window rather than from the source directly, so the
-    /// lookup sees the same sessions a window would: a session stamped ahead of this machine's clock
-    /// must not name the test a reader gets an answer about. Unscoped unless the reader named an
-    /// assembly, because a name is a stronger scope than the assembly that happened to run last.
+    /// <para>
+    /// Read through the resolver rather than from the source directly, so the lookup sees the same
+    /// sessions a window would: a session stamped ahead of this machine's clock must not name the
+    /// test a reader gets an answer about. Every assembly unless the reader named one, because a name
+    /// is a stronger scope than the assembly that happened to run last.
+    /// </para>
+    /// <para>
+    /// One assembly at a time, each read whole and dropped before the next, so memory peaks at one
+    /// assembly's history however many share the store, and no fixed ceiling cuts the oldest runs
+    /// off. Only identities survive a read, and they are all the name needs.
+    /// </para>
+    /// <para>
+    /// What the reads skipped is counted by file and by run, not summed per read: a file that names no
+    /// assembly is opened by every scoped read, and a run covering two assemblies is read twice.
+    /// </para>
     /// </remarks>
     public static TestLookup Resolve(
         IWindowResolver resolver, ISessionSource source, string query, string? assembly)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(query);
 
-        WindowResult read = resolver.Resolve(
-            source, new WindowRequest(Runs: null, Since: null, assembly, WholeStore: true));
+        if (!source.IsAvailable)
+            return new TestLookup(WindowResult.Failed(WindowFailure.NoStore), null);
 
-        return read.Window == null
-            ? new TestLookup(read, null)
-            : new TestLookup(read, Resolve(read.Window.Sessions, query, assembly));
+        IReadOnlyList<string> assemblies = assembly is null ? source.KnownAssemblies() : [assembly];
+
+        var entries = new List<Entry>();
+        var runs = new HashSet<Guid>();
+        var unreadable = new HashSet<string>(StringComparer.Ordinal);
+        var skewed = new HashSet<Guid>();
+        bool anyRead = false;
+        bool everyReadSkewed = true;
+
+        foreach (string scope in assemblies)
+        {
+            StoreRead read = resolver.ReadStore(source, scope);
+
+            unreadable.UnionWith(read.UnreadableFiles);
+            skewed.UnionWith(read.SkewedSessionIds);
+
+            if (read.Sessions.Count == 0)
+                continue;
+
+            anyRead = true;
+            everyReadSkewed &= read.WholeStoreSkewed;
+
+            entries.AddRange(Index(read.Sessions, scope));
+            runs.UnionWith(read.Sessions.Select(s => s.SessionId));
+        }
+
+        // A run left out of one assembly's read but kept in another's, whose every run was ahead of
+        // the clock, was not left out of the lookup.
+        skewed.ExceptWith(runs);
+
+        bool wholeStoreSkewed = anyRead && everyReadSkewed;
+
+        if (!anyRead)
+        {
+            // Runs that name no assembly have no read of their own. They are told apart from an empty
+            // store so the caller can say which it is: "nothing attributable", not "no runs".
+            if (assembly is null && source.Read(1, null).Sessions.Count > 0)
+            {
+                return new TestLookup(
+                    Warnings(null, unreadable, skewed, wholeStoreSkewed),
+                    Resolve(entries, query, assembly, runCount: 0));
+            }
+
+            return new TestLookup(Warnings(WindowFailure.EmptyStore, unreadable, skewed, wholeStoreSkewed), null);
+        }
+
+        return new TestLookup(
+            Warnings(null, unreadable, skewed, wholeStoreSkewed),
+            Resolve(entries, query, assembly, runs.Count));
     }
 
     /// <summary>
@@ -138,7 +199,19 @@ internal static class TestResolver
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(query);
 
-        List<Entry> entries = Index(sessions, assembly);
+        int runCount = assembly == null
+            ? sessions.Count
+            : sessions.Count(s => SessionAssemblies.Covers(s, assembly));
+
+        return Resolve(Index(sessions, assembly), query, assembly, runCount);
+    }
+
+    private static WindowResult Warnings(
+        WindowFailure? failure, HashSet<string> unreadable, HashSet<Guid> skewed, bool wholeStoreSkewed) =>
+        new(null, failure, null, unreadable.Count, skewed.Count, wholeStoreSkewed);
+
+    private static TestResolution Resolve(List<Entry> entries, string query, string? assembly, int runCount)
+    {
         List<Entry> matched = Match(entries, query);
 
         TestResolutionKind kind = matched.Count switch
@@ -151,7 +224,10 @@ internal static class TestResolver
         var siblings = new ShortFingerprints(entries);
 
         List<TestMatch> candidates = matched
-            .OrderBy(e => e.NewestPosition)
+            // The order the store reads runs in: newest first, session id breaking ties. Taken from the
+            // run itself rather than its place in a read, since candidates come from separate reads.
+            .OrderByDescending(e => e.LastSeen)
+            .ThenBy(e => e.NewestSessionId.ToString("N"), StringComparer.Ordinal)
             .ThenBy(e => e.Assembly, StringComparer.Ordinal)
             .ThenBy(e => e.FullyQualifiedName, StringComparer.Ordinal)
             .ThenBy(e => e.Fingerprint, StringComparer.Ordinal)
@@ -165,10 +241,6 @@ internal static class TestResolver
             .ToList();
 
         int assemblyCount = entries.Select(e => e.Assembly).Distinct(StringComparer.Ordinal).Count();
-
-        int runCount = assembly == null
-            ? sessions.Count
-            : sessions.Count(s => SessionAssemblies.Covers(s, assembly));
 
         return new TestResolution(kind, query, assembly, candidates, assemblyCount, runCount);
     }
@@ -311,7 +383,7 @@ internal static class TestResolver
 
                 if (!entries.TryGetValue(key, out Entry? entry))
                 {
-                    entry = new Entry(identity.Assembly, identity.TestFingerprint, identity.FullyQualifiedName, position, session.StartedAt);
+                    entry = new Entry(identity.Assembly, identity.TestFingerprint, identity.FullyQualifiedName, session.SessionId, session.StartedAt);
                     entries[key] = entry;
                     ordered.Add(entry);
                 }
@@ -580,7 +652,7 @@ internal static class TestResolver
     /// One assembly and fingerprint, accumulated over the read.
     /// </summary>
     private sealed class Entry(
-        string assembly, string fingerprint, string fullyQualifiedName, int newestPosition, DateTime lastSeen)
+        string assembly, string fingerprint, string fullyQualifiedName, Guid newestSessionId, DateTime lastSeen)
     {
         public string Assembly { get; } = assembly;
 
@@ -588,7 +660,7 @@ internal static class TestResolver
 
         public string FullyQualifiedName { get; } = fullyQualifiedName;
 
-        public int NewestPosition { get; } = newestPosition;
+        public Guid NewestSessionId { get; } = newestSessionId;
 
         public DateTime LastSeen { get; } = lastSeen;
 

@@ -366,8 +366,17 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// <summary>Gets the store location.</summary>
     public string? StorePath => "/fake/store";
 
-    /// <summary>Gets or sets the unreadable-file count every read reports.</summary>
-    public int UnreadableCount { get; set; }
+    /// <summary>
+    /// Gets or sets the unreadable files every read reports, as a file that names no assembly would
+    /// be reported by every scoped read.
+    /// </summary>
+    public IReadOnlyList<string> UnreadableFiles { get; set; } = [];
+
+    /// <summary>Gets every read asked of the source, in order.</summary>
+    public List<(int MaxSessions, string? Assembly)> Reads { get; } = [];
+
+    /// <summary>Gets how many headers have been enumerated.</summary>
+    public int HeadersRead { get; private set; }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -377,11 +386,23 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// </remarks>
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
+        Reads.Add((maxSessions, assembly));
+
         IEnumerable<TestSession> matching = assembly == null
             ? _sessions
             : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
 
-        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableCount);
+        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableFiles);
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<LocalSessionHeader> ReadHeaders()
+    {
+        foreach (TestSession session in _sessions)
+        {
+            HeadersRead++;
+            yield return new LocalSessionHeader(session.StartedAt, SessionAssemblies.Of(session));
+        }
     }
 
     /// <inheritdoc/>

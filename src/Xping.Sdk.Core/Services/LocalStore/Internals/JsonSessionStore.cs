@@ -119,7 +119,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 .ToList();
 
             var sessions = new List<TestSession>(Math.Min(maxSessions, files.Count));
-            int unreadable = 0;
+            var unreadable = new List<string>();
             string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
 
             foreach (string file in files)
@@ -141,7 +141,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 {
                     // Only files we actually attempted are counted. Files beyond the window were
                     // never opened, so claiming them as unreadable would overstate the damage.
-                    unreadable++;
+                    unreadable.Add(Path.GetFileName(file));
                     continue;
                 }
 
@@ -233,6 +233,42 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
+    public IEnumerable<LocalSessionHeader> ReadHeaders()
+    {
+        // Listed here and enumerated in Headers: an iterator cannot yield inside a try that catches,
+        // and listing is the only step that can fail. Each header read degrades on its own.
+        string? directory = SessionsPath;
+        if (!Directory.Exists(directory))
+            return [];
+
+        try
+        {
+            var files = new List<(DateTime StartedAt, string Path)>();
+
+            foreach (string file in Directory.GetFiles(directory!, SessionFileName.SearchPattern))
+            {
+                if (SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt))
+                    files.Add((startedAt, file));
+            }
+
+            // Not the reverse of the name order ReadRecent walks: that breaks same-tick ties by id
+            // descending, where CompareNewestFirst sorts them ascending. The name's id is a prefix of
+            // the full one, so ascending names within a tick give the same order.
+            files.Sort((left, right) =>
+            {
+                int byTime = right.StartedAt.CompareTo(left.StartedAt);
+                return byTime != 0 ? byTime : string.CompareOrdinal(left.Path, right.Path);
+            });
+
+            return Headers(files);
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            _logger.LogDebug("Local session store header read skipped: {Message}", ex.Message);
+            return [];
+        }
+    }
+
     public int Delete(string? assembly = null)
     {
         string? root = _storePath.Value;
@@ -283,6 +319,12 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             _logger.LogDebug("Local session store delete skipped: {Message}", ex.Message);
             return 0;
         }
+    }
+
+    private static IEnumerable<LocalSessionHeader> Headers(List<(DateTime StartedAt, string Path)> files)
+    {
+        foreach ((DateTime startedAt, string path) in files)
+            yield return new LocalSessionHeader(startedAt, SessionFileHeader.ReadAssemblies(path) ?? []);
     }
 
     /// <summary>

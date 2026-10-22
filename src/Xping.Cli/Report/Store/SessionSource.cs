@@ -9,14 +9,17 @@ using Xping.Sdk.Core.Services.LocalStore;
 namespace Xping.Cli.Report.Store;
 
 /// <summary>
-/// Sessions read from somewhere, with a count of what could not be read.
+/// Sessions read from somewhere, with what could not be read.
 /// </summary>
 /// <param name="Sessions">The sessions, newest first.</param>
-/// <param name="UnreadableCount">Files skipped because they could not be read.</param>
-internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, int UnreadableCount)
+/// <param name="UnreadableFiles">Names of the files skipped because they could not be read.</param>
+internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, IReadOnlyList<string> UnreadableFiles)
 {
     /// <summary>Gets an empty result.</summary>
-    public static SessionReadResult Empty { get; } = new([], 0);
+    public static SessionReadResult Empty { get; } = new([], []);
+
+    /// <summary>Gets the number of files skipped because they could not be read.</summary>
+    public int UnreadableCount => UnreadableFiles.Count;
 }
 
 /// <summary>
@@ -40,8 +43,14 @@ internal interface ISessionSource
     /// </summary>
     /// <param name="maxSessions">Upper bound on how many to return.</param>
     /// <param name="assembly">Test assembly to scope to, when one was chosen.</param>
-    /// <returns>The sessions and the count of unreadable files.</returns>
+    /// <returns>The sessions and the unreadable files.</returns>
     SessionReadResult Read(int maxSessions, string? assembly);
+
+    /// <summary>
+    /// Lists the stored runs newest first, without loading any of them.
+    /// </summary>
+    /// <returns>Each run's start time and assemblies, read as the sequence is enumerated.</returns>
+    IEnumerable<LocalSessionHeader> ReadHeaders();
 
     /// <summary>
     /// Returns the distinct assemblies present in recent history, ordered.
@@ -61,8 +70,11 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
         LocalSessionReadResult result = store.ReadRecent(maxSessions, assembly);
-        return new SessionReadResult(result.Sessions, result.UnreadableCount);
+        return new SessionReadResult(result.Sessions, result.UnreadableFiles);
     }
+
+    // Passed through unmaterialised: a caller that stops at the first match must not pay for the rest.
+    public IEnumerable<LocalSessionHeader> ReadHeaders() => store.ReadHeaders();
 
     /// <remarks>
     /// Read from the store's summary, which covers every file: the scope notice reports how many

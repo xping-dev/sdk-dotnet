@@ -136,7 +136,7 @@ internal sealed class ReportCommand(
     {
         TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
 
-        if (lookup.Read.Window is not { } read || lookup.Resolution is not { } resolution)
+        if (lookup.Resolution is not { } resolution)
             return ReportUnavailable(lookup.Read, store, options.Assembly);
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
@@ -145,7 +145,7 @@ internal sealed class ReportCommand(
             return ReportNothingAttributable(store);
 
         if (resolution.Match is not { } match)
-            return Unresolved(options, resolution, lookup.Read, read, source);
+            return Unresolved(options, resolution, lookup.Read, source);
 
         WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, match.Assembly));
 
@@ -205,8 +205,7 @@ internal sealed class ReportCommand(
     /// </summary>
     /// <param name="options">Parsed command-line options.</param>
     /// <param name="resolution">The ambiguous or empty resolution.</param>
-    /// <param name="lookup">The whole-store read the name was resolved over.</param>
-    /// <param name="read">That read's window.</param>
+    /// <param name="lookup">What the reads the name was resolved over skipped.</param>
     /// <param name="source">Where sessions are read from.</param>
     /// <returns>The exit code.</returns>
     /// <remarks>
@@ -218,7 +217,6 @@ internal sealed class ReportCommand(
         ReportOptions options,
         TestResolution resolution,
         WindowResult lookup,
-        AnalysisWindow read,
         LocalSessionSource source)
     {
         // Every candidate's command names its own assembly and nothing of the window, so the scope
@@ -227,7 +225,7 @@ internal sealed class ReportCommand(
             ? (TestHistoryBuilder.Ambiguous(
                     resolution,
                     new ReportScope(
-                        options.Assembly, read.Resolution, read.SessionCount,
+                        options.Assembly, WindowResolution.Store, resolution.RunCount,
                         AssemblyGiven: true, Directory: options.Directory)),
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);

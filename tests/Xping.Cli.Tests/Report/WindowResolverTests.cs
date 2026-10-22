@@ -334,7 +334,7 @@ public sealed class WindowResolverTests
     [Fact]
     public void UnreadableFilesAreCarriedOntoTheResult()
     {
-        var source = new FakeSessionSource(Sessions(3)) { UnreadableCount = 2 };
+        var source = new FakeSessionSource(Sessions(3)) { UnreadableFiles = ["a.json.gz", "b.json.gz"] };
 
         WindowResult result = CreateResolver().Resolve(source, new WindowRequest(null, null, null));
 
@@ -481,6 +481,52 @@ public sealed class WindowResolverTests
             [.. Enumerable.Range(0, 3).Select(i => Skewed(i))]);
 
         Assert.Equal(TestSessionFactory.DefaultAssembly, CreateResolver().ScopeAssembly(source));
+    }
+
+    [Fact]
+    public void ScopeAssemblyLoadsNoSession()
+    {
+        // Every plain report asks this. Loading runs to answer it cost as much as the report itself
+        // once a store held many suites (#283).
+        var source = new FakeSessionSource(
+            [.. Enumerable.Range(0, 300).Select(i => TestSessionFactory.Session(
+                i, [TestSessionFactory.Execution("Alpha")], startedAt: TestSessionFactory.Epoch.AddMinutes(-i)))]);
+
+        Assert.Equal(TestSessionFactory.DefaultAssembly, CreateResolver().ScopeAssembly(source));
+        Assert.Empty(source.Reads);
+        Assert.Equal(1, source.HeadersRead);
+    }
+
+    [Fact]
+    public void ScopeAssemblyWalksPastRunsThatNameNoAssembly()
+    {
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution("Alpha", assembly: "Alpha.Tests")]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution("Unnamed", assembly: "")]),
+            TestSessionFactory.Session(2, [TestSessionFactory.Execution("Unnamed", assembly: "")])
+        ];
+        var source = new FakeSessionSource(sessions);
+
+        Assert.Equal("Alpha.Tests", CreateResolver().ScopeAssembly(source));
+        Assert.Equal(3, source.HeadersRead);
+    }
+
+    [Fact]
+    public void ScopeAssemblyFallsBackToARunAheadOfTheClockWhenNoDatableRunNamesAnAssembly()
+    {
+        // The datable runs name no suite, so the only scope there is comes from the fast clock's run.
+        // Returning null would refuse the report outright; the scoped report warns about the clock.
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [TestSessionFactory.Execution("Unnamed", assembly: "")]),
+            TestSessionFactory.Session(
+                100,
+                [TestSessionFactory.Execution("Beta", assembly: "Beta.Tests")],
+                startedAt: TestSessionFactory.Epoch.AddDays(4))
+        ];
+
+        Assert.Equal("Beta.Tests", CreateResolver().ScopeAssembly(new FakeSessionSource(sessions)));
     }
 
     [Fact]

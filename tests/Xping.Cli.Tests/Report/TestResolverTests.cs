@@ -535,7 +535,148 @@ public sealed class TestResolverTests
 
         Assert.Equal(TestResolutionKind.Found, lookup.Resolution!.Kind);
         Assert.Equal(Other, lookup.Resolution.Match!.Assembly);
-        Assert.Equal(WindowResolution.Store, lookup.Read.Window!.Resolution);
+        Assert.Null(lookup.Read.Window);
+    }
+
+    [Fact]
+    public void TheUnscopedLookupNeverReadsTheStoreUnscoped()
+    {
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Foo", "aaaaaaaa1", Other)),
+            Session(1, Test("Ns.A.Bar", "bbbbbbbb1")));
+
+        TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal([Assembly, Other], source.Reads.Select(r => r.Assembly));
+    }
+
+    [Fact]
+    public void ALookupFindsATestWhoseOnlyRunsAreOlderThanTheThousandthSession()
+    {
+        // 21 suites at 50 runs each: one more than a 1000-session read held. Foo's suite ran first,
+        // so its whole history sat past that read and the name was reported as never run (#283).
+        const int Suites = 21;
+        const int RunsEach = 50;
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, Suites * RunsEach).Select(k =>
+            {
+                int suite = k / RunsEach;
+                TestExecution test = suite == 0
+                    ? Test("Ns.A.Foo", "aaaaaaaa1", "Suite00.Tests")
+                    : Test($"Ns.S{suite}.Bar", $"bbbbbb{suite:D2}", $"Suite{suite:D2}.Tests");
+
+                return TestSessionFactory.Session(k, [test], startedAt: TestSessionFactory.Epoch.AddMinutes(-2000 + k));
+            })
+        ];
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), new FakeSessionSource(sessions), "Foo", null);
+
+        Assert.Equal(TestResolutionKind.Found, lookup.Resolution!.Kind);
+        Assert.Equal("Suite00.Tests", lookup.Resolution.Match!.Assembly);
+        Assert.Equal(RunsEach, lookup.Resolution.Match.Runs);
+        Assert.Equal(Suites * RunsEach, lookup.Resolution.RunCount);
+    }
+
+    [Fact]
+    public void CandidatesFromDifferentAssembliesAreOrderedNewestRunFirst()
+    {
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Foo", "aaaaaaaa1")),
+            Session(1, Test("Ns.B.Foo", "bbbbbbbb1", Other)),
+            Session(2, Test("Ns.C.Foo", "cccccccc1"), Test("Ns.D.Foo", "dddddddd1", Other)));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        // The newest run covers both suites, so its two tests tie on time and fall to assembly order.
+        Assert.Equal(
+            ["Ns.C.Foo", "Ns.D.Foo", "Ns.B.Foo", "Ns.A.Foo"],
+            lookup.Resolution!.Candidates.Select(c => c.FullyQualifiedName));
+    }
+
+    [Fact]
+    public void RunCountCountsARunCoveringTwoAssembliesOnce()
+    {
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Bar", "bbbbbbbb1"), Test("Ns.B.Bar", "bbbbbbbb2", Other)),
+            Session(1, Test("Ns.A.Bar", "bbbbbbbb1")));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal(2, lookup.Resolution!.RunCount);
+        Assert.Equal(2, lookup.Resolution.AssemblyCount);
+    }
+
+    [Fact]
+    public void AnUnreadableFileIsCountedOnceAcrossAssemblies()
+    {
+        // A file whose name carries no assembly is opened by every suite's read.
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Foo", "aaaaaaaa1")),
+            Session(1, Test("Ns.A.Bar", "bbbbbbbb1", Other)))
+        {
+            UnreadableFiles = ["session-damaged.json.gz"]
+        };
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal(1, lookup.Read.UnreadableSessions);
+    }
+
+    [Fact]
+    public void ARunAheadOfTheClockCoveringTwoAssembliesIsCountedOnce()
+    {
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Bar", "bbbbbbbb1")),
+            Session(1, Test("Ns.B.Bar", "bbbbbbbb2", Other)),
+            TestSessionFactory.Session(
+                100,
+                [Test("Ns.A.Foo", "aaaaaaaa1"), Test("Ns.B.Foo", "aaaaaaaa2", Other)],
+                startedAt: TestSessionFactory.Epoch.AddDays(4)));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal(1, lookup.Read.SkewedSessions);
+        Assert.False(lookup.Read.WholeStoreSkewed);
+        Assert.Equal(TestResolutionKind.NotFound, lookup.Resolution!.Kind);
+    }
+
+    [Fact]
+    public void AnAssemblyWhoseEveryRunIsAheadIsStillSearched()
+    {
+        // Other's only run is ahead of the clock. Its read keeps it, as --assembly Other would, so the
+        // name resolves the same with or without the assembly.
+        var source = new FakeSessionSource(
+            Session(0, Test("Ns.A.Bar", "bbbbbbbb1")),
+            TestSessionFactory.Session(
+                100, [Test("Ns.B.Foo", "aaaaaaaa1", Other)], startedAt: TestSessionFactory.Epoch.AddDays(4)));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Equal(Other, lookup.Resolution!.Match!.Assembly);
+        Assert.Equal(0, lookup.Read.SkewedSessions);
+        Assert.False(lookup.Read.WholeStoreSkewed);
+    }
+
+    [Fact]
+    public void AStoreOfUnattributedRunsResolvesToNoAssembly()
+    {
+        var source = new FakeSessionSource(Session(0, Test("Ns.A.Foo", "aaaaaaaa1", "")));
+
+        TestLookup lookup = TestResolver.Resolve(Resolver(), source, "Foo", null);
+
+        Assert.Null(lookup.Read.Failure);
+        Assert.Equal(0, lookup.Resolution!.AssemblyCount);
+    }
+
+    [Fact]
+    public void AnEmptyStoreFailsAsEmpty()
+    {
+        TestLookup lookup = TestResolver.Resolve(Resolver(), new FakeSessionSource(), "Foo", null);
+
+        Assert.Equal(WindowFailure.EmptyStore, lookup.Read.Failure);
+        Assert.Null(lookup.Resolution);
     }
 
     [Fact]
