@@ -99,6 +99,16 @@ The schema stays `1.23`, which is unreleased; its remarks entry names both new f
 
 The report's default window (20 runs / 14 days) is unchanged. It now comes from `ReportWindow` in Core, which retention is tested against, so the store always holds at least one full default window per assembly.
 
+### Amendment 8 — from #283
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Lookup across every assembly reads the store once, unscoped, up to `UnboundedReadCeiling` (Amendment 7B) | One whole-store read per assembly the store summary names, one at a time, so memory peaks at one assembly's history and nothing is truncated. The clock-skew drop applies per assembly, as it already did under `--assembly`, so `--test Foo` and `--test Foo --assembly X` agree. Candidates are ordered by their newest run (start time descending, then session id ascending), then assembly, FQN and fingerprint. "N runs" in D4(a) counts distinct runs, so a run covering two assemblies counts once. Read warnings count each file and each run once | D2, D4 |
+| B | The `--test` window is read up to `UnboundedReadCeiling` | The ceiling is gone. Every unbounded read is scoped to one assembly, which the writer's retention bounds | §1.1, D5 |
+| C | Amendment 7B | Replaced by A | D2 |
+
+`report`'s auto-scoping, which this spec does not use, now picks the newest assembly from each file's header without loading any session.
+
 ---
 
 ## 1. Ground truth
@@ -107,10 +117,10 @@ The report's default window (20 runs / 14 days) is unchanged. It now comes from 
 
 Every claim here was read in source at the cited line.
 
-- **Three window modes, one read ceiling.** `WindowResolver.Resolve` (`Report/Windowing/WindowResolver.cs:136-147`)
+- **Three window modes, unbounded reads scoped.** `WindowResolver.Resolve` (`Report/Windowing/WindowResolver.cs:136-147`)
   picks `--since`, then `--runs`, then the default (20 sessions, kept to 14 days). Every read goes
-  through `Read(source, maxSessions, assembly)` (`:346`), and the unbounded modes read up to
-  `UnboundedReadCeiling` = 1000 (`:121`). `WindowResolution` has `Default`, `Runs`, `SinceSha`,
+  through `Read(source, maxSessions, assembly)` (`:346`). The unbounded modes read every session
+  of one assembly; retention, not the CLI, bounds them (Amendment 8B). `WindowResolution` has `Default`, `Runs`, `SinceSha`,
   `SinceDate` (`AnalysisWindow.cs:13-26`).
 - **Retention bounds the store, not the CLI.** `LocalStoreOptions` keeps 50 runs per assembly, and
   100 MB and 30 days store-wide (`src/Xping.Sdk.Core/Services/LocalStore/LocalStoreOptions.cs`;
@@ -217,15 +227,15 @@ later tiers are not tried.
 Matching uses each fingerprint's **newest** identity, so a renamed test is found under its current name.
 
 **Where it looks.** With `--assembly`, only that assembly. Without it, every assembly in the store:
-`ResolveTest` reads the store once with no assembly filter, up to `UnboundedReadCeiling` (subject to
-the clock-skew drop), and groups executions by `(Assembly, TestFingerprint)`. A single match scopes the
+`ResolveTest` reads the store one assembly at a time, each read whole and subject to the clock-skew
+drop, and groups executions by `(Assembly, TestFingerprint)` (Amendment 8A). A single match scopes the
 rest of the command to that test's assembly, and its window is then resolved as D5 describes. Nothing
 is ever joined across assemblies.
 
 **Rejected:** case-insensitive matching, globs and fuzzy matching. Each makes "matched one test" depend
 on what else happens to be in the store, and the ambiguity path (D3) already handles typing less.
 **Rejected:** using `report`'s auto-scoping (newest assembly only). A name is a stronger scope than
-"whatever ran last", and lookup across every assembly costs one bounded read of the store (Amendment 7B).
+"whatever ran last", and lookup across every assembly costs one read per assembly, each bounded by retention (Amendment 8A).
 
 ### D3 — Ambiguity
 
@@ -273,7 +283,7 @@ for. Not found and ambiguous differ by `candidates` and by the exit code.
 ### D5 — Window
 
 A new **`WindowResolution.Store`**, the default under `--test`: every session the store holds for the
-assembly, read up to `UnboundedReadCeiling`. `--runs N` and `--since` behave exactly as in `report` and
+assembly. `--runs N` and `--since` behave exactly as in `report` and
 replace it. The clock-skew drop still applies.
 
 The findings block (D10) and the partial marker (D8) are computed over this same window. A narrower
