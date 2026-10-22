@@ -90,10 +90,11 @@ Based on the SDK implementation plan, we aim to meet these targets:
 | Choose scope, loading 200 sessions (before) | 975 ms, 2.1 GB allocated | 983 ms, 2.1 GB allocated |
 | Choose scope from file headers (after) | 0.4 ms, 0.4 MB allocated | 0.9 ms, 0.8 MB allocated |
 | `--test` lookup, one unscoped read of up to 1000 (before) | 2.5 s, 2.1 GB retained | 7.0 s, 4.3 GB retained, oldest 250 runs cut off |
-| `--test` lookup, one assembly at a time (after) | 2.6 s, 216 MB retained | 6.6 s, 216 MB retained, every run read |
+| `--test` lookup, one pass, one run held at a time (after) | 2.3 s, ~4 MB retained | 5.7 s, ~4 MB retained, every run read |
 
 "Retained" is the managed heap held while the read's sessions are alive, logged by the benchmark's
-setup. The lookup still deserializes every run; what changes is how many are held at once.
+setup for the old lookup; the new one holds a single run, about 1/50 of one assembly's history.
+The lookup still deserializes every run once; what changes is how many are held at once.
 
 ## CI/CD Integration
 

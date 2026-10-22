@@ -23,8 +23,8 @@ namespace Xping.Sdk.Benchmarks;
 /// </para>
 /// <para>
 /// BenchmarkDotNet reports time and allocation, not what is held at once. Setup logs the retained
-/// managed heap while each lookup's sessions are held, which is the number that decides whether a
-/// large solution's report runs out of memory.
+/// managed heap while the old lookup's sessions are held, which is the number that decided whether a
+/// large solution's report ran out of memory. The new lookup holds one session at a time.
 /// </para>
 /// </remarks>
 [MemoryDiagnoser]
@@ -65,7 +65,6 @@ public class LocalStoreScanBenchmarks
 
         Console.WriteLine($"// {Assemblies} assemblies x {RunsPerAssembly} runs: {bytes / (1024 * 1024)} MB on disk");
         Console.WriteLine($"// Retained by the old lookup: {Retained(() => _store.ReadRecent(1000).Sessions) / (1024 * 1024)} MB");
-        Console.WriteLine($"// Retained by one assembly's read: {Retained(() => _store.ReadRecent(int.MaxValue, AssemblyName(0)).Sessions) / (1024 * 1024)} MB");
     }
 
     [GlobalCleanup]
@@ -102,17 +101,10 @@ public class LocalStoreScanBenchmarks
     public int Lookup_Unscoped() =>
         _store.ReadRecent(1000).Sessions.Sum(s => s.Executions.Count);
 
-    /// <summary>The <c>--test</c> lookup after #283: each assembly read whole, one at a time.</summary>
+    /// <summary>The <c>--test</c> lookup after #283: one pass over every run, one held at a time.</summary>
     [Benchmark]
-    public int Lookup_PerAssembly()
-    {
-        int executions = 0;
-
-        foreach (LocalStoreAssembly assembly in _store.Summarize().Assemblies)
-            executions += _store.ReadRecent(int.MaxValue, assembly.Name).Sessions.Sum(s => s.Executions.Count);
-
-        return executions;
-    }
+    public int Lookup_OnePass() =>
+        _store.ReadEach().Sum(f => f.Session?.Executions.Count ?? 0);
 
     private static long Retained(Func<IReadOnlyList<TestSession>> read)
     {
