@@ -232,6 +232,26 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
+    public void StrictModeFailure_OnTestingPlatform_SetsTheExitCodeWithoutWaiting()
+    {
+        // Microsoft.Testing.Platform writes its reports after NUnit is done; terminating the process
+        // would lose them all.
+        (TimeSpan delay, Action<XpingNetworkException> failProcess) = XpingContext.StrictModeFailure(onTestingPlatform: true);
+
+        Assert.Equal(TimeSpan.Zero, delay);
+        Assert.Equal("FailProcessOnExit", failProcess.Method.Name);
+    }
+
+    [Fact]
+    public void StrictModeFailure_InVsTestHost_TerminatesAfterTheResultsAreSent()
+    {
+        (TimeSpan delay, Action<XpingNetworkException> failProcess) = XpingContext.StrictModeFailure(onTestingPlatform: false);
+
+        Assert.Equal(XpingContext.TestHostResultFlushDelay, delay);
+        Assert.Equal("FailProcess", failProcess.Method.Name);
+    }
+
+    [Fact]
     public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
     {
         var exception = await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);

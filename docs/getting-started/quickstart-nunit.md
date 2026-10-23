@@ -201,9 +201,10 @@ public class XpingSetup
 
 `FinalizeAndShutdownAsync` closes the session, delivers everything still buffered, and disposes the
 host. Without it the last batch is lost. In [strict mode](../configuration/configuration-reference.md#strictmode),
-a failed upload terminates the test process so the run fails: NUnit reports an exception from
-`[OneTimeTearDown]` as a warning and still exits with code 0. It waits about two seconds first, so
-every test result reaches `dotnet test` and its reports. (`FlushAsync` also exists, but
+a failed upload fails the run itself, because NUnit reports an exception from `[OneTimeTearDown]` as a
+warning and still exits with code 0. On vstest it terminates the test process, about two seconds
+later so every test result reaches `dotnet test` and its reports. On Microsoft.Testing.Platform it
+sets exit code 1 once the platform has written its reports. (`FlushAsync` also exists, but
 it flushes mid-session and does not close the run; you rarely need it.)
 
 ---
@@ -352,6 +353,28 @@ Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration:
 ```
 
 Xping SDK runs silently in the background, tracking execution data without affecting your test results.
+
+### On Microsoft.Testing.Platform
+
+The adapter hooks into NUnit, not the test runner, so it works the same on
+[Microsoft.Testing.Platform](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-intro)
+(MTP). Enable NUnit's MTP runner (NUnit3TestAdapter 5.0 or later) in the test project:
+
+```xml
+<PropertyGroup>
+  <OutputType>Exe</OutputType>
+  <EnableNUnitRunner>true</EnableNUnitRunner>
+</PropertyGroup>
+```
+
+Then run the test executable directly, or use `dotnet test` in the .NET 10 SDK's MTP mode with a
+`global.json` next to your solution:
+
+```json
+{ "test": { "runner": "Microsoft.Testing.Platform" } }
+```
+
+For a TRX report, reference `Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
 
 ---
 

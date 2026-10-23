@@ -202,20 +202,21 @@ leaves its tests recorded as **passed**
 
 **Workaround**: move the work into `[TestInitialize]`, which is recorded.
 
-### MSTest: A Session Finalized By The Process-Exit Safety Net Usually Loses Its Upload
+### MSTest: A Session Finalized By The Process-Exit Safety Net Loses Its Upload On vstest
 
 **Impact**: When no `[AssemblyCleanup]` finalizes the session, the SDK finalizes it from a
-process-exit safety net. Local history is written and `xping report` sees the run, but the **cloud
-upload is usually lost**.
+process-exit safety net. Local history is written and `xping report` sees the run, but on vstest the
+**cloud upload is usually lost**. On Microsoft.Testing.Platform the upload completes.
 
-**Reason**: The safety net runs inside `AppDomain.ProcessExit`, and under `dotnet test` vstest
-terminates the test host 100 ms after the run completes. A local file write fits in that window; a
+**Reason**: The safety net runs inside `AppDomain.ProcessExit`, and vstest terminates the test host
+100 ms after the run completes. Microsoft.Testing.Platform runs in the test process and lets the
+handler finish. A local file write fits in that window; a
 network round trip does not. The hook goes missing when the test assembly declares none (MSTest only
 runs assembly hooks declared in the test assembly itself), when it throws before finalizing, or, on
 MSTest 3.7.x, under method-level parallelization (fixed in 3.8, the package's minimum).
 
 **Workaround**: declare an `[AssemblyCleanup]` in the test assembly that calls
-`XpingContext.FinalizeAndShutdownAsync()`. If the safety net still fires, set
+`XpingContext.FinalizeAndShutdownAsync()`. If the safety net still fires on vstest, set
 `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000` in the environment that runs `dotnet test` so the upload has
 time to complete.
 

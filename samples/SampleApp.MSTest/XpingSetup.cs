@@ -22,9 +22,12 @@ public static class XpingSetup
         XpingContext.Initialize();
     }
 
+    // The integration tests build the sample without it, to reach the SDK's process-exit safety net.
+#if !XPING_SKIP_ASSEMBLY_CLEANUP
     [AssemblyCleanup]
     public static async Task AssemblyCleanup()
     {
         await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(false);
     }
+#endif
 }

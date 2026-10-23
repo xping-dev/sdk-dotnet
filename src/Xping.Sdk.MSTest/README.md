@@ -61,6 +61,26 @@ dotnet test
 
 All test executions are automatically tracked and uploaded to Xping!
 
+## Running on Microsoft.Testing.Platform
+
+The adapter hooks into MSTest, not the test runner, so it works on vstest and on
+Microsoft.Testing.Platform (MTP) alike. To use MTP, enable MSTest's runner in the test project:
+
+```xml
+<PropertyGroup>
+  <OutputType>Exe</OutputType>
+  <EnableMSTestRunner>true</EnableMSTestRunner>
+</PropertyGroup>
+```
+
+Run the test executable directly, or `dotnet test` in the .NET 10 SDK's MTP mode
+(`global.json`: `{ "test": { "runner": "Microsoft.Testing.Platform" } }`). For TRX, reference
+`Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
+
+Strict mode fails the run through `[AssemblyCleanup]` on both runners. On MTP the
+[process-exit safety net](#session-finalized-by-the-process-exit-safety-net) completes its upload
+without `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT`.
+
 ## Configuration
 
 The adapter uses the standard Xping configuration. Add a `"Xping"` section to your `appsettings.json` file:
@@ -371,10 +391,10 @@ that nothing in it throws before that call. (MSTest 3.7.x also skipped the hook 
 parallelization; this package requires 3.8 or later, where that is fixed.)
 
 The safety net writes local history to `.xping/` before it uploads, so `xping report` still sees the
-run. The cloud upload usually does not complete: under `dotnet test`, vstest terminates the test host
-100 ms after the run finishes, which is less than one network round trip. To give the upload time, set
-the timeout in the environment that runs `dotnet test` (it is read by the parent process, so the SDK
-cannot set it for you):
+run. On vstest the cloud upload usually does not complete: vstest terminates the test host 100 ms
+after the run finishes, which is less than one network round trip. To give the upload time, set the
+timeout in the environment that runs `dotnet test` (it is read by the parent process, so the SDK
+cannot set it for you). On Microsoft.Testing.Platform the upload completes without it.
 
 ```bash
 VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 dotnet test

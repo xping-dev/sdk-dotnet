@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -569,6 +570,51 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <param name="runFailure">The error <see cref="EndSessionAsync(XpingContextOrchestrator?)"/> returned.</param>
     internal static void FailProcess(XpingNetworkException runFailure) =>
         Environment.FailFast($"[Xping] {runFailure.Message}", runFailure);
+
+    /// <summary>
+    /// Fails the run on a strict-mode network error through the process exit code, set as the process
+    /// exits, for an adapter on Microsoft.Testing.Platform with no way left to fail the run through its
+    /// test framework.
+    /// </summary>
+    /// <remarks>
+    /// Microsoft.Testing.Platform runs in the test process itself and writes its reports, TRX among
+    /// them, after the test framework is done, so <see cref="FailProcess"/> would lose every report.
+    /// Its entry point returns the run's exit code, which overrides one set any earlier; a
+    /// <c>ProcessExit</c> handler runs after that and gets the last word. vstest ignores the test
+    /// host's exit code, so this does not work there.
+    /// </remarks>
+    /// <param name="runFailure">The error <see cref="EndSessionAsync(XpingContextOrchestrator?)"/> returned.</param>
+    internal static void FailProcessOnExit(XpingNetworkException runFailure) =>
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => FailExitCode(runFailure, Console.Error);
+
+    /// <summary>
+    /// What <see cref="FailProcessOnExit"/> does as the process exits: reports the error and sets a
+    /// failing exit code.
+    /// </summary>
+    /// <param name="runFailure">The error the run fails on.</param>
+    /// <param name="errors">Where the error is reported.</param>
+    internal static void FailExitCode(XpingNetworkException runFailure, TextWriter errors)
+    {
+        errors.WriteLine($"[Xping] {runFailure.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    /// <summary>
+    /// Whether the tests run on Microsoft.Testing.Platform, which makes the test assembly the
+    /// executable, rather than in a vstest test host.
+    /// </summary>
+    /// <param name="entryAssembly">The process's entry assembly.</param>
+    /// <returns><see langword="true"/> when the entry assembly is a Microsoft.Testing.Platform app.</returns>
+    internal static bool RunsOnTestingPlatform(Assembly? entryAssembly) =>
+        entryAssembly is not null && ReferencesTestingPlatform(entryAssembly.GetReferencedAssemblies());
+
+    /// <summary>
+    /// Whether an assembly with these references is a Microsoft.Testing.Platform app.
+    /// </summary>
+    /// <param name="references">The assembly's references.</param>
+    /// <returns><see langword="true"/> when one of them is Microsoft.Testing.Platform.</returns>
+    internal static bool ReferencesTestingPlatform(IEnumerable<AssemblyName> references) =>
+        references.Any(name => string.Equals(name.Name, "Microsoft.Testing.Platform", StringComparison.Ordinal));
 
     /// <summary>
     /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live

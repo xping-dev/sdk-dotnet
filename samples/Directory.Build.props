@@ -17,4 +17,34 @@
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
         <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
     </PropertyGroup>
+
+    <!--
+        -p:XpingTestRunner=MTP runs the NUnit and MSTest samples on Microsoft.Testing.Platform instead
+        of vstest. xUnit v2 has no MTP runner, so its sample stays on vstest.
+
+        An MTP build gets its own bin/ and obj/: its restore pulls different packages, and the run
+        tests build both flavours of the same sample. Its obj/mtp/ sits inside obj/, which the vstest
+        build already leaves out of its globs; the MTP build has to leave out the vstest obj/ in turn.
+    -->
+    <PropertyGroup Condition="'$(XpingTestRunner)' == 'MTP' AND '$(MSBuildProjectName)' != 'SampleApp.XUnit'">
+        <OutputType>Exe</OutputType>
+        <EnableNUnitRunner>true</EnableNUnitRunner>
+        <EnableMSTestRunner>true</EnableMSTestRunner>
+        <BaseOutputPath>bin/mtp/</BaseOutputPath>
+        <BaseIntermediateOutputPath>obj/mtp/</BaseIntermediateOutputPath>
+        <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(XpingTestRunner)' == 'MTP' AND '$(MSBuildProjectName)' != 'SampleApp.XUnit'">
+        <!-- Matches the Microsoft.Testing.Platform 1.9 that both runners ship with; enables report-trx. -->
+        <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
+    </ItemGroup>
+
+    <!--
+        -p:XpingSkipAssemblyCleanup=true builds the MSTest sample without its [AssemblyCleanup], so the
+        run tests reach the SDK's process-exit safety net.
+    -->
+    <PropertyGroup Condition="'$(XpingSkipAssemblyCleanup)' == 'true'">
+        <DefineConstants>$(DefineConstants);XPING_SKIP_ASSEMBLY_CLEANUP</DefineConstants>
+    </PropertyGroup>
 </Project>

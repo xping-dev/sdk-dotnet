@@ -20,7 +20,8 @@ Before you begin, make sure you have:
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
 - **No Xping account needed.** Without an API key the SDK runs [local-only](local-first.md): every run is recorded to `.xping/` in your repo and no network call is made. An account is required only to upload to Xping Cloud, which is currently invite-only.
-- An existing **xUnit test project** or create a new one
+- An existing **xUnit v2 test project** or create a new one. It runs on vstest: xUnit v2 has no
+  Microsoft.Testing.Platform runner, so Xping does not support xUnit on MTP until xUnit v3 support lands.
 
 > **New to xUnit?** Create a test project with: `dotnet new xunit -n MyTestProject`
 
