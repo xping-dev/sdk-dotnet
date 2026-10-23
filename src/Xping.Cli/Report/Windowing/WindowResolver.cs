@@ -102,6 +102,17 @@ internal interface IWindowResolver
     WindowResult Resolve(ISessionSource source, WindowRequest request);
 
     /// <summary>
+    /// Whether a session started later than this machine's clock allows.
+    /// </summary>
+    /// <param name="startedAt">When the session says it started.</param>
+    /// <returns><see langword="true"/> when the stamp is past the clock-skew tolerance.</returns>
+    /// <remarks>
+    /// For a caller that reads sessions one at a time and so cannot hand a list to
+    /// <see cref="Resolve"/>, but must still apply the one clock rule every read here applies.
+    /// </remarks>
+    bool IsAhead(DateTime startedAt);
+
+    /// <summary>
     /// Returns the assembly to scope to when the caller named none, or <see langword="null"/>.
     /// </summary>
     /// <param name="source">Where sessions are read from.</param>
@@ -120,13 +131,11 @@ internal interface IWindowResolver
 /// </remarks>
 internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolver
 {
-    // Bounds the read when --since selects by date or commit, or the window is the whole store: we do
-    // not know how many sessions fall inside until we have looked, but retention caps the store well
-    // below this.
-    private const int UnboundedReadCeiling = 1000;
-
-    // A generous probe used only to discover which assembly to scope to, never to bound analysis.
-    private const int AssemblyDiscoveryWindow = 200;
+    // The read when --since selects by date or commit, or the window is the whole store: we do not
+    // know how many sessions fall inside until we have looked. Every such read is scoped to one
+    // assembly, so the writer's retention bounds it, and that limit is configurable, so the CLI cannot
+    // restate it here. A fixed ceiling would only ever cut history off silently.
+    private const int Unbounded = int.MaxValue;
 
     /// <summary>
     /// What a read yielded, once the sessions this machine cannot date were set aside.
@@ -149,10 +158,13 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
             { Runs: { } runs } => ResolveCount(source, request, runs, WindowResolution.Runs, runs.ToString(CultureInfo.InvariantCulture)),
             // No age bound, unlike the default: a reader who named one test wants all of its
             // history, and retention has already decided how much of it there is.
-            { WholeStore: true } => ResolveCount(source, request, UnboundedReadCeiling, WindowResolution.Store, null),
+            { WholeStore: true } => ResolveCount(source, request, Unbounded, WindowResolution.Store, null),
             _ => ResolveDefault(source, request)
         };
     }
+
+    /// <inheritdoc/>
+    public bool IsAhead(DateTime startedAt) => startedAt > Horizon();
 
     /// <inheritdoc/>
     /// <remarks>
@@ -174,19 +186,36 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// that chose the scope would hand the developer a report about a suite they are not working on,
     /// which is the one decision in the report that no later filtering can undo.
     /// </para>
+    /// <para>
+    /// Answered from file headers, which carry a run's start time and assemblies, so no session is
+    /// loaded. A plain <c>report</c> asks this on every invocation, and loading sessions to answer it
+    /// cost as much as the report itself once the store held many assemblies. A header can be intact
+    /// over a damaged body; such a run can choose the scope, and the report then counts it unreadable
+    /// and rests on that assembly's other runs.
+    /// </para>
+    /// <para>
+    /// When every run that names an assembly is ahead of the clock, the newest of them still chooses.
+    /// That is the store <see cref="Read"/> keeps whole and dates against its own clock, with a
+    /// warning, rather than leaving the developer with no report.
+    /// </para>
     /// </remarks>
     public string? ScopeAssembly(ISessionSource source)
     {
-        DatableRead read = Read(source, AssemblyDiscoveryWindow, null);
+        DateTime horizon = Horizon();
+        string? ahead = null;
 
-        foreach (TestSession session in read.Sessions)
+        foreach (LocalSessionHeader header in source.ReadHeaders())
         {
-            IReadOnlyList<string> assemblies = SessionAssemblies.Of(session);
-            if (assemblies.Count > 0)
-                return assemblies[0];
+            if (header.Assemblies.Count == 0)
+                continue;
+
+            if (header.StartedAt <= horizon)
+                return header.Assemblies[0];
+
+            ahead ??= header.Assemblies[0];
         }
 
-        return null;
+        return ahead;
     }
 
     /// <summary>
@@ -257,7 +286,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     private WindowResult ResolveSinceDate(
         ISessionSource source, WindowRequest request, string argument, DateTime boundary)
     {
-        DatableRead read = Read(source, UnboundedReadCeiling, request.Assembly);
+        DatableRead read = Read(source, Unbounded, request.Assembly);
 
         var selected = read.Sessions.Where(s => s.StartedAt >= boundary).ToList();
 
@@ -283,7 +312,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     private WindowResult ResolveSinceSha(
         ISessionSource source, WindowRequest request, string sha)
     {
-        DatableRead read = Read(source, UnboundedReadCeiling, request.Assembly);
+        DatableRead read = Read(source, Unbounded, request.Assembly);
 
         // Sessions arrive newest first, so the last match is the oldest one.
         int anchor = -1;
@@ -355,16 +384,15 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     {
         SessionReadResult read = source.Read(maxSessions, assembly);
 
-        DateTime horizon = timeProvider.GetUtcNow().UtcDateTime
-            .AddHours(LocalAnalysisConstants.ClockSkewToleranceHours);
+        DateTime horizon = Horizon();
 
         if (read.Sessions.All(s => s.StartedAt <= horizon))
             return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: false);
 
         // Already the whole store, so there is nothing deeper to read.
-        SessionReadResult deep = maxSessions >= UnboundedReadCeiling
+        SessionReadResult deep = maxSessions == Unbounded
             ? read
-            : source.Read(UnboundedReadCeiling, assembly);
+            : source.Read(Unbounded, assembly);
 
         var selected = new List<TestSession>(Math.Min(maxSessions, deep.Sessions.Count));
         int skewed = 0;
@@ -387,6 +415,12 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
 
         return new DatableRead(selected, deep.UnreadableCount, skewed, WholeStoreSkewed: false);
     }
+
+    /// <summary>
+    /// The latest start time this machine believes.
+    /// </summary>
+    private DateTime Horizon() =>
+        timeProvider.GetUtcNow().UtcDateTime.AddHours(LocalAnalysisConstants.ClockSkewToleranceHours);
 
     private static WindowResult Build(
         IReadOnlyList<TestSession> sessions,

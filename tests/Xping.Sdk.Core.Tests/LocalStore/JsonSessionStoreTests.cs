@@ -134,6 +134,16 @@ public sealed class JsonSessionStoreTests : IDisposable
             .Build();
     }
 
+    private static TestSession WithId(TestSession session, string id) =>
+        new TestSessionBuilder()
+            .WithSessionId(Guid.Parse(id))
+            .WithStartedAt(session.StartedAt)
+            .WithEndedAt(session.EndedAt)
+            .WithEnvironmentInfo(session.EnvironmentInfo)
+            .AddExecutions(session.Executions)
+            .WithSessionState(TestSessionState.Finalized)
+            .Build();
+
     /// <summary>
     /// Builds one session recording several test assemblies, as a shared test host produces.
     /// </summary>
@@ -547,6 +557,126 @@ public sealed class JsonSessionStoreTests : IDisposable
         try
         {
             Assert.Empty(store.Summarize().Assemblies);
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                SessionsDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
+    public void ReadHeadersReturnsNewestFirstWithTheAssembliesEachRunCovers()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Beta.Tests", 1), ("Alpha.Tests", 1)));
+        store.Write(BuildSession(baseTime.AddMinutes(2), assembly: "Alpha.Tests"));
+
+        List<LocalSessionHeader> headers = [.. store.ReadHeaders()];
+
+        Assert.Equal(
+            [baseTime.AddMinutes(2), baseTime.AddMinutes(1), baseTime],
+            headers.Select(h => h.StartedAt));
+        Assert.Equal(["Alpha.Tests"], headers[0].Assemblies);
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], headers[1].Assemblies);
+        Assert.Equal(["Beta.Tests"], headers[2].Assemblies);
+    }
+
+    [Fact]
+    public void ReadHeadersBreaksSameTickTiesAsReadRecentDoes()
+    {
+        // Two suites starting in one tick is routine in a solution-wide run. File names sort the ids
+        // the other way round, so walking them in reverse would name a different "newest" suite.
+        JsonSessionStore store = CreateStore();
+        var startedAt = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(WithId(BuildSession(startedAt, assembly: "Alpha.Tests"), "22222222-0000-0000-0000-000000000000"));
+        store.Write(WithId(BuildSession(startedAt, assembly: "Beta.Tests"), "11111111-0000-0000-0000-000000000000"));
+
+        Assert.Equal(
+            store.ReadRecent(10).Sessions.Select(s => s.Executions.First().Identity.Assembly),
+            store.ReadHeaders().Select(h => h.Assemblies.Single()));
+        Assert.Equal("Beta.Tests", store.ReadHeaders().First().Assemblies.Single());
+    }
+
+    [Fact]
+    public void ReadHeadersReportsNoAssembliesForAnUnreadableHead()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, "session-0000000000000000009-deadbeef.json.gz"), [0x00]);
+
+        List<LocalSessionHeader> headers = [.. store.ReadHeaders()];
+
+        Assert.Equal(2, headers.Count);
+        Assert.Empty(headers[1].Assemblies);
+    }
+
+    [Fact]
+    public void ReadEachReturnsEveryRunInReadRecentsOrderWithAnEntryPerUnreadableFile()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 4; i++)
+            store.Write(BuildSession(baseTime.AddMinutes(i % 2), assembly: i < 2 ? "Alpha.Tests" : "Beta.Tests"));
+
+        File.WriteAllBytes(
+            Path.Combine(SessionsDirectory, "session-0000000000000000009-deadbeef.json.gz"), [0x00]);
+
+        List<LocalSessionFile> files = [.. store.ReadEach()];
+
+        Assert.Equal(
+            store.ReadRecent(10).Sessions.Select(s => s.SessionId),
+            files.Where(f => f.Session != null).Select(f => f.Session!.SessionId));
+        Assert.Null(files[^1].Session);
+    }
+
+    [Fact]
+    public void ReadEachNarrowsToAnAssemblyAsReadRecentDoes()
+    {
+        JsonSessionStore store = CreateStore();
+        var baseTime = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        store.Write(BuildSession(baseTime, assembly: "Beta.Tests"));
+        store.Write(BuildMixedSession(baseTime.AddMinutes(1), ("Alpha.Tests", 1), ("Beta.Tests", 2)));
+        store.Write(BuildSession(baseTime.AddMinutes(2), assembly: "Alpha.Tests"));
+
+        List<TestSession> each = [.. store.ReadEach("Beta.Tests").Select(f => f.Session!)];
+        IReadOnlyList<TestSession> recent = store.ReadRecent(10, "Beta.Tests").Sessions;
+
+        Assert.Equal(recent.Select(s => s.SessionId), each.Select(s => s.SessionId));
+        Assert.Equal(recent.Select(s => s.Executions.Count), each.Select(s => s.Executions.Count));
+        Assert.All(each.SelectMany(s => s.Executions), e => Assert.Equal("Beta.Tests", e.Identity.Assembly));
+    }
+
+    [Fact]
+    public void ReadEachIsEmptyBeforeAnyRunIsWritten() =>
+        Assert.Empty(CreateStore().ReadEach());
+
+    [Fact]
+    public void ReadHeadersIsEmptyBeforeAnyRunIsWritten() =>
+        Assert.Empty(CreateStore().ReadHeaders());
+
+    [Fact]
+    public void ReadHeadersDegradesToEmptyWhenTheDirectoryCannotBeListed()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return; // chmod semantics differ; the behaviour is verified on Unix CI.
+
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        File.SetUnixFileMode(SessionsDirectory, UnixFileMode.None);
+
+        try
+        {
+            Assert.Empty(store.ReadHeaders());
         }
         finally
         {

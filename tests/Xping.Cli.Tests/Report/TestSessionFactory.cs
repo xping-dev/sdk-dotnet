@@ -369,6 +369,18 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// <summary>Gets or sets the unreadable-file count every read reports.</summary>
     public int UnreadableCount { get; set; }
 
+    /// <summary>Gets every bounded read asked of the source, in order.</summary>
+    public List<(int MaxSessions, string? Assembly)> Reads { get; } = [];
+
+    /// <summary>Gets the assembly of every one-at-a-time read asked of the source, in order.</summary>
+    public List<string?> Scans { get; } = [];
+
+    /// <summary>Gets how many sessions one-at-a-time reads have handed out.</summary>
+    public int SessionsRead { get; private set; }
+
+    /// <summary>Gets how many headers have been enumerated.</summary>
+    public int HeadersRead { get; private set; }
+
     /// <inheritdoc/>
     /// <remarks>
     /// Narrows rather than selects, exactly as <see cref="LocalSessionSource"/> does. A fake that
@@ -377,11 +389,43 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// </remarks>
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
+        Reads.Add((maxSessions, assembly));
+
         IEnumerable<TestSession> matching = assembly == null
             ? _sessions
             : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
 
         return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableCount);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Unreadable files come last, as files whose name carries no start time do.</remarks>
+    public IEnumerable<LocalSessionFile> ReadEach(string? assembly)
+    {
+        Scans.Add(assembly);
+
+        IEnumerable<TestSession> matching = assembly == null
+            ? _sessions
+            : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
+
+        foreach (TestSession session in matching)
+        {
+            SessionsRead++;
+            yield return new LocalSessionFile(session);
+        }
+
+        for (int i = 0; i < UnreadableCount; i++)
+            yield return new LocalSessionFile(null);
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<LocalSessionHeader> ReadHeaders()
+    {
+        foreach (TestSession session in _sessions)
+        {
+            HeadersRead++;
+            yield return new LocalSessionHeader(session.StartedAt, SessionAssemblies.Of(session));
+        }
     }
 
     /// <inheritdoc/>

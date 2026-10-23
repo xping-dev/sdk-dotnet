@@ -43,6 +43,50 @@ public sealed class LocalSessionReadResult
 }
 
 /// <summary>
+/// One stored file, read: the session it holds, or nothing when it could not be read.
+/// </summary>
+public sealed class LocalSessionFile
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalSessionFile"/> class.
+    /// </summary>
+    /// <param name="session">The session, or <see langword="null"/> when the file could not be read.</param>
+    public LocalSessionFile(TestSession? session)
+    {
+        Session = session;
+    }
+
+    /// <summary>Gets the session, or <see langword="null"/> when the file could not be read.</summary>
+    public TestSession? Session { get; }
+}
+
+/// <summary>
+/// One stored run as its file's name and header describe it, without the run itself.
+/// </summary>
+public sealed class LocalSessionHeader
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalSessionHeader"/> class.
+    /// </summary>
+    /// <param name="startedAt">When the run started, in UTC.</param>
+    /// <param name="assemblies">The assemblies the run covered, ordered by name.</param>
+    public LocalSessionHeader(DateTime startedAt, IReadOnlyList<string> assemblies)
+    {
+        StartedAt = startedAt;
+        Assemblies = assemblies ?? throw new ArgumentNullException(nameof(assemblies));
+    }
+
+    /// <summary>Gets when the run started, in UTC.</summary>
+    public DateTime StartedAt { get; }
+
+    /// <summary>
+    /// Gets the assemblies the run covered, ordered by name. Empty when it names none or its header
+    /// could not be read.
+    /// </summary>
+    public IReadOnlyList<string> Assemblies { get; }
+}
+
+/// <summary>
 /// One test assembly's history in the local store.
 /// </summary>
 public sealed class LocalStoreAssembly
@@ -174,6 +218,43 @@ public interface ILocalSessionStore
     /// bound cannot promise. Cheap enough to call whenever the full list of assemblies is needed.
     /// </remarks>
     LocalStoreSummary Summarize();
+
+    /// <summary>
+    /// Lists the stored runs newest first, as their file names and headers describe them.
+    /// </summary>
+    /// <returns>
+    /// One header per file, read only as the sequence is enumerated, so a caller looking for the
+    /// newest run with some property reads as few headers as it needs.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Loads no session. A header is the head of the file, so a damaged run whose head is intact is
+    /// listed here although <see cref="ReadRecent"/> reports it unreadable.
+    /// </para>
+    /// <para>
+    /// Ties in start time break the same way <see cref="ReadRecent"/> breaks them, so "the newest
+    /// run" means the same run through either method.
+    /// </para>
+    /// </remarks>
+    IEnumerable<LocalSessionHeader> ReadHeaders();
+
+    /// <summary>
+    /// Reads every stored session, newest first, one file at a time.
+    /// </summary>
+    /// <param name="assembly">
+    /// When supplied, only sessions that recorded this test assembly, each narrowed to it, exactly as
+    /// <see cref="ReadRecent"/> scopes them.
+    /// </param>
+    /// <returns>
+    /// One entry per file opened, read only as the sequence is enumerated. An unreadable file is an
+    /// entry with no session; a session with no executions, or none for the assembly, is no entry.
+    /// </returns>
+    /// <remarks>
+    /// For a caller that needs every session but only a little of each. Holding them all, as
+    /// <see cref="ReadRecent"/> does, costs many times the store's size on disk; enumerating holds
+    /// one at a time. Ordered as <see cref="ReadRecent"/> and <see cref="ReadHeaders"/> are.
+    /// </remarks>
+    IEnumerable<LocalSessionFile> ReadEach(string? assembly = null);
 
     /// <summary>
     /// Deletes stored sessions.

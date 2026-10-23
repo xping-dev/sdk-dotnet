@@ -196,6 +196,10 @@ public sealed class AuthCommandShellTests
 
         public LocalStoreSummary Summarize() => LocalStoreSummary.Empty;
 
+        public IEnumerable<LocalSessionHeader> ReadHeaders() => [];
+
+        public IEnumerable<LocalSessionFile> ReadEach(string? assembly = null) => [];
+
         public int Delete(string? assembly = null) => 0;
     }
 

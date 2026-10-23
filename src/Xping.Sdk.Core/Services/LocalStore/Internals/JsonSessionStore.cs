@@ -233,6 +233,55 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
+    public IEnumerable<LocalSessionHeader> ReadHeaders() =>
+        Headers(ListNewestFirst().Where(f => f.Dated));
+
+    public IEnumerable<LocalSessionFile> ReadEach(string? assembly = null) =>
+        Files(ListNewestFirst(), assembly);
+
+    /// <summary>
+    /// Lists the session files newest first, ordered as <see cref="CompareNewestFirst"/> orders
+    /// sessions. Files whose name carries no start time come last, as ordinal order puts them.
+    /// </summary>
+    /// <remarks>
+    /// Listed eagerly so the lazy readers built on it stay iterators: an iterator cannot yield inside
+    /// a try that catches, and listing is the only step that can fail. Each file read degrades on
+    /// its own.
+    /// </remarks>
+    private List<(DateTime StartedAt, bool Dated, string Path)> ListNewestFirst()
+    {
+        string? directory = SessionsPath;
+        if (!Directory.Exists(directory))
+            return [];
+
+        try
+        {
+            var files = new List<(DateTime StartedAt, bool Dated, string Path)>();
+
+            foreach (string file in Directory.GetFiles(directory!, SessionFileName.SearchPattern))
+            {
+                bool dated = SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt);
+                files.Add((startedAt, dated, file));
+            }
+
+            // Not the reverse of the name order ReadRecent walks: that breaks same-tick ties by id
+            // descending, where CompareNewestFirst sorts them ascending. The name's id is a prefix of
+            // the full one, so ascending names within a tick give the same order.
+            files.Sort((left, right) =>
+            {
+                int byTime = right.StartedAt.CompareTo(left.StartedAt);
+                return byTime != 0 ? byTime : string.CompareOrdinal(left.Path, right.Path);
+            });
+
+            return files;
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            _logger.LogDebug("Local session store listing skipped: {Message}", ex.Message);
+            return [];
+        }
+    }
+
     public int Delete(string? assembly = null)
     {
         string? root = _storePath.Value;
@@ -282,6 +331,52 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         {
             _logger.LogDebug("Local session store delete skipped: {Message}", ex.Message);
             return 0;
+        }
+    }
+
+    private static IEnumerable<LocalSessionHeader> Headers(
+        IEnumerable<(DateTime StartedAt, bool Dated, string Path)> files)
+    {
+        foreach ((DateTime startedAt, _, string path) in files)
+            yield return new LocalSessionHeader(startedAt, SessionFileHeader.ReadAssemblies(path) ?? []);
+    }
+
+    /// <remarks>
+    /// Skips and narrows exactly as <see cref="ReadRecent"/> does, so the two never disagree about
+    /// which runs an assembly has.
+    /// </remarks>
+    private IEnumerable<LocalSessionFile> Files(
+        List<(DateTime StartedAt, bool Dated, string Path)> files, string? assembly)
+    {
+        string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
+
+        foreach ((_, _, string path) in files)
+        {
+            if (tag != null
+                && SessionFileName.ParseTags(Path.GetFileName(path)) is { } tags
+                && !tags.Contains(tag, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            TestSession? session = TryReadFile(path);
+            if (session == null)
+            {
+                yield return new LocalSessionFile(null);
+                continue;
+            }
+
+            if (session.Executions.Count == 0)
+                continue;
+
+            if (assembly != null)
+            {
+                session = SessionAssemblies.Project(session, assembly);
+                if (session == null)
+                    continue;
+            }
+
+            yield return new LocalSessionFile(session);
         }
     }
 

@@ -79,6 +79,23 @@ Based on the SDK implementation plan, we aim to meet these targets:
 - `XUnitAdapterBenchmarks` - xUnit adapter overhead
 - `MSTestAdapterBenchmarks` - MSTest adapter overhead
 
+### Local Store Benchmarks
+- `LocalStoreBenchmarks` - session write and read
+- `LocalStoreScanBenchmarks` - the reads `xping report` makes without `--assembly`, before and after #283
+
+`LocalStoreScanBenchmarks` on Apple Silicon, 50 runs of 2,000 tests per assembly (#283):
+
+| Read | 10 assemblies (81 MB on disk) | 25 assemblies (201 MB on disk) |
+|---|---|---|
+| Choose scope, loading 200 sessions (before) | 975 ms, 2.1 GB allocated | 983 ms, 2.1 GB allocated |
+| Choose scope from file headers (after) | 0.4 ms, 0.4 MB allocated | 0.9 ms, 0.8 MB allocated |
+| `--test` lookup, one unscoped read of up to 1000 (before) | 2.5 s, 2.1 GB retained | 7.0 s, 4.3 GB retained, oldest 250 runs cut off |
+| `--test` lookup, one pass, one run held at a time (after) | 2.3 s, ~4 MB retained | 5.7 s, ~4 MB retained, every run read |
+
+"Retained" is the managed heap held while the read's sessions are alive, logged by the benchmark's
+setup for the old lookup; the new one holds a single run, about 1/50 of one assembly's history.
+The lookup still deserializes every run once; what changes is how many are held at once.
+
 ## CI/CD Integration
 
 Benchmarks run automatically on:
