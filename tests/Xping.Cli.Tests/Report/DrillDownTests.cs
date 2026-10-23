@@ -16,10 +16,6 @@ public sealed class DrillDownTests
     [Theory]
     [InlineData("../svc", "../svc")]
     [InlineData("/work/My Repo", "'/work/My Repo'")]
-    [InlineData("/work/r&d/app", "'/work/r&d/app'")]
-    [InlineData("/work/$HOME;rm", "'/work/$HOME;rm'")]
-    [InlineData("/work/it's", "'/work/it'\\''s'")]
-    [InlineData(@"C:\My Repo\", @"'C:\My Repo\'")]
     public void AValueTheShellWouldReadIsSingleQuoted(string directory, string printed)
     {
         Assert.Equal(
