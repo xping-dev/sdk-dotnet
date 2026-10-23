@@ -17,6 +17,15 @@ Identical to `cli-report-format-spec.md`. This document is ground truth. An impl
 conflict stops and reports rather than adapting. Decisions and the data contract change by amendment
 only, committed before dependent code. **OQ** sections are gates.
 
+### Amendment 1 — from the P0 runner checks
+
+P0 re-read §1.1 against source and found no conflict. It ran OQ-1 by hand (results in §5) and found
+one conflict, in D3. Resolved here and committed before P1.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D3 escapes `\ ( ) & \| = ! ~` | D3 also escapes `"`, as `\"`. NUnit's stored FQN quotes a string argument (`Echo("x")`). `dotnet test` hands `--filter` to MSBuild as a property, and a bare `"` there fails before VSTest runs: `MSB4177: Invalid property`. `\"` and `%22` both reach VSTest as `"`; `\"` keeps D3 to one escape rule | D3, §3.2 |
+
 ---
 
 ## 1. Ground truth
@@ -119,7 +128,7 @@ Why the dashes:
 ### D3 — The filter
 
 `FullyQualifiedName=<FQN>`, the stored FQN of D2's test, with VSTest's reserved characters
-`\ ( ) & | = ! ~` escaped by a backslash. Several members join with `|`.
+`\ ( ) & | = ! ~` and `"` (Amendment 1A) escaped by a backslash. Several members join with `|`.
 
 What this matches, per adapter (§1.1):
 - **NUnit:** exactly the stored case. The stored FQN carries the arguments, as NUnit's own does.
@@ -250,6 +259,12 @@ The filter needs no quotes: every character in it is plain (D4).
 Repro: dotnet test --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Divide\(10,0\)'
 ```
 
+With a string argument (Amendment 1A):
+
+```
+Repro: dotnet test --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Echo\(\"a\=b\|c\"\)'
+```
+
 ### 3.3 A shared failure
 
 ```
@@ -307,7 +322,7 @@ Every provider, every finding, every ranking. **No analysis behaviour changes.**
 
 ## 5. Open questions — gates
 
-### OQ-1 — Runner behaviour. **Open**
+### OQ-1 — Runner behaviour. **Closed by P0** (Amendment 1)
 
 P0 confirms, against the three sample projects under VSTest, before any code:
 
@@ -318,6 +333,22 @@ P0 confirms, against the three sample projects under VSTest, before any code:
 
 A failure here is an amendment to D3 or D4, not a workaround in code.
 
+**Results.** Run on .NET SDK 10.0.201 with the samples' package versions (MSTest 3.11.1, NUnit 4.2.2 with
+NUnit3TestAdapter 4.6.0, xUnit 2.9.2 with xunit.runner.visualstudio 2.8.2, Microsoft.NET.Test.Sdk
+17.12.0). The samples have no `[DataRow]` and no nested class, so the checks used throwaway projects
+with the same packages and setup. Each project had `Add` and `AddRange`, two data rows each of
+`Divide(int, int)` and `Echo(string)`, and `Outer+Inner.Nested`. A full run with `XPING_LOCAL_STORE`
+pointing at a scratch store recorded the FQNs. Each command was built from those FQNs as D3 and D4
+say, then run from the project directory in zsh, and once in bash.
+
+| # | Result |
+|---|---|
+| 1 | NUnit `Divide\(10,0\)` ran that case alone. `Echo("a=b\|c")` **failed** with D3's original set (MSB4177) and passed with `"` escaped (Amendment 1A). With that set, string arguments holding `; % ' $( ) @( ) , \` and a space, a `char` argument and `null` each ran exactly one case. `=` matched `Add` and never `AddRange`, in all three frameworks |
+| 2 | MSTest `Calc.Divide` and `Calc.Echo` each ran both rows. Same for xUnit |
+| 3 | No filtered run with `-e XPING_ENABLED=false` added a session, in any of the three frameworks. A control run without it added one in each |
+| 4 | `Outer+Inner.Nested` is stored with `+` by all three adapters and matched as stored, unquoted |
+| — | Three-member `\|` filters (§3.3 shape) ran exactly their members, NUnit and xUnit |
+
 ---
 
 ## 6. Implementation sequence
@@ -327,14 +358,15 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
 `cli-test-history-spec.md` §6.1. Each phase ends green: `dotnet build -c Release` is clean and
 `dotnet test tests/Xping.Cli.Tests -c Release` passes.
 
-- **P0 — Inventory and OQ-1.** Re-verify §1.1. Run OQ-1's checks by hand against the samples and
-  record the results. Any conflict becomes Amendment 1, committed to the feature branch. No PR.
-- **P1 — Builder.** `ShellQuote`, `ReproCommand`, the two constants. Unit tests: escaping, quoting,
-  each D2 row, D5's table, the cap, `AlwaysFailing`.
+- **P0 — Inventory and OQ-1.** Done; see Amendment 1 and OQ-1's results. Re-verify §1.1. Run OQ-1's
+  checks by hand against the samples and record the results. Any conflict becomes Amendment 1,
+  committed to the feature branch. No PR.
+- **P1 — Builder.** `ShellQuote`, `ReproCommand`, the two constants. Unit tests: escaping (`"`
+  included), quoting, each D2 row, D5's table, the cap, `AlwaysFailing`.
 - **P2 — Contract and text.** `ReproDto`, schema 1.24, `EnvelopeBuilder`, the `repro` line and the
   `Repro:` line. Envelope tests, §3.4's goldens, and the existing goldens regenerated.
 - **P3 — Runner test.** In `tests/Xping.Sdk.Integration.Tests`: for one test per sample project,
-  including a parameterised one each, run the emitted command once and assert the runner selected the
+  including a parameterised one each and an NUnit string case, run the emitted command once and assert the runner selected the
   expected tests and wrote no session. This pins OQ-1 against framework upgrades.
 - **P4 — Docs.**
   - `docs/cli/command-reference.md`: the `repro` field, the VSTest-only limit, running from the
