@@ -55,6 +55,8 @@ Before calling a change done: build is clean and the affected test projects pass
 - **DI**: services register in `XpingServiceCollectionExtensions`. Public surface is interfaces
   (`IXpingUploader`, `IEnvironmentDetector`, …); implementations live in `Internals/` folders
   and are `internal sealed`.
+- **MSBuild**: Core ships `buildTransitive/Xping.Sdk.Core.targets` (stamps `Xping.ProjectPath`).
+  Samples reference the SDK as projects, so `samples/Directory.Build.targets` imports it directly.
 - **HTTP resilience** uses `Microsoft.Extensions.Http.Resilience`, not raw Polly.
 - **Serialization** goes through `IXpingSerializer` (System.Text.Json, camelCase, enums as
   strings). Don't call `JsonSerializer` directly. Exception: the CLI's documented `--json` output

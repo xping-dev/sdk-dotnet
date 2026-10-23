@@ -91,6 +91,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     // after startup.
     private string? _projectPin;
 
+    // The runner the process is hosted by, detected once at startup for the local session stamp.
+    // Null when it is neither a vstest test host nor a Microsoft.Testing.Platform app.
+    private readonly string? _runner;
+
     // Set as soon as the options resolve, so every later failure - in the constructor or at finalize -
     // is judged by the same answer. False only while no options have been read.
     private bool _strictMode;
@@ -148,6 +152,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected IServiceProvider Services => _host.Services;
 
     /// <summary>
+    /// Gets the test framework the derived adapter maps, recorded on each local session as
+    /// <see cref="LocalSessionProperties.TestFramework"/>.
+    /// </summary>
+    /// <remarks>
+    /// Read at finalization only, never from this class's constructor, where a derived instance is
+    /// not yet initialized.
+    /// </remarks>
+    protected abstract string TestFramework { get; }
+
+    /// <summary>
     /// Initializes a new instance of <see cref="XpingContextOrchestrator"/> from a configured <see cref="IHost"/>.
     /// Resolves all required services from the host's service container and stores the host for lifetime management.
     /// </summary>
@@ -200,6 +214,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 // warnings (a container missing GITHUB_EVENT_NAME), which at finalization would print
                 // after every test result, or not at all when vstest kills the testhost (#126).
                 _ = _environmentDetector.CustomProperties;
+
+                _runner = DetectRunner(Assembly.GetEntryAssembly());
 
                 if (configuration.EnablePullRequestDetection)
                     _pullRequestContext = _prDetector.Detect();
@@ -617,6 +633,89 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         references.Any(name => string.Equals(name.Name, "Microsoft.Testing.Platform", StringComparison.Ordinal));
 
     /// <summary>
+    /// Identifies the test runner hosting the process from its entry assembly.
+    /// </summary>
+    /// <param name="entryAssembly">The process's entry assembly.</param>
+    /// <returns>
+    /// <see cref="LocalSessionProperties.TestingPlatformRunner"/>, <see cref="LocalSessionProperties.VSTestRunner"/>,
+    /// or <see langword="null"/> for any other host.
+    /// </returns>
+    internal static string? DetectRunner(Assembly? entryAssembly) =>
+        entryAssembly is null
+            ? null
+            : DetectRunner(entryAssembly.GetName().Name, entryAssembly.GetReferencedAssemblies());
+
+    /// <summary>
+    /// Identifies the test runner from the entry assembly's name and references.
+    /// </summary>
+    /// <param name="entryName">The entry assembly's simple name.</param>
+    /// <param name="references">The entry assembly's references.</param>
+    /// <returns>
+    /// <see cref="LocalSessionProperties.TestingPlatformRunner"/>, <see cref="LocalSessionProperties.VSTestRunner"/>,
+    /// or <see langword="null"/> for any other host.
+    /// </returns>
+    /// <remarks>
+    /// vstest runs tests in its own <c>testhost</c> executable, named <c>testhost.x86</c> or
+    /// <c>testhost.net48</c> on some platforms, while Microsoft.Testing.Platform makes the test
+    /// assembly the entry point. Any other host, such as the xUnit console runner, stays unknown.
+    /// </remarks>
+    internal static string? DetectRunner(string? entryName, IEnumerable<AssemblyName> references)
+    {
+        if (ReferencesTestingPlatform(references))
+            return LocalSessionProperties.TestingPlatformRunner;
+
+        return string.Equals(entryName, "testhost", StringComparison.OrdinalIgnoreCase) ||
+               (entryName?.StartsWith("testhost.", StringComparison.OrdinalIgnoreCase) ?? false)
+            ? LocalSessionProperties.VSTestRunner
+            : null;
+    }
+
+    /// <summary>
+    /// Picks the project path the build stamped into the session's test assemblies.
+    /// </summary>
+    /// <param name="sessionAssemblies">The simple names of the test assemblies the session recorded.</param>
+    /// <param name="stampedPath">The path stamped into the named assembly, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The path every session assembly carries, or <see langword="null"/> when there are none, one
+    /// carries no path, or they disagree.
+    /// </returns>
+    /// <remarks>
+    /// A session spanning two projects has no single project to run again, so it gets none.
+    /// </remarks>
+    internal static string? ResolveProjectPath(IEnumerable<string> sessionAssemblies, Func<string, string?> stampedPath)
+    {
+        string? path = null;
+
+        foreach (string name in sessionAssemblies)
+        {
+            string? stamped = stampedPath(name);
+
+            if (string.IsNullOrEmpty(stamped) || (path != null && !string.Equals(path, stamped, StringComparison.Ordinal)))
+                return null;
+
+            path = stamped;
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// Reads the project path the build stamped into a loaded test assembly.
+    /// </summary>
+    /// <param name="loaded">The assemblies loaded in the process.</param>
+    /// <param name="name">The test assembly's simple name.</param>
+    /// <returns>The stamped path, or <see langword="null"/> when the assembly is not loaded or has none.</returns>
+    /// <remarks>
+    /// Read from the test assembly rather than the entry assembly, which under vstest is the test host.
+    /// </remarks>
+    internal static string? ReadStampedProjectPath(IEnumerable<Assembly> loaded, string name) =>
+        loaded
+            .FirstOrDefault(assembly => string.Equals(assembly.GetName().Name, name, StringComparison.Ordinal))?
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, LocalSessionProperties.ProjectPath, StringComparison.Ordinal))?
+            .Value;
+
+    /// <summary>
     /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live
     /// context, so that every path through it can be driven.
     /// </summary>
@@ -982,13 +1081,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns a copy of <paramref name="environment"/> carrying the mode this session was recorded
-    /// under and, when one is configured, the project it was pinned to.
+    /// Returns a copy of <paramref name="environment"/> carrying how this session was recorded: the
+    /// mode and test framework, and, when known, the project pin, the runner and the project path.
     /// </summary>
     /// <remarks>
     /// The CLI needs to know whether a project is already cloud-connected so it does not pitch the
     /// cloud to people who pay for it, and which Cloud project a pinned run belongs to, since it must
-    /// not derive the key itself; the stored session is the only record of either. Applied here
+    /// not derive the key itself. To print a command that runs a test again it needs the runner,
+    /// framework and project. The stored session is the only record of any of these. Applied here
     /// rather than in the environment detector so it lands on the local copy alone — the uploaded
     /// session keeps the environment exactly as detected.
     /// </remarks>
@@ -1003,9 +1103,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         properties[LocalSessionProperties.Mode] = _mode.ToString();
+        properties[LocalSessionProperties.TestFramework] = TestFramework;
 
         if (_projectPin != null)
             properties[LocalSessionProperties.ProjectId] = _projectPin;
+
+        if (_runner != null)
+            properties[LocalSessionProperties.Runner] = _runner;
+
+        if (ProjectPathOrNull() is { } projectPath)
+            properties[LocalSessionProperties.ProjectPath] = projectPath;
 
         return new EnvironmentInfo
         {
@@ -1019,6 +1126,28 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             TimeZoneId = environment.TimeZoneId,
             CustomProperties = new ReadOnlyDictionary<string, string>(properties)
         };
+    }
+
+    /// <summary>
+    /// Resolves <see cref="LocalSessionProperties.ProjectPath"/> for this session, or
+    /// <see langword="null"/> when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// Reflection over loaded assemblies can throw for a dynamic or partially loaded one. A failure
+    /// here only costs the property; it must not cost the session write that calls it.
+    /// </remarks>
+    private string? ProjectPathOrNull()
+    {
+        try
+        {
+            Assembly[] loaded = AppDomain.CurrentDomain.GetAssemblies();
+            return ResolveProjectPath(_sessionAssemblies, name => ReadStampedProjectPath(loaded, name));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read the project path from the test assemblies.");
+            return null;
+        }
     }
 
     /// <summary>

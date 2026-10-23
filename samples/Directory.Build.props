@@ -47,4 +47,13 @@
     <PropertyGroup Condition="'$(XpingSkipAssemblyCleanup)' == 'true'">
         <DefineConstants>$(DefineConstants);XPING_SKIP_ASSEMBLY_CLEANUP</DefineConstants>
     </PropertyGroup>
+
+    <!--
+        -p:XpingSampleWithoutAssemblyInfo=true builds a sample without generated assembly info, which
+        drops its Xping.ProjectPath stamp. A plain -p:GenerateAssemblyInfo=false would reach the SDK
+        projects the sample references too, and fail their build.
+    -->
+    <PropertyGroup Condition="'$(XpingSampleWithoutAssemblyInfo)' == 'true'">
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    </PropertyGroup>
 </Project>

@@ -10,7 +10,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -48,6 +50,9 @@ internal sealed class SampleRunner : IDisposable
 
     private readonly string _scratch = Path.Combine(
         Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
+
+    /// <summary>The scratch directory this runner deletes when disposed. Outside any repository.</summary>
+    public string ScratchPath => _scratch;
 
     /// <summary>The local store the run writes to.</summary>
     public string StorePath => Path.Combine(_scratch, "store");
@@ -106,6 +111,25 @@ internal sealed class SampleRunner : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(runner), runner, null),
         };
 
+        return await DotnetAsync(workingDirectory, arguments, environment, $"{runner} run of {sample}").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Runs <c>dotnet</c> with <paramref name="arguments"/> in a child process that inherits no Xping,
+    /// MSBuild, vstest or testing platform setting from this one.
+    /// </summary>
+    /// <param name="workingDirectory">Where to run it.</param>
+    /// <param name="arguments">The arguments after <c>dotnet</c>.</param>
+    /// <param name="environment">Settings for the child on top of the cleaned environment.</param>
+    /// <param name="description">What is being run, for the timeout message.</param>
+    public async Task<(int ExitCode, string Output)> DotnetAsync(
+        string workingDirectory,
+        IEnumerable<string> arguments,
+        IReadOnlyDictionary<string, string> environment,
+        string description)
+    {
+        Directory.CreateDirectory(_scratch);
+
         var startInfo = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = workingDirectory,
@@ -143,10 +167,21 @@ internal sealed class SampleRunner : IDisposable
         if (await Task.WhenAny(exited, Task.Delay(RunTimeout)).ConfigureAwait(true) != exited)
         {
             process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"{runner} run of {sample} did not finish within {RunTimeout}.");
+            throw new TimeoutException($"{description} did not finish within {RunTimeout}.");
         }
 
         return (process.ExitCode, await stdout.ConfigureAwait(true) + await stderr.ConfigureAwait(true));
+    }
+
+    /// <summary>The single session the run wrote to the local store.</summary>
+    public JsonElement ReadStoredSession()
+    {
+        string session = Directory.GetFiles(Path.Combine(StorePath, "sessions"), "*.json.gz")
+            .Should().ContainSingle().Subject;
+
+        using var gzip = new GZipStream(File.OpenRead(session), CompressionMode.Decompress);
+        using JsonDocument document = JsonDocument.Parse(gzip);
+        return document.RootElement.Clone();
     }
 
     /// <summary>The <c>Counters</c> element of the single TRX the run wrote.</summary>
@@ -166,7 +201,8 @@ internal sealed class SampleRunner : IDisposable
         return directory;
     }
 
-    private static string FindRepositoryRoot()
+    /// <summary>The repository root, found from this test assembly's output folder.</summary>
+    public static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
         {

@@ -15,6 +15,7 @@ using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.NUnit.Retry;
@@ -45,6 +46,9 @@ public class XpingContext : XpingContextOrchestrator
     {
         _logger = host.Services.GetRequiredService<ILogger<XpingContext>>();
     }
+
+    /// <inheritdoc/>
+    protected override string TestFramework => LocalSessionProperties.NUnitFramework;
 
     private static XpingContext CreateInstance(XpingConfiguration? configuration = null)
     {
