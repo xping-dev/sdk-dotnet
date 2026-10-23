@@ -31,6 +31,8 @@ public sealed class LocalHistoryWriteTests : IDisposable
 {
     private sealed class Harness(IHost host) : XpingContextOrchestrator(host)
     {
+        protected override string TestFramework => "Harness";
+
         public void Record(TestExecution execution) => RecordTestExecution(execution);
 
         public Task<UploadResult> FinalizeAsync() => FinalizeSessionAsync(CancellationToken.None);

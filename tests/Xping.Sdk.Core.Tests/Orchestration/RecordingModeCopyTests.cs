@@ -37,7 +37,10 @@ namespace Xping.Sdk.Core.Tests.Orchestration;
 [Collection("Sequential")]
 public sealed class RecordingModeCopyTests
 {
-    private sealed class Harness(IHost host) : XpingContextOrchestrator(host);
+    private sealed class Harness(IHost host) : XpingContextOrchestrator(host)
+    {
+        protected override string TestFramework => "Harness";
+    }
 
     [Fact]
     public async Task TheLocalCopyPreservesEveryPropertyOfTheDetectedEnvironment()
@@ -79,6 +82,22 @@ public sealed class RecordingModeCopyTests
         EnvironmentInfo copied = await LocalCopyOf(Populated(), o => o.ProjectId = null);
 
         Assert.False(copied.CustomProperties.ContainsKey(LocalSessionProperties.ProjectId));
+    }
+
+    [Fact]
+    public async Task TheLocalCopyNamesTheAdaptersTestFramework()
+    {
+        EnvironmentInfo copied = await LocalCopyOf(Populated());
+
+        Assert.Equal("Harness", copied.CustomProperties[LocalSessionProperties.TestFramework]);
+    }
+
+    [Fact]
+    public async Task TheLocalCopyHasNoProjectPathWhenTheSessionRecordedNoTestAssembly()
+    {
+        EnvironmentInfo copied = await LocalCopyOf(Populated());
+
+        Assert.False(copied.CustomProperties.ContainsKey(LocalSessionProperties.ProjectPath));
     }
 
     [Fact]

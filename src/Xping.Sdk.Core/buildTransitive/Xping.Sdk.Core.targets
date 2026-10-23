@@ -1,0 +1,28 @@
+<Project>
+  <!--
+    Stamps the test project's path, relative to the repository root, into the test assembly as
+    [assembly: AssemblyMetadata("Xping.ProjectPath", ...)]. The SDK records it on each local session,
+    so the CLI can print a dotnet test command for the right project. Only the build knows the
+    project: at run time the SDK sees the output folder, and under vstest not even the test assembly
+    is the entry point.
+
+    Relative to the repository root so the stamped binary does not carry the build machine's folder
+    layout. GetDirectoryNameOfFileAbove matches .git as a file too, as worktrees and submodules have.
+    Outside a repository nothing is stamped, and GenerateAssemblyInfo=false drops the attribute.
+  -->
+  <PropertyGroup>
+    <_XpingRepositoryRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_XpingRepositoryRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_XpingRepositoryRoot)' != ''">
+    <_XpingProjectPath>$([MSBuild]::MakeRelative('$([MSBuild]::EnsureTrailingSlash('$(_XpingRepositoryRoot)'))', '$(MSBuildProjectFullPath)'))</_XpingProjectPath>
+    <_XpingProjectPath>$(_XpingProjectPath.Replace('\', '/'))</_XpingProjectPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_XpingProjectPath)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Xping.ProjectPath</_Parameter1>
+      <_Parameter2>$(_XpingProjectPath)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
