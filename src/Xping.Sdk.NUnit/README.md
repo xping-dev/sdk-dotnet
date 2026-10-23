@@ -90,6 +90,25 @@ Add to `AssemblyInfo.cs` or any file:
 [assembly: XpingTrack]
 ```
 
+## Running on Microsoft.Testing.Platform
+
+The adapter hooks into NUnit, not the test runner, so it works on vstest and on
+Microsoft.Testing.Platform (MTP) alike. To use MTP, enable NUnit's runner in the test project:
+
+```xml
+<PropertyGroup>
+  <OutputType>Exe</OutputType>
+  <EnableNUnitRunner>true</EnableNUnitRunner>
+</PropertyGroup>
+```
+
+Run the test executable directly, or `dotnet test` in the .NET 10 SDK's MTP mode
+(`global.json`: `{ "test": { "runner": "Microsoft.Testing.Platform" } }`). For TRX, reference
+`Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
+
+Requires NUnit3TestAdapter 5.0 or later. In strict mode, a failed upload ends the run with exit code 1
+after MTP has written its reports; on vstest it terminates the test host instead.
+
 ## Configuration
 
 The adapter uses the standard Xping configuration. Add a `"Xping"` section to your `appsettings.json` file:
