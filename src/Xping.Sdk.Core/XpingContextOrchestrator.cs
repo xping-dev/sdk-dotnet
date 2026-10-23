@@ -585,11 +585,19 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </remarks>
     /// <param name="runFailure">The error <see cref="EndSessionAsync(XpingContextOrchestrator?)"/> returned.</param>
     internal static void FailProcessOnExit(XpingNetworkException runFailure) =>
-        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-        {
-            Console.Error.WriteLine($"[Xping] {runFailure.Message}");
-            Environment.ExitCode = 1;
-        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => FailExitCode(runFailure, Console.Error);
+
+    /// <summary>
+    /// What <see cref="FailProcessOnExit"/> does as the process exits: reports the error and sets a
+    /// failing exit code.
+    /// </summary>
+    /// <param name="runFailure">The error the run fails on.</param>
+    /// <param name="errors">Where the error is reported.</param>
+    internal static void FailExitCode(XpingNetworkException runFailure, TextWriter errors)
+    {
+        errors.WriteLine($"[Xping] {runFailure.Message}");
+        Environment.ExitCode = 1;
+    }
 
     /// <summary>
     /// Whether the tests run on Microsoft.Testing.Platform, which makes the test assembly the
@@ -598,8 +606,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// <param name="entryAssembly">The process's entry assembly.</param>
     /// <returns><see langword="true"/> when the entry assembly is a Microsoft.Testing.Platform app.</returns>
     internal static bool RunsOnTestingPlatform(Assembly? entryAssembly) =>
-        entryAssembly?.GetReferencedAssemblies()
-            .Any(name => string.Equals(name.Name, "Microsoft.Testing.Platform", StringComparison.Ordinal)) == true;
+        entryAssembly is not null && ReferencesTestingPlatform(entryAssembly.GetReferencedAssemblies());
+
+    /// <summary>
+    /// Whether an assembly with these references is a Microsoft.Testing.Platform app.
+    /// </summary>
+    /// <param name="references">The assembly's references.</param>
+    /// <returns><see langword="true"/> when one of them is Microsoft.Testing.Platform.</returns>
+    internal static bool ReferencesTestingPlatform(IEnumerable<AssemblyName> references) =>
+        references.Any(name => string.Equals(name.Name, "Microsoft.Testing.Platform", StringComparison.Ordinal));
 
     /// <summary>
     /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live

@@ -171,10 +171,23 @@ public class XpingContext : XpingContextOrchestrator
     /// </para>
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FinalizeAndShutdownAsync() =>
-        RunsOnTestingPlatform(Assembly.GetEntryAssembly())
-            ? FinalizeAndShutdownAsync(TimeSpan.Zero, FailProcessOnExit)
-            : FinalizeAndShutdownAsync(TestHostResultFlushDelay, FailProcess);
+    public static Task FinalizeAndShutdownAsync()
+    {
+        (TimeSpan resultFlushDelay, Action<XpingNetworkException> failProcess) =
+            StrictModeFailure(RunsOnTestingPlatform(Assembly.GetEntryAssembly()));
+        return FinalizeAndShutdownAsync(resultFlushDelay, failProcess);
+    }
+
+    /// <summary>
+    /// How <see cref="FinalizeAndShutdownAsync()"/> fails the process on a strict-mode network error.
+    /// </summary>
+    /// <param name="onTestingPlatform">Whether the tests run on Microsoft.Testing.Platform.</param>
+    /// <returns>How long to wait first, and what fails the process.</returns>
+    internal static (TimeSpan ResultFlushDelay, Action<XpingNetworkException> FailProcess) StrictModeFailure(
+        bool onTestingPlatform) =>
+        onTestingPlatform
+            ? (TimeSpan.Zero, FailProcessOnExit)
+            : (TestHostResultFlushDelay, FailProcess);
 
     /// <summary>
     /// How long a strict-mode failure waits before it terminates the process. The vstest test host
