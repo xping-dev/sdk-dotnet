@@ -5,6 +5,7 @@
 
 using System.Reflection;
 using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Services.Statistics;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 

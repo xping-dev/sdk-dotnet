@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- xUnit v3 test projects are executables. -->
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!--
+    vstest by default, as the other samples, so a plain `dotnet test` of the solution still runs it.
+    On .NET 10, vstest refuses a Microsoft.Testing.Platform app, so this flavour takes xunit.v3.mtp-off.
+  -->
+  <ItemGroup Condition="'$(XpingTestRunner)' != 'MTP'">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+
+  <!--
+    -p:XpingTestRunner=MTP: xunit.v3, which brings Microsoft.Testing.Platform 2. UseMicrosoftTestingPlatformRunner
+    makes the executable itself an MTP app, so `dotnet run` takes the same arguments as `dotnet test`.
+  -->
+  <PropertyGroup Condition="'$(XpingTestRunner)' == 'MTP'">
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(XpingTestRunner)' == 'MTP'">
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <!-- Matches the Microsoft.Testing.Platform xunit.v3 4.0.2 ships with; enables report-trx. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Xping.Sdk.XUnit.V3\Xping.Sdk.XUnit.V3.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

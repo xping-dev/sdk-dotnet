@@ -7,7 +7,8 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Xping.Sdk.XUnit</PackageId>
-    <Description>xUnit adapter for Xping SDK - Seamlessly integrate test execution tracking into your xUnit test projects. Provides custom test framework with automatic test result collection and analysis for xUnit 2.x tests.</Description>
+    <Description>For xUnit v2 (the xunit package, 2.x). Using xUnit v3 (the xunit.v3 package)? Use Xping.Sdk.XUnit.V3 instead. xUnit v2 adapter for Xping SDK - records every test execution through a custom test framework.</Description>
+    <PackageTags>$(PackageTags);xunit</PackageTags>
     <PackageReleaseNotes>Initial release of Xping SDK xUnit adapter with support for custom test framework integration, automatic tracking of [Fact] and [Theory] tests, and environment detection.</PackageReleaseNotes>
   </PropertyGroup>
 
@@ -15,6 +16,8 @@
   <ItemGroup>
     <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
     <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+    <None Update="buildTransitive\Xping.Sdk.XUnit.targets" Pack="true" PackagePath="buildTransitive\Xping.Sdk.XUnit.targets" />
+    <None Remove="obj\**" />
   </ItemGroup>
   
   <ItemGroup>

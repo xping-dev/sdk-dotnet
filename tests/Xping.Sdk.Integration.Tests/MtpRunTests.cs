@@ -16,8 +16,8 @@ using Xping.Sdk.Integration.Tests.Infrastructure;
 using Xunit;
 
 /// <summary>
-/// Runs the NUnit and MSTest samples on Microsoft.Testing.Platform, through <c>dotnet test</c> and as
-/// their own executable, uploading to a <see cref="MockApiServer"/>: every test is recorded, written
+/// Runs the NUnit, MSTest and xUnit v3 samples on Microsoft.Testing.Platform, through <c>dotnet test</c>
+/// and as their own executable, uploading to a <see cref="MockApiServer"/>: every test is recorded, written
 /// to the local store and uploaded, with no vstest setting.
 /// </summary>
 [Collection(SampleRunner.Collection)]
@@ -39,6 +39,8 @@ public sealed class MtpRunTests : IDisposable
     [InlineData("SampleApp.NUnit", TestRunner.MtpExecutable, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     [InlineData("SampleApp.MSTest", TestRunner.MtpDotnetTest, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", null)]
     [InlineData("SampleApp.MSTest", TestRunner.MtpExecutable, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", null)]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpDotnetTest, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     public async Task EveryTestIsRecordedStoredAndUploaded(
         string sample, TestRunner runner, string passing, string throwing, string? timingOut)
     {

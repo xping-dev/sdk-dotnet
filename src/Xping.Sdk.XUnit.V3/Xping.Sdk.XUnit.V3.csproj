@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>Xping.Sdk.XUnit.V3</PackageId>
+    <Description>For xUnit v3 (the xunit.v3 package). Using xUnit v2 (the xunit package, 2.x)? Use Xping.Sdk.XUnit instead. xUnit v3 adapter for Xping SDK - records every test execution through a custom test framework, on Microsoft.Testing.Platform and vstest.</Description>
+    <PackageTags>$(PackageTags);xunit;xunit.v3</PackageTags>
+    <PackageReleaseNotes>Initial release of the Xping SDK xUnit v3 adapter.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!-- Include icon and README in the package -->
+  <ItemGroup>
+    <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
+    <None Update="buildTransitive\Xping.Sdk.XUnit.V3.targets" Pack="true" PackagePath="buildTransitive\Xping.Sdk.XUnit.V3.targets" />
+    <None Remove="obj\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Xping.Sdk.XUnit.V3.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+    <ProjectReference Include="..\Xping.Sdk.Shared\Xping.Sdk.Shared.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+    <PackageReference Include="xunit.v3.extensibility.core" Version="4.0.2" />
+  </ItemGroup>
+
+</Project>

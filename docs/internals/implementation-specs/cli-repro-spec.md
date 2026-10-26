@@ -48,6 +48,8 @@ Every claim here was read in source at the cited line.
   - MSTest: `{FullyQualifiedTestClassName}.{TestName}`, no arguments (`src/Xping.Sdk.MSTest/XpingTestBase.cs:180`).
   - NUnit: `test.FullName`, **with** arguments for a parameterised case (`src/Xping.Sdk.NUnit/XpingTrackAttribute.cs:230`).
   - xUnit: `{Class.Name}.{Method.Name}`, no arguments (`src/Xping.Sdk.XUnit/XpingMessageSink.cs:317`).
+  - xUnit v3: `{TestClassName}.{TestMethodName}`, no arguments (`src/Xping.Sdk.XUnit.V3/XpingMessageSink.cs:343`).
+    Its sessions record `Xping.TestFramework = xUnit.v3`.
 - **Not recorded.** The store holds no project path and no runner (VSTest or
   Microsoft.Testing.Platform). `EnvironmentInfo.Framework` is the .NET runtime, not the test framework.
 - **Turning the SDK off.** `XPING_ENABLED=false` disables collection
