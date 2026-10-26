@@ -40,6 +40,19 @@ committed before P1 is reworked.
 | C | — | **Rejected for MTP: `dotnet test --project`** (the .NET 10 SDK's MTP mode). On SDK 10.0.201, `-e` did not reach the test app: each filtered run with `-e XPING_ENABLED=false` (and with `-e XPING_MODE=Disabled`) still wrote a session. The mode also needs a `global.json` the CLI cannot see, and without one the same command fails with `MSB1001: Unknown switch`. `dotnet run` starts the app directly, whichever way the suite usually runs | D4 |
 | D | — | `Xping.TestFramework` is not read. NUnit, MSTest and xUnit v2 take the same filter on both runners. xUnit v3 (#284) will need it (`--filter-method`) | D4, §7 |
 
+### Amendment 3 — from the P1 review
+
+D2 and D5 sized the count from the wrong runs. Both conflicts lower `p` or raise it past what the
+command reruns, so the printed count is wrong in a direction the reader can't see. Resolved here and
+committed on the P1 branch before its code.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Single-test kinds: `p` over `SessionsConsidered` | Over `Finding.EvidenceSessions`, the runs the test ran in (environmental runs set aside). `SessionsConsidered` is the window's runs minus environmental ones (`FailureModeProvider.cs:680`), not the test's: a test in 5 of 20 runs that failed in 2 read as 2 of 20, capped, when it is 2 of 5 (6 runs). For a test in every run the two agree, so §3.1 is unchanged. D6's counts are these | D2, D5, D6 |
+| B | Cluster kinds: `p` from `SessionsAffected / Sessions`, the whole cluster's runs | From the chosen members' own runs. `ClusterMember` gains `FailingSessions` (runs it failed in with the cluster's signature) and `Sessions` (runs it ran in, `TestIndex.SessionsRunIn`). A subset of the cluster fails in fewer runs than the cluster, so the old count was too low: a member with 5 failures in a cluster affecting 10 of 20 runs printed 5 runs for a rate of at most 25% (11+ runs) | D2, D5, §4.4 |
+| C | Members chosen by most failures | By the share of their own runs they failed in, then most failures, then ordinal order. That is the member most likely to fail on a rerun, which is what the command is for. `BrokenFixture` takes the first; `SharedFailure` the first 3, and `p` is the highest of their rates. That is a lower bound on the chance that at least one of them fails, so the count errs towards more runs | D2 |
+| D | §4.4: no change to any finding | The evidence payload changes: `members[]` in the envelope gains `failingSessions` and `sessions`. Ranking, emission and every other field are unchanged. Schema 1.24 covers it (§4.2) | §4.2, §4.4 |
+
 ---
 
 ## 1. Ground truth
@@ -119,11 +132,11 @@ A kind gets a `repro` only when rerunning the test can show the failure it repor
 
 | Kind | Filter | Runs |
 |---|---|---|
-| `Flaky` | the test | D5, from `SessionsWithFailures / SessionsConsidered` |
+| `Flaky` | the test | D5, from `SessionsWithFailures / EvidenceSessions` (Amendment 3A) |
 | `AlwaysFailing` | the test | 1 |
-| `TimingOut` | the test | D5, from `SessionsWithTimeouts / SessionsConsidered` |
-| `BrokenFixture` | the member with the most failures | D5, from `SessionsAffected / Sessions` |
-| `SharedFailure` | up to 3 members, most failures first | D5, from `SessionsAffected / Sessions` |
+| `TimingOut` | the test | D5, from `SessionsWithTimeouts / EvidenceSessions` (Amendment 3A) |
+| `BrokenFixture` | the member that failed in the largest share of its runs (Amendment 3C) | D5, from that member's `FailingSessions / Sessions` (Amendment 3B) |
+| `SharedFailure` | up to 3 members, in that order | D5, from the highest of their `FailingSessions / Sessions` |
 | `RetryMasked`, `RetryDeepening`, `RetryExhausted` | — | — |
 | `DurationRegression`, `DurationUnstable` | — | — |
 | `ParallelSensitive`, `TimeSensitive` | — | — |
@@ -197,7 +210,8 @@ runs = ceil(ln(1 - 0.95) / ln(1 - p))
   each by its result. `FlakyEvidence.FailureRate` counts retry attempts and would understate the
   count needed.
 - **`p` is the point estimate**, not a Wilson bound. On a 20-run window the bound puts 2 failures in
-  20 at 107 runs, past the cap. The rate a reader sees in the headline is the rate the count uses.
+  20 at 107 runs, past the cap. The counts are the ones D6 prints, so the reader can check them.
+- **`p` is over the runs the rerun test ran in** (Amendment 3), not the window's.
 - **Capped at `ReproMaxRuns` (50).** Above it (`p` below ~5.8%), `runs` is null. The command is still
   printed, for a reader who wants to debug a single run.
 - `AlwaysFailing` is 1 (D2). Otherwise `runs ≥ 1`.
@@ -339,7 +353,8 @@ internal sealed record ReproDto(   // NEW
     string Expectation);           // D6
 ```
 
-`CurrentSchemaVersion` = `"1.24"`, with a remarks entry: *1.24 adds `repro` to each finding.*
+`CurrentSchemaVersion` = `"1.24"`, with a remarks entry: *1.24 adds `repro` to each finding, and
+`failingSessions` and `sessions` to each cluster member* (Amendment 3D).
 
 ### 4.3 Small changes
 
@@ -351,7 +366,8 @@ internal sealed record ReproDto(   // NEW
 
 ### 4.4 Unchanged
 
-Every provider, every finding, every ranking. **No analysis behaviour changes.**
+Every ranking and every emission rule. **No analysis behaviour changes.** The one evidence change is
+Amendment 3D.
 
 ---
 
@@ -416,7 +432,9 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
   amendment, committed to the feature branch. No PR.
 - **P1 — Builder.** `ShellQuote`, `ReproTarget`, `ReproCommand`, the two constants. Unit tests:
   escaping per runner (`"` and `%` on VSTest only), quoting, both command forms, with and without a
-  path, no runner, each D2 row, D5's table, the cap, `AlwaysFailing`.
+  path, no runner, each D2 row, D5's table, the cap, `AlwaysFailing`. Amendment 3: the test's own
+  runs as `p`'s denominator, `ClusterMember`'s two counts in `FailureModeProvider` (provider tests),
+  member choice and the cluster rate.
 - **P2 — Contract and text.** `ReproDto`, schema 1.24, `EnvelopeBuilder` (reads `ReproTarget`), the `repro` line and the
   `Repro:` line. Envelope tests, §3.4's goldens, and the existing goldens regenerated.
 - **P3 — Runner test.** In `tests/Xping.Sdk.Integration.Tests`, through `SampleRunner`: for one test
