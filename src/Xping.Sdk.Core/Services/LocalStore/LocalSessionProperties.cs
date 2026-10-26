@@ -43,7 +43,9 @@ public static class LocalSessionProperties
     /// <remarks>
     /// <c>dotnet test</c> takes different arguments on each runner, so a command the CLI prints to run
     /// a test again depends on it. Left out rather than guessed: a wrong runner prints a command that
-    /// fails, where a missing one prints none.
+    /// fails, where a missing one prints none. <see cref="TestingPlatformRunner"/> covers both ways
+    /// to start a Microsoft.Testing.Platform app, <c>dotnet test</c> and the test executable itself;
+    /// they take the same filter arguments.
     /// </remarks>
     public const string Runner = "Xping.Runner";
 

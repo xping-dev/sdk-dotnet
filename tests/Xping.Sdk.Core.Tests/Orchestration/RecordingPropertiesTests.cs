@@ -86,17 +86,8 @@ public sealed class RecordingPropertiesTests
     }
 
     [Fact]
-    public void ReadStampedProjectPath_ForAnAssemblyThatIsNotLoaded_ReturnsNull()
-    {
-        Assert.Null(XpingContextOrchestrator.ReadStampedProjectPath(
-            [typeof(XpingContextOrchestrator).Assembly], "Not.Loaded"));
-    }
-
-    [Fact]
     public void ReadStampedProjectPath_ForAnAssemblyBuiltWithoutTheStamp_ReturnsNull()
     {
-        Assembly core = typeof(XpingContextOrchestrator).Assembly;
-
-        Assert.Null(XpingContextOrchestrator.ReadStampedProjectPath([core], core.GetName().Name!));
+        Assert.Null(XpingContextOrchestrator.ReadStampedProjectPath(typeof(XpingContextOrchestrator).Assembly));
     }
 }

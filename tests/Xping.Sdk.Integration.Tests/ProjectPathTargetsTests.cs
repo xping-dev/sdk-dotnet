@@ -43,21 +43,36 @@ public sealed class ProjectPathTargetsTests : IDisposable
             .Should().Equal(["samples/SampleApp.MSTest/SampleApp.MSTest.csproj"]);
     }
 
+    // A clone's .git is a folder; this repository's own run may be in a worktree, whose .git is a file.
+    [Fact]
+    public async Task InACloneTheProjectPathIsStampedRelativeToItsRoot()
+    {
+        string clone = Path.Combine(_runner.ScratchPath, "clone");
+        GitFolderAt(clone);
+
+        string project = await WriteProjectAsync(Path.Combine(clone, "tests", "Shop.Tests")).ConfigureAwait(true);
+
+        (await StampedProjectPathsAsync(project).ConfigureAwait(true)).Should().Equal(["tests/Shop.Tests/Shop.Tests.csproj"]);
+    }
+
+    [Fact]
+    public async Task InAWorktreeInsideACloneTheWorktreeIsTheRoot()
+    {
+        string clone = Path.Combine(_runner.ScratchPath, "clone");
+        GitFolderAt(clone);
+        string worktree = Path.Combine(clone, "worktrees", "feature");
+        Directory.CreateDirectory(worktree);
+        await File.WriteAllTextAsync(Path.Combine(worktree, ".git"), "gitdir: ../../.git/worktrees/feature\n").ConfigureAwait(true);
+
+        string project = await WriteProjectAsync(Path.Combine(worktree, "tests", "Shop.Tests")).ConfigureAwait(true);
+
+        (await StampedProjectPathsAsync(project).ConfigureAwait(true)).Should().Equal(["tests/Shop.Tests/Shop.Tests.csproj"]);
+    }
+
     [Fact]
     public async Task OutsideARepositoryNothingIsStamped()
     {
-        string directory = Path.Combine(_runner.ScratchPath, "outside");
-        Directory.CreateDirectory(directory);
-        string targets = Path.Combine(_repositoryRoot, "src", "Xping.Sdk.Core", "buildTransitive", "Xping.Sdk.Core.targets");
-        string project = Path.Combine(directory, "Outside.csproj");
-        await File.WriteAllTextAsync(
-            project,
-            $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
-              <Import Project="{targets}" />
-            </Project>
-            """).ConfigureAwait(true);
+        string project = await WriteProjectAsync(Path.Combine(_runner.ScratchPath, "outside", "Shop.Tests")).ConfigureAwait(true);
 
         (await StampedProjectPathsAsync(project).ConfigureAwait(true)).Should().BeEmpty();
     }
@@ -80,6 +95,29 @@ public sealed class ProjectPathTargetsTests : IDisposable
 
         using ZipArchive archive = await ZipFile.OpenReadAsync(package, CancellationToken.None).ConfigureAwait(true);
         archive.Entries.Select(entry => entry.FullName).Should().Contain("buildTransitive/Xping.Sdk.Core.targets");
+    }
+
+    // A .git folder holds HEAD in every clone, which is all the targets look for.
+    private static void GitFolderAt(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, ".git"));
+        File.WriteAllText(Path.Combine(root, ".git", "HEAD"), "ref: refs/heads/main\n");
+    }
+
+    private async Task<string> WriteProjectAsync(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        string targets = Path.Combine(_repositoryRoot, "src", "Xping.Sdk.Core", "buildTransitive", "Xping.Sdk.Core.targets");
+        string project = Path.Combine(directory, "Shop.Tests.csproj");
+        await File.WriteAllTextAsync(
+            project,
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+              <Import Project="{targets}" />
+            </Project>
+            """).ConfigureAwait(true);
+        return project;
     }
 
     private async Task<string[]> StampedProjectPathsAsync(string project)

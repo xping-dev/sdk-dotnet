@@ -7,11 +7,16 @@
     is the entry point.
 
     Relative to the repository root so the stamped binary does not carry the build machine's folder
-    layout. GetDirectoryNameOfFileAbove matches .git as a file too, as worktrees and submodules have.
+    layout. GetDirectoryNameOfFileAbove matches files only, and .git is a folder in a clone but a
+    file in a worktree or submodule, so both are looked for and the nearer one wins. In a submodule
+    the path is relative to the submodule, not the repository around it.
     Outside a repository nothing is stamped, and GenerateAssemblyInfo=false drops the attribute.
   -->
   <PropertyGroup>
-    <_XpingRepositoryRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_XpingRepositoryRoot>
+    <_XpingGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git/HEAD'))</_XpingGitFolderRoot>
+    <_XpingGitFileRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_XpingGitFileRoot>
+    <_XpingRepositoryRoot>$(_XpingGitFolderRoot)</_XpingRepositoryRoot>
+    <_XpingRepositoryRoot Condition="$(_XpingGitFileRoot.Length) &gt; $(_XpingGitFolderRoot.Length)">$(_XpingGitFileRoot)</_XpingRepositoryRoot>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(_XpingRepositoryRoot)' != ''">

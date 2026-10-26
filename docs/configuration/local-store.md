@@ -143,7 +143,7 @@ Each run also records how it was recorded, under the environment's custom proper
 | `Xping.Runner` | `VSTest` or `MTP` (Microsoft.Testing.Platform) | The tests ran in another host, such as the xUnit console runner |
 | `Xping.ProjectPath` | The test project's path from the repository root, e.g. `tests/Shop.Tests/Shop.Tests.csproj` | The project was built outside a Git repository, with `GenerateAssemblyInfo=false`, or the run covered test assemblies from more than one project |
 
-The project path comes from an MSBuild file the Xping packages add to your test project's build. It stamps the path into the test assembly as `[assembly: AssemblyMetadata("Xping.ProjectPath", ...)]`.
+The project path comes from an MSBuild file the Xping packages add to your test project's build. It stamps the path into the test assembly as `[assembly: AssemblyMetadata("Xping.ProjectPath", ...)]`. In a Git submodule the path is relative to the submodule, not the repository around it.
 
 **Stack traces, error message text, exception types, and source locations are not stored.** The store holds what local analysis needs and nothing more, which keeps it roughly ten times smaller than the uploaded payload.
 

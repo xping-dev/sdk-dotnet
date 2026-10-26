@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -178,7 +177,7 @@ public class XpingContext : XpingContextOrchestrator
     public static Task FinalizeAndShutdownAsync()
     {
         (TimeSpan resultFlushDelay, Action<XpingNetworkException> failProcess) =
-            StrictModeFailure(RunsOnTestingPlatform(Assembly.GetEntryAssembly()));
+            StrictModeFailure(CurrentRunner == LocalSessionProperties.TestingPlatformRunner);
         return FinalizeAndShutdownAsync(resultFlushDelay, failProcess);
     }
 

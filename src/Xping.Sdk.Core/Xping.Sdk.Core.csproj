@@ -16,7 +16,7 @@
     <None Include="..\..\docs\media\icon.png" Pack="true" PackagePath="\" />
     <None Include="..\..\nuspec\README.md" Pack="true" PackagePath="\" />
     <!-- buildTransitive, so projects that reference only an adapter package import it too. -->
-    <None Include="buildTransitive\Xping.Sdk.Core.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Update="buildTransitive\Xping.Sdk.Core.targets" Pack="true" PackagePath="buildTransitive\Xping.Sdk.Core.targets" />
     <None Remove="obj\**" />
   </ItemGroup>
   
