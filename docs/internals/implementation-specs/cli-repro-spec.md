@@ -24,7 +24,21 @@ one conflict, in D3. Resolved here and committed before P1.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | D3 escapes `\ ( ) & \| = ! ~` | D3 also escapes `"`, as `\"`. NUnit's stored FQN quotes a string argument (`Echo("x")`). `dotnet test` hands `--filter` to MSBuild as a property, and a bare `"` there fails before VSTest runs: `MSB4177: Invalid property`. `\"` and `%22` both reach VSTest as `"`; `\"` keeps D3 to one escape rule | D3, §3.2 |
+| A | D3 escapes `\ ( ) & \| = ! ~` | D3 also escapes `"`, as `\"`. NUnit's stored FQN quotes a string argument (`Echo("x")`). `dotnet test` hands `--filter` to MSBuild as a property, and a bare `"` there fails before VSTest runs: `MSB4177: Invalid property`. `\"` and `%22` both reach VSTest as `"`; `\"` keeps D3 to one escape rule. **Narrowed by Amendment 2B:** VSTest only | D3, §3.2 |
+
+### Amendment 2 — from #287 (runner and project on each session)
+
+#287 records `Xping.Runner` (`VSTest`, `MTP`), `Xping.TestFramework` and `Xping.ProjectPath` on each
+local session (`LocalSessionProperties`, `src/Xping.Sdk.Core/Services/LocalStore/`). Its scope says
+the D4 amendment belongs to this issue's P0. P0 was rerun for it (OQ-2, §5). Resolved here and
+committed before P1 is reworked.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D4: one `dotnet test` command, VSTest only, no project path | The command depends on the newest session in the window. **VSTest:** `dotnet test <path> --no-build -e XPING_ENABLED=false --filter <filter>`. **MTP:** `dotnet run --project <path> --no-build -e XPING_ENABLED=false -- --filter <filter>`. `<path>` is `Xping.ProjectPath`, and the command runs from the repository root. With no recorded path, the VSTest form drops `<path>` and the MTP form drops `--project <path>`, and the reader runs it from the project directory, as before. With no recorded runner (the xUnit console runner, a custom host), `repro` is null: a guessed runner prints a command that fails | D4, §1.1, §3, §4.3, §7 |
+| B | D3: one escape set | Shared by both runners: `\ ( ) & \| = ! ~` get a backslash. **VSTest adds** `"` as `\"` (Amendment 1A) and `%` as `%25`: `dotnet test` passes the filter through MSBuild, which decodes `%XX`, so `S("50%20off")` became `S("50 off")` and matched nothing. **MTP adds nothing.** `dotnet run` hands the filter straight to the test app: `\"` there fails to parse and throws, and a bare `"` or `%` is read as written | D3, §3.2 |
+| C | — | **Rejected for MTP: `dotnet test --project`** (the .NET 10 SDK's MTP mode). On SDK 10.0.201, `-e` did not reach the test app: each filtered run with `-e XPING_ENABLED=false` (and with `-e XPING_MODE=Disabled`) still wrote a session. The mode also needs a `global.json` the CLI cannot see, and without one the same command fails with `MSB1001: Unknown switch`. `dotnet run` starts the app directly, whichever way the suite usually runs | D4 |
+| D | — | `Xping.TestFramework` is not read. NUnit, MSTest and xUnit v2 take the same filter on both runners. xUnit v3 (#284) will need it (`--filter-method`) | D4, §7 |
 
 ---
 
@@ -57,11 +71,14 @@ Every claim here was read in source at the cited line.
   - MSTest: `{FullyQualifiedTestClassName}.{TestName}`, no arguments (`src/Xping.Sdk.MSTest/XpingTestBase.cs:180`).
   - NUnit: `test.FullName`, **with** arguments for a parameterised case (`src/Xping.Sdk.NUnit/XpingTrackAttribute.cs:230`).
   - xUnit: `{Class.Name}.{Method.Name}`, no arguments (`src/Xping.Sdk.XUnit/XpingMessageSink.cs:317`).
-- **Not recorded.** The store holds no project path and no runner (VSTest or
-  Microsoft.Testing.Platform). `EnvironmentInfo.Framework` is the .NET runtime, not the test framework.
+- **Runner and project per session** (Amendment 2, #287). `EnvironmentInfo.CustomProperties` carries
+  `LocalSessionProperties.Runner` (`VSTest` or `MTP`, absent when the SDK could not tell),
+  `TestFramework` and `ProjectPath` (repository-relative, `/` separators, absent outside a repository
+  or with `GenerateAssemblyInfo=false`). The CLI already reads this dictionary for `ProjectId`
+  (`ReportCommand.cs:491`). `EnvironmentInfo.Framework` is the .NET runtime, not the test framework.
 - **Turning the SDK off.** `XPING_ENABLED=false` disables collection
-  (`docs/configuration/configuration-reference.md:48`). `dotnet test -e NAME=VALUE` sets a variable for
-  the test host, without shell syntax.
+  (`docs/configuration/configuration-reference.md:48`). `dotnet test -e NAME=VALUE` and
+  `dotnet run -e NAME=VALUE` set a variable for the test process, without shell syntax.
 - **No retry switch.** Retries come from framework attributes (`RetryAttributeRegistry`, the three
   `*RetryDetector`s). Nothing turns them off from the command line.
 
@@ -127,8 +144,9 @@ Why the dashes:
 
 ### D3 — The filter
 
-`FullyQualifiedName=<FQN>`, the stored FQN of D2's test, with VSTest's reserved characters
-`\ ( ) & | = ! ~` and `"` (Amendment 1A) escaped by a backslash. Several members join with `|`.
+`FullyQualifiedName=<FQN>`, the stored FQN of D2's test, with the filter's reserved characters
+`\ ( ) & | = ! ~` escaped by a backslash. On VSTest, `"` also becomes `\"` and `%` becomes `%25`
+(Amendments 1A, 2B). Several members join with `|`.
 
 What this matches, per adapter (§1.1):
 - **NUnit:** exactly the stored case. The stored FQN carries the arguments, as NUnit's own does.
@@ -141,21 +159,27 @@ What this matches, per adapter (§1.1):
 
 ### D4 — The command
 
+By the newest session's `Xping.Runner` (Amendment 2A):
+
 ```
-dotnet test --no-build -e XPING_ENABLED=false --filter <filter>
+VSTest:  dotnet test <path> --no-build -e XPING_ENABLED=false --filter <filter>
+MTP:     dotnet run --project <path> --no-build -e XPING_ENABLED=false -- --filter <filter>
 ```
+
+No runner recorded: no command, and `repro` is null.
 
 - **`-e XPING_ENABLED=false`.** Repro runs are back-to-back filtered runs of one test. Recorded, they
   would push real runs out of a `--runs` window and skew every session count. `-e` works in every
   shell, where a `VAR=value` prefix does not.
 - **`--no-build`.** About 0.7 s per run instead of a build each time. The expectation line (D6) tells
   the reader to build first.
-- **No project path.** The store has none. Run from where `dotnet test` finds the project. From a
-  solution root, other test projects match nothing and finish at once.
-- **VSTest only.** The store does not record the runner. MTP projects can need different filter flags
-  (xUnit v3: `--filter-method`). The docs say so.
-- **Quoting.** `<filter>` goes through `DrillDown.Quote`. `Quote` moves to a shared internal
-  `ShellQuote` used by both builders.
+- **`<path>`** is `Xping.ProjectPath`, relative to the repository root, so the command runs from
+  there. No recorded path: the VSTest form drops it and the MTP form drops `--project <path>`. The
+  reader runs it from the project directory.
+- **Newest session.** Its runner and path describe the project as it is now. An older session may
+  predate a switch of runner.
+- **Quoting.** `<path>` and `<filter>` go through `ShellQuote`, which `DrillDown.Quote` moves into
+  so both builders share it.
 
 The command is one line of plain text, with no loop. A loop is shell-specific, and `runs` carries the
 count.
@@ -248,7 +272,7 @@ FINDING                                                       row 2 of 6
 <legend>
 Showing 1 of 6 · all: xping report --all
 History: xping report --test 5d1e2a0c --assembly SampleApp.MSTest
-Repro: dotnet test --no-build -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj --no-build -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
 ````
 
 The filter needs no quotes: every character in it is plain (D4).
@@ -256,19 +280,26 @@ The filter needs no quotes: every character in it is plain (D4).
 ### 3.2 A parameterised NUnit case
 
 ```
+Repro: dotnet test tests/SampleApp.NUnit/SampleApp.NUnit.csproj --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Divide\(10,0\)'
+```
+
+With a string argument (Amendments 1A, 2B), on VSTest and on MTP:
+
+```
+Repro: dotnet test tests/SampleApp.NUnit/SampleApp.NUnit.csproj --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Echo\(\"50%2520off\"\)'
+Repro: dotnet run --project tests/SampleApp.NUnit/SampleApp.NUnit.csproj --no-build -e XPING_ENABLED=false -- --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Echo\("50%20off"\)'
+```
+
+No project path recorded:
+
+```
 Repro: dotnet test --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Divide\(10,0\)'
-```
-
-With a string argument (Amendment 1A):
-
-```
-Repro: dotnet test --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Echo\(\"a\=b\|c\"\)'
 ```
 
 ### 3.3 A shared failure
 
 ```
-Repro: dotnet test --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=Ns.A.One|FullyQualifiedName=Ns.B.Two|FullyQualifiedName=Ns.C.Three'
+Repro: dotnet test tests/Ns.Tests/Ns.Tests.csproj --no-build -e XPING_ENABLED=false --filter 'FullyQualifiedName=Ns.A.One|FullyQualifiedName=Ns.B.Two|FullyQualifiedName=Ns.C.Three'
 ```
 
 ### 3.4 Goldens to add
@@ -279,6 +310,8 @@ Each in both glyph sets, built through `ReportFixtures`:
 - `detail-repro-capped`: `runs` null
 - `detail-repro-cluster`: §3.3
 - `detail-repro-none`: a retry kind, with no `repro` line and no `Repro:` line
+- `detail-repro-mtp`: §3.1 on MTP, the `dotnet run` form
+- `detail-repro-no-runner`: §3.1 with no recorded runner, so no `repro` line and no `Repro:` line
 
 Every existing golden whose finding gains a `repro` is regenerated.
 
@@ -310,7 +343,9 @@ internal sealed record ReproDto(   // NEW
 
 ### 4.3 Small changes
 
-- `ReproCommand.For(Finding)` in `src/Xping.Cli/Report/`, beside `DrillDown`. Pure, no I/O.
+- `ReproCommand.For(Finding, ReproTarget)` in `src/Xping.Cli/Report/`, beside `DrillDown`. Pure, no
+  I/O. `ReproTarget(string? Runner, string? ProjectPath)` is read once per report from the newest
+  session's `CustomProperties` (Amendment 2A).
 - `ShellQuote`, moved out of `DrillDown`.
 - `LocalAnalysisConstants.ReproConfidence` (0.95) and `ReproMaxRuns` (50).
 
@@ -349,6 +384,24 @@ say, then run from the project directory in zsh, and once in bash.
 | 4 | `Outer+Inner.Nested` is stored with `+` by all three adapters and matched as stored, unquoted |
 | — | Three-member `\|` filters (§3.3 shape) ran exactly their members, NUnit and xUnit |
 
+### OQ-2 — Runner behaviour on MTP, with a project path. **Closed by P0** (Amendment 2)
+
+Rerun after #287. Same SDK and packages as OQ-1, except NUnit3TestAdapter 5.2.0 (the samples'
+version since #290). The harness was a scratch Git repository importing the shipped
+`Xping.Sdk.Core.targets`, with VSTest projects for all three frameworks and MTP projects
+(`EnableNUnitRunner`, `EnableMSTestRunner`, `OutputType=Exe`) for NUnit and MSTest. Every run had
+`XPING_MODE=LocalOnly`. Commands ran from the repository root.
+
+| Check | Result |
+|---|---|
+| Properties | Each full run recorded `Xping.Runner` (`VSTest` for `dotnet test`, `MTP` for the executable through `dotnet run`), `Xping.TestFramework`, and `Xping.ProjectPath` as `tests/<fw>/<name>.csproj` |
+| VSTest with a path | `dotnet test tests/nunit/Oq2.nunit.csproj --no-build -e … --filter …` ran the selected case from the repository root |
+| VSTest `%` | `S("50%20off")` with `%` as written: `No test matches … S("50 off")`. With `%25`: ran that case (Amendment 2B) |
+| MTP `dotnet run` | `Divide\(10,0\)`, `Echo\("a\=b\|c"\)`, `S\("50%20off"\)`, `S\("c:\\x"\)`, `S\("it's"\)`, `S\(null\)` each ran exactly one case. MSTest `Calc.Divide` ran both rows. `Outer+Inner.Nested` matched. A two-member `\|` filter ran both |
+| MTP `\"` | `Echo\(\"a\=b\|c\"\)` threw from `TestApplication.RunAsync` (Amendment 2B) |
+| MTP `-e` | `dotnet run … -e XPING_ENABLED=false` wrote no session, with and without an MTP `global.json`. A control run without `-e` wrote one |
+| `dotnet test --project`, MTP mode | With an MTP `global.json`: filters ran, but every run wrote a session despite `-e XPING_ENABLED=false` or `-e XPING_MODE=Disabled`. Without one: `MSB1001: Unknown switch` (Amendment 2C) |
+
 ---
 
 ## 6. Implementation sequence
@@ -358,19 +411,23 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
 `cli-test-history-spec.md` §6.1. Each phase ends green: `dotnet build -c Release` is clean and
 `dotnet test tests/Xping.Cli.Tests -c Release` passes.
 
-- **P0 — Inventory and OQ-1.** Done; see Amendment 1 and OQ-1's results. Re-verify §1.1. Run OQ-1's
-  checks by hand against the samples and record the results. Any conflict becomes Amendment 1,
-  committed to the feature branch. No PR.
-- **P1 — Builder.** `ShellQuote`, `ReproCommand`, the two constants. Unit tests: escaping (`"`
-  included), quoting, each D2 row, D5's table, the cap, `AlwaysFailing`.
-- **P2 — Contract and text.** `ReproDto`, schema 1.24, `EnvelopeBuilder`, the `repro` line and the
+- **P0 — Inventory, OQ-1 and OQ-2.** Done; see Amendments 1 and 2 and the results in §5. Re-verify
+  §1.1. Run the checks by hand against the samples and record the results. Any conflict becomes an
+  amendment, committed to the feature branch. No PR.
+- **P1 — Builder.** `ShellQuote`, `ReproTarget`, `ReproCommand`, the two constants. Unit tests:
+  escaping per runner (`"` and `%` on VSTest only), quoting, both command forms, with and without a
+  path, no runner, each D2 row, D5's table, the cap, `AlwaysFailing`.
+- **P2 — Contract and text.** `ReproDto`, schema 1.24, `EnvelopeBuilder` (reads `ReproTarget`), the `repro` line and the
   `Repro:` line. Envelope tests, §3.4's goldens, and the existing goldens regenerated.
-- **P3 — Runner test.** In `tests/Xping.Sdk.Integration.Tests`: for one test per sample project,
-  including a parameterised one each and an NUnit string case, run the emitted command once and assert the runner selected the
-  expected tests and wrote no session. This pins OQ-1 against framework upgrades.
+- **P3 — Runner test.** In `tests/Xping.Sdk.Integration.Tests`, through `SampleRunner`: for one test
+  per sample project, on VSTest and, for NUnit and MSTest, on MTP, including a parameterised one each
+  and an NUnit string case, run the emitted command once from the repository root and assert the
+  runner selected the expected tests and wrote no session. This pins OQ-1 and OQ-2 against framework
+  and SDK upgrades.
 - **P4 — Docs.**
-  - `docs/cli/command-reference.md`: the `repro` field, the VSTest-only limit, running from the
-    project or solution directory.
+  - `docs/cli/command-reference.md`: the `repro` field, the two command forms, running from the
+    repository root (or the project directory when no path was recorded), and no repro without a
+    recorded runner.
   - The CLI README (`nuspec/README.Cli.md`).
   - Any documented sample that `DocumentedSampleTests` checks.
 
@@ -381,8 +438,8 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
 - An executing verb (`xping repro <id>`). If ever built, it sets `XPING_ENABLED=false` for its own
   runs.
 - Repro for the retry, duration, parallel, time and vanished kinds (D2).
-- Microsoft.Testing.Platform filters. Needs the SDK to record the runner: a separate issue.
-- A project path in the command. Needs the SDK to record it: a separate issue.
+- xUnit v3 (#284) and its `--filter-method`. Uses `Xping.TestFramework` when it lands (Amendment 2D).
+- `dotnet test` in the SDK's MTP mode (Amendment 2C).
 - The repro line in `report --test`: #271.
 
 ---
