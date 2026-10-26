@@ -69,6 +69,16 @@ here and committed on the P1 branch before its code.
 | C | Members chosen per member (Amendment 3C) | Per distinct FQN. MSTest and xUnit data rows share one FQN, so two members could print the same filter clause twice and leave out a third test. The first member of each FQN, in 3C's order, stands for it | D2 |
 | D | D4: `--no-build` | Dropped. The store doesn't record the build configuration, and `--no-build` without `-c` fails on a suite built in Release (`test source not found`). An incremental build costs 1–2 s per run. Recording the configuration so the command can carry `-c` is an SDK change, out of scope | D4, D6, §3 |
 
+### Amendment 5 — from P2
+
+D6 and §3.1 printed `44%` for 4 of 9 runs. D6 also says percentages round as the headline rounds
+them, and the headline prints a rate at one decimal (`FindingOrder.Round`, then `0.#`): `44.4%`.
+Resolved here and committed on the P2 branch before its code.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D6's first row and §3.1 read `44%` | `44.4%`, as the headline prints it. §3.1's headline lines read `(44.4%)` too | D6, §3.1 |
+
 ---
 
 ## 1. Ground truth
@@ -250,7 +260,7 @@ One sentence, resolved in the envelope like every other display string:
 
 | Case | Text |
 |---|---|
-| `runs > 1` | `run 6 times: at 44% of runs failing, 6 runs show a failure 95% of the time` |
+| `runs > 1` | `run 6 times: at 44.4% of runs failing, 6 runs show a failure 95% of the time` |
 | `runs = 1` | `run once: it failed in 9 of 9 runs` |
 | `runs` null | `failed in 1 of 20 runs: too rare to reproduce by rerunning (59 runs needed)` |
 
@@ -286,7 +296,7 @@ FINDING                                                       row 2 of 6
 
 2.  HIGH  flaky
     CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
-    failed 4 of 9 executions (44%) in 4 of 9 runs, 1 failure mode
+    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
     evidence low | f_1491bf4c | .../CalculatorTests.cs:57
 
     test      SampleApp.MSTest.CalculatorTests.
@@ -294,10 +304,10 @@ FINDING                                                       row 2 of 6
     assembly  SampleApp.MSTest
     source    tests/SampleApp.MSTest/CalculatorTests.cs:57
 
-    failed          4 of 9 executions (44%)
+    failed          4 of 9 executions (44.4%)
     runs affected   4 of 9
     failure modes   1
-    repro           run 6 times: at 44% of runs failing,
+    repro           run 6 times: at 44.4% of runs failing,
                     6 runs show a failure 95% of the time
 ```
 
