@@ -8,8 +8,6 @@ namespace Xping.Integration.Tests;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -121,17 +119,10 @@ public sealed class MtpRunTests : IDisposable
             : Enumerable.Empty<JsonElement>())
         .ToDictionary(MethodName);
 
-    private string[] StoredExecutionNames()
-    {
-        string session = Directory.GetFiles(Path.Combine(_runner.StorePath, "sessions"), "*.json.gz")
-            .Should().ContainSingle().Subject;
-
-        using var gzip = new GZipStream(File.OpenRead(session), CompressionMode.Decompress);
-        using JsonDocument document = JsonDocument.Parse(gzip);
-        return document.RootElement.GetProperty("executions").EnumerateArray()
-            .Select(MethodName)
-            .ToArray();
-    }
+    private string[] StoredExecutionNames() => _runner.ReadStoredSession()
+        .GetProperty("executions").EnumerateArray()
+        .Select(MethodName)
+        .ToArray();
 
     // Not testName, which MSTest takes from the display name.
     private static string MethodName(JsonElement execution) =>

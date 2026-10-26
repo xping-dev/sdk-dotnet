@@ -148,6 +148,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected IServiceProvider Services => _host.Services;
 
     /// <summary>
+    /// Gets the test framework the derived adapter maps, recorded on each local session as
+    /// <see cref="LocalSessionProperties.TestFramework"/>.
+    /// </summary>
+    /// <remarks>
+    /// Read at finalization only, never from this class's constructor, where a derived instance is
+    /// not yet initialized.
+    /// </remarks>
+    protected abstract string TestFramework { get; }
+
+    /// <summary>
     /// Initializes a new instance of <see cref="XpingContextOrchestrator"/> from a configured <see cref="IHost"/>.
     /// Resolves all required services from the host's service container and stores the host for lifetime management.
     /// </summary>
@@ -616,6 +626,118 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     internal static bool ReferencesTestingPlatform(IEnumerable<AssemblyName> references) =>
         references.Any(name => string.Equals(name.Name, "Microsoft.Testing.Platform", StringComparison.Ordinal));
 
+    // The entry assembly cannot change, so the runner is detected once per process, on first use at
+    // finalization. Shared with adapters that fail the run differently on each runner.
+    private static readonly Lazy<string?> ProcessRunner = new(() => DetectProcessRunner(Assembly.GetEntryAssembly));
+
+    /// <summary>
+    /// Gets the test runner hosting this process, or <see langword="null"/> when it is not known.
+    /// </summary>
+    internal static string? CurrentRunner => ProcessRunner.Value;
+
+    /// <summary>
+    /// Identifies the test runner from the entry assembly, or returns <see langword="null"/> when
+    /// inspecting it fails.
+    /// </summary>
+    /// <param name="entryAssembly">Supplies the process's entry assembly.</param>
+    /// <returns>The runner, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// No logger here: it runs outside any instance. An entry assembly that cannot be inspected only
+    /// costs the runner property, never the session.
+    /// </remarks>
+    internal static string? DetectProcessRunner(Func<Assembly?> entryAssembly)
+    {
+        try
+        {
+            return DetectRunner(entryAssembly());
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Identifies the test runner hosting the process from its entry assembly.
+    /// </summary>
+    /// <param name="entryAssembly">The process's entry assembly.</param>
+    /// <returns>
+    /// <see cref="LocalSessionProperties.TestingPlatformRunner"/>, <see cref="LocalSessionProperties.VSTestRunner"/>,
+    /// or <see langword="null"/> for any other host.
+    /// </returns>
+    internal static string? DetectRunner(Assembly? entryAssembly) =>
+        entryAssembly is null
+            ? null
+            : DetectRunner(entryAssembly.GetName().Name, entryAssembly.GetReferencedAssemblies());
+
+    /// <summary>
+    /// Identifies the test runner from the entry assembly's name and references.
+    /// </summary>
+    /// <param name="entryName">The entry assembly's simple name.</param>
+    /// <param name="references">The entry assembly's references.</param>
+    /// <returns>
+    /// <see cref="LocalSessionProperties.TestingPlatformRunner"/>, <see cref="LocalSessionProperties.VSTestRunner"/>,
+    /// or <see langword="null"/> for any other host.
+    /// </returns>
+    /// <remarks>
+    /// vstest runs tests in its own <c>testhost</c> executable, named <c>testhost.x86</c> or
+    /// <c>testhost.net48</c> on some platforms, while Microsoft.Testing.Platform makes the test
+    /// assembly the entry point. Any other host, such as the xUnit console runner, stays unknown.
+    /// </remarks>
+    internal static string? DetectRunner(string? entryName, IEnumerable<AssemblyName> references)
+    {
+        if (ReferencesTestingPlatform(references))
+            return LocalSessionProperties.TestingPlatformRunner;
+
+        return string.Equals(entryName, "testhost", StringComparison.OrdinalIgnoreCase) ||
+               (entryName?.StartsWith("testhost.", StringComparison.OrdinalIgnoreCase) ?? false)
+            ? LocalSessionProperties.VSTestRunner
+            : null;
+    }
+
+    /// <summary>
+    /// Picks the project path the build stamped into the session's test assemblies.
+    /// </summary>
+    /// <param name="sessionAssemblies">The simple names of the test assemblies the session recorded.</param>
+    /// <param name="stampedPath">The path stamped into the named assembly, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The path every session assembly carries, or <see langword="null"/> when there are none, one
+    /// carries no path, or they disagree.
+    /// </returns>
+    /// <remarks>
+    /// A session spanning two projects has no single project to run again, so it gets none.
+    /// </remarks>
+    internal static string? ResolveProjectPath(IEnumerable<string> sessionAssemblies, Func<string, string?> stampedPath)
+    {
+        string? path = null;
+
+        foreach (string name in sessionAssemblies)
+        {
+            string? stamped = stampedPath(name);
+
+            if (string.IsNullOrEmpty(stamped) || (path != null && !string.Equals(path, stamped, StringComparison.Ordinal)))
+                return null;
+
+            path = stamped;
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// Reads the project path the build stamped into a test assembly.
+    /// </summary>
+    /// <param name="assembly">The test assembly.</param>
+    /// <returns>The stamped path, or <see langword="null"/> when it has none.</returns>
+    /// <remarks>
+    /// Read from the test assembly rather than the entry assembly, which under vstest is the test host.
+    /// </remarks>
+    internal static string? ReadStampedProjectPath(Assembly assembly) =>
+        assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, LocalSessionProperties.ProjectPath, StringComparison.Ordinal))?
+            .Value;
+
     /// <summary>
     /// The error handling of <see cref="EndSessionAsync(XpingContextOrchestrator?)"/>, apart from a live
     /// context, so that every path through it can be driven.
@@ -982,13 +1104,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns a copy of <paramref name="environment"/> carrying the mode this session was recorded
-    /// under and, when one is configured, the project it was pinned to.
+    /// Returns a copy of <paramref name="environment"/> carrying how this session was recorded: the
+    /// mode and test framework, and, when known, the project pin, the runner and the project path.
     /// </summary>
     /// <remarks>
     /// The CLI needs to know whether a project is already cloud-connected so it does not pitch the
     /// cloud to people who pay for it, and which Cloud project a pinned run belongs to, since it must
-    /// not derive the key itself; the stored session is the only record of either. Applied here
+    /// not derive the key itself. To print a command that runs a test again it needs the runner,
+    /// framework and project. The stored session is the only record of any of these. Applied here
     /// rather than in the environment detector so it lands on the local copy alone — the uploaded
     /// session keeps the environment exactly as detected.
     /// </remarks>
@@ -1003,9 +1126,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
 
         properties[LocalSessionProperties.Mode] = _mode.ToString();
+        properties[LocalSessionProperties.TestFramework] = TestFramework;
 
         if (_projectPin != null)
             properties[LocalSessionProperties.ProjectId] = _projectPin;
+
+        if (CurrentRunner is { } runner)
+            properties[LocalSessionProperties.Runner] = runner;
+
+        if (ResolveSessionProjectPath(_sessionAssemblies, AppDomain.CurrentDomain.GetAssemblies, _logger) is { } projectPath)
+            properties[LocalSessionProperties.ProjectPath] = projectPath;
 
         return new EnvironmentInfo
         {
@@ -1019,6 +1149,42 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             TimeZoneId = environment.TimeZoneId,
             CustomProperties = new ReadOnlyDictionary<string, string>(properties)
         };
+    }
+
+    /// <summary>
+    /// Resolves <see cref="LocalSessionProperties.ProjectPath"/> for a session from the loaded test
+    /// assemblies, or returns <see langword="null"/> when it cannot.
+    /// </summary>
+    /// <param name="sessionAssemblies">The simple names of the test assemblies the session recorded.</param>
+    /// <param name="loaded">Supplies the assemblies loaded in the process.</param>
+    /// <param name="logger">Where a failure is reported.</param>
+    /// <returns>The project path, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Reflection over loaded assemblies can throw for a dynamic or partially loaded one. A failure
+    /// here only costs the property; it must not cost the session write that calls it.
+    /// </remarks>
+    internal static string? ResolveSessionProjectPath(
+        ICollection<string> sessionAssemblies, Func<IEnumerable<Assembly>> loaded, ILogger logger)
+    {
+        try
+        {
+            // One pass over the loaded assemblies, however many test assemblies the session has.
+            var byName = new Dictionary<string, Assembly>(StringComparer.Ordinal);
+            foreach (Assembly assembly in loaded())
+            {
+                if (assembly.GetName().Name is { } name && sessionAssemblies.Contains(name) && !byName.ContainsKey(name))
+                    byName[name] = assembly;
+            }
+
+            return ResolveProjectPath(
+                sessionAssemblies,
+                name => byName.TryGetValue(name, out Assembly? assembly) ? ReadStampedProjectPath(assembly) : null);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not read the project path from the test assemblies.");
+            return null;
+        }
     }
 
     /// <summary>

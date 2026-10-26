@@ -34,6 +34,8 @@ public sealed class XpingContextOrchestratorEnvVarTests
     {
         public TestOrchestrator(IHost host) : base(host) { }
 
+        protected override string TestFramework => "Harness";
+
         public Task<UploadResult> FinalizeAsync(CancellationToken ct = default)
             => FinalizeSessionAsync(ct);
 

@@ -7,11 +7,14 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 using xRetry;
 
 namespace Xping.Sdk.NUnit.Tests;
 
 using System;
+using System.IO.Compression;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -257,6 +260,27 @@ public sealed class XpingContextTests : IAsyncLifetime
         var exception = await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_WritesASessionThatNamesNUnitAsItsFramework()
+    {
+        XpingContext.Initialize(ScratchConfiguration());
+        XpingContext.RecordTest(new TestExecutionBuilder()
+            .WithTestName("TestMethod")
+            .WithOutcome(TestOutcome.Passed)
+            .WithIdentity(new TestIdentity { Assembly = "Shop.Tests", FullyQualifiedName = "Shop.Tests.TestMethod" })
+            .Build());
+
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        string file = Assert.Single(Directory.GetFiles(_scratchStore, "*.json.gz", SearchOption.AllDirectories));
+        using var gzip = new GZipStream(File.OpenRead(file), CompressionMode.Decompress);
+        using JsonDocument session = await JsonDocument.ParseAsync(gzip).ConfigureAwait(true);
+        Assert.Equal(
+            LocalSessionProperties.NUnitFramework,
+            session.RootElement.GetProperty("environmentInfo").GetProperty("customProperties")
+                .GetProperty(LocalSessionProperties.TestFramework).GetString());
     }
 
     [Fact]

@@ -29,4 +29,10 @@
     <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
   </ItemGroup>
 
+  <!--
+    Stamps this test assembly with its Xping.ProjectPath, as the package does for a consumer, so the
+    orchestrator's read of the stamp is tested in-process against a real one.
+  -->
+  <Import Project="..\..\src\Xping.Sdk.Core\buildTransitive\Xping.Sdk.Core.targets" />
+
 </Project>
