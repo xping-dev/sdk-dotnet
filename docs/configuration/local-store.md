@@ -139,8 +139,8 @@ Each run also records how it was recorded, under the environment's custom proper
 |----------|-------|-------------|
 | `Xping.Mode` | `LocalOnly` or `Cloud` | Never |
 | `Xping.ProjectId` | The pinned project id | No project is pinned |
-| `Xping.TestFramework` | `NUnit`, `MSTest` or `xUnit` | Never |
-| `Xping.Runner` | `VSTest` or `MTP` (Microsoft.Testing.Platform) | The tests ran in another host, such as the xUnit console runner |
+| `Xping.TestFramework` | `NUnit`, `MSTest`, `xUnit` (v2) or `xUnit.v3` | Never |
+| `Xping.Runner` | `VSTest` or `MTP` (Microsoft.Testing.Platform) | The tests ran in another host, such as the xUnit console runner or an xUnit v3 test executable run without Microsoft.Testing.Platform |
 | `Xping.ProjectPath` | The test project's path from the repository root, e.g. `tests/Shop.Tests/Shop.Tests.csproj` | The project was built outside a Git repository, with `GenerateAssemblyInfo=false`, or the run covered test assemblies from more than one project |
 
 The project path comes from an MSBuild file the Xping packages add to your test project's build. It stamps the path into the test assembly as `[assembly: AssemblyMetadata("Xping.ProjectPath", ...)]`. In a Git submodule the path is relative to the submodule, not the repository around it.

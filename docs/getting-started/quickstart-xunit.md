@@ -6,7 +6,7 @@ Get started with Xping SDK in your xUnit test projects in less than 5 minutes. T
 
 ## What You'll Learn
 
-- How to install Xping SDK for xUnit
+- Which Xping package your xUnit version needs, and how to install it
 - How to run local-only, and how to add cloud upload later
 - How to enable automatic test tracking
 - How to verify results in Xping Cloud
@@ -20,38 +20,69 @@ Before you begin, make sure you have:
 - **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
   - Xping SDK targets .NET Standard 2.0 for broad compatibility
 - **No Xping account needed.** Without an API key the SDK runs [local-only](local-first.md): every run is recorded to `.xping/` in your repo and no network call is made. An account is required only to upload to Xping Cloud, which is currently invite-only.
-- An existing **xUnit v2 test project** or create a new one. It runs on vstest: xUnit v2 has no
-  Microsoft.Testing.Platform runner, so Xping does not support xUnit on MTP until xUnit v3 support lands.
+- An existing **xUnit test project**, v2 or v3, or a new one.
 
-> **New to xUnit?** Create a test project with: `dotnet new xunit -n MyTestProject`
+> **New to xUnit?** `dotnet new xunit -n MyTestProject` creates an xUnit v2 project. For xUnit v3,
+> install the templates with `dotnet new install xunit.v3.templates`, then run
+> `dotnet new xunit3 -n MyTestProject`.
+
+---
+
+## Which Package?
+
+Xping has one adapter per xUnit version. **Match the xUnit package your test project references:**
+
+| Your project references | Install | xUnit runs on |
+|-------------------------|---------|---------------|
+| `xunit` (2.x) | `Xping.Sdk.XUnit` | vstest |
+| `xunit.v3` (or `xunit.v3.mtp-off`, `xunit.v3.mtp-v1`, …) | `Xping.Sdk.XUnit.V3` | Microsoft.Testing.Platform or vstest |
+
+To check which one you have:
+
+```bash
+dotnet list package | grep -i xunit
+```
+
+or look for `<PackageReference Include="xunit"` or `Include="xunit.v3"` in the `.csproj`.
+
+If you install the wrong one, the build stops with `XPING001` or `XPING002` and names the package
+to use instead. See [Wrong xUnit adapter](../troubleshooting/common-issues.md#wrong-xunit-adapter-xping001-xping002).
 
 ---
 
 ## Step 1: Installation
 
-Install the Xping SDK xUnit adapter package in your test project:
+Install the adapter that matches your xUnit version:
 
-### Using .NET CLI
+# [xUnit v2](#tab/xunit-v2)
 
 ```bash
 dotnet add package Xping.Sdk.XUnit
 ```
 
-### Using Package Manager Console
-
-```powershell
-Install-Package Xping.Sdk.XUnit
-```
-
-### Using PackageReference
-
-Add to your `.csproj` file:
+Or in your `.csproj`:
 
 ```xml
 <ItemGroup>
   <PackageReference Include="Xping.Sdk.XUnit" Version="1.0.*" />
 </ItemGroup>
 ```
+
+# [xUnit v3](#tab/xunit-v3)
+
+```bash
+dotnet add package Xping.Sdk.XUnit.V3
+```
+
+Or in your `.csproj`:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Xping.Sdk.XUnit.V3" Version="1.0.*" />
+</ItemGroup>
+```
+
+---
 
 ---
 
@@ -143,11 +174,11 @@ Reference.
 ### Option C: Programmatic Configuration
 
 Pass a configuration object to `Initialize` from a module initializer. Read the key from the
-environment — never a literal:
+environment — never a literal. On xUnit v3, the namespace is `Xping.Sdk.XUnit.V3`:
 
 ```csharp
 using System.Runtime.CompilerServices;
-using Xping.Sdk.XUnit;
+using Xping.Sdk.XUnit; // Xping.Sdk.XUnit.V3 on xUnit v3
 using Xping.Sdk.Core.Configuration;
 
 namespace MyTestProject;
@@ -176,30 +207,31 @@ internal static class ModuleInitializer
 
 ## Step 3: Enable Xping Test Framework
 
-To enable automatic test tracking, configure your test project to use the Xping test framework. Add this to an `AssemblyInfo.cs` file in your test project:
+To enable automatic test tracking, configure your test project to use the Xping test framework.
+Add this to an `AssemblyInfo.cs` file at the root of your test project (create it if you don't
+have one):
+
+# [xUnit v2](#tab/xunit-v2)
 
 ```csharp
 using Xunit;
 
 [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
 ```
+
+# [xUnit v3](#tab/xunit-v3)
+
+```csharp
+using Xunit;
+
+[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]
+```
+
+xUnit v3 takes the framework's type rather than its name.
+
+---
 
 > **What does this do?** This tells xUnit to use the Xping test framework instead of the default one. The Xping framework wraps xUnit and automatically tracks all test executions.
-
-**Creating AssemblyInfo.cs:**
-
-If you don't have an `AssemblyInfo.cs` file, create one at the root of your test project:
-
-```csharp
-/*
- * AssemblyInfo.cs - xUnit Configuration for Xping SDK
- */
-
-using Xunit;
-
-// Configure xUnit to use Xping test framework for automatic tracking
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
-```
 
 ---
 
@@ -340,6 +372,16 @@ Passed!  - Failed:     0, Passed:     3, Skipped:     0, Total:     3, Duration:
 ```
 
 Xping SDK runs silently in the background, tracking execution data without affecting your test results.
+
+**xUnit v3 runners.** An xUnit v3 test project is an executable, and Xping records it on every way
+it can run:
+
+- **Microsoft.Testing.Platform**: `dotnet test` with `"test": { "runner": "Microsoft.Testing.Platform" }`
+  in `global.json`, or the project itself with `dotnet run` when it sets
+  `<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>`.
+- **vstest**: `dotnet test` without that `global.json` setting, through `xunit.runner.visualstudio`.
+  On the .NET 10 SDK, vstest refuses a Microsoft.Testing.Platform app, so reference
+  `xunit.v3.mtp-off` instead of `xunit.v3`.
 
 ---
 
@@ -525,6 +567,11 @@ public class ExperimentalTests
 >
 > For framework comparison and other limitations, see [Known Limitations](../known-limitations.md).
 
+**xUnit v3 retries.** xRetry.v3 reports only the attempt a retried test ended on. Xping records that
+attempt with its number, so a test that passed on a retry shows as one, but the attempts before it
+are not recorded and the duration is that of all attempts together. See
+[Known Limitations](../known-limitations.md#xunit-v3-records-only-the-last-retry-attempt).
+
 ---
 
 ## Troubleshooting
@@ -535,6 +582,7 @@ If you encounter issues while integrating or using the Xping SDK with xUnit, we 
 
 - **Tests not appearing in Xping Cloud** - Configuration, test framework setup, and connectivity checks
 - **"Could not find test framework" error** - Package installation and AssemblyInfo configuration
+- **Build error `XPING001` or `XPING002`** - The adapter does not match your xUnit version; see [Which Package?](#which-package)
 - **Data looks incomplete** - Network stability and flush timing
 - **Performance concerns** - Impact measurement and optimization
 
@@ -567,7 +615,8 @@ Now explore more features:
 
 For a complete working example, check out our sample project:
 
-📂 [samples/SampleApp.XUnit](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
+- xUnit v2: 📂 [samples/SampleApp.XUnit](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
+- xUnit v3: 📂 [samples/SampleApp.XUnitV3](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnitV3)
 
 ---
 

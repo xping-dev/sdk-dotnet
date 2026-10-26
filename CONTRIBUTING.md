@@ -24,7 +24,7 @@ registered in each project's `AssemblyInfo.cs`:
 ```
 
 Core, NUnit adapter, MSTest adapter, Integration and CLI tests are tracked. `Xping.Sdk.XUnit.Tests`
-is not: its tests shut down and recreate the static `XpingContext` the framework records into,
+and `Xping.Sdk.XUnit.V3.Tests` are not: their tests shut down and recreate the static `XpingContext` the framework records into,
 which would split the run into fragments.
 
 **Project names.** There is no configuration. Each test assembly reports into a Xping Cloud

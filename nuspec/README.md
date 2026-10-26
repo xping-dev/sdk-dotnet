@@ -27,8 +27,12 @@ dotnet add package Xping.Sdk.NUnit
 ```
 
 ### xUnit
+
+Match the xUnit package your project references:
+
 ```bash
-dotnet add package Xping.Sdk.XUnit
+dotnet add package Xping.Sdk.XUnit      # xUnit v2: the project references xunit
+dotnet add package Xping.Sdk.XUnit.V3   # xUnit v3: the project references xunit.v3
 ```
 
 ### MSTest
@@ -66,8 +70,9 @@ public class CalculatorTests
 ```csharp
 using Xunit;
 
-// Add to AssemblyInfo.cs or as assembly attribute
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+// Add to AssemblyInfo.cs, one of:
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
+// [assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]       // xUnit v3
 
 public class CalculatorTests
 {
@@ -141,7 +146,7 @@ Track test execution duration to identify slow tests and optimize your test suit
 
 - .NET Standard 2.0 or higher
 - .NET Framework 4.6.1+ / .NET Core 2.0+ / .NET 5+
-- NUnit 3.14+, xUnit 2.9+, or MSTest 3.2+
+- NUnit 3.14+, xUnit 2.9+ (`Xping.Sdk.XUnit`), xUnit v3 4.0+ (`Xping.Sdk.XUnit.V3`), or MSTest 3.2+
 
 ## Documentation
 

@@ -84,10 +84,13 @@ changing a line of test code.
 ### 1. Install both pieces
 
 ```bash
-dotnet add package Xping.Sdk.XUnit    # or Xping.Sdk.NUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.XUnit    # xUnit v2; or Xping.Sdk.XUnit.V3 / Xping.Sdk.NUnit / Xping.Sdk.MSTest
 
 dotnet tool install -g Xping.Cli      # puts `xping` on your PATH
 ```
+
+For xUnit, match the xUnit package your project references: `xunit` (v2) takes `Xping.Sdk.XUnit`,
+`xunit.v3` takes `Xping.Sdk.XUnit.V3`.
 
 The SDK records what happens during each run; the CLI reads what it recorded. You need
 both — the SDK alone writes history nothing reads.
@@ -99,7 +102,8 @@ both — the SDK alone writes history nothing reads.
 
 **xUnit** — add one line to `AssemblyInfo.cs`:
 ```csharp
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
+[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
 ```
 
 **NUnit** — add one assembly-level attribute:
@@ -395,7 +399,7 @@ for worked examples.
 | Path | Contents |
 | ---- | -------- |
 | `src/Xping.Sdk.Core` | Collection, environment detection, configuration, delivery |
-| `src/Xping.Sdk.XUnit` · `.NUnit` · `.MSTest` | Framework adapters |
+| `src/Xping.Sdk.XUnit` · `.XUnit.V3` · `.NUnit` · `.MSTest` | Framework adapters (xUnit v2, xUnit v3, NUnit, MSTest) |
 | `src/Xping.Cli` | `xping` — local analysis and reporting |
 | `samples/` | Runnable examples per framework |
 | `docs/` | Source for [docs.xping.io](https://docs.xping.io) |

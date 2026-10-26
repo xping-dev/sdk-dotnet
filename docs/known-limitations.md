@@ -92,6 +92,57 @@ public void FlakyTest()
 
 ---
 
+### xUnit v3
+
+Skipped tests are tracked, including a test that skips itself while running (`Assert.Skip`,
+`Assert.SkipWhen`). An explicit test (`[Fact(Explicit = true)]`) that the run leaves out is not
+recorded, because it did not run.
+
+#### xUnit v3 Records Only The Last Retry Attempt
+
+**Affected Versions**: All versions, with xRetry.v3 1.0
+**Impact**: A test retried by xRetry.v3 is recorded once, as the attempt it ended on. `AttemptNumber`
+and `PassedOnRetry` are right, so a test that passed on its second attempt shows as a pass on retry.
+The attempts before it are not recorded: their failure messages and stack traces are lost, and the
+recorded duration is that of all attempts together.
+
+**Reason**: xRetry.v3 runs each attempt behind a message bus of its own and discards every attempt
+but the last, as its v2 version does. Unlike its v2 version, it exposes no hook to run an attempt
+through, so Xping cannot sit inside the loop. It does announce each attempt (`Running test "…"
+attempt (2/3)`) on the run's own bus, which is where the attempt number comes from.
+
+#### vstest Needs `xunit.v3.mtp-off` On The .NET 10 SDK
+
+**Impact**: `dotnet test` without a Microsoft.Testing.Platform `global.json` fails the build of an
+`xunit.v3` project with "Testing with VSTest target is no longer supported by Microsoft.Testing.Platform".
+
+**Reason**: `xunit.v3` makes the test project a Microsoft.Testing.Platform app, and the .NET 10 SDK's
+vstest refuses one. This is xUnit's and the SDK's behavior, not Xping's. Reference `xunit.v3.mtp-off`
+instead of `xunit.v3` to stay on vstest, or move `dotnet test` to Microsoft.Testing.Platform.
+
+#### A Theory Row Is Identified By The Arguments In Its Display Name
+
+**Impact**: Two rows of one theory whose arguments display the same way, such as two different
+objects with the same `ToString()`, share one identity and one history. A row's identity also changes
+when its display text does.
+
+**Reason**: a theory row xUnit v3 did not pre-enumerate reaches Xping without its arguments: only
+its display name carries them. vstest and Microsoft.Testing.Platform pre-enumerate; xUnit's own console
+runner, and a runner configured with `preEnumerateTheories: false`, do not. Reading the arguments from
+the display name every time keeps a row's identity the same however it was run.
+
+#### The Runner Is Unknown Under xUnit's Own Console Runner
+
+**Impact**: A session recorded by `xunit.v3.runner.console`, or by running the test executable by
+hand without Microsoft.Testing.Platform, has no `Xping.Runner` property, so `xping report` prints no
+command to run a test again.
+
+**Reason**: an xUnit v3 test assembly is its own executable on every runner, so the entry assembly
+says nothing about the runner. Xping reads it from the runner's code on the call stack and from
+vstest's environment, and leaves it out rather than guess.
+
+---
+
 ### Timeouts
 
 Xping records a test the framework killed for overrunning its timeout as `Outcome = Timeout` rather
@@ -119,9 +170,9 @@ public async Task MyTest(CancellationToken cancellationToken)
 }
 ```
 
-#### xUnit Applies A Timeout Only To Async Tests
+#### xUnit v2 Applies A Timeout Only To Async Tests
 
-`[Fact(Timeout = ...)]` on a synchronous test is rejected by xUnit itself, which fails the test with
+`[Fact(Timeout = ...)]` on a synchronous test is rejected by xUnit v2 itself, which fails the test with
 "Tests marked with Timeout are only supported for async tests". Xping records that as `Failed`, not
 `Timeout` — it is a misconfigured test, not a hanging one.
 
@@ -230,11 +281,12 @@ time to complete.
 been reported. `XpingMessageSink` forwards these messages to the runner without recording them, since
 there is no execution to attach them to.
 
-**What works**: fixture *construction* is fully recorded. xUnit wraps a failing `IClassFixture<T>`
+**What works**: fixture *construction* is fully recorded. xUnit v2 wraps a failing `IClassFixture<T>`
 constructor in `Xunit.Sdk.TestClassException` and names the fixture type in the message, which is the
 only first-class failure-site signal any of the three frameworks provides. An `ICollectionFixture<T>`
 constructor is **not** wrapped — it arrives as the bare exception — and is recognised from its
-constructor frame instead.
+constructor frame instead. xUnit v3 wraps a failing fixture of every scope, assembly, collection and
+class, in `Xunit.Sdk.TestPipelineException` and names its type.
 
 ---
 
@@ -344,16 +396,17 @@ bar.
 **Impact**: under NUnit and MSTest, a run that covered less than half the suite is counted on neither
 side of an absence, so a deletion that removed more than half a suite is never reported. A `--filter`
 selecting *more* than half the suite still produces one false `stopped running` per unselected test.
-The same applies to xUnit tests run from an IDE, and to runs recorded before the SDK reported test
-cases.
+The same applies to xUnit tests run from an IDE, to xUnit v3 tests run on vstest, and to runs
+recorded before the SDK reported test cases.
 
-**Not under xUnit with `dotnet test`**: there the SDK records, per assembly, how many test cases the
+**Not under xUnit v2 with `dotnet test`, or xUnit v3 on Microsoft.Testing.Platform**: there the SDK records, per assembly, how many test cases the
 framework discovered and how many it was asked to run. A run that selected fewer than it discovered
 was filtered, and one that did not was a run of the whole suite however small it is, so both cases
 above are decided correctly. The threshold below is never consulted for such a run.
 
 **Why only xUnit**: xUnit discovers the whole assembly in the test process before applying the
-filter, and the SDK sees both steps. NUnit tracking is opt-in per `[XpingTrack]` fixture or method,
+filter, and the SDK sees both steps. xUnit v3 on vstest is the exception: `xunit.runner.visualstudio`
+discovers in a process of its own, so the run's process has no discovery to count, as with an IDE. NUnit tracking is opt-in per `[XpingTrack]` fixture or method,
 so NUnit's own count of the suite includes tests Xping never records. NUnit3TestAdapter's `PreFilter`
 setting can also make that count post-filter, and the SDK cannot detect it. MSTest exposes no
 count at all to anything the SDK can hook. A number that is sometimes the wrong number is worse than
