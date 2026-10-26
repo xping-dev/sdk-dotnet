@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.IO.Compression;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
@@ -72,6 +74,27 @@ public sealed class LocalHistoryWriteTests : IDisposable
         }
 
         Assert.Single(SessionFiles(store));
+    }
+
+    // This test project imports the targets the package ships, so its assembly carries a real stamp.
+    [Fact]
+    public async Task TheWrittenSessionCarriesTheFrameworkAndTheTestAssemblysProjectPath()
+    {
+        string store = Path.Combine(_temp, "properties");
+        string assembly = typeof(LocalHistoryWriteTests).Assembly.GetName().Name!;
+
+        await using (Harness orchestrator = Create(store))
+        {
+            orchestrator.Record(Execution(assembly, "Passes"));
+            await orchestrator.FinalizeAsync();
+        }
+
+        using JsonDocument session = ReadSession(Assert.Single(SessionFiles(store)));
+        JsonElement properties = session.RootElement.GetProperty("environmentInfo").GetProperty("customProperties");
+        Assert.Equal("Harness", properties.GetProperty(LocalSessionProperties.TestFramework).GetString());
+        Assert.Equal(
+            "tests/Xping.Sdk.Core.Tests/Xping.Sdk.Core.Tests.csproj",
+            properties.GetProperty(LocalSessionProperties.ProjectPath).GetString());
     }
 
     [Fact]
@@ -346,6 +369,12 @@ public sealed class LocalHistoryWriteTests : IDisposable
             .WithOutcome(TestOutcome.Passed)
             .WithIdentity(new TestIdentity { Assembly = assembly, FullyQualifiedName = $"{assembly}.{name}" })
             .Build();
+
+    private static JsonDocument ReadSession(string file)
+    {
+        using var gzip = new GZipStream(File.OpenRead(file), CompressionMode.Decompress);
+        return JsonDocument.Parse(gzip);
+    }
 
     private static string[] SessionFiles(string store)
     {

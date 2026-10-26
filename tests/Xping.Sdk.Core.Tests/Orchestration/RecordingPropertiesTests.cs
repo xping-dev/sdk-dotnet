@@ -4,6 +4,7 @@
  */
 
 using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Services.LocalStore;
 
@@ -14,6 +15,10 @@ namespace Xping.Sdk.Core.Tests.Orchestration;
 /// </summary>
 public sealed class RecordingPropertiesTests
 {
+    private const string ThisProjectPath = "tests/Xping.Sdk.Core.Tests/Xping.Sdk.Core.Tests.csproj";
+
+    private static readonly string ThisAssemblyName = typeof(RecordingPropertiesTests).Assembly.GetName().Name!;
+
     [Theory]
     [InlineData("testhost")]
     [InlineData("testhost.x86")]
@@ -51,6 +56,18 @@ public sealed class RecordingPropertiesTests
     }
 
     [Fact]
+    public void DetectProcessRunner_WhenTheEntryAssemblyCannotBeInspected_ReturnsNull()
+    {
+        Assert.Null(XpingContextOrchestrator.DetectProcessRunner(() => throw new NotSupportedException()));
+    }
+
+    [Fact]
+    public void DetectProcessRunner_ForAnEntryAssemblyThatIsNoKnownRunner_ReturnsNull()
+    {
+        Assert.Null(XpingContextOrchestrator.DetectProcessRunner(() => typeof(XpingContextOrchestrator).Assembly));
+    }
+
+    [Fact]
     public void ResolveProjectPath_ForOneStampedAssembly_ReturnsItsPath()
     {
         Assert.Equal(
@@ -83,6 +100,38 @@ public sealed class RecordingPropertiesTests
     public void ResolveProjectPath_WithoutAssemblies_ReturnsNull()
     {
         Assert.Null(XpingContextOrchestrator.ResolveProjectPath([], _ => "tests/A/A.csproj"));
+    }
+
+    // This test project imports the targets the package ships, so its own assembly carries a real stamp.
+    [Fact]
+    public void ReadStampedProjectPath_ForAStampedAssembly_ReturnsItsProjectPath()
+    {
+        Assert.Equal(
+            ThisProjectPath,
+            XpingContextOrchestrator.ReadStampedProjectPath(typeof(RecordingPropertiesTests).Assembly));
+    }
+
+    [Fact]
+    public void ResolveSessionProjectPath_FindsTheStampAmongTheLoadedAssemblies()
+    {
+        Assert.Equal(
+            ThisProjectPath,
+            XpingContextOrchestrator.ResolveSessionProjectPath(
+                [ThisAssemblyName], AppDomain.CurrentDomain.GetAssemblies, NullLogger.Instance));
+    }
+
+    [Fact]
+    public void ResolveSessionProjectPath_ForATestAssemblyThatIsNotLoaded_ReturnsNull()
+    {
+        Assert.Null(XpingContextOrchestrator.ResolveSessionProjectPath(
+            ["Not.Loaded"], AppDomain.CurrentDomain.GetAssemblies, NullLogger.Instance));
+    }
+
+    [Fact]
+    public void ResolveSessionProjectPath_WhenReadingTheAssembliesFails_ReturnsNull()
+    {
+        Assert.Null(XpingContextOrchestrator.ResolveSessionProjectPath(
+            [ThisAssemblyName], () => throw new InvalidOperationException(), NullLogger.Instance));
     }
 
     [Fact]

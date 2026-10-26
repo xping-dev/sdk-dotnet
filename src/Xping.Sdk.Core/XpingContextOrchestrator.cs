@@ -628,20 +628,28 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     // The entry assembly cannot change, so the runner is detected once per process, on first use at
     // finalization. Shared with adapters that fail the run differently on each runner.
-    private static readonly Lazy<string?> ProcessRunner = new(DetectProcessRunner);
+    private static readonly Lazy<string?> ProcessRunner = new(() => DetectProcessRunner(Assembly.GetEntryAssembly));
 
     /// <summary>
     /// Gets the test runner hosting this process, or <see langword="null"/> when it is not known.
     /// </summary>
     internal static string? CurrentRunner => ProcessRunner.Value;
 
-    // No logger here: it runs outside any instance. An entry assembly that cannot be inspected only
-    // costs the runner property, never the session.
-    private static string? DetectProcessRunner()
+    /// <summary>
+    /// Identifies the test runner from the entry assembly, or returns <see langword="null"/> when
+    /// inspecting it fails.
+    /// </summary>
+    /// <param name="entryAssembly">Supplies the process's entry assembly.</param>
+    /// <returns>The runner, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// No logger here: it runs outside any instance. An entry assembly that cannot be inspected only
+    /// costs the runner property, never the session.
+    /// </remarks>
+    internal static string? DetectProcessRunner(Func<Assembly?> entryAssembly)
     {
         try
         {
-            return DetectRunner(Assembly.GetEntryAssembly());
+            return DetectRunner(entryAssembly());
         }
         catch (Exception)
         {
@@ -1126,7 +1134,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (CurrentRunner is { } runner)
             properties[LocalSessionProperties.Runner] = runner;
 
-        if (ProjectPathOrNull() is { } projectPath)
+        if (ResolveSessionProjectPath(_sessionAssemblies, AppDomain.CurrentDomain.GetAssemblies, _logger) is { } projectPath)
             properties[LocalSessionProperties.ProjectPath] = projectPath;
 
         return new EnvironmentInfo
@@ -1144,32 +1152,37 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Resolves <see cref="LocalSessionProperties.ProjectPath"/> for this session, or
-    /// <see langword="null"/> when it cannot.
+    /// Resolves <see cref="LocalSessionProperties.ProjectPath"/> for a session from the loaded test
+    /// assemblies, or returns <see langword="null"/> when it cannot.
     /// </summary>
+    /// <param name="sessionAssemblies">The simple names of the test assemblies the session recorded.</param>
+    /// <param name="loaded">Supplies the assemblies loaded in the process.</param>
+    /// <param name="logger">Where a failure is reported.</param>
+    /// <returns>The project path, or <see langword="null"/>.</returns>
     /// <remarks>
     /// Reflection over loaded assemblies can throw for a dynamic or partially loaded one. A failure
     /// here only costs the property; it must not cost the session write that calls it.
     /// </remarks>
-    private string? ProjectPathOrNull()
+    internal static string? ResolveSessionProjectPath(
+        ICollection<string> sessionAssemblies, Func<IEnumerable<Assembly>> loaded, ILogger logger)
     {
         try
         {
             // One pass over the loaded assemblies, however many test assemblies the session has.
             var byName = new Dictionary<string, Assembly>(StringComparer.Ordinal);
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly assembly in loaded())
             {
-                if (assembly.GetName().Name is { } name && _sessionAssemblies.Contains(name) && !byName.ContainsKey(name))
+                if (assembly.GetName().Name is { } name && sessionAssemblies.Contains(name) && !byName.ContainsKey(name))
                     byName[name] = assembly;
             }
 
             return ResolveProjectPath(
-                _sessionAssemblies,
+                sessionAssemblies,
                 name => byName.TryGetValue(name, out Assembly? assembly) ? ReadStampedProjectPath(assembly) : null);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Could not read the project path from the test assemblies.");
+            logger.LogDebug(ex, "Could not read the project path from the test assemblies.");
             return null;
         }
     }
