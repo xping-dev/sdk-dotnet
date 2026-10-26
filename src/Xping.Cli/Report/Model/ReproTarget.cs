@@ -29,8 +29,15 @@ internal sealed record ReproTarget(string? Runner, string? ProjectPath)
     /// <param name="newest">The newest session in the window, or null for an empty one.</param>
     /// <returns>The target.</returns>
     /// <remarks>
+    /// <para>
     /// The newest session, because it describes the project as it is now: an older one may predate
     /// a switch of runner, and a command for the old runner fails.
+    /// </para>
+    /// <para>
+    /// One session serves every finding because the window holds one test assembly
+    /// (<see cref="Windowing.WindowResolver"/> scopes it), so its newest session ran the same project
+    /// each finding's test is in.
+    /// </para>
     /// </remarks>
     public static ReproTarget From(TestSession? newest)
     {

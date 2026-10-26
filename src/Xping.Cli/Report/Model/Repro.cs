@@ -14,9 +14,9 @@ namespace Xping.Cli.Report.Model;
 /// <see cref="LocalAnalysisConstants.ReproConfidence"/>, uncapped. Carried so a finding too rare to
 /// rerun can say how rare.
 /// </param>
-/// <param name="FailingSessions">Runs in the window that showed the failure.</param>
-/// <param name="Sessions">Runs they were counted out of.</param>
-internal sealed record Repro(string Command, int RunsNeeded, int FailingSessions, int Sessions)
+/// <param name="RunsFailed">Runs of the rerun test that ended red, by their deciding attempt.</param>
+/// <param name="RunsJudged">Its runs with a verdict, which they were counted out of.</param>
+internal sealed record Repro(string Command, int RunsNeeded, int RunsFailed, int RunsJudged)
 {
     /// <summary>
     /// Gets how many times to run <see cref="Command"/>, or null when that is more than
@@ -27,5 +27,5 @@ internal sealed record Repro(string Command, int RunsNeeded, int FailingSessions
     /// <summary>
     /// Gets the per-run failure rate the counts were sized from.
     /// </summary>
-    public double Rate => (double)FailingSessions / Sessions;
+    public double Rate => (double)RunsFailed / RunsJudged;
 }

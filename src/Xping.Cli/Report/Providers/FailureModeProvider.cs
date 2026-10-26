@@ -104,18 +104,20 @@ internal sealed record ContrastExecution(
 /// <param name="Fingerprint">Its stable identity.</param>
 /// <param name="FullyQualifiedName">Namespace, class and method.</param>
 /// <param name="Failures">Failures of this test carrying the cluster's signature.</param>
-/// <param name="FailingSessions">Sessions in which this test failed with the cluster's signature.</param>
-/// <param name="Sessions">
-/// Sessions this test ran in. Not the cluster's: a repro command reruns one or a few members, and how
-/// often a rerun shows the failure depends on how often that member failed when it ran, not on how
-/// often any member did.
+/// <param name="RunsFailed">
+/// Of <paramref name="RunsJudged"/>, the runs this test ended red with the cluster's signature.
+/// </param>
+/// <param name="RunsJudged">
+/// Runs this test ended with a verdict (<see cref="TestIndex.VerdictRunsOf"/>). Not the cluster's: a
+/// repro command reruns one or a few members, and how often a rerun shows the failure depends on how
+/// often that member failed when it ran, not on how often any member did.
 /// </param>
 internal sealed record ClusterMember(
     string Fingerprint,
     string FullyQualifiedName,
     int Failures,
-    int FailingSessions,
-    int Sessions);
+    int RunsFailed,
+    int RunsJudged);
 
 /// <summary>
 /// Evidence that a test fails sometimes, or fails in more than one way.
@@ -132,6 +134,14 @@ internal sealed record ClusterMember(
 /// larger by however many runs were discounted and is in the report's header.
 /// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
+/// <param name="RunsFailed">
+/// Of <paramref name="RunsJudged"/>, the runs this test ended red on its own account. A run a
+/// retry turned green is not one: rerun, it comes back green too.
+/// </param>
+/// <param name="RunsJudged">
+/// Runs this test ended with a verdict (<see cref="TestIndex.VerdictRunsOf"/>), environmental ones
+/// set aside. The rate a rerun fails at is <paramref name="RunsFailed"/> over this.
+/// </param>
 /// <param name="FailureRate">
 /// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
 /// </param>
@@ -152,6 +162,8 @@ internal sealed record FlakyEvidence(
     int ExecutionsConsidered,
     int SessionsConsidered,
     int SessionsWithFailures,
+    int RunsFailed,
+    int RunsJudged,
     double FailureRate,
     int DiscountedEnvironmental,
     int DiscountedClustered,
@@ -175,6 +187,14 @@ internal sealed record FlakyEvidence(
 /// larger by however many runs were discounted and is in the report's header.
 /// </param>
 /// <param name="SessionsWithFailures">Sessions this test failed in.</param>
+/// <param name="RunsFailed">
+/// Of <paramref name="RunsJudged"/>, the runs this test ended red on its own account. A run a
+/// retry turned green is not one: rerun, it comes back green too.
+/// </param>
+/// <param name="RunsJudged">
+/// Runs this test ended with a verdict (<see cref="TestIndex.VerdictRunsOf"/>), environmental ones
+/// set aside. The rate a rerun fails at is <paramref name="RunsFailed"/> over this.
+/// </param>
 /// <param name="FailureRate">
 /// <paramref name="Failures"/> over <paramref name="ExecutionsConsidered"/>.
 /// </param>
@@ -199,6 +219,8 @@ internal sealed record AlwaysFailingEvidence(
     int ExecutionsConsidered,
     int SessionsConsidered,
     int SessionsWithFailures,
+    int RunsFailed,
+    int RunsJudged,
     double FailureRate,
     int DiscountedEnvironmental,
     int DiscountedClustered,
@@ -223,6 +245,14 @@ internal sealed record AlwaysFailingEvidence(
 /// larger by however many runs were discounted and is in the report's header.
 /// </param>
 /// <param name="SessionsWithTimeouts">Sessions this test timed out in.</param>
+/// <param name="RunsFailed">
+/// Of <paramref name="RunsJudged"/>, the runs this test ended red on its own account, by a timeout. A run a
+/// retry turned green is not one: rerun, it comes back green too.
+/// </param>
+/// <param name="RunsJudged">
+/// Runs this test ended with a verdict (<see cref="TestIndex.VerdictRunsOf"/>), environmental ones
+/// set aside. The rate a rerun fails at is <paramref name="RunsFailed"/> over this.
+/// </param>
 /// <param name="TimeoutRate">
 /// <paramref name="Timeouts"/> over <paramref name="ExecutionsConsidered"/>.
 /// </param>
@@ -252,6 +282,8 @@ internal sealed record TimingOutEvidence(
     int ExecutionsConsidered,
     int SessionsConsidered,
     int SessionsWithTimeouts,
+    int RunsFailed,
+    int RunsJudged,
     double TimeoutRate,
     double TimeoutShareOfFailures,
     int DiscountedEnvironmental,
@@ -468,16 +500,6 @@ internal sealed class FailureModeProvider : IFindingProvider
 
         double unreliability = 0;
 
-        var failingSessions = new Dictionary<string, HashSet<Guid>>(StringComparer.Ordinal);
-        foreach (ExecutionRef failure in cluster.Failures)
-        {
-            string key = failure.Execution.Identity.TestFingerprint;
-            if (!failingSessions.TryGetValue(key, out HashSet<Guid>? sessions))
-                failingSessions[key] = sessions = [];
-
-            sessions.Add(failure.Session.SessionId);
-        }
-
         foreach (string fingerprint in cluster.Fingerprints)
         {
             TestReference? reference = context.Tests.ReferenceFor(fingerprint);
@@ -488,12 +510,15 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             cluster.FailuresByFingerprint.TryGetValue(fingerprint, out int failures);
 
+            IReadOnlyList<ExecutionRef> judged = context.Tests.VerdictRunsOf(fingerprint);
+
             members.Add(new ClusterMember(
                 fingerprint,
                 reference.FullyQualifiedName,
                 failures,
-                failingSessions.TryGetValue(fingerprint, out HashSet<Guid>? failedIn) ? failedIn.Count : 0,
-                context.Tests.SessionsRunIn(fingerprint)));
+                judged.Count(run => run.Failed &&
+                    context.Signatures.Of(run)?.Hash == cluster.Signature.Hash),
+                judged.Count));
 
             // The cluster takes its worst member's unreliability rather than their average. One
             // member failing constantly makes the whole cluster worth opening, and an average would
@@ -708,6 +733,7 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<SignatureView> signatures = DistinctSignatures(context, fingerprint, failures);
 
         int sessionsWithFailures = failures.Select(f => f.Session.SessionId).Distinct().Count();
+        RerunCounts rerun = Rerun(context, fingerprint, clustered);
         List<FailureExemplar> exemplars = [.. Spread(failures, SignatureHashOf(context))
             .Select(e => ToExemplar(context, e))];
 
@@ -740,6 +766,7 @@ internal sealed class FailureModeProvider : IFindingProvider
                 failures,
                 timeouts,
                 sessionsConsidered,
+                rerun,
                 environmental,
                 clusteredOut,
                 occasions.Count));
@@ -772,6 +799,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                     considered.Count,
                     sessionsConsidered,
                     sessionsWithFailures,
+                    rerun.Failed,
+                    rerun.Judged,
                     FindingOrder.Round(failureRate),
                     environmental,
                     clusteredOut,
@@ -801,6 +830,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                 considered.Count,
                 sessionsConsidered,
                 sessionsWithFailures,
+                rerun.Failed,
+                rerun.Judged,
                 FindingOrder.Round(failureRate),
                 environmental,
                 clusteredOut,
@@ -866,6 +897,7 @@ internal sealed class FailureModeProvider : IFindingProvider
         List<ExecutionRef> failures,
         List<ExecutionRef> timeouts,
         int sessionsConsidered,
+        RerunCounts rerun,
         int environmental,
         int clusteredOut,
         int occasions)
@@ -898,6 +930,8 @@ internal sealed class FailureModeProvider : IFindingProvider
                 considered.Count,
                 sessionsConsidered,
                 sessionsWithTimeouts,
+                rerun.TimedOut,
+                rerun.Judged,
                 FindingOrder.Round(timeoutRate),
                 FindingOrder.Round((double)timeouts.Count / failures.Count),
                 environmental,
@@ -916,6 +950,45 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             LastOccurrenceIn: TestIndex.NewestSession(timeouts),
             EvidenceSessions: occasions);
+    }
+
+    /// <summary>
+    /// A test's runs as a rerun would see them: judged, failed on its own account, and timed out.
+    /// </summary>
+    private readonly record struct RerunCounts(int Judged, int Failed, int TimedOut);
+
+    /// <summary>
+    /// Counts a test's runs by their deciding attempt, with the same discounts as its failures.
+    /// </summary>
+    /// <remarks>
+    /// By run and not by execution, because one rerun is one run. The deciding attempt and not any
+    /// attempt, because a rerun keeps the test's retry attribute: a run where attempt 1 failed and
+    /// attempt 2 passed comes back green, and counting it as failing sizes the repro for failures the
+    /// reader will never see. A clustered failure leaves the run judged but not failed, as it leaves
+    /// the run in <c>occasions</c>.
+    /// </remarks>
+    private static RerunCounts Rerun(
+        AnalysisContext context, string fingerprint, HashSet<string> clustered)
+    {
+        int judged = 0, failed = 0, timedOut = 0;
+
+        foreach (ExecutionRef run in context.Tests.VerdictRunsOf(fingerprint))
+        {
+            Discount discount = DiscountFor(context, run, clustered);
+            if (discount == Discount.Environmental)
+                continue;
+
+            judged++;
+
+            if (discount == Discount.None && run.Failed)
+            {
+                failed++;
+                if (run.Execution.Outcome == TestOutcome.Timeout)
+                    timedOut++;
+            }
+        }
+
+        return new RerunCounts(judged, failed, timedOut);
     }
 
     /// <summary>

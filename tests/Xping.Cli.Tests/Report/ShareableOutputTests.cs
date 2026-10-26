@@ -225,7 +225,7 @@ public sealed class ShareableOutputTests
 
         var (headline, _) = EvidenceHeadline.For(
             FindingKind.AlwaysFailing,
-            new AlwaysFailingEvidence(19, 20, 20, 19, 0.95, 0, 0, unnamed, 1.0, [], null));
+            new AlwaysFailingEvidence(19, 20, 20, 19, 19, 20, 0.95, 0, 0, unnamed, 1.0, [], null));
 
         // An adapter that captures no failure detail is not the same as a failure that had none.
         Assert.EndsWith("one failure mode", headline, StringComparison.Ordinal);

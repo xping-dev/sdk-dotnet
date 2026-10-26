@@ -91,7 +91,7 @@ internal static class EvidenceSamples
 
             FindingKind.Flaky =>
                 new FlakyEvidence(
-                    7, 20, 20, 5, 0.35, 2, 1, 3,
+                    7, 20, 20, 5, 5, 20, 0.35, 2, 1, 3,
                     [
                         signature with { Occurrences = 4 },
                         signature with
@@ -116,12 +116,12 @@ internal static class EvidenceSamples
 
             FindingKind.AlwaysFailing =>
                 new AlwaysFailingEvidence(
-                    19, 20, 20, 19, 0.95, 0, 0, signature with { Occurrences = 19 }, 1.0,
+                    19, 20, 20, 19, 19, 20, 0.95, 0, 0, signature with { Occurrences = 19 }, 1.0,
                     [exemplar], null),
 
             FindingKind.TimingOut =>
                 new TimingOutEvidence(
-                    9, 10, 20, 20, 9, 0.45, 0.9, 0, 0, 500, [512, 508, 503], [exemplar], null),
+                    9, 10, 20, 20, 9, 9, 20, 0.45, 0.9, 0, 0, 500, [512, 508, 503], [exemplar], null),
 
             FindingKind.BrokenFixture =>
                 new BrokenFixtureEvidence(

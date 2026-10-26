@@ -61,27 +61,28 @@ internal static class ReproCommand
         ArgumentNullException.ThrowIfNull(finding);
         ArgumentNullException.ThrowIfNull(target);
 
-        bool? runner = target.Runner switch
+        Runner? runner = target.Runner switch
         {
-            LocalSessionProperties.VSTestRunner => true,
-            LocalSessionProperties.TestingPlatformRunner => false,
+            LocalSessionProperties.VSTestRunner => Runner.VSTest,
+            LocalSessionProperties.TestingPlatformRunner => Runner.TestingPlatform,
             _ => null
         };
 
-        if (runner is not { } vstest)
+        if (runner is not { } known)
             return null;
 
-        // Every rate is over the runs the rerun tests ran in. The window's count is larger for a test
-        // that joined it late or skipped runs, and a cluster's is larger than any subset of it; both
-        // understate how often a rerun fails, and the count comes out too high or too low.
-        (string[] names, int failing, int sessions, bool once) = finding.Evidence switch
+        // Every rate is over the runs the rerun tests ran in with a verdict, failed by their deciding
+        // attempt. The window's count is larger for a test that joined it late or was skipped, a
+        // cluster's is larger than any subset of it, and a run a retry turned green comes back green;
+        // each puts the count off in a direction the reader cannot see.
+        (string[] names, int failing, int judged, bool once) = finding.Evidence switch
         {
-            FlakyEvidence e => (Single(finding), e.SessionsWithFailures, finding.EvidenceSessions, false),
+            FlakyEvidence e => (Single(finding), e.RunsFailed, e.RunsJudged, false),
 
             // Broken, not intermittent: one run shows it, whatever the odd pass in the window says.
-            AlwaysFailingEvidence e => (Single(finding), e.SessionsWithFailures, finding.EvidenceSessions, true),
+            AlwaysFailingEvidence e => (Single(finding), e.RunsFailed, e.RunsJudged, true),
 
-            TimingOutEvidence e => (Single(finding), e.SessionsWithTimeouts, finding.EvidenceSessions, false),
+            TimingOutEvidence e => (Single(finding), e.RunsFailed, e.RunsJudged, false),
 
             // A broken fixture fails every test that uses it, so one member shows it.
             BrokenFixtureEvidence e => Members(e.Members, 1),
@@ -91,14 +92,23 @@ internal static class ReproCommand
             _ => ([], 0, 0, false)
         };
 
-        if (names.Length == 0 || failing <= 0 || sessions <= 0)
+        if (names.Length == 0 || failing <= 0 || judged <= 0)
             return null;
 
         return new Repro(
-            Command(names, vstest, target.ProjectPath),
-            once ? 1 : RunsNeeded((double)failing / sessions),
+            Command(names, known, target.ProjectPath),
+            once ? 1 : RunsNeeded((double)failing / judged),
             failing,
-            sessions);
+            judged);
+    }
+
+    /// <summary>
+    /// The runners a command can be built for.
+    /// </summary>
+    private enum Runner
+    {
+        VSTest,
+        TestingPlatform
     }
 
     private static string[] Single(Finding finding) =>
@@ -108,20 +118,27 @@ internal static class ReproCommand
     /// Picks the members most likely to fail on a rerun, and the rate to size their runs from.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The rate is the highest of theirs, not the chance that any of them fails, which the counts
     /// cannot give: their failing runs may overlap or not. The highest is a lower bound on that
     /// chance, so the count errs towards more runs. OrderBy is stable, so a full tie keeps the
     /// members' ordinal order and the command is the same on every run of the report.
+    /// </para>
+    /// <para>
+    /// One per name. MSTest and xUnit data rows share an FQN, and the filter runs every row of it, so
+    /// a second row would repeat a clause and crowd out another test.
+    /// </para>
     /// </remarks>
-    private static (string[] Names, int Failing, int Sessions, bool Once) Members(
+    private static (string[] Names, int Failing, int Judged, bool Once) Members(
         IReadOnlyList<ClusterMember> members, int count)
     {
         ClusterMember[] chosen =
         [
             .. members
-                .Where(member => member.Sessions > 0)
-                .OrderByDescending(member => (double)member.FailingSessions / member.Sessions)
+                .Where(member => member.RunsJudged > 0)
+                .OrderByDescending(member => (double)member.RunsFailed / member.RunsJudged)
                 .ThenByDescending(member => member.Failures)
+                .DistinctBy(member => member.FullyQualifiedName, StringComparer.Ordinal)
                 .Take(count)
         ];
 
@@ -129,11 +146,12 @@ internal static class ReproCommand
             return ([], 0, 0, false);
 
         // Chosen in descending rate order, so the first carries the highest.
-        return ([.. chosen.Select(member => member.FullyQualifiedName)], chosen[0].FailingSessions, chosen[0].Sessions, false);
+        return ([.. chosen.Select(member => member.FullyQualifiedName)], chosen[0].RunsFailed, chosen[0].RunsJudged, false);
     }
 
-    private static string Command(string[] names, bool vstest, string? projectPath)
+    private static string Command(string[] names, Runner runner, string? projectPath)
     {
+        bool vstest = runner == Runner.VSTest;
         var builder = new StringBuilder(vstest ? "dotnet test" : "dotnet run");
 
         if (projectPath != null)
@@ -142,7 +160,7 @@ internal static class ReproCommand
         string filter = string.Join("|", names.Select(name => "FullyQualifiedName=" + Escape(name, vstest)));
 
         return builder
-            .Append(" --no-build -e XPING_ENABLED=false ")
+            .Append(" -e XPING_ENABLED=false ")
             .Append(vstest ? "--filter " : "-- --filter ")
             .Append(ShellQuote.Of(filter))
             .ToString();

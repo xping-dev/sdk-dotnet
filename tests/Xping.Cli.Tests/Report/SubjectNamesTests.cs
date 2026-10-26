@@ -202,7 +202,7 @@ public sealed class SubjectNamesTests
         Assert.Equal(
             "(cause not recorded)",
             SubjectNames.CauseLabel(
-                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 1, 3, [Signature(null)], [], null)));
+                new FlakyEvidence(7, 20, 20, 5, 5, 20, 0.35, 2, 1, 3, [Signature(null)], [], null)));
 
     private static BrokenFixtureEvidence Fixture(string? member, FailureSite site) =>
         new(

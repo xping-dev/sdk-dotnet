@@ -15,7 +15,7 @@ namespace Xping.Cli.Tests.Report;
 /// </summary>
 public sealed class ReproCommandTests
 {
-    private const string Prefix = "dotnet test --no-build -e XPING_ENABLED=false --filter ";
+    private const string Prefix = "dotnet test -e XPING_ENABLED=false --filter ";
 
     private static readonly ReproTarget VSTest = new(LocalSessionProperties.VSTestRunner, null);
 
@@ -24,14 +24,14 @@ public sealed class ReproCommandTests
     {
         Repro repro = Build(
             "SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently",
-            Flaky(4), 9)!;
+            Flaky(4, 9))!;
 
         Assert.Equal(
             Prefix + "FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently",
             repro.Command);
         Assert.Equal(6, repro.Runs);
-        Assert.Equal(4, repro.FailingSessions);
-        Assert.Equal(9, repro.Sessions);
+        Assert.Equal(4, repro.RunsFailed);
+        Assert.Equal(9, repro.RunsJudged);
     }
 
     /// <summary>D5's table.</summary>
@@ -41,9 +41,9 @@ public sealed class ReproCommandTests
     [InlineData(10, 20, 5, 5)]
     [InlineData(2, 20, 29, 29)]
     [InlineData(1, 20, null, 59)]
-    public void TheRunCountIsSizedFromTheShareOfRunsThatFailed(int failing, int sessions, int? runs, int needed)
+    public void TheRunCountIsSizedFromTheShareOfRunsThatFailed(int failing, int judged, int? runs, int needed)
     {
-        Repro repro = Build("Ns.C.T", Flaky(failing), sessions)!;
+        Repro repro = Build("Ns.C.T", Flaky(failing, judged))!;
 
         Assert.Equal(runs, repro.Runs);
         Assert.Equal(needed, repro.RunsNeeded);
@@ -53,22 +53,31 @@ public sealed class ReproCommandTests
     public void TheRateIsPerRunNotPerExecution()
     {
         // Retry attempts inflate the executions: 4 failures in 40 executions, but in 4 of 9 runs.
-        var evidence = Flaky(4) with { Failures = 4, ExecutionsConsidered = 40, FailureRate = 0.1 };
+        var evidence = Flaky(4, 9) with { Failures = 4, ExecutionsConsidered = 40, FailureRate = 0.1 };
 
-        Assert.Equal(6, Build("Ns.C.T", evidence, 9)!.Runs);
+        Assert.Equal(6, Build("Ns.C.T", evidence)!.Runs);
     }
 
-    /// <summary>Amendment 3A.</summary>
+    /// <summary>Amendments 3A and 4A.</summary>
     [Fact]
-    public void TheRateIsOverTheRunsTheTestRanInNotTheWindow()
+    public void TheRateIsOverTheRunsTheTestWasJudgedInNotTheWindow()
     {
         // Two failures in the five runs since the test was added, in a twenty-run window.
-        var evidence = Flaky(2) with { SessionsConsidered = 20 };
+        var evidence = Flaky(2, 5) with { SessionsConsidered = 20, SessionsWithFailures = 2 };
 
-        Repro repro = Build("Ns.C.T", evidence, 5)!;
+        Repro repro = Build("Ns.C.T", evidence)!;
 
         Assert.Equal(6, repro.Runs);
-        Assert.Equal(5, repro.Sessions);
+        Assert.Equal(5, repro.RunsJudged);
+    }
+
+    /// <summary>Amendment 4A: a rerun keeps the retry attribute, so those runs come back green.</summary>
+    [Fact]
+    public void ATestWhoseEveryFailureARetryHidHasNoRepro()
+    {
+        var evidence = Flaky(0, 20) with { SessionsWithFailures = 4 };
+
+        Assert.Null(Build("Ns.C.T", evidence));
     }
 
     [Fact]
@@ -76,15 +85,15 @@ public sealed class ReproCommandTests
     {
         var evidence = (AlwaysFailingEvidence)EvidenceSamples.For(FindingKind.AlwaysFailing) with
         {
-            SessionsWithFailures = 19,
-            SessionsConsidered = 20
+            RunsFailed = 19,
+            RunsJudged = 20
         };
 
-        Repro repro = Build("Ns.C.T", evidence, 20)!;
+        Repro repro = Build("Ns.C.T", evidence, FindingKind.AlwaysFailing)!;
 
         Assert.Equal(1, repro.Runs);
         Assert.Equal(1, repro.RunsNeeded);
-        Assert.Equal(19, repro.FailingSessions);
+        Assert.Equal(19, repro.RunsFailed);
     }
 
     [Fact]
@@ -92,11 +101,11 @@ public sealed class ReproCommandTests
     {
         var evidence = (TimingOutEvidence)EvidenceSamples.For(FindingKind.TimingOut) with
         {
-            SessionsWithTimeouts = 6,
-            SessionsConsidered = 20
+            RunsFailed = 6,
+            RunsJudged = 20
         };
 
-        Repro repro = Build("Ns.C.T", evidence, 20)!;
+        Repro repro = Build("Ns.C.T", evidence, FindingKind.TimingOut)!;
 
         Assert.Equal(Prefix + "FullyQualifiedName=Ns.C.T", repro.Command);
         Assert.Equal(9, repro.Runs);
@@ -118,8 +127,8 @@ public sealed class ReproCommandTests
 
         Assert.Equal(Prefix + "FullyQualifiedName=Ns.A.One", repro.Command);
         Assert.Equal(4, repro.Runs);
-        Assert.Equal(3, repro.FailingSessions);
-        Assert.Equal(5, repro.Sessions);
+        Assert.Equal(3, repro.RunsFailed);
+        Assert.Equal(5, repro.RunsJudged);
     }
 
     [Fact]
@@ -159,7 +168,27 @@ public sealed class ReproCommandTests
             Prefix + "'FullyQualifiedName=Ns.A.One|FullyQualifiedName=Ns.D.Four|FullyQualifiedName=Ns.C.Three'",
             repro.Command);
         Assert.Equal(9, repro.Runs);
-        Assert.Equal(6, repro.FailingSessions);
+        Assert.Equal(6, repro.RunsFailed);
+    }
+
+    /// <summary>Amendment 4C: MSTest and xUnit data rows share one FQN.</summary>
+    [Fact]
+    public void DataRowsOfOneTestAreNamedOnceAndLeaveRoomForAnother()
+    {
+        var evidence = (SharedFailureEvidence)EvidenceSamples.For(FindingKind.SharedFailure) with
+        {
+            Members =
+            [
+                Member("Ns.A.Rows", 5, 5, 20),
+                Member("Ns.A.Rows", 4, 4, 20),
+                Member("Ns.B.Two", 3, 3, 20),
+                Member("Ns.C.Three", 2, 2, 20)
+            ]
+        };
+
+        Assert.Equal(
+            Prefix + "'FullyQualifiedName=Ns.A.Rows|FullyQualifiedName=Ns.B.Two|FullyQualifiedName=Ns.C.Three'",
+            ReproCommand.For(Group(evidence), VSTest)!.Command);
     }
 
     [Fact]
@@ -187,15 +216,15 @@ public sealed class ReproCommandTests
     {
         var kind = Enum.Parse<FindingKind>(name);
 
-        Assert.Null(Build("Ns.C.T", EvidenceSamples.For(kind), 20, kind));
+        Assert.Null(Build("Ns.C.T", EvidenceSamples.For(kind), kind));
     }
 
     [Theory]
     [InlineData(0, 20)]
     [InlineData(3, 0)]
-    public void CountsThatSizeNothingGiveNoRepro(int failing, int sessions)
+    public void CountsThatSizeNothingGiveNoRepro(int failing, int judged)
     {
-        Assert.Null(Build("Ns.C.T", Flaky(failing), sessions));
+        Assert.Null(Build("Ns.C.T", Flaky(failing, judged)));
     }
 
     /// <summary>D3 and Amendment 1A, with the strings §3.2 prints.</summary>
@@ -213,7 +242,7 @@ public sealed class ReproCommandTests
     [InlineData("Ns.C.S(\"50%20off\")", @"'FullyQualifiedName=Ns.C.S\(\""50%2520off\""\)'")]
     public void OnVSTestTheNameIsEscapedForTheFilterMSBuildAndTheShell(string name, string filter)
     {
-        Assert.Equal(Prefix + filter, Build(name, Flaky(4), 9)!.Command);
+        Assert.Equal(Prefix + filter, Build(name, Flaky(4, 9))!.Command);
     }
 
     /// <summary>Amendment 2B: <c>dotnet run</c> hands the filter to the app, so only the filter syntax is escaped.</summary>
@@ -226,9 +255,9 @@ public sealed class ReproCommandTests
     [InlineData("Ns.Outer+Inner.Nested", "FullyQualifiedName=Ns.Outer+Inner.Nested")]
     public void OnTheTestingPlatformOnlyTheFilterSyntaxIsEscaped(string name, string filter)
     {
-        Repro repro = Build(name, Flaky(4), 9, target: new ReproTarget(LocalSessionProperties.TestingPlatformRunner, null))!;
+        Repro repro = Build(name, Flaky(4, 9), target: new ReproTarget(LocalSessionProperties.TestingPlatformRunner, null))!;
 
-        Assert.Equal("dotnet run --no-build -e XPING_ENABLED=false -- --filter " + filter, repro.Command);
+        Assert.Equal("dotnet run -e XPING_ENABLED=false -- --filter " + filter, repro.Command);
     }
 
     /// <summary>Amendment 2A.</summary>
@@ -238,9 +267,9 @@ public sealed class ReproCommandTests
         var target = new ReproTarget(LocalSessionProperties.VSTestRunner, "tests/SampleApp.MSTest/SampleApp.MSTest.csproj");
 
         Assert.Equal(
-            "dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj --no-build -e XPING_ENABLED=false " +
+            "dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false " +
             "--filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.Add",
-            Build("SampleApp.MSTest.CalculatorTests.Add", Flaky(4), 9, target: target)!.Command);
+            Build("SampleApp.MSTest.CalculatorTests.Add", Flaky(4, 9), target: target)!.Command);
     }
 
     [Fact]
@@ -249,9 +278,9 @@ public sealed class ReproCommandTests
         var target = new ReproTarget(LocalSessionProperties.TestingPlatformRunner, "tests/SampleApp.NUnit/SampleApp.NUnit.csproj");
 
         Assert.Equal(
-            "dotnet run --project tests/SampleApp.NUnit/SampleApp.NUnit.csproj --no-build -e XPING_ENABLED=false " +
+            "dotnet run --project tests/SampleApp.NUnit/SampleApp.NUnit.csproj -e XPING_ENABLED=false " +
             "-- --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Divide\\(10,0\\)'",
-            Build("SampleApp.NUnit.CalculatorTests.Divide(10,0)", Flaky(4), 9, target: target)!.Command);
+            Build("SampleApp.NUnit.CalculatorTests.Divide(10,0)", Flaky(4, 9), target: target)!.Command);
     }
 
     [Fact]
@@ -260,8 +289,8 @@ public sealed class ReproCommandTests
         var target = new ReproTarget(LocalSessionProperties.VSTestRunner, "tests/My Tests/My.Tests.csproj");
 
         Assert.StartsWith(
-            "dotnet test 'tests/My Tests/My.Tests.csproj' --no-build",
-            Build("Ns.C.T", Flaky(4), 9, target: target)!.Command,
+            "dotnet test 'tests/My Tests/My.Tests.csproj' -e",
+            Build("Ns.C.T", Flaky(4, 9), target: target)!.Command,
             StringComparison.Ordinal);
     }
 
@@ -271,19 +300,19 @@ public sealed class ReproCommandTests
     [InlineData("xunit.console")]
     public void WithNoKnownRunnerThereIsNoRepro(string? runner)
     {
-        Assert.Null(Build("Ns.C.T", Flaky(4), 9, target: new ReproTarget(runner, "tests/A/A.csproj")));
+        Assert.Null(Build("Ns.C.T", Flaky(4, 9), target: new ReproTarget(runner, "tests/A/A.csproj")));
     }
 
-    private static FlakyEvidence Flaky(int failing) =>
-        (FlakyEvidence)EvidenceSamples.For(FindingKind.Flaky) with { SessionsWithFailures = failing };
+    private static FlakyEvidence Flaky(int failing, int judged) =>
+        (FlakyEvidence)EvidenceSamples.For(FindingKind.Flaky) with { RunsFailed = failing, RunsJudged = judged };
 
-    private static ClusterMember Member(string name, int failures, int failingSessions, int sessions) =>
-        new("fp-" + name, name, failures, failingSessions, sessions);
+    private static ClusterMember Member(string name, int failures, int runsFailed, int runsJudged) =>
+        new("fp-" + name, name, failures, runsFailed, runsJudged);
 
+    // The finding's own run count is the window's on purpose: the repro must not read it.
     private static Repro? Build(
         string name,
         FindingEvidence evidence,
-        int ranIn,
         FindingKind kind = FindingKind.Flaky,
         ReproTarget? target = null) =>
         ReproCommand.For(
@@ -292,7 +321,7 @@ public sealed class ReproCommandTests
                 kind,
                 Severity.Medium,
                 EvidenceLevel.Moderate,
-                ranIn,
+                20,
                 new FindingSubject.SingleTest(new TestReference("fp", name, name, null, null, "MyApp.Tests")),
                 evidence,
                 0.5),
