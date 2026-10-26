@@ -6,6 +6,7 @@
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -15,6 +16,8 @@ namespace Xping.Cli.Tests.Report;
 public sealed class ReproCommandTests
 {
     private const string Prefix = "dotnet test --no-build -e XPING_ENABLED=false --filter ";
+
+    private static readonly ReproTarget VSTest = new(LocalSessionProperties.VSTestRunner, null);
 
     [Fact]
     public void AFlakyTestIsRerunEnoughTimesToSeeItFail()
@@ -96,7 +99,7 @@ public sealed class ReproCommandTests
             Sessions = 20
         };
 
-        Repro repro = ReproCommand.For(Group(evidence))!;
+        Repro repro = ReproCommand.For(Group(evidence), VSTest)!;
 
         Assert.Equal(Prefix + "FullyQualifiedName=Ns.B.Two", repro.Command);
         Assert.Equal(5, repro.Runs);
@@ -111,7 +114,7 @@ public sealed class ReproCommandTests
             Sessions = 20
         };
 
-        Assert.Equal(1, ReproCommand.For(Group(evidence))!.Runs);
+        Assert.Equal(1, ReproCommand.For(Group(evidence), VSTest)!.Runs);
     }
 
     [Fact]
@@ -131,7 +134,7 @@ public sealed class ReproCommandTests
             Sessions = 20
         };
 
-        Repro repro = ReproCommand.For(Group(evidence))!;
+        Repro repro = ReproCommand.For(Group(evidence), VSTest)!;
 
         Assert.Equal(
             Prefix + "'FullyQualifiedName=Ns.A.One|FullyQualifiedName=Ns.C.Three|FullyQualifiedName=Ns.B.Two'",
@@ -176,9 +179,68 @@ public sealed class ReproCommandTests
     [InlineData("Ns.C.S(\"c:\\\\x\")", @"'FullyQualifiedName=Ns.C.S\(\""c:\\\\x\""\)'")]
     [InlineData("Ns.C.S(\"it's\")", @"'FullyQualifiedName=Ns.C.S\(\""it'\''s\""\)'")]
     [InlineData("Ns.C.S(\"a&b!~\")", @"'FullyQualifiedName=Ns.C.S\(\""a\&b\!\~\""\)'")]
-    public void TheNameIsEscapedForTheFilterAndQuotedForTheShell(string name, string filter)
+    [InlineData("Ns.C.S(\"50%20off\")", @"'FullyQualifiedName=Ns.C.S\(\""50%2520off\""\)'")]
+    public void OnVSTestTheNameIsEscapedForTheFilterMSBuildAndTheShell(string name, string filter)
     {
         Assert.Equal(Prefix + filter, Build(name, Flaky(4, 9))!.Command);
+    }
+
+    /// <summary>Amendment 2B: <c>dotnet run</c> hands the filter to the app, so only the filter syntax is escaped.</summary>
+    [Theory]
+    [InlineData(
+        "SampleApp.NUnit.CalculatorTests.Echo(\"50%20off\")",
+        @"'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Echo\(""50%20off""\)'")]
+    [InlineData("Ns.C.S(\"c:\\\\x\")", @"'FullyQualifiedName=Ns.C.S\(""c:\\\\x""\)'")]
+    [InlineData("Ns.C.S(\"a=b|c\")", @"'FullyQualifiedName=Ns.C.S\(""a\=b\|c""\)'")]
+    [InlineData("Ns.Outer+Inner.Nested", "FullyQualifiedName=Ns.Outer+Inner.Nested")]
+    public void OnTheTestingPlatformOnlyTheFilterSyntaxIsEscaped(string name, string filter)
+    {
+        Repro repro = Build(name, Flaky(4, 9), target: new ReproTarget(LocalSessionProperties.TestingPlatformRunner, null))!;
+
+        Assert.Equal("dotnet run --no-build -e XPING_ENABLED=false -- --filter " + filter, repro.Command);
+    }
+
+    /// <summary>Amendment 2A.</summary>
+    [Fact]
+    public void AVSTestProjectRunsUnderDotnetTestNamingTheProject()
+    {
+        var target = new ReproTarget(LocalSessionProperties.VSTestRunner, "tests/SampleApp.MSTest/SampleApp.MSTest.csproj");
+
+        Assert.Equal(
+            "dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj --no-build -e XPING_ENABLED=false " +
+            "--filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.Add",
+            Build("SampleApp.MSTest.CalculatorTests.Add", Flaky(4, 9), target: target)!.Command);
+    }
+
+    [Fact]
+    public void ATestingPlatformProjectRunsAsItsOwnExecutable()
+    {
+        var target = new ReproTarget(LocalSessionProperties.TestingPlatformRunner, "tests/SampleApp.NUnit/SampleApp.NUnit.csproj");
+
+        Assert.Equal(
+            "dotnet run --project tests/SampleApp.NUnit/SampleApp.NUnit.csproj --no-build -e XPING_ENABLED=false " +
+            "-- --filter 'FullyQualifiedName=SampleApp.NUnit.CalculatorTests.Divide\\(10,0\\)'",
+            Build("SampleApp.NUnit.CalculatorTests.Divide(10,0)", Flaky(4, 9), target: target)!.Command);
+    }
+
+    [Fact]
+    public void AProjectPathTheShellWouldReadIsQuoted()
+    {
+        var target = new ReproTarget(LocalSessionProperties.VSTestRunner, "tests/My Tests/My.Tests.csproj");
+
+        Assert.StartsWith(
+            "dotnet test 'tests/My Tests/My.Tests.csproj' --no-build",
+            Build("Ns.C.T", Flaky(4, 9), target: target)!.Command,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>Amendment 2A: a guessed runner prints a command that fails.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("xunit.console")]
+    public void WithNoKnownRunnerThereIsNoRepro(string? runner)
+    {
+        Assert.Null(Build("Ns.C.T", Flaky(4, 9), target: new ReproTarget(runner, "tests/A/A.csproj")));
     }
 
     private static FlakyEvidence Flaky(int failing, int sessions) =>
@@ -190,7 +252,11 @@ public sealed class ReproCommandTests
 
     private static ClusterMember Member(string name, int failures) => new("fp-" + name, name, failures);
 
-    private static Repro? Build(string name, FindingEvidence evidence, FindingKind kind = FindingKind.Flaky) =>
+    private static Repro? Build(
+        string name,
+        FindingEvidence evidence,
+        FindingKind kind = FindingKind.Flaky,
+        ReproTarget? target = null) =>
         ReproCommand.For(
             new Finding(
                 "f_00000000",
@@ -200,7 +266,8 @@ public sealed class ReproCommandTests
                 9,
                 new FindingSubject.SingleTest(new TestReference("fp", name, name, null, null, "MyApp.Tests")),
                 evidence,
-                0.5));
+                0.5),
+            target ?? VSTest);
 
     private static Finding Group(FindingEvidence evidence) =>
         new(

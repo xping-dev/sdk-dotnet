@@ -6,6 +6,7 @@
 using System.Text;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Report;
 
@@ -30,6 +31,14 @@ namespace Xping.Cli.Report;
 /// concurrency or a time-of-day effect does not show up as pass or fail; a vanished test has nothing
 /// to run. A command that cannot show the failure discredits the report more than no command.
 /// </para>
+/// <para>
+/// The command follows the runner the SDK recorded. A vstest project runs under <c>dotnet test</c>;
+/// a Microsoft.Testing.Platform project runs as its own executable through <c>dotnet run</c>, which
+/// works whether the suite is usually started that way or by <c>dotnet test</c> in the SDK's
+/// platform mode — and in that mode <c>-e</c> does not reach the test process, so the repro runs
+/// would be recorded. With no runner recorded there is no command: a guessed runner prints one that
+/// fails.
+/// </para>
 /// </remarks>
 internal static class ReproCommand
 {
@@ -43,27 +52,51 @@ internal static class ReproCommand
     /// Builds the repro for a finding.
     /// </summary>
     /// <param name="finding">The finding.</param>
-    /// <returns>The repro, or null when rerunning cannot show this kind of failure.</returns>
-    public static Repro? For(Finding finding)
+    /// <param name="target">The runner and project the window's newest session recorded.</param>
+    /// <returns>
+    /// The repro, or null when rerunning cannot show this kind of failure or the runner is unknown.
+    /// </returns>
+    public static Repro? For(Finding finding, ReproTarget target)
     {
         ArgumentNullException.ThrowIfNull(finding);
+        ArgumentNullException.ThrowIfNull(target);
 
-        return finding.Evidence switch
+        bool? runner = target.Runner switch
         {
-            FlakyEvidence e => Sized(Single(finding), e.SessionsWithFailures, e.SessionsConsidered),
-
-            // Broken, not intermittent: one run shows it, whatever the odd pass in the window says.
-            AlwaysFailingEvidence e => Build(Single(finding), 1, 1, e.SessionsWithFailures, e.SessionsConsidered),
-
-            TimingOutEvidence e => Sized(Single(finding), e.SessionsWithTimeouts, e.SessionsConsidered),
-
-            // A broken fixture fails every test that uses it, so one member shows it.
-            BrokenFixtureEvidence e => Sized(MostFailing(e.Members, 1), e.SessionsAffected, e.Sessions),
-
-            SharedFailureEvidence e => Sized(MostFailing(e.Members, SharedFailureMembers), e.SessionsAffected, e.Sessions),
-
+            LocalSessionProperties.VSTestRunner => true,
+            LocalSessionProperties.TestingPlatformRunner => false,
             _ => null
         };
+
+        if (runner is not { } vstest)
+            return null;
+
+        (string[] names, int failing, int sessions, bool once) = finding.Evidence switch
+        {
+            FlakyEvidence e => (Single(finding), e.SessionsWithFailures, e.SessionsConsidered, false),
+
+            // Broken, not intermittent: one run shows it, whatever the odd pass in the window says.
+            AlwaysFailingEvidence e => (Single(finding), e.SessionsWithFailures, e.SessionsConsidered, true),
+
+            TimingOutEvidence e => (Single(finding), e.SessionsWithTimeouts, e.SessionsConsidered, false),
+
+            // A broken fixture fails every test that uses it, so one member shows it.
+            BrokenFixtureEvidence e => (MostFailing(e.Members, 1), e.SessionsAffected, e.Sessions, false),
+
+            SharedFailureEvidence e =>
+                (MostFailing(e.Members, SharedFailureMembers), e.SessionsAffected, e.Sessions, false),
+
+            _ => ([], 0, 0, false)
+        };
+
+        if (names.Length == 0 || failing <= 0 || sessions <= 0)
+            return null;
+
+        return new Repro(
+            Command(names, vstest, target.ProjectPath),
+            once ? 1 : RunsNeeded((double)failing / sessions),
+            failing,
+            sessions);
     }
 
     private static string[] Single(Finding finding) =>
@@ -74,29 +107,20 @@ internal static class ReproCommand
     private static string[] MostFailing(IReadOnlyList<ClusterMember> members, int count) =>
         [.. members.OrderByDescending(member => member.Failures).Take(count).Select(member => member.FullyQualifiedName)];
 
-    private static Repro? Sized(string[] names, int failing, int sessions)
+    private static string Command(string[] names, bool vstest, string? projectPath)
     {
-        if (failing <= 0 || sessions <= 0)
-            return null;
+        var builder = new StringBuilder(vstest ? "dotnet test" : "dotnet run");
 
-        int needed = RunsNeeded((double)failing / sessions);
+        if (projectPath != null)
+            builder.Append(vstest ? " " : " --project ").Append(ShellQuote.Of(projectPath));
 
-        return Build(names, needed <= LocalAnalysisConstants.ReproMaxRuns ? needed : null, needed, failing, sessions);
-    }
+        string filter = string.Join("|", names.Select(name => "FullyQualifiedName=" + Escape(name, vstest)));
 
-    private static Repro? Build(string[] names, int? runs, int needed, int failing, int sessions)
-    {
-        if (names.Length == 0 || sessions <= 0)
-            return null;
-
-        string filter = string.Join("|", names.Select(name => "FullyQualifiedName=" + Escape(name)));
-
-        return new Repro(
-            "dotnet test --no-build -e XPING_ENABLED=false --filter " + ShellQuote.Of(filter),
-            runs,
-            needed,
-            failing,
-            sessions);
+        return builder
+            .Append(" --no-build -e XPING_ENABLED=false ")
+            .Append(vstest ? "--filter " : "-- --filter ")
+            .Append(ShellQuote.Of(filter))
+            .ToString();
     }
 
     /// <summary>
@@ -114,23 +138,29 @@ internal static class ReproCommand
     }
 
     /// <summary>
-    /// Escapes a name for a VSTest filter value.
+    /// Escapes a name for a filter value.
     /// </summary>
     /// <remarks>
-    /// VSTest reserves <c>\ ( ) &amp; | = ! ~</c>. <c>"</c> is not VSTest's but MSBuild's:
-    /// <c>dotnet test</c> hands the filter to MSBuild as a property, and a bare quote there fails
-    /// before the runner starts. NUnit's stored names quote their string arguments.
+    /// The filter syntax reserves <c>\ ( ) &amp; | = ! ~</c> on both runners. <c>dotnet test</c> on
+    /// vstest also hands the filter to MSBuild as a property, which fails on a bare <c>"</c> and
+    /// decodes <c>%XX</c>, so those two are escaped for MSBuild too; NUnit's stored names quote their
+    /// string arguments. <c>dotnet run</c> passes the filter to the test app as it is, and there an
+    /// escaped quote does not parse.
     /// </remarks>
-    private static string Escape(string name)
+    private static string Escape(string name, bool throughMSBuild)
     {
         var builder = new StringBuilder(name.Length + 8);
 
         foreach (char c in name)
         {
-            if (c is '\\' or '(' or ')' or '&' or '|' or '=' or '!' or '~' or '"')
-                builder.Append('\\');
-
-            builder.Append(c);
+            if (c is '\\' or '(' or ')' or '&' or '|' or '=' or '!' or '~')
+                builder.Append('\\').Append(c);
+            else if (throughMSBuild && c == '"')
+                builder.Append("\\\"");
+            else if (throughMSBuild && c == '%')
+                builder.Append("%25");
+            else
+                builder.Append(c);
         }
 
         return builder.ToString();
