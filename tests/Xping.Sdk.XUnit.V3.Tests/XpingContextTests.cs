@@ -3,10 +3,12 @@
  * License: [MIT]
  */
 
+using System.Reflection;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Sdk.XUnit.V3.Tests;
 
@@ -72,6 +74,36 @@ public sealed class XpingContextTests : IAsyncLifetime
 
         Assert.Null(await XpingContext.FinalizeAndShutdownAsync());
         Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Theory]
+    [InlineData(LocalSessionProperties.VSTestRunner, false)]
+    [InlineData(LocalSessionProperties.TestingPlatformRunner, true)]
+    [InlineData(null, true)]
+    public void FailsThroughExitCode_EveryRunnerButVSTest(string? runner, bool expected)
+    {
+        Assert.Equal(expected, XpingContext.FailsThroughExitCode(runner));
+    }
+
+    /// <summary>
+    /// xUnit can build the framework again off the runner's call stack, where detection cannot tell.
+    /// </summary>
+    [Fact]
+    public void RecordRunner_ADetectionThatCouldNotTell_KeepsTheRunnerAlreadyDetected()
+    {
+        FieldInfo runner = typeof(XpingContext).GetField("_runner", BindingFlags.NonPublic | BindingFlags.Static)!;
+        object? before = runner.GetValue(null);
+        try
+        {
+            XpingContext.RecordRunner(LocalSessionProperties.TestingPlatformRunner);
+            XpingContext.RecordRunner(null);
+
+            Assert.Equal(LocalSessionProperties.TestingPlatformRunner, XpingContext.DetectedRunner);
+        }
+        finally
+        {
+            runner.SetValue(null, before);
+        }
     }
 
     // Port 9 (discard) is closed on loopback, so the upload is refused immediately.

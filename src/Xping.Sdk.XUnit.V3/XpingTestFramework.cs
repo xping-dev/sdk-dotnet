@@ -71,6 +71,9 @@ public sealed class XpingTestFramework : XunitTestFramework
         XpingExecutorServices services;
         try
         {
+            // The session ends with each run, and a long-lived process, such as an IDE's test server,
+            // may ask this framework for another. Initialize() does nothing while a session is open.
+            XpingContext.Initialize();
             services = XpingContext.GetExecutorServices();
         }
         catch (XpingConfigurationException ex)

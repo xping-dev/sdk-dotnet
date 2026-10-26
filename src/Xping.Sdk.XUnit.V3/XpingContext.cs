@@ -27,7 +27,7 @@ namespace Xping.Sdk.XUnit.V3;
 /// Global context for managing the Xping SDK lifecycle in xUnit v3 test assemblies.
 /// Provides initialization, test recording, and cleanup functionality.
 /// </summary>
-public class XpingContext : XpingContextOrchestrator
+public sealed class XpingContext : XpingContextOrchestrator
 {
     private static Lazy<XpingContext>? _instance;
 
@@ -35,6 +35,10 @@ public class XpingContext : XpingContextOrchestrator
     // Static rather than per instance: the runner is a property of the process, and Initialize() may
     // build the context before or after the framework has looked.
     private static string? _runner;
+
+    // The configuration the last session was started with, for the next one: the session ends with each
+    // run, and a long-lived process, such as an IDE's test server, can start another run.
+    private static XpingConfiguration? _configuration;
 
     private readonly ILogger<XpingContext> _logger;
 
@@ -59,13 +63,25 @@ public class XpingContext : XpingContextOrchestrator
     /// Microsoft.Testing.Platform even when vstest runs it, so the entry assembly the base class reads
     /// would call every run an MTP run.
     /// </remarks>
-    protected override string? TestRunner => Volatile.Read(ref _runner);
+    protected override string? TestRunner => DetectedRunner;
+
+    /// <summary>Gets the runner <see cref="XpingTestFramework"/> detected, or <see langword="null"/>.</summary>
+    internal static string? DetectedRunner => Volatile.Read(ref _runner);
 
     /// <summary>
     /// Records the test runner <see cref="XpingTestFramework"/> found hosting this process.
     /// </summary>
     /// <param name="runner">The runner, or <see langword="null"/> when it could not tell.</param>
-    internal static void RecordRunner(string? runner) => Volatile.Write(ref _runner, runner);
+    /// <remarks>
+    /// xUnit may build the framework more than once in a process, and a later build can happen off the
+    /// runner's call stack. The runner cannot change within a process, so a detection that could not tell
+    /// never replaces one that could.
+    /// </remarks>
+    internal static void RecordRunner(string? runner)
+    {
+        if (runner != null)
+            Volatile.Write(ref _runner, runner);
+    }
 
     private static XpingContext CreateInstance(XpingConfiguration? configuration = null)
     {
@@ -99,16 +115,18 @@ public class XpingContext : XpingContextOrchestrator
     }
 
     /// <summary>
-    /// Initializes the Xping context with the default configuration.
-    /// Loads configuration from appsettings.json or environment variables.
+    /// Initializes the Xping context with the default configuration, which loads from appsettings.json
+    /// and environment variables, or with the configuration an earlier session in this process was
+    /// initialized with.
     /// </summary>
     public static void Initialize()
     {
         if (IsInitialized)
             return;
 
+        XpingConfiguration? configuration = Volatile.Read(ref _configuration);
         Lazy<XpingContext> newInstance = new(
-            valueFactory: () => CreateInstance(),
+            valueFactory: () => CreateInstance(configuration),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
         Interlocked.CompareExchange(ref _instance, newInstance, null);
@@ -122,6 +140,8 @@ public class XpingContext : XpingContextOrchestrator
     {
         if (IsInitialized)
             return;
+
+        Volatile.Write(ref _configuration, configuration.RequireNotNull());
 
         Lazy<XpingContext> newInstance = new(
             valueFactory: () => CreateInstance(configuration),
@@ -200,9 +220,22 @@ public class XpingContext : XpingContextOrchestrator
     /// </remarks>
     internal static void FailRun(XpingNetworkException runFailure)
     {
-        if (Volatile.Read(ref _runner) == LocalSessionProperties.TestingPlatformRunner)
+        if (FailsThroughExitCode(DetectedRunner))
             FailProcessOnExit(runFailure);
     }
+
+    /// <summary>
+    /// Whether a strict-mode failure also has to set the exit code on this runner.
+    /// </summary>
+    /// <param name="runner">The detected runner, or <see langword="null"/> when it is not known.</param>
+    /// <returns><see langword="false"/> only for vstest.</returns>
+    /// <remarks>
+    /// Only vstest is excluded, because the error message already fails the run there. An unknown runner
+    /// may be Microsoft.Testing.Platform, which would otherwise pass the run, and on xUnit's console runner
+    /// a second failing signal is harmless.
+    /// </remarks>
+    internal static bool FailsThroughExitCode(string? runner) =>
+        !string.Equals(runner, LocalSessionProperties.VSTestRunner, StringComparison.Ordinal);
 
     /// <summary>
     /// Disposes the singleton context instance, releasing the flush lock, timer, and host,

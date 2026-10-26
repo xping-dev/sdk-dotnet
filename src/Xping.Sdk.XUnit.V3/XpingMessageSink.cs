@@ -51,7 +51,13 @@ internal sealed class XpingMessageSink : IMessageSink
     private readonly ConcurrentDictionary<string, TestExecutionData> _testData = new(StringComparer.Ordinal);
 
     // The attempt a retry library last announced, by test case display name; see RecordRetryAttempt.
+    // Read rather than taken: a theory case that was not pre-enumerated reports every row of the
+    // attempt after one announcement.
     private readonly ConcurrentDictionary<string, int> _retryAttempts = new(StringComparer.Ordinal);
+
+    // Relativized source paths, by the path xUnit recorded. Relativizing walks the filesystem up to
+    // the repository root, and every test in a file has the same answer.
+    private static readonly ConcurrentDictionary<string, string> _sourceFiles = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="XpingMessageSink"/> class for a run of the
@@ -350,7 +356,7 @@ internal sealed class XpingMessageSink : IMessageSink
 
         TestMetadata metadata = ExtractMetadata(data.Traits, arguments, output);
 
-        int? announcedAttempt = _retryAttempts.TryRemove(testCase.TestCaseDisplayName, out int attempt) ? attempt : null;
+        int? announcedAttempt = _retryAttempts.TryGetValue(testCase.TestCaseDisplayName, out int attempt) ? attempt : null;
         RetryMetadata? retryMetadata = announcedAttempt is int known && _retryDetector is IXUnitRetryDetector detector
             ? detector.DetectRetryMetadata(testCase, outcome, known)
             : _retryDetector.DetectRetryMetadata(testCase, outcome);
@@ -418,14 +424,30 @@ internal sealed class XpingMessageSink : IMessageSink
     /// identity whichever way the runner enumerated it: vstest and Microsoft.Testing.Platform
     /// pre-enumerate, xUnit's own console runner does not by default.
     /// </para>
+    /// <para>
+    /// The exception is a display name xUnit shortened, which it marks with an ellipsis: long strings,
+    /// long collections and deep objects. Rows that differ only past the cut would share one identity,
+    /// so a case that carries its arguments is identified by them instead.
+    /// </para>
     /// </remarks>
     internal static object[]? ResolveArguments(IXunitTestCase testCase, string testDisplayName)
     {
         if (testCase.TestMethod.Parameters.Count == 0)
             return null;
 
-        return [ArgumentText(testDisplayName)];
+        string argumentText = ArgumentText(testDisplayName);
+
+        if (argumentText.Contains(ArgumentFormatterEllipsis) && testCase.TestMethod.TestMethodArguments is { Length: > 0 } arguments)
+        {
+            // A null argument is a value like any other: the identity generator formats it as null.
+            return arguments!;
+        }
+
+        return [argumentText];
     }
+
+    /// <summary>The mark xUnit's argument formatter leaves where it shortened a value: three middle dots.</summary>
+    private const string ArgumentFormatterEllipsis = "\u00B7\u00B7\u00B7";
 
     /// <summary>
     /// Reads the argument list out of a theory row's display name: <c>Class.Method(x: 1)</c> gives <c>x: 1</c>.
@@ -476,7 +498,7 @@ internal sealed class XpingMessageSink : IMessageSink
     private const string TestPipelineExceptionType = "Xunit.Sdk.TestPipelineException";
 
     /// <summary>The part of that exception's message naming the fixture, common to every scope.</summary>
-    private const string FixtureConstructorMarker = "fixture type '";
+    private const string FixtureMarker = "fixture type '";
 
     /// <summary>
     /// The framework frame xUnit disposes a test class through. Written by the runner rather than by
@@ -528,9 +550,9 @@ internal sealed class XpingMessageSink : IMessageSink
 
         if (string.Equals(exceptionType, TestPipelineExceptionType, StringComparison.Ordinal))
         {
-            string? fixtureType = ReadFixtureType(errorMessage);
-            if (fixtureType != null)
-                return (FailureSite.FixtureSetup, StackFrameLookup.Shorten(fixtureType + ConstructorSuffix));
+            (string Type, string Step)? fixture = ReadFixtureFailure(errorMessage);
+            if (fixture is (string type, string step))
+                return FixtureFailureSite(type, step);
         }
 
         var frames = new List<string>(StackFrameLookup.Frames(stackTrace));
@@ -599,21 +621,50 @@ internal sealed class XpingMessageSink : IMessageSink
     }
 
     /// <summary>
-    /// Reads the fixture's type name out of the message xUnit wraps a failing fixture constructor in.
+    /// Reads the fixture's type name, and what follows it, out of the message xUnit wraps a failing
+    /// fixture in: <c>Class fixture type 'Shop.Db' threw in InitializeAsync</c>.
     /// </summary>
-    private static string? ReadFixtureType(string? errorMessage)
+    private static (string Type, string Step)? ReadFixtureFailure(string? errorMessage)
     {
         if (errorMessage == null)
             return null;
 
-        int marker = errorMessage.IndexOf(FixtureConstructorMarker, StringComparison.Ordinal);
+        int marker = errorMessage.IndexOf(FixtureMarker, StringComparison.Ordinal);
         if (marker < 0)
             return null;
 
-        int start = marker + FixtureConstructorMarker.Length;
+        int start = marker + FixtureMarker.Length;
         int end = errorMessage.IndexOf('\'', start);
+        if (end <= start)
+            return null;
 
-        return end > start ? errorMessage.Substring(start, end - start) : null;
+        int lineEnd = errorMessage.IndexOf('\n', end);
+        string step = lineEnd < 0 ? errorMessage.Substring(end + 1) : errorMessage.Substring(end + 1, lineEnd - end - 1);
+
+        return (errorMessage.Substring(start, end - start), step.Trim());
+    }
+
+    /// <summary>
+    /// Names the fixture member xUnit's message says failed.
+    /// </summary>
+    /// <remarks>
+    /// xUnit v3 4.0.2 writes "threw in its constructor", "threw in InitializeAsync", "threw in Dispose",
+    /// "threw in DisposeAsync", "had one or more unresolved constructor arguments" and "may only define a
+    /// single public constructor". The last two are about the constructor too, and so is any wording a
+    /// later version adds: the constructor is where a fixture most often fails.
+    /// </remarks>
+    private static (FailureSite? Site, string? Member) FixtureFailureSite(string type, string step)
+    {
+        foreach (string member in new[] { "InitializeAsync", "DisposeAsync", "Dispose" })
+        {
+            if (!string.Equals(step, "threw in " + member, StringComparison.Ordinal))
+                continue;
+
+            FailureSite site = member == "InitializeAsync" ? FailureSite.FixtureSetup : FailureSite.FixtureTeardown;
+            return (site, StackFrameLookup.Shorten(type + "." + member));
+        }
+
+        return (FailureSite.FixtureSetup, StackFrameLookup.Shorten(type + ConstructorSuffix));
     }
 
     private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
@@ -691,7 +742,7 @@ internal sealed class XpingMessageSink : IMessageSink
     internal static (string? File, int? Line) ResolveSourceLocation(string? sourceFilePath, int? sourceLineNumber, MethodInfo method)
     {
         if (!string.IsNullOrEmpty(sourceFilePath))
-            return (SourceLocationLookup.Relativize(sourceFilePath!, repositoryRoot: null), sourceLineNumber);
+            return (_sourceFiles.GetOrAdd(sourceFilePath!, static path => SourceLocationLookup.Relativize(path, repositoryRoot: null)), sourceLineNumber);
 
         return SourceLocationLookup.Of(method);
     }

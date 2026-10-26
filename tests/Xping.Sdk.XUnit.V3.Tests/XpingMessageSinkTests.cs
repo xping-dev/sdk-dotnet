@@ -11,6 +11,7 @@ using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity.Internals;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.XUnit.V3.Probe;
+using Xping.Sdk.XUnit.V3.Retry;
 using Xunit.Sdk;
 using Xunit.v3;
 
@@ -167,6 +168,29 @@ public sealed class XpingMessageSinkTests
         Assert.Equal(["value: 2"], XpingMessageSink.ResolveArguments(testCase, "Probe.OutcomeTests.Theory(value: 2)"));
     }
 
+    /// <summary>
+    /// xUnit cuts a string argument past 50 characters, so two rows that differ only after the cut
+    /// display the same. A pre-enumerated case carries its arguments, which still tell them apart.
+    /// </summary>
+    [Fact]
+    public void ResolveArguments_ADisplayNameXunitShortened_IsTheArgumentsTheCaseCarries()
+    {
+        object[] arguments = [new string('a', 60) + "b"];
+        IXunitTestCase testCase = TestCase("case", nameof(OutcomeTests.Theory), arguments);
+
+        Assert.Equal(arguments, XpingMessageSink.ResolveArguments(testCase, "Probe.OutcomeTests.Theory(value: \"aaaa\"\u00B7\u00B7\u00B7)"));
+    }
+
+    [Fact]
+    public void ResolveArguments_AShortenedDisplayNameOfACaseWithoutArguments_IsItsArgumentText()
+    {
+        IXunitTestCase testCase = TestCase("case", nameof(OutcomeTests.Theory));
+
+        Assert.Equal(
+            ["value: \"aaaa\"\u00B7\u00B7\u00B7"],
+            XpingMessageSink.ResolveArguments(testCase, "Probe.OutcomeTests.Theory(value: \"aaaa\"\u00B7\u00B7\u00B7)"));
+    }
+
     [Theory]
     [InlineData("Test collection for Shop.CartTests (id: 3162997e34be91f108c54ac8)", "Test collection for Shop.CartTests")]
     [InlineData("Database", "Database")]
@@ -188,6 +212,28 @@ public sealed class XpingMessageSinkTests
 
         Assert.Equal("Probe.RetryTests.Flaky(name: \"a\")", testCase);
         Assert.Equal(2, attempt);
+    }
+
+    /// <summary>
+    /// A theory case that was not pre-enumerated runs every row on each attempt, after one announcement.
+    /// </summary>
+    [Fact]
+    public void AnAnnouncedAttempt_AppliesToEveryTestOfTheCase()
+    {
+        var recorded = new List<TestExecution>();
+        IXunitTestCase testCase = TestCase("case", typeof(RetryTests), nameof(RetryTests.PassesOnItsSecondAttempt));
+        XpingMessageSink sink = CreateSink(Collecting([]), [testCase], record: recorded.Add, retryDetector: new XUnitRetryDetector());
+
+        sink.OnMessage(Mock.Of<IDiagnosticMessage>(m =>
+            m.Message == $"Running test \"{testCase.TestCaseDisplayName}\" attempt (2/3)"));
+
+        foreach (string test in new[] { "row 1", "row 2" })
+        {
+            sink.OnMessage(Starting(test, "case", test, DateTimeOffset.UtcNow));
+            sink.OnMessage(Mock.Of<ITestPassed>(m => m.TestUniqueID == test && m.Output == string.Empty));
+        }
+
+        Assert.Equal([2, 2], recorded.Select(execution => execution.Retry!.AttemptNumber));
     }
 
     [Theory]
@@ -255,6 +301,24 @@ public sealed class XpingMessageSinkTests
 
         Assert.Equal(FailureSite.FixtureSetup, site);
         Assert.Equal(member, failed);
+    }
+
+    /// <summary>
+    /// The messages are xUnit v3 4.0.2's own. A fixture that got past its constructor is named by the
+    /// member that failed, rather than sending the reader to a constructor that worked.
+    /// </summary>
+    [Theory]
+    [InlineData("Class fixture type 'Probe.Db' threw in InitializeAsync\nboom", FailureSite.FixtureSetup, "Db.InitializeAsync")]
+    [InlineData("Collection fixture type 'Probe.Db' threw in DisposeAsync\nboom", FailureSite.FixtureTeardown, "Db.DisposeAsync")]
+    [InlineData("Class fixture type 'Probe.Db' threw in Dispose\nboom", FailureSite.FixtureTeardown, "Db.Dispose")]
+    [InlineData("Class fixture type 'Probe.Db' had one or more unresolved constructor arguments: Int32 x", FailureSite.FixtureSetup, "Db..ctor")]
+    public void ResolveFailureSite_AFixtureFailingOutsideItsConstructor_NamesTheMemberThatFailed(
+        string message, FailureSite expectedSite, string expectedMember)
+    {
+        var (site, member) = Resolve(TestOutcome.Failed, "Xunit.Sdk.TestPipelineException", message, string.Empty);
+
+        Assert.Equal(expectedSite, site);
+        Assert.Equal(expectedMember, member);
     }
 
     /// <summary>
@@ -349,12 +413,13 @@ public sealed class XpingMessageSinkTests
         Action<TestExecution>? record = null,
         Func<Task<XpingNetworkException?>>? endSession = null,
         Action<XpingNetworkException>? failRun = null,
-        IExecutionTracker? tracker = null) =>
+        IExecutionTracker? tracker = null,
+        IRetryDetector<IXunitTestCase>? retryDetector = null) =>
         new(
             inner,
             testCases ?? [],
             tracker ?? Mock.Of<IExecutionTracker>(),
-            Mock.Of<IRetryDetector<IXunitTestCase>>(),
+            retryDetector ?? Mock.Of<IRetryDetector<IXunitTestCase>>(),
             new TestIdentityGenerator(),
             captureStackTraces: true,
             assemblyName: "Probe",
@@ -382,13 +447,17 @@ public sealed class XpingMessageSinkTests
             m.StartTime == startTime &&
             m.Traits == new Dictionary<string, IReadOnlyCollection<string>>());
 
-    private static IXunitTestCase TestCase(string id, string probeMethod)
+    private static IXunitTestCase TestCase(string id, string probeMethod, object[]? arguments = null) =>
+        TestCase(id, typeof(OutcomeTests), probeMethod, arguments);
+
+    private static IXunitTestCase TestCase(string id, Type probeClass, string probeMethod, object[]? arguments = null)
     {
-        MethodInfo method = typeof(OutcomeTests).GetMethod(probeMethod)!;
+        MethodInfo method = probeClass.GetMethod(probeMethod)!;
 
         var testMethod = new Mock<IXunitTestMethod>();
         testMethod.Setup(m => m.Method).Returns(method);
         testMethod.Setup(m => m.Parameters).Returns(method.GetParameters());
+        testMethod.Setup(m => m.TestMethodArguments).Returns(arguments ?? []);
 
         var collection = new Mock<IXunitTestCollection>();
         collection.Setup(c => c.TestCollectionDisplayName).Returns("Test collection for Probe.OutcomeTests (id: 1234)");
@@ -397,9 +466,9 @@ public sealed class XpingMessageSinkTests
         testCase.Setup(c => c.UniqueID).Returns(id);
         testCase.Setup(c => c.TestMethod).Returns(testMethod.Object);
         testCase.Setup(c => c.TestCollection).Returns(collection.Object);
-        testCase.Setup(c => c.TestClassName).Returns(typeof(OutcomeTests).FullName!);
+        testCase.Setup(c => c.TestClassName).Returns(probeClass.FullName!);
         testCase.Setup(c => c.TestMethodName).Returns(probeMethod);
-        testCase.Setup(c => c.TestCaseDisplayName).Returns($"{typeof(OutcomeTests).FullName}.{probeMethod}");
+        testCase.Setup(c => c.TestCaseDisplayName).Returns($"{probeClass.FullName}.{probeMethod}");
         return testCase.Object;
     }
 }

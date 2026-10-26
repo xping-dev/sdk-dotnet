@@ -131,6 +131,12 @@ its display name carries them. vstest and Microsoft.Testing.Platform pre-enumera
 runner, and a runner configured with `preEnumerateTheories: false`, do not. Reading the arguments from
 the display name every time keeps a row's identity the same however it was run.
 
+The exception is a value xUnit shortens in the display name (it ends with `···`): a string over
+50 characters, a collection over 5 items, or a deeply nested object. A pre-enumerated row with such a
+value is identified by its real arguments instead, so rows that differ past the cut stay apart. A row
+xUnit did not pre-enumerate still uses the shortened text, so such a row has a different identity
+under xUnit's console runner than under vstest or Microsoft.Testing.Platform.
+
 #### The Runner Is Unknown Under xUnit's Own Console Runner
 
 **Impact**: A session recorded by `xunit.v3.runner.console`, or by running the test executable by

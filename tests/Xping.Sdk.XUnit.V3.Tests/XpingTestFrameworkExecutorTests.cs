@@ -36,6 +36,20 @@ public sealed class XpingTestFrameworkExecutorTests
         Assert.Single(filtered.Executions);
     }
 
+    /// <summary>
+    /// The session ends with each run. A process that keeps the framework, such as an IDE's test server,
+    /// records the next run in a session of its own, with the configuration the first was started with.
+    /// </summary>
+    [Fact]
+    public async Task ASecondRunThroughTheSameFramework_IsRecordedInASessionOfItsOwn()
+    {
+        using ProbeRun run = await ProbeRun.RunAsync(
+            filter: testCase => testCase.TestClass?.TestClassName == typeof(RetryTests).FullName,
+            runs: 2);
+
+        Assert.Equal(2, run.SessionCount);
+    }
+
     [Fact]
     public async Task TheSessionEndsBeforeTheRunnerSeesTheAssemblyFinish()
     {

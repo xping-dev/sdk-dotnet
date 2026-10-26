@@ -35,6 +35,9 @@ internal sealed class ProbeRun : IDisposable
     /// <summary>Gets the session the run stored.</summary>
     public JsonElement Session { get; private set; }
 
+    /// <summary>Gets how many sessions the run stored.</summary>
+    public int SessionCount { get; private set; }
+
     /// <summary>Gets the stored executions, by test display name.</summary>
     public Dictionary<string, JsonElement> Executions { get; } = new(StringComparer.Ordinal);
 
@@ -43,9 +46,14 @@ internal sealed class ProbeRun : IDisposable
     /// </summary>
     /// <param name="filter">Which discovered test cases to run; all when <see langword="null"/>.</param>
     /// <param name="onMessage">Called for each message as the runner receives it.</param>
+    /// <param name="runs">
+    /// How many runs one framework serves, as it may in a long-lived process. The session read back is
+    /// the only one when this is 1.
+    /// </param>
     public static async Task<ProbeRun> RunAsync(
         Func<ITestCase, bool>? filter = null,
-        Action<IMessageSinkMessage>? onMessage = null)
+        Action<IMessageSinkMessage>? onMessage = null,
+        int runs = 1)
     {
         var run = new ProbeRun();
 
@@ -56,22 +64,29 @@ internal sealed class ProbeRun : IDisposable
         var framework = new XpingTestFramework();
         try
         {
-            var controller = new InProcessFrontController(framework, typeof(OutcomeTests).Assembly, configFilePath: null);
-            var configuration = new TestAssemblyConfiguration();
-            using var cancellation = new CancellationTokenSource();
+            for (int i = 0; i < runs; i++)
+            {
+                var controller = new InProcessFrontController(framework, typeof(OutcomeTests).Assembly, configFilePath: null);
+                var configuration = new TestAssemblyConfiguration();
+                using var cancellation = new CancellationTokenSource();
 
-            await controller.FindAndRun(
-                new CollectingSink(run.Messages, onMessage),
-                TestFrameworkOptions.ForDiscovery(configuration),
-                TestFrameworkOptions.ForExecution(configuration),
-                filter ?? (_ => true),
-                cancellation).ConfigureAwait(true);
+                await controller.FindAndRun(
+                    new CollectingSink(run.Messages, onMessage),
+                    TestFrameworkOptions.ForDiscovery(configuration),
+                    TestFrameworkOptions.ForExecution(configuration),
+                    filter ?? (_ => true),
+                    cancellation).ConfigureAwait(true);
+            }
         }
         finally
         {
             await framework.DisposeAsync().ConfigureAwait(true);
             await XpingContext.ShutdownAsync().ConfigureAwait(true);
         }
+
+        run.SessionCount = SessionFiles(run._store).Length;
+        if (runs > 1)
+            return run;
 
         run.Session = ReadSession(run._store);
         foreach (JsonElement execution in run.Session.GetProperty("executions").EnumerateArray())
@@ -95,11 +110,17 @@ internal sealed class ProbeRun : IDisposable
 
     private static JsonElement ReadSession(string store)
     {
-        string session = Assert.Single(Directory.GetFiles(Path.Combine(store, "sessions"), "*.json.gz"));
+        string session = Assert.Single(SessionFiles(store));
 
         using var gzip = new GZipStream(File.OpenRead(session), CompressionMode.Decompress);
         using JsonDocument document = JsonDocument.Parse(gzip);
         return document.RootElement.Clone();
+    }
+
+    private static string[] SessionFiles(string store)
+    {
+        string sessions = Path.Combine(store, "sessions");
+        return Directory.Exists(sessions) ? Directory.GetFiles(sessions, "*.json.gz") : [];
     }
 
     private sealed class CollectingSink(List<IMessageSinkMessage> messages, Action<IMessageSinkMessage>? onMessage) : IMessageSink
