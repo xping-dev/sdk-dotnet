@@ -832,7 +832,8 @@ How the run fails:
 | Configuration error, at startup | all | The test process terminates (`Environment.FailFast`) before any test runs. |
 | Upload error, at the end of the run | xUnit | An error from the runner (`Catastrophic failure: XpingNetworkException`). |
 | | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result, so that test shows as failed. |
-| | NUnit | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
+| | NUnit on vstest | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
+| | NUnit on Microsoft.Testing.Platform | The test executable exits with code 1 after writing its reports. `dotnet test` reports the run as failed. |
 
 In every case `dotnet test` exits non-zero, and every test that ran stays in TRX and other reports.
 

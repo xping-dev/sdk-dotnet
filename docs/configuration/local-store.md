@@ -133,6 +133,18 @@ A deliberately reduced projection of each test execution:
 
 Plus per-run metadata: session id, timestamps, environment name, test assembly, branch, commit SHA, and whether the run was in CI.
 
+Each run also records how it was recorded, under the environment's custom properties. The CLI uses these. They are written to the local store only, never uploaded.
+
+| Property | Value | Absent when |
+|----------|-------|-------------|
+| `Xping.Mode` | `LocalOnly` or `Cloud` | Never |
+| `Xping.ProjectId` | The pinned project id | No project is pinned |
+| `Xping.TestFramework` | `NUnit`, `MSTest` or `xUnit` | Never |
+| `Xping.Runner` | `VSTest` or `MTP` (Microsoft.Testing.Platform) | The tests ran in another host, such as the xUnit console runner |
+| `Xping.ProjectPath` | The test project's path from the repository root, e.g. `tests/Shop.Tests/Shop.Tests.csproj` | The project was built outside a Git repository, with `GenerateAssemblyInfo=false`, or the run covered test assemblies from more than one project |
+
+The project path comes from an MSBuild file the Xping packages add to your test project's build. It stamps the path into the test assembly as `[assembly: AssemblyMetadata("Xping.ProjectPath", ...)]`. In a Git submodule the path is relative to the submodule, not the repository around it.
+
 **Stack traces, error message text, exception types, and source locations are not stored.** The store holds what local analysis needs and nothing more, which keeps it roughly ten times smaller than the uploaded payload.
 
 A consequence worth knowing: because the local record is reduced, it **cannot be re-uploaded** as a full session. It is a source of local analysis, not a backup of your uploaded data.

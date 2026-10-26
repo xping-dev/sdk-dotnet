@@ -1,0 +1,33 @@
+<Project>
+  <!--
+    Stamps the test project's path, relative to the repository root, into the test assembly as
+    [assembly: AssemblyMetadata("Xping.ProjectPath", ...)]. The SDK records it on each local session,
+    so the CLI can print a dotnet test command for the right project. Only the build knows the
+    project: at run time the SDK sees the output folder, and under vstest not even the test assembly
+    is the entry point.
+
+    Relative to the repository root so the stamped binary does not carry the build machine's folder
+    layout. GetDirectoryNameOfFileAbove matches files only, and .git is a folder in a clone but a
+    file in a worktree or submodule, so both are looked for and the nearer one wins. In a submodule
+    the path is relative to the submodule, not the repository around it.
+    Outside a repository nothing is stamped, and GenerateAssemblyInfo=false drops the attribute.
+  -->
+  <PropertyGroup>
+    <_XpingGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git/HEAD'))</_XpingGitFolderRoot>
+    <_XpingGitFileRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_XpingGitFileRoot>
+    <_XpingRepositoryRoot>$(_XpingGitFolderRoot)</_XpingRepositoryRoot>
+    <_XpingRepositoryRoot Condition="$(_XpingGitFileRoot.Length) &gt; $(_XpingGitFolderRoot.Length)">$(_XpingGitFileRoot)</_XpingRepositoryRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_XpingRepositoryRoot)' != ''">
+    <_XpingProjectPath>$([MSBuild]::MakeRelative('$([MSBuild]::EnsureTrailingSlash('$(_XpingRepositoryRoot)'))', '$(MSBuildProjectFullPath)'))</_XpingProjectPath>
+    <_XpingProjectPath>$(_XpingProjectPath.Replace('\', '/'))</_XpingProjectPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_XpingProjectPath)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Xping.ProjectPath</_Parameter1>
+      <_Parameter2>$(_XpingProjectPath)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

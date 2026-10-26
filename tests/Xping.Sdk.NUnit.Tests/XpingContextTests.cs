@@ -7,11 +7,14 @@ using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 using xRetry;
 
 namespace Xping.Sdk.NUnit.Tests;
 
 using System;
+using System.IO.Compression;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -232,11 +235,52 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
+    public void StrictModeFailure_OnTestingPlatform_SetsTheExitCodeWithoutWaiting()
+    {
+        // Microsoft.Testing.Platform writes its reports after NUnit is done; terminating the process
+        // would lose them all.
+        (TimeSpan delay, Action<XpingNetworkException> failProcess) = XpingContext.StrictModeFailure(onTestingPlatform: true);
+
+        Assert.Equal(TimeSpan.Zero, delay);
+        Assert.Equal("FailProcessOnExit", failProcess.Method.Name);
+    }
+
+    [Fact]
+    public void StrictModeFailure_InVsTestHost_TerminatesAfterTheResultsAreSent()
+    {
+        (TimeSpan delay, Action<XpingNetworkException> failProcess) = XpingContext.StrictModeFailure(onTestingPlatform: false);
+
+        Assert.Equal(XpingContext.TestHostResultFlushDelay, delay);
+        Assert.Equal("FailProcess", failProcess.Method.Name);
+    }
+
+    [Fact]
     public async Task FinalizeAndShutdownAsync_BeforeInitialize_DoesNotThrow()
     {
         var exception = await Record.ExceptionAsync(XpingContext.FinalizeAndShutdownAsync).ConfigureAwait(true);
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_WritesASessionThatNamesNUnitAsItsFramework()
+    {
+        XpingContext.Initialize(ScratchConfiguration());
+        XpingContext.RecordTest(new TestExecutionBuilder()
+            .WithTestName("TestMethod")
+            .WithOutcome(TestOutcome.Passed)
+            .WithIdentity(new TestIdentity { Assembly = "Shop.Tests", FullyQualifiedName = "Shop.Tests.TestMethod" })
+            .Build());
+
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        string file = Assert.Single(Directory.GetFiles(_scratchStore, "*.json.gz", SearchOption.AllDirectories));
+        using var gzip = new GZipStream(File.OpenRead(file), CompressionMode.Decompress);
+        using JsonDocument session = await JsonDocument.ParseAsync(gzip).ConfigureAwait(true);
+        Assert.Equal(
+            LocalSessionProperties.NUnitFramework,
+            session.RootElement.GetProperty("environmentInfo").GetProperty("customProperties")
+                .GetProperty(LocalSessionProperties.TestFramework).GetString());
     }
 
     [Fact]
