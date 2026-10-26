@@ -640,4 +640,24 @@ internal static class LocalAnalysisConstants
     /// nobody can predict. <c>--all</c> lifts both, because it means one thing in both places.
     /// </remarks>
     public const int LatestRunMaxRows = 10;
+
+    /// <summary>
+    /// The chance a finding's repro runs show at least one failure, which sets how many to run (0.95).
+    /// </summary>
+    /// <remarks>
+    /// Applied to the observed per-run rate as it stands, not to a Wilson bound. On a twenty-run
+    /// window the bound puts two failures in twenty past <see cref="ReproMaxRuns"/>, and the rate
+    /// the reader sees in the headline should be the rate the count was sized from.
+    /// </remarks>
+    public const double ReproConfidence = 0.95;
+
+    /// <summary>
+    /// The most repro runs a finding asks for (50).
+    /// </summary>
+    /// <remarks>
+    /// Past it, a rate below about 5.8%, rerunning is not a sensible way to see the failure, and the
+    /// report says so instead of printing a count nobody will run. The command is still printed, for
+    /// a reader who wants to debug one run.
+    /// </remarks>
+    public const int ReproMaxRuns = 50;
 }

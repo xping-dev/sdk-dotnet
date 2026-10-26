@@ -413,7 +413,7 @@ internal static class ReportFixtures
         FindingDto flaky = envelope.Findings[4];
         (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(
             FindingKind.Flaky,
-            new FlakyEvidence(6, 20, 20, 6, 0.3, 0, 0, 1, [signature], [], null));
+            new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null));
 
         return envelope with
         {

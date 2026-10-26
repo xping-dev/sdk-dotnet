@@ -763,6 +763,90 @@ public sealed class FailureModeProviderTests
         Assert.Equal(6, evidence.Failures);
     }
 
+    /// <summary>Amendment 4B.</summary>
+    [Fact]
+    public void EachClusterMemberCarriesTheRunsItEndedRedAndTheRunsItWasJudgedIn()
+    {
+        // A repro reruns one or a few members, so its count is sized from theirs and not the
+        // cluster's. Alpha fails twice in one run, which is one run. Beta's retry passed in the
+        // second, so a rerun of that run comes back green. Gamma was skipped in the last, which is
+        // no verdict.
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    SharedFailure("Alpha"),
+                    TestSessionFactory.Execution(
+                        "Alpha", TestOutcome.Failed, attempt: 2, exceptionType: SharedType, errorMessage: SharedMessage),
+                    SharedFailure("Beta"),
+                    SharedFailure("Gamma")
+                ]),
+            TestSessionFactory.Session(
+                5,
+                [
+                    SharedFailure("Alpha"),
+                    SharedFailure("Beta"),
+                    TestSessionFactory.Execution("Beta", attempt: 2, passedOnRetry: true),
+                    Passing("Gamma")
+                ]),
+            TestSessionFactory.Session(
+                6, [Passing("Alpha"), Passing("Beta"), TestSessionFactory.Execution("Gamma", TestOutcome.Skipped)])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal([3, 2, 1], evidence.Members.Select(m => m.Failures));
+        Assert.Equal([2, 1, 1], evidence.Members.Select(m => m.RunsFailed));
+        Assert.Equal([7, 7, 6], evidence.Members.Select(m => m.RunsJudged));
+    }
+
+    /// <summary>Amendment 4A.</summary>
+    [Fact]
+    public void AFlakyTestCountsTheRunsItEndedRedAndTheRunsItWasJudgedIn()
+    {
+        // Ten runs: failed outright in the last two, failed then passed on retry in the one before,
+        // and skipped in the first.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                ordinal switch
+                {
+                    0 => [TestSessionFactory.Execution("Subject", TestOutcome.Skipped)],
+                    7 => [FailedAttempt("Subject", 1, 1), TestSessionFactory.Execution("Subject", attempt: 2, passedOnRetry: true, maxRetries: 1)],
+                    >= 8 => [Failure("Subject")],
+                    _ => [Passing("Subject")]
+                }))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(3, evidence.SessionsWithFailures);
+        Assert.Equal(2, evidence.RunsFailed);
+        Assert.Equal(9, evidence.RunsJudged);
+    }
+
+    /// <summary>Amendment 4A.</summary>
+    [Fact]
+    public void ATimingOutTestCountsOnlyTheRunsItTimedOutIn()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                ordinal switch
+                {
+                    9 => [Failure("Subject")],
+                    >= 4 => [TimedOut("Subject")],
+                    _ => [Passing("Subject")]
+                }))];
+
+        var evidence = Assert.IsType<TimingOutEvidence>(Single(Analyze(sessions), FindingKind.TimingOut).Evidence);
+
+        Assert.Equal(5, evidence.RunsFailed);
+        Assert.Equal(10, evidence.RunsJudged);
+    }
+
     [Fact]
     public void ClusterExemplarsAreOneMemberEachInOrdinalOrder()
     {
@@ -1168,6 +1252,12 @@ public sealed class FailureModeProviderTests
         FindingCandidate flaky = For(candidates, "Alpha");
         Assert.Equal(6, context.Tests.SessionsRunIn("fp-Alpha"));
         Assert.Equal(5, flaky.EvidenceSessions);
+
+        // Amendment 4A: the repro's counts discount the same way. The outage is no run of Alpha's,
+        // and the clustered failure leaves its run judged but not one Alpha ended red on its own.
+        var own = Assert.IsType<FlakyEvidence>(flaky.Evidence);
+        Assert.Equal(1, own.RunsFailed);
+        Assert.Equal(5, own.RunsJudged);
 
         // The shared cause keeps every run, environmental ones included — an outage is a shared
         // cause seen from underneath — so its own evidence is the whole of its members' history.
