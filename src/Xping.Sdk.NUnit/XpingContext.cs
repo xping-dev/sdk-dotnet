@@ -14,6 +14,7 @@ using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.NUnit.Retry;
@@ -44,6 +45,9 @@ public class XpingContext : XpingContextOrchestrator
     {
         _logger = host.Services.GetRequiredService<ILogger<XpingContext>>();
     }
+
+    /// <inheritdoc/>
+    protected override string TestFramework => LocalSessionProperties.NUnitFramework;
 
     private static XpingContext CreateInstance(XpingConfiguration? configuration = null)
     {
@@ -158,18 +162,35 @@ public class XpingContext : XpingContextOrchestrator
     /// </summary>
     /// <remarks>
     /// <para>
-    /// NUnit reports an exception from <c>[OneTimeTearDown]</c> as a warning and still lets
-    /// <c>dotnet test</c> exit zero, so a strict-mode network error terminates the process instead. It
-    /// first waits <see cref="TestHostResultFlushDelay"/>, so the test results the test host still
-    /// holds reach <c>dotnet test</c> and stay in its reports.
+    /// NUnit reports an exception from <c>[OneTimeTearDown]</c> as a warning and still lets the run
+    /// exit zero, on vstest and on Microsoft.Testing.Platform alike, so a strict-mode network error
+    /// fails the process instead. In a vstest test host it terminates the process, after waiting
+    /// <see cref="TestHostResultFlushDelay"/> so the test results the host still holds reach
+    /// <c>dotnet test</c> and stay in its reports. On Microsoft.Testing.Platform it sets a non-zero exit
+    /// code as the process exits, after the platform has written its reports.
     /// </para>
     /// <para>
     /// Every other error is logged, and this method never throws.
     /// </para>
     /// </remarks>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FinalizeAndShutdownAsync() =>
-        FinalizeAndShutdownAsync(TestHostResultFlushDelay, FailProcess);
+    public static Task FinalizeAndShutdownAsync()
+    {
+        (TimeSpan resultFlushDelay, Action<XpingNetworkException> failProcess) =
+            StrictModeFailure(CurrentRunner == LocalSessionProperties.TestingPlatformRunner);
+        return FinalizeAndShutdownAsync(resultFlushDelay, failProcess);
+    }
+
+    /// <summary>
+    /// How <see cref="FinalizeAndShutdownAsync()"/> fails the process on a strict-mode network error.
+    /// </summary>
+    /// <param name="onTestingPlatform">Whether the tests run on Microsoft.Testing.Platform.</param>
+    /// <returns>How long to wait first, and what fails the process.</returns>
+    internal static (TimeSpan ResultFlushDelay, Action<XpingNetworkException> FailProcess) StrictModeFailure(
+        bool onTestingPlatform) =>
+        onTestingPlatform
+            ? (TimeSpan.Zero, FailProcessOnExit)
+            : (TestHostResultFlushDelay, FailProcess);
 
     /// <summary>
     /// How long a strict-mode failure waits before it terminates the process. The vstest test host

@@ -39,6 +39,8 @@ public sealed class XpingContextOrchestratorTests
 
         public TestOrchestrator(IHost host) : base(host) { }
 
+        protected override string TestFramework => "Harness";
+
         public Task<UploadResult> FlushAsync(CancellationToken ct = default)
             => FlushSessionAsync(ct);
 
@@ -76,6 +78,8 @@ public sealed class XpingContextOrchestratorTests
     private sealed class StatsOrchestrator : XpingContextOrchestrator
     {
         public StatsOrchestrator(IHost host) : base(host) { }
+
+        protected override string TestFramework => "Harness";
 
         public Action<UploadResult>? OnFinalizedResult { get; set; }
 

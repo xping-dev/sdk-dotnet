@@ -365,6 +365,31 @@ Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration:
 
 Xping SDK runs silently in the background, tracking execution data without affecting your test results.
 
+### On Microsoft.Testing.Platform
+
+The adapter hooks into MSTest, not the test runner, so it works the same on
+[Microsoft.Testing.Platform](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-intro)
+(MTP). Enable MSTest's MTP runner in the test project:
+
+```xml
+<PropertyGroup>
+  <OutputType>Exe</OutputType>
+  <EnableMSTestRunner>true</EnableMSTestRunner>
+</PropertyGroup>
+```
+
+Then run the test executable directly, or use `dotnet test` in the .NET 10 SDK's MTP mode with a
+`global.json` next to your solution:
+
+```json
+{ "test": { "runner": "Microsoft.Testing.Platform" } }
+```
+
+For a TRX report, reference `Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
+
+Unlike vstest, MTP lets the [process-exit safety net](../known-limitations.md#mstest-a-session-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest)
+finish its upload, so it needs no `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT`.
+
 ---
 
 ## Step 6: Read the Results

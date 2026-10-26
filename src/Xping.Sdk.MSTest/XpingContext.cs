@@ -15,6 +15,7 @@ using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
+using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.MSTest.Retry;
@@ -43,6 +44,9 @@ public class XpingContext : XpingContextOrchestrator
     {
         _logger = host.Services.GetRequiredService<ILogger<XpingContext>>();
     }
+
+    /// <inheritdoc/>
+    protected override string TestFramework => LocalSessionProperties.MSTestFramework;
 
     private static XpingContext CreateInstance(XpingConfiguration? configuration = null)
     {
@@ -198,11 +202,12 @@ public class XpingContext : XpingContextOrchestrator
     /// <see cref="_instance"/> before the process exits.
     /// </summary>
     /// <remarks>
-    /// This is a last resort, not a substitute for the cleanup hook. Under <c>dotnet test</c>, vstest
+    /// This is a last resort, not a substitute for the cleanup hook. On vstest, <c>dotnet test</c>
     /// terminates the test host 100 ms after the run completes (issue #126), and a network upload rarely
     /// fits in that window. Finalization writes local history before it uploads, so the run survives on
     /// disk; the cloud upload needs <c>VSTEST_TESTHOST_SHUTDOWN_TIMEOUT</c> raised in the environment
-    /// that runs <c>dotnet test</c>, which only the parent process reads.
+    /// that runs <c>dotnet test</c>, which only the parent process reads. Microsoft.Testing.Platform runs
+    /// in the test process and lets this handler finish, so the upload goes through there.
     /// </remarks>
     private static void EnsureProcessExitSafetyNetRegistered()
     {
@@ -226,9 +231,9 @@ public class XpingContext : XpingContextOrchestrator
             "finalized Xping. MSTest only runs assembly hooks declared in the test assembly itself, so " +
             "declare one that calls XpingContext.FinalizeAndShutdownAsync(), and check that yours does " +
             "not throw before that call. Finalizing as a safety net: local history is written first " +
-            "and should survive; the cloud upload may not, because vstest terminates the test host " +
-            "100 ms after the run. Set VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 in the environment that " +
-            "runs `dotnet test` to give it time.",
+            "and should survive. On vstest the cloud upload may not, because vstest terminates the test " +
+            "host 100 ms after the run: set VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 in the environment " +
+            "that runs `dotnet test` to give it time. Microsoft.Testing.Platform needs no setting.",
             context.SessionId);
 
         // FinalizeAndShutdownCoreAsync reports its own errors, but an exception out of a ProcessExit
