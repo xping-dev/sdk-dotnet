@@ -129,13 +129,13 @@ internal static class EvidenceSamples
                     "CheckoutFixture.Setup",
                     signature,
                     12,
-                    [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+                    [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)],
                     47, 3, 20, 12,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
 
             FindingKind.SharedFailure =>
                 new SharedFailureEvidence(
-                    signature, 12, [new ClusterMember("fp", "MyApp.Tests.A", 4)], 47, 3, 20, 12,
+                    signature, 12, [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)], 47, 3, 20, 12,
                     new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc), "a3f9c2e", [exemplar]),
 
             FindingKind.DurationRegression =>

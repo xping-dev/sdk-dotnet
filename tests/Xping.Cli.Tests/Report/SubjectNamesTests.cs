@@ -210,7 +210,7 @@ public sealed class SubjectNamesTests
             member,
             Signature("System.InvalidOperationException"),
             3,
-            [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+            [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)],
             12, 3, 20, 3,
             new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
             "a3f9c2e",
@@ -220,7 +220,7 @@ public sealed class SubjectNamesTests
         new(
             Signature(exceptionType),
             3,
-            [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+            [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)],
             12, 3, 20, 3,
             new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
             "a3f9c2e",

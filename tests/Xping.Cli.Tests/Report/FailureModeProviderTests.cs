@@ -764,6 +764,38 @@ public sealed class FailureModeProviderTests
     }
 
     [Fact]
+    public void EachClusterMemberCarriesTheRunsItFailedInAndTheRunsItRanIn()
+    {
+        // A repro reruns one or a few members, so its count is sized from theirs and not the
+        // cluster's. Alpha fails twice in one run (a retry), which is one run, and Gamma skipped
+        // the last run, which is not a run it was seen in.
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    SharedFailure("Alpha"),
+                    TestSessionFactory.Execution(
+                        "Alpha", TestOutcome.Failed, attempt: 2, exceptionType: SharedType, errorMessage: SharedMessage),
+                    SharedFailure("Beta"),
+                    SharedFailure("Gamma")
+                ]),
+            TestSessionFactory.Session(
+                5, [SharedFailure("Alpha"), SharedFailure("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(
+                6, [Passing("Alpha"), Passing("Beta")])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal([3, 2, 1], evidence.Members.Select(m => m.Failures));
+        Assert.Equal([2, 2, 1], evidence.Members.Select(m => m.FailingSessions));
+        Assert.Equal([7, 7, 6], evidence.Members.Select(m => m.Sessions));
+    }
+
+    [Fact]
     public void ClusterExemplarsAreOneMemberEachInOrdinalOrder()
     {
         // Which three, not just how many. Six members failed in one run, so the three exemplars are

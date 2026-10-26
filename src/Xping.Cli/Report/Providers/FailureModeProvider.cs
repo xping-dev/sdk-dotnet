@@ -104,7 +104,18 @@ internal sealed record ContrastExecution(
 /// <param name="Fingerprint">Its stable identity.</param>
 /// <param name="FullyQualifiedName">Namespace, class and method.</param>
 /// <param name="Failures">Failures of this test carrying the cluster's signature.</param>
-internal sealed record ClusterMember(string Fingerprint, string FullyQualifiedName, int Failures);
+/// <param name="FailingSessions">Sessions in which this test failed with the cluster's signature.</param>
+/// <param name="Sessions">
+/// Sessions this test ran in. Not the cluster's: a repro command reruns one or a few members, and how
+/// often a rerun shows the failure depends on how often that member failed when it ran, not on how
+/// often any member did.
+/// </param>
+internal sealed record ClusterMember(
+    string Fingerprint,
+    string FullyQualifiedName,
+    int Failures,
+    int FailingSessions,
+    int Sessions);
 
 /// <summary>
 /// Evidence that a test fails sometimes, or fails in more than one way.
@@ -457,6 +468,16 @@ internal sealed class FailureModeProvider : IFindingProvider
 
         double unreliability = 0;
 
+        var failingSessions = new Dictionary<string, HashSet<Guid>>(StringComparer.Ordinal);
+        foreach (ExecutionRef failure in cluster.Failures)
+        {
+            string key = failure.Execution.Identity.TestFingerprint;
+            if (!failingSessions.TryGetValue(key, out HashSet<Guid>? sessions))
+                failingSessions[key] = sessions = [];
+
+            sessions.Add(failure.Session.SessionId);
+        }
+
         foreach (string fingerprint in cluster.Fingerprints)
         {
             TestReference? reference = context.Tests.ReferenceFor(fingerprint);
@@ -467,7 +488,12 @@ internal sealed class FailureModeProvider : IFindingProvider
 
             cluster.FailuresByFingerprint.TryGetValue(fingerprint, out int failures);
 
-            members.Add(new ClusterMember(fingerprint, reference.FullyQualifiedName, failures));
+            members.Add(new ClusterMember(
+                fingerprint,
+                reference.FullyQualifiedName,
+                failures,
+                failingSessions.TryGetValue(fingerprint, out HashSet<Guid>? failedIn) ? failedIn.Count : 0,
+                context.Tests.SessionsRunIn(fingerprint)));
 
             // The cluster takes its worst member's unreliability rather than their average. One
             // member failing constantly makes the whole cluster worth opening, and an average would

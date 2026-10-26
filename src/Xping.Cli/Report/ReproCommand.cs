@@ -71,20 +71,22 @@ internal static class ReproCommand
         if (runner is not { } vstest)
             return null;
 
+        // Every rate is over the runs the rerun tests ran in. The window's count is larger for a test
+        // that joined it late or skipped runs, and a cluster's is larger than any subset of it; both
+        // understate how often a rerun fails, and the count comes out too high or too low.
         (string[] names, int failing, int sessions, bool once) = finding.Evidence switch
         {
-            FlakyEvidence e => (Single(finding), e.SessionsWithFailures, e.SessionsConsidered, false),
+            FlakyEvidence e => (Single(finding), e.SessionsWithFailures, finding.EvidenceSessions, false),
 
             // Broken, not intermittent: one run shows it, whatever the odd pass in the window says.
-            AlwaysFailingEvidence e => (Single(finding), e.SessionsWithFailures, e.SessionsConsidered, true),
+            AlwaysFailingEvidence e => (Single(finding), e.SessionsWithFailures, finding.EvidenceSessions, true),
 
-            TimingOutEvidence e => (Single(finding), e.SessionsWithTimeouts, e.SessionsConsidered, false),
+            TimingOutEvidence e => (Single(finding), e.SessionsWithTimeouts, finding.EvidenceSessions, false),
 
             // A broken fixture fails every test that uses it, so one member shows it.
-            BrokenFixtureEvidence e => (MostFailing(e.Members, 1), e.SessionsAffected, e.Sessions, false),
+            BrokenFixtureEvidence e => Members(e.Members, 1),
 
-            SharedFailureEvidence e =>
-                (MostFailing(e.Members, SharedFailureMembers), e.SessionsAffected, e.Sessions, false),
+            SharedFailureEvidence e => Members(e.Members, SharedFailureMembers),
 
             _ => ([], 0, 0, false)
         };
@@ -102,10 +104,33 @@ internal static class ReproCommand
     private static string[] Single(Finding finding) =>
         finding.Subject is FindingSubject.SingleTest single ? [single.Test.FullyQualifiedName] : [];
 
-    // OrderByDescending is stable, so a tie keeps the members' ordinal order and the command is
-    // the same on every run of the report.
-    private static string[] MostFailing(IReadOnlyList<ClusterMember> members, int count) =>
-        [.. members.OrderByDescending(member => member.Failures).Take(count).Select(member => member.FullyQualifiedName)];
+    /// <summary>
+    /// Picks the members most likely to fail on a rerun, and the rate to size their runs from.
+    /// </summary>
+    /// <remarks>
+    /// The rate is the highest of theirs, not the chance that any of them fails, which the counts
+    /// cannot give: their failing runs may overlap or not. The highest is a lower bound on that
+    /// chance, so the count errs towards more runs. OrderBy is stable, so a full tie keeps the
+    /// members' ordinal order and the command is the same on every run of the report.
+    /// </remarks>
+    private static (string[] Names, int Failing, int Sessions, bool Once) Members(
+        IReadOnlyList<ClusterMember> members, int count)
+    {
+        ClusterMember[] chosen =
+        [
+            .. members
+                .Where(member => member.Sessions > 0)
+                .OrderByDescending(member => (double)member.FailingSessions / member.Sessions)
+                .ThenByDescending(member => member.Failures)
+                .Take(count)
+        ];
+
+        if (chosen.Length == 0)
+            return ([], 0, 0, false);
+
+        // Chosen in descending rate order, so the first carries the highest.
+        return ([.. chosen.Select(member => member.FullyQualifiedName)], chosen[0].FailingSessions, chosen[0].Sessions, false);
+    }
 
     private static string Command(string[] names, bool vstest, string? projectPath)
     {
