@@ -837,20 +837,39 @@ internal static class ReportFixtures
                 newest.AddMinutes(-41 * i), TestOutcome.Failed, TestOutcome.Failed, 1, 3))
         ];
 
+        FindingDto single = Finding(nameof(FindingKind.AlwaysFailing), "high", name,
+            "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
+        { Id = "f_1b44e0c9", EvidenceLevel = "moderate" };
+
+        FindingDto cluster = Cluster(
+            "UnprovisionedDatabase..ctor",
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10 runs",
+            [
+                "SampleApp.MSTest.FixtureTests.FirstTestNeedingTheDatabase",
+                name,
+                "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
+            ]) with
+        { Id = "f_7c905f05", EvidenceLevel = "high" };
+
+        // Both carry a repro, as the pipeline gives them. The cluster's names its first member, not
+        // this test, so the view must print neither its sentence nor its command (Amendment 9A).
+        var always = (AlwaysFailingEvidence)EvidenceSamples.For(FindingKind.AlwaysFailing) with
+        {
+            RunsFailed = 10,
+            RunsJudged = 10
+        };
+
+        var fixture = (BrokenFixtureEvidence)EvidenceSamples.For(FindingKind.BrokenFixture) with
+        {
+            Members = [.. cluster.Subject.Members!.Select(m => new ClusterMember(m.Fingerprint!, m.FullyQualifiedName!, 10, 10, 10))]
+        };
+
+        ReproTarget target = VSTest(SampleProject);
+
         FindingDto[] findings =
         [
-            Finding(nameof(FindingKind.AlwaysFailing), "high", name,
-                "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
-            { Id = "f_1b44e0c9", EvidenceLevel = "moderate" },
-            Cluster(
-                "UnprovisionedDatabase..ctor",
-                "UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10 runs",
-                [
-                    "SampleApp.MSTest.FixtureTests.FirstTestNeedingTheDatabase",
-                    name,
-                    "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
-                ]) with
-            { Id = "f_7c905f05", EvidenceLevel = "high" }
+            single with { Repro = Repro(FindingKind.AlwaysFailing, always, single.Subject, target) },
+            cluster with { Repro = Repro(FindingKind.BrokenFixture, fixture, cluster.Subject, target) }
         ];
 
         return History(

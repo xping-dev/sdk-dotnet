@@ -250,6 +250,40 @@ public sealed class HistoryRenderingTests
     }
 
     [Fact]
+    public void AReproWithACountIsPreferredToATooRareOne()
+    {
+        FindingDto[] findings =
+        [
+            Finding("Flaky", "high", Name, "h") with { Id = "f_0001", Repro = Repro("rare") with { Runs = null } },
+            Finding("TimingOut", "medium", Name, "h") with { Id = "f_0002", Repro = Repro("counted") }
+        ];
+
+        string[] lines = [.. Lines(Render(History([Ran(0)], findings, [3, 5]))).Where(l => l.Length > 0)];
+
+        Assert.Equal("Repro of row 5: counted", lines[^1]);
+    }
+
+    [Fact]
+    public void ATooRareReproIsPrintedWhenItIsTheOnlyOne()
+    {
+        FindingDto finding = Finding("Flaky", "high", Name, "h") with { Repro = Repro("rare") with { Runs = null } };
+
+        string[] lines = [.. Lines(Render(History([Ran(0)], [finding], [3]))).Where(l => l.Length > 0)];
+
+        Assert.Equal("Repro of row 3: rare", lines[^1]);
+    }
+
+    [Fact]
+    public void AClusterPrintsNoReproInTheHistoryOfOneOfItsMembers()
+    {
+        FindingDto cluster = Cluster("fixture setup failed", 2, "2 tests failed together") with { Repro = Repro("member") };
+
+        string report = Render(History([Ran(0)], [cluster], [3]));
+
+        Assert.DoesNotContain("repro", report, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void NoFindingWithAReproPrintsNoReproLine()
     {
         string withFinding = Render(History([Ran(0)], [Finding("Flaky", "high", Name, "h")], [1]));

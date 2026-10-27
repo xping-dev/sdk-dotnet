@@ -620,9 +620,11 @@ prints that report. The command below the fence opens the first finding with `--
 block says so instead of `no findings`: `too little history to judge: findings need 5 runs, this
 test has 3`.
 
-A finding that a rerun can show ends with the same `repro` line as under `--id`, and the last line
-below the fence is the command, named by its row. It is for the first finding that has one, so
-`Repro of row 2:` can follow `Detail of row 1:`. A test with no such finding gets neither line (see
+A finding about the test that a rerun can show ends with the same `repro` line as under `--id`, and
+the last line below the fence is the command, named by its row. It is for the first such finding
+whose `repro` gives a run count, so `Repro of row 2:` can follow `Detail of row 1:`. A cluster the
+test belongs to gets neither here: its command reruns the members most likely to fail, which may not
+include this test; open it with `--id` to see it. A test with no such finding gets neither line (see
 [Reproducing a finding](#reproducing-a-finding)):
 
 <!-- xping:sample history-repro -->
