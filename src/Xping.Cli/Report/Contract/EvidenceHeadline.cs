@@ -672,6 +672,33 @@ internal static class EvidenceHeadline
             metrics);
     }
 
+    /// <summary>
+    /// Says what running a repro command will show, in one sentence.
+    /// </summary>
+    /// <param name="repro">The repro.</param>
+    /// <returns>The sentence.</returns>
+    /// <remarks>
+    /// The counts it was sized from are in the sentence, so a reader can check the arithmetic. Past
+    /// the cap the sentence says how many runs it would take rather than printing a count nobody
+    /// will run.
+    /// </remarks>
+    public static string ReproExpectation(Repro repro)
+    {
+        ArgumentNullException.ThrowIfNull(repro);
+
+        string runs = $"{repro.RunsFailed.ToString(CultureInfo.InvariantCulture)} of {Runs(repro.RunsJudged)}";
+
+        return repro.Runs switch
+        {
+            null =>
+                $"failed in {runs}: too rare to reproduce by rerunning ({Runs(repro.RunsNeeded)} needed)",
+            1 => $"run once: it failed in {runs}",
+            int count =>
+                $"run {Times(count)}: at {Percent(FindingOrder.Round(repro.Rate))} of runs failing, " +
+                $"{Runs(count)} show a failure {Percent(LocalAnalysisConstants.ReproConfidence)} of the time"
+        };
+    }
+
     private static string Times(int count) =>
         count == 1 ? "once" : $"{count.ToString(CultureInfo.InvariantCulture)} times";
 
