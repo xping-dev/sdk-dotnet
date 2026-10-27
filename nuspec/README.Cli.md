@@ -60,6 +60,8 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 
 The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.
 
+`xping report --id <id>` opens one finding. For a finding a rerun can show (flaky, always failing, timing out, broken fixture, shared failure), its `repro` line says how many runs it takes to see the failure, and a `Repro:` line below the block gives the `dotnet test` (or, on Microsoft.Testing.Platform, `dotnet run`) command that reruns just that test from the repository root. See [Reproducing a finding](https://docs.xping.io/cli/command-reference.html#reproducing-a-finding).
+
 Findings need a few runs of history. What the newest run did that the runs before it did not needs only two, and when it has failures a `LATEST RUN` section opens the block, above the findings:
 
 <!-- xping:sample latest-run latest-run -->
@@ -85,7 +87,7 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 | `xping report` | Report flakiness from recent local runs |
 | `xping report --all` | Show every finding and every latest-run row, not only the first ten of each |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
-| `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, and the other findings about the same test |
+| `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, the other findings about the same test, and the command that reruns it |
 | `xping report --test <name>` | Show one test's history, run by run, and the findings about it. Works for any test, healthy or not |
 | `xping where` | Show where local runs are stored |
 | `xping clear` | Delete recorded runs |
