@@ -1,0 +1,30 @@
+Xping | SampleApp.MSTest | 9 runs | 2026-08-20 -> 2026-08-21 | main@c670fc3
+16 tests | 10 healthy | 6 flagged
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  HIGH  flaky
+    CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
+    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+
+    test      SampleApp.MSTest.CalculatorTests.
+              FlakyTest_RaceCondition_FailsIntermittently
+    assembly  SampleApp.MSTest
+    source    tests/SampleApp.MSTest/CalculatorTests.cs:57
+
+    failed          4 of 9 executions (44.4%)
+    runs affected   4 of 9
+    failure modes   1
+    failure mode 1  System.InvalidOperationException: Race condition
+                    detected
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding | all: xping report --all
+History: xping report --test fp-Sampl --assembly SampleApp.MSTest

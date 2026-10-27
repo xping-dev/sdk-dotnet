@@ -18,6 +18,7 @@ FINDING                                                       row 1 of 1
     failed         19 of 20 executions (95%)
     runs affected  19 of 20
     failure mode   System.InvalidOperationException
+    repro          run once: it failed in 19 of 20 runs
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -26,3 +27,4 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 Showing 1 of 1 finding | all: xping report --all
 History: xping report --test fp-MyApp --assembly MyApp.Tests
+Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=MyApp.Tests.CheckoutTests.Completes

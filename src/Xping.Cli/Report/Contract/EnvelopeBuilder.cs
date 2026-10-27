@@ -103,6 +103,8 @@ internal static class EnvelopeBuilder
 
         Dictionary<string, string> annotations = Annotations(ordered);
 
+        ReproTarget target = ReproTarget.From(context.Sessions.Count > 0 ? context.Sessions[0] : null);
+
         int tests = context.Tests.Fingerprints.Count;
 
         int high = 0;
@@ -156,7 +158,7 @@ internal static class EnvelopeBuilder
             latestRun == null ? null : BuildLatestRun(latestRun, ordered),
             selection == null ? null : BuildSelection(selection, History(selection, shortFingerprint, scope)),
             test,
-            [.. shown.Select(finding => BuildFinding(finding, annotations, scope))],
+            [.. shown.Select(finding => BuildFinding(finding, annotations, scope, target))],
             new TruncationDto(shown.Count, result.Findings.Count, DrillDown.ForFullReport(scope)));
     }
 
@@ -428,7 +430,7 @@ internal static class EnvelopeBuilder
     }
 
     private static FindingDto BuildFinding(
-        Finding finding, Dictionary<string, string> annotations, ReportScope scope)
+        Finding finding, Dictionary<string, string> annotations, ReportScope scope, ReproTarget target)
     {
         (string headline, IReadOnlyList<MetricDto> metrics) =
             EvidenceHeadline.For(finding.Kind, finding.Evidence);
@@ -445,8 +447,24 @@ internal static class EnvelopeBuilder
             headline,
             metrics,
             BuildEvidence(finding.Evidence),
-            DrillDown.ForFinding(finding.Id, scope));
+            DrillDown.ForFinding(finding.Id, scope),
+            BuildRepro(finding, target));
     }
+
+    /// <summary>
+    /// Projects how to reproduce a finding into the envelope, with its sentence resolved.
+    /// </summary>
+    /// <param name="finding">The finding.</param>
+    /// <param name="target">The runner and project the window's newest session recorded.</param>
+    /// <returns>The repro, or null where <see cref="ReproCommand"/> builds none.</returns>
+    internal static ReproDto? BuildRepro(Finding finding, ReproTarget target) =>
+        ReproCommand.For(finding, target) is { } repro
+            ? new ReproDto(
+                repro.Command,
+                repro.Runs,
+                FindingOrder.Round(repro.Rate),
+                EvidenceHeadline.ReproExpectation(repro))
+            : null;
 
     /// <summary>
     /// Projects a finding's subject into the envelope.

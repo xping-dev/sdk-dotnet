@@ -87,9 +87,13 @@ internal sealed record ReportEnvelope(
     /// gained <c>test</c>, written by <c>xping report --test</c>: one test's every run in the window,
     /// what it did in each, its short fingerprint, and the rows its findings hold in the full report;
     /// and where <c>selection</c> gained <c>history</c>, the command that opens that view for the
-    /// test an id is about.
+    /// test an id is about. 1.24 is where every finding gained <c>repro</c>, the command that makes
+    /// its failure happen again and how many runs that takes, null for a kind a rerun cannot show;
+    /// and where each cluster member and the <c>Flaky</c>, <c>AlwaysFailing</c> and
+    /// <c>TimingOut</c> evidence gained <c>runsFailed</c> and <c>runsJudged</c>, the counts it was
+    /// sized from.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.23";
+    public const string CurrentSchemaVersion = "1.24";
 }
 
 /// <summary>
@@ -349,6 +353,10 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
 /// <param name="Evidence">The kind-specific observations.</param>
 /// <param name="DrillDown">The command that expands it.</param>
+/// <param name="Repro">
+/// How to make its failure happen again, or null where rerunning cannot show it or the runner is
+/// unknown.
+/// </param>
 /// <param name="Cloud">
 /// What Xping Cloud says about the finding's test, or null. Always null for a group finding.
 /// </param>
@@ -365,7 +373,24 @@ internal sealed record FindingDto(
     IReadOnlyList<MetricDto> Metrics,
     JsonNode? Evidence,
     string DrillDown,
+    ReproDto? Repro,
     CloudTestDto? Cloud = null);
+
+/// <summary>
+/// How to make a finding's failure happen again.
+/// </summary>
+/// <remarks>
+/// The CLI prints the command and never runs it. The count is the point: one rerun of a test that
+/// fails in a third of its runs passes most of the time, and the reader concludes the report is
+/// wrong.
+/// </remarks>
+/// <param name="Command">One <c>dotnet</c> invocation, on one line, shell-quoted.</param>
+/// <param name="Runs">
+/// How many times to run it to see a failure 95% of the time, or null when that is more than 50.
+/// </param>
+/// <param name="Rate">The per-run failure rate the count was sized from, at published precision.</param>
+/// <param name="Expectation">What to expect, in one already-resolved sentence.</param>
+internal sealed record ReproDto(string Command, int? Runs, double Rate, string Expectation);
 
 /// <summary>
 /// One labelled observation from a finding's evidence, already formatted.
