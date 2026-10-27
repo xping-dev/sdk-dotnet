@@ -168,7 +168,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         /// <summary>
         /// The history view, whose subject is the test: a finding about it alone drops the name line
-        /// and the sibling annotation, because every sibling is on screen.
+        /// and the sibling annotation, because every sibling is on screen. A finding with a repro ends
+        /// with its sentence.
         /// </summary>
         History
     }
@@ -201,7 +202,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         bool truncated = envelope.Test is { } test ? WriteHistoryFooter(builder, envelope, test) : WriteFooter(builder, envelope);
 
         if (envelope.Selection == null && detailCommand)
+        {
             WriteDetailCommand(builder, envelope, truncated);
+
+            if (envelope.Test is { } shown)
+                WriteHistoryRepro(builder, envelope, shown);
+        }
 
         // Below the fence with the other commands, never wrapped inside it: a long assembly or
         // --directory would break it across lines, and a command cut to fit does not run
@@ -210,7 +216,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             builder.AppendLine(capabilities.Dim("History: " + command));
 
         // The sentence above says how many times; the command is here for the same reason History
-        // is. Only in the detail view: the list is one row per finding, a command away from this.
+        // is. Not in the list: it is one row per finding, a command away from this. The history view
+        // writes its own above, naming the row.
         // Guarded as WriteDetail is, so a finding that view says is not reported prints no command.
         if (envelope.Selection is { Row: not null } && envelope.Findings is [{ Repro: { } repro }])
             builder.AppendLine(capabilities.Dim("Repro: " + repro.Command));
@@ -1399,6 +1406,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.Append(' ', ContinuationIndent)
                .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), budget)));
+
+        // The count, here because the command below the fence comes without one, and one rerun of a
+        // test that fails in a third of its runs passes and tells the reader the report is wrong.
+        if (view == RowView.History && finding.Repro is { } repro)
+            WritePairs(builder, [("repro", repro.Expectation)], separate: false);
     }
 
     /// <summary>
@@ -1508,6 +1520,34 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.AppendLine(capabilities.Dim(
             $"Detail of row {Count(row)}: {envelope.Findings[0].DrillDown}"));
+    }
+
+    /// <summary>
+    /// Writes the command that reproduces the first finding in a history that has one.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The history's report.</param>
+    /// <param name="history">The history.</param>
+    /// <remarks>
+    /// One command, as <see cref="WriteDetailCommand"/> writes one. It names its row because the first
+    /// finding with a repro need not be the first shown, and a flaky and a timing-out finding on the
+    /// same test share the command but not the count each row's sentence gives (Amendment 9B).
+    /// </remarks>
+    private void WriteHistoryRepro(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history)
+    {
+        IReadOnlyList<FindingDto> findings = envelope.Findings;
+
+        for (int index = 0; index < findings.Count; index++)
+        {
+            if (findings[index].Repro is not { } repro)
+                continue;
+
+            int row = index < history.FindingRows.Count ? history.FindingRows[index].Row : index + 1;
+
+            builder.AppendLine(capabilities.Dim($"Repro of row {Count(row)}: {repro.Command}"));
+
+            return;
+        }
     }
 
     /// <summary>

@@ -487,7 +487,7 @@ Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABL
 ````
 
 The CLI prints the command and never runs it. The list view shows no `repro`; open the finding
-with `--id`.
+with `--id`, or its test with [`--test`](#test-history).
 
 **The command** depends on the runner the newest run in the window recorded:
 
@@ -619,6 +619,59 @@ number from the full report over the same assembly and window: the `all:` comman
 prints that report. The command below the fence opens the first finding with `--id`. When the test has too little history for any finding, the
 block says so instead of `no findings`: `too little history to judge: findings need 5 runs, this
 test has 3`.
+
+A finding that a rerun can show ends with the same `repro` line as under `--id`, and the last line
+below the fence is the command, named by its row. It is for the first finding that has one, so
+`Repro of row 2:` can follow `Detail of row 1:`. A test with no such finding gets neither line (see
+[Reproducing a finding](#reproducing-a-finding)):
+
+<!-- xping:sample history-repro -->
+````
+Xping · SampleApp.MSTest · 9 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
+
+```
+TEST                                                         fp 5d1e2a0c
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.CalculatorTests.
+            FlakyTest_RaceCondition_FailsIntermittently
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:57
+
+ran in 9 of 9 runs: 5 passed, 0 passed on retry, 4 failed
+duration p50 38ms · p95 41ms · range 38-41ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-21 09:02  ✓                       38ms  c670fc3
+  08-21 06:51  ✗                       41ms  c670fc3
+  08-21 04:40  ✓                       38ms  c670fc3
+  08-21 02:29  ✗                       41ms  c670fc3
+  08-21 00:18  ✓                       38ms  c670fc3
+  08-20 22:07  ✓                       38ms  c670fc3
+  08-20 19:56  ✗                       41ms  c670fc3
+  08-20 17:45  ✗                       41ms  c670fc3
+  08-20 15:34  ✓                       38ms  c670fc3
+
+FINDINGS                                                       1 finding
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
+    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+    repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a
+           failure 95% of the time
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+1 finding about this test · all: xping report --all --assembly SampleApp.MSTest --runs 9
+Detail of row 1: xping report --id f_1491bf4c --assembly SampleApp.MSTest --runs 9
+Repro of row 1: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+````
 
 **Naming the test.** The name is matched in three tiers, and the first tier that matches anything
 wins:

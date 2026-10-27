@@ -583,6 +583,38 @@ public sealed class TestHistoryCommandTests : IDisposable
         }
     }
 
+    [Fact]
+    public void AFindingAboutTheTestCarriesItsReproInJson()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+        var recorded = new Dictionary<string, string>
+        {
+            [LocalSessionProperties.Runner] = LocalSessionProperties.VSTestRunner,
+            [LocalSessionProperties.ProjectPath] = "tests/MyApp.Tests/MyApp.Tests.csproj"
+        };
+
+        for (int i = 0; i < 8; i++)
+        {
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable0"),
+                    TestSessionFactory.Execution(
+                        "Broken", TestOutcome.Failed, errorMessage: "boom", exceptionType: "System.InvalidOperationException")
+                ],
+                customProperties: recorded));
+        }
+
+        JsonElement root = Json("--test", "Broken");
+        JsonElement repro = root.GetProperty("findings")[0].GetProperty("repro");
+
+        Assert.StartsWith(
+            "dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter ",
+            repro.GetProperty("command").GetString(),
+            StringComparison.Ordinal);
+        Assert.Equal(1, repro.GetProperty("runs").GetInt32());
+    }
+
     /// <summary>Writes eight runs of a parameterised <c>Add</c> with the given number of cases.</summary>
     private static void SeedParameterised(int cases, string? sha = null)
     {
