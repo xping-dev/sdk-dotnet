@@ -211,7 +211,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // The sentence above says how many times; the command is here for the same reason History
         // is. Only in the detail view: the list is one row per finding, a command away from this.
-        if (envelope.Selection != null && envelope.Findings is [{ Repro: { } repro }])
+        // Guarded as WriteDetail is, so a finding that view says is not reported prints no command.
+        if (envelope.Selection is { Row: not null } && envelope.Findings is [{ Repro: { } repro }])
             builder.AppendLine(capabilities.Dim("Repro: " + repro.Command));
 
         output.Write(builder.ToString());

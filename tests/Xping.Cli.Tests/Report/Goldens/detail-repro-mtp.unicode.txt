@@ -20,8 +20,8 @@ FINDING                                                       row 1 of 1
     failure modes   1
     failure mode 1  System.InvalidOperationException: Race condition
                     detected
-    repro           run 6 times: at 44.4% of runs failing, 6 runs show a
-                    failure 95% of the time
+    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
+                    show a failure 95% of the time
 ```
 
 rates: the marker on each finding says which runs its percentage was

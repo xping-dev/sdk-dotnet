@@ -88,7 +88,8 @@ internal sealed record ReportEnvelope(
     /// what it did in each, its short fingerprint, and the rows its findings hold in the full report;
     /// and where <c>selection</c> gained <c>history</c>, the command that opens that view for the
     /// test an id is about. 1.24 is where every finding gained <c>repro</c>, the command that makes
-    /// its failure happen again and how many runs that takes, null for a kind a rerun cannot show;
+    /// its failure happen again, how many runs that takes and the counts it was sized from; null for
+    /// a kind a rerun cannot show, and where no runner was recorded to build a command for;
     /// and where each cluster member and the <c>Flaky</c>, <c>AlwaysFailing</c> and
     /// <c>TimingOut</c> evidence gained <c>runsFailed</c> and <c>runsJudged</c>, the counts it was
     /// sized from.
@@ -386,11 +387,31 @@ internal sealed record FindingDto(
 /// </remarks>
 /// <param name="Command">One <c>dotnet</c> invocation, on one line, shell-quoted.</param>
 /// <param name="Runs">
-/// How many times to run it to see a failure 95% of the time, or null when that is more than 50.
+/// How many times to run it to see a failure with probability
+/// <see cref="LocalAnalysisConstants.ReproConfidence"/>, or null when that is more than
+/// <see cref="LocalAnalysisConstants.ReproMaxRuns"/>.
 /// </param>
-/// <param name="Rate">The per-run failure rate the count was sized from, at published precision.</param>
+/// <param name="RunsNeeded">
+/// The same count uncapped, so a reader of a null <paramref name="Runs"/> still learns how rare the
+/// failure is without parsing <paramref name="Expectation"/>.
+/// </param>
+/// <param name="RunsFailed">Runs of the rerun tests that ended red, by their deciding attempt.</param>
+/// <param name="RunsJudged">
+/// Their runs with a verdict, which <paramref name="RunsFailed"/> was counted out of. For a cluster
+/// these are its top member's runs, not the cluster's.
+/// </param>
+/// <param name="Rate">
+/// <paramref name="RunsFailed"/> over <paramref name="RunsJudged"/>, at published precision.
+/// </param>
 /// <param name="Expectation">What to expect, in one already-resolved sentence.</param>
-internal sealed record ReproDto(string Command, int? Runs, double Rate, string Expectation);
+internal sealed record ReproDto(
+    string Command,
+    int? Runs,
+    int RunsNeeded,
+    int RunsFailed,
+    int RunsJudged,
+    double Rate,
+    string Expectation);
 
 /// <summary>
 /// One labelled observation from a finding's evidence, already formatted.

@@ -125,8 +125,21 @@ public sealed class DetailRenderingTests
 
         Assert.Equal("History: " + detail.Selection!.History, lines[^3]);
         Assert.Equal("Repro: " + repro.Command, lines[^2]);
-        Assert.Contains("    repro           run 6 times: at 44.4% of runs failing, 6 runs show a", fenced);
+        Assert.Contains("    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs", fenced);
         Assert.DoesNotContain(fenced, l => l.Contains("Repro:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The detail view says the finding is not reported; no command follows for it.
+    /// </summary>
+    [Fact]
+    public void AnUnreportedSelectionPrintsNoReproCommand()
+    {
+        ReportEnvelope detail = Get("detail-repro-flaky");
+        string report = Render(detail with { Selection = detail.Selection! with { Row = null } });
+
+        Assert.Contains("is not reported in this window", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Repro:", report, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -1058,9 +1058,6 @@ internal static class ReportFixtures
             latestRun);
     }
 
-    /// <summary>
-    /// Writes the twenty runs <see cref="LatestRunFromStore"/> describes and runs every provider.
-    /// </summary>
     /// <summary>What the SDK records on each of the store's sessions, so its repro is the builder's.</summary>
     private static readonly Dictionary<string, string> StoreRunner = new(StringComparer.Ordinal)
     {
@@ -1068,6 +1065,9 @@ internal static class ReportFixtures
         [LocalSessionProperties.ProjectPath] = "tests/MyApp.Tests/MyApp.Tests.csproj"
     };
 
+    /// <summary>
+    /// Writes the twenty runs <see cref="LatestRunFromStore"/> describes and runs every provider.
+    /// </summary>
     private static (AnalysisContext Context, AnalysisResult Analysis) AnalyzeStore()
     {
         const int runs = 20;
