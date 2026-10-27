@@ -46,6 +46,10 @@ internal sealed class SampleRunner : IDisposable
     /// </summary>
     public const string Collection = "Sample runs";
 
+    /// <summary>Settings for a run that records to the local store and uploads nothing.</summary>
+    public static IReadOnlyDictionary<string, string> LocalOnly { get; } =
+        new Dictionary<string, string> { ["XPING_MODE"] = "LocalOnly" };
+
     private static readonly TimeSpan RunTimeout = TimeSpan.FromMinutes(5);
 
     private readonly string _scratch = Path.Combine(
@@ -57,7 +61,8 @@ internal sealed class SampleRunner : IDisposable
     /// <summary>The local store the run writes to.</summary>
     public string StorePath => Path.Combine(_scratch, "store");
 
-    private string ResultsPath => Path.Combine(_scratch, "results");
+    /// <summary>The directory a run writes its TRX to.</summary>
+    public string ResultsPath => Path.Combine(_scratch, "results");
 
     public void Dispose()
     {
@@ -212,25 +217,18 @@ internal sealed class SampleRunner : IDisposable
         return Directory.Exists(sessions) ? Directory.GetFiles(sessions, "*.json.gz").Length : 0;
     }
 
-    /// <summary>The directory a run writes its TRX to.</summary>
-    public string TrxDirectory => ResultsPath;
-
     /// <summary>The names of the tests in the single TRX the run wrote, as the runner reports them.</summary>
-    public string[] ReadTrxTestNames()
-    {
-        string trx = Directory.GetFiles(ResultsPath, "*.trx", SearchOption.AllDirectories).Should().ContainSingle().Subject;
-        return XDocument.Load(trx).Descendants()
-            .Where(e => e.Name.LocalName == "UnitTestResult")
-            .Select(e => (string)e.Attribute("testName")!)
-            .ToArray();
-    }
+    public string[] ReadTrxTestNames() => LoadSingleTrx().Descendants()
+        .Where(e => e.Name.LocalName == "UnitTestResult")
+        .Select(e => (string)e.Attribute("testName")!)
+        .ToArray();
 
     /// <summary>The <c>Counters</c> element of the single TRX the run wrote.</summary>
-    public XElement ReadTrxCounters()
-    {
-        string trx = Directory.GetFiles(ResultsPath, "*.trx", SearchOption.AllDirectories).Should().ContainSingle().Subject;
-        return XDocument.Load(trx).Descendants().Single(e => e.Name.LocalName == "Counters");
-    }
+    public XElement ReadTrxCounters() =>
+        LoadSingleTrx().Descendants().Single(e => e.Name.LocalName == "Counters");
+
+    private XDocument LoadSingleTrx() => XDocument.Load(
+        Directory.GetFiles(ResultsPath, "*.trx", SearchOption.AllDirectories).Should().ContainSingle().Subject);
 
     private string WriteMtpGlobalJson()
     {

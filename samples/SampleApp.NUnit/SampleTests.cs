@@ -156,11 +156,13 @@ public class SampleTests
     }
 
     // NUnit quotes a string argument in the test's name, and dotnet test passes a filter through
-    // MSBuild, which decodes %20. A filter that leaves either unescaped fails, or runs the other case.
+    // MSBuild, which decodes %20. A filter that leaves either unescaped fails, or runs the "50 off"
+    // case. The apostrophe is one the shell quoting has to escape.
     [Test]
     [Description("Test with a string argument a filter has to escape")]
     [TestCase("50%20off")]
     [TestCase("50 off")]
+    [TestCase("50's off")]
     public void StringParameterIsTracked(string code)
     {
         Assert.That(code, Does.StartWith("50"));
