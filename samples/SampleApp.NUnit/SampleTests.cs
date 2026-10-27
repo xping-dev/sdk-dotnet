@@ -154,6 +154,17 @@ public class SampleTests
         var result = a + b;
         Assert.That(result, Is.EqualTo(expected));
     }
+
+    // NUnit quotes a string argument in the test's name, and dotnet test passes a filter through
+    // MSBuild, which decodes %20. A filter that leaves either unescaped fails, or runs the other case.
+    [Test]
+    [Description("Test with a string argument a filter has to escape")]
+    [TestCase("50%20off")]
+    [TestCase("50 off")]
+    public void StringParameterIsTracked(string code)
+    {
+        Assert.That(code, Does.StartWith("50"));
+    }
 }
 
 /// <summary>
