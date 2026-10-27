@@ -100,7 +100,7 @@ changing a line of test code.
 ### 1. Install both pieces
 
 ```bash
-dotnet add package Xping.Sdk.XUnit    # or Xping.Sdk.NUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.XUnit    # xUnit v2; or Xping.Sdk.XUnit.V3 / Xping.Sdk.NUnit / Xping.Sdk.MSTest
 
 dotnet tool install -g Xping.Cli      # puts `xping` on your PATH
 ```
@@ -112,10 +112,11 @@ dotnet tool install -g Xping.Cli      # puts `xping` on your PATH
 
 # [xUnit](#tab/xunit)
 
-Add one line to `AssemblyInfo.cs`:
+Add one line to `AssemblyInfo.cs`. Which one depends on the xUnit package your project references:
 
 ```csharp
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xunit (v2): Xping.Sdk.XUnit
+[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xunit.v3: Xping.Sdk.XUnit.V3
 ```
 
 [xUnit Quick Start →](getting-started/quickstart-xunit.md)
@@ -448,7 +449,8 @@ Complete API documentation for all SDK components.
 Runnable examples per framework:
 
 - [NUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.NUnit)
-- [xUnit Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
+- [xUnit v2 Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
+- [xUnit v3 Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnitV3)
 - [MSTest Sample](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.MSTest)
 
 ---

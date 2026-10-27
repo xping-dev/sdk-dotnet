@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    Stops the build of a project that pairs this adapter with xUnit v2. The adapter brings in xUnit v3's
+    xunit.v3.core, which defines the same Xunit types as xUnit v2's xunit.core, so the build would
+    otherwise fail on every [Fact] with CS0433 and never mention the package that caused it.
+
+    Reads the resolved references rather than the PackageReference items, so a version set by central
+    package management or a reference that arrives transitively is caught too.
+  -->
+  <Target Name="_XpingCheckXUnitV3Version" AfterTargets="ResolveAssemblyReferences" BeforeTargets="CoreCompile">
+    <Error Code="XPING002"
+           Text="Xping.Sdk.XUnit.V3 supports xUnit v3, but this project references xUnit v2 (xunit). Replace it with Xping.Sdk.XUnit."
+           Condition="'@(ReferencePath->WithMetadataValue('Filename', 'xunit.core'))' != ''" />
+  </Target>
+</Project>

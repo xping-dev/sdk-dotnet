@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Sdk.Core.Services.Statistics;
 using Xunit;
 using Xunit.Abstractions;
 

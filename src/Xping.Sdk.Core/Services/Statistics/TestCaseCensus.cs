@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.XUnit;
+namespace Xping.Sdk.Core.Services.Statistics;
 
 /// <summary>
 /// What one test framework instance discovered in its assembly, and what it was then asked to run.

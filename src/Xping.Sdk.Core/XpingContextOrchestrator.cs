@@ -158,6 +158,16 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     protected abstract string TestFramework { get; }
 
     /// <summary>
+    /// Gets the test runner hosting this process, recorded on each local session as
+    /// <see cref="LocalSessionProperties.Runner"/>, or <see langword="null"/> when it is not known.
+    /// </summary>
+    /// <remarks>
+    /// Detected from the entry assembly by default. An adapter whose test assembly is the entry point
+    /// on every runner, as xUnit v3's is, overrides it, because there the entry assembly cannot tell.
+    /// </remarks>
+    protected virtual string? TestRunner => CurrentRunner;
+
+    /// <summary>
     /// Initializes a new instance of <see cref="XpingContextOrchestrator"/> from a configured <see cref="IHost"/>.
     /// Resolves all required services from the host's service container and stores the host for lifetime management.
     /// </summary>
@@ -1131,7 +1141,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (_projectPin != null)
             properties[LocalSessionProperties.ProjectId] = _projectPin;
 
-        if (CurrentRunner is { } runner)
+        if (TestRunner is { } runner)
             properties[LocalSessionProperties.Runner] = runner;
 
         if (ResolveSessionProjectPath(_sessionAssemblies, AppDomain.CurrentDomain.GetAssemblies, _logger) is { } projectPath)

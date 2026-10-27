@@ -36,6 +36,11 @@ public sealed class SessionPropertiesRunTests : IDisposable
     [InlineData("SampleApp.MSTest", TestRunner.MtpDotnetTest, "FullyQualifiedName~.Add_TwoNumbers_ReturnsSum", "MTP", "MSTest")]
     [InlineData("SampleApp.MSTest", TestRunner.MtpExecutable, "FullyQualifiedName~.Add_TwoNumbers_ReturnsSum", "MTP", "MSTest")]
     [InlineData("SampleApp.XUnit", TestRunner.VsTest, "FullyQualifiedName~.PassingTestIsTracked", "VSTest", "xUnit")]
+    // An xUnit v3 test assembly is its own executable on every runner, so the runner cannot be read
+    // from the entry assembly as it is for the others.
+    [InlineData("SampleApp.XUnitV3", TestRunner.VsTest, "FullyQualifiedName~.PassingTestIsTracked", "VSTest", "xUnit.v3")]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpDotnetTest, "FullyQualifiedName~.PassingTestIsTracked", "MTP", "xUnit.v3")]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, "FullyQualifiedName~.PassingTestIsTracked", "MTP", "xUnit.v3")]
     public async Task TheStoredSessionNamesItsRunnerFrameworkAndProject(
         string sample, TestRunner runner, string filter, string expectedRunner, string expectedFramework)
     {

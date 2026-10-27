@@ -2,7 +2,11 @@
   <!--
     The samples reference the SDK as projects, and NuGet imports a package's buildTransitive files
     only for package references. Imported directly so the samples, and the run tests built on them,
-    use the same file the Xping.Sdk.Core package ships.
+    use the same files the packages ship: Core's in every sample, each xUnit adapter's in its own.
   -->
   <Import Project="$(MSBuildThisFileDirectory)../src/Xping.Sdk.Core/buildTransitive/Xping.Sdk.Core.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)../src/Xping.Sdk.XUnit/buildTransitive/Xping.Sdk.XUnit.targets"
+          Condition="'$(MSBuildProjectName)' == 'SampleApp.XUnit'" />
+  <Import Project="$(MSBuildThisFileDirectory)../src/Xping.Sdk.XUnit.V3/buildTransitive/Xping.Sdk.XUnit.V3.targets"
+          Condition="'$(MSBuildProjectName)' == 'SampleApp.XUnitV3'" />
 </Project>

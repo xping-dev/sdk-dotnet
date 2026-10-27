@@ -5,7 +5,7 @@ infer from the code. If something here goes stale, fix it in the same change.
 
 ## What this is
 
-Xping SDK records .NET test executions (NUnit, xUnit, MSTest) and either keeps them in a local
+Xping SDK records .NET test executions (NUnit, xUnit v2 and v3, MSTest) and either keeps them in a local
 store or uploads them to Xping Cloud. The `xping` CLI analyzes the local store and reports
 flaky, slow, and newly broken tests.
 
@@ -30,7 +30,8 @@ Before calling a change done: build is clean and the affected test projects pass
 |------|--------|---------|
 | `src/Xping.Sdk.Core` | netstandard2.0 | Config, collection, environment/PR detection, local store, upload |
 | `src/Xping.Sdk.NUnit` | netstandard2.0 | `[XpingTrack]` attribute + `XpingContext` |
-| `src/Xping.Sdk.XUnit` | netstandard2.0 | `XpingTestFramework` (registered via `[assembly: TestFramework]`) |
+| `src/Xping.Sdk.XUnit` | netstandard2.0 | xUnit v2: `XpingTestFramework` (registered via `[assembly: TestFramework]`) |
+| `src/Xping.Sdk.XUnit.V3` | netstandard2.0 | xUnit v3: `XpingTestFramework` (`[assembly: TestFramework(typeof(...))]`) |
 | `src/Xping.Sdk.MSTest` | netstandard2.0 | `XpingAssemblyInitialize` + `XpingTestBase` (MSTest ≥ 3.8) |
 | `src/Xping.Sdk.Shared` | netstandard2.0 | Internal helpers and polyfills; not a public package |
 | `src/Xping.Cli` | net10.0 | `xping report / where / clear` (System.CommandLine) |
@@ -93,6 +94,8 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
 - Every bug fix gets a regression test that fails without the fix.
 - Test time and environment through `ITimeProvider` / `TimeProvider` and
   `IEnvironmentVariableProvider` — no `Thread.Sleep`, no real env vars, no network.
+- The xUnit v3 adapter's tests run on xUnit v3 themselves (vstest, `xunit.v3.mtp-off`) and drive a
+  real v3 pipeline over `tests/Xping.Sdk.XUnit.V3.Probe`, a class library whose tests fail on purpose.
 - Adapter behavior that depends on a test runner (vstest shutdown, MSTest cleanup, xUnit
   discovery) needs a test against that framework, not just a mock.
 

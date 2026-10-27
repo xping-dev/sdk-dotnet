@@ -42,7 +42,9 @@ public sealed class StrictModeRunTests : IDisposable
 
     // Each filter selects two passing tests. MSTest reports an [AssemblyCleanup] failure on the last
     // test result, on either runner, so one of them shows as failed there; the others report the
-    // failure on their own. xUnit v2 has no Microsoft.Testing.Platform runner.
+    // failure on their own. xUnit v2 has no Microsoft.Testing.Platform runner. xUnit v3 fails the run
+    // with an error message on vstest, which prints its type and keeps the message for normal
+    // verbosity, and through the exit code on MTP, where the message is ignored.
     [Theory]
     [InlineData("SampleApp.XUnit", TestRunner.VsTest, "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest", 2, 0)]
     [InlineData("SampleApp.NUnit", TestRunner.VsTest, "Name~Passing", 2, 0)]
@@ -51,8 +53,16 @@ public sealed class StrictModeRunTests : IDisposable
     [InlineData("SampleApp.MSTest", TestRunner.VsTest, "Name~Add_TwoNumbers|Name~Subtract_TwoNumbers", 1, 1)]
     [InlineData("SampleApp.MSTest", TestRunner.MtpDotnetTest, "Name~Add_TwoNumbers|Name~Subtract_TwoNumbers", 1, 1)]
     [InlineData("SampleApp.MSTest", TestRunner.MtpExecutable, "Name~Add_TwoNumbers|Name~Subtract_TwoNumbers", 1, 1)]
+    [InlineData("SampleApp.XUnitV3", TestRunner.VsTest, "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest", 2, 0, "[FATAL ERROR] Xping.Sdk.Core.Exceptions.XpingNetworkException")]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpDotnetTest, "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest", 2, 0)]
+    [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, "FullyQualifiedName~PassingTestIsTracked|FullyQualifiedName~AnotherPassingTest", 2, 0)]
     public async Task StrictModeUploadFails_FailsRunAndKeepsEveryResult(
-        string sample, TestRunner runner, string filter, int expectedPassed, int expectedFailed)
+        string sample,
+        TestRunner runner,
+        string filter,
+        int expectedPassed,
+        int expectedFailed,
+        string reported = "Xping network error in strict mode")
     {
         (int exitCode, string output) = await _runner
             .RunAsync(sample, runner, filter, StrictModeAgainstClosedPort)
@@ -64,6 +74,6 @@ public sealed class StrictModeRunTests : IDisposable
         counters.Attribute("total")!.Value.Should().Be("2", "every test that ran stays in the report. Output:\n{0}", output);
         counters.Attribute("passed")!.Value.Should().Be(expectedPassed.ToString(CultureInfo.InvariantCulture), "Output:\n{0}", output);
         counters.Attribute("failed")!.Value.Should().Be(expectedFailed.ToString(CultureInfo.InvariantCulture), "Output:\n{0}", output);
-        output.Should().Contain("Xping network error in strict mode");
+        output.Should().Contain(reported);
     }
 }

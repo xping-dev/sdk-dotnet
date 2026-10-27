@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Test classes the xUnit v3 adapter's tests run through a real xUnit v3 pipeline. A class library,
+    not a test project, so no runner ever picks these up as tests of their own: several fail on purpose.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.extensibility.core" Version="4.0.2" />
+    <PackageReference Include="xunit.v3.assert" Version="4.0.2" />
+    <!-- Test-only: the retry library the adapter reads attempts from. The adapter takes no dependency on it. -->
+    <PackageReference Include="xRetry.v3" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Xping.Sdk.Core\Xping.Sdk.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

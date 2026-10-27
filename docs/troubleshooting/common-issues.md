@@ -158,7 +158,8 @@ public static class XpingSetup
 ✅ **xUnit - No manual teardown needed:**
 ```csharp
 // xUnit's XpingTestFramework handles initialization and disposal automatically
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
+[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
 
 // That's it! No manual teardown required for xUnit.
 ```
@@ -415,6 +416,40 @@ passwords on this account are affected too.
 
 The `xping` tool is not signed by Apple, so macOS asks once per installed version. Choose
 **Always Allow**.
+
+---
+
+## Installation Issues
+
+### Wrong xUnit adapter (XPING001, XPING002)
+
+**Symptoms:** The build of your test project stops with one of:
+
+```
+error XPING001: Xping.Sdk.XUnit supports xUnit v2, but this project references xUnit v3 (xunit.v3). Replace it with Xping.Sdk.XUnit.V3.
+error XPING002: Xping.Sdk.XUnit.V3 supports xUnit v3, but this project references xUnit v2 (xunit). Replace it with Xping.Sdk.XUnit.
+```
+
+**Cause:** Xping has one adapter per xUnit version, and the one installed does not match the xUnit
+package the project references.
+
+**Solution:** Swap the package the error names, and use the matching attribute:
+
+```bash
+# XPING001: the project is on xUnit v3
+dotnet remove package Xping.Sdk.XUnit
+dotnet add package Xping.Sdk.XUnit.V3
+
+# XPING002: the project is on xUnit v2
+dotnet remove package Xping.Sdk.XUnit.V3
+dotnet add package Xping.Sdk.XUnit
+```
+
+See [Which Package?](../getting-started/quickstart-xunit.md#which-package) for the attribute each one needs.
+
+**`CS0433: The type 'FactAttribute' exists in both 'xunit.core' and 'xunit.v3.core'`** is the same
+mistake in a build that skips the check above, for example one that does not import NuGet's
+`buildTransitive` files. The fix is the same.
 
 ---
 
@@ -818,7 +853,8 @@ public static class XpingSetup
 **xUnit:**
 ```csharp
 // Add to AssemblyInfo.cs - initialization and cleanup are automatic
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")]
+[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
+[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
 ```
 
 For detailed setup instructions, see the [Getting Started guides](../getting-started/quickstart-nunit.md) for your test framework.
