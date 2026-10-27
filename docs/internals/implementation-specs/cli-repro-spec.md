@@ -38,7 +38,7 @@ committed before P1 is reworked.
 | A | D4: one `dotnet test` command, VSTest only, no project path | The command depends on the newest session in the window. **VSTest:** `dotnet test <path> --no-build -e XPING_ENABLED=false --filter <filter>`. **MTP:** `dotnet run --project <path> --no-build -e XPING_ENABLED=false -- --filter <filter>` (**`--no-build` dropped by Amendment 4D**). `<path>` is `Xping.ProjectPath`, and the command runs from the repository root. With no recorded path, the VSTest form drops `<path>` and the MTP form drops `--project <path>`, and the reader runs it from the project directory, as before. With no recorded runner (the xUnit console runner, a custom host), `repro` is null: a guessed runner prints a command that fails | D4, §1.1, §3, §4.3, §7 |
 | B | D3: one escape set | Shared by both runners: `\ ( ) & \| = ! ~` get a backslash. **VSTest adds** `"` as `\"` (Amendment 1A) and `%` as `%25`: `dotnet test` passes the filter through MSBuild, which decodes `%XX`, so `S("50%20off")` became `S("50 off")` and matched nothing. **MTP adds nothing.** `dotnet run` hands the filter straight to the test app: `\"` there fails to parse and throws, and a bare `"` or `%` is read as written | D3, §3.2 |
 | C | — | **Rejected for MTP: `dotnet test --project`** (the .NET 10 SDK's MTP mode). On SDK 10.0.201, `-e` did not reach the test app: each filtered run with `-e XPING_ENABLED=false` (and with `-e XPING_MODE=Disabled`) still wrote a session. The mode also needs a `global.json` the CLI cannot see, and without one the same command fails with `MSB1001: Unknown switch`. `dotnet run` starts the app directly, whichever way the suite usually runs | D4 |
-| D | — | `Xping.TestFramework` is not read. NUnit, MSTest and xUnit v2 take the same filter on both runners. xUnit v3 (#284) will need it (`--filter-method`) | D4, §7 |
+| D | — | `Xping.TestFramework` is not read. NUnit, MSTest and xUnit v2 take the same filter on both runners. xUnit v3 (#284) will need it (`--filter-method`). **Overturned by Amendment 7A:** v3 takes the same filter too | D4, §7 |
 
 ### Amendment 3 — from the P1 review
 
@@ -93,6 +93,19 @@ uncapped count only in an English sentence. Resolved here and committed before t
 |---|---|---|---|
 | A | `runs > 1`: `at 44.4% of runs failing` | `at 4 of 9 runs failing (44.4%)`. The counts are the rerun test's own (D5), so a cluster's line names the member's runs, not the cluster's | D6, §3.1 |
 | B | `ReproDto(Command, Runs, Rate, Expectation)` | Adds `RunsNeeded` (D5's count, uncapped), `RunsFailed` and `RunsJudged` (D5's `p`), so a JSON reader never parses the sentence | §4.2 |
+
+---
+
+### Amendment 7 — from #284 (xUnit v3)
+
+#284 merged to `main` after P4, so `feat/139-repro` built commands for xUnit v3 sessions that no
+check had run. Amendment 2D expected v3 to need its own filter. P5 ran OQ-3 (§5) and found it does
+not. Resolved here and committed before P5's tests.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Amendment 2D, §7: xUnit v3 needs `--filter-method`, out of scope | v3 takes D3's filter on both runners: `FullyQualifiedName=` through xunit.runner.visualstudio on VSTest, and `-- --filter` on the MTP executable. `Xping.TestFramework` is still not read. No code change | D3, D4, §7 |
+| B | §6: P3 covers NUnit, MSTest and xUnit v2 | P5 adds the v3 sample to P3's runner test, on VSTest and MTP, with a data-driven test and a two-member filter | §6 |
 
 ---
 
@@ -206,8 +219,8 @@ Why the dashes:
 
 What this matches, per adapter (§1.1):
 - **NUnit:** exactly the stored case. The stored FQN carries the arguments, as NUnit's own does.
-- **MSTest, xUnit:** every data row of a data-driven test. The stored FQN has no arguments, and
-  neither does the runner's. The failing row runs among them.
+- **MSTest, xUnit v2 and v3:** every data row of a data-driven test. The stored FQN has no
+  arguments, and neither does the runner's. The failing row runs among them.
 
 **Rejected:**
 - `~` (contains). `Calc.Add` also matches `Calc.AddRange`.
@@ -467,6 +480,17 @@ version since #290). The harness was a scratch Git repository importing the ship
 | MTP `-e` | `dotnet run … -e XPING_ENABLED=false` wrote no session, with and without an MTP `global.json`. A control run without `-e` wrote one |
 | `dotnet test --project`, MTP mode | With an MTP `global.json`: filters ran, but every run wrote a session despite `-e XPING_ENABLED=false` or `-e XPING_MODE=Disabled`. Without one: `MSB1001: Unknown switch` (Amendment 2C) |
 
+### OQ-3 — xUnit v3. **Closed by P5** (Amendment 7)
+
+Run through `ReproCommandRunTests` against `samples/SampleApp.XUnitV3` (xunit.v3 4.0.2; on VSTest,
+xunit.v3.mtp-off with xunit.runner.visualstudio 4.0.1), .NET SDK 10.0.201, from the repository root.
+
+| Check | Result |
+|---|---|
+| VSTest | `dotnet test <path> -e XPING_ENABLED=false --filter FullyQualifiedName=…ParameterizedTestIsTracked` ran its three rows and wrote no session |
+| MTP | `dotnet run --project <path> -e XPING_ENABLED=false -- --filter FullyQualifiedName=…` ran the same three rows and wrote no session |
+| MTP, two members | `'…ParameterizedTestIsTracked\|…PassingTestIsTracked'` ran exactly those four tests |
+
 ---
 
 ## 6. Implementation sequence
@@ -498,6 +522,7 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
     recorded runner.
   - The CLI README (`nuspec/README.Cli.md`).
   - Any documented sample that `DocumentedSampleTests` checks.
+- **P5 — xUnit v3** (Amendment 7). OQ-3, and the v3 sample in P3's runner test on VSTest and MTP.
 
 ---
 
@@ -506,7 +531,6 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
 - An executing verb (`xping repro <id>`). If ever built, it sets `XPING_ENABLED=false` for its own
   runs.
 - Repro for the retry, duration, parallel, time and vanished kinds (D2).
-- xUnit v3 (#284) and its `--filter-method`. Uses `Xping.TestFramework` when it lands (Amendment 2D).
 - `dotnet test` in the SDK's MTP mode (Amendment 2C).
 - The repro line in `report --test`: #271.
 
