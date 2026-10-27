@@ -379,7 +379,8 @@ that is both flaky and masked by a retry produces two findings and two ids.
 accepted in either case. The detail view prints the row as the report does, every
 member of a cluster with where it lives, the test's full name and source location, each metric
 behind the headline, the other findings about the same test, and, for a finding about one test,
-the command that shows that test's run-by-run history:
+the command that shows that test's run-by-run history. Where rerunning the test can show the
+failure, it also prints the command that reruns it — see [Reproducing a finding](#reproducing-a-finding):
 
 <!-- xping:sample detail-test -->
 ````
@@ -441,6 +442,102 @@ xping report | wl-copy         # Linux (Wayland)
 
 When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
 
+
+### Reproducing a finding
+
+`--id` tells you how to see a finding fail on your own machine. The detail block gains a `repro`
+line saying how many times to run the test and why, and below the fence, after `History:`, a
+`Repro:` line gives the command:
+
+<!-- xping:sample detail-repro-flaky -->
+````
+Xping · SampleApp.MSTest · 9 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
+16 tests · 10 healthy · 6 flagged
+
+```
+FINDING                                                       row 1 of 1
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
+    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+
+    test      SampleApp.MSTest.CalculatorTests.
+              FlakyTest_RaceCondition_FailsIntermittently
+    assembly  SampleApp.MSTest
+    source    tests/SampleApp.MSTest/CalculatorTests.cs:57
+
+    failed          4 of 9 executions (44.4%)
+    runs affected   4 of 9
+    failure modes   1
+    failure mode 1  System.InvalidOperationException: Race condition
+                    detected
+    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
+                    show a failure 95% of the time
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding · all: xping report --all
+History: xping report --test fp-Sampl --assembly SampleApp.MSTest
+Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+````
+
+The CLI prints the command and never runs it. The list view shows no `repro`; open the finding
+with `--id`.
+
+**The command** depends on the runner the newest run in the window recorded:
+
+```
+VSTest:  dotnet test <path> -e XPING_ENABLED=false --filter <filter>
+MTP:     dotnet run --project <path> -e XPING_ENABLED=false -- --filter <filter>
+```
+
+- **Run it from the repository root.** `<path>` is the test project as the SDK recorded it,
+  relative to the root. When no path was recorded, the command leaves it out, and you run it from
+  the project directory.
+- **`-e XPING_ENABLED=false`** keeps the reruns out of the store. Recorded, a dozen filtered runs
+  of one test would push your real runs out of the window and skew every count in the report.
+- **No `--no-build`.** The store doesn't record which configuration the suite was built in. Add
+  `-c Release` yourself if that is what you build.
+- **The filter** is `FullyQualifiedName=` and the stored name, escaped for the runner. On NUnit it
+  selects exactly the failing case, arguments and all. On MSTest and xUnit a data-driven test's rows
+  share one name, so it runs every row, the failing one among them.
+
+**The run count** is how many runs it takes to see at least one failure 95% of the time, at the
+rate the test failed in the window: the runs it failed in out of the runs it ran in with a verdict.
+A run a retry turned green counts as passing, because it will pass the same way when you rerun it.
+Above 50 runs (a test failing in fewer than about 6% of runs) no count is given: the `repro` line
+says the failure is too rare to reproduce by rerunning and how many runs it would take, and the
+command is still printed for debugging a single run. An always-failing test needs one run.
+
+**Which findings get one.** A command that cannot show the failure is worse than none, so only
+these do:
+
+| Kind | Reruns |
+|---|---|
+| `flaky`, `always failing`, `timing out` | the test |
+| `broken fixture` | the member that failed in the largest share of its runs; a broken fixture fails every test that uses it |
+| `shared failure` | up to three members, most likely to fail first; the count is for the likeliest of them |
+
+None for the rest:
+
+- **Retry kinds** (`masked by retry`, `deeper retries`, `out of retries`): the retry attribute
+  stays on when you rerun, so the run stays green.
+- **Duration kinds** (`slower`, `unstable timing`): a rerun prints pass or fail, not a time against
+  the recorded median.
+- **`concurrency`**: the finding is the difference between an isolated run and a full one, and
+  each framework sets parallelism its own way.
+- **`time sensitive`**: it depends on the time of day, not on running again.
+- **`stopped running`**: the question is whether the test is still discovered at all, which
+  `dotnet test --list-tests` answers and a filtered rerun does not.
+
+**No runner recorded, no command.** The SDK records `VSTest` or `MTP` on each run. The xUnit
+console runner and custom hosts record neither, and a guessed runner prints a command that fails,
+so those findings carry no `repro`.
 
 ### Test history
 
@@ -565,7 +662,8 @@ change them. Every command the view prints repeats the window: `--since` as you 
 `--runs` with the window's size, so it reopens a window of the same size.
 
 The two views link to each other. `--id` on a finding about one test ends with a `History:` line,
-as the [`--id` sample](#finding-ids) shows. When an id is not reported and its test has no other
+as the [`--id` sample](#finding-ids) shows, and with a `Repro:` line where it has
+[one](#reproducing-a-finding). When an id is not reported and its test has no other
 finding in the window, stderr gives that test's `--test` command.
 
 ### Source locations
@@ -704,6 +802,13 @@ lists them, each with `fingerprintPrefix`, `assembly`, `fullyQualifiedName`, `la
 over, such as a `--since` later than every run, stdout is empty and only the exit code and stderr
 answer.
 
+`repro` is [the repro command](#reproducing-a-finding) as data, or `null` for a finding that has
+none. `command` is the `Repro:` line. `runs` is the count to run it, `null` above the cap of 50;
+`runsNeeded` is the same count uncapped. `rate` is `runsFailed` out of `runsJudged`, the rerun
+test's runs it failed in and ran in with a verdict, and `expectation` is the sentence the `repro`
+line prints. A cluster's members in `evidence` carry their own `runsFailed` and `runsJudged`, as do
+the `Flaky`, `AlwaysFailing` and `TimingOut` evidence records.
+
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
 `not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
@@ -723,7 +828,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.23",
+  "schemaVersion": "1.24",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
@@ -797,6 +902,11 @@ are not each other and `tests` is what they add up to:
       ],
       "evidence": { "…": "…" },
       "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests",
+      "repro": {
+        "command": "dotnet test tests/Checkout.Tests/Checkout.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=Billing.SummaryTests.GenerateMonthlySummary",
+        "runs": 11, "runsNeeded": 11, "runsFailed": 5, "runsJudged": 20, "rate": 0.25,
+        "expectation": "run 11 times: at 5 of 20 runs failing (25%), 11 runs show a failure 95% of the time"
+      },
       "cloud": {
         "confidence": 0.62, "category": "moderately-reliable", "evidenceLevel": "robust", "runs": 812,
         "trend": "stable", "delta": -0.03, "flaky": true,
