@@ -81,6 +81,21 @@ Resolved here and committed on the P2 branch before its code.
 
 ---
 
+### Amendment 6 — from the P2 review
+
+D5 says the counts are the ones D6 prints, so the reader can check them. D6's `runs > 1` sentence
+printed only the rate, and `ReproDto` only the capped count. A cluster's rate is its top member's,
+not the cluster's: a shared failure read `runs affected 3 of 20` above `at 60% of runs failing`, with
+nothing saying the 60% was one member's 3 of 5. And a capped repro carried `runs: null`, leaving the
+uncapped count only in an English sentence. Resolved here and committed before the fix.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | `runs > 1`: `at 44.4% of runs failing` | `at 4 of 9 runs failing (44.4%)`. The counts are the rerun test's own (D5), so a cluster's line names the member's runs, not the cluster's | D6, §3.1 |
+| B | `ReproDto(Command, Runs, Rate, Expectation)` | Adds `RunsNeeded` (D5's count, uncapped), `RunsFailed` and `RunsJudged` (D5's `p`), so a JSON reader never parses the sentence | §4.2 |
+
+---
+
 ## 1. Ground truth
 
 ### 1.1 What exists
@@ -260,7 +275,7 @@ One sentence, resolved in the envelope like every other display string:
 
 | Case | Text |
 |---|---|
-| `runs > 1` | `run 6 times: at 44.4% of runs failing, 6 runs show a failure 95% of the time` |
+| `runs > 1` | `run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a failure 95% of the time` |
 | `runs = 1` | `run once: it failed in 9 of 9 runs` |
 | `runs` null | `failed in 1 of 20 runs: too rare to reproduce by rerunning (59 runs needed)` |
 
@@ -307,8 +322,8 @@ FINDING                                                       row 2 of 6
     failed          4 of 9 executions (44.4%)
     runs affected   4 of 9
     failure modes   1
-    repro           run 6 times: at 44.4% of runs failing,
-                    6 runs show a failure 95% of the time
+    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
+                    show a failure 95% of the time
 ```
 
 <legend>
@@ -377,6 +392,9 @@ internal sealed record FindingDto(
 internal sealed record ReproDto(   // NEW
     string Command,                // D4, one line
     int? Runs,                     // D5; null above ReproMaxRuns
+    int RunsNeeded,                // D5, uncapped (Amendment 6B)
+    int RunsFailed,                // D5's p: runs failed (Amendment 6B)
+    int RunsJudged,                //   of runs judged (Amendment 6B)
     double Rate,                   // D5's p, at published precision
     string Expectation);           // D6
 ```
