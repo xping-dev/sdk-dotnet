@@ -6,7 +6,6 @@
 namespace Xping.Integration.Tests;
 
 using System;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -22,8 +21,6 @@ using Xunit;
 [Collection(SampleRunner.Collection)]
 public sealed class SessionPropertiesRunTests : IDisposable
 {
-    private static readonly Dictionary<string, string> LocalOnly = new() { ["XPING_MODE"] = "LocalOnly" };
-
     private readonly SampleRunner _runner = new();
 
     public void Dispose() => _runner.Dispose();
@@ -39,7 +36,7 @@ public sealed class SessionPropertiesRunTests : IDisposable
     public async Task TheStoredSessionNamesItsRunnerFrameworkAndProject(
         string sample, TestRunner runner, string filter, string expectedRunner, string expectedFramework)
     {
-        (int exitCode, string output) = await _runner.RunAsync(sample, runner, filter, LocalOnly).ConfigureAwait(true);
+        (int exitCode, string output) = await _runner.RunAsync(sample, runner, filter, SampleRunner.LocalOnly).ConfigureAwait(true);
 
         exitCode.Should().Be(0, "Output:\n{0}", output);
 
@@ -54,7 +51,7 @@ public sealed class SessionPropertiesRunTests : IDisposable
     public async Task AProjectBuiltWithoutAssemblyInfoRecordsNoProjectPath()
     {
         (int exitCode, string output) = await _runner
-            .RunAsync("SampleApp.NUnit", TestRunner.VsTest, "FullyQualifiedName~.PassingTestIsTracked", LocalOnly, "XpingSampleWithoutAssemblyInfo=true")
+            .RunAsync("SampleApp.NUnit", TestRunner.VsTest, "FullyQualifiedName~.PassingTestIsTracked", SampleRunner.LocalOnly, "XpingSampleWithoutAssemblyInfo=true")
             .ConfigureAwait(true);
 
         exitCode.Should().Be(0, "Output:\n{0}", output);
