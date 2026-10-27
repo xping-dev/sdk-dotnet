@@ -446,8 +446,8 @@ When stdout is not a terminal the report drops everything that is not the report
 ### Reproducing a finding
 
 `--id` tells you how to see a finding fail on your own machine. The detail block gains a `repro`
-line saying how many times to run the test and why, and below the fence, after `History:`, a
-`Repro:` line gives the command:
+line saying how many times to run the test and why. Below the fence, a `Repro:` line gives the
+command. It is the last line, after `History:` where the finding has one (a cluster has none):
 
 <!-- xping:sample detail-repro-flaky -->
 ````
@@ -506,6 +506,9 @@ MTP:     dotnet run --project <path> -e XPING_ENABLED=false -- --filter <filter>
 - **The filter** is `FullyQualifiedName=` and the stored name, escaped for the runner. On NUnit it
   selects exactly the failing case, arguments and all. On MSTest and xUnit a data-driven test's rows
   share one name, so it runs every row, the failing one among them.
+- **Quoting is for bash and zsh**, like every command the report prints. A filter holding
+  parentheses or quotes is wrapped in single quotes, which cmd.exe passes through as part of the
+  filter. PowerShell reads it as written, except a name with an apostrophe.
 
 **The run count** is how many runs it takes to see at least one failure 95% of the time, at the
 rate the test failed in the window: the runs it failed in out of the runs it ran in with a verdict.
@@ -521,7 +524,7 @@ these do:
 |---|---|
 | `flaky`, `always failing`, `timing out` | the test |
 | `broken fixture` | the member that failed in the largest share of its runs; a broken fixture fails every test that uses it |
-| `shared failure` | up to three members, most likely to fail first; the count is for the likeliest of them |
+| `shared failure` | up to three members, those that failed in the largest share of their runs; the count is for the highest of their rates |
 
 None for the rest:
 
@@ -661,9 +664,9 @@ as they do for `report`. The findings are computed over the same window, so a na
 change them. Every command the view prints repeats the window: `--since` as you gave it, otherwise
 `--runs` with the window's size, so it reopens a window of the same size.
 
-The two views link to each other. `--id` on a finding about one test ends with a `History:` line,
-as the [`--id` sample](#finding-ids) shows, and with a `Repro:` line where it has
-[one](#reproducing-a-finding). When an id is not reported and its test has no other
+The two views link to each other. `--id` on a finding about one test prints a `History:` line
+below the fence, as the [`--id` sample](#finding-ids) shows, followed by a `Repro:` line where it
+has [one](#reproducing-a-finding). When an id is not reported and its test has no other
 finding in the window, stderr gives that test's `--test` command.
 
 ### Source locations

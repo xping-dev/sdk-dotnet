@@ -30,25 +30,27 @@ Use the six confidence score factors to hypothesize the cause:
 
 ### 3. Reproduce Locally
 
-Open the finding with `xping report --id <id>`. Its `Repro:` line is the command that reruns just
-that test, and its `repro` line says how many runs it takes to see a failure 95% of the time:
+Open the finding with `xping report --id <id>`. Its `repro` line says how many runs it takes to see
+a failure 95% of the time, and the `Repro:` line below the block is the command that reruns just
+that test. Run it that many times, from the repository root, or from the project directory when the
+command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
+[Reproducing a finding](../../cli/command-reference.md#reproducing-a-finding) shows the output and
+says which findings get a command.
+
+With no `Repro:` line because the runner wasn't recorded (the xUnit console runner, a custom host),
+loop it yourself. Use `=`, not `~`: `~Calc.Add` also runs `Calc.AddRange`. When a retry masks the
+failure, take the retry attribute off first, or every run stays green.
 
 ```bash
-xping report --id f_1491bf4c
-# repro    run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a failure 95% of the time
-# Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
+for i in {1..10}; do dotnet test -e XPING_ENABLED=false --filter "FullyQualifiedName=MyApp.Tests.CalcTests.Add"; done
 ```
 
-Run that command from the repository root as many times as it says. `-e XPING_ENABLED=false` keeps
-the reruns out of your history. If it never fails in isolation, run the full suite: a test that only
-fails alongside others points at shared state.
+If it never fails in isolation, run the full suite: a test that only fails alongside others points
+at shared state.
 
 ```bash
 dotnet test
 ```
-
-See [Reproducing a finding](../../cli/command-reference.md#reproducing-a-finding) for which findings
-get a command and how the run count is chosen.
 
 ### 4. Check Environment Differences
 

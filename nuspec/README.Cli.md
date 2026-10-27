@@ -60,7 +60,7 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 
 The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.
 
-`xping report --id <id>` opens one finding. For a test that fails on its own account, it ends with a `Repro:` line: the `dotnet test` (or, on Microsoft.Testing.Platform, `dotnet run`) command that reruns just that test from the repository root, and how many runs it takes to see it fail. See [Reproducing a finding](https://docs.xping.io/cli/command-reference.html#reproducing-a-finding).
+`xping report --id <id>` opens one finding. For a finding a rerun can show (flaky, always failing, timing out, broken fixture, shared failure), its `repro` line says how many runs it takes to see the failure, and a `Repro:` line below the block gives the `dotnet test` (or, on Microsoft.Testing.Platform, `dotnet run`) command that reruns just that test from the repository root. See [Reproducing a finding](https://docs.xping.io/cli/command-reference.html#reproducing-a-finding).
 
 Findings need a few runs of history. What the newest run did that the runs before it did not needs only two, and when it has failures a `LATEST RUN` section opens the block, above the findings:
 
