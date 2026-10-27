@@ -250,7 +250,7 @@ public sealed class EnvelopeBuilderTests
 
         Assert.Equal(names.IndexOf("drillDown") + 1, names.IndexOf("repro"));
         Assert.Equal(
-            ["command", "runs", "rate", "expectation"],
+            ["command", "runs", "runsNeeded", "runsFailed", "runsJudged", "rate", "expectation"],
             finding.GetProperty("repro").EnumerateObject().Select(property => property.Name));
 
         using JsonDocument none = JsonDocument.Parse(Json(Build(context, Findings(), test: null)));
@@ -261,8 +261,8 @@ public sealed class EnvelopeBuilderTests
 
     /// <summary>D6, with D5's rate rounded as the headline rounds it (Amendment 5A).</summary>
     [Theory]
-    [InlineData(4, 9, "run 6 times: at 44.4% of runs failing, 6 runs show a failure 95% of the time")]
-    [InlineData(10, 20, "run 5 times: at 50% of runs failing, 5 runs show a failure 95% of the time")]
+    [InlineData(4, 9, "run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a failure 95% of the time")]
+    [InlineData(10, 20, "run 5 times: at 10 of 20 runs failing (50%), 5 runs show a failure 95% of the time")]
     [InlineData(1, 20, "failed in 1 of 20 runs: too rare to reproduce by rerunning (59 runs needed)")]
     [InlineData(19, 20, "run once: it failed in 19 of 20 runs")]
     public void TheExpectationSaysWhatTheRunsWillShow(int failing, int judged, string expected)
@@ -270,6 +270,23 @@ public sealed class EnvelopeBuilderTests
         Finding finding = Flaky(4, 9).Findings[0] with { Evidence = FlakyEvidence(failing, judged) };
 
         Assert.Equal(expected, EnvelopeBuilder.BuildRepro(finding, VSTest)!.Expectation);
+    }
+
+    /// <summary>
+    /// Amendment 6B: past the cap the JSON still says how rare, without parsing the sentence.
+    /// </summary>
+    [Fact]
+    public void ACappedReproCarriesItsUncappedCountAndTheCountsBehindIt()
+    {
+        Finding finding = Flaky(4, 9).Findings[0] with { Evidence = FlakyEvidence(1, 20) };
+
+        ReproDto repro = EnvelopeBuilder.BuildRepro(finding, VSTest)!;
+
+        Assert.Null(repro.Runs);
+        Assert.Equal(59, repro.RunsNeeded);
+        Assert.Equal(1, repro.RunsFailed);
+        Assert.Equal(20, repro.RunsJudged);
+        Assert.Equal(0.05, repro.Rate);
     }
 
     [Fact]

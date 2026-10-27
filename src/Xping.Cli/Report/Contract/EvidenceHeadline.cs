@@ -676,13 +676,17 @@ internal static class EvidenceHeadline
     /// Says what running a repro command will show, in one sentence.
     /// </summary>
     /// <param name="repro">The repro.</param>
+    /// <param name="rate">
+    /// Its rate, already rounded to the precision the envelope publishes it at, so the sentence and
+    /// the JSON <c>rate</c> are one number.
+    /// </param>
     /// <returns>The sentence.</returns>
     /// <remarks>
     /// The counts it was sized from are in the sentence, so a reader can check the arithmetic. Past
     /// the cap the sentence says how many runs it would take rather than printing a count nobody
     /// will run.
     /// </remarks>
-    public static string ReproExpectation(Repro repro)
+    public static string ReproExpectation(Repro repro, double rate)
     {
         ArgumentNullException.ThrowIfNull(repro);
 
@@ -694,7 +698,7 @@ internal static class EvidenceHeadline
                 $"failed in {runs}: too rare to reproduce by rerunning ({Runs(repro.RunsNeeded)} needed)",
             1 => $"run once: it failed in {runs}",
             int count =>
-                $"run {Times(count)}: at {Percent(FindingOrder.Round(repro.Rate))} of runs failing, " +
+                $"run {Times(count)}: at {runs} failing ({Percent(rate)}), " +
                 $"{Runs(count)} show a failure {Percent(LocalAnalysisConstants.ReproConfidence)} of the time"
         };
     }

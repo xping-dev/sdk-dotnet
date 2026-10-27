@@ -457,14 +457,22 @@ internal static class EnvelopeBuilder
     /// <param name="finding">The finding.</param>
     /// <param name="target">The runner and project the window's newest session recorded.</param>
     /// <returns>The repro, or null where <see cref="ReproCommand"/> builds none.</returns>
-    internal static ReproDto? BuildRepro(Finding finding, ReproTarget target) =>
-        ReproCommand.For(finding, target) is { } repro
-            ? new ReproDto(
-                repro.Command,
-                repro.Runs,
-                FindingOrder.Round(repro.Rate),
-                EvidenceHeadline.ReproExpectation(repro))
-            : null;
+    internal static ReproDto? BuildRepro(Finding finding, ReproTarget target)
+    {
+        if (ReproCommand.For(finding, target) is not { } repro)
+            return null;
+
+        double rate = FindingOrder.Round(repro.Rate);
+
+        return new ReproDto(
+            repro.Command,
+            repro.Runs,
+            repro.RunsNeeded,
+            repro.RunsFailed,
+            repro.RunsJudged,
+            rate,
+            EvidenceHeadline.ReproExpectation(repro, rate));
+    }
 
     /// <summary>
     /// Projects a finding's subject into the envelope.
