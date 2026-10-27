@@ -24,6 +24,8 @@
     <ProjectReference Include="..\..\src\Xping.Sdk.NUnit\Xping.Sdk.NUnit.csproj" />
     <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
     <ProjectReference Include="..\..\src\Xping.Sdk.MSTest\Xping.Sdk.MSTest.csproj" />
+    <!-- The repro run tests build the command with the CLI's own builder. -->
+    <ProjectReference Include="..\..\src\Xping.Cli\Xping.Cli.csproj" />
   </ItemGroup>
 
 </Project>

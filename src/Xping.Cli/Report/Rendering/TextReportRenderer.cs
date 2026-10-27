@@ -209,6 +209,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (envelope.Selection?.History is { } command)
             builder.AppendLine(capabilities.Dim("History: " + command));
 
+        // The sentence above says how many times; the command is here for the same reason History
+        // is. Only in the detail view: the list is one row per finding, a command away from this.
+        // Guarded as WriteDetail is, so a finding that view says is not reported prints no command.
+        if (envelope.Selection is { Row: not null } && envelope.Findings is [{ Repro: { } repro }])
+            builder.AppendLine(capabilities.Dim("Repro: " + repro.Command));
+
         output.Write(builder.ToString());
     }
 
@@ -505,6 +511,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         WritePairs(builder,
         [
             .. finding.Metrics.Select(metric => (metric.Label, (string?)metric.Value)),
+            ("repro", finding.Repro?.Expectation),
             .. CloudText.Pairs(finding.Cloud)
         ]);
 

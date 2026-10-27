@@ -12,6 +12,7 @@ using Xping.Cli.Report.Rendering;
 using Xping.Cli.Report.Scoring;
 using Xping.Cli.Report.Windowing;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -70,6 +71,12 @@ internal static class ReportFixtures
         "detail-group",
         .. Enum.GetValues<FindingKind>().Select(DetailKey),
         "detail-store",
+        "detail-repro-flaky",
+        "detail-repro-capped",
+        "detail-repro-cluster",
+        "detail-repro-none",
+        "detail-repro-mtp",
+        "detail-repro-no-runner",
         "history-flaky",
         "history-healthy",
         "history-timeout-retry",
@@ -249,6 +256,13 @@ internal static class ReportFixtures
         "detail-test" => Detail(SpecSection3Measured(), 5),
         "detail-group" => Detail(SpecSection3Measured(), 3),
         "detail-store" => DetailFromStore(),
+        "detail-repro-flaky" => ReproFlaky(VSTest(SampleProject), failing: 4, judged: 9),
+        "detail-repro-capped" => ReproFlaky(VSTest(SampleProject), failing: 1, judged: 20),
+        "detail-repro-cluster" => ReproCluster(),
+        "detail-repro-none" => Detail(Envelope(Measured(FindingKind.RetryMasked)), 1),
+        "detail-repro-mtp" => ReproFlaky(
+            new ReproTarget(LocalSessionProperties.TestingPlatformRunner, SampleProject), failing: 4, judged: 9),
+        "detail-repro-no-runner" => ReproFlaky(ReproTarget.Unknown, failing: 4, judged: 9),
         "history-flaky" => HistoryFlaky(),
         "history-healthy" => HistoryHealthy(),
         "history-timeout-retry" => HistoryTimeoutRetry(),
@@ -413,7 +427,7 @@ internal static class ReportFixtures
         FindingDto flaky = envelope.Findings[4];
         (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(
             FindingKind.Flaky,
-            new FlakyEvidence(6, 20, 20, 6, 0.3, 0, 0, 1, [signature], [], null));
+            new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null));
 
         return envelope with
         {
@@ -472,6 +486,15 @@ internal static class ReportFixtures
             : Finding(kind.ToString(), "medium", "MyApp.Tests.CheckoutTests.Completes", headline,
                 "tests/MyApp.Tests/CheckoutTests.cs", 42);
 
+        // The command names the tests the view lists. The sample's own member is a placeholder
+        // that no row above it shows.
+        FindingEvidence reproEvidence = evidence switch
+        {
+            BrokenFixtureEvidence e => e with { Members = MembersOf(finding.Subject) },
+            SharedFailureEvidence e => e with { Members = MembersOf(finding.Subject) },
+            _ => evidence
+        };
+
         return finding with
         {
             Id = FindingId.Compute(kind, finding.Subject.GroupId ?? finding.Subject.Fingerprint!),
@@ -479,8 +502,121 @@ internal static class ReportFixtures
             Severity = "medium",
             Population = ToCamelCase(PopulationRules.For(kind).ToString()),
             Headline = headline,
+            Metrics = metrics,
+            Repro = Repro(kind, reproEvidence, finding.Subject, VSTest("tests/MyApp.Tests/MyApp.Tests.csproj"))
+        };
+    }
+
+    /// <summary>The project the §3.1 repro fixtures were recorded from.</summary>
+    private const string SampleProject = "tests/SampleApp.MSTest/SampleApp.MSTest.csproj";
+
+    private static ReproTarget VSTest(string projectPath) =>
+        new(LocalSessionProperties.VSTestRunner, projectPath);
+
+    /// <summary>
+    /// A cluster's members as evidence, each failing in the cluster's 3 of 20 runs and fewer times
+    /// than the one before, so the command names them in the order the view lists them.
+    /// </summary>
+    private static ClusterMember[] MembersOf(SubjectDto subject) =>
+    [
+        .. subject.Members!.Select((member, i) =>
+            new ClusterMember(member.Fingerprint!, member.FullyQualifiedName!, 12 - i, 3, 20))
+    ];
+
+    /// <summary>
+    /// Builds a finding's repro the way the envelope does, from the model the command reads.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="EnvelopeBuilder.BuildRepro"/>, so a fixture cannot pin a command or a
+    /// sentence the builder would not have produced.
+    /// </remarks>
+    private static ReproDto? Repro(FindingKind kind, FindingEvidence evidence, SubjectDto subject, ReproTarget target)
+    {
+        FindingSubject model = subject.Members is { } members
+            ? new FindingSubject.Group(subject.GroupId!, [.. members.Select(Reference)])
+            : new FindingSubject.SingleTest(Reference(subject));
+
+        return EnvelopeBuilder.BuildRepro(
+            new Finding("f_00000000", kind, Severity.Medium, EvidenceLevel.Moderate, 20, model, evidence, 0.5),
+            target);
+
+        static TestReference Reference(SubjectDto test) =>
+            new(test.Fingerprint!, test.FullyQualifiedName!, test.DisplayName ?? test.FullyQualifiedName!,
+                test.SourceFile, test.SourceLineNumber, test.Assembly ?? "MyApp.Tests");
+    }
+
+    /// <summary>
+    /// The repro spec's §3.1: a flaky MSTest test, in the detail view, under a given runner.
+    /// </summary>
+    private static ReportEnvelope ReproFlaky(ReproTarget target, int failing, int judged)
+    {
+        const string name = "SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently";
+
+        SignatureView signature = new(
+            "abc123", "System.InvalidOperationException", "Race condition detected", [],
+            Degraded: false, Unavailable: false, Occurrences: failing,
+            FirstSeenAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "c670fc3",
+            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
+
+        var evidence = new FlakyEvidence(
+            failing, judged, judged, failing, failing, judged,
+            FindingOrder.Round((double)failing / judged), 0, 0, 1, [signature], [], null);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(FindingKind.Flaky, evidence);
+
+        FindingDto finding = Finding(nameof(FindingKind.Flaky), "high", name, headline,
+            "tests/SampleApp.MSTest/CalculatorTests.cs", 57);
+
+        finding = finding with
+        {
+            Id = "f_1491bf4c",
+            EvidenceLevel = "low",
+            Metrics = metrics,
+            Subject = finding.Subject with { Assembly = "SampleApp.MSTest" }
+        };
+
+        ReportEnvelope envelope = Envelope(finding with
+        {
+            Repro = Repro(FindingKind.Flaky, evidence, finding.Subject, target)
+        });
+
+        return Detail(envelope with
+        {
+            Window = envelope.Window with
+            {
+                From = new DateTime(2026, 8, 20, 7, 52, 0, DateTimeKind.Utc),
+                To = new DateTime(2026, 8, 21, 9, 2, 0, DateTimeKind.Utc),
+                SessionCount = judged
+            },
+            Context = new ContextDto("c670fc3a91", "main", "SampleApp.MSTest"),
+            Summary = envelope.Summary with { Tests = 16, Flagged = 6, Healthy = 10 }
+        }, 1);
+    }
+
+    /// <summary>
+    /// The repro spec's §3.3: a shared failure whose command names three members.
+    /// </summary>
+    private static ReportEnvelope ReproCluster()
+    {
+        FindingEvidence sample = EvidenceSamples.For(FindingKind.SharedFailure);
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(FindingKind.SharedFailure, sample);
+
+        FindingDto finding = Cluster("System.InvalidOperationException", headline, ["Ns.A.One", "Ns.B.Two", "Ns.C.Three", "Ns.D.Four"]);
+
+        finding = finding with
+        {
+            Id = FindingId.Compute(FindingKind.SharedFailure, finding.Subject.GroupId!),
+            Kind = nameof(FindingKind.SharedFailure),
+            Population = ToCamelCase(PopulationRules.For(FindingKind.SharedFailure).ToString()),
             Metrics = metrics
         };
+
+        var evidence = (SharedFailureEvidence)sample with { Members = MembersOf(finding.Subject) };
+
+        return Detail(Envelope(finding with
+        {
+            Repro = Repro(FindingKind.SharedFailure, evidence, finding.Subject, VSTest("tests/Ns.Tests/Ns.Tests.csproj"))
+        }), 1);
     }
 
     /// <summary>
@@ -922,6 +1058,13 @@ internal static class ReportFixtures
             latestRun);
     }
 
+    /// <summary>What the SDK records on each of the store's sessions, so its repro is the builder's.</summary>
+    private static readonly Dictionary<string, string> StoreRunner = new(StringComparer.Ordinal)
+    {
+        [LocalSessionProperties.Runner] = LocalSessionProperties.VSTestRunner,
+        [LocalSessionProperties.ProjectPath] = "tests/MyApp.Tests/MyApp.Tests.csproj"
+    };
+
     /// <summary>
     /// Writes the twenty runs <see cref="LatestRunFromStore"/> describes and runs every provider.
     /// </summary>
@@ -958,7 +1101,8 @@ internal static class ReportFixtures
                     errorMessage: "Assert.Equal() Failure: Values differ"));
             }
 
-            sessions.Add(TestSessionFactory.Session(ordinal, executions, sha: "eab9867a1c40", branch: "main"));
+            sessions.Add(TestSessionFactory.Session(
+                ordinal, executions, sha: "eab9867a1c40", branch: "main", customProperties: StoreRunner));
         }
 
         AnalysisContext context = TestSessionFactory.Context([.. sessions]);
@@ -1373,7 +1517,8 @@ internal static class ReportFixtures
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
             null,
-            "xping report --id f_2a91 --assembly MyApp.Tests");
+            "xping report --id f_2a91 --assembly MyApp.Tests",
+            null);
 
     /// <summary>
     /// A finding about a cluster: no name of its own, a cause, and members beneath it.

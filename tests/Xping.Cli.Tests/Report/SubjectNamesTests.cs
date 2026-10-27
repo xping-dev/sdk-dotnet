@@ -202,7 +202,7 @@ public sealed class SubjectNamesTests
         Assert.Equal(
             "(cause not recorded)",
             SubjectNames.CauseLabel(
-                new FlakyEvidence(7, 20, 20, 5, 0.35, 2, 1, 3, [Signature(null)], [], null)));
+                new FlakyEvidence(7, 20, 20, 5, 5, 20, 0.35, 2, 1, 3, [Signature(null)], [], null)));
 
     private static BrokenFixtureEvidence Fixture(string? member, FailureSite site) =>
         new(
@@ -210,7 +210,7 @@ public sealed class SubjectNamesTests
             member,
             Signature("System.InvalidOperationException"),
             3,
-            [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+            [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)],
             12, 3, 20, 3,
             new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
             "a3f9c2e",
@@ -220,7 +220,7 @@ public sealed class SubjectNamesTests
         new(
             Signature(exceptionType),
             3,
-            [new ClusterMember("fp", "MyApp.Tests.A", 4)],
+            [new ClusterMember("fp", "MyApp.Tests.A", 4, 3, 20)],
             12, 3, 20, 3,
             new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc),
             "a3f9c2e",

@@ -19,6 +19,8 @@ FINDING                                                       row 1 of 1
     runs affected      9 of 20
     declared limit     500ms
     share of failures  9 of 10 (90%)
+    repro              run 6 times: at 9 of 20 runs failing (45%), 6
+                       runs show a failure 95% of the time
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -27,3 +29,4 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 Showing 1 of 1 finding · all: xping report --all
 History: xping report --test fp-MyApp --assembly MyApp.Tests
+Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=MyApp.Tests.CheckoutTests.Completes

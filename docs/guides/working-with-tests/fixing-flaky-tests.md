@@ -30,15 +30,25 @@ Use the six confidence score factors to hypothesize the cause:
 
 ### 3. Reproduce Locally
 
-Try to reproduce the flakiness:
+Open the finding with `xping report --id <id>`. Its `repro` line says how many runs it takes to see
+a failure 95% of the time, and the `Repro:` line below the block is the command that reruns just
+that test. Run it that many times, from the repository root, or from the project directory when the
+command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
+[Reproducing a finding](../../cli/command-reference.md#reproducing-a-finding) shows the output and
+says which findings get a command.
+
+With no `Repro:` line because the runner wasn't recorded (the xUnit console runner, a custom host),
+loop it yourself. Use `=`, not `~`: `~Calc.Add` also runs `Calc.AddRange`. When a retry masks the
+failure, take the retry attribute off first, or every run stays green.
+
 ```bash
-# Run the test multiple times in isolation
-dotnet test --filter "FullyQualifiedName~FlakyTestName" --logger "console;verbosity=detailed"
+for i in {1..10}; do dotnet test -e XPING_ENABLED=false --filter "FullyQualifiedName=MyApp.Tests.CalcTests.Add"; done
+```
 
-# Run it 10 times to see if it fails
-for i in {1..10}; do dotnet test --filter "FullyQualifiedName~FlakyTestName"; done
+If it never fails in isolation, run the full suite: a test that only fails alongside others points
+at shared state.
 
-# Run with the full test suite (check for shared state issues)
+```bash
 dotnet test
 ```
 

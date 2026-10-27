@@ -111,6 +111,62 @@ public sealed class DetailRenderingTests
     public void AClusterHasNoHistoryCommand() =>
         Assert.DoesNotContain("History:", Render(Detail(Get("spec-section-3"), 3)), StringComparison.Ordinal);
 
+    /// <summary>
+    /// The sentence says how many times, inside the block; the command follows History below the
+    /// fence, never cut.
+    /// </summary>
+    [Fact]
+    public void AReproPrintsItsSentenceInTheBlockAndItsCommandLast()
+    {
+        ReportEnvelope detail = Get("detail-repro-flaky");
+        ReproDto repro = detail.Findings[0].Repro!;
+        string[] lines = Lines(Render(detail));
+        string[] fenced = Fenced(Render(detail));
+
+        Assert.Equal("History: " + detail.Selection!.History, lines[^3]);
+        Assert.Equal("Repro: " + repro.Command, lines[^2]);
+        Assert.Contains("    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs", fenced);
+        Assert.DoesNotContain(fenced, l => l.Contains("Repro:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The detail view says the finding is not reported; no command follows for it.
+    /// </summary>
+    [Fact]
+    public void AnUnreportedSelectionPrintsNoReproCommand()
+    {
+        ReportEnvelope detail = Get("detail-repro-flaky");
+        string report = Render(detail with { Selection = detail.Selection! with { Row = null } });
+
+        Assert.Contains("is not reported in this window", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Repro:", report, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("detail-repro-none")]
+    [InlineData("detail-repro-no-runner")]
+    public void AFindingWithNoReproPrintsNeitherLine(string fixture)
+    {
+        string report = Render(Get(fixture));
+
+        Assert.DoesNotContain("Repro:", report, StringComparison.Ordinal);
+        Assert.DoesNotContain(Fenced(report), l => l.StartsWith("    repro ", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The list is one row per finding; the repro is one <c>--id</c> away (D7).
+    /// </summary>
+    [Fact]
+    public void TheFullReportPrintsNoRepro()
+    {
+        FindingDto finding = Get("detail-repro-flaky").Findings[0];
+        string report = Render(Envelope(finding));
+
+        Assert.NotNull(finding.Repro);
+        Assert.DoesNotContain("Repro:", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("run 6 times", report, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AFortyMemberClusterPrintsFortyMembersWithTheirLocations()
     {

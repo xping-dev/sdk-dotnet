@@ -17,6 +17,8 @@ FINDING                                                       row 1 of 1
     failures        47
     runs affected   3 of 20
     worst run       12 tests
+    repro           run 19 times: at 3 of 20 runs failing (15%), 19 runs
+                    show a failure 95% of the time
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -24,3 +26,4 @@ counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 Showing 1 of 1 finding | all: xping report --all
+Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter 'FullyQualifiedName=MyApp.Tests.CheckoutTests.Completes|FullyQualifiedName=MyApp.Tests.CheckoutTests.Refunds|FullyQualifiedName=MyApp.Tests.CartTests.Totals'
