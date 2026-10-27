@@ -304,8 +304,8 @@ Percentages round as the headline rounds them.
   wrapped, for the same reason as `History:`.
 - **Text, `report` list:** unchanged. A finding is one row there, and the reader reaches `--id` in one
   command.
-- **`--test` view:** each history row ends with the `repro` line, and one `Repro of row N:` command
-  follows the fence (`cli-test-history-spec.md` Amendment 9, #271).
+- **`--test` view:** each single-test row ends with the `repro` line, and one `Repro of row N:`
+  command follows the fence. Clusters get neither there (`cli-test-history-spec.md` Amendment 9, #271).
 
 ---
 
