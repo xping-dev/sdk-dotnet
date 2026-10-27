@@ -125,6 +125,8 @@ Every claim here was read in source at the cited line.
   - MSTest: `{FullyQualifiedTestClassName}.{TestName}`, no arguments (`src/Xping.Sdk.MSTest/XpingTestBase.cs:180`).
   - NUnit: `test.FullName`, **with** arguments for a parameterised case (`src/Xping.Sdk.NUnit/XpingTrackAttribute.cs:230`).
   - xUnit: `{Class.Name}.{Method.Name}`, no arguments (`src/Xping.Sdk.XUnit/XpingMessageSink.cs:317`).
+  - xUnit v3: `{TestClassName}.{TestMethodName}`, no arguments (`src/Xping.Sdk.XUnit.V3/XpingMessageSink.cs:343`).
+    Its sessions record `Xping.TestFramework = xUnit.v3`.
 - **Runner and project per session** (Amendment 2, #287). `EnvironmentInfo.CustomProperties` carries
   `LocalSessionProperties.Runner` (`VSTest` or `MTP`, absent when the SDK could not tell),
   `TestFramework` and `ProjectPath` (repository-relative, `/` separators, absent outside a repository

@@ -34,7 +34,7 @@ No account. No API key.
 Install the adapter for your test framework:
 
 ```bash
-dotnet add package Xping.Sdk.NUnit     # or Xping.Sdk.XUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.NUnit     # or Xping.Sdk.XUnit (xUnit v2) / Xping.Sdk.XUnit.V3 (xUnit v3) / Xping.Sdk.MSTest
 ```
 
 Wire it up exactly as the framework quickstart describes ([NUnit](quickstart-nunit.md), [xUnit](quickstart-xunit.md), [MSTest](quickstart-mstest.md)) — but skip the API key step.

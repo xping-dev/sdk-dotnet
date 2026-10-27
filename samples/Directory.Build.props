@@ -19,8 +19,9 @@
     </PropertyGroup>
 
     <!--
-        -p:XpingTestRunner=MTP runs the NUnit and MSTest samples on Microsoft.Testing.Platform instead
-        of vstest. xUnit v2 has no MTP runner, so its sample stays on vstest.
+        -p:XpingTestRunner=MTP runs the NUnit, MSTest and xUnit v3 samples on Microsoft.Testing.Platform
+        instead of vstest. xUnit v2 has no MTP runner, so its sample stays on vstest. The xUnit v3
+        sample swaps its own packages; see its project file.
 
         An MTP build gets its own bin/ and obj/: its restore pulls different packages, and the run
         tests build both flavours of the same sample. Its obj/mtp/ sits inside obj/, which the vstest
@@ -35,7 +36,7 @@
         <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
     </PropertyGroup>
 
-    <ItemGroup Condition="'$(XpingTestRunner)' == 'MTP' AND '$(MSBuildProjectName)' != 'SampleApp.XUnit'">
+    <ItemGroup Condition="'$(XpingTestRunner)' == 'MTP' AND ('$(MSBuildProjectName)' == 'SampleApp.NUnit' OR '$(MSBuildProjectName)' == 'SampleApp.MSTest')">
         <!-- Matches the Microsoft.Testing.Platform 1.9 that both runners ship with; enables report-trx. -->
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
     </ItemGroup>

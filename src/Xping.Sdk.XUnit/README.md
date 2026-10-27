@@ -1,5 +1,9 @@
 # Xping.Sdk.XUnit
 
+**For xUnit v2 (the `xunit` package, 2.x).** Using xUnit v3 (`xunit.v3`)? Use
+[`Xping.Sdk.XUnit.V3`](../Xping.Sdk.XUnit.V3/README.md) instead; a build that pairs this package with
+xUnit v3 stops with `XPING001`.
+
 xUnit test framework adapter for Xping SDK. Automatically tracks xUnit test executions and uploads results to the Xping platform.
 
 ## Features

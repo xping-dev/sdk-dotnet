@@ -102,6 +102,7 @@ jobs:
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.Core.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.NUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.XUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
+          gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.XUnit.V3.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.MSTest.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Cli.${{ steps.get_version.outputs.VERSION }}.nupkg
         env:

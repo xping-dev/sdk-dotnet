@@ -51,7 +51,8 @@ public static class LocalSessionProperties
 
     /// <summary>
     /// The property key holding the test framework whose adapter recorded the session:
-    /// <see cref="NUnitFramework"/>, <see cref="MSTestFramework"/> or <see cref="XUnitFramework"/>.
+    /// <see cref="NUnitFramework"/>, <see cref="MSTestFramework"/>, <see cref="XUnitFramework"/> or
+    /// <see cref="XUnitV3Framework"/>.
     /// </summary>
     public const string TestFramework = "Xping.TestFramework";
 
@@ -81,6 +82,13 @@ public static class LocalSessionProperties
 
     /// <summary>The <see cref="TestFramework"/> value for the xUnit v2 adapter.</summary>
     public const string XUnitFramework = "xUnit";
+
+    /// <summary>The <see cref="TestFramework"/> value for the xUnit v3 adapter.</summary>
+    /// <remarks>
+    /// Separate from <see cref="XUnitFramework"/>: only xUnit v3 runs on Microsoft.Testing.Platform,
+    /// and the two adapters derive a theory row's identity differently.
+    /// </remarks>
+    public const string XUnitV3Framework = "xUnit.v3";
 
     /// <summary>
     /// Returns whether the session was recorded by a cloud-connected project.
