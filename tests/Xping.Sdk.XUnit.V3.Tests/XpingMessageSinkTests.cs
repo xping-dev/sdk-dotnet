@@ -139,6 +139,100 @@ public sealed class XpingMessageSinkTests
         Assert.Contains(passed, received);
     }
 
+    [Fact]
+    public void MessagesForATestCaseTheRunWasNotHanded_AreForwardedAndNotRecorded()
+    {
+        var recorded = new List<TestExecution>();
+        var received = new List<IMessageSinkMessage>();
+        XpingMessageSink sink = CreateSink(Collecting(received), [TestCase("case", nameof(OutcomeTests.Passes))], record: recorded.Add);
+
+        ITestStarting starting = Starting("test", "another case", "Probe.Other.Test", DateTimeOffset.UtcNow);
+        ITestPassed passed = Mock.Of<ITestPassed>(m => m.TestUniqueID == "test" && m.Output == string.Empty);
+        sink.OnMessage(starting);
+        sink.OnMessage(passed);
+
+        Assert.Empty(recorded);
+        Assert.Equal([starting, passed], received);
+    }
+
+    [Fact]
+    public void AMessageTheSinkCannotRead_StillReachesTheRunner()
+    {
+        var received = new List<IMessageSinkMessage>();
+
+        // A test case without a collection makes reading the start throw.
+        var testCase = new Mock<IXunitTestCase>();
+        testCase.Setup(c => c.UniqueID).Returns("case");
+        XpingMessageSink sink = CreateSink(Collecting(received), [testCase.Object]);
+
+        ITestStarting starting = Starting("test", "case", "Probe.OutcomeTests.Passes", DateTimeOffset.UtcNow);
+
+        Assert.True(sink.OnMessage(starting));
+        Assert.Contains(starting, received);
+    }
+
+    [Fact]
+    public void ASkippedTest_LastsFromItsStartToItsFinishAndKeepsItsReason()
+    {
+        var recorded = new List<TestExecution>();
+        XpingMessageSink sink = CreateSink(Collecting([]), [TestCase("case", nameof(OutcomeTests.Passes))], record: recorded.Add);
+
+        var started = new DateTimeOffset(2026, 10, 26, 12, 0, 0, TimeSpan.Zero);
+        sink.OnMessage(Starting("test", "case", "Probe.OutcomeTests.Passes", started));
+        sink.OnMessage(Mock.Of<ITestSkipped>(m =>
+            m.TestUniqueID == "test" && m.Reason == "not today" && m.FinishTime == started.AddMilliseconds(30) && m.Output == string.Empty));
+
+        TestExecution execution = Assert.Single(recorded);
+        Assert.Equal(TestOutcome.Skipped, execution.Outcome);
+        Assert.Equal(TimeSpan.FromMilliseconds(30), execution.Duration);
+        Assert.Equal("Test skipped: not today", execution.ErrorMessage);
+    }
+
+    /// <summary>The two times come from different clocks, so a finish can read as earlier than the start.</summary>
+    [Fact]
+    public void ASkippedTestFinishingBeforeItStarted_LastsNoTime()
+    {
+        var recorded = new List<TestExecution>();
+        XpingMessageSink sink = CreateSink(Collecting([]), [TestCase("case", nameof(OutcomeTests.Passes))], record: recorded.Add);
+
+        var started = new DateTimeOffset(2026, 10, 26, 12, 0, 0, TimeSpan.Zero);
+        sink.OnMessage(Starting("test", "case", "Probe.OutcomeTests.Passes", started));
+        sink.OnMessage(Mock.Of<ITestSkipped>(m =>
+            m.TestUniqueID == "test" && m.Reason == "r" && m.FinishTime == started.AddMilliseconds(-5) && m.Output == string.Empty));
+
+        Assert.Equal(TimeSpan.Zero, Assert.Single(recorded).Duration);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AFailedTest_KeepsItsTraceOnlyWhenTracesAreCaptured(bool captureStackTraces)
+    {
+        var recorded = new List<TestExecution>();
+        XpingMessageSink sink = CreateSink(
+            Collecting([]), [TestCase("case", nameof(OutcomeTests.Throws))], record: recorded.Add, captureStackTraces: captureStackTraces);
+
+        string?[] exceptionTypes = ["System.InvalidOperationException"];
+        string?[] messages = ["boom"];
+        string?[] stackTraces = [Frame(typeof(OutcomeTests).FullName!, nameof(OutcomeTests.Throws))];
+
+        sink.OnMessage(Starting("test", "case", "Probe.OutcomeTests.Throws", DateTimeOffset.UtcNow));
+        sink.OnMessage(Mock.Of<ITestFailed>(m =>
+            m.TestUniqueID == "test" &&
+            m.Cause == FailureCause.Exception &&
+            m.ExceptionTypes == exceptionTypes &&
+            m.Messages == messages &&
+            m.StackTraces == stackTraces &&
+            m.Output == string.Empty));
+
+        TestExecution execution = Assert.Single(recorded);
+        Assert.Equal(TestOutcome.Failed, execution.Outcome);
+        Assert.Equal("boom", execution.ErrorMessage);
+        Assert.Equal(captureStackTraces, execution.StackTrace != null);
+        Assert.Equal(!captureStackTraces, execution.StackTraceOmitted);
+        Assert.Equal(FailureSite.TestBody, execution.Site);
+    }
+
     // ---------------------------------------------------------------------------
     // Arguments and names
     // ---------------------------------------------------------------------------
@@ -321,6 +415,82 @@ public sealed class XpingMessageSinkTests
         Assert.Equal(expectedMember, member);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("a pipeline failure that names no fixture")]
+    [InlineData("Class fixture type 'unterminated")]
+    public void ResolveFailureSite_APipelineFailureWithoutAFixture_IsReadFromTheTrace(string? message)
+    {
+        var (site, member) = Resolve(TestOutcome.Failed, "Xunit.Sdk.TestPipelineException", message, Frame(TestClass, TestMethod));
+
+        Assert.Equal(FailureSite.TestBody, site);
+        Assert.Null(member);
+    }
+
+    [Fact]
+    public void ResolveFailureSite_AFailureWithoutATrace_IsUnknown()
+    {
+        Assert.Equal((FailureSite.Unknown, null), Resolve(TestOutcome.Failed, "System.Exception", "boom", string.Empty));
+    }
+
+    /// <summary>
+    /// With the test class nowhere on the stack, nothing in it ran, and a constructor frame is a fixture
+    /// the test never got past.
+    /// </summary>
+    [Fact]
+    public void ResolveFailureSite_OnlyAForeignConstructorOnTheStack_IsFixtureSetup()
+    {
+        var (site, member) = Resolve(TestOutcome.Failed, "System.Exception", "boom", Frame("Probe.Database", ".ctor"));
+
+        Assert.Equal(FailureSite.FixtureSetup, site);
+        Assert.Equal("Database..ctor", member);
+    }
+
+    [Fact]
+    public void ResolveFailureSite_NoFrameItCanPlace_IsUnknown()
+    {
+        Assert.Equal(
+            (FailureSite.Unknown, null),
+            Resolve(TestOutcome.Failed, "System.Exception", "boom", Frame("Probe.Helpers", "Compute")));
+    }
+
+    [Fact]
+    public void ResolveFailureSite_WithoutATestClassName_NoFrameBelongsToTheTest()
+    {
+        var (site, _) = XpingMessageSink.ResolveFailureSite(
+            TestOutcome.Failed, testClassName: null, TestMethod, "System.Exception", "boom", Frame(TestClass, TestMethod));
+
+        Assert.Equal(FailureSite.Unknown, site);
+    }
+
+    /// <summary>
+    /// A trace cut short above the runner's own frames still names the member.
+    /// </summary>
+    [Theory]
+    [InlineData("Dispose")]
+    [InlineData("DisposeAsync")]
+    public void ResolveFailureSite_ADisposeFrameWithoutTheRunners_IsTestTeardown(string disposeMember)
+    {
+        var (site, member) = Resolve(TestOutcome.Failed, "System.InvalidOperationException", "boom", Frame(TestClass, disposeMember));
+
+        Assert.Equal(FailureSite.TestTeardown, site);
+        Assert.Equal($"SampleTests.{disposeMember}", member);
+    }
+
+    [Fact]
+    public void ResolveFailureSite_DisposingThroughTheRunner_IsTestTeardownForAnyMemberOfTheClass()
+    {
+        var (site, member) = Resolve(
+            TestOutcome.Failed,
+            "System.InvalidOperationException",
+            "boom dispose",
+            Frame(TestClass, "ReleaseConnection") + "\n" +
+            "   at Xunit.v3.TestRunner`2.DisposeTestClassInstance(TContext ctxt, Object testClassInstance) in /_/src/xunit.v3.core/Runners/Base/TestRunner.cs:line 103");
+
+        Assert.Equal(FailureSite.TestTeardown, site);
+        Assert.Equal("SampleTests.ReleaseConnection", member);
+    }
+
     /// <summary>
     /// A body that constructs something which throws produces a foreign constructor frame too. What
     /// separates it from a broken fixture is that the test class is on the stack: the test ran.
@@ -414,14 +584,15 @@ public sealed class XpingMessageSinkTests
         Func<Task<XpingNetworkException?>>? endSession = null,
         Action<XpingNetworkException>? failRun = null,
         IExecutionTracker? tracker = null,
-        IRetryDetector<IXunitTestCase>? retryDetector = null) =>
+        IRetryDetector<IXunitTestCase>? retryDetector = null,
+        bool captureStackTraces = true) =>
         new(
             inner,
             testCases ?? [],
             tracker ?? Mock.Of<IExecutionTracker>(),
             retryDetector ?? Mock.Of<IRetryDetector<IXunitTestCase>>(),
             new TestIdentityGenerator(),
-            captureStackTraces: true,
+            captureStackTraces,
             assemblyName: "Probe",
             record ?? (_ => { }),
             endSession ?? (() => Task.FromResult<XpingNetworkException?>(null)),

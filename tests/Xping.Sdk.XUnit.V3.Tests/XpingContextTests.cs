@@ -76,6 +76,92 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.False(XpingContext.IsInitialized);
     }
 
+    [Fact]
+    public void GetExecutorServices_BeforeInitialize_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(XpingContext.GetExecutorServices);
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_BeforeTheHostIsBuilt_DoesNothing()
+    {
+        XpingContext.Initialize(LocalConfiguration());
+
+        await XpingContext.FinalizeAsync();
+
+        Assert.False(Directory.Exists(_scratchStore));
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_LeavesTheContextForShutdownToEnd()
+    {
+        XpingContext.Initialize(LocalConfiguration());
+        XpingContext.RecordTest(CreateTestExecution());
+
+        await XpingContext.FlushAsync();
+        await XpingContext.FinalizeAsync();
+
+        Assert.True(XpingContext.IsInitialized);
+    }
+
+    /// <summary>
+    /// A test recorded twice is a retry. The summary counts it once, which only finalizing a session
+    /// with a retry in it reaches.
+    /// </summary>
+    [Fact]
+    public async Task FinalizeAndShutdownAsync_ASessionWithARetry_EndsWithoutAnError()
+    {
+        XpingContext.Initialize(LocalConfiguration());
+        XpingContext.RecordTest(CreateTestExecution());
+        XpingContext.RecordTest(CreateTestExecution());
+
+        Assert.Null(await XpingContext.FinalizeAndShutdownAsync());
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public async Task ShutdownAsync_AfterTheHostWasBuilt_EndsTheContext()
+    {
+        XpingContext.Initialize(LocalConfiguration());
+        XpingContext.GetExecutorServices();
+
+        await XpingContext.ShutdownAsync();
+
+        Assert.False(XpingContext.IsInitialized);
+    }
+
+    [Fact]
+    public void Initialize_WithAConfigurationWhileInitialized_KeepsTheFirst()
+    {
+        XpingContext.Initialize(LocalConfiguration());
+        XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
+
+        Assert.NotNull(XpingContext.GetExecutorServices());
+    }
+
+    /// <summary>
+    /// On vstest the error message already failed the run; the exit code is left alone.
+    /// </summary>
+    [Fact]
+    public void FailRun_OnVSTest_LeavesTheExitCode()
+    {
+        FieldInfo runner = typeof(XpingContext).GetField("_runner", BindingFlags.NonPublic | BindingFlags.Static)!;
+        object? before = runner.GetValue(null);
+        int exitCode = Environment.ExitCode;
+        try
+        {
+            runner.SetValue(null, LocalSessionProperties.VSTestRunner);
+
+            XpingContext.FailRun(new XpingNetworkException("unreachable"));
+
+            Assert.Equal(exitCode, Environment.ExitCode);
+        }
+        finally
+        {
+            runner.SetValue(null, before);
+        }
+    }
+
     [Theory]
     [InlineData(LocalSessionProperties.VSTestRunner, false)]
     [InlineData(LocalSessionProperties.TestingPlatformRunner, true)]
@@ -105,6 +191,8 @@ public sealed class XpingContextTests : IAsyncLifetime
             runner.SetValue(null, before);
         }
     }
+
+    private XpingConfiguration LocalConfiguration() => new() { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore };
 
     // Port 9 (discard) is closed on loopback, so the upload is refused immediately.
     private XpingConfiguration UnreachableCloudConfiguration(bool strictMode) => new()

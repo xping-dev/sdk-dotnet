@@ -16,7 +16,18 @@ using xRetry.v3;
 
 namespace Xping.Sdk.XUnit.V3.Probe;
 
+/// <summary>Why the probe's types are left out of coverage.</summary>
+internal static class ProbeCoverage
+{
+    /// <summary>
+    /// The probe's tests fail on purpose and only exist to drive the adapter, so many of their lines
+    /// never run. Counted, they would read as missing coverage of the adapter's change.
+    /// </summary>
+    public const string Justification = "Test input for the adapter's tests, not code under test.";
+}
+
 /// <summary>Plain outcomes.</summary>
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class OutcomeTests
 {
     [Fact]
@@ -65,6 +76,7 @@ public class OutcomeTests
 }
 
 /// <summary>Fails its first attempt and passes its second, under xRetry.</summary>
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class RetryTests
 {
     private static int _attempts;
@@ -78,11 +90,13 @@ public class RetryTests
 }
 
 /// <summary>A class fixture whose constructor throws.</summary>
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public sealed class BrokenClassFixture
 {
     public BrokenClassFixture() => throw new InvalidOperationException("the class fixture is broken");
 }
 
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class ClassFixtureTests(BrokenClassFixture fixture) : IClassFixture<BrokenClassFixture>
 {
     [Fact]
@@ -90,15 +104,18 @@ public class ClassFixtureTests(BrokenClassFixture fixture) : IClassFixture<Broke
 }
 
 /// <summary>A collection fixture whose constructor throws.</summary>
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public sealed class BrokenCollectionFixture
 {
     public BrokenCollectionFixture() => throw new InvalidOperationException("the collection fixture is broken");
 }
 
 [CollectionDefinition("Broken collection")]
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class BrokenCollection : ICollectionFixture<BrokenCollectionFixture>;
 
 [Collection("Broken collection")]
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class CollectionFixtureTests
 {
     [Fact]
@@ -107,6 +124,7 @@ public class CollectionFixtureTests
     }
 }
 
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class ConstructorThrows
 {
     public ConstructorThrows() => throw new InvalidOperationException("the test class constructor throws");
@@ -117,6 +135,7 @@ public class ConstructorThrows
     }
 }
 
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public sealed class DisposeThrows : IDisposable
 {
     [SuppressMessage("Usage", "CA1065", Justification = "A Dispose that throws is the case under test.")]
@@ -128,6 +147,7 @@ public sealed class DisposeThrows : IDisposable
     }
 }
 
+[ExcludeFromCodeCoverage(Justification = ProbeCoverage.Justification)]
 public class InitializeAsyncThrows : IAsyncLifetime
 {
     public ValueTask InitializeAsync() => throw new InvalidOperationException("InitializeAsync throws");

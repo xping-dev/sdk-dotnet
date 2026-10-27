@@ -58,6 +58,40 @@ public sealed class XpingTestFrameworkDiscovererTests
         Assert.Equal(3, handed.Count);
     }
 
+    [Fact]
+    public async Task TestAssembly_IsTheInnerDiscoverers()
+    {
+        ITestAssembly assembly = Mock.Of<ITestAssembly>();
+        var discoverer = new XpingTestFrameworkDiscoverer(Mock.Of<ITestFrameworkDiscoverer>(d => d.TestAssembly == assembly), new TestCaseCensus());
+        await using (discoverer.ConfigureAwait(true))
+        {
+            Assert.Same(assembly, discoverer.TestAssembly);
+        }
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DisposesAnInnerDiscovererThatIsOnlyDisposable()
+    {
+        var inner = new Mock<ITestFrameworkDiscoverer>();
+        Mock<IDisposable> disposable = inner.As<IDisposable>();
+
+        await new XpingTestFrameworkDiscoverer(inner.Object, new TestCaseCensus()).DisposeAsync();
+
+        disposable.Verify(d => d.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DisposesAnAsyncDisposableInnerDiscoverer()
+    {
+        var inner = new Mock<ITestFrameworkDiscoverer>();
+        Mock<IAsyncDisposable> disposable = inner.As<IAsyncDisposable>();
+        disposable.Setup(d => d.DisposeAsync()).Returns(default(ValueTask));
+
+        await new XpingTestFrameworkDiscoverer(inner.Object, new TestCaseCensus()).DisposeAsync();
+
+        disposable.Verify(d => d.DisposeAsync(), Times.Once);
+    }
+
     /// <summary>Searches three discovered cases through a discoverer counting into <paramref name="census"/>.</summary>
     private static async Task FindAsync(
         TestCaseCensus census,

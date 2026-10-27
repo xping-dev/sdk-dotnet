@@ -504,7 +504,7 @@ internal sealed class XpingMessageSink : IMessageSink
     /// The framework frame xUnit disposes a test class through. Written by the runner rather than by
     /// the test, so unlike a message it cannot be produced by the code under test.
     /// </summary>
-    private const string DisposeTestClassFrame = "Xunit.v3.TestRunner`2.DisposeTestClassInstance";
+    private const string DisposeTestClassFrame = "Xunit.v3.TestRunner.DisposeTestClassInstance";
 
     private const string ConstructorSuffix = "..ctor";
 
