@@ -127,7 +127,7 @@ records what it changes here, committed with that spec.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | The view is TEST, RUNS, FINDINGS | A `FAILURE MODES` block sits between RUNS and FINDINGS (failure-mode spec D5). It is built from the test's own failed attempts over the D5 window, nothing discounted, through `SignatureIndex.SignaturesOf`, not from its findings (failure-mode spec D4). Not printed when the test never failed in the window | D10, §3.1 |
+| A | The view is TEST, RUNS, FINDINGS | A `FAILURE MODES` block sits between RUNS and FINDINGS (failure-mode spec D5). It is built from the test's own failed attempts over the D5 window, nothing discounted, through `SignatureIndex.SignaturesOf`, not from its findings (failure-mode spec D4). Each mode counts failed attempts, not runs, so a test that always passed on retry reads `0 failed` in the summary and still lists its modes. Not printed when the test has no failed attempt in the window | D10, §3.1 |
 | B | §4.2: `TestHistoryDto` has no failure modes | It gains `FailureModes`, after `Duration` (failure-mode spec §4.3) | §4.2 |
 
 ---

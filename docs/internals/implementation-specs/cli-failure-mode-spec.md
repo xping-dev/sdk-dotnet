@@ -85,7 +85,7 @@ Every claim here was read in source at the cited line.
 ### 1.2 Opened in this document
 
 - `FailureModeDto`, `FindingDto.FailureModes`, `TestHistoryDto.FailureModes` (§4).
-- `TerminalText` in `Report/Rendering/` (D7).
+- `TerminalText` and `TerminalCharset` in `src/Xping.Cli/Reporting/`, and the renderer helpers `Recorded` and `Command` (D7).
 - Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text` (§3.5).
 
 ### 1.3 The question this block answers
@@ -125,40 +125,58 @@ three of their kinds have no failure mode at all. That is a different block, out
 are not in its evidence, and adding them is out of scope (§7). The existing `dominant mode` pair
 already says the modal mode does not cover every failure.
 
-### D3 — First seen is counted over the same failures as the count
+### D3 — First seen: the date from the counted failures, the flags from all of them
 
 For `Flaky` and `AlwaysFailing`, `DistinctSignatures` derives `FirstSeenAt`, `FirstSeenSha` and
-`FirstSeenSessionsAgo`, and through them the two `FirstSeen*` flags, from the failures it counted.
-That is the oldest surviving failure per hash: `Max(SessionIndex)`, its session's `StartedAt`, and
-`RevisionContext.ReadSha` of that session, as `BuildPerTest` computes them for the whole set. The
-index's undiscounted `SignatureOccurrence` remains the source of the signature itself and of the
-tie-break order.
+`FirstSeenSessionsAgo` from the failures it counted: the oldest surviving failure per hash, i.e.
+`Max(SessionIndex)`, its session's `StartedAt`, and `RevisionContext.ReadSha` of that session, as
+`BuildPerTest` computes them for the whole set. The count and the date on D5's count line then
+describe the same failures, and the date never points at a run the count excludes.
 
-The two fields sit on one printed line (D5). If the first-seen date pointed at a run the count
-excludes, the line would contradict itself. Clusters are unchanged. Their count and first seen
-already come from one population.
+The two flags stay on the index's undiscounted `SignatureOccurrence.OldestSessionIndex`, as
+`ToView` computes them today:
 
-This moves `evidence` for those two kinds wherever an environmental or clustered failure was a
-mode's oldest. It is a fix, and it gets a regression test: a flaky test whose oldest failure of a
-mode is in an environmental session reports the first seen of its oldest non-environmental failure.
+- `FirstSeenInLatestSession`: the mode appeared nowhere in the window before the newest run.
+- `FirstSeenAfterWindowStart`: the mode was absent from the window's oldest run.
+
+They answer *is this mode new?*, and discounting must not change that answer. A mode whose older
+failures all fell in environmental runs is not new because those runs were set aside. Deriving the
+flags from the counted failures would make a discounted oldest run turn every mode into "first seen
+… N runs ago", and a mode with only one counted failure into "first seen in the latest run": a
+false regression signal. D5 prints a date only when the flags say the mode is new in the window.
+
+The index's `SignatureOccurrence` also remains the source of the signature itself and of the
+tie-break order. Clusters are unchanged: their count and first seen already come from one
+population.
+
+This changes `evidence` for those two kinds wherever an environmental or clustered failure was a
+mode's oldest. It is a fix, with two regression tests:
+
+- A flaky test whose oldest failure of a mode is in an environmental session, after the window's
+  oldest run, reports the date and sha of its oldest counted failure.
+- A flaky test whose mode appears in the window's oldest run, which is environmental, still has
+  `FirstSeenAfterWindowStart = false`.
 
 ### D4 — `--test` builds its block from the test's own failures
 
 `TestHistoryBuilder` maps `context.Signatures.SignaturesOf(fingerprint)` into `FailureModes`:
 
 - **Population:** every failed attempt of this test over the D5 window, nothing discounted. That is
-  the population the RUNS timeline draws. A failed first attempt that passed on retry is in it, as
+  the population the RUNS timeline draws: a failed first attempt that passed on retry is in it, as
   it is in the timeline's `✗→✓`.
 - **Order:** the index's order: count, then recency, then hash.
-- **Count and first seen** come from `SignatureOccurrence` (`Occurrences`, `OldestSessionIndex`,
-  `FirstSeenAt`, `FirstSeenSha`). `FirstSeenAfterWindowStart` is
-  `OldestSessionIndex < Window.SessionCount - 1`, as `ToView` computes it.
+- **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
+  `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
+  them.
 - **Not from findings.** A test that failed without reaching any finding's threshold still shows
-  how it failed. When it is also flaky, the counts here and in its `--id` view may differ, because
-  `--id` discounts. Each view states its own population: the `--test` summary line counts runs
-  without discounting, and the finding's headline names the executions it considered.
-- **Absent block.** When the test never failed in the window, `FailureModes` is empty and the block
-  is not printed. The summary line above already says `0 failed`.
+  how it failed.
+- **The unit is the attempt.** The summary line above counts runs by their deciding attempt
+  (`TestHistoryBuilder.cs:153-179`). A test that always passed on retry reads `0 failed` there and
+  has failed attempts here. The count line therefore names its unit, `failed attempts` (D5), in both
+  views. When the test is also flaky, the count here and the count in its `--id` view may differ,
+  because `--id` discounts. Each block counts the attempts of its own view's population.
+- **Absent block.** When the test has no failed attempt in the window, `FailureModes` is empty and
+  the block is not printed.
 
 ### D5 — The text block
 
@@ -176,34 +194,38 @@ One writer, `WriteFailureModes`, used by both views.
 as findings are numbered:
 
 ```
-1.  4 failures · first seen 08-12 09:40 at b71e004, 6 runs ago
+1.  4 failed attempts · first seen 08-12 09:40 at b71e004, 6 runs ago
     System.InvalidOperationException
     expected <num> but was <num>
-      at MyApp.Tests.CheckoutTests.Completes()
       at MyApp.Checkout.Basket.Total()
+      at MyApp.Tests.CheckoutTests.Completes()
 ```
 
-1. **Count line.** `N failure`/`N failures`, the glyph separator, then when it was first seen:
-   - `FirstSeenSessionsAgo == 0`: `first seen in the latest run`.
-   - Otherwise, `FirstSeenAfterWindowStart`: `first seen <MM-dd HH:mm> at <sha>, <n> runs ago`
-     (`1 run ago` for one).
-   - Otherwise: `since the window opened, <MM-dd HH:mm> at <sha>`. The mode was already there in
-     the window's oldest run, and the report cannot see further back. This is the
-     `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
-   - No sha recorded: drop ` at <sha>`.
+1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then:
+   - `FirstSeenInLatestSession`: `first seen in the latest run`.
+   - Otherwise, `FirstSeenAfterWindowStart`: `first seen <MM-dd HH:mm> at <sha>, <when>`, where
+     `<when>` is `<n> runs ago` (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo`
+     is 0. That case happens only when D3's discounting set aside every older failure.
+   - Otherwise: `since the window opened`, with no date. The mode was already there in the window's
+     oldest run, the header names that run's date, and the report cannot see further back. This is
+     the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
+   - The sha is cut to `ShaWidth` (7), as the RUNS rows cut it (`TextReportRenderer.cs:711`). No
+     sha recorded: drop ` at <sha>`.
 
    The line wraps with `Wrap` to `ContinuationBudget` (68), continuing at indent 4.
 2. **Type line**, indent 4: `ExceptionType`, or `exception type not recorded` when null. A type
    with no break in reach overflows as one token (detail spec Amendment 2D).
-3. **Message**, indent 4, wrapped to `ContinuationBudget` (68) with `Wrap`. At most **6** lines. If
-   it is cut, the sixth line ends in `...` within the 68 columns. Omitted when the message is
-   empty.
-4. **Frames**, indent 6, each `at <frame>`, every frame (at most 5). A frame that does not fit
-   breaks once, after the last `.` before its first `(` that fits, and continues at indent 9, so
-   the method name and its arguments stay together. Only a remainder still too wide wraps
-   further, at spaces. No such `.` in reach: the frame overflows as one token. When `Degraded` and there are
-   frames, one more dim line at indent 6: `(no test code on the stack; framework frames shown)`.
-   No frames: no frame lines and no note.
+3. **Message**, indent 4, wrapped to `ContinuationBudget` (68) with `Wrap`. At most **6** lines.
+   When more would follow, the sixth line is the rest of the message cut hard to 65 columns, a word
+   or a token split if need be, followed by `...`. The marker always fits in the 68 columns,
+   including when the sixth line would be one long token. Omitted when the message is empty.
+4. **Frames**, innermost first as recorded, every frame (at most 5). Each is `at <frame>` at indent
+   6, a budget of 66 columns. A frame that does not fit breaks once, after the last `.` before its
+   first `(` that fits, and continues at indent 9 (budget 63), so the method name and its
+   arguments stay together. A remainder still wider than 63 wraps further at spaces, at indent 9. No
+   such `.` in reach: the frame overflows as one token. When `Degraded` and there are frames, one
+   more dim line at indent 6: `(no test code on the stack; framework frames shown)`. No frames: no
+   frame lines and no note.
 5. **Unavailable.** When `Unavailable`, the mode prints its count line and one line at indent 4,
    `the adapter recorded no failure detail`, and nothing else.
 
@@ -233,45 +255,86 @@ The block replaces them: the same information, plus the parts the pairs could no
 
 ### D7 — Recorded text is made safe for the terminal
 
-`TerminalText.Printable(string text, ReportGlyphs glyphs)` in `Report/Rendering/` returns the text
-with every unsafe character replaced by `?`. It works per `Rune`, so an astral character becomes one
-`?`.
+**One function.** `TerminalText.Printable(string text, TerminalCharset charset)` in
+`src/Xping.Cli/Reporting/` (beside `ReportGlyphs`) returns the text with every unsafe rune replaced
+by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCharset` is
+`Unicode`, `Ascii` or `Command` (below). The text renderer derives the charset from its glyphs.
 
-- **Always unsafe:** C0 controls (U+0000–U+001F, which includes `ESC`, `CR`, `LF` and tab), `DEL`
-  (U+007F), C1 controls (U+0080–U+009F), bidi embeddings and overrides (U+202A–U+202E), and bidi
-  isolates (U+2066–U+2069).
-- **Unsafe under `ReportGlyphs.Ascii`:** every rune ≥ U+0080. Under `--ascii` or piped output the
-  report is ASCII end to end, which is what `APipedReportCarriesNothingButTheReport` already
-  asserts.
+- **Always unsafe:**
+  - C0 controls U+0000–U+001F (including `ESC`, `CR`, `LF`, tab), `DEL` U+007F, C1 controls
+    U+0080–U+009F;
+  - the line and paragraph separators U+2028 and U+2029;
+  - bidi marks U+200E, U+200F and U+061C, bidi embeddings and overrides U+202A–U+202E, bidi
+    isolates U+2066–U+2069;
+  - zero-width and invisible format characters: U+200B–U+200D, U+2060–U+2064, U+FEFF, and U+00AD.
+- **`Ascii`:** additionally every rune ≥ U+0080.
+- **`Command`:** the always-unsafe set only, in every glyph set. A command is printed to be run,
+  and replacing an `é` in an FQN would make it select nothing. A control or bidi character is never
+  part of a command that works, so replacing it costs nothing.
 
-**Where it applies.** Every value from a DTO that came from a recorded session, a store file or
-Xping Cloud, at the point a text renderer appends it:
+The auth path's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`), which strips
+`char.IsControl` characters, is replaced by `TerminalText.Printable(text, Unicode)`. One definition
+of "safe to print" serves the whole CLI.
+
+**One choke point in the renderer.** No text renderer appends a DTO string directly.
+`TextReportRenderer`, `SummaryReportRenderer` and `CloudText` read every recorded value through one
+helper, `Recorded(string?)`, or through `Command(string?)` for a command. Each applies `Printable`
+with the right charset. Renderer-authored text (labels, vocabulary, glyphs, numbers it formats)
+does not go through them. A new field is safe only if it is read through one of the two, so the
+rule is enforced by a test, not by the list below:
+
+- **The hostile-envelope test** (P2) takes every fixture envelope. It rewrites, by reflection over
+  the DTO graph, every `string` property and every `string` element of a list to append
+  `\u001b[31m\u202e\u2028é`. Values the renderer maps through `ReportVocabulary` (kind,
+  severity, population, evidence level, status) keep their own, because a fixture with an
+  unknown kind tests nothing about recorded text. It renders the result in both glyph sets with
+  colour off, and asserts:
+  - no output character is in the always-unsafe set, apart from the renderer's own `\n`/`\r`;
+  - under `Ascii`, no character ≥ U+0080 outside the command strings the envelope carries.
+
+  A renderer site that bypasses the helpers fails it.
+
+The values this covers today, for P0 to check against:
 
 - the header: assembly, branch, sha;
-- subject names, cause labels and member names;
+- subject names, cause labels, member names;
 - locations and the trailer's path;
-- metric values;
-- headlines (they embed types and member names);
-- annotations;
-- latest-run failure summaries;
-- the `--test` query and FQN, and `FindingsWithheld`;
+- metric values, including retry mechanisms and declared reasons;
+- headlines and annotations;
+- the finding id and the selection id;
+- latest-run failure summaries and shas;
+- the `--test` query, FQN, short fingerprint, `FindingsWithheld`, and every RUNS row's sha
+  (`TextReportRenderer.cs:711`);
 - every `FailureModeDto` field;
 - `CloudText` values;
 - `SummaryReportRenderer`'s assembly.
 
-`ReportCommand`'s stderr messages that echo the query, candidate FQNs or assemblies
-(`TestResolver.NotFoundMessage`, `WriteAmbiguous`, the not-reported message) apply it too. Commands
-(`DrillDown`, `Repro.Command`) are left alone. They are shell-quoted already, and rewriting a
-character would break the command.
+Commands go through `Command`: `DrillDown`, `Repro.Command`, `Selection.History`,
+`Truncated.Command`, and the footer and below-fence lines built from them.
 
-Text output only. JSON is unchanged: `ReportJsonOptions.Default` uses `JavaScriptEncoder.Default`,
-which escapes controls and bidi characters, and a consumer needs the recorded value.
+**ASCII end to end, except inside commands.** Under `--ascii` or piped output, every character is
+ASCII except a non-ASCII character a command carries from a recorded name or path.
+`APipedReportCarriesNothingButTheReport` and `TheAsciiReportCarriesNothingButPrintableAscii` keep
+their assertion over every existing fixture, none of which has a non-ASCII command. The second
+test also rejects every control character but the renderer's `\n` and `\r`. The hostile-envelope
+test is where the command exception is checked.
 
-Replacement is one-for-one, so a cleaned value is never wider than the original. The width rules
-stay as they are.
+**Stderr.** `ReportCommand`'s messages that echo the query, candidate FQNs or assemblies
+(`TestResolver.NotFoundMessage`, `WriteAmbiguous`, the not-reported message) apply `Printable` with
+the charset the report would use. The commands they print apply `Command`.
 
-**Rejected:** cleaning in `EnvelopeBuilder`. JSON would then lose the recorded value, and the
-choice depends on the glyph set, which only the renderer knows.
+**Text output only.** JSON is unchanged: `ReportJsonOptions.Default` uses `JavaScriptEncoder.Default`,
+which escapes controls and non-ASCII, and a consumer needs the recorded value.
+
+Replacement is one-for-one per rune, so a cleaned value is never wider than the original. The
+width rules stay as they are.
+
+**Rejected:**
+
+- **Cleaning in `EnvelopeBuilder`.** JSON would then lose the recorded value, and the choice depends
+  on the glyph set, which only the renderer knows.
+- **A list of call sites without the test.** The first review of this spec found a site the list
+  missed.
 
 ---
 
@@ -305,33 +368,35 @@ FINDING                                                       row 1 of 1
 FAILURE MODES                                            3 failure modes
 ────────────────────────────────────────────────────────────────────────
 
-1.  4 failures · first seen 08-12 09:40 at b71e004, 6 runs ago
+1.  4 failed attempts · first seen 08-12 09:40 at b71e004, 6 runs ago
     System.InvalidOperationException
     expected <num> but was <num>
       at MyApp.Checkout.Basket.Total()
       at MyApp.Tests.CheckoutTests.Completes()
 
-2.  2 failures · since the window opened, 08-05 10:12 at a3f9c2e
+2.  2 failed attempts · since the window opened
     System.TimeoutException
     timed out after <num>ms
       at System.Net.Http.HttpConnectionPool.
          SendAsync(HttpRequestMessage request)
       (no test code on the stack; framework frames shown)
 
-3.  1 failure · first seen in the latest run
+3.  1 failed attempt · first seen in the latest run
     the adapter recorded no failure detail
 ```
 ````
 
 ### 3.2 `--test`
 
-The RUNS block is unchanged and is followed by:
+§3.1 of the test-history spec, after the RUNS block. The summary above it reads
+`0 passed, 6 passed on retry, 0 failed`: the six failed attempts are the first attempts of runs
+that passed on retry (D4).
 
 ````
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failures · since the window opened, 08-20 13:19 at c670fc3
+1.  6 failed attempts · since the window opened
     Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
     assert.areequal failed. expected:<<num>>. actual:<<num>>.
       at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
@@ -346,9 +411,16 @@ A 900-character message prints 6 lines of up to 68 columns. The sixth ends in `.
 
 ### 3.4 Hostile text
 
-A test whose recorded name, type, message and frame hold `ESC[31m`, a newline, `é` and U+202E
-prints, under `--ascii`, `?[31m`, `?`, `?` and `?` at those positions. Under Unicode glyphs it
-prints `?[31m`, `?`, `é` and `?`. No line inside the fence exceeds the width rule.
+The normaliser collapses whitespace in a signature's message, and the frame extractor splits the
+stack on line breaks. So a newline in those two fields reaches the output as a space or as two
+frames, never as `?`. The other characters survive both, and so does a newline in a test name,
+exception type, member name or path.
+
+A test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E prints, under `--ascii`,
+`?[31m`, `?`, `?` and `?` at those positions in its name, its `test` pair and every failure-mode
+field that carries them. Under Unicode glyphs it prints `?[31m`, `?`, `é` and `?`. In the
+`Repro:` and `History:` commands, under both glyph sets, it prints `?[31m`, `?`, `é` and `?`. No
+line inside the fence exceeds the width rule.
 
 ### 3.5 Goldens to add
 
@@ -357,7 +429,7 @@ prints `?[31m`, `?`, `é` and `?`. No line inside the fence exceeds the width ru
 | `detail-failure-modes` | §3.1: three modes, a degraded one, an unavailable one, all three first-seen forms |
 | `detail-unavailable` | `AlwaysFailing` whose adapter recorded nothing |
 | `history-failure-modes` | §3.2, plus a test with 7 modes (cap line) and a 900-character message (§3.3) |
-| `hostile-text` | §3.4, through `--id`, `--test` and the full report |
+| `hostile-text` | §3.4, through `--id`, `--test` and the full report. The golden pins one store; the hostile-envelope test (D7) covers every field |
 
 The existing `detail-flaky`, `detail-always-failing`, `detail-broken-fixture`,
 `detail-shared-failure`, `detail-store`, `detail-repro-*` and `history-*` goldens change: D6's pairs
@@ -372,7 +444,7 @@ changes and nothing else. 59 fixtures, 118 files.
 
 `CurrentSchemaVersion` → `"1.25"`. The history comment gains: *1.25 adds `failureModes` to each
 finding and to `test`, drops the `failure mode N`, `more failure modes` and `AlwaysFailing`
-`failure mode` metrics, and counts `Flaky` and `AlwaysFailing` first-seen fields over the failures
+`failure mode` metrics, and takes `Flaky` and `AlwaysFailing` first-seen dates from the failures
 their counts cover.*
 
 ### 4.2 `FailureModeDto`
@@ -389,10 +461,12 @@ internal sealed record FailureModeDto(
     DateTime FirstSeenAt,
     string? FirstSeenSha,
     int FirstSeenSessionsAgo,
+    bool FirstSeenInLatestSession,
     bool FirstSeenAfterWindowStart);
 ```
 
-`FirstSeenInLatestSession` is not repeated: it is `FirstSeenSessionsAgo == 0`.
+`FirstSeenInLatestSession` is carried rather than read off `FirstSeenSessionsAgo == 0`: under D3
+the two can differ.
 
 ### 4.3 Changed records
 
@@ -433,7 +507,7 @@ into the feature branch, then one PR into `main` with `Closes #270`. Same steps 
 3. List every test that asserts a `failure mode N`, `more failure modes` or `AlwaysFailing`
    `failure mode` metric, or a `firstSeen*` value.
 4. List every text-renderer site that appends recorded data, against D7's list. Report any site the
-   list misses.
+   list misses. List every site that appends a command.
 5. Confirm the golden count is 110.
 
 **Stop and report.** Write nothing.
@@ -448,18 +522,27 @@ whole diff. Tests:
 
 - each D2 kind's `failureModes`, in order;
 - an empty list for the other kinds;
-- D3's regression test (§2 D3);
+- D3's two regression tests;
 - `--test` modes equal `SignaturesOf` and share hashes with the finding's evidence;
 - a never-failing test has an empty list;
-- the version pins at `EnvelopeBuilderTests.cs:202` and `ReportEnrichmentTests.cs:89`.
+- the six `"1.24"` pins: `EnvelopeBuilderTests.cs:202`, `ReportEnvelopeTests.cs:329` and `:916`,
+  `CliSurfaceTests.cs:393` and `:437`, `ReportEnrichmentTests.cs:89`.
 
 ### P2 — Terminal text, D7
 
-`TerminalText` with unit tests for each character class in both glyph sets, plus the astral-rune
-case. Apply it at every site in D7's list and at those P0 found. Tighten
-`TheAsciiReportCarriesNothingButPrintableAscii` to reject every control character but `\n` and
-`\r`, which the renderer writes itself. Add the `hostile-text` fixture.
-At this phase it covers the existing views; P3 and P4 extend it to the block.
+`TerminalText` and `TerminalCharset`, with unit tests for each character class under each charset
+and for an astral rune. Then:
+
+- `Recorded` and `Command` in the text renderers, and every recorded or command read routed through
+  them;
+- `FlowFailures.Printable` replaced;
+- the stderr messages;
+- the hostile-envelope test;
+- `TheAsciiReportCarriesNothingButPrintableAscii` tightened;
+- the `hostile-text` fixture.
+
+At this phase the fixture covers the existing views. P3 and P4 add the block to it, and the
+hostile-envelope test covers `FailureModeDto` as soon as P1's field exists.
 
 ### P3 — `--id` block
 
