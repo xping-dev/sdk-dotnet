@@ -168,7 +168,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         /// <summary>
         /// The history view, whose subject is the test: a finding about it alone drops the name line
-        /// and the sibling annotation, because every sibling is on screen.
+        /// and the sibling annotation, because every sibling is on screen. A finding with a repro ends
+        /// with its sentence.
         /// </summary>
         History
     }
@@ -201,7 +202,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         bool truncated = envelope.Test is { } test ? WriteHistoryFooter(builder, envelope, test) : WriteFooter(builder, envelope);
 
         if (envelope.Selection == null && detailCommand)
+        {
             WriteDetailCommand(builder, envelope, truncated);
+            WriteHistoryRepro(builder, envelope);
+        }
 
         // Below the fence with the other commands, never wrapped inside it: a long assembly or
         // --directory would break it across lines, and a command cut to fit does not run
@@ -210,7 +214,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             builder.AppendLine(capabilities.Dim("History: " + command));
 
         // The sentence above says how many times; the command is here for the same reason History
-        // is. Only in the detail view: the list is one row per finding, a command away from this.
+        // is. Not in the list: it is one row per finding, a command away from this. The history view
+        // writes its own above, naming the row.
         // Guarded as WriteDetail is, so a finding that view says is not reported prints no command.
         if (envelope.Selection is { Row: not null } && envelope.Findings is [{ Repro: { } repro }])
             builder.AppendLine(capabilities.Dim("Repro: " + repro.Command));
@@ -808,9 +813,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             if (index > 0)
                 builder.AppendLine();
 
-            int row = index < history.FindingRows.Count ? history.FindingRows[index].Row : index + 1;
-
-            WriteFinding(builder, findings[index], row, RowView.History);
+            WriteFinding(builder, findings[index], RowOf(envelope, index), RowView.History);
         }
     }
 
@@ -1399,6 +1402,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.Append(' ', ContinuationIndent)
                .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), budget)));
+
+        // The count, here because the command below the fence comes without one, and one rerun of a
+        // test that fails in a third of its runs passes and tells the reader the report is wrong.
+        // Not on a cluster: its command and count are its likeliest members', which need not include
+        // the view's test, and would contradict the runs above (Amendment 9A).
+        if (aboutTheView && finding.Repro is { } repro)
+            WritePairs(builder, [("repro", repro.Expectation)], separate: false);
     }
 
     /// <summary>
@@ -1504,11 +1514,63 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (!truncated)
             builder.AppendLine();
 
-        int row = envelope.Test?.FindingRows is [var first, ..] ? first.Row : 1;
+        builder.AppendLine(capabilities.Dim(
+            $"Detail of row {Count(RowOf(envelope, 0))}: {envelope.Findings[0].DrillDown}"));
+    }
+
+    /// <summary>
+    /// Writes the command that reproduces a history's test, from the first finding about it alone.
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="envelope">The report; nothing is written unless it is a history.</param>
+    /// <remarks>
+    /// <para>
+    /// One command, as <see cref="WriteDetailCommand"/> writes one. It names its row because that
+    /// finding need not be the first shown, and a flaky and a timing-out finding on the same test
+    /// share the command but not the count each row's sentence gives (Amendment 9B).
+    /// </para>
+    /// <para>
+    /// A repro with a count first: a too-rare one's sentence says rerunning will not show the
+    /// failure, and printed here it would hide a command that does. Never a cluster's, whose command
+    /// may not run this test at all (Amendment 9A).
+    /// </para>
+    /// </remarks>
+    private void WriteHistoryRepro(StringBuilder builder, ReportEnvelope envelope)
+    {
+        if (envelope.Test == null)
+            return;
+
+        IReadOnlyList<FindingDto> findings = envelope.Findings;
+
+        int Find(bool counted)
+        {
+            for (int index = 0; index < findings.Count; index++)
+            {
+                if (findings[index] is { Subject.Members: null, Repro: { } repro } && (!counted || repro.Runs != null))
+                    return index;
+            }
+
+            return -1;
+        }
+
+        int chosen = Find(counted: true) is var found and >= 0 ? found : Find(counted: false);
+        if (chosen < 0)
+            return;
 
         builder.AppendLine(capabilities.Dim(
-            $"Detail of row {Count(row)}: {envelope.Findings[0].DrillDown}"));
+            $"Repro of row {Count(RowOf(envelope, chosen))}: {findings[chosen].Repro!.Command}"));
     }
+
+    /// <summary>
+    /// Gets a shown finding's row in the full report.
+    /// </summary>
+    /// <remarks>
+    /// Under <c>--test</c> the findings are filtered and each keeps its full-report row (Amendment
+    /// 4A), so the fence, the <c>Detail</c> line and the <c>Repro</c> line read it from one place.
+    /// Elsewhere a finding's row is its position.
+    /// </remarks>
+    private static int RowOf(ReportEnvelope envelope, int index) =>
+        envelope.Test?.FindingRows is { } rows && index < rows.Count ? rows[index].Row : index + 1;
 
     /// <summary>
     /// Lists the tests a cluster covers, beneath the cause they share.

@@ -7,8 +7,7 @@
 authority, width and charset discipline). `cli-finding-detail-spec.md` D3 (not-found tiers), D6 (flag
 interactions), §4 (`SelectionDto`, `FindingSelection`), and its Amendment 6, committed with this
 document. Issue #141.
-**Blocks:** #270 (failure-mode exemplars, adds a block to this view), #271 (repro line, adds a line to
-this view)
+**Blocks:** #270 (failure-mode exemplars, adds a block to this view)
 
 ---
 
@@ -108,6 +107,18 @@ The report's default window (20 runs / 14 days) is unchanged. It now comes from 
 | C | Amendment 7B | Replaced by A | D2 |
 
 `report`'s auto-scoping, which this spec does not use, now picks the newest assembly from each file's header without loading any session.
+
+### Amendment 9 — from #271
+
+`cli-repro-spec.md` (#139) gave every finding a `repro`. JSON already carries it under `--test`: the
+history's findings are built by the same `EnvelopeBuilder.BuildFinding`. This amendment adds it to the
+text view.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D10: a history row ends on its evidence line | A **single-test** row whose finding has a `repro` ends with one more line, the labelled pair `repro  <expectation>`, written and wrapped as the `--id` detail block writes its pairs. The sentence carries the run count, and a command without its count is what #139 exists to prevent. A cluster row gets none: its command names the members most likely to fail, which need not include this test, and its count is theirs, which contradicts this test's runs above it. The cluster's `--id` view keeps both | D10, §3.1 |
+| B | Below the fence, the view prints `Detail of row N:` only | After it, one dimmed line: `Repro of row N: <command>`, for the **first single-test finding shown whose repro has a count** (`runs` not null). Only when none has a count, the first single-test finding with any repro. A too-rare repro's own sentence says rerunning will not show it, so it must not take the line from one that will. N is that finding's full-report row (`FindingRows`), as in the `Detail` line. It names its row because that finding need not be the first shown, and two findings on the same test (flaky and timing out) share the command but not the count. Never wrapped (Amendment 6B). Printed only where the `Detail` line may be | D10, §3.1 |
+| C | — | No repro, no line. A healthy test, an unknown runner, only kinds `ReproCommand` skips, or only clusters print neither A nor B. No plain single-run filter: it shows no failure (repro spec D2). §3.1's own test prints none either: every run passed on retry, so no run failed by its deciding attempt | D10, §3.2 |
 
 ---
 

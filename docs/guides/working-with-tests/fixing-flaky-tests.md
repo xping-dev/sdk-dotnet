@@ -34,6 +34,8 @@ Open the finding with `xping report --id <id>`. Its `repro` line says how many r
 a failure 95% of the time, and the `Repro:` line below the block is the command that reruns just
 that test. Run it that many times, from the repository root, or from the project directory when the
 command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
+`xping report --test <name>` prints the same `repro` line under each finding about the test, and
+the command as `Repro of row N:`.
 [Reproducing a finding](../../cli/command-reference.md#reproducing-a-finding) shows the output and
 says which findings get a command.
 

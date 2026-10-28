@@ -83,7 +83,8 @@ internal static class ReportFixtures
         "history-no-sha",
         "history-below-floor",
         "history-cluster-member",
-        "history-store"
+        "history-store",
+        "history-repro"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
@@ -270,6 +271,7 @@ internal static class ReportFixtures
         "history-below-floor" => HistoryBelowFloor(),
         "history-cluster-member" => HistoryClusterMember(),
         "history-store" => HistoryFromStore(),
+        "history-repro" => HistoryRepro(),
         _ when DetailKind(name) is { } kind => Detail(Envelope(Measured(kind)), 1),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
@@ -755,6 +757,45 @@ internal static class ReportFixtures
     }
 
     /// <summary>
+    /// Amendment 9: the repro spec's flaky test, failing in 4 of its 9 runs with no retry, so its row
+    /// ends with the repro sentence and the command follows the fence.
+    /// </summary>
+    private static ReportEnvelope HistoryRepro()
+    {
+        const string name = "SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently";
+        var newest = new DateTime(2026, 8, 21, 9, 2, 0, DateTimeKind.Utc);
+        bool[] failed = [false, true, false, true, false, false, true, true, false];
+
+        TestSessionDto[] sessions =
+        [
+            .. failed.Select((f, i) => HistoryRan(
+                newest.AddMinutes(-131 * i), f ? TestOutcome.Failed : TestOutcome.Passed,
+                f ? TestOutcome.Failed : TestOutcome.Passed, 1, f ? 41 : 38))
+        ];
+
+        int failing = failed.Count(f => f);
+
+        var evidence = new FlakyEvidence(
+            failing, failed.Length, failed.Length, failing, failing, failed.Length,
+            FindingOrder.Round((double)failing / failed.Length), 0, 0, 1, [], [], null);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(FindingKind.Flaky, evidence);
+
+        FindingDto finding = Finding(nameof(FindingKind.Flaky), "high", name, headline) with
+        {
+            Id = "f_1491bf4c",
+            EvidenceLevel = "low",
+            Metrics = metrics
+        };
+
+        return History(
+            name, "5d1e2a0c77b4", "tests/SampleApp.MSTest/CalculatorTests.cs", 57,
+            sessions,
+            [finding with { Repro = Repro(FindingKind.Flaky, evidence, finding.Subject, VSTest(SampleProject)) }],
+            [1], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+    }
+
+    /// <summary>
     /// Runs a CI agent recorded without a checkout: no sha on any row, and none in the header.
     /// </summary>
     private static ReportEnvelope HistoryNoSha()
@@ -796,20 +837,39 @@ internal static class ReportFixtures
                 newest.AddMinutes(-41 * i), TestOutcome.Failed, TestOutcome.Failed, 1, 3))
         ];
 
+        FindingDto single = Finding(nameof(FindingKind.AlwaysFailing), "high", name,
+            "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
+        { Id = "f_1b44e0c9", EvidenceLevel = "moderate" };
+
+        FindingDto cluster = Cluster(
+            "UnprovisionedDatabase..ctor",
+            "UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10 runs",
+            [
+                "SampleApp.MSTest.FixtureTests.FirstTestNeedingTheDatabase",
+                name,
+                "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
+            ]) with
+        { Id = "f_7c905f05", EvidenceLevel = "high" };
+
+        // Both carry a repro, as the pipeline gives them. The cluster's names its first member, not
+        // this test, so the view must print neither its sentence nor its command (Amendment 9A).
+        var always = (AlwaysFailingEvidence)EvidenceSamples.For(FindingKind.AlwaysFailing) with
+        {
+            RunsFailed = 10,
+            RunsJudged = 10
+        };
+
+        var fixture = (BrokenFixtureEvidence)EvidenceSamples.For(FindingKind.BrokenFixture) with
+        {
+            Members = [.. cluster.Subject.Members!.Select(m => new ClusterMember(m.Fingerprint!, m.FullyQualifiedName!, 10, 10, 10))]
+        };
+
+        ReproTarget target = VSTest(SampleProject);
+
         FindingDto[] findings =
         [
-            Finding(nameof(FindingKind.AlwaysFailing), "high", name,
-                "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
-            { Id = "f_1b44e0c9", EvidenceLevel = "moderate" },
-            Cluster(
-                "UnprovisionedDatabase..ctor",
-                "UnprovisionedDatabase..ctor failed, blocking 3 tests in 10 of 10 runs",
-                [
-                    "SampleApp.MSTest.FixtureTests.FirstTestNeedingTheDatabase",
-                    name,
-                    "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
-                ]) with
-            { Id = "f_7c905f05", EvidenceLevel = "high" }
+            single with { Repro = Repro(FindingKind.AlwaysFailing, always, single.Subject, target) },
+            cluster with { Repro = Repro(FindingKind.BrokenFixture, fixture, cluster.Subject, target) }
         ];
 
         return History(

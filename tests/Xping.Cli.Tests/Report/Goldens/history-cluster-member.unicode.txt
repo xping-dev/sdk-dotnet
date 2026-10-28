@@ -32,6 +32,7 @@ FINDINGS                                                      2 findings
     failed 10 of 10 executions (100%), one failure mode:
     System.InvalidOperationException
     evidence moderate | -env-cluster | f_1b44e0c9 | ...ixtureTests.cs:19
+    repro  run once: it failed in 10 of 10 runs
 
 1.  HIGH  broken fixture
     UnprovisionedDatabase..ctor (3 tests)
@@ -49,3 +50,4 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 10
 Detail of row 3: xping report --id f_1b44e0c9 --assembly SampleApp.MSTest --runs 10
+Repro of row 3: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.FixtureTests.SecondTestNeedingTheDatabase

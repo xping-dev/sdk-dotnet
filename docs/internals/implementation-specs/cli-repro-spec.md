@@ -7,7 +7,7 @@
 `cli-finding-detail-spec.md` D4 (the text detail view) and its Amendments 3 and 4 (commands below the
 fence, shell quoting). `cli-test-history-spec.md` Amendment 6B (`History:` below the fence). Issue
 #139.
-**Blocks:** #271 (the repro line in `report --test`)
+**Blocks:** nothing. #271 adds the repro to `report --test` (`cli-test-history-spec.md` Amendment 9).
 
 ---
 
@@ -304,7 +304,8 @@ Percentages round as the headline rounds them.
   wrapped, for the same reason as `History:`.
 - **Text, `report` list:** unchanged. A finding is one row there, and the reader reaches `--id` in one
   command.
-- **`--test` view:** #271.
+- **`--test` view:** each single-test row ends with the `repro` line, and one `Repro of row N:`
+  command follows the fence. Clusters get neither there (`cli-test-history-spec.md` Amendment 9, #271).
 
 ---
 
@@ -532,7 +533,6 @@ feature branch, then one PR into `main` with `Closes #139`. Same steps as
   runs.
 - Repro for the retry, duration, parallel, time and vanished kinds (D2).
 - `dotnet test` in the SDK's MTP mode (Amendment 2C).
-- The repro line in `report --test`: #271.
 
 ---
 

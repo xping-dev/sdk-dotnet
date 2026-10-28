@@ -43,6 +43,7 @@ FINDINGS                                                       1 finding
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
     evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+    repro  run once: it failed in 20 of 20 runs
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -51,3 +52,4 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 
 1 finding about this test | all: xping report --all --assembly MyApp.Tests --runs 20
 Detail of row 1: xping report --id f_87ef5c9a --assembly MyApp.Tests --runs 20
+Repro of row 1: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=MyApp.Tests.SampleTests.Checkout_RequiresProvisionedDatabase

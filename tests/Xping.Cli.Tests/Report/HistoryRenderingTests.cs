@@ -221,6 +221,79 @@ public sealed class HistoryRenderingTests
     }
 
     [Fact]
+    public void AFindingWithAReproEndsItsRowWithTheSentence()
+    {
+        FindingDto finding = Finding("Flaky", "high", Name, "failed 4 of 9 executions") with { Repro = Repro("cmd") };
+
+        string[] fenced = Fenced(Render(History([Ran(0)], [finding], [5])));
+        int row = Array.IndexOf(fenced, "5.  HIGH  flaky");
+
+        Assert.StartsWith("    evidence moderate", fenced[row + 2], StringComparison.Ordinal);
+        Assert.Equal("    repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a", fenced[row + 3]);
+        Assert.Equal("           failure 95% of the time", fenced[row + 4]);
+    }
+
+    [Fact]
+    public void TheReproLineNamesTheFirstFindingThatHasOne()
+    {
+        FindingDto[] findings =
+        [
+            Finding("DurationUnstable", "high", Name, "h") with { Id = "f_0001" },
+            Finding("Flaky", "medium", Name, "h") with { Id = "f_0002", Repro = Repro("first") },
+            Finding("TimingOut", "medium", Name, "h") with { Id = "f_0003", Repro = Repro("second") }
+        ];
+
+        string[] lines = [.. Lines(Render(History([Ran(0)], findings, [3, 5, 6]))).Where(l => l.Length > 0)];
+
+        Assert.StartsWith("Detail of row 3: ", lines[^2], StringComparison.Ordinal);
+        Assert.Equal("Repro of row 5: first", lines[^1]);
+    }
+
+    [Fact]
+    public void AReproWithACountIsPreferredToATooRareOne()
+    {
+        FindingDto[] findings =
+        [
+            Finding("Flaky", "high", Name, "h") with { Id = "f_0001", Repro = Repro("rare") with { Runs = null } },
+            Finding("TimingOut", "medium", Name, "h") with { Id = "f_0002", Repro = Repro("counted") }
+        ];
+
+        string[] lines = [.. Lines(Render(History([Ran(0)], findings, [3, 5]))).Where(l => l.Length > 0)];
+
+        Assert.Equal("Repro of row 5: counted", lines[^1]);
+    }
+
+    [Fact]
+    public void ATooRareReproIsPrintedWhenItIsTheOnlyOne()
+    {
+        FindingDto finding = Finding("Flaky", "high", Name, "h") with { Repro = Repro("rare") with { Runs = null } };
+
+        string[] lines = [.. Lines(Render(History([Ran(0)], [finding], [3]))).Where(l => l.Length > 0)];
+
+        Assert.Equal("Repro of row 3: rare", lines[^1]);
+    }
+
+    [Fact]
+    public void AClusterPrintsNoReproInTheHistoryOfOneOfItsMembers()
+    {
+        FindingDto cluster = Cluster("fixture setup failed", 2, "2 tests failed together") with { Repro = Repro("member") };
+
+        string report = Render(History([Ran(0)], [cluster], [3]));
+
+        Assert.DoesNotContain("repro", report, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NoFindingWithAReproPrintsNoReproLine()
+    {
+        string withFinding = Render(History([Ran(0)], [Finding("Flaky", "high", Name, "h")], [1]));
+        string healthy = Render(History([Ran(0)]));
+
+        Assert.DoesNotContain("repro", withFinding, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("repro", healthy, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void EveryFencedLineFitsTheFence()
     {
         TestSessionDto[] sessions =
@@ -230,7 +303,10 @@ public sealed class HistoryRenderingTests
             Ran(2)
         ];
 
-        FindingDto[] findings = [Finding("Flaky", "high", Name, "failed 6 of 12 executions in 6 of 20 runs")];
+        FindingDto[] findings =
+        [
+            Finding("Flaky", "high", Name, "failed 6 of 12 executions in 6 of 20 runs") with { Repro = Repro("cmd") }
+        ];
 
         foreach (ReportGlyphs glyphs in new[] { ReportGlyphs.Ascii, ReportGlyphs.Unicode })
         {
@@ -261,6 +337,10 @@ public sealed class HistoryRenderingTests
             attempt,
             12,
             [new TestAttemptDto(attempt, outcome, 12)]);
+
+    private static ReproDto Repro(string command) =>
+        new(command, 6, 6, 4, 9, 0.444,
+            "run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a failure 95% of the time");
 
     private static TestSessionDto Absent(int index, bool partial) =>
         new(Guid.NewGuid(), Start.AddHours(-index), "c670fc3a91", false, partial, null, null, null, []);
