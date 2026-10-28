@@ -112,6 +112,16 @@ amendment records the changes it makes here, committed with that spec.
 B is refined by `cli-test-history-spec.md` Amendment 6B: the `History:` line is printed below the
 fence, after the footer, and `SelectionDto` carries it as `history`.
 
+### Amendment 7 — from #270
+
+`cli-failure-mode-spec.md` (#270) resolves failure modes into `FindingDto.FailureModes` and prints
+them as a block. This amendment records what it changes here, committed with that spec.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D4.1: `Flaky` metrics carry one `failure mode N` pair per signature, at most 5, then `more failure modes`. `AlwaysFailing` carries `failure mode` = its type | Dropped. `Flaky` keeps `failure modes <count>`. The detail view ends with the `FAILURE MODES` block (failure-mode spec D5), after the same-subject line | D4, D4.1 |
+| B | D4, §7: exemplars, stack frames and signature messages are deferred | Signatures (type, message, frames, count, first seen) are in, through `FailureModeDto`. Raw exemplars stay out of scope (failure-mode spec §7) | D4, §7 |
+
 ---
 
 ## 1. Ground truth
@@ -905,9 +915,8 @@ and `1.21`. `README.md:183-193` gains one line. `nuspec/README.Cli.md:83-85` gai
 
 ## 7. Out of scope
 
-- **Exemplars, stack frames and signature messages in the detail view.** Deferred by D4, for the
-  architectural reason given there: they need a builder-resolved `ExemplarDto` and per-kind
-  decisions about which fields to show, in their own spec. That spec starts from this one's §4.2.
+- **Raw exemplars in the detail view.** Signature messages, frames, counts and first seen arrive
+  with `cli-failure-mode-spec.md` (#270, Amendment 7). The sample runs themselves stay in JSON.
 - **The third not-found tier**, *the test is in the window and carries no finding*, via
   `context.Tests.Fingerprints` and `TestIndex.ReferenceFor`. Both exist; it is a scope decision,
   and the first thing to add. D3 records it.
