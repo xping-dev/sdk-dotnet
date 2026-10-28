@@ -42,7 +42,7 @@ internal static class FailureModes
     /// <param name="fingerprint">The test.</param>
     /// <returns>Its modes in the index's order: count, then recency, then hash.</returns>
     public static IReadOnlyList<FailureModeDto> Of(AnalysisContext context, string fingerprint) =>
-        [.. context.Signatures.SignaturesOf(fingerprint).Select(o => From(o, context.Window.SessionCount))];
+        [.. context.Signatures.SignaturesOf(fingerprint).Select(o => From(FailureModeProvider.ViewOf(context, o)))];
 
     private static FailureModeDto From(SignatureView view) =>
         new(
@@ -58,21 +58,4 @@ internal static class FailureModes
             view.FirstSeenSessionsAgo,
             view.FirstSeenInLatestSession,
             view.FirstSeenAfterWindowStart);
-
-    // Nothing is discounted here, so the date and the flags come from one population, as a
-    // provider's view of a cluster does.
-    private static FailureModeDto From(SignatureOccurrence occurrence, int sessionCount) =>
-        new(
-            occurrence.Signature.Hash,
-            occurrence.Signature.ExceptionType,
-            occurrence.Signature.NormalisedMessage,
-            occurrence.Signature.Frames,
-            occurrence.Signature.Degraded,
-            occurrence.Signature.Unavailable,
-            occurrence.Occurrences,
-            occurrence.FirstSeenAt,
-            occurrence.FirstSeenSha,
-            occurrence.OldestSessionIndex,
-            occurrence.OldestSessionIndex == 0,
-            occurrence.OldestSessionIndex < sessionCount - 1);
 }

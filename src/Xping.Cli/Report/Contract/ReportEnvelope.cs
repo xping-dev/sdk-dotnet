@@ -457,7 +457,11 @@ internal sealed record MetricDto(string Label, string Value);
 /// <param name="Occurrences">Failed attempts carrying it.</param>
 /// <param name="FirstSeenAt">Start of the oldest session among those attempts.</param>
 /// <param name="FirstSeenSha">Commit that session ran at, when one was recorded.</param>
-/// <param name="FirstSeenSessionsAgo">How many sessions back that was; 0 is the newest.</param>
+/// <param name="FirstSeenSessionsAgo">
+/// How many sessions back that was; 0 is the newest. Not whether the mode is new: when its older
+/// failures fell in discounted runs this can be 0 while <paramref name="FirstSeenInLatestSession"/>
+/// is false.
+/// </param>
 /// <param name="FirstSeenInLatestSession">
 /// Whether it appeared in no session before the newest. Carried rather than read off
 /// <paramref name="FirstSeenSessionsAgo"/>: a finding dates a mode by the failures it counted, and

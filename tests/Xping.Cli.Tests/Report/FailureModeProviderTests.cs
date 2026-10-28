@@ -1620,10 +1620,30 @@ public sealed class FailureModeProviderTests
         Assert.Equal(1, signature.Occurrences);
         Assert.Equal(3, signature.FirstSeenSessionsAgo);
         Assert.Equal(sessions[6].StartedAt, signature.FirstSeenAt);
+        Assert.Equal("sha-of-run-6", signature.FirstSeenSha);
 
         // Whether it is new is asked of every failure: it was there in the run set aside.
         Assert.True(signature.FirstSeenAfterWindowStart);
         Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// <c>--test</c> lists a test's modes under the hashes its finding's evidence uses, so a reader
+    /// can join one to the other.
+    /// </summary>
+    [Fact]
+    public void ATestsFailureModesShareTheHashesOfItsFindingsEvidence()
+    {
+        AnalysisContext context = TestSessionFactory.Context(FailingFourWaysIn(total: 20, failing: 8));
+
+        FindingCandidate flaky = Assert.Single(
+            new FailureModeProvider().Analyze(context).Candidates, c => c.Kind == FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(flaky.Evidence);
+        string fingerprint = Assert.Single(flaky.Subject.Tests).TestFingerprint;
+
+        Assert.Equal(
+            evidence.DistinctSignatures.Select(s => s.Hash).Order(StringComparer.Ordinal),
+            FailureModes.Of(context, fingerprint).Select(m => m.Hash).Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -1655,7 +1675,8 @@ public sealed class FailureModeProviderTests
                 .. Enumerable.Range(0, 12).Select(i =>
                     ordinal == environmental ? Failure($"Broken{i}") : Passing($"Broken{i}")),
                 .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
-            ]))
+            ],
+            sha: $"sha-of-run-{ordinal}"))
     ];
 
     [Fact]

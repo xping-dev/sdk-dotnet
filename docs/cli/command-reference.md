@@ -863,6 +863,16 @@ test's runs it failed in and ran in with a verdict, and `expectation` is the sen
 line prints. A cluster's members in `evidence` carry their own `runsFailed` and `runsJudged`, as do
 the `Flaky`, `AlwaysFailing` and `TimingOut` evidence records.
 
+`failureModes` lists the distinct ways a finding's test failed, most frequent first: every mode for
+`Flaky`, the one signature for `AlwaysFailing` (its most common), `BrokenFixture` and
+`SharedFailure`, and an empty list for every other kind. Each carries the exception type (`null` when
+the adapter recorded none), the normalised message, up to five frames innermost first, the
+`occurrences` the finding counted, and when it was first seen among those occurrences.
+`firstSeenInLatestSession` and `firstSeenAfterWindowStart` say whether the mode is new, asked of
+every failure in the window, so `firstSeenSessionsAgo` of `0` alone does not mean new. `hash` joins a
+mode to `evidence.exemplars[].signatureHash`. `report --test --format json` carries the same list
+for the test, counted over every failed attempt in the window.
+
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
 `not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
@@ -882,7 +892,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.24",
+  "schemaVersion": "1.25",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
@@ -949,10 +959,18 @@ are not each other and `tests` is what they add up to:
       "metrics": [
         { "label": "failed", "value": "7 of 20 executions (35%)" },
         { "label": "runs affected", "value": "5 of 20" },
-        { "label": "failure modes", "value": "3" },
-        { "label": "failure mode 1", "value": "System.InvalidOperationException" },
-        { "label": "failure mode 2", "value": "System.TimeoutException" },
-        { "label": "failure mode 3", "value": "not recorded by the adapter" }
+        { "label": "failure modes", "value": "3" }
+      ],
+      "failureModes": [
+        {
+          "hash": "9c41e07b2d3a", "exceptionType": "System.InvalidOperationException",
+          "message": "summary for <date> has no rows", "frames": ["Billing.SummaryTests.GenerateMonthlySummary()"],
+          "framesDegraded": false, "unavailable": false, "occurrences": 4,
+          "firstSeenAt": "2026-08-12T09:14:00Z", "firstSeenSha": "c670fc3d1e2f", "firstSeenSessionsAgo": 14,
+          "firstSeenInLatestSession": false, "firstSeenAfterWindowStart": true
+        },
+        { "hash": "…", "exceptionType": "System.TimeoutException", "…": "…" },
+        { "hash": "…", "exceptionType": null, "unavailable": true, "…": "…" }
       ],
       "evidence": { "…": "…" },
       "drillDown": "xping report --id f_2a91c0de --assembly Checkout.Tests",

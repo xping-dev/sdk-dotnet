@@ -31,7 +31,11 @@ namespace Xping.Cli.Report.Providers;
 /// date never names a run the count set aside.
 /// </param>
 /// <param name="FirstSeenSha">Commit that session ran at, when one was recorded.</param>
-/// <param name="FirstSeenSessionsAgo">How many sessions back that was; 0 is the newest.</param>
+/// <param name="FirstSeenSessionsAgo">
+/// How many sessions back that was; 0 is the newest. Not whether the mode is new: when its older
+/// failures fell in discounted runs this can be 0 while <paramref name="FirstSeenInLatestSession"/>
+/// is false.
+/// </param>
 /// <param name="FirstSeenInLatestSession">
 /// Whether it has only ever appeared in the newest session. Asked of every failure carrying it,
 /// discounted or not: setting a run aside does not make a mode new.
@@ -1066,7 +1070,7 @@ internal sealed class FailureModeProvider : IFindingProvider
         // index, so a test whose only varying failures were clustered is not still called varying.
         // The oldest of them dates the mode, so the count and the date describe the same failures
         // and the date never names a run the count set aside.
-        var counted = new Dictionary<string, (int Count, ExecutionRef Oldest)>(StringComparer.Ordinal);
+        var counted = new Dictionary<string, List<ExecutionRef>>(StringComparer.Ordinal);
 
         foreach (ExecutionRef reference in failures)
         {
@@ -1074,28 +1078,33 @@ internal sealed class FailureModeProvider : IFindingProvider
             if (signature == null)
                 continue;
 
-            counted[signature.Hash] = counted.TryGetValue(signature.Hash, out var seen)
-                ? (seen.Count + 1, reference.SessionIndex > seen.Oldest.SessionIndex ? reference : seen.Oldest)
-                : (1, reference);
+            if (!counted.TryGetValue(signature.Hash, out List<ExecutionRef>? carrying))
+            {
+                carrying = [];
+                counted[signature.Hash] = carrying;
+            }
+
+            carrying.Add(reference);
         }
 
         List<SignatureView> views = [];
 
         foreach (SignatureOccurrence occurrence in context.Signatures.SignaturesOf(fingerprint))
         {
-            if (!counted.TryGetValue(occurrence.Signature.Hash, out var seen))
+            if (!counted.TryGetValue(occurrence.Signature.Hash, out List<ExecutionRef>? carrying))
                 continue;
 
             // Whether the mode is new is asked of every failure, discounted or not: a mode whose
             // older failures fell in environmental runs did not start when those runs were set
             // aside, and saying so would read as a regression that never happened.
+            ExecutionRef oldest = SignatureIndex.Oldest(carrying);
             views.Add(ToView(
                 context,
                 occurrence.Signature,
-                seen.Count,
-                seen.Oldest.SessionIndex,
-                seen.Oldest.Session.StartedAt,
-                RevisionContext.ReadSha(seen.Oldest.Session),
+                carrying.Count,
+                oldest.SessionIndex,
+                oldest.Session.StartedAt,
+                RevisionContext.ReadSha(oldest.Session),
                 occurrence.OldestSessionIndex));
         }
 
@@ -1107,6 +1116,22 @@ internal sealed class FailureModeProvider : IFindingProvider
         // and the published evidence still does not shuffle between runs.
         return [.. views.OrderByDescending(v => v.Occurrences)];
     }
+
+    /// <summary>
+    /// Gets the view of a signature as the index saw it for one test, nothing discounted.
+    /// </summary>
+    /// <param name="context">The window the index was built over.</param>
+    /// <param name="occurrence">The signature's appearances for the test.</param>
+    /// <returns>A view whose count, date and flags all come from every failure carrying it.</returns>
+    internal static SignatureView ViewOf(AnalysisContext context, SignatureOccurrence occurrence) =>
+        ToView(
+            context,
+            occurrence.Signature,
+            occurrence.Occurrences,
+            occurrence.OldestSessionIndex,
+            occurrence.FirstSeenAt,
+            occurrence.FirstSeenSha,
+            occurrence.OldestSessionIndex);
 
     private static SignatureView ToView(
         AnalysisContext context,
