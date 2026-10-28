@@ -27,7 +27,8 @@ public class XpingTestSetup
     [OneTimeSetUp]
     public void BeforeAllTests()
     {
-        // Initialize Xping context - will load configuration from environment variables
+        // Loads configuration from environment variables, unless a test in this process already
+        // installed a context or left a configuration behind (see docs/known-limitations.md)
         XpingContext.Initialize();
     }
 

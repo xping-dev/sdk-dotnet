@@ -75,19 +75,13 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// Records a test execution to the collector.
     /// </summary>
     /// <param name="execution">The test execution to record.</param>
-    public static void RecordTest(TestExecution execution)
-    {
-        Context.Instance.RecordTestExecution(execution);
-    }
+    public static void RecordTest(TestExecution execution) => Context.RecordTest(execution);
 
     /// <summary>
     /// Flushes all pending test executions to Xping Cloud.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FlushAsync()
-    {
-        return Context.Instance.FlushSessionAsync();
-    }
+    public static Task FlushAsync() => Context.FlushAsync();
 
     /// <summary>
     /// Resolves the fixed set of services required by <see cref="XpingTestBase"/> to record test executions.
@@ -100,20 +94,14 @@ public sealed class XpingContext : XpingContextOrchestrator
     public static XpingBaseServices GetBaseServices()
     {
         // Builds the host on first access: Initialize() only installs the context.
-        return Context.Require("base services").ResolveBaseServices();
+        return Context.Instance.ResolveBaseServices();
     }
 
     /// <summary>
     /// Finalizes the Xping session and uploads all buffered test executions.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static Task FinalizeAsync()
-    {
-        // Only finalize if the host was actually built (i.e., at least one test ran or the adapter's
-        // services were resolved). Avoids building the host just to send an empty session when
-        // Initialize() was called but no tests executed.
-        return Context.Built?.FinalizeSessionAsync(CancellationToken.None) ?? Task.CompletedTask;
-    }
+    public static Task FinalizeAsync() => Context.FinalizeAsync();
 
     /// <summary>
     /// Finalizes the Xping session and shuts down the context, matching the behavior MSTest's
@@ -210,14 +198,12 @@ public sealed class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Disposes the singleton context instance, releasing the flush lock, timer, and host,
-    /// then resets the context so <see cref="Initialize()"/> can be called again.
+    /// then resets the context and forgets the configuration an earlier
+    /// <see cref="Initialize(XpingConfiguration)"/> supplied, so <see cref="Initialize()"/> starts from scratch.
     /// Finalization is idempotent, so this is safe to call even when
     /// <see cref="FinalizeAsync"/> was already invoked.
     /// </summary>
-    public static async ValueTask ShutdownAsync()
-    {
-        await Context.ShutdownAsync().ConfigureAwait(false);
-    }
+    public static ValueTask ShutdownAsync() => Context.ShutdownAsync();
 
     private XpingBaseServices ResolveBaseServices()
     {

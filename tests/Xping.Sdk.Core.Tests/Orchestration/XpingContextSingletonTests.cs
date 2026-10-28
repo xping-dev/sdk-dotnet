@@ -77,11 +77,42 @@ public sealed class XpingContextSingletonTests
     }
 
     [Fact]
-    public async Task Initialize_WithoutConfiguration_ReusesTheLastOneInitializedWith()
+    public async Task Initialize_WithoutConfiguration_ReusesTheOneTheLastSessionRanWith()
     {
         var singleton = CreateSingleton();
         var configuration = new XpingConfiguration();
         singleton.Initialize(configuration);
+        _ = singleton.Instance;
+        await singleton.EndSessionAsync();
+
+        singleton.Initialize(null);
+        _ = singleton.Instance;
+        await singleton.EndSessionAsync();
+
+        Assert.Equal([configuration, configuration], _created);
+    }
+
+    [Fact]
+    public async Task Initialize_WithConfigurationWhileAContextIsInstalled_DoesNotRememberIt()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(null);
+        singleton.Initialize(new XpingConfiguration());
+        _ = singleton.Instance;
+        await singleton.EndSessionAsync();
+
+        singleton.Initialize(null);
+        _ = singleton.Instance;
+        await singleton.EndSessionAsync();
+
+        Assert.Equal([null, null], _created);
+    }
+
+    [Fact]
+    public async Task ShutdownAsync_ForgetsTheRememberedConfiguration()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(new XpingConfiguration());
         _ = singleton.Instance;
         await singleton.ShutdownAsync();
 
@@ -89,7 +120,7 @@ public sealed class XpingContextSingletonTests
         _ = singleton.Instance;
         await singleton.ShutdownAsync();
 
-        Assert.Equal([configuration, configuration], _created);
+        Assert.Null(_created[1]);
     }
 
     [Fact]
@@ -105,35 +136,62 @@ public sealed class XpingContextSingletonTests
     }
 
     [Fact]
-    public void Require_BeforeInitialize_ThrowsNamingWhatWasResolved()
+    public void Instance_BeforeInitialize_ThrowsSayingToInitialize()
     {
         var singleton = CreateSingleton();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => singleton.Require("adapter services"));
+        var ex = Assert.Throws<InvalidOperationException>(() => singleton.Instance);
 
-        Assert.Contains("before resolving adapter services", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Initialize()", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Instance_BeforeInitialize_Throws()
+    public void RecordTest_BeforeInitialize_ThrowsInvalidOperationException()
     {
         var singleton = CreateSingleton();
 
-        Assert.Throws<ArgumentNullException>(() => singleton.Instance);
+        Assert.Throws<InvalidOperationException>(() => singleton.RecordTest(
+            new TestExecutionBuilder().WithTestName("Test").WithOutcome(TestOutcome.Passed).Build()));
     }
 
     [Fact]
-    public async Task Require_BuildsTheContextOnce()
+    public async Task Instance_BuildsTheContextOnce()
     {
         var singleton = CreateSingleton();
         singleton.Initialize(null);
 
-        Harness first = singleton.Require("adapter services");
-        Harness second = singleton.Require("adapter services");
+        Harness first = singleton.Instance;
+        Harness second = singleton.Instance;
 
         Assert.Same(first, second);
         Assert.Same(first, singleton.Built);
         Assert.Single(_created);
+        await singleton.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_WithAnUnbuiltContext_DoesNotBuildIt()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(null);
+
+        await singleton.FinalizeAsync();
+
+        Assert.Empty(_created);
+        Assert.True(singleton.IsInitialized);
+    }
+
+    [Fact]
+    public async Task FinalizeAsync_FinalizesTheBuiltContextAndKeepsItInstalled()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(null);
+        singleton.RecordTest(new TestExecutionBuilder().WithTestName("Test").WithOutcome(TestOutcome.Passed).Build());
+
+        await singleton.FinalizeAsync();
+
+        Assert.Equal(1, singleton.Instance.FinalizeCount);
+        Assert.True(singleton.IsInitialized);
         await singleton.ShutdownAsync();
     }
 

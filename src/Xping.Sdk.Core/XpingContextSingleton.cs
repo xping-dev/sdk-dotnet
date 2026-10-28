@@ -5,6 +5,7 @@
 
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
+using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Shared;
 
 namespace Xping.Sdk.Core;
@@ -25,8 +26,9 @@ internal sealed class XpingContextSingleton<TContext>
     private readonly Func<XpingConfiguration?, TContext> _create;
     private Lazy<TContext>? _instance;
 
-    // The configuration the last session was started with, for the next one: the session ends with each
-    // run, and a long-lived process, such as an IDE's test server, can start another run.
+    // The configuration of the last context Initialize(configuration) installed, for the next session: the
+    // session ends with each run, and a long-lived process, such as an IDE's test server, can start
+    // another run through a parameterless Initialize(). Only ShutdownAsync forgets it.
     private XpingConfiguration? _configuration;
 
     /// <summary>
@@ -50,8 +52,10 @@ internal sealed class XpingContextSingleton<TContext>
     /// <summary>
     /// Gets the context, building its host on first access.
     /// </summary>
-    /// <exception cref="ArgumentNullException">The context is not initialized.</exception>
-    public TContext Instance => _instance.RequireNotNull().Value;
+    /// <exception cref="InvalidOperationException">The context is not initialized.</exception>
+    public TContext Instance =>
+        (_instance ?? throw new InvalidOperationException(
+            "XpingContext is not initialized. Call XpingContext.Initialize() first.")).Value;
 
     /// <summary>
     /// Gets the context if its host has been built, or <see langword="null"/>. Never builds the host.
@@ -62,42 +66,46 @@ internal sealed class XpingContextSingleton<TContext>
     /// Installs a context, unless one is installed already. Its host is built on first use.
     /// </summary>
     /// <param name="configuration">
-    /// The configuration to use, or <see langword="null"/> for the one an earlier session in this process
-    /// was initialized with, else appsettings.json and environment variables.
+    /// The configuration to use, or <see langword="null"/> for the one the last
+    /// <c>Initialize(configuration)</c> in this process installed, else appsettings.json and environment
+    /// variables.
     /// </param>
     public void Initialize(XpingConfiguration? configuration)
     {
         if (IsInitialized)
             return;
 
-        if (configuration != null)
-            Volatile.Write(ref _configuration, configuration);
-        else
-            configuration = Volatile.Read(ref _configuration);
-
+        XpingConfiguration? resolved = configuration ?? Volatile.Read(ref _configuration);
         Lazy<TContext> newInstance = new(
-            valueFactory: () => _create(configuration),
+            valueFactory: () => _create(resolved),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
-        Interlocked.CompareExchange(ref _instance, newInstance, null);
+        // Remembered only when this call installed the context, so the configuration reused later is one
+        // a session actually ran with.
+        if (Interlocked.CompareExchange(ref _instance, newInstance, null) == null && configuration != null)
+            Volatile.Write(ref _configuration, configuration);
     }
 
     /// <summary>
-    /// Gets the context for resolving an adapter's services, building its host on first access.
+    /// Records a test execution with the context.
     /// </summary>
-    /// <param name="services">What the caller resolves, for the error message.</param>
-    /// <returns>The context.</returns>
+    /// <param name="execution">The test execution to record.</param>
     /// <exception cref="InvalidOperationException">The context is not initialized.</exception>
-    public TContext Require(string services)
-    {
-        Lazy<TContext>? instance = _instance;
-        if (instance == null)
-            throw new InvalidOperationException(
-                $"XpingContext must be initialized before resolving {services}. " +
-                "Ensure Initialize() has been called.");
+    public void RecordTest(TestExecution execution) => Instance.RecordTestExecution(execution);
 
-        return instance.Value;
-    }
+    /// <summary>
+    /// Flushes the context's pending test executions.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="InvalidOperationException">The context is not initialized.</exception>
+    public Task FlushAsync() => Instance.FlushSessionAsync();
+
+    /// <summary>
+    /// Finalizes the session, if the context's host was built. Avoids building the host just to send an
+    /// empty session when <see cref="Initialize"/> was called but no test ran.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public Task FinalizeAsync() => Built?.FinalizeSessionAsync(CancellationToken.None) ?? Task.CompletedTask;
 
     /// <summary>
     /// Finalizes the session and shuts the context down. See
@@ -114,12 +122,14 @@ internal sealed class XpingContextSingleton<TContext>
     }
 
     /// <summary>
-    /// Disposes the context, if its host was built, and uninstalls it so <see cref="Initialize"/> can
-    /// install a new one.
+    /// Disposes the context, if its host was built, uninstalls it, and forgets the remembered
+    /// configuration, so the next <see cref="Initialize"/> starts from scratch.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     public async ValueTask ShutdownAsync()
     {
+        Volatile.Write(ref _configuration, null);
+
         TContext? context = Claim();
         if (context != null)
             await context.DisposeAsync().ConfigureAwait(false);

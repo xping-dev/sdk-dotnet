@@ -12,13 +12,11 @@ namespace Xping.Sdk.Core.Models.Statistics;
 /// The end-of-session summary line, reduced to display-ready pieces.
 /// </summary>
 /// <remarks>
-/// Every test framework adapter prints the same summary once its session is finalized, so the
-/// decisions behind that line — which outcome counters to read, how to word them, and at what
-/// scale to render the durations — live here rather than three times over in the adapters.
-/// The adapters keep only the logging call, so the wording stays identical across NUnit, xUnit
-/// and MSTest.
+/// The decisions behind the line <see cref="XpingContextOrchestrator"/> logs once a session is
+/// finalized — which outcome counters to read, how to word them, and at what scale to render the
+/// durations — live here, apart from the logging call.
 /// </remarks>
-public sealed class SessionSummary
+internal sealed class SessionSummary
 {
     private SessionSummary(
         int total,

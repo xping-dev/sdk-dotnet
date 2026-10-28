@@ -71,6 +71,10 @@ internal static class ModuleInitializer
 }
 ```
 
+A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
+so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
+forgets it. `Initialize(null)` throws `ArgumentNullException`.
+
 ## Error Handling
 
 An SDK failure is logged and the tests run untracked. In `StrictMode` a configuration error ends the
