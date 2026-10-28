@@ -90,6 +90,7 @@ internal static class TestHistoryBuilder
             sessions,
             Counts(runs.Values, context.Window.SessionCount),
             Duration(tests.VerdictRunsOf(fingerprint)),
+            FailureModes.Of(context, fingerprint),
             FindingsWithheld: null,
             FindingRows: [],
             Candidates: []);
@@ -140,7 +141,7 @@ internal static class TestHistoryBuilder
     }
 
     private static TestHistoryDto Empty(string query) =>
-        new(query, null, null, [], null, null, null, [], []);
+        new(query, null, null, [], null, null, [], null, [], []);
 
     /// <summary>
     /// Counts the runs by how their deciding attempt ended.

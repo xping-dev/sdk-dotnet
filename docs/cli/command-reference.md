@@ -401,11 +401,9 @@ FINDING                                                       row 5 of 5
     assembly  SampleApp.XUnit
     source    src/SampleApp.XUnit/SampleTests.cs:83
 
-    failed          6 of 20 executions (30%)
-    runs affected   6 of 20
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Expected <n> but
-                    was <n>
+    failed         6 of 20 executions (30%)
+    runs affected  6 of 20
+    failure modes  1
 
     Also about this test: #4 unstable timing (f_66c10ec3)
 ```
@@ -468,13 +466,11 @@ FINDING                                                       row 1 of 1
     assembly  SampleApp.MSTest
     source    tests/SampleApp.MSTest/CalculatorTests.cs:57
 
-    failed          4 of 9 executions (44.4%)
-    runs affected   4 of 9
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Race condition
-                    detected
-    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
-                    show a failure 95% of the time
+    failed         4 of 9 executions (44.4%)
+    runs affected  4 of 9
+    failure modes  1
+    repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
+                   show a failure 95% of the time
 ```
 
 rates: the marker on each finding says which runs its percentage was

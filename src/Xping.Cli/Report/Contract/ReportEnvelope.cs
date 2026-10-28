@@ -92,9 +92,14 @@ internal sealed record ReportEnvelope(
     /// a kind a rerun cannot show, and where no runner was recorded to build a command for;
     /// and where each cluster member and the <c>Flaky</c>, <c>AlwaysFailing</c> and
     /// <c>TimingOut</c> evidence gained <c>runsFailed</c> and <c>runsJudged</c>, the counts it was
-    /// sized from.
+    /// sized from. 1.25 is where every finding and <c>test</c> gained <c>failureModes</c>: each way
+    /// the test failed, with its frames, count and first seen, resolved so a renderer need not read
+    /// <c>evidence</c>; where the <c>failure mode N</c>, <c>more failure modes</c> and
+    /// <c>AlwaysFailing</c> <c>failure mode</c> metrics went, the block carrying them in full; and
+    /// where a <c>Flaky</c> or <c>AlwaysFailing</c> signature's first-seen date, sha and sessions ago
+    /// came to be taken from the failures its count covers.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.24";
+    public const string CurrentSchemaVersion = "1.25";
 }
 
 /// <summary>
@@ -352,6 +357,10 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// </param>
 /// <param name="Headline">The observations in one already-resolved sentence.</param>
 /// <param name="Metrics">The same observations as labelled pairs, for a caller laying out its own.</param>
+/// <param name="FailureModes">
+/// The ways it failed, most frequent first, for the kinds whose evidence names them; empty for every
+/// other kind.
+/// </param>
 /// <param name="Evidence">The kind-specific observations.</param>
 /// <param name="DrillDown">The command that expands it.</param>
 /// <param name="Repro">
@@ -372,6 +381,7 @@ internal sealed record FindingDto(
     string? Annotation,
     string Headline,
     IReadOnlyList<MetricDto> Metrics,
+    IReadOnlyList<FailureModeDto> FailureModes,
     JsonNode? Evidence,
     string DrillDown,
     ReproDto? Repro,
@@ -425,6 +435,50 @@ internal sealed record ReproDto(
 /// <param name="Label">What was measured, in lower case.</param>
 /// <param name="Value">The measurement, at published precision.</param>
 internal sealed record MetricDto(string Label, string Value);
+
+/// <summary>
+/// One way a test failed: what it threw, where, how often and since when.
+/// </summary>
+/// <remarks>
+/// Resolved from the evidence so a renderer can print it without reading <c>evidence</c>, which it
+/// may not. Under <c>--id</c> it describes the failures the finding counted; under <c>--test</c>
+/// every failed attempt in the window, so the two can count the same mode differently.
+/// </remarks>
+/// <param name="Hash">
+/// The signature's grouping key, for joining to <c>evidence.exemplars[].signatureHash</c>.
+/// </param>
+/// <param name="ExceptionType">The type the adapter recorded, or null when it recorded none.</param>
+/// <param name="Message">The normalised message: run-varying values replaced by tokens.</param>
+/// <param name="Frames">Up to five frames, innermost first, method signature only.</param>
+/// <param name="FramesDegraded">
+/// Whether no test code was on the stack, so the frames are the framework's, or there are none.
+/// </param>
+/// <param name="Unavailable">Whether the adapter recorded nothing to build a signature from.</param>
+/// <param name="Occurrences">Failed attempts carrying it.</param>
+/// <param name="FirstSeenAt">Start of the oldest session among those attempts.</param>
+/// <param name="FirstSeenSha">Commit that session ran at, when one was recorded.</param>
+/// <param name="FirstSeenSessionsAgo">How many sessions back that was; 0 is the newest.</param>
+/// <param name="FirstSeenInLatestSession">
+/// Whether it appeared in no session before the newest. Carried rather than read off
+/// <paramref name="FirstSeenSessionsAgo"/>: a finding dates a mode by the failures it counted, and
+/// asks whether it is new of every failure.
+/// </param>
+/// <param name="FirstSeenAfterWindowStart">
+/// Whether it was absent from the window's oldest session. Not a claim that it never happened before.
+/// </param>
+internal sealed record FailureModeDto(
+    string Hash,
+    string? ExceptionType,
+    string Message,
+    IReadOnlyList<string> Frames,
+    bool FramesDegraded,
+    bool Unavailable,
+    int Occurrences,
+    DateTime FirstSeenAt,
+    string? FirstSeenSha,
+    int FirstSeenSessionsAgo,
+    bool FirstSeenInLatestSession,
+    bool FirstSeenAfterWindowStart);
 
 /// <summary>
 /// Findings broken down by severity.
@@ -550,6 +604,10 @@ internal sealed record TruncationDto(int Shown, int Total, string Command);
 /// <param name="Duration">
 /// Its durations over the runs that reached a verdict, or null when none did or no test was resolved.
 /// </param>
+/// <param name="FailureModes">
+/// The ways it failed over every failed attempt in the window, nothing discounted, most frequent
+/// first. Empty when it never failed or no test was resolved.
+/// </param>
 /// <param name="FindingsWithheld">
 /// Why no finding could be reported about the test — too few runs to clear the reporting floors —
 /// or null when the floors are not the explanation.
@@ -566,6 +624,7 @@ internal sealed record TestHistoryDto(
     IReadOnlyList<TestSessionDto> Sessions,
     TestRunCountsDto? Counts,
     TestDurationDto? Duration,
+    IReadOnlyList<FailureModeDto> FailureModes,
     string? FindingsWithheld,
     IReadOnlyList<SameSubjectDto> FindingRows,
     IReadOnlyList<TestCandidateDto> Candidates);
