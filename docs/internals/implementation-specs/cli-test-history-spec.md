@@ -7,7 +7,7 @@
 authority, width and charset discipline). `cli-finding-detail-spec.md` D3 (not-found tiers), D6 (flag
 interactions), §4 (`SelectionDto`, `FindingSelection`), and its Amendment 6, committed with this
 document. Issue #141.
-**Blocks:** #270 (failure-mode exemplars, adds a block to this view)
+**Blocks:** nothing. #270 adds the `FAILURE MODES` block to this view (Amendment 10, `cli-failure-mode-spec.md`)
 
 ---
 
@@ -119,6 +119,16 @@ text view.
 | A | D10: a history row ends on its evidence line | A **single-test** row whose finding has a `repro` ends with one more line, the labelled pair `repro  <expectation>`, written and wrapped as the `--id` detail block writes its pairs. The sentence carries the run count, and a command without its count is what #139 exists to prevent. A cluster row gets none: its command names the members most likely to fail, which need not include this test, and its count is theirs, which contradicts this test's runs above it. The cluster's `--id` view keeps both | D10, §3.1 |
 | B | Below the fence, the view prints `Detail of row N:` only | After it, one dimmed line: `Repro of row N: <command>`, for the **first single-test finding shown whose repro has a count** (`runs` not null). Only when none has a count, the first single-test finding with any repro. A too-rare repro's own sentence says rerunning will not show it, so it must not take the line from one that will. N is that finding's full-report row (`FindingRows`), as in the `Detail` line. It names its row because that finding need not be the first shown, and two findings on the same test (flaky and timing out) share the command but not the count. Never wrapped (Amendment 6B). Printed only where the `Detail` line may be | D10, §3.1 |
 | C | — | No repro, no line. A healthy test, an unknown runner, only kinds `ReproCommand` skips, or only clusters print neither A nor B. No plain single-run filter: it shows no failure (repro spec D2). §3.1's own test prints none either: every run passed on retry, so no run failed by its deciding attempt | D10, §3.2 |
+
+### Amendment 10 — from #270
+
+`cli-failure-mode-spec.md` (#270) gives this view the test's own failure modes. This amendment
+records what it changes here, committed with that spec.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | The view is TEST, RUNS, FINDINGS | A `FAILURE MODES` block sits between RUNS and FINDINGS (failure-mode spec D5). It is built from the test's own failed attempts over the D5 window, nothing discounted, through `SignatureIndex.SignaturesOf`, not from its findings (failure-mode spec D4). Each mode counts failed attempts, not runs, so a test that always passed on retry reads `0 failed` in the summary and still lists its modes. Not printed when the test has no failed attempt in the window | D10, §3.1 |
+| B | §4.2: `TestHistoryDto` has no failure modes | It gains `FailureModes`, after `Duration` (failure-mode spec §4.3) | §4.2 |
 
 ---
 
@@ -714,7 +724,7 @@ directly to `feat/141-report-test`.
 
 ## 7. Out of scope
 
-- Failure-mode exemplars (message, frames, first seen, counts): #270, which adds a block to this view.
+- Raw failure exemplars. The failure modes themselves arrive with #270 (Amendment 10).
 - The repro line: #271, after #139.
 - Executing tests: never. #139 prints the command (`repro`, `cli-repro-spec.md`).
 - Joining across assemblies. Lookup spans assemblies; the view never does.
