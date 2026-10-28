@@ -29,6 +29,10 @@ secret or redirect an endpoint without the test assembly being rebuilt, and a va
 `Initialize(config)` does not shield the run from it. Your instance is not modified — the override
 is applied to the copy the SDK resolves.
 
+Once a process has called `Initialize(config)`, a later `Initialize()` in the same process reuses that
+configuration instead of discovering one. This matters in a long-lived process, such as an IDE's test
+server, that runs several sessions.
+
 If you configure in code and want `appsettings.json` or `Xping__*` honoured as well, build an
 `IConfiguration` yourself and call `services.AddXping(configuration)`.
 

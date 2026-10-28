@@ -445,6 +445,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (!IsCollecting)
             return new UploadResult { Success = true, TotalRecordsCount = 0 };
 
+        _logger.LogDebug("Finalizing session");
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         UploadResult uploadResult;
@@ -483,6 +484,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         finally { _flushLock.Release(); }
 
+        LogSessionSummary(uploadResult);
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
         if (storedExecutions != null)
@@ -546,6 +548,33 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _logger.LogWarning(
                 "No test assembly could be resolved for this session, so it will not be kept in the " +
                 "local store. Report this as an SDK defect.");
+        }
+    }
+
+    private void LogSessionSummary(UploadResult result)
+    {
+        QuickStatistics? stats = result.Success ? result.QuickStatistics : null;
+        if (stats == null)
+        {
+            _logger.LogInformation("Session finalized.");
+            return;
+        }
+
+        SessionSummary summary = SessionSummary.From(stats);
+        if (summary.Retried)
+        {
+            _logger.LogInformation(
+                "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
+                summary.Total, summary.DistinctTests, summary.TestLabel,
+                summary.Retries, summary.RetryLabel, summary.Outcomes,
+                summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
+                summary.Total, summary.Outcomes,
+                summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
         }
     }
 
@@ -827,8 +856,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Called after the session has been finalized and uploaded. Override to handle post-upload logic,
-    /// such as logging or reporting the upload result.
+    /// Called after the session has been finalized and uploaded, and its summary logged. Override to
+    /// handle post-upload logic.
     /// </summary>
     /// <param name="result">The result returned by the upload operation.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

@@ -5,18 +5,15 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Identity;
 using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Retry;
 using Xping.Sdk.Core.Services.Statistics;
-using Xping.Sdk.Core.Services.Upload;
 using Xping.Sdk.Shared;
 using Xping.Sdk.XUnit.V3.Retry;
 using Xunit.v3;
@@ -29,29 +26,25 @@ namespace Xping.Sdk.XUnit.V3;
 /// </summary>
 public sealed class XpingContext : XpingContextOrchestrator
 {
-    private static Lazy<XpingContext>? _instance;
+    private static readonly XpingContextSingleton<XpingContext> Context = new(configuration =>
+        new XpingContext(CreateHostBuilder(configuration)
+            .ConfigureServices(services => services.AddSingleton<IRetryDetector<IXunitTestCase>, XUnitRetryDetector>())
+            .Build()));
 
     // Detected by XpingTestFramework, which is the only code that runs inside the runner's call stack.
     // Static rather than per instance: the runner is a property of the process, and Initialize() may
     // build the context before or after the framework has looked.
     private static string? _runner;
 
-    // The configuration the last session was started with, for the next one: the session ends with each
-    // run, and a long-lived process, such as an IDE's test server, can start another run.
-    private static XpingConfiguration? _configuration;
-
-    private readonly ILogger<XpingContext> _logger;
-
     /// <summary>
     /// Gets a value indicating whether <see cref="Initialize()"/> has been called and the context
     /// has not yet been shut down. Returns <see langword="true"/> as soon as <see cref="Initialize()"/>
     /// sets the internal lazy wrapper, even before the DI host is fully built on first use.
     /// </summary>
-    public static bool IsInitialized => _instance != null;
+    public static bool IsInitialized => Context.IsInitialized;
 
     private XpingContext(IHost host) : base(host)
     {
-        _logger = host.Services.GetRequiredService<ILogger<XpingContext>>();
     }
 
     /// <inheritdoc/>
@@ -83,18 +76,6 @@ public sealed class XpingContext : XpingContextOrchestrator
             Volatile.Write(ref _runner, runner);
     }
 
-    private static XpingContext CreateInstance(XpingConfiguration? configuration = null)
-    {
-        IHost host = CreateHostBuilder(configuration)
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton<IRetryDetector<IXunitTestCase>, XUnitRetryDetector>();
-            })
-            .Build();
-
-        return new XpingContext(host);
-    }
-
     /// <summary>
     /// Resolves the fixed set of services required to construct <see cref="XpingTestFrameworkExecutor"/>.
     /// Must be called after <see cref="Initialize()"/> has been invoked.
@@ -105,13 +86,8 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </exception>
     internal static XpingExecutorServices GetExecutorServices()
     {
-        if (_instance == null)
-            throw new InvalidOperationException(
-                "XpingContext must be initialized before resolving executor services. " +
-                "Ensure Initialize() has been called.");
-
-        // Builds the host on first access: Initialize() only registers the Lazy<> wrapper.
-        return _instance.Value.ResolveExecutorServices();
+        // Builds the host on first access: Initialize() only installs the context.
+        return Context.Require("executor services").ResolveExecutorServices();
     }
 
     /// <summary>
@@ -121,15 +97,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </summary>
     public static void Initialize()
     {
-        if (IsInitialized)
-            return;
-
-        XpingConfiguration? configuration = Volatile.Read(ref _configuration);
-        Lazy<XpingContext> newInstance = new(
-            valueFactory: () => CreateInstance(configuration),
-            LazyThreadSafetyMode.ExecutionAndPublication);
-
-        Interlocked.CompareExchange(ref _instance, newInstance, null);
+        Context.Initialize(null);
     }
 
     /// <summary>
@@ -138,16 +106,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// <param name="configuration">The configuration to use.</param>
     public static void Initialize(XpingConfiguration configuration)
     {
-        if (IsInitialized)
-            return;
-
-        Volatile.Write(ref _configuration, configuration.RequireNotNull());
-
-        Lazy<XpingContext> newInstance = new(
-            valueFactory: () => CreateInstance(configuration),
-            LazyThreadSafetyMode.ExecutionAndPublication);
-
-        Interlocked.CompareExchange(ref _instance, newInstance, null);
+        Context.Initialize(configuration.RequireNotNull());
     }
 
     /// <summary>
@@ -156,10 +115,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// <param name="execution">The test execution to record.</param>
     public static void RecordTest(TestExecution execution)
     {
-        _instance
-            .RequireNotNull()
-            .Value
-            .RecordTestExecution(execution);
+        Context.Instance.RecordTestExecution(execution);
     }
 
     /// <summary>
@@ -168,10 +124,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// <returns>A task representing the asynchronous operation.</returns>
     public static Task FlushAsync()
     {
-        return _instance
-            .RequireNotNull()
-            .Value
-            .FlushSessionAsync();
+        return Context.Instance.FlushSessionAsync();
     }
 
     /// <summary>
@@ -180,12 +133,10 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// <returns>A task representing the asynchronous operation.</returns>
     public static Task FinalizeAsync()
     {
-        // Only finalize if the host was actually built, so an Initialize() with no tests behind it
-        // does not build a host just to send an empty session.
-        if (_instance is not { IsValueCreated: true })
-            return Task.CompletedTask;
-
-        return _instance.Value.FinalizeSessionAsync(CancellationToken.None);
+        // Only finalize if the host was actually built (i.e., at least one test ran or the adapter's
+        // services were resolved). Avoids building the host just to send an empty session when
+        // Initialize() was called but no tests executed.
+        return Context.Built?.FinalizeSessionAsync(CancellationToken.None) ?? Task.CompletedTask;
     }
 
     /// <summary>
@@ -200,11 +151,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </returns>
     internal static Task<XpingNetworkException?> FinalizeAndShutdownAsync()
     {
-        // Claimed before finalizing, so the context finalized is the one shut down, even if Initialize()
-        // installs a new one in between.
-        Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
-
-        return EndSessionAsync(instance is { IsValueCreated: true } ? instance.Value : null);
+        return Context.EndSessionAsync();
     }
 
     /// <summary>
@@ -246,53 +193,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// <returns>A task representing the asynchronous operation.</returns>
     public static async ValueTask ShutdownAsync()
     {
-        // Atomically claim the instance and replace with null so that IsInitialized
-        // returns false immediately and Initialize() can be called again afterward.
-        Lazy<XpingContext>? instance = Interlocked.Exchange(ref _instance, null);
-
-        if (instance?.IsValueCreated == true)
-            await ((IAsyncDisposable)instance.Value).DisposeAsync().ConfigureAwait(false);
-    }
-
-    /// <inheritdoc/>
-    protected override Task OnSessionFinalizingAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("Finalizing session");
-        return base.OnSessionFinalizingAsync(cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    protected override Task OnSessionFinalizedAsync(UploadResult result, CancellationToken cancellationToken)
-    {
-        result = result.RequireNotNull();
-        QuickStatistics? stats = result.Success ? result.QuickStatistics : null;
-
-        if (stats != null)
-        {
-            SessionSummary summary = SessionSummary.From(stats);
-
-            if (summary.Retried)
-            {
-                _logger.LogInformation(
-                    "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
-                    summary.Total, summary.DistinctTests, summary.TestLabel,
-                    summary.Retries, summary.RetryLabel, summary.Outcomes,
-                    summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
-            }
-            else
-            {
-                _logger.LogInformation(
-                    "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
-                    summary.Total, summary.Outcomes,
-                    summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
-            }
-        }
-        else
-        {
-            _logger.LogInformation("Session finalized.");
-        }
-
-        return base.OnSessionFinalizedAsync(result, cancellationToken);
+        await Context.ShutdownAsync().ConfigureAwait(false);
     }
 
     private XpingExecutorServices ResolveExecutorServices()
