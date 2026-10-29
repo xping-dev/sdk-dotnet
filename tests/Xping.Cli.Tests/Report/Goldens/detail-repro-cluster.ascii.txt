@@ -24,7 +24,7 @@ FINDING                                                       row 1 of 1
 FAILURE MODES                                             1 failure mode
 ------------------------------------------------------------------------
 
-1.  12 failed attempts | first seen 08-01 09:00 at a3f9c2e, 4 runs ago
+1.  12 failed attempts | first seen 08-06 09:00 at a3f9c2e, 18 runs ago
     System.InvalidOperationException
     Expected <n> but was <n>
       at MyApp.Tests.CheckoutTests.Completes()

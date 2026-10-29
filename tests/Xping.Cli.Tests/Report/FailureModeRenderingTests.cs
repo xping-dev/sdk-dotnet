@@ -139,7 +139,7 @@ public sealed class FailureModeRenderingTests
         string[] block = Block(Render(Get("detail-unavailable")));
 
         Assert.Equal(
-            ["1.  19 failed attempts | first seen 08-01 09:00 at a3f9c2e, 4 runs ago", "    the adapter recorded no failure detail"],
+            ["1.  19 failed attempts | first seen 08-06 09:00 at a3f9c2e, 18 runs ago", "    the adapter recorded no failure detail"],
             block);
     }
 
@@ -153,6 +153,30 @@ public sealed class FailureModeRenderingTests
 
         Assert.Equal("      at MyApp.Infrastructure.Persistence.Repositories.OrderRepository.", block[^2]);
         Assert.Equal("         SaveChangesAsync(CancellationToken token)", block[^1]);
+    }
+
+    [Theory]
+    [InlineData("ctor")]
+    [InlineData("cctor")]
+    public void AConstructorFrameBreaksBeforeItsOwnDot(string constructor)
+    {
+        string[] block = Block(Render(With(Mode() with
+        {
+            Frames = [$"MyApp.Infrastructure.Persistence.Repositories.OrderRepository..{constructor}(CancellationToken token)"]
+        })));
+
+        Assert.Equal("      at MyApp.Infrastructure.Persistence.Repositories.OrderRepository.", block[^2]);
+        Assert.Equal($"         .{constructor}(CancellationToken token)", block[^1]);
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("   ")]
+    public void ABlankMessagePrintsNoLine(string message)
+    {
+        string[] block = Block(Render(With(Mode() with { Message = message })));
+
+        Assert.Equal(["    System.InvalidOperationException", "      at MyApp.Checkout.Basket.Total()"], block[1..]);
     }
 
     [Fact]

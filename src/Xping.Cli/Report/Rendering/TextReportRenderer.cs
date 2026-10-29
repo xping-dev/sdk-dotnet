@@ -642,7 +642,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         foreach (string line in type)
             builder.Append(' ', ContinuationIndent).AppendLine(line);
 
-        if (mode.Message.Length > 0)
+        // Blank is empty: a line of indentation alone would read as the gap between two modes.
+        if (!string.IsNullOrWhiteSpace(mode.Message))
         {
             foreach (string line in MessageLines(Recorded(mode.Message)))
                 builder.Append(' ', ContinuationIndent).AppendLine(line);
@@ -730,9 +731,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             return;
         }
 
-        int paren = frame.IndexOf('(', StringComparison.Ordinal);
-        int end = Math.Min(paren < 0 ? frame.Length : paren, budget - prefix.Length);
-        int dot = end == 0 ? -1 : frame.LastIndexOf('.', end - 1);
+        int dot = MethodDot(frame, budget - prefix.Length);
 
         // No break in reach: the frame overflows whole rather than losing half an identifier.
         if (dot < 0)
@@ -1969,9 +1968,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (value.Length <= width)
             return value;
 
-        int paren = value.IndexOf('(', StringComparison.Ordinal);
-        int end = paren < 0 ? value.Length : paren;
-        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+        int dot = MethodDot(value, value.Length);
 
         if (dot < 0)
             return value;
@@ -1981,6 +1978,30 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return width >= value.Length - dot + 4
             ? Fit(value, width)
             : string.Concat("...", value.AsSpan(dot + 1));
+    }
+
+    /// <summary>
+    /// Finds the dot that ends a name's type and starts its method: the last one before the argument
+    /// list, within <paramref name="limit"/> characters.
+    /// </summary>
+    /// <returns>The dot's index, or -1 where there is none in reach.</returns>
+    /// <remarks>
+    /// <para>
+    /// Never inside the argument list, where a dot belongs to a parameter's type or a decimal.
+    /// </para>
+    /// <para>
+    /// A constructor's method is <c>.ctor</c> or <c>.cctor</c>, its own dot included, so
+    /// <c>Order..ctor()</c> ends its type at the first of the two dots. Taking the second would leave
+    /// <c>ctor()</c>, which no frame and no search reads as a constructor.
+    /// </para>
+    /// </remarks>
+    private static int MethodDot(string value, int limit)
+    {
+        int paren = value.IndexOf('(', StringComparison.Ordinal);
+        int end = Math.Min(paren < 0 ? value.Length : paren, limit);
+        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+
+        return dot > 0 && value[dot - 1] == '.' ? dot - 1 : dot;
     }
 
     /// <summary>
