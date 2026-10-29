@@ -77,6 +77,8 @@ internal static class ReportFixtures
         "detail-repro-none",
         "detail-repro-mtp",
         "detail-repro-no-runner",
+        "detail-failure-modes",
+        "detail-unavailable",
         "history-flaky",
         "history-healthy",
         "history-timeout-retry",
@@ -284,6 +286,8 @@ internal static class ReportFixtures
         "detail-repro-mtp" => ReproFlaky(
             new ReproTarget(LocalSessionProperties.TestingPlatformRunner, SampleProject), failing: 4, judged: 9),
         "detail-repro-no-runner" => ReproFlaky(ReproTarget.Unknown, failing: 4, judged: 9),
+        "detail-failure-modes" => DetailFailureModes(),
+        "detail-unavailable" => DetailUnavailable(),
         "history-flaky" => HistoryFlaky(),
         "history-healthy" => HistoryHealthy(),
         "history-timeout-retry" => HistoryTimeoutRetry(),
@@ -443,16 +447,15 @@ internal static class ReportFixtures
             FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
 
         FindingDto cluster = envelope.Findings[2];
-        (string clusterHeadline, IReadOnlyList<MetricDto> clusterMetrics) = EvidenceHeadline.For(
-            FindingKind.BrokenFixture,
-            new BrokenFixtureEvidence(
-                nameof(Sdk.Core.Models.Executions.FailureSite.FixtureSetup), "UnprovisionedDatabase..ctor", signature with { Occurrences = 60 },
-                3, [], 60, 20, 20, 3, new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc), "eab9867", []));
+        var clusterEvidence = new BrokenFixtureEvidence(
+            nameof(Sdk.Core.Models.Executions.FailureSite.FixtureSetup), "UnprovisionedDatabase..ctor", signature with { Occurrences = 60 },
+            3, [], 60, 20, 20, 3, new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc), "eab9867", []);
+        (string clusterHeadline, IReadOnlyList<MetricDto> clusterMetrics) =
+            EvidenceHeadline.For(FindingKind.BrokenFixture, clusterEvidence);
 
         FindingDto flaky = envelope.Findings[4];
-        (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(
-            FindingKind.Flaky,
-            new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null));
+        var flakyEvidence = new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null);
+        (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(FindingKind.Flaky, flakyEvidence);
 
         return envelope with
         {
@@ -464,6 +467,7 @@ internal static class ReportFixtures
                 {
                     Headline = clusterHeadline,
                     Metrics = clusterMetrics,
+                    FailureModes = FailureModes.Of(clusterEvidence),
                     Subject = cluster.Subject with
                     {
                         Members =
@@ -477,7 +481,7 @@ internal static class ReportFixtures
                     }
                 },
                 envelope.Findings[3],
-                flaky with { Headline = flakyHeadline, Metrics = flakyMetrics, Subject = flaky.Subject with { Assembly = "SampleApp.XUnit" } },
+                flaky with { Headline = flakyHeadline, Metrics = flakyMetrics, FailureModes = FailureModes.Of(flakyEvidence), Subject = flaky.Subject with { Assembly = "SampleApp.XUnit" } },
                 .. envelope.Findings.Skip(5)
             ]
         };
@@ -598,6 +602,7 @@ internal static class ReportFixtures
             Id = "f_1491bf4c",
             EvidenceLevel = "low",
             Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence),
             Subject = finding.Subject with { Assembly = "SampleApp.MSTest" }
         };
 
@@ -634,7 +639,8 @@ internal static class ReportFixtures
             Id = FindingId.Compute(FindingKind.SharedFailure, finding.Subject.GroupId!),
             Kind = nameof(FindingKind.SharedFailure),
             Population = ToCamelCase(PopulationRules.For(FindingKind.SharedFailure).ToString()),
-            Metrics = metrics
+            Metrics = metrics,
+            FailureModes = FailureModes.Of(sample)
         };
 
         var evidence = (SharedFailureEvidence)sample with { Members = MembersOf(finding.Subject) };
@@ -643,6 +649,94 @@ internal static class ReportFixtures
         {
             Repro = Repro(FindingKind.SharedFailure, evidence, finding.Subject, VSTest("tests/Ns.Tests/Ns.Tests.csproj"))
         }), 1);
+    }
+
+    /// <summary>
+    /// The failure-mode spec's §3.1: a flaky test with three modes, one degraded and one unavailable,
+    /// each first seen in a different form.
+    /// </summary>
+    /// <remarks>
+    /// The sha is recorded whole, so the golden pins the cut to seven. The degraded mode's frame is
+    /// too wide for its line and pins the break between the type and the method.
+    /// </remarks>
+    private static ReportEnvelope DetailFailureModes()
+    {
+        var sample = (FlakyEvidence)EvidenceSamples.For(FindingKind.Flaky);
+        SignatureView first = sample.DistinctSignatures[0];
+
+        var evidence = sample with
+        {
+            DistinctSignatures =
+            [
+                first with
+                {
+                    Message = "expected <num> but was <num>",
+                    Frames = ["MyApp.Checkout.Basket.Total()", "MyApp.Tests.CheckoutTests.Completes()"],
+                    Occurrences = 4,
+                    FirstSeenAt = new DateTime(2026, 8, 12, 9, 40, 0, DateTimeKind.Utc),
+                    FirstSeenSha = "b71e004c93d2a1f05e6b7c8d9e0f1a2b3c4d5e6f",
+                    FirstSeenSessionsAgo = 6,
+                    FirstSeenAfterWindowStart = true
+                },
+                first with
+                {
+                    Hash = "def456",
+                    ExceptionType = "System.TimeoutException",
+                    Message = "timed out after <num>ms",
+                    Frames = ["System.Net.Http.HttpConnectionPool.SendAsync(HttpRequestMessage request)"],
+                    Degraded = true,
+                    Occurrences = 2,
+                    FirstSeenSessionsAgo = 19,
+                    FirstSeenAfterWindowStart = false
+                },
+                first with
+                {
+                    Hash = "0a1b2c",
+                    ExceptionType = null,
+                    Message = string.Empty,
+                    Frames = [],
+                    Unavailable = true,
+                    Occurrences = 1,
+                    FirstSeenSessionsAgo = 0,
+                    FirstSeenInLatestSession = true,
+                    FirstSeenAfterWindowStart = true
+                }
+            ]
+        };
+
+        FindingDto finding = Measured(FindingKind.Flaky);
+
+        return Detail(Envelope(finding with { FailureModes = FailureModes.Of(evidence) }), 1);
+    }
+
+    /// <summary>
+    /// An always-failing test whose adapter recorded no failure detail: no type, message or frames.
+    /// </summary>
+    private static ReportEnvelope DetailUnavailable()
+    {
+        var sample = (AlwaysFailingEvidence)EvidenceSamples.For(FindingKind.AlwaysFailing);
+
+        var evidence = sample with
+        {
+            Signature = sample.Signature with
+            {
+                ExceptionType = null,
+                Message = string.Empty,
+                Frames = [],
+                Unavailable = true
+            }
+        };
+
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(FindingKind.AlwaysFailing, evidence);
+
+        FindingDto finding = Measured(FindingKind.AlwaysFailing) with
+        {
+            Headline = headline,
+            Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence)
+        };
+
+        return Detail(Envelope(finding), 1);
     }
 
     /// <summary>

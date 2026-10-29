@@ -23,6 +23,13 @@ FINDING                                                       row 3 of 5
     failures        60
     runs affected   20 of 20
     worst run       3 tests
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  60 failed attempts | since the window opened
+    System.InvalidOperationException
+    Expected <n> but was <n>
 ```
 
 rates: the marker on each finding says which runs its percentage was

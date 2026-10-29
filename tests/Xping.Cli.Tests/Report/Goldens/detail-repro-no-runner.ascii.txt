@@ -18,6 +18,13 @@ FINDING                                                       row 1 of 1
     failed         4 of 9 executions (44.4%)
     runs affected  4 of 9
     failure modes  1
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  4 failed attempts | since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

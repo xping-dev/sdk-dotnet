@@ -20,6 +20,13 @@ FINDING                                                       row 1 of 1
     failure modes  1
     repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
                    show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

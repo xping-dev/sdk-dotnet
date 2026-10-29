@@ -20,6 +20,14 @@ FINDING                                                       row 1 of 1
     worst run       12 tests
     repro           run 19 times: at 3 of 20 runs failing (15%), 19 runs
                     show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  12 failed attempts | first seen 08-01 09:00 at a3f9c2e, 4 runs ago
+    System.InvalidOperationException
+    Expected <n> but was <n>
+      at MyApp.Tests.CheckoutTests.Completes()
 ```
 
 rates: the marker on each finding says which runs its percentage was
