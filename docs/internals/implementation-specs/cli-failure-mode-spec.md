@@ -560,7 +560,6 @@ and for an astral rune. Then:
 
 - `Recorded` and `Command` in the text renderers, and every recorded or command read routed through
   them;
-- `FlowFailures.Printable` replaced;
 - the stderr messages;
 - the hostile-envelope test;
 - `TheAsciiReportCarriesNothingButPrintableAscii` tightened;
