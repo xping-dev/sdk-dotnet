@@ -1267,7 +1267,7 @@ internal static class ReportFixtures
     /// and both flags come from the code that computes them, not from a copy of its rules. Every
     /// session also runs a stable test, so a row the test is absent from is still a run.
     /// </remarks>
-    private static IReadOnlyList<FailureModeDto> HistoryModes(
+    internal static IReadOnlyList<FailureModeDto> HistoryModes(
         string name, TestSessionDto[] sessions, Func<int, TestAttemptDto, RecordedFailure>? failure)
     {
         Sdk.Core.Models.Executions.TestExecution Replay(int row, TestAttemptDto attempt)
@@ -1287,10 +1287,12 @@ internal static class ReportFixtures
                 stackTrace: recorded.StackTrace);
         }
 
+        // Numbered by row, newest lowest: the window breaks a tie on start time by session id,
+        // ascending, so two rows that started together keep the order RUNS prints them in.
         Sdk.Core.Models.TestSession[] replayed =
         [
             .. sessions.Select((session, row) => TestSessionFactory.Session(
-                sessions.Length - 1 - row,
+                row,
                 [
                     TestSessionFactory.Execution("Stable"),
                     .. session.Attempts.Select(attempt => Replay(row, attempt))
@@ -1303,7 +1305,7 @@ internal static class ReportFixtures
     }
 
     /// <summary>What one failed attempt recorded; all three null is an adapter that recorded nothing.</summary>
-    private sealed record RecordedFailure(string? ExceptionType, string? Message, string? StackTrace);
+    internal sealed record RecordedFailure(string? ExceptionType, string? Message, string? StackTrace);
 
     // Every attempt before the deciding one ended as the first did: a retry chain has no gaps, and
     // the row only reads the first attempt and the deciding one. The id is set by History.

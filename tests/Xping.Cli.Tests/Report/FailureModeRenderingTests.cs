@@ -384,6 +384,14 @@ public sealed class FailureModeRenderingTests
     }
 
     [Fact]
+    public void InAHistoryTheBlockEndsBeforeFindings()
+    {
+        string[] block = Block(Render(Get("history-flaky")));
+
+        Assert.Equal("      at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()", block[^1]);
+    }
+
+    [Fact]
     public void AHistoryListsFiveModesAndCountsTheRest()
     {
         string[] fenced = Fenced(Render(Get("history-failure-modes")));
@@ -454,14 +462,27 @@ public sealed class FailureModeRenderingTests
         return detail with { Findings = [detail.Findings[0] with { FailureModes = modes }] };
     }
 
-    /// <summary>The block's lines below its heading, rule and blank line.</summary>
+    /// <summary>
+    /// The block's lines below its heading, rule and blank line, up to the blank line before the
+    /// next heading, or to the fence's end.
+    /// </summary>
+    /// <remarks>
+    /// Bounded, because in a history FINDINGS follows: a line asserted to be in the block must not
+    /// pass by being under a finding.
+    /// </remarks>
     private static string[] Block(string report)
     {
         string[] fenced = Fenced(report);
         int heading = Array.FindIndex(fenced, l => l.StartsWith(Heading, StringComparison.Ordinal));
+        int next = Array.FindIndex(fenced, heading + 1, l => IsRule(l)) is var rule && rule >= 0
+            ? Array.FindIndex(fenced, rule + 1, l => IsRule(l))
+            : -1;
 
-        return fenced[(heading + 3)..];
+        return next < 0 ? fenced[(heading + 3)..] : fenced[(heading + 3)..(next - 2)];
     }
+
+    private static bool IsRule(string line) =>
+        line.Length == FenceWidth && line.All(c => c is '-' or '\u2500');
 
     /// <summary>A single mode's message lines: between its type line and its first frame.</summary>
     private static string[] MessageLines(string report)
