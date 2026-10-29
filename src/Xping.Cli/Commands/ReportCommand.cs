@@ -48,8 +48,12 @@ internal sealed class ReportCommand(
         ILocalSessionStore store = sessionStoreFactory.Create(startDirectory: startDirectory);
         var source = new LocalSessionSource(store);
 
+        // What the messages around the report may print of a recorded name or path: what the report
+        // itself would print it with (D7).
+        TerminalCharset charset = Capabilities(options).Glyphs.Charset;
+
         if (options.Test is { } query)
-            return await RunTestAsync(options, query, startDirectory, store, source, cancellationToken).ConfigureAwait(false);
+            return await RunTestAsync(options, query, startDirectory, store, source, charset, cancellationToken).ConfigureAwait(false);
 
         // Auto-scope to the newest assembly unless the caller named one. Every test project in a
         // solution shares one store, so an unscoped report would pool unrelated suites: one
@@ -69,14 +73,14 @@ internal sealed class ReportCommand(
             // nothing to scope by, and reporting on them anyway would pool every suite together and
             // produce numbers no --assembly value can reproduce.
             if (assembly == null && source.Read(1, null).Sessions.Count > 0)
-                return ReportNothingAttributable(store);
+                return ReportNothingAttributable(store, charset);
         }
 
         WindowResult resolved = windowResolver.Resolve(
             source, new WindowRequest(options.Runs, options.Since, assembly));
 
         if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, options.Assembly);
+            return ReportUnavailable(resolved, store, options.Assembly, charset);
 
         (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
             options,
@@ -97,7 +101,7 @@ internal sealed class ReportCommand(
         // fence around an absence the message already describes.
         if (envelope.Selection is { Reported: false } selection)
         {
-            WriteNotReported(selection, envelope, source, assembly);
+            WriteNotReported(selection, envelope, source, assembly, charset);
 
             if (options.Format == ReportFormat.Json)
                 new JsonReportRenderer().Render(envelope, io.Output);
@@ -132,6 +136,7 @@ internal sealed class ReportCommand(
         string startDirectory,
         ILocalSessionStore store,
         LocalSessionSource source,
+        TerminalCharset charset,
         CancellationToken cancellationToken)
     {
         TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
@@ -143,29 +148,30 @@ internal sealed class ReportCommand(
                 WindowResult.Failed(
                     lookup.Failure!.Value, null, skipped.Unreadable, skipped.Skewed, skipped.WholeStoreSkewed),
                 store,
-                options.Assembly);
+                options.Assembly,
+                charset);
         }
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
         // scoped, so "no test matching" would blame the name for what is a property of the store.
         if (options.Assembly == null && resolution.AssemblyCount == 0)
-            return ReportNothingAttributable(store);
+            return ReportNothingAttributable(store, charset);
 
         if (resolution.Match is not { } match)
-            return Unresolved(options, resolution, lookup.Warnings, source);
+            return Unresolved(options, resolution, lookup.Warnings, source, charset);
 
         WindowResult resolved = windowResolver.Resolve(source, TestWindow(options, match.Assembly));
 
         // A --since later than every run of the assembly opens no window at all. That is still a
         // test outside the window: the lookup just found it, so "no runs recorded" would be false.
         if (resolved.Failure == WindowFailure.EmptyStore && options.Since != null)
-            return OutsideWindow(options, query, match, resolved);
+            return OutsideWindow(options, query, match, resolved, charset);
 
         if (resolved.Window == null)
-            return ReportUnavailable(resolved, store, match.Assembly);
+            return ReportUnavailable(resolved, store, match.Assembly, charset);
 
         if (!TestResolver.InWindow(match, resolved.Window))
-            return OutsideWindow(options, query, match, resolved);
+            return OutsideWindow(options, query, match, resolved, charset);
 
         (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
             options,
@@ -193,13 +199,17 @@ internal sealed class ReportCommand(
     /// session at all there is no report to write around the answer, so a script gets the exit
     /// code and nothing on standard output.
     /// </remarks>
-    private int OutsideWindow(ReportOptions options, string query, TestMatch match, WindowResult resolved)
+    private int OutsideWindow(
+        ReportOptions options, string query, TestMatch match, WindowResult resolved, TerminalCharset charset)
     {
         WriteReadWarnings(resolved);
 
-        io.Error.WriteLine(resolved.Window is { } window
-            ? TestResolver.OutsideWindowMessage(query, match, window)
-            : TestResolver.OutsideWindowMessage(query, match, "--since", options.Since));
+        // The whole line: it echoes the query and a --since value, and carries no command.
+        io.Error.WriteLine(TerminalText.Printable(
+            resolved.Window is { } window
+                ? TestResolver.OutsideWindowMessage(query, match, window)
+                : TestResolver.OutsideWindowMessage(query, match, "--since", options.Since),
+            charset));
 
         if (options.Format == ReportFormat.Json && resolved.Window != null)
             RenderUnresolved(options, resolved, match.Assembly, TestHistoryBuilder.NotFound(query));
@@ -214,6 +224,7 @@ internal sealed class ReportCommand(
     /// <param name="resolution">The ambiguous or empty resolution.</param>
     /// <param name="lookup">What the read the name was resolved over could not use.</param>
     /// <param name="source">Where sessions are read from.</param>
+    /// <param name="charset">What the messages may print of a recorded name.</param>
     /// <returns>The exit code.</returns>
     /// <remarks>
     /// The lookup's warnings are repeated because they can be the whole explanation: a test whose
@@ -224,7 +235,8 @@ internal sealed class ReportCommand(
         ReportOptions options,
         TestResolution resolution,
         LookupWarnings lookup,
-        LocalSessionSource source)
+        LocalSessionSource source,
+        TerminalCharset charset)
     {
         // Every candidate's command names its own assembly and nothing of the window, so the scope
         // it is built from needs only the directory.
@@ -237,12 +249,12 @@ internal sealed class ReportCommand(
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
-        WriteLookupWarnings(lookup);
+        WriteLookupWarnings(lookup, charset);
 
         if (history.Candidates.Count > 0)
-            WriteAmbiguous(resolution.Query, history.Candidates);
+            WriteAmbiguous(resolution.Query, history.Candidates, charset);
         else
-            io.Error.WriteLine(TestResolver.NotFoundMessage(resolution));
+            io.Error.WriteLine(TerminalText.Printable(TestResolver.NotFoundMessage(resolution), charset));
 
         if (options.Format != ReportFormat.Json)
             return exitCode;
@@ -404,7 +416,7 @@ internal sealed class ReportCommand(
             var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions));
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
-            WriteCloudHints(enriched.Hints);
+            WriteCloudHints(enriched.Hints, Capabilities(options).Glyphs.Charset);
             envelope = enriched.Envelope;
         }
 
@@ -426,8 +438,7 @@ internal sealed class ReportCommand(
     {
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
-        OutputCapabilities capabilities = OutputCapabilities.Resolve(
-            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
+        OutputCapabilities capabilities = Capabilities(options);
 
         // A blank line either side, for a person only. It separates the report from the command that
         // produced it and from whatever comes next, which a terminal gives no other help with — and
@@ -443,7 +454,7 @@ internal sealed class ReportCommand(
         // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
         if (pad)
         {
-            WriteScopeNotice(source, assembly, assemblyGiven);
+            WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs.Charset);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
@@ -464,12 +475,13 @@ internal sealed class ReportCommand(
     /// Quiet on a pipe so <c>report --json | jq</c> stays clean, except for the expired sign-in: that
     /// one has a fix only a human can apply, and the human may only ever see a log.
     /// </remarks>
-    private void WriteCloudHints(IReadOnlyList<CloudHint> hints)
+    private void WriteCloudHints(IReadOnlyList<CloudHint> hints, TerminalCharset charset)
     {
         foreach (CloudHint hint in hints)
         {
+            // The whole line: it can carry an assembly name or an exception's message.
             if (hint.Always || io.IsErrorTerminal || globalOptions.Verbose)
-                io.Error.WriteLine(hint.Text);
+                io.Error.WriteLine(TerminalText.Printable(hint.Text, charset));
         }
     }
 
@@ -500,11 +512,22 @@ internal sealed class ReportCommand(
         return pins;
     }
 
+    /// <summary>
+    /// Resolves what this invocation's stdout can draw.
+    /// </summary>
+    /// <remarks>
+    /// Once per decision rather than once per invocation, but always from the same inputs, so the
+    /// report and the messages around it agree on a glyph set.
+    /// </remarks>
+    private OutputCapabilities Capabilities(ReportOptions options) =>
+        OutputCapabilities.Resolve(
+            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
+
     private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>
         options.Format switch
         {
             ReportFormat.Json => new JsonReportRenderer(),
-            ReportFormat.Summary => new SummaryReportRenderer(),
+            ReportFormat.Summary => new SummaryReportRenderer(capabilities.Glyphs.Charset),
             // No detail line on a --kind-narrowed report: its rows are numbered against a list the
             // detail view does not use, and its row 1 is not the detail view's row 1.
             _ => new TextReportRenderer(capabilities, detailCommand: options.Kinds.Count == 0)
@@ -517,9 +540,13 @@ internal sealed class ReportCommand(
     /// Always exit code 2, never 1. A build step has to tell "I looked and found problems" apart
     /// from "I could not look", and every case here is the second.
     /// </remarks>
-    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly)
+    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly, TerminalCharset charset)
     {
         TextWriter error = io.Error;
+
+        // Every line here echoes a recorded name, the store path or the reader's --since, and none
+        // carries a command, so each is cleaned whole.
+        string Printable(string text) => TerminalText.Printable(text, charset);
 
         switch (result.Failure)
         {
@@ -530,16 +557,16 @@ internal sealed class ReportCommand(
 
             case WindowFailure.ShaNotFound:
             case WindowFailure.SinceNotUnderstood:
-                error.WriteLine(result.FailureDetail);
+                error.WriteLine(Printable(result.FailureDetail ?? string.Empty));
                 break;
 
             default:
-                error.WriteLine(assembly == null
+                error.WriteLine(Printable(assembly == null
                     ? $"No runs recorded yet in {store.StorePath}"
-                    : $"No runs recorded for assembly '{assembly}' in {store.StorePath}");
+                    : $"No runs recorded for assembly '{assembly}' in {store.StorePath}"));
 
                 if (result.FailureDetail is { Length: > 0 } detail)
-                    error.WriteLine(detail);
+                    error.WriteLine(Printable(detail));
 
                 error.WriteLine("Run your tests once with the Xping SDK installed, then try again.");
                 break;
@@ -567,7 +594,7 @@ internal sealed class ReportCommand(
     /// one the report is dated against. An assembly whose every run is ahead is named on its own: its
     /// runs were kept, so no count of excluded runs says anything about it.
     /// </remarks>
-    private void WriteLookupWarnings(LookupWarnings warnings)
+    private void WriteLookupWarnings(LookupWarnings warnings, TerminalCharset charset)
     {
         WriteUnreadableWarning(warnings.Unreadable);
         WriteClockWarning(warnings.WholeStoreSkewed, warnings.Skewed, reportWritten: false);
@@ -575,7 +602,7 @@ internal sealed class ReportCommand(
         foreach (string assembly in warnings.AheadAssemblies)
         {
             io.Error.WriteLine(
-                $"warning: every run of {assembly} is stamped ahead of this machine's clock. " +
+                $"warning: every run of {TerminalText.Printable(assembly, charset)} is stamped ahead of this machine's clock. " +
                 "Check the clock on the machine that recorded them.");
         }
     }
@@ -628,11 +655,11 @@ internal sealed class ReportCommand(
     /// Exit code 2 for the same reason every other unavailable case uses it: the report could not
     /// be produced, which a build step has to tell apart from a report that found problems.
     /// </remarks>
-    private int ReportNothingAttributable(ILocalSessionStore store)
+    private int ReportNothingAttributable(ILocalSessionStore store, TerminalCharset charset)
     {
         TextWriter error = io.Error;
 
-        error.WriteLine($"No runs in {store.StorePath} record which test assembly they belong to.");
+        error.WriteLine($"No runs in {TerminalText.Printable(store.StorePath ?? string.Empty, charset)} record which test assembly they belong to.");
         error.WriteLine(
             "A report always covers one assembly, so there is nothing to report on. " +
             "Run your tests again with the Xping SDK installed, then try again.");
@@ -645,26 +672,29 @@ internal sealed class ReportCommand(
     /// </summary>
     /// <param name="query">The name the reader typed.</param>
     /// <param name="candidates">Every test it matched, newest run first.</param>
+    /// <param name="charset">What the list may print of a recorded name.</param>
     /// <remarks>
     /// Capped, because a name like <c>Add</c> can match a parameterised test's every case, and past
     /// ten the reader needs a longer name rather than a longer list. Each name is broken as the
     /// report breaks one, so the list survives being pasted into a chat.
     /// </remarks>
-    private void WriteAmbiguous(string query, IReadOnlyList<TestCandidateDto> candidates)
+    private void WriteAmbiguous(string query, IReadOnlyList<TestCandidateDto> candidates, TerminalCharset charset)
     {
         const int Shown = 10;
         const int NameIndent = 4;
 
         TextWriter error = io.Error;
 
-        error.WriteLine($"'{query}' matches {candidates.Count} tests. Name one by its fingerprint:");
+        string Recorded(string value) => TerminalText.Printable(value, charset);
+
+        error.WriteLine($"'{Recorded(query)}' matches {candidates.Count} tests. Name one by its fingerprint:");
 
         foreach (TestCandidateDto candidate in candidates.Take(Shown))
         {
-            error.WriteLine($"  {candidate.FingerprintPrefix}  {candidate.Assembly}");
+            error.WriteLine($"  {Recorded(candidate.FingerprintPrefix)}  {Recorded(candidate.Assembly)}");
 
             foreach (string line in TextReportRenderer.WrapValue(
-                candidate.FullyQualifiedName, TextReportRenderer.FenceWidth - NameIndent))
+                Recorded(candidate.FullyQualifiedName), TextReportRenderer.FenceWidth - NameIndent))
             {
                 error.WriteLine(new string(' ', NameIndent) + line);
             }
@@ -673,7 +703,7 @@ internal sealed class ReportCommand(
         if (candidates.Count > Shown)
             error.WriteLine($"  +{candidates.Count - Shown} more");
 
-        error.WriteLine(candidates[0].Command);
+        error.WriteLine(TerminalText.Printable(candidates[0].Command, TerminalCharset.Command));
     }
 
     /// <summary>
@@ -693,9 +723,11 @@ internal sealed class ReportCommand(
     /// </para>
     /// </remarks>
     private void WriteNotReported(
-        SelectionDto selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly)
+        SelectionDto selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly, TerminalCharset charset)
     {
-        var message = new StringBuilder("Finding ").Append(selection.Id);
+        string Recorded(string value) => TerminalText.Printable(value, charset);
+
+        var message = new StringBuilder("Finding ").Append(Recorded(selection.Id));
 
         if (selection.Kind is { } kind)
             message.Append(" (").Append(ReportVocabulary.LabelFor(kind)).Append(')');
@@ -704,14 +736,14 @@ internal sealed class ReportCommand(
         string runs = sessions == 1 ? "1 run" : $"{sessions} runs";
 
         message.Append(" is not reported in this window (")
-               .Append(assembly == null ? runs : $"{assembly}, {runs}")
+               .Append(assembly == null ? runs : $"{Recorded(assembly)}, {runs}")
                .Append(").");
 
         if (selection.SameSubject.Count > 0)
         {
             message.Append(" Its subject is reported as ")
                    .AppendJoin(", ", selection.SameSubject.Select(same =>
-                       $"{same.Id} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
+                       $"{Recorded(same.Id)} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
                    .Append('.');
         }
         int others = OtherAssemblies(source, assembly);
@@ -729,7 +761,8 @@ internal sealed class ReportCommand(
         // A line of its own, ending on the command: anything after it would be copied with it and
         // run as arguments.
         if (selection.SameSubject.Count == 0 && selection.History is { } history)
-            io.Error.WriteLine($"Its test has no findings in this window: {history}");
+            io.Error.WriteLine(
+                $"Its test has no findings in this window: {TerminalText.Printable(history, TerminalCharset.Command)}");
     }
 
     /// <summary>
@@ -739,7 +772,8 @@ internal sealed class ReportCommand(
     /// Auto-scoping keeps the numbers honest, but silently omitting other suites would be worse than
     /// the problem it solves. Naming the scope makes the omission visible and points at the flag.
     /// </remarks>
-    private void WriteScopeNotice(LocalSessionSource source, string? assembly, bool explicitlyChosen)
+    private void WriteScopeNotice(
+        LocalSessionSource source, string? assembly, bool explicitlyChosen, TerminalCharset charset)
     {
         if (assembly == null || explicitlyChosen)
             return;
@@ -750,7 +784,7 @@ internal sealed class ReportCommand(
             return;
 
         io.Output.WriteLine(
-            $"Reporting on {assembly} {(char)0x00B7} {others} other " +
+            $"Reporting on {TerminalText.Printable(assembly, charset)} {(char)0x00B7} {others} other " +
             (others == 1 ? "assembly" : "assemblies") +
             " in this store (use --assembly to switch).");
     }

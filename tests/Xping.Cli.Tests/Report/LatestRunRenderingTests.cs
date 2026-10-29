@@ -585,7 +585,7 @@ public sealed class LatestRunRenderingTests
     private static string Summary(ReportEnvelope envelope)
     {
         using var writer = new StringWriter();
-        new SummaryReportRenderer().Render(envelope, writer);
+        new SummaryReportRenderer(TerminalCharset.Ascii).Render(envelope, writer);
 
         return writer.ToString().TrimEnd();
     }

@@ -137,7 +137,7 @@ public sealed class DocumentedSampleTests
         if (extent == "summary")
         {
             using var writer = new StringWriter();
-            new SummaryReportRenderer().Render(envelope, writer);
+            new SummaryReportRenderer(TerminalCharset.Ascii).Render(envelope, writer);
 
             return Normalise(writer.ToString()).TrimEnd('\n');
         }

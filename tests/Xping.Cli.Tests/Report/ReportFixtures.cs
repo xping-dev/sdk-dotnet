@@ -84,12 +84,32 @@ internal static class ReportFixtures
         "history-below-floor",
         "history-cluster-member",
         "history-store",
-        "history-repro"
+        "history-repro",
+        "hostile-text",
+        "hostile-text-detail",
+        "hostile-text-history"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
     /// <returns>The keys.</returns>
     public static TheoryData<string> Names() => [.. Keys];
+
+    /// <summary>
+    /// Gets the fixtures whose recorded text carries control, bidi and non-ASCII characters (§3.4).
+    /// </summary>
+    public static IReadOnlySet<string> HostileKeys { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { "hostile-text", "hostile-text-detail", "hostile-text-history" };
+
+    /// <summary>
+    /// The keys whose recorded text is printable ASCII, as a theory source.
+    /// </summary>
+    /// <returns>The keys.</returns>
+    /// <remarks>
+    /// For the sweeps that hold the whole rendering to a charset. A hostile fixture's commands keep
+    /// the <c>é</c> its test name carries, and its Unicode rendering prints one; the hostile-envelope
+    /// test is where those are checked (D7).
+    /// </remarks>
+    public static TheoryData<string> PlainNames() => [.. Keys.Where(key => !HostileKeys.Contains(key))];
 
     /// <summary>
     /// Returns the envelope a key names.
@@ -272,6 +292,9 @@ internal static class ReportFixtures
         "history-cluster-member" => HistoryClusterMember(),
         "history-store" => HistoryFromStore(),
         "history-repro" => HistoryRepro(),
+        "hostile-text" => HostileText(),
+        "hostile-text-detail" => HostileTextDetail(),
+        "hostile-text-history" => HostileTextHistory(),
         _ when DetailKind(name) is { } kind => Detail(Envelope(Measured(kind)), 1),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
@@ -1118,6 +1141,99 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun);
+    }
+
+    // ---------------------------------------------------------------------
+    // Hostile text — D7, §3.4
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The method name of the store's hostile test: an SGR escape, a newline, an <c>é</c> and a
+    /// right-to-left override, each where it lands mid-name.
+    /// </summary>
+    internal const string HostileMethod = "Refund\u001b[31m\nCaf\u00e9\u202eTotal";
+
+    /// <summary>
+    /// The full report over a store whose one flaky test has <see cref="HostileMethod"/> for a name
+    /// and a message carrying the same characters.
+    /// </summary>
+    private static ReportEnvelope HostileText()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            LatestRunAnalyzer.Analyze(context, analysis.Findings));
+    }
+
+    /// <summary>The hostile test's finding, selected as <c>--id</c> selects it.</summary>
+    private static ReportEnvelope HostileTextDetail()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        Finding finding = FindingOrder.WithSiblingsAdjacent(analysis.Findings)
+            .First(f => f.Subject.Tests.Any(t => t.FullyQualifiedName.Contains(HostileMethod, StringComparison.Ordinal)));
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            finding.Id,
+            shortFingerprint: fingerprint =>
+                TestResolver.ShortFingerprintOf(context.Window.Sessions, context.Revision!.Assembly!, fingerprint));
+    }
+
+    /// <summary>The hostile test's history, its name typed as <c>--test</c> would receive it.</summary>
+    private static ReportEnvelope HostileTextHistory()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        return HistoryThroughPipeline(context, analysis, HostileMethod);
+    }
+
+    /// <summary>
+    /// Writes twenty runs in which the hostile test fails every fourth, and runs every provider.
+    /// </summary>
+    /// <remarks>
+    /// The message carries the same characters as the name. The normaliser folds its newline into a
+    /// space (§3.4), so the escape, the <c>é</c> and the override are what reach the output.
+    /// </remarks>
+    private static (AnalysisContext Context, AnalysisResult Analysis) AnalyzeHostileStore()
+    {
+        const int runs = 20;
+        var sessions = new List<Sdk.Core.Models.TestSession>();
+
+        for (int ordinal = 0; ordinal < runs; ordinal++)
+        {
+            bool fails = ordinal % 4 == 3;
+
+            List<Sdk.Core.Models.Executions.TestExecution> executions =
+            [
+                TestSessionFactory.Execution(
+                    HostileMethod,
+                    fails ? Sdk.Core.Models.Executions.TestOutcome.Failed : Sdk.Core.Models.Executions.TestOutcome.Passed,
+                    exceptionType: fails ? "System.InvalidOperationException" : null,
+                    errorMessage: fails ? "refund \u001b[31mdeclined\u001b[0m\nfor caf\u00e9 \u202eorder" : null),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}"))
+            ];
+
+            sessions.Add(TestSessionFactory.Session(
+                ordinal, executions, sha: "eab9867a1c40", branch: "main", customProperties: StoreRunner));
+        }
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+
+        return (context, Analyze(context));
     }
 
     /// <summary>What the SDK records on each of the store's sessions, so its repro is the builder's.</summary>

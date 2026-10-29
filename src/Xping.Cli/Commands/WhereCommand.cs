@@ -5,6 +5,8 @@
 
 using System.Globalization;
 using Xping.Cli.Hosting;
+using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -34,7 +36,12 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             return 1;
         }
 
-        output.WriteLine(store.StorePath);
+        // What the report would print a recorded name with on this stream (D7). A path or an assembly
+        // name is whatever the file system and the test project were given.
+        TerminalCharset charset = OutputCapabilities.Resolve(
+            forceAscii: false, noColor: true, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable).Glyphs.Charset;
+
+        output.WriteLine(TerminalText.Printable(store.StorePath, charset));
 
         string? sessionsDirectory = store.SessionsPath;
         if (sessionsDirectory == null || !Directory.Exists(sessionsDirectory))
@@ -86,7 +93,7 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             output.WriteLine(string.Format(
                 CultureInfo.InvariantCulture,
                 "  {0,-40} {1,4} {2}  last {3:yyyy-MM-dd HH:mm} UTC",
-                Truncate(assembly.Name, 40),
+                Truncate(TerminalText.Printable(assembly.Name, charset), 40),
                 assembly.Runs,
                 assembly.Runs == 1 ? "run " : "runs",
                 assembly.LastStartedAt));

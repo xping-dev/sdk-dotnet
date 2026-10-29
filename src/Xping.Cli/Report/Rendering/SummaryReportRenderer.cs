@@ -6,6 +6,7 @@
 using System.Globalization;
 
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Reporting;
 
 namespace Xping.Cli.Report.Rendering;
 
@@ -23,7 +24,8 @@ namespace Xping.Cli.Report.Rendering;
 /// go with it.
 /// </para>
 /// </remarks>
-internal sealed class SummaryReportRenderer : IReportRenderer
+/// <param name="charset">What recorded text may keep: the glyph set the text report would use.</param>
+internal sealed class SummaryReportRenderer(TerminalCharset charset) : IReportRenderer
 {
     /// <inheritdoc/>
     public void Render(ReportEnvelope envelope, TextWriter output)
@@ -38,7 +40,7 @@ internal sealed class SummaryReportRenderer : IReportRenderer
             ? "1 run"
             : $"{sessions.ToString(CultureInfo.InvariantCulture)} runs";
 
-        string scope = envelope.Context?.Assembly is { Length: > 0 } assembly
+        string scope = Recorded(envelope.Context?.Assembly) is { Length: > 0 } assembly
             ? $" of {assembly}"
             : string.Empty;
 
@@ -50,4 +52,7 @@ internal sealed class SummaryReportRenderer : IReportRenderer
 
         output.WriteLine($"Xping: {ReportVocabulary.FindingsPhrase(summary)} in {runs}{scope}{newFailures}");
     }
+
+    /// <summary>Reads a value the envelope recorded, made safe for the terminal (D7).</summary>
+    private string? Recorded(string? value) => value == null ? null : TerminalText.Printable(value, charset);
 }

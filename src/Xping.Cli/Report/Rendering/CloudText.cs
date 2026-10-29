@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Reporting;
 
 namespace Xping.Cli.Report.Rendering;
 
@@ -16,6 +17,10 @@ namespace Xping.Cli.Report.Rendering;
 /// strings, so that in JSON every Cloud value stays under a <c>cloud</c> object and the local
 /// <c>contrast</c> and <c>metrics</c> are never mixed with it. Every phrase says "cloud" or
 /// "confidence", so no Cloud figure can be read as a local statistic.
+/// <para>
+/// Every word read from the DTO goes through <see cref="Recorded"/>: the Cloud is another writer of
+/// text this process prints, and is trusted no more than the local store (D7).
+/// </para>
 /// </remarks>
 internal static class CloudText
 {
@@ -33,13 +38,13 @@ internal static class CloudText
     /// category, <c>confidence 0.62</c>; <see langword="null"/> when the Cloud has no score worth
     /// showing.
     /// </summary>
-    public static string? Trailer(CloudTestDto? cloud, string separator, bool withCategory)
+    public static string? Trailer(CloudTestDto? cloud, string separator, bool withCategory, TerminalCharset charset)
     {
         if (!HasScore(cloud))
             return null;
 
         string score = $"confidence {Score(cloud!.Confidence!.Value)}";
-        return withCategory && Words(cloud.Category) is { } category ? $"{score} {separator} {category}" : score;
+        return withCategory && Words(cloud.Category, charset) is { } category ? $"{score} {separator} {category}" : score;
     }
 
     /// <summary>
@@ -52,20 +57,20 @@ internal static class CloudText
     /// <summary>
     /// The detail view's labelled pairs; empty without Cloud data.
     /// </summary>
-    public static IReadOnlyList<(string Label, string? Value)> Pairs(CloudTestDto? cloud)
+    public static IReadOnlyList<(string Label, string? Value)> Pairs(CloudTestDto? cloud, TerminalCharset charset)
     {
         if (cloud is null)
             return [];
 
         string? confidence = cloud.Confidence is { } score
-            ? Words(cloud.Category) is { } category ? $"{Score(score)} ({category})" : Score(score)
+            ? Words(cloud.Category, charset) is { } category ? $"{Score(score)} ({category})" : Score(score)
             : null;
 
         return
         [
             ("cloud confidence", confidence),
-            ("cloud evidence", $"{Words(cloud.EvidenceLevel)}, {Runs(cloud.Runs)}"),
-            ("cloud trend", Words(cloud.Trend))
+            ("cloud evidence", $"{Words(cloud.EvidenceLevel, charset)}, {Runs(cloud.Runs)}"),
+            ("cloud trend", Words(cloud.Trend, charset))
         ];
     }
 
@@ -75,6 +80,9 @@ internal static class CloudText
         runs == 1 ? "1 run" : $"{runs.ToString(CultureInfo.InvariantCulture)} runs";
 
     /// <summary><c>moderately-reliable</c> → <c>moderately reliable</c>.</summary>
-    private static string? Words(string? kebab) =>
-        string.IsNullOrEmpty(kebab) ? null : kebab.Replace('-', ' ');
+    private static string? Words(string? kebab, TerminalCharset charset) =>
+        string.IsNullOrEmpty(kebab) ? null : Recorded(kebab, charset).Replace('-', ' ');
+
+    /// <summary>A value the Cloud sent, made safe for the terminal.</summary>
+    private static string Recorded(string value, TerminalCharset charset) => TerminalText.Printable(value, charset);
 }
