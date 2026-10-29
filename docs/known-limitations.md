@@ -152,7 +152,8 @@ vstest's environment, and leaves it out rather than guess.
 ### Timeouts
 
 Xping records a test the framework killed for overrunning its timeout as `Outcome = Timeout` rather
-than `Failed`, and captures the budget the test declared alongside it. Two cases are not observable.
+than `Failed`, and captures the budget the test declared alongside it. The cases below are recorded
+differently or not at all.
 
 #### A Hang That Takes Down The Test Host Is Not Recorded
 
@@ -175,6 +176,21 @@ public async Task MyTest(CancellationToken cancellationToken)
     await Task.Delay(5000, cancellationToken);
 }
 ```
+
+#### MSTest's Cooperative `[Timeout]` Is Recorded As Failed Or Passed
+
+With `[Timeout(..., CooperativeCancellation = true)]`, MSTest cancels the test's token instead of
+abandoning the test. By the time `[TestCleanup]` runs, MSTest reports nothing that marks the test as
+timed out:
+
+- A test that observes the token ends with an `OperationCanceledException`. Xping records it as
+  `Failed`.
+- A test that ignores the token runs to completion. MSTest passes it, and Xping records `Passed`.
+
+A plain `[Timeout]` (the default, non-cooperative) is recorded as `Timeout`, for sync and async tests
+alike.
+
+**Affected Versions**: MSTest 3.8 and later
 
 #### xUnit v2 Applies A Timeout Only To Async Tests
 

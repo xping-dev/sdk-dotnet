@@ -62,6 +62,25 @@ public class CalculatorTests : XpingTestBase
         Assert.IsNotNull(response);
     }
 
+    /// <summary>
+    /// TIMEOUT TEST: async call to a dependency that never answers.
+    /// </summary>
+    /// <remarks>
+    /// The async version of the hang above: the test awaits the call instead of blocking on it. It
+    /// passes no token, so <c>[Timeout]</c> abandons the test rather than cancelling it, and Xping
+    /// records it as <c>Outcome = Timeout</c> with the 500 ms budget.
+    /// </remarks>
+    [TestMethod("Verifies that an async test killed for overrunning its timeout is tracked as a timeout")]
+    [TestCategory("Unit")]
+    [TestCategory("Timeout")]
+    [Timeout(500)]
+    public async Task TimeoutTest_UnresponsiveDependency_AwaitsForever()
+    {
+        var response = await UnresponsiveService.FetchAsync();
+
+        Assert.IsNotNull(response);
+    }
+
     [TestMethod]
     [TestCategory("Unit")]
     [TestCategory("Fast")]

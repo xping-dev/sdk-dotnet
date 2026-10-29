@@ -236,11 +236,15 @@ MSTest test outcomes are mapped to Xping outcomes:
 | Passed | Passed |
 | Failed | Failed |
 | Inconclusive | Inconclusive |
-| Timeout | Failed |
+| Stopped by `[Timeout]` | Timeout |
 | Aborted | Failed |
 | Unknown | NotExecuted |
 | NotRunnable | NotExecuted |
-| InProgress | NotExecuted |
+
+A test stopped by `[Timeout]` is recorded as `Timeout`, together with the budget it declared. With
+`CooperativeCancellation = true`, a timed-out test is recorded as `Failed` if it observes its token,
+or `Passed` if it ignores the token (MSTest passes it too). See
+[Known Limitations](https://docs.xping.io/known-limitations.html#timeouts).
 
 ## Skipped Tests
 

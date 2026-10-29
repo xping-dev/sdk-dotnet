@@ -33,12 +33,11 @@ public sealed class MtpRunTests : IDisposable
     }
 
     // A pass, a thrown exception, and a test its framework cancels for overrunning a 500 ms budget.
-    // MSTest leaves its timeout out: it records one as notExecuted on either runner (#289).
     [Theory]
     [InlineData("SampleApp.NUnit", TestRunner.MtpDotnetTest, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     [InlineData("SampleApp.NUnit", TestRunner.MtpExecutable, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
-    [InlineData("SampleApp.MSTest", TestRunner.MtpDotnetTest, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", null)]
-    [InlineData("SampleApp.MSTest", TestRunner.MtpExecutable, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", null)]
+    [InlineData("SampleApp.MSTest", TestRunner.MtpDotnetTest, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
+    [InlineData("SampleApp.MSTest", TestRunner.MtpExecutable, "Add_TwoNumbers_ReturnsSum", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     [InlineData("SampleApp.XUnitV3", TestRunner.MtpDotnetTest, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     public async Task EveryTestIsRecordedStoredAndUploaded(
