@@ -167,15 +167,16 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
-    public void FinalizeOnProcessExit_WithoutMaterializedSession_LeavesContextAlone()
+    public void FinalizeOnProcessExit_AfterInitializeAlone_FinalizesAndShutsDown()
     {
-        // Initialize() only registers the lazy wrapper. Nothing ran, so there is nothing to
-        // finalize, and building a host on the way out of the process would be pure cost.
+        // Initialize() builds the host itself, so its cost is not charged to the first test's
+        // [Timeout] budget (#289). The safety net therefore has a session to end even before any
+        // test is recorded.
         XpingContext.Initialize(ScratchConfiguration());
 
         XpingContext.FinalizeOnProcessExit(_ => throw new InvalidOperationException("unexpected process failure"));
 
-        Assert.True(XpingContext.IsInitialized);
+        Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]

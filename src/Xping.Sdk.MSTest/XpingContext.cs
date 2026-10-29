@@ -37,8 +37,7 @@ public sealed class XpingContext : XpingContextOrchestrator
 
     /// <summary>
     /// Gets a value indicating whether <see cref="Initialize()"/> has been called and the context
-    /// has not yet been shut down. Returns <see langword="true"/> as soon as <see cref="Initialize()"/>
-    /// sets the internal lazy wrapper, even before the DI host is fully built on first use.
+    /// has not yet been shut down. Returns <see langword="true"/> even when building the DI host failed.
     /// </summary>
     public static bool IsInitialized => Context.IsInitialized;
 
@@ -59,6 +58,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     {
         EnsureProcessExitSafetyNetRegistered();
         Context.Initialize(null);
+        BuildHost();
     }
 
     /// <summary>
@@ -69,6 +69,24 @@ public sealed class XpingContext : XpingContextOrchestrator
     {
         EnsureProcessExitSafetyNetRegistered();
         Context.Initialize(configuration.RequireNotNull());
+        BuildHost();
+    }
+
+    // Builds the host here rather than in the first test's [TestInitialize]. MSTest's [Timeout] clock
+    // includes [TestInitialize], and XpingTestBase times a test from the end of it, so the build cost
+    // would otherwise be missing from a timed-out first test and eat into its budget. A failure is not
+    // lost: the Lazy caches the exception, and XpingTestBase hits it again when it resolves its
+    // services, where strict mode already fails the run.
+    private static void BuildHost()
+    {
+        try
+        {
+            _ = Context.Instance;
+        }
+        catch
+        {
+            // Rethrown from the cached Lazy on first use; see above.
+        }
     }
 
     /// <summary>
@@ -93,7 +111,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </exception>
     public static XpingBaseServices GetBaseServices()
     {
-        // Builds the host on first access: Initialize() only installs the context.
+        // Initialize() has already built the host, or failed to; a failure is rethrown here.
         return Context.Instance.ResolveBaseServices();
     }
 

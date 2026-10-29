@@ -59,19 +59,12 @@ public abstract class XpingTestBase
     [TestInitialize]
     public void XpingTestInitialize()
     {
-        // Taken before the SDK initializes: MSTest's [Timeout] clock starts before [TestInitialize],
-        // so a timed-out test is only recorded with a duration close to its budget if the SDK's own
-        // startup cost (paid by the first test) is counted too.
-        _startTime = DateTime.UtcNow;
-        _startTimestamp = Stopwatch.GetTimestamp();
-
         // Self-initialize if XpingAssemblyInitialize was not included in the test project.
         if (!XpingContext.IsInitialized)
             XpingContext.Initialize();
 
-        // Resolve and cache services once per test class instance. GetBaseServices()
-        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
-        // later calls on the same instance are a no-op field read.
+        // Resolve and cache services once per test class instance, so later calls on the same
+        // instance are a no-op field read. A host that failed to build throws here.
         try
         {
             _services ??= XpingContext.GetBaseServices();
@@ -88,6 +81,8 @@ public abstract class XpingTestBase
             Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
         }
 
+        _startTime = DateTime.UtcNow;
+        _startTimestamp = Stopwatch.GetTimestamp();
         _workerKey = Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
 
         try

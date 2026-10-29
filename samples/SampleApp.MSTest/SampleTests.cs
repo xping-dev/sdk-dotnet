@@ -66,8 +66,8 @@ public class CalculatorTests : XpingTestBase
     /// TIMEOUT TEST: async call to a dependency that never answers.
     /// </summary>
     /// <remarks>
-    /// The async version of the hang above: the test awaits the call instead of blocking on it. It
-    /// passes no token, so <c>[Timeout]</c> abandons the test rather than cancelling it, and Xping
+    /// The async version of the hang above: the test awaits the call instead of blocking on it. A
+    /// plain <c>[Timeout]</c> abandons the test rather than cancelling it, async or not, and Xping
     /// records it as <c>Outcome = Timeout</c> with the 500 ms budget.
     /// </remarks>
     [TestMethod("Verifies that an async test killed for overrunning its timeout is tracked as a timeout")]
@@ -79,6 +79,42 @@ public class CalculatorTests : XpingTestBase
         var response = await UnresponsiveService.FetchAsync();
 
         Assert.IsNotNull(response);
+    }
+
+    /// <summary>
+    /// COOPERATIVE TIMEOUT: the test observes the token MSTest cancels at its budget.
+    /// </summary>
+    /// <remarks>
+    /// With <c>CooperativeCancellation = true</c>, MSTest cancels the test's token instead of
+    /// abandoning the test. The test ends with an <see cref="OperationCanceledException"/>, and
+    /// nothing in <c>[TestCleanup]</c> tells it apart from any other failure, so Xping records it as
+    /// <c>Outcome = Failed</c>. See docs/known-limitations.md.
+    /// </remarks>
+    [TestMethod("Shows that a cooperative timeout which observes its token is tracked as failed")]
+    [TestCategory("Unit")]
+    [TestCategory("Timeout")]
+    [Timeout(500, CooperativeCancellation = true)]
+    public async Task CooperativeTimeoutTest_ObservesToken()
+    {
+        var response = await UnresponsiveService.FetchAsync(TestContext!.CancellationToken);
+
+        Assert.IsNotNull(response);
+    }
+
+    /// <summary>
+    /// COOPERATIVE TIMEOUT: the test overruns its budget and ignores the cancelled token.
+    /// </summary>
+    /// <remarks>
+    /// MSTest passes a cooperative test that runs to completion, even past its budget, and Xping
+    /// records it as <c>Outcome = Passed</c> to match. See docs/known-limitations.md.
+    /// </remarks>
+    [TestMethod("Shows that a cooperative timeout which ignores its token is tracked as passed")]
+    [TestCategory("Unit")]
+    [TestCategory("Timeout")]
+    [Timeout(500, CooperativeCancellation = true)]
+    public void CooperativeTimeoutTest_IgnoresToken()
+    {
+        Thread.Sleep(1000);
     }
 
     [TestMethod]
