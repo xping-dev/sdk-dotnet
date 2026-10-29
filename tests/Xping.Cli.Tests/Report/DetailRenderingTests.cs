@@ -125,7 +125,7 @@ public sealed class DetailRenderingTests
 
         Assert.Equal("History: " + detail.Selection!.History, lines[^3]);
         Assert.Equal("Repro: " + repro.Command, lines[^2]);
-        Assert.Contains("    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs", fenced);
+        Assert.Contains("    repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs", fenced);
         Assert.DoesNotContain(fenced, l => l.Contains("Repro:", StringComparison.Ordinal));
     }
 

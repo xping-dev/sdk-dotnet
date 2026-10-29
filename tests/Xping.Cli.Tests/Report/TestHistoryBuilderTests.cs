@@ -232,5 +232,68 @@ public sealed class TestHistoryBuilderTests
         Assert.Null(history.FindingsWithheld);
         Assert.Empty(history.FindingRows);
         Assert.Empty(history.Candidates);
+        Assert.Empty(history.FailureModes);
+    }
+
+    /// <summary>
+    /// The failure modes count every failed attempt, the first attempt of a run that passed on retry
+    /// and a timeout included: the population the timeline draws, not a run's verdict.
+    /// </summary>
+    [Fact]
+    public void FailureModesCountEveryFailedAttemptOfTheWindow()
+    {
+        // Neither failure recorded any detail, so both carry the test's one unavailable signature.
+        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(Mixed(), Target, Match).FailureModes);
+
+        Assert.True(mode.Unavailable);
+        Assert.Equal(2, mode.Occurrences);
+        Assert.Equal(2, mode.FirstSeenSessionsAgo);
+        Assert.Equal(TestSessionFactory.Session(2).StartedAt, mode.FirstSeenAt);
+        Assert.True(mode.FirstSeenAfterWindowStart);
+        Assert.False(mode.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// The history's modes are the index's, so a mode carries the hash a finding's evidence names it by.
+    /// </summary>
+    [Fact]
+    public void FailureModesAreTheIndexsSignaturesMostFrequentFirst()
+    {
+        static TestExecution Failing(string message) => TestSessionFactory.Execution(
+            Target,
+            TestOutcome.Failed,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: message,
+            stackTrace: $"   at MyApp.Tests.SampleTests.{Target}()");
+
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, [Failing("expected apple")]),
+            Run(1, [Failing("expected pear")]),
+            Run(2, [Failing("expected pear")]),
+            Run(3, [TestSessionFactory.Execution(Target)]));
+
+        IReadOnlyList<FailureModeDto> modes = TestHistoryBuilder.Found(context, Target, Match).FailureModes;
+
+        Assert.Equal(
+            context.Signatures.SignaturesOf($"fp-{Target}").Select(o => o.Signature.Hash),
+            modes.Select(m => m.Hash));
+        Assert.Equal(["expected pear", "expected apple"], modes.Select(m => m.Message));
+        Assert.Equal([2, 1], modes.Select(m => m.Occurrences));
+        Assert.Equal([$"MyApp.Tests.SampleTests.{Target}()"], modes[0].Frames);
+        Assert.False(modes[0].FramesDegraded);
+
+        // Pear first appeared after the window opened; apple was there in its oldest run.
+        Assert.True(modes[0].FirstSeenAfterWindowStart);
+        Assert.False(modes[1].FirstSeenAfterWindowStart);
+    }
+
+    [Fact]
+    public void ATestThatNeverFailedHasNoFailureModes()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, [TestSessionFactory.Execution(Target)]),
+            Run(1, [TestSessionFactory.Execution(Target)]));
+
+        Assert.Empty(TestHistoryBuilder.Found(context, Target, Match).FailureModes);
     }
 }

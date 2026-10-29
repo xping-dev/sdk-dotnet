@@ -505,6 +505,7 @@ internal static class ReportFixtures
             Population = ToCamelCase(PopulationRules.For(kind).ToString()),
             Headline = headline,
             Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence),
             Repro = Repro(kind, reproEvidence, finding.Subject, VSTest("tests/MyApp.Tests/MyApp.Tests.csproj"))
         };
     }
@@ -1021,6 +1022,7 @@ internal static class ReportFixtures
             sessions,
             counts,
             duration,
+            [],
             FindingsWithheld: null,
             [.. about.Select((f, i) => new SameSubjectDto(f.Id, f.Kind, rows[i]))],
             []);
@@ -1576,6 +1578,7 @@ internal static class ReportFixtures
             null,
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
+            [],
             null,
             "xping report --id f_2a91 --assembly MyApp.Tests",
             null);

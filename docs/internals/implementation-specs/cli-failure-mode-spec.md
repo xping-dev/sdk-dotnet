@@ -17,6 +17,24 @@ Identical to `cli-report-format-spec.md`. This document is ground truth. An impl
 conflict stops and reports rather than adapting. Decisions and the data contract change by
 amendment only, committed before dependent code. **OQ** sections are gates.
 
+### Amendment 1 — from the P0 inventory
+
+P0 checked every citation against source and listed the tests and output sites the phases touch.
+These changes are applied in place in the sections named.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D7: `FlowFailures.Printable` is replaced by `TerminalText.Printable`, so one definition serves the whole CLI | Auth is out of D7. `FlowFailures.Printable` drops and trims rather than replacing, `DeviceFlowTests.cs:162-163` and `LoginDeviceTests.cs:119` pin that, and its result reaches auth's `--json` output as `oauthError`. Replacing it would change JSON, which D7 rules out. Auth is not report text and keeps its own tested rule | D7, P2 |
+| B | D7's covered values and stderr list | Added, in the text renderer: `Summary.FailedProviders` (`TextReportRenderer.cs:404`), metric **labels** as well as values (`:518`), `Repro.Expectation` (`:519`, `:1411`), the latest run's local `Contrast` (`:1160`), `SameSubject` ids (`:526`). Added, on stderr in `ReportCommand`: `TestResolver.OutsideWindowMessage` (`:200-202`), `CloudHint.Text` (`:472`), the window resolver's `FailureDetail` (`:533`, `:541-542`), the assembly and store path (`:538-539`, `:635`), `LookupWarnings.AheadAssemblies` (`:577-579`). On stdout, `WriteScopeNotice`'s assembly (`:752`). Outside `report`: the rejected `--project` echo (`Program.cs:601`) and `xping where`'s assembly names and store path (`WhereCommand.cs:37`, `:86-90`), with the `Unicode` or `Ascii` charset their output would use | D7, P2 |
+| C | D7: `EvidenceLevel` is a vocabulary value the hostile-envelope test keeps | It is printed raw (`TextReportRenderer.cs:1367`, `$"evidence {finding.EvidenceLevel}"`), so it reads through `Recorded` and the test rewrites it. Only kind, severity, population and status keep their values | D7 |
+| D | D7: the hostile-envelope test rewrites string properties and list elements | It also rewrites dictionary **keys** and values of string type. `Summary.NotMeasured` is keyed by kind and printed through `LabelFor` (`:335`), which echoes an unknown key as-is. That site reads the label through `Recorded`, so `LabelFor`'s fallback can't pass raw text through | D7 |
+| E | D4: the population is every failed attempt | Stated: a failed attempt includes a timed-out one (`TestOutcomeExtensions.IsFailure`). `--test` lists modes from timed-out attempts, which `--id` never does, because `TimingOut` carries no signature (`FailureModeProvider.cs:743-747`). The `--test` block describes how the test failed, and a timeout is one way | D4 |
+| F | §3.5 / P1: the D6 golden diff is "the pairs removed" | In every Flaky detail golden, `failure mode 1` (14 characters) was the longest label. Without it, the block's column narrows by one, and every pair in it moves one column left. That is part of the expected diff. AlwaysFailing does not shift, because `runs affected` (13) is longer than `failure mode` (12). No `history-*` golden carries a D6 pair | §3.5, P1 |
+| G | P1's test list | Adds: `FailureModeProviderTests.cs:423`, `:456` and `:475` (they assert the D6 pairs) are rewritten to assert `failureModes`. The positional `FindingDto` in `ReportFixtures.cs:1565-1581` and the positional `TestHistoryDto`s in `ReportFixtures.cs:1017-1026` and `HistoryRenderingTests.cs:363-372` gain the new field. The JSON sample at `docs/cli/command-reference.md:957-959` and `:889` move in P6 | P1, P6 |
+| H | §1.1: the normalised message is one line, lowercased, at most 4096 characters, `Normalise` at `:107-177` | One line. Lowercased outside quoted literals, which keep their case (`MessageNormaliser.cs:131-144`). Cut to 4096 **before** token substitution (`:119-120`), so the result can exceed 4096 slightly. `Normalise` is `:107-150`, `Substitute` `:161-178`. D5's 6-line cap is unaffected | §1.1 |
+| I | §1.1: `ReportCommand.cs:318-323` | The context is built at `:329` and passed to the history callback at `:376` | §1.1 |
+| J | — | `StackFrameExtractor.cs:14` documents frames as "outermost first". They are kept in trace order, which puts the throw site first. P1 corrects the comment to "innermost first, as the trace lists them" | §1.1, P1 |
+
 ---
 
 ## 1. Ground truth
@@ -43,9 +61,9 @@ Every claim here was read in source at the cited line.
   Otherwise they are framework frames with `Degraded` set. Each is a method signature with file and
   line removed, e.g. `MyApp.Services.OrderService.Place(Order order)`, innermost first.
 - **Messages.** `SignatureView.Message` is `MessageNormaliser.Normalise`'s output
-  (`MessageNormaliser.cs:107-177`): one line, whitespace collapsed (`:123`), run-varying values
-  replaced by tokens such as `<num>`, lowercased (`:177`), at most `MaxLength` = 4096 characters
-  (`:46`). The raw message in `FailureExemplar.ErrorMessage` is a different value: multi-line,
+  (`MessageNormaliser.cs:107-150`): one line, whitespace collapsed (`:123`), run-varying values
+  replaced by tokens such as `<num>`, lowercased outside quoted literals (`:131-144`), cut to `MaxLength` =
+  4096 characters before substitution (`:46`, `:119-120`). The raw message in `FailureExemplar.ErrorMessage` is a different value: multi-line,
   elided at `ExemplarCharBudget` = 500 (`EvidenceText.cs:26-34`). It is not shown here.
 - **First seen and count are counted over different failures** for `Flaky` and `AlwaysFailing`.
   `Occurrences` counts the failures that survived discounting: environmental sessions and
@@ -65,7 +83,7 @@ Every claim here was read in source at the cited line.
   field names. The renderer may not read `evidence`: "every value it prints was resolved before it
   was called" (`src/Xping.Cli/Report/Rendering/IReportRenderer.cs:15-18`).
 - **Per-test signatures for `--test`.** `TestHistoryBuilder.Found` receives the `AnalysisContext`
-  over the D5 window (`src/Xping.Cli/Commands/ReportCommand.cs:178`, `:318-323`).
+  over the D5 window (`src/Xping.Cli/Commands/ReportCommand.cs:178`, `:329`, `:376`).
   `context.Signatures.SignaturesOf(fingerprint)` (`SignatureIndex.cs:128-131`) returns that test's
   signatures over every failed attempt in the window, nothing discounted, ordered by count, then
   recency, then hash (`:232-245`). The hashes are the ones the providers use.
@@ -163,7 +181,8 @@ mode's oldest. It is a fix, with two regression tests:
 
 - **Population:** every failed attempt of this test over the D5 window, nothing discounted. That is
   the population the RUNS timeline draws: a failed first attempt that passed on retry is in it, as
-  it is in the timeline's `✗→✓`.
+  it is in the timeline's `✗→✓`. A timed-out attempt is a failed one (`IsFailure`), so `--test`
+  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E).
 - **Order:** the index's order: count, then recency, then hash.
 - **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
   `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
@@ -272,9 +291,7 @@ by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCh
   and replacing an `é` in an FQN would make it select nothing. A control or bidi character is never
   part of a command that works, so replacing it costs nothing.
 
-The auth path's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`), which strips
-`char.IsControl` characters, is replaced by `TerminalText.Printable(text, Unicode)`. One definition
-of "safe to print" serves the whole CLI.
+Auth's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`) is left alone (Amendment 1A).
 
 **One choke point in the renderer.** No text renderer appends a DTO string directly.
 `TextReportRenderer`, `SummaryReportRenderer` and `CloudText` read every recorded value through one
@@ -284,9 +301,10 @@ does not go through them. A new field is safe only if it is read through one of 
 rule is enforced by a test, not by the list below:
 
 - **The hostile-envelope test** (P2) takes every fixture envelope. It rewrites, by reflection over
-  the DTO graph, every `string` property and every `string` element of a list to append
+  the DTO graph, every `string` property, every `string` element of a list, and every `string` key and value
+  of a dictionary to append
   `\u001b[31m\u202e\u2028é`. Values the renderer maps through `ReportVocabulary` (kind,
-  severity, population, evidence level, status) keep their own, because a fixture with an
+  severity, population, status) keep their own, because a fixture with an
   unknown kind tests nothing about recorded text. It renders the result in both glyph sets with
   colour off, and asserts:
   - no output character is in the always-unsafe set, apart from the renderer's own `\n`/`\r`;
@@ -299,10 +317,11 @@ The values this covers today, for P0 to check against:
 - the header: assembly, branch, sha;
 - subject names, cause labels, member names;
 - locations and the trailer's path;
-- metric values, including retry mechanisms and declared reasons;
-- headlines and annotations;
-- the finding id and the selection id;
-- latest-run failure summaries and shas;
+- metric labels and values, including retry mechanisms and declared reasons;
+- headlines, annotations, `repro` sentences, the evidence level;
+- the finding id, the selection id, same-subject ids;
+- `Summary.FailedProviders` and the not-measured kinds;
+- latest-run failure summaries, contrasts and shas;
 - the `--test` query, FQN, short fingerprint, `FindingsWithheld`, and every RUNS row's sha
   (`TextReportRenderer.cs:711`);
 - every `FailureModeDto` field;
@@ -319,9 +338,15 @@ their assertion over every existing fixture, none of which has a non-ASCII comma
 test also rejects every control character but the renderer's `\n` and `\r`. The hostile-envelope
 test is where the command exception is checked.
 
-**Stderr.** `ReportCommand`'s messages that echo the query, candidate FQNs or assemblies
-(`TestResolver.NotFoundMessage`, `WriteAmbiguous`, the not-reported message) apply `Printable` with
-the charset the report would use. The commands they print apply `Command`.
+**Messages outside the renderer.** These apply `Printable` with the charset the report would use,
+and any command in them applies `Command`:
+
+- `ReportCommand`'s messages that echo the query, candidates, assemblies, the store path, a
+  `--since` value or a sha: `TestResolver.NotFoundMessage`, `OutsideWindowMessage`,
+  `WriteAmbiguous`, the not-reported message, `CloudHint.Text`, the window resolver's
+  `FailureDetail`, `LookupWarnings.AheadAssemblies`, `WriteScopeNotice`;
+- `Program.cs:601`'s echo of a rejected `--project`;
+- `xping where`'s assembly names and store path.
 
 **Text output only.** JSON is unchanged: `ReportJsonOptions.Default` uses `JavaScriptEncoder.Default`,
 which escapes controls and non-ASCII, and a consumer needs the recorded value.
