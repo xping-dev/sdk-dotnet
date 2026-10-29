@@ -17,6 +17,8 @@ using Xping.Cli.Configuration;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli;
@@ -374,15 +376,25 @@ internal static class Program
             Description = "Resolve the store from this directory"
         };
 
-        Option<string?> projectOption = new("--project")
-        {
-            Description = "Read Cloud data from this Xping Cloud project key",
-            CustomParser = ParseProjectKey
-        };
-
         Option<bool> asciiOption = new("--ascii")
         {
             Description = "Force ASCII output"
+        };
+
+        ConsoleIO io = services.GetRequiredService<ConsoleIO>();
+
+        Option<string?> projectOption = new("--project")
+        {
+            Description = "Read Cloud data from this Xping Cloud project key",
+
+            // The rejection echoes the value in the glyph set the report would have used (D7).
+            CustomParser = result => ParseProjectKey(
+                result,
+                OutputCapabilities.Resolve(
+                    forceAscii: result.GetValue(asciiOption),
+                    noColor: false,
+                    redirected: !io.IsTerminal,
+                    Environment.GetEnvironmentVariable).Glyphs.Charset)
         };
 
         // NO_COLOR is honoured too; the flag exists for the caller who cannot set an environment
@@ -592,13 +604,13 @@ internal static class Program
     /// Parses a Cloud project key: anything a URL path segment can carry once escaped, but not a
     /// path, query or fragment of its own.
     /// </summary>
-    private static string? ParseProjectKey(ArgumentResult result)
+    private static string? ParseProjectKey(ArgumentResult result, TerminalCharset charset)
     {
         string raw = result.Tokens.Count == 1 ? result.Tokens[0].Value.Trim() : string.Empty;
 
         if (raw.Length == 0 || raw.Length > 200 || raw.Any(c => char.IsControl(c) || c is '/' or '\\' or '?' or '#'))
         {
-            result.AddError($"--project expects an Xping Cloud project key, got '{raw}'.");
+            result.AddError($"--project expects an Xping Cloud project key, got '{TerminalText.Printable(raw, charset)}'.");
             return null;
         }
 

@@ -5,6 +5,8 @@
 
 using System.Globalization;
 using Xping.Cli.Hosting;
+using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -34,7 +36,12 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             return 1;
         }
 
-        output.WriteLine(store.StorePath);
+        // What the report would print a recorded name with on this stream (D7). A path or an assembly
+        // name is whatever the file system and the test project were given.
+        ReportGlyphs glyphs = OutputCapabilities.Resolve(
+            forceAscii: false, noColor: true, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable).Glyphs;
+
+        output.WriteLine(TerminalText.Printable(store.StorePath, glyphs.Charset));
 
         string? sessionsDirectory = store.SessionsPath;
         if (sessionsDirectory == null || !Directory.Exists(sessionsDirectory))
@@ -48,9 +55,10 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
 
         output.WriteLine(string.Format(
             CultureInfo.InvariantCulture,
-            "  {0} {1} · {2} on disk",
+            "  {0} {1} {2} {3} on disk",
             files.Length,
             files.Length == 1 ? "run" : "runs",
+            glyphs.Separator,
             FormatSize(bytes)));
 
         // The summary covers every file and loads no session, so the listing below always accounts
@@ -86,7 +94,7 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             output.WriteLine(string.Format(
                 CultureInfo.InvariantCulture,
                 "  {0,-40} {1,4} {2}  last {3:yyyy-MM-dd HH:mm} UTC",
-                Truncate(assembly.Name, 40),
+                Truncate(TerminalText.Printable(assembly.Name, glyphs.Charset), 40),
                 assembly.Runs,
                 assembly.Runs == 1 ? "run " : "runs",
                 assembly.LastStartedAt));
@@ -108,5 +116,5 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             : string.Format(CultureInfo.InvariantCulture, "{0:0.0} KB", bytes / 1024.0);
 
     private static string Truncate(string value, int max) =>
-        value.Length <= max ? value : string.Concat(value.AsSpan(0, max - 1), "~");
+        value.Length <= max ? value : TerminalText.Head(value, max - 1) + "~";
 }

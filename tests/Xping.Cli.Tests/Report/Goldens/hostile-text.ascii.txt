@@ -1,0 +1,24 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-01 09:00 -> 09:19 | main@eab9867
+13 tests | 12 healthy | 1 flagged
+* nothing to measure: concurrency 13 | time sensitive 13
+
+```
+LATEST RUN  09:19 | eab9867                              no new failures
+------------------------------------------------------------------------
+
+    Also failing: 1 test explained by finding below (#1).
+
+NEEDS ATTENTION (1 high)                               most severe first
+------------------------------------------------------------------------
+
+1.  HIGH  flaky
+    SampleTests.Refund?[31m?Caf??Total
+    failed 5 of 20 executions (25%) in 5 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_b0290552 | SampleTests.cs:10
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_b0290552 --assembly MyApp.Tests

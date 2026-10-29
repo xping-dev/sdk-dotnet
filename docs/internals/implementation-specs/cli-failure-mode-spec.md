@@ -35,6 +35,18 @@ These changes are applied in place in the sections named.
 | I | §1.1: `ReportCommand.cs:318-323` | The context is built at `:329` and passed to the history callback at `:376` | §1.1 |
 | J | — | `StackFrameExtractor.cs:14` documents frames as "outermost first". They are kept in trace order, which puts the throw site first. P1 corrects the comment to "innermost first, as the trace lists them" | §1.1, P1 |
 
+### Amendment 2 — from P2
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.5: one `hostile-text` fixture, through `--id`, `--test` and the full report | A golden renders one envelope, so one view. Three fixtures over the one store: `hostile-text` (the full report), `hostile-text-detail` (`--id`) and `hostile-text-history` (`--test`). 61 fixtures, 122 files | §1.2, §3.5 |
+| B | D7: every unsafe **rune** becomes `?` | A lone surrogate is not a rune. It is replaced by one `?` too: no terminal renders it, and an encoder writes it as a replacement character or throws | D7 |
+| C | D7: the messages outside the renderer apply `Printable` to what they echo | A message composed outside `ReportCommand` (`TestResolver`'s two, `CloudHint.Text`, the window resolver's `FailureDetail`) holds no command, and its own words are ASCII, so it is cleaned as a whole line. The result is the same as cleaning each echoed value | D7 |
+| D | D7: the always-unsafe set is a list of code points | Every rune of general category Cc, Cf, Zl or Zp. The list was a subset of those categories and missed others: tag characters U+E0000–E007F, U+180E, U+206A–206F, U+FFF9–FFFB. A category stays complete when Unicode adds a character | D7 |
+| E | D7: "replacement is one-for-one per rune" | So is every cut after it. A sha cut to 7, `Fit`'s left truncation and `xping where`'s 40-column name never split a surrogate pair, so no cut prints half an astral character. The hostile-envelope suffix gains U+1F600, and the test also rejects a lone surrogate in the output | D7 |
+| F | D7: "a renderer-authored label does not go through `Recorded`" | A vocabulary lookup that echoes an unknown value (`LabelFor`, `PopulationTokenFor`, `StatusWordsFor`) is read through `Recorded`, wherever its argument came from the envelope. The hostile-envelope test keeps those values for its D7 assertions, and a second pass rewrites them too and asserts only that nothing unsafe is printed | D7 |
+| G | D7: "ASCII end to end, except inside commands" | Also outside the renderer: the scope notice and `xping where` join their segments with the glyph set's separator rather than a literal `·` | D7 |
+
 ---
 
 ## 1. Ground truth
@@ -104,7 +116,8 @@ Every claim here was read in source at the cited line.
 
 - `FailureModeDto`, `FindingDto.FailureModes`, `TestHistoryDto.FailureModes` (§4).
 - `TerminalText` and `TerminalCharset` in `src/Xping.Cli/Reporting/`, and the renderer helpers `Recorded` and `Command` (D7).
-- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text` (§3.5).
+- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text`,
+  `hostile-text-detail`, `hostile-text-history` (§3.5, Amendment 2A).
 
 ### 1.3 The question this block answers
 
@@ -279,7 +292,7 @@ The block replaces them: the same information, plus the parts the pairs could no
 by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCharset` is
 `Unicode`, `Ascii` or `Command` (below). The text renderer derives the charset from its glyphs.
 
-- **Always unsafe:**
+- **Always unsafe** (Amendment 2D): every rune of general category Cc, Cf, Zl or Zp. That includes:
   - C0 controls U+0000–U+001F (including `ESC`, `CR`, `LF`, tab), `DEL` U+007F, C1 controls
     U+0080–U+009F;
   - the line and paragraph separators U+2028 and U+2029;
@@ -291,19 +304,21 @@ by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCh
   and replacing an `é` in an FQN would make it select nothing. A control or bidi character is never
   part of a command that works, so replacing it costs nothing.
 
+A lone surrogate is replaced by one `?` as well (Amendment 2B).
+
 Auth's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`) is left alone (Amendment 1A).
 
 **One choke point in the renderer.** No text renderer appends a DTO string directly.
 `TextReportRenderer`, `SummaryReportRenderer` and `CloudText` read every recorded value through one
 helper, `Recorded(string?)`, or through `Command(string?)` for a command. Each applies `Printable`
 with the right charset. Renderer-authored text (labels, vocabulary, glyphs, numbers it formats)
-does not go through them. A new field is safe only if it is read through one of the two, so the
+does not go through them, except a vocabulary lookup that echoes an unknown value (Amendment 2F). A new field is safe only if it is read through one of the two, so the
 rule is enforced by a test, not by the list below:
 
 - **The hostile-envelope test** (P2) takes every fixture envelope. It rewrites, by reflection over
   the DTO graph, every `string` property, every `string` element of a list, and every `string` key and value
   of a dictionary to append
-  `\u001b[31m\u202e\u2028é`. Values the renderer maps through `ReportVocabulary` (kind,
+  `\u001b[31m\u202e\u2028é\U0001F600` (Amendment 2E). Values the renderer maps through `ReportVocabulary` (kind,
   severity, population, status) keep their own, because a fixture with an
   unknown kind tests nothing about recorded text. It renders the result in both glyph sets with
   colour off, and asserts:
@@ -339,7 +354,8 @@ test also rejects every control character but the renderer's `\n` and `\r`. The 
 test is where the command exception is checked.
 
 **Messages outside the renderer.** These apply `Printable` with the charset the report would use,
-and any command in them applies `Command`:
+and any command in them applies `Command`. One composed outside `ReportCommand` is cleaned whole
+(Amendment 2C):
 
 - `ReportCommand`'s messages that echo the query, candidates, assemblies, the store path, a
   `--since` value or a sha: `TestResolver.NotFoundMessage`, `OutsideWindowMessage`,
@@ -352,7 +368,7 @@ and any command in them applies `Command`:
 which escapes controls and non-ASCII, and a consumer needs the recorded value.
 
 Replacement is one-for-one per rune, so a cleaned value is never wider than the original. The
-width rules stay as they are.
+width rules stay as they are. No cut splits a surrogate pair (Amendment 2E).
 
 **Rejected:**
 
@@ -454,12 +470,12 @@ line inside the fence exceeds the width rule.
 | `detail-failure-modes` | §3.1: three modes, a degraded one, an unavailable one, all three first-seen forms |
 | `detail-unavailable` | `AlwaysFailing` whose adapter recorded nothing |
 | `history-failure-modes` | §3.2, plus a test with 7 modes (cap line) and a 900-character message (§3.3) |
-| `hostile-text` | §3.4, through `--id`, `--test` and the full report. The golden pins one store; the hostile-envelope test (D7) covers every field |
+| `hostile-text`, `hostile-text-detail`, `hostile-text-history` | §3.4, through the full report, `--id` and `--test`, one fixture each over one store (Amendment 2A). The goldens pin that store; the hostile-envelope test (D7) covers every field |
 
 The existing `detail-flaky`, `detail-always-failing`, `detail-broken-fixture`,
 `detail-shared-failure`, `detail-store`, `detail-repro-*` and `history-*` goldens change: D6's pairs
 go and the block arrives. Regenerate them all and review the diff. It must consist of those two
-changes and nothing else. 59 fixtures, 118 files.
+changes and nothing else. 61 fixtures, 122 files.
 
 ---
 
@@ -560,13 +576,12 @@ and for an astral rune. Then:
 
 - `Recorded` and `Command` in the text renderers, and every recorded or command read routed through
   them;
-- `FlowFailures.Printable` replaced;
 - the stderr messages;
 - the hostile-envelope test;
 - `TheAsciiReportCarriesNothingButPrintableAscii` tightened;
-- the `hostile-text` fixture.
+- the `hostile-text` fixtures (Amendment 2A).
 
-At this phase the fixture covers the existing views. P3 and P4 add the block to it, and the
+At this phase the fixtures cover the existing views. P3 and P4 add the block to them, and the
 hostile-envelope test covers `FailureModeDto` as soon as P1's field exists.
 
 ### P3 — `--id` block
