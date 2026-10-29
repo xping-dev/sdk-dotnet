@@ -655,30 +655,30 @@ unaffected.
 ```
 Assert.Null() Failure: Value is not null
 Expected: null
-Actual:   System.ArgumentNullException: Argument is null. (Parameter '_instance')
+Actual:   System.InvalidOperationException: XpingContext is not initialized. Call XpingContext.Initialize() first.
    at Xping.Sdk.NUnit.XpingContext.RecordTest(...)
 ```
 
 **Root cause — race condition between two test framework lifecycles**:
 
-The `Xping.Sdk.NUnit.Tests` project runs tests under **xUnit** as its primary runner, but also contains a NUnit `[SetUpFixture]` (`XpingTestSetup.cs`) for self-hosted telemetry. This creates two independent owners of the same static `XpingContext._instance` field operating concurrently:
+The `Xping.Sdk.NUnit.Tests` project runs tests under **xUnit** as its primary runner, but also contains a NUnit `[SetUpFixture]` (`XpingTestSetup.cs`) for self-hosted telemetry. This creates two independent owners of the same static context (the `XpingContextSingleton` behind `XpingContext`) operating concurrently:
 
-1. **NUnit `[SetUpFixture]` teardown** (`AfterAllTests`) calls `XpingContext.FinalizeAsync()` and then `XpingContext.ShutdownAsync()`, which atomically sets `_instance = null` via `Interlocked.Exchange`. It deliberately avoids `FinalizeAndShutdownAsync()`: the context it finalizes may be a strict-mode one an xUnit test installed, aimed at an unreachable endpoint, and the resulting `Environment.FailFast` would crash the test host.
-2. **xUnit `IAsyncLifetime`** (`InitializeAsync`/`DisposeAsync`) resets `_instance` around each test via `ShutdownAsync`, expecting exclusive ownership.
+1. **NUnit `[SetUpFixture]` teardown** (`AfterAllTests`) calls `XpingContext.FinalizeAsync()` and then `XpingContext.ShutdownAsync()`, which atomically uninstalls the context via `Interlocked.Exchange`. It deliberately avoids `FinalizeAndShutdownAsync()`: the context it finalizes may be a strict-mode one an xUnit test installed, aimed at an unreachable endpoint, and the resulting `Environment.FailFast` would crash the test host.
+2. **xUnit `IAsyncLifetime`** (`InitializeAsync`/`DisposeAsync`) resets the context around each test via `ShutdownAsync`, expecting exclusive ownership.
 
 The race window opens when:
 
 1. NUnit finds no NUnit tests to run and immediately calls `AfterAllTests()`.
 2. xUnit is concurrently executing a test inside `[Collection("XpingContext")]`.
-3. The xUnit test calls `XpingContext.Initialize()` → `_instance = newLazy`.
-4. Before `RecordTest()` is called, NUnit's `AfterAllTests()` fires `ShutdownAsync()` → `_instance = null`.
-5. `RecordTest()` calls `_instance.RequireNotNull()` and throws `ArgumentNullException`.
+3. The xUnit test calls `XpingContext.Initialize()`, which installs a new context.
+4. Before `RecordTest()` is called, NUnit's `AfterAllTests()` fires `ShutdownAsync()`, which uninstalls it.
+5. `RecordTest()` finds no context and throws `InvalidOperationException`.
 
 **Why CI-specific**: With `XPING_ENABLED=true` in CI (`XPING_APIKEY` is set), `ShutdownAsync()` triggers real network I/O (session finalization + upload), significantly widening the race window. Locally, the SDK is disabled (no credentials), so disposal is instant and the window is near-zero.
 
 **Why these tests exist as-is**: A deliberate example of a flaky test caused by a legitimate environmental and concurrency issue. Its purpose is to demonstrate Xping's ability to detect, correlate, and report flaky tests automatically across CI runs. Removing the race would eliminate a valuable real-world validation case for the SDK's own flaky test detection pipeline.
 
-**Why `[RetryFact(3)]`**: Retrying does not fix the race and is not meant to — it changes what the flake produces. Without it the test either goes green, in which case nobody learns anything, or goes red and blocks a build over a defect in the test harness rather than in the SDK. With it the build stays green *and* Xping records both attempts, because xRetry is the retry library Xping instruments from inside the retry loop (see the xUnit section above). Attempt 1 is persisted as `Failed` with its real `ArgumentNullException`, attempt 2 as `Passed` with `PassedOnRetry = true`, and the pair is reported as a `RetryMasked` finding — the one flakiness signal that needs no history at all and is otherwise invisible in a green build.
+**Why `[RetryFact(3)]`**: Retrying does not fix the race and is not meant to — it changes what the flake produces. Without it the test either goes green, in which case nobody learns anything, or goes red and blocks a build over a defect in the test harness rather than in the SDK. With it the build stays green *and* Xping records both attempts, because xRetry is the retry library Xping instruments from inside the retry loop (see the xUnit section above). Attempt 1 is persisted as `Failed` with its real `InvalidOperationException`, attempt 2 as `Passed` with `PassedOnRetry = true`, and the pair is reported as a `RetryMasked` finding — the one flakiness signal that needs no history at all and is otherwise invisible in a green build.
 
 Which is a better demonstration than the original: the flake is now caught every time it occurs, rather than only on the runs where it happened to turn CI red.
 

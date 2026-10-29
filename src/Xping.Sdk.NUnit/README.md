@@ -228,6 +228,10 @@ var config = new XpingConfiguration
 XpingContext.Initialize(config);
 ```
 
+A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
+so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
+forgets it. `Initialize(null)` throws `ArgumentNullException`.
+
 ## Error Handling
 
 The `AfterTest` hook includes error handling to ensure test execution is never interrupted:
@@ -241,9 +245,9 @@ The `AfterTest` hook includes error handling to ensure test execution is never i
 The adapter is fully thread-safe for parallel test execution:
 
 **XpingContext:**
-- Uses thread-safe singleton initialization with locking
-- First call to `Initialize()` creates the instance
-- Subsequent calls return the same instance
+- Uses lock-free, thread-safe singleton initialization
+- First call to `Initialize()` installs the context; its host is built on first use
+- Subsequent calls keep the installed context until it is shut down
 - Safe for parallel test execution
 
 **XpingTrackAttribute:**

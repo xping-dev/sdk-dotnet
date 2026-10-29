@@ -291,6 +291,10 @@ public static class CustomTestSetup
 }
 ```
 
+A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
+so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
+forgets it. `Initialize(null)` throws `ArgumentNullException`.
+
 ### TestContext Access
 
 The base class provides access to MSTest's `TestContext`:
