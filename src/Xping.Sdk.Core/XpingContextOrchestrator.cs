@@ -51,6 +51,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly IHost _host;
     private readonly ILogger<XpingContextOrchestrator> _logger;
 
+    // Logs the session lifecycle under the adapter's own category, so a Logging filter written for
+    // the adapter keeps applying to the lines it printed before Core took them over.
+    private readonly ILogger _lifecycleLogger;
+
     // _Host manages lifetime — disposing the host disposes all registered services.
 #pragma warning disable CA2213
     private readonly ITestExecutionCollector _collector;
@@ -184,6 +188,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         // Resolve the logger first, so it is available for error reporting during the rest of initialization.
         _logger = services.GetRequiredService<ILogger<XpingContextOrchestrator>>();
+        _lifecycleLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
         _flushLock = new SemaphoreSlim(1, 1);
 
         try
@@ -445,7 +450,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (!IsCollecting)
             return new UploadResult { Success = true, TotalRecordsCount = 0 };
 
-        _logger.LogDebug("Finalizing session");
+        _lifecycleLogger.LogDebug("Finalizing session");
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         UploadResult uploadResult;
@@ -556,14 +561,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         QuickStatistics? stats = result.Success ? result.QuickStatistics : null;
         if (stats == null)
         {
-            _logger.LogInformation("Session finalized.");
+            _lifecycleLogger.LogInformation("Session finalized.");
             return;
         }
 
         SessionSummary summary = SessionSummary.From(stats);
         if (summary.Retried)
         {
-            _logger.LogInformation(
+            _lifecycleLogger.LogInformation(
                 "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
                 summary.Total, summary.DistinctTests, summary.TestLabel,
                 summary.Retries, summary.RetryLabel, summary.Outcomes,
@@ -571,7 +576,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         else
         {
-            _logger.LogInformation(
+            _lifecycleLogger.LogInformation(
                 "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
                 summary.Total, summary.Outcomes,
                 summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);

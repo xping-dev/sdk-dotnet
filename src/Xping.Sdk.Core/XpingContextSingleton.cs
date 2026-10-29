@@ -24,7 +24,13 @@ internal sealed class XpingContextSingleton<TContext>
     where TContext : XpingContextOrchestrator
 {
     private readonly Func<XpingConfiguration?, TContext> _create;
-    private Lazy<TContext>? _instance;
+
+    // Serializes installing, claiming and forgetting, which each touch both _instance and _configuration:
+    // without it a shutdown could forget the configuration between an install and the write that
+    // remembers it. Reads stay lock-free, and so does Initialize() once a context is installed, which
+    // the NUnit and MSTest adapters call before every test.
+    private readonly object _lifecycleLock = new();
+    private volatile Lazy<TContext>? _instance;
 
     // The configuration of the last context Initialize(configuration) installed, for the next session: the
     // session ends with each run, and a long-lived process, such as an IDE's test server, can start
@@ -75,15 +81,21 @@ internal sealed class XpingContextSingleton<TContext>
         if (IsInitialized)
             return;
 
-        XpingConfiguration? resolved = configuration ?? Volatile.Read(ref _configuration);
-        Lazy<TContext> newInstance = new(
-            valueFactory: () => _create(resolved),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+        lock (_lifecycleLock)
+        {
+            if (_instance != null)
+                return;
 
-        // Remembered only when this call installed the context, so the configuration reused later is one
-        // a session actually ran with.
-        if (Interlocked.CompareExchange(ref _instance, newInstance, null) == null && configuration != null)
-            Volatile.Write(ref _configuration, configuration);
+            XpingConfiguration? resolved = configuration ?? _configuration;
+            _instance = new Lazy<TContext>(
+                valueFactory: () => _create(resolved),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+
+            // Remembered only when this call installed the context, so the configuration reused later is
+            // one a session actually ran with.
+            if (configuration != null)
+                _configuration = configuration;
+        }
     }
 
     /// <summary>
@@ -128,17 +140,27 @@ internal sealed class XpingContextSingleton<TContext>
     /// <returns>A task representing the asynchronous operation.</returns>
     public async ValueTask ShutdownAsync()
     {
-        Volatile.Write(ref _configuration, null);
+        TContext? context;
+        lock (_lifecycleLock)
+        {
+            _configuration = null;
+            context = Claim();
+        }
 
-        TContext? context = Claim();
         if (context != null)
             await context.DisposeAsync().ConfigureAwait(false);
     }
 
-    // Uninstalls the context atomically, so IsInitialized is false at once.
+    // Uninstalls the context, so IsInitialized is false at once.
     private TContext? Claim()
     {
-        Lazy<TContext>? instance = Interlocked.Exchange(ref _instance, null);
+        Lazy<TContext>? instance;
+        lock (_lifecycleLock)
+        {
+            instance = _instance;
+            _instance = null;
+        }
+
         return instance is { IsValueCreated: true } ? instance.Value : null;
     }
 }

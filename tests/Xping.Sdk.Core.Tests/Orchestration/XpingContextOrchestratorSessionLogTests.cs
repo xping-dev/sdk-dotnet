@@ -32,16 +32,16 @@ public sealed class XpingContextOrchestratorSessionLogTests
 
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        public List<string> Messages { get; } = [];
+        public List<(string Category, string Message)> Messages { get; } = [];
 
-        public ILogger CreateLogger(string categoryName) => new CapturingLogger(Messages);
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, Messages);
 
         public void Dispose()
         {
         }
     }
 
-    private sealed class CapturingLogger(List<string> messages) : ILogger
+    private sealed class CapturingLogger(string category, List<(string Category, string Message)> messages) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -51,7 +51,7 @@ public sealed class XpingContextOrchestratorSessionLogTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             if (IsEnabled(logLevel))
-                messages.Add(formatter(state, exception));
+                messages.Add((category, formatter(state, exception)));
         }
     }
 
@@ -71,8 +71,10 @@ public sealed class XpingContextOrchestratorSessionLogTests
         await orchestrator.FinalizeAsync();
         await orchestrator.DisposeAsync();
 
-        string summary = Assert.Single(provider.Messages, m => m.StartsWith("Total tests recorded: 1", StringComparison.Ordinal));
-        Assert.DoesNotContain(provider.Messages, m => m == "Session finalized.");
-        Assert.Contains("exec:", summary, StringComparison.Ordinal);
+        var summary = Assert.Single(
+            provider.Messages, m => m.Message.StartsWith("Total tests recorded: 1", StringComparison.Ordinal));
+        Assert.DoesNotContain(provider.Messages, m => m.Message == "Session finalized.");
+        Assert.Contains("exec:", summary.Message, StringComparison.Ordinal);
+        Assert.Equal(typeof(Harness).FullName!.Replace('+', '.'), summary.Category);
     }
 }
