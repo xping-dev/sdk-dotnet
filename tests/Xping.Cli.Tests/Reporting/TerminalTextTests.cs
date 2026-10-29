@@ -12,7 +12,10 @@ namespace Xping.Cli.Tests.Reporting;
 /// </summary>
 public sealed class TerminalTextTests
 {
-    /// <summary>The characters D7 replaces in every charset, one per class boundary.</summary>
+    /// <summary>
+    /// The characters D7 replaces in every charset: one per class boundary, and the Cf characters a
+    /// list of code points missed (Amendment 2D).
+    /// </summary>
     public static TheoryData<string, string> AlwaysUnsafe() => new()
     {
         { "\u0000", "NUL" },
@@ -39,7 +42,16 @@ public sealed class TerminalTextTests
         { "\u2060", "word joiner" },
         { "\u2064", "invisible plus" },
         { "\ufeff", "BOM" },
-        { "\u00ad", "soft hyphen" }
+        { "\u00ad", "soft hyphen" },
+        { "\u0600", "Arabic number sign" },
+        { "\u180e", "Mongolian vowel separator" },
+        { "\u206a", "inhibit symmetric swapping" },
+        { "\u206f", "nominal digit shapes" },
+        { "\ufff9", "interlinear annotation anchor" },
+        { "\ufffb", "interlinear annotation terminator" },
+        { "\U000E0001", "language tag" },
+        { "\U000E0041", "tag capital A" },
+        { "\U000E007F", "cancel tag" }
     };
 
     /// <summary>Characters next to an unsafe range that every charset but ASCII keeps.</summary>
@@ -50,7 +62,7 @@ public sealed class TerminalTextTests
         { "\u200a", "hair space, before the zero-width range" },
         { "\u2027", "hyphenation point, before the separators" },
         { "\u2065", "unassigned, between the operators and the isolates" },
-        { "\u206a", "after the isolates" },
+        { "\u2070", "superscript zero, after the format block" },
         { "\u2192", "an arrow the glyphs use" }
     };
 
@@ -106,6 +118,22 @@ public sealed class TerminalTextTests
             foreach ((string text, string expected) in cases)
                 Assert.Equal(expected, TerminalText.Printable(text, charset));
         }
+    }
+
+    [Fact]
+    public void HeadNeverEndsOnHalfASurrogatePair()
+    {
+        Assert.Equal("abcdef", TerminalText.Head("abcdef\U0001F600z", 7));
+        Assert.Equal("abcdef\U0001F600", TerminalText.Head("abcdef\U0001F600z", 8));
+        Assert.Equal("abc", TerminalText.Head("abc", 7));
+    }
+
+    [Fact]
+    public void TailNeverStartsOnHalfASurrogatePair()
+    {
+        Assert.Equal("z", TerminalText.Tail("a\U0001F600z", 2));
+        Assert.Equal("\U0001F600z", TerminalText.Tail("a\U0001F600z", 3));
+        Assert.Equal("abc", TerminalText.Tail("abc", 7));
     }
 
     [Fact]

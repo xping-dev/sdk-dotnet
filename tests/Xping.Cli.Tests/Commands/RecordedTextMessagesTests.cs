@@ -5,6 +5,7 @@
 
 using Xping.Cli.Commands;
 using Xping.Cli.Report;
+using Xping.Cli.Reporting;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -24,7 +25,7 @@ namespace Xping.Cli.Tests.Commands;
 public sealed class RecordedTextMessagesTests : IDisposable
 {
     // An escape sequence, a newline, an é and a right-to-left override, mid-name.
-    private const string Hostile = "Pay\u001b[31m\nCafé‮";
+    private const string Hostile = "Pay\u001b[31m\nCaf\u00e9\u202e";
 
     private readonly string _root;
 
@@ -81,7 +82,7 @@ public sealed class RecordedTextMessagesTests : IDisposable
         // The command is printed to be run: its é stays, its controls do not.
         Assert.StartsWith("xping report --test ", lines[^1], StringComparison.Ordinal);
         AssertPrintableAscii(string.Join('\n', lines[..^1]));
-        Assert.DoesNotContain(lines[^1], c => c is '\u001b' or '‮' or '\n');
+        Assert.DoesNotContain(lines[^1], c => c is '\u001b' or '\u202e' or '\n');
     }
 
     [Fact]
@@ -93,8 +94,8 @@ public sealed class RecordedTextMessagesTests : IDisposable
         var (code, output, _) = Run(isTerminal: true, "report", "--ascii", "--no-color");
 
         Assert.Equal(ExitCodes.Success, code);
-        Assert.Contains("Reporting on Pay?[31m?Caf??.Tests", output, StringComparison.Ordinal);
-        Assert.DoesNotContain(output, c => c is '\u001b' or '‮' or 'é');
+        Assert.Contains("Reporting on Pay?[31m?Caf??.Tests | ", output, StringComparison.Ordinal);
+        AssertPrintableAscii(output);
     }
 
     [Fact]
@@ -114,7 +115,7 @@ public sealed class RecordedTextMessagesTests : IDisposable
     [InlineData(false)]
     public void ARejectedProjectKeyIsEchoedPrintableWhereverAsciiIsGiven(bool asciiFirst)
     {
-        string[] project = ["--project", "Café\u001b[31m‮/"];
+        string[] project = ["--project", "Caf\u00e9\u001b[31m\u202e/"];
         string[] args = asciiFirst ? ["report", "--ascii", .. project] : ["report", .. project, "--ascii"];
 
         var (code, _, error) = Run(isTerminal: true, args);
@@ -122,6 +123,20 @@ public sealed class RecordedTextMessagesTests : IDisposable
         Assert.Equal(2, code);
         Assert.Contains("got 'Caf??[31m?/'", error, StringComparison.Ordinal);
         AssertPrintableAscii(error);
+    }
+
+    /// <summary>
+    /// The echo follows <c>--ascii</c>'s value, as the report does, not its mere presence.
+    /// </summary>
+    [Fact]
+    public void ARejectedProjectKeyFollowsAnAsciiFlagSetToFalse()
+    {
+        var (code, _, error) = Run(isTerminal: true, "report", "--ascii", "false", "--project", "Caf\u00e9/");
+
+        string expected = TerminalText.Printable("Caf\u00e9/", ReportGlyphs.Detect().Charset);
+
+        Assert.Equal(2, code);
+        Assert.Contains($"got '{expected}'", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,7 +148,9 @@ public sealed class RecordedTextMessagesTests : IDisposable
 
         Assert.Equal(0, code);
         Assert.Contains("Pay?[31m?Caf??.Tests", output, StringComparison.Ordinal);
-        Assert.DoesNotContain(output, c => c is '\u001b' or '‮' or 'é');
+
+        // Piped, so ASCII throughout: the separator on the count line too, not only the names.
+        AssertPrintableAscii(output);
     }
 
     /// <summary>Nothing but printable ASCII and the line breaks between messages.</summary>

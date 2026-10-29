@@ -4,6 +4,7 @@
  */
 
 using System.Buffers;
+using System.Globalization;
 using System.Text;
 
 namespace Xping.Cli.Reporting;
@@ -13,7 +14,7 @@ namespace Xping.Cli.Reporting;
 /// </summary>
 internal enum TerminalCharset
 {
-    /// <summary>Everything but controls, separators, bidi and invisible format characters.</summary>
+    /// <summary>Everything but controls, line and paragraph separators, and format characters.</summary>
     Unicode,
 
     /// <summary>Printable ASCII only.</summary>
@@ -39,6 +40,10 @@ internal enum TerminalCharset
 /// One <c>?</c> per rune, so a cleaned value is never wider than the original and the report's width
 /// rules hold as they are. A lone surrogate is not a rune and is replaced the same way.
 /// </para>
+/// <para>
+/// By general category rather than by list. Cf holds every bidi control and invisible character,
+/// tag characters included, and a category stays complete when Unicode adds one (Amendment 2D).
+/// </para>
 /// </remarks>
 internal static class TerminalText
 {
@@ -60,7 +65,7 @@ internal static class TerminalText
         while (index < text.Length)
         {
             OperationStatus status = Rune.DecodeFromUtf16(text.AsSpan(index), out Rune rune, out int consumed);
-            bool safe = status == OperationStatus.Done && !IsUnsafe(rune.Value, charset);
+            bool safe = status == OperationStatus.Done && !IsUnsafe(rune, charset);
 
             if (!safe)
                 (cleaned ??= new StringBuilder(text.Length).Append(text, 0, index)).Append(Replacement);
@@ -73,16 +78,38 @@ internal static class TerminalText
         return cleaned?.ToString() ?? text;
     }
 
-    private static bool IsUnsafe(int value, TerminalCharset charset) =>
-        value is <= 0x1F or (>= 0x7F and <= 0x9F)
-        || (charset == TerminalCharset.Ascii && value >= 0x80)
-        || value is 0x00AD or 0x061C or 0x2028 or 0x2029 or 0xFEFF
-            // Zero-width space, non-joiner and joiner, then the LRM and RLM marks.
-            or (>= 0x200B and <= 0x200F)
-            // Bidi embeddings and overrides.
-            or (>= 0x202A and <= 0x202E)
-            // Word joiner and the invisible operators.
-            or (>= 0x2060 and <= 0x2064)
-            // Bidi isolates.
-            or (>= 0x2066 and <= 0x2069);
+    /// <summary>
+    /// Takes at most <paramref name="length"/> characters from the start, one fewer where the last
+    /// would be half of a surrogate pair.
+    /// </summary>
+    public static string Head(string text, int length)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (text.Length <= length)
+            return text;
+
+        int end = length > 0 && char.IsHighSurrogate(text[length - 1]) ? length - 1 : length;
+        return text[..end];
+    }
+
+    /// <summary>
+    /// Takes at most <paramref name="length"/> characters from the end, one fewer where the first
+    /// would be half of a surrogate pair.
+    /// </summary>
+    public static string Tail(string text, int length)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (text.Length <= length)
+            return text;
+
+        int start = text.Length - length;
+        return text[(char.IsLowSurrogate(text[start]) ? start + 1 : start)..];
+    }
+
+    private static bool IsUnsafe(Rune rune, TerminalCharset charset) =>
+        (charset == TerminalCharset.Ascii && rune.Value >= 0x80)
+        || Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format
+            or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 }

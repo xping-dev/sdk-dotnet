@@ -48,12 +48,17 @@ internal sealed class ReportCommand(
         ILocalSessionStore store = sessionStoreFactory.Create(startDirectory: startDirectory);
         var source = new LocalSessionSource(store);
 
+        // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
+        // terminal and decorated for a pipe, or the reverse.
+        OutputCapabilities capabilities = OutputCapabilities.Resolve(
+            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
+
         // What the messages around the report may print of a recorded name or path: what the report
         // itself would print it with (D7).
-        TerminalCharset charset = Capabilities(options).Glyphs.Charset;
+        TerminalCharset charset = capabilities.Glyphs.Charset;
 
         if (options.Test is { } query)
-            return await RunTestAsync(options, query, startDirectory, store, source, charset, cancellationToken).ConfigureAwait(false);
+            return await RunTestAsync(options, query, startDirectory, store, source, capabilities, cancellationToken).ConfigureAwait(false);
 
         // Auto-scope to the newest assembly unless the caller named one. Every test project in a
         // solution shares one store, so an unscoped report would pool unrelated suites: one
@@ -110,7 +115,7 @@ internal sealed class ReportCommand(
         }
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, source, assembly, options.Assembly != null, cancellationToken)
+            options, envelope, analysis, resolved, startDirectory, store, source, assembly, options.Assembly != null, capabilities, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -136,9 +141,10 @@ internal sealed class ReportCommand(
         string startDirectory,
         ILocalSessionStore store,
         LocalSessionSource source,
-        TerminalCharset charset,
+        OutputCapabilities capabilities,
         CancellationToken cancellationToken)
     {
+        TerminalCharset charset = capabilities.Glyphs.Charset;
         TestLookup lookup = TestResolver.Resolve(windowResolver, source, query, options.Assembly);
 
         if (lookup.Resolution is not { } resolution)
@@ -186,7 +192,7 @@ internal sealed class ReportCommand(
         WriteClockWarning(resolved);
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, source, match.Assembly, assemblyGiven: true, cancellationToken)
+            options, envelope, analysis, resolved, startDirectory, store, source, match.Assembly, assemblyGiven: true, capabilities, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -404,6 +410,7 @@ internal sealed class ReportCommand(
         LocalSessionSource source,
         string? assembly,
         bool assemblyGiven,
+        OutputCapabilities capabilities,
         CancellationToken cancellationToken)
     {
         AnalysisWindow window = resolved.Window
@@ -416,11 +423,11 @@ internal sealed class ReportCommand(
             var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions));
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
-            WriteCloudHints(enriched.Hints, Capabilities(options).Glyphs.Charset);
+            WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);
             envelope = enriched.Envelope;
         }
 
-        return Render(options, envelope, analysis, window, store, source, assembly, assemblyGiven);
+        return Render(options, envelope, analysis, window, store, source, assembly, assemblyGiven, capabilities);
     }
 
     /// <summary>
@@ -434,12 +441,9 @@ internal sealed class ReportCommand(
         ILocalSessionStore store,
         LocalSessionSource source,
         string? assembly,
-        bool assemblyGiven)
+        bool assemblyGiven,
+        OutputCapabilities capabilities)
     {
-        // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
-        // terminal and decorated for a pipe, or the reverse.
-        OutputCapabilities capabilities = Capabilities(options);
-
         // A blank line either side, for a person only. It separates the report from the command that
         // produced it and from whatever comes next, which a terminal gives no other help with — and
         // it is decoration, so a redirected stream carries the report and nothing around it.
@@ -454,7 +458,7 @@ internal sealed class ReportCommand(
         // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
         if (pad)
         {
-            WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs.Charset);
+            WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
@@ -511,17 +515,6 @@ internal sealed class ReportCommand(
 
         return pins;
     }
-
-    /// <summary>
-    /// Resolves what this invocation's stdout can draw.
-    /// </summary>
-    /// <remarks>
-    /// Once per decision rather than once per invocation, but always from the same inputs, so the
-    /// report and the messages around it agree on a glyph set.
-    /// </remarks>
-    private OutputCapabilities Capabilities(ReportOptions options) =>
-        OutputCapabilities.Resolve(
-            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
 
     private static IReportRenderer Renderer(ReportOptions options, OutputCapabilities capabilities) =>
         options.Format switch
@@ -730,7 +723,7 @@ internal sealed class ReportCommand(
         var message = new StringBuilder("Finding ").Append(Recorded(selection.Id));
 
         if (selection.Kind is { } kind)
-            message.Append(" (").Append(ReportVocabulary.LabelFor(kind)).Append(')');
+            message.Append(" (").Append(Recorded(ReportVocabulary.LabelFor(kind))).Append(')');
 
         int sessions = envelope.Window.SessionCount;
         string runs = sessions == 1 ? "1 run" : $"{sessions} runs";
@@ -743,7 +736,7 @@ internal sealed class ReportCommand(
         {
             message.Append(" Its subject is reported as ")
                    .AppendJoin(", ", selection.SameSubject.Select(same =>
-                       $"{Recorded(same.Id)} ({ReportVocabulary.LabelFor(same.Kind)}, row {same.Row})"))
+                       $"{Recorded(same.Id)} ({Recorded(ReportVocabulary.LabelFor(same.Kind))}, row {same.Row})"))
                    .Append('.');
         }
         int others = OtherAssemblies(source, assembly);
@@ -773,7 +766,7 @@ internal sealed class ReportCommand(
     /// the problem it solves. Naming the scope makes the omission visible and points at the flag.
     /// </remarks>
     private void WriteScopeNotice(
-        LocalSessionSource source, string? assembly, bool explicitlyChosen, TerminalCharset charset)
+        LocalSessionSource source, string? assembly, bool explicitlyChosen, ReportGlyphs glyphs)
     {
         if (assembly == null || explicitlyChosen)
             return;
@@ -784,7 +777,7 @@ internal sealed class ReportCommand(
             return;
 
         io.Output.WriteLine(
-            $"Reporting on {TerminalText.Printable(assembly, charset)} {(char)0x00B7} {others} other " +
+            $"Reporting on {TerminalText.Printable(assembly, glyphs.Charset)} {glyphs.Separator} {others} other " +
             (others == 1 ? "assembly" : "assemblies") +
             " in this store (use --assembly to switch).");
     }

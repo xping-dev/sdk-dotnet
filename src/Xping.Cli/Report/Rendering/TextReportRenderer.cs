@@ -356,7 +356,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         foreach (KeyValuePair<string, NotMeasuredDto> entry in unreadable.Take(UnmeasuredKindsShown))
         {
             segments.Add(
-                // Recorded: LabelFor echoes a kind it does not know, and the key is the envelope's.
+                // Recorded: LabelFor echoes a kind it does not know (Amendment 1D).
                 $"{Recorded(ReportVocabulary.LabelFor(entry.Key))} " +
                 entry.Value.Unreadable.ToString(CultureInfo.InvariantCulture));
         }
@@ -548,7 +548,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (selection.SameSubject.Count > 0)
         {
             string also = "Also about this test: " + string.Join(", ", selection.SameSubject.Select(same =>
-                $"#{same.Row.ToString(CultureInfo.InvariantCulture)} {ReportVocabulary.LabelFor(same.Kind)} ({Recorded(same.Id)})"));
+                $"#{same.Row.ToString(CultureInfo.InvariantCulture)} {Recorded(ReportVocabulary.LabelFor(same.Kind))} ({Recorded(same.Id)})"));
 
             builder.AppendLine();
 
@@ -733,7 +733,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     private void WriteRun(StringBuilder builder, TestSessionDto session)
     {
         string duration = session.DurationMs is { } milliseconds ? DurationFormatter.Format(milliseconds) : string.Empty;
-        string sha = Recorded(session.Sha) is { } recorded ? recorded[..Math.Min(recorded.Length, ShaWidth)] : string.Empty;
+        string sha = Recorded(session.Sha) is { } recorded ? TerminalText.Head(recorded, ShaWidth) : string.Empty;
 
         var row = new StringBuilder()
             .Append(' ', RunIndent)
@@ -1133,7 +1133,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (Recorded(latest.Sha) is not { Length: > 0 } sha)
             return time;
 
-        return $"{time} {capabilities.Glyphs.Separator} {(sha.Length > 7 ? sha.Substring(0, 7) : sha)}";
+        return $"{time} {capabilities.Glyphs.Separator} {TerminalText.Head(sha, 7)}";
     }
 
     /// <summary>
@@ -1170,7 +1170,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure)
     {
-        string status = ReportVocabulary.StatusWordsFor(failure.Status);
+        string status = Recorded(ReportVocabulary.StatusWordsFor(failure.Status));
         string decorated = failure.Status == "new" ? capabilities.Emphasis(status) : status;
 
         // Padded against the plain word: escape codes occupy no columns, and padding to a length
@@ -1346,7 +1346,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     {
         string number = row.ToString(CultureInfo.InvariantCulture) + ".";
         string marker = ReportVocabulary.MarkerFor(finding.Severity);
-        string label = ReportVocabulary.LabelFor(finding.Kind);
+        // Recorded, as every vocabulary echo is: an unknown value comes back as it was (Amendment 2F).
+        string label = Recorded(ReportVocabulary.LabelFor(finding.Kind));
         int spacing = Math.Max(1, RowLabelWidth - number.Length);
 
         builder.Append(number)
@@ -1390,7 +1391,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         var trailer = new List<string>
         {
             $"evidence {Recorded(finding.EvidenceLevel)}",
-            ReportVocabulary.PopulationTokenFor(finding.Population),
+            Recorded(ReportVocabulary.PopulationTokenFor(finding.Population)),
             Recorded(finding.Id)
         };
 
@@ -1717,7 +1718,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (context == null)
             return string.Empty;
 
-        string sha = Recorded(context.Sha) is { } recorded ? recorded[..Math.Min(recorded.Length, 7)] : string.Empty;
+        string sha = Recorded(context.Sha) is { } recorded ? TerminalText.Head(recorded, 7) : string.Empty;
 
         if (Recorded(context.Branch) is not { Length: > 0 } branch)
             return sha;
@@ -1748,7 +1749,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (value.Length <= width || width <= 3)
             return value;
 
-        return string.Concat("...", value.AsSpan(value.Length - (width - 3)));
+        // Never from inside a surrogate pair: half an astral character is what Printable removed.
+        return "..." + TerminalText.Tail(value, width - 3);
     }
 
     /// <summary>

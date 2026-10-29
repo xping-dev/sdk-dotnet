@@ -391,7 +391,7 @@ internal static class Program
             CustomParser = result => ParseProjectKey(
                 result,
                 OutputCapabilities.Resolve(
-                    forceAscii: result.GetResult(asciiOption) != null,
+                    forceAscii: result.GetValue(asciiOption),
                     noColor: false,
                     redirected: !io.IsTerminal,
                     Environment.GetEnvironmentVariable).Glyphs.Charset)
