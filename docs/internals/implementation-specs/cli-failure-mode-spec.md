@@ -35,6 +35,14 @@ These changes are applied in place in the sections named.
 | I | §1.1: `ReportCommand.cs:318-323` | The context is built at `:329` and passed to the history callback at `:376` | §1.1 |
 | J | — | `StackFrameExtractor.cs:14` documents frames as "outermost first". They are kept in trace order, which puts the throw site first. P1 corrects the comment to "innermost first, as the trace lists them" | §1.1, P1 |
 
+### Amendment 2 — from P2
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.5: one `hostile-text` fixture, through `--id`, `--test` and the full report | A golden renders one envelope, so one view. Three fixtures over the one store: `hostile-text` (the full report), `hostile-text-detail` (`--id`) and `hostile-text-history` (`--test`). 61 fixtures, 122 files | §1.2, §3.5 |
+| B | D7: every unsafe **rune** becomes `?` | A lone surrogate is not a rune. It is replaced by one `?` too: no terminal renders it, and an encoder writes it as a replacement character or throws | D7 |
+| C | D7: the messages outside the renderer apply `Printable` to what they echo | A message composed outside `ReportCommand` (`TestResolver`'s two, `CloudHint.Text`, the window resolver's `FailureDetail`) holds no command, and its own words are ASCII, so it is cleaned as a whole line. The result is the same as cleaning each echoed value | D7 |
+
 ---
 
 ## 1. Ground truth
@@ -104,7 +112,8 @@ Every claim here was read in source at the cited line.
 
 - `FailureModeDto`, `FindingDto.FailureModes`, `TestHistoryDto.FailureModes` (§4).
 - `TerminalText` and `TerminalCharset` in `src/Xping.Cli/Reporting/`, and the renderer helpers `Recorded` and `Command` (D7).
-- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text` (§3.5).
+- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text`,
+  `hostile-text-detail`, `hostile-text-history` (§3.5, Amendment 2A).
 
 ### 1.3 The question this block answers
 
@@ -291,6 +300,8 @@ by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCh
   and replacing an `é` in an FQN would make it select nothing. A control or bidi character is never
   part of a command that works, so replacing it costs nothing.
 
+A lone surrogate is replaced by one `?` as well (Amendment 2B).
+
 Auth's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`) is left alone (Amendment 1A).
 
 **One choke point in the renderer.** No text renderer appends a DTO string directly.
@@ -339,7 +350,8 @@ test also rejects every control character but the renderer's `\n` and `\r`. The 
 test is where the command exception is checked.
 
 **Messages outside the renderer.** These apply `Printable` with the charset the report would use,
-and any command in them applies `Command`:
+and any command in them applies `Command`. One composed outside `ReportCommand` is cleaned whole
+(Amendment 2C):
 
 - `ReportCommand`'s messages that echo the query, candidates, assemblies, the store path, a
   `--since` value or a sha: `TestResolver.NotFoundMessage`, `OutsideWindowMessage`,
@@ -454,12 +466,12 @@ line inside the fence exceeds the width rule.
 | `detail-failure-modes` | §3.1: three modes, a degraded one, an unavailable one, all three first-seen forms |
 | `detail-unavailable` | `AlwaysFailing` whose adapter recorded nothing |
 | `history-failure-modes` | §3.2, plus a test with 7 modes (cap line) and a 900-character message (§3.3) |
-| `hostile-text` | §3.4, through `--id`, `--test` and the full report. The golden pins one store; the hostile-envelope test (D7) covers every field |
+| `hostile-text`, `hostile-text-detail`, `hostile-text-history` | §3.4, through the full report, `--id` and `--test`, one fixture each over one store (Amendment 2A). The goldens pin that store; the hostile-envelope test (D7) covers every field |
 
 The existing `detail-flaky`, `detail-always-failing`, `detail-broken-fixture`,
 `detail-shared-failure`, `detail-store`, `detail-repro-*` and `history-*` goldens change: D6's pairs
 go and the block arrives. Regenerate them all and review the diff. It must consist of those two
-changes and nothing else. 59 fixtures, 118 files.
+changes and nothing else. 61 fixtures, 122 files.
 
 ---
 
@@ -563,9 +575,9 @@ and for an astral rune. Then:
 - the stderr messages;
 - the hostile-envelope test;
 - `TheAsciiReportCarriesNothingButPrintableAscii` tightened;
-- the `hostile-text` fixture.
+- the `hostile-text` fixtures (Amendment 2A).
 
-At this phase the fixture covers the existing views. P3 and P4 add the block to it, and the
+At this phase the fixtures cover the existing views. P3 and P4 add the block to them, and the
 hostile-envelope test covers `FailureModeDto` as soon as P1's field exists.
 
 ### P3 — `--id` block
