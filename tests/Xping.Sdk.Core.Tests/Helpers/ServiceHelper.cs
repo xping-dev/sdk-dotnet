@@ -65,7 +65,8 @@ internal static class ServiceHelper
     public static IHost BuildOrchestratorHost(
         Mock<IXpingUploader> uploaderMock,
         Mock<IEnvironmentDetector> envDetectorMock,
-        Action<XpingConfiguration>? configure = null)
+        Action<XpingConfiguration>? configure = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         return new HostBuilder()
             .ConfigureServices(services =>
@@ -85,6 +86,7 @@ internal static class ServiceHelper
                 services.AddXpingStatistics();
                 services.AddSingleton(uploaderMock.Object);
                 services.AddSingleton(envDetectorMock.Object);
+                configureServices?.Invoke(services);
             })
             .Build();
     }

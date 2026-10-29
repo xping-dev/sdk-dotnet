@@ -23,7 +23,8 @@ public static class XpingTestSetup
     [AssemblyInitialize]
     public static void AssemblyInit(TestContext context)
     {
-        // Initialize Xping context - will load configuration from environment variables
+        // Runs before any test, so no test has installed a context or left a configuration behind yet:
+        // configuration comes from environment variables.
         XpingContext.Initialize();
     }
 

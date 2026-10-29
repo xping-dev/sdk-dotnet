@@ -51,6 +51,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     private readonly IHost _host;
     private readonly ILogger<XpingContextOrchestrator> _logger;
 
+    // Logs the session lifecycle under the adapter's own category, so a Logging filter written for
+    // the adapter keeps applying to the lines it printed before Core took them over.
+    private readonly ILogger _lifecycleLogger;
+
     // _Host manages lifetime — disposing the host disposes all registered services.
 #pragma warning disable CA2213
     private readonly ITestExecutionCollector _collector;
@@ -184,6 +188,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
         // Resolve the logger first, so it is available for error reporting during the rest of initialization.
         _logger = services.GetRequiredService<ILogger<XpingContextOrchestrator>>();
+        _lifecycleLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
         _flushLock = new SemaphoreSlim(1, 1);
 
         try
@@ -351,7 +356,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The result of the upload operation.</returns>
-    protected async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
+    protected internal async Task<UploadResult> FlushSessionAsync(CancellationToken cancellationToken = default)
     {
         // Short-circuit when SDK is unhealthy or disabled
         if (!IsCollecting)
@@ -390,7 +395,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     /// <param name="execution">The test execution result to record.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="execution"/> is <c>null</c>.</exception>
-    protected void RecordTestExecution(TestExecution execution)
+    protected internal void RecordTestExecution(TestExecution execution)
     {
         if (execution == null)
             throw new ArgumentNullException(nameof(execution));
@@ -429,7 +434,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// Thrown when the final upload fails and strict mode is enabled, to ensure CI pipelines fail fast
     /// when test observability data cannot be transmitted. Thrown again by every later call.
     /// </exception>
-    protected async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
+    protected internal async Task<UploadResult> FinalizeSessionAsync(CancellationToken cancellationToken = default)
     {
         // Idempotent: lifecycle hooks and upload run exactly once even if called multiple times.
         // A strict-mode failure is thrown again on every later call: whichever call ends the session
@@ -445,6 +450,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         if (!IsCollecting)
             return new UploadResult { Success = true, TotalRecordsCount = 0 };
 
+        _lifecycleLogger.LogDebug("Finalizing session");
         await OnSessionFinalizingAsync(cancellationToken).ConfigureAwait(false);
 
         UploadResult uploadResult;
@@ -483,6 +489,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         finally { _flushLock.Release(); }
 
+        LogSessionSummary(uploadResult);
         await OnSessionFinalizedAsync(uploadResult, cancellationToken).ConfigureAwait(false);
 
         if (storedExecutions != null)
@@ -549,10 +556,37 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
     }
 
+    private void LogSessionSummary(UploadResult result)
+    {
+        QuickStatistics? stats = result.Success ? result.QuickStatistics : null;
+        if (stats == null)
+        {
+            _lifecycleLogger.LogInformation("Session finalized.");
+            return;
+        }
+
+        SessionSummary summary = SessionSummary.From(stats);
+        if (summary.Retried)
+        {
+            _lifecycleLogger.LogInformation(
+                "Total tests recorded: {Total} ({DistinctTests} {TestLabel}, {Retries} {RetryLabel}) · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
+                summary.Total, summary.DistinctTests, summary.TestLabel,
+                summary.Retries, summary.RetryLabel, summary.Outcomes,
+                summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
+        }
+        else
+        {
+            _lifecycleLogger.LogInformation(
+                "Total tests recorded: {Total} · {Outcomes} · exec: {ExecDuration} · wall: {WallClockDuration}{Overhead}",
+                summary.Total, summary.Outcomes,
+                summary.ExecutionDuration, summary.WallClockDuration, summary.Overhead);
+        }
+    }
+
     /// <summary>
-    /// Ends a session: finalizes <paramref name="context"/> and always disposes it afterward. Backs each
-    /// adapter's <c>FinalizeAndShutdownAsync</c>, which claims its static instance first and passes it
-    /// here, so the context that is finalized is the one that is shut down.
+    /// Ends a session: finalizes <paramref name="context"/> and always disposes it afterward. Backs
+    /// <see cref="XpingContextSingleton{TContext}.EndSessionAsync"/>, which claims the installed context
+    /// first and passes it here, so the context that is finalized is the one that is shut down.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -827,8 +861,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Called after the session has been finalized and uploaded. Override to handle post-upload logic,
-    /// such as logging or reporting the upload result.
+    /// Called after the session has been finalized and uploaded, and its summary logged. Override to
+    /// handle post-upload logic.
     /// </summary>
     /// <param name="result">The result returned by the upload operation.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

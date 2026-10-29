@@ -20,6 +20,7 @@ using Xunit;
 /// <summary>
 /// Tests for XpingContext lifecycle management.
 /// </summary>
+[Collection(XpingContextCollection.Name)]
 public sealed class XpingContextTests : IAsyncLifetime
 {
     // A store of its own, thrown away with the fixture. Without it the context under test resolves
@@ -166,16 +167,41 @@ public sealed class XpingContextTests : IAsyncLifetime
         Assert.False(XpingContext.IsInitialized);
     }
 
+    /// <summary>
+    /// Initialize() builds the host but must not throw from [AssemblyInitialize] when that fails: the
+    /// failure is cached and surfaces where XpingTestBase resolves its services, which already fails
+    /// the run in strict mode.
+    /// </summary>
     [Fact]
-    public void FinalizeOnProcessExit_WithoutMaterializedSession_LeavesContextAlone()
+    public void Initialize_HostBuildFails_DoesNotThrowAndGetBaseServicesRethrows()
     {
-        // Initialize() only registers the lazy wrapper. Nothing ran, so there is nothing to
-        // finalize, and building a host on the way out of the process would be pure cost.
+        // BatchSize 0 is invalid, and strict mode turns an invalid configuration into an error.
+        var invalid = new XpingConfiguration
+        {
+            Mode = XpingMode.LocalOnly,
+            LocalStorePath = _scratchStore,
+            StrictMode = true,
+            BatchSize = 0,
+        };
+
+        var exception = Record.Exception(() => XpingContext.Initialize(invalid));
+
+        Assert.Null(exception);
+        Assert.True(XpingContext.IsInitialized);
+        Assert.Throws<XpingConfigurationException>(() => XpingContext.GetBaseServices());
+    }
+
+    [Fact]
+    public void FinalizeOnProcessExit_AfterInitializeAlone_FinalizesAndShutsDown()
+    {
+        // Initialize() builds the host itself, so its cost is not charged to the first test's
+        // [Timeout] budget (#289). The safety net therefore has a session to end even before any
+        // test is recorded.
         XpingContext.Initialize(ScratchConfiguration());
 
         XpingContext.FinalizeOnProcessExit(_ => throw new InvalidOperationException("unexpected process failure"));
 
-        Assert.True(XpingContext.IsInitialized);
+        Assert.False(XpingContext.IsInitialized);
     }
 
     [Fact]
@@ -291,7 +317,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     // LocalOnly, not left to Auto: CI sets XPING_APIKEY for the whole job and XPING_* overrides
     // every config path, so Auto would resolve to Cloud and upload these synthetic sessions to the
     // real Xping Cloud (#260). The parameterless Initialize() reads that ambient config, so it is
-    // only used here where the host is never built.
+    // only used here where nothing is recorded or finalized.
     private XpingConfiguration ScratchConfiguration() =>
         new() { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore };
 

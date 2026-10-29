@@ -203,6 +203,10 @@ public class TestBase
 }
 ```
 
+A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
+so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
+forgets it. `Initialize(null)` throws `ArgumentNullException`.
+
 ### Manual Test Recording
 
 While not typically needed (automatic tracking handles this), you can manually record tests:

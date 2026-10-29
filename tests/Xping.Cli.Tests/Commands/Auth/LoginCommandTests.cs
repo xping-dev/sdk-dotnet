@@ -244,7 +244,7 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
-    public void ACallbackErrorOtherThanDenialFailsWithTheServersCode()
+    public async Task ACallbackErrorOtherThanDenialFailsWithTheServersCode()
     {
         CliFlowHost host = _host;
         host.Cloud.QueueAuthorize(AuthorizeScript.ServerError);
@@ -258,7 +258,9 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal("oauth_error", json.GetProperty("error").GetString());
         Assert.Equal("server_error", json.GetProperty("oauthError").GetString());
 
-        // The page shows the error code, never the description a redirect could have written.
+        // The page shows the error code, never the description a redirect could have written. The
+        // browser records the page after reading it, which can land after login has returned.
+        await host.Browser.Played.ConfigureAwait(true);
         (_, string body) = Assert.Single(host.Browser.Callbacks);
         Assert.Contains("server_error", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Something broke", body, StringComparison.Ordinal);

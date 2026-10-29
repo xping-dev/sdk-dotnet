@@ -236,11 +236,17 @@ MSTest test outcomes are mapped to Xping outcomes:
 | Passed | Passed |
 | Failed | Failed |
 | Inconclusive | Inconclusive |
-| Timeout | Failed |
+| Stopped by `[Timeout]` | Timeout |
 | Aborted | Failed |
 | Unknown | NotExecuted |
 | NotRunnable | NotExecuted |
-| InProgress | NotExecuted |
+
+A test stopped by `[Timeout]` is recorded as `Timeout`, together with the budget it declared. A test
+stopped by a run-wide `TestTimeout` is recorded as `Timeout` without a budget. With cooperative
+cancellation (`CooperativeCancellation = true`, or turned on for the whole run), a timed-out test is
+recorded as `Failed` if it observes its token, or `Passed` if it ignores the token (MSTest passes it
+too). See
+[Known Limitations](https://docs.xping.io/known-limitations.html#timeouts).
 
 ## Skipped Tests
 
@@ -290,6 +296,10 @@ public static class CustomTestSetup
     }
 }
 ```
+
+A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
+so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
+forgets it. `Initialize(null)` throws `ArgumentNullException`.
 
 ### TestContext Access
 
