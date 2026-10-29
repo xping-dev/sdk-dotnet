@@ -47,6 +47,15 @@ These changes are applied in place in the sections named.
 | F | D7: "a renderer-authored label does not go through `Recorded`" | A vocabulary lookup that echoes an unknown value (`LabelFor`, `PopulationTokenFor`, `StatusWordsFor`) is read through `Recorded`, wherever its argument came from the envelope. The hostile-envelope test keeps those values for its D7 assertions, and a second pass rewrites them too and asserts only that nothing unsafe is printed | D7 |
 | G | D7: "ASCII end to end, except inside commands" | Also outside the renderer: the scope notice and `xping where` join their segments with the glyph set's separator rather than a literal `·` | D7 |
 
+### Amendment 3 — from P3
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D5: past the cap, "one line at indent 4" | One blank line, then that line, as between modes. Without it the line reads as the last mode's | D5 |
+| B | D5: a frame breaks "after the last `.` before its first `(`" | A constructor's method is `.ctor` or `.cctor`, its own dot included. In `Type..ctor(...)` the break is after the first of the two dots, so the continuation reads `.ctor(...)` | D5 |
+| C | D5: the message is "omitted when the message is empty" | Omitted when it is empty or only whitespace. A line of indentation alone would read as the gap between two modes | D5 |
+| D | D5: the sixth line is cut "when more would follow" | Also when the sixth line is one token wider than 68 columns: it is more than the line holds. A sixth line that fits is printed as it is | D5 |
+
 ---
 
 ## 1. Ground truth
@@ -248,23 +257,25 @@ as findings are numbered:
 2. **Type line**, indent 4: `ExceptionType`, or `exception type not recorded` when null. A type
    with no break in reach overflows as one token (detail spec Amendment 2D).
 3. **Message**, indent 4, wrapped to `ContinuationBudget` (68) with `Wrap`. At most **6** lines.
-   When more would follow, the sixth line is the rest of the message cut hard to 65 columns, a word
-   or a token split if need be, followed by `...`. The marker always fits in the 68 columns,
-   including when the sixth line would be one long token. Omitted when the message is empty.
+   When more would follow, or the sixth line is one token wider than 68 columns (Amendment 3D), the
+   sixth line is the rest of the message cut hard to 65 columns, a word or a token split if need be,
+   followed by `...`. The marker always fits in the 68 columns, including when the sixth line would
+   be one long token. Omitted when the message is empty or only whitespace (Amendment 3C).
 4. **Frames**, innermost first as recorded, every frame (at most 5). Each is `at <frame>` at indent
    6, a budget of 66 columns. A frame that does not fit breaks once, after the last `.` before its
    first `(` that fits, and continues at indent 9 (budget 63), so the method name and its
    arguments stay together. A remainder still wider than 63 wraps further at spaces, at indent 9. No
-   such `.` in reach: the frame overflows as one token. When `Degraded` and there are frames, one
-   more dim line at indent 6: `(no test code on the stack; framework frames shown)`. No frames: no
-   frame lines and no note.
+   such `.` in reach: the frame overflows as one token. A constructor keeps its own dot: in
+   `Type..ctor(...)` the break is after the first of the two (Amendment 3B). When `Degraded` and
+   there are frames, one more dim line at indent 6:
+   `(no test code on the stack; framework frames shown)`. No frames: no frame lines and no note.
 5. **Unavailable.** When `Unavailable`, the mode prints its count line and one line at indent 4,
    `the adapter recorded no failure detail`, and nothing else.
 
 One blank line between modes.
 
-**Cap.** At most **5** modes are printed, the same cap D4.1 used. Past that, one line at indent 4:
-`N more failure modes in --format json`.
+**Cap.** At most **5** modes are printed, the same cap D4.1 used. Past that, one blank line and one
+line at indent 4: `N more failure modes in --format json` (Amendment 3A).
 
 **Charset.** The separator is `ReportGlyphs.Separator`. Every other character the block adds is
 ASCII. Recorded text goes through D7.

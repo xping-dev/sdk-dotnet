@@ -19,6 +19,22 @@ FINDING                                                       row 1 of 1
     failure modes  3
     repro          run 11 times: at 5 of 20 runs failing (25%), 11 runs
                    show a failure 95% of the time
+
+FAILURE MODES                                            3 failure modes
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    System.InvalidOperationException
+    Expected <n> but was <n>
+      at MyApp.Tests.CheckoutTests.Completes()
+
+2.  2 failed attempts · first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    System.TimeoutException
+    timed out after <n>ms
+      at MyApp.Tests.CheckoutTests.Completes()
+
+3.  1 failed attempt · first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    the adapter recorded no failure detail
 ```
 
 rates: the marker on each finding says which runs its percentage was

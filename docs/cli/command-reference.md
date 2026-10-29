@@ -406,6 +406,13 @@ FINDING                                                       row 5 of 5
     failure modes  1
 
     Also about this test: #4 unstable timing (f_66c10ec3)
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  6 failed attempts · since the window opened
+    System.InvalidOperationException
+    Expected <n> but was <n>
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -471,6 +478,13 @@ FINDING                                                       row 1 of 1
     failure modes  1
     repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
                    show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

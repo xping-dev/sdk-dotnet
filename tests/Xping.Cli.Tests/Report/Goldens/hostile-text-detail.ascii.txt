@@ -20,6 +20,13 @@ FINDING                                                       row 1 of 1
     failure modes  1
     repro          run 11 times: at 5 of 20 runs failing (25%), 11 runs
                    show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  5 failed attempts | first seen 08-01 09:03 at eab9867, 16 runs ago
+    System.InvalidOperationException
+    refund ?[31mdeclined?[0m for caf? ?order
 ```
 
 rates: the marker on each finding says which runs its percentage was

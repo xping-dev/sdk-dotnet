@@ -160,6 +160,22 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
     private const int ShaWidth = 7;
 
+    private const string FailureModesLabel = "FAILURE MODES";
+
+    /// <summary>How many failure modes a view lists; the rest are in the JSON (D5).</summary>
+    private const int FailureModesShown = 5;
+
+    /// <summary>How many lines a failure mode's message takes at most (D5).</summary>
+    private const int MessageLinesShown = 6;
+
+    /// <summary>Where a failure mode's frames start, under its type and message.</summary>
+    private const int FrameIndent = ContinuationIndent + 2;
+
+    /// <summary>Where a frame broken between its type and its method continues.</summary>
+    private const int FrameContinuationIndent = FrameIndent + 3;
+
+    private const string Ellipsis = "...";
+
     // Where the outcome column starts, which is where an absence line puts its rule glyph.
     private const int RunOutcomeColumn = RunIndent + RunWhenWidth + RunGap;
 
@@ -555,6 +571,179 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             foreach (string text in Wrap(also, ContinuationBudget))
                 builder.Append(' ', ContinuationIndent).AppendLine(text);
         }
+
+        WriteFailureModes(builder, finding.FailureModes, finding.FailureModes.Count);
+    }
+
+    /// <summary>
+    /// Writes how the subject failed: each failure mode's count, first sighting, type, message and
+    /// frames (failure-mode spec D5).
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="modes">The modes, in the order the view resolved them.</param>
+    /// <param name="total">How many modes there are, which the heading states however many are listed.</param>
+    /// <remarks>
+    /// Numbered in the row-number column, as findings are, so the block reads as a list of the same
+    /// shape. Nothing at all when there is no mode: an empty heading would say the subject failed.
+    /// </remarks>
+    private void WriteFailureModes(StringBuilder builder, IReadOnlyList<FailureModeDto> modes, int total)
+    {
+        if (modes.Count == 0)
+            return;
+
+        builder.AppendLine();
+        WriteHeading(builder, FailureModesLabel, $"{Count(total)} {Plural(total, "failure mode")}");
+
+        int listed = Math.Min(modes.Count, FailureModesShown);
+
+        for (int index = 0; index < listed; index++)
+        {
+            if (index > 0)
+                builder.AppendLine();
+
+            WriteFailureMode(builder, modes[index], index + 1);
+        }
+
+        if (total > listed)
+        {
+            int more = total - listed;
+
+            builder.AppendLine()
+                   .Append(' ', ContinuationIndent)
+                   .Append(Count(more)).Append(" more ").Append(Plural(more, "failure mode"))
+                   .AppendLine(" in --format json");
+        }
+    }
+
+    /// <summary>
+    /// Writes one failure mode: the count line, then the type, the message and the frames.
+    /// </summary>
+    private void WriteFailureMode(StringBuilder builder, FailureModeDto mode, int number)
+    {
+        string label = number.ToString(CultureInfo.InvariantCulture) + ".";
+        string count = $"{Count(mode.Occurrences)} {Plural(mode.Occurrences, "failed attempt")}";
+        List<string> header = Wrap($"{count} {capabilities.Glyphs.Separator} {FirstSeen(mode)}", ContinuationBudget);
+
+        builder.Append(label).Append(' ', Math.Max(1, RowLabelWidth - label.Length)).AppendLine(header[0]);
+
+        foreach (string line in header.Skip(1))
+            builder.Append(' ', ContinuationIndent).AppendLine(line);
+
+        if (mode.Unavailable)
+        {
+            builder.Append(' ', ContinuationIndent).AppendLine("the adapter recorded no failure detail");
+            return;
+        }
+
+        IEnumerable<string> type = Recorded(mode.ExceptionType) is { Length: > 0 } recorded
+            ? WrapValue(recorded, ContinuationBudget)
+            : ["exception type not recorded"];
+
+        foreach (string line in type)
+            builder.Append(' ', ContinuationIndent).AppendLine(line);
+
+        // Blank is empty: a line of indentation alone would read as the gap between two modes.
+        if (!string.IsNullOrWhiteSpace(mode.Message))
+        {
+            foreach (string line in MessageLines(Recorded(mode.Message)))
+                builder.Append(' ', ContinuationIndent).AppendLine(line);
+        }
+
+        foreach (string frame in mode.Frames)
+            WriteFrame(builder, Recorded(frame));
+
+        if (mode.FramesDegraded && mode.Frames.Count > 0)
+        {
+            builder.Append(' ', FrameIndent)
+                   .AppendLine(capabilities.Dim("(no test code on the stack; framework frames shown)"));
+        }
+    }
+
+    /// <summary>
+    /// Says when a mode first appeared, in words only when it is new in the window.
+    /// </summary>
+    /// <remarks>
+    /// A mode already present in the window's oldest run gets no date: that date is the header's, and
+    /// the report cannot see whether the mode started there or long before.
+    /// </remarks>
+    private string FirstSeen(FailureModeDto mode)
+    {
+        if (mode.FirstSeenInLatestSession)
+            return "first seen in the latest run";
+
+        if (!mode.FirstSeenAfterWindowStart)
+            return "since the window opened";
+
+        string sha = Recorded(mode.FirstSeenSha) is { Length: > 0 } recorded
+            ? " at " + TerminalText.Head(recorded, ShaWidth)
+            : string.Empty;
+
+        // Zero only where discounting set aside every older failure (D3): the counted ones began in
+        // the latest run, though the mode itself did not.
+        string when = mode.FirstSeenSessionsAgo == 0
+            ? "in the latest run"
+            : $"{Runs(mode.FirstSeenSessionsAgo)} ago";
+
+        return $"first seen {Format(mode.FirstSeenAt, "MM-dd HH:mm")}{sha}, {when}";
+    }
+
+    /// <summary>
+    /// Wraps a mode's message, capped at <see cref="MessageLinesShown"/> lines.
+    /// </summary>
+    /// <remarks>
+    /// The last line is cut hard rather than at a word, so the marker fits even when the rest is one
+    /// token that <see cref="Wrap"/> would otherwise print whole and past the fence. A sixth line
+    /// that is such a token is cut too: it is more than the line can hold.
+    /// </remarks>
+    private static List<string> MessageLines(string message)
+    {
+        List<string> lines = Wrap(message, ContinuationBudget);
+
+        if (lines.Count < MessageLinesShown)
+            return lines;
+
+        string rest = string.Join(' ', lines.Skip(MessageLinesShown - 1));
+
+        if (rest.Length <= ContinuationBudget)
+            return lines;
+
+        string last = TerminalText.Head(rest, ContinuationBudget - Ellipsis.Length).TrimEnd() + Ellipsis;
+
+        return [.. lines.Take(MessageLinesShown - 1), last];
+    }
+
+    /// <summary>
+    /// Writes one frame, broken once between its type and its method where it does not fit.
+    /// </summary>
+    /// <remarks>
+    /// After the last <c>.</c> before the argument list, so the method name and its arguments stay
+    /// together on the continuation: that is the half a reader searches for. A dot inside the
+    /// argument list may be a decimal point and is never a break.
+    /// </remarks>
+    private static void WriteFrame(StringBuilder builder, string frame)
+    {
+        const string prefix = "at ";
+        const int budget = FenceWidth - FrameIndent;
+
+        if (prefix.Length + frame.Length <= budget)
+        {
+            builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame);
+            return;
+        }
+
+        int dot = MethodDot(frame, budget - prefix.Length);
+
+        // No break in reach: the frame overflows whole rather than losing half an identifier.
+        if (dot < 0)
+        {
+            builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame);
+            return;
+        }
+
+        builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame[..(dot + 1)]);
+
+        foreach (string line in Wrap(frame[(dot + 1)..], FenceWidth - FrameContinuationIndent))
+            builder.Append(' ', FrameContinuationIndent).AppendLine(line);
     }
 
     /// <summary>
@@ -1779,9 +1968,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (value.Length <= width)
             return value;
 
-        int paren = value.IndexOf('(', StringComparison.Ordinal);
-        int end = paren < 0 ? value.Length : paren;
-        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+        int dot = MethodDot(value, value.Length);
 
         if (dot < 0)
             return value;
@@ -1791,6 +1978,30 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return width >= value.Length - dot + 4
             ? Fit(value, width)
             : string.Concat("...", value.AsSpan(dot + 1));
+    }
+
+    /// <summary>
+    /// Finds the dot that ends a name's type and starts its method: the last one before the argument
+    /// list, within <paramref name="limit"/> characters.
+    /// </summary>
+    /// <returns>The dot's index, or -1 where there is none in reach.</returns>
+    /// <remarks>
+    /// <para>
+    /// Never inside the argument list, where a dot belongs to a parameter's type or a decimal.
+    /// </para>
+    /// <para>
+    /// A constructor's method is <c>.ctor</c> or <c>.cctor</c>, its own dot included, so
+    /// <c>Order..ctor()</c> ends its type at the first of the two dots. Taking the second would leave
+    /// <c>ctor()</c>, which no frame and no search reads as a constructor.
+    /// </para>
+    /// </remarks>
+    private static int MethodDot(string value, int limit)
+    {
+        int paren = value.IndexOf('(', StringComparison.Ordinal);
+        int end = Math.Min(paren < 0 ? value.Length : paren, limit);
+        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+
+        return dot > 0 && value[dot - 1] == '.' ? dot - 1 : dot;
     }
 
     /// <summary>
