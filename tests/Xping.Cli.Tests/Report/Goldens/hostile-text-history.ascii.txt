@@ -36,6 +36,13 @@ RUNS                                                        newest first
   08-01 09:01  +                      100ms  eab9867
   08-01 09:00  +                      100ms  eab9867
 
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  5 failed attempts | first seen 08-01 09:03 at eab9867, 16 runs ago
+    System.InvalidOperationException
+    refund ?[31mdeclined?[0m for caf? ?order
+
 FINDINGS                                                       1 finding
 ------------------------------------------------------------------------
 

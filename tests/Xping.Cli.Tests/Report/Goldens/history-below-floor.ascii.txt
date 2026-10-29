@@ -20,6 +20,13 @@ RUNS                                                        newest first
   08-01 09:05  +                      100ms  eab9867
                -     absent from 5 runs
 
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  1 failed attempt | first seen 08-01 09:06 at eab9867, 1 run ago
+    System.InvalidOperationException
+    the refund was issued twice.
+
 FINDINGS
 ------------------------------------------------------------------------
 

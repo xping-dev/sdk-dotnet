@@ -664,15 +664,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </summary>
     /// <remarks>
     /// A mode already present in the window's oldest run gets no date: that date is the header's, and
-    /// the report cannot see whether the mode started there or long before.
+    /// the report cannot see whether the mode started there or long before. Checked first because in
+    /// a one-run window the oldest run is also the latest, and both flags hold (Amendment 4A).
     /// </remarks>
     private string FirstSeen(FailureModeDto mode)
     {
-        if (mode.FirstSeenInLatestSession)
-            return "first seen in the latest run";
-
         if (!mode.FirstSeenAfterWindowStart)
             return "since the window opened";
+
+        if (mode.FirstSeenInLatestSession)
+            return "first seen in the latest run";
 
         string sha = Recorded(mode.FirstSeenSha) is { Length: > 0 } recorded
             ? " at " + TerminalText.Head(recorded, ShaWidth)
@@ -747,7 +748,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     }
 
     /// <summary>
-    /// Writes one test's history: who it is, how its runs ended, each run, and its findings.
+    /// Writes one test's history: who it is, how its runs ended, each run, how it failed, and its
+    /// findings.
     /// </summary>
     /// <param name="builder">What the report is being written into.</param>
     /// <param name="envelope">The report, holding the findings about this test alone.</param>
@@ -792,6 +794,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         builder.AppendLine();
         WriteHeading(builder, RunsLabel, RunsNote);
         WriteRuns(builder, history.Sessions);
+
+        // Every mode is listed whatever the findings say: a test can fail without reaching any
+        // finding's threshold, and the block counts attempts, so it reads beside RUNS (D4).
+        WriteFailureModes(builder, history.FailureModes, history.FailureModes.Count);
 
         builder.AppendLine();
         WriteHistoryFindings(builder, envelope, history);

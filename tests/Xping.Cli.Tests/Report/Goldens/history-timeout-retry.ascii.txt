@@ -24,6 +24,18 @@ RUNS                                                        newest first
   08-20 23:40  x     timeout @3          5s  c670fc3
   08-20 20:40  +                      805ms  c670fc3
 
+FAILURE MODES                                            2 failure modes
+------------------------------------------------------------------------
+
+1.  5 failed attempts | first seen 08-20 23:40 at c670fc3, 6 runs ago
+    System.Net.Http.HttpRequestException
+    response status code does not indicate success: <num> (service
+    unavailable).
+      at SampleApp.MSTest.GatewayTests.Charge_CompletesWithinTheBudget()
+
+2.  4 failed attempts | first seen 08-20 23:40 at c670fc3, 6 runs ago
+    the adapter recorded no failure detail
+
 FINDINGS                                                       1 finding
 ------------------------------------------------------------------------
 
