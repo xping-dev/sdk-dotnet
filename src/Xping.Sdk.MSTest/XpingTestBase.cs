@@ -63,9 +63,8 @@ public abstract class XpingTestBase
         if (!XpingContext.IsInitialized)
             XpingContext.Initialize();
 
-        // Resolve and cache services once per test class instance. GetBaseServices()
-        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
-        // later calls on the same instance are a no-op field read.
+        // Resolve and cache services once per test class instance, so later calls on the same
+        // instance are a no-op field read. A host that failed to build throws here.
         try
         {
             _services ??= XpingContext.GetBaseServices();
@@ -157,7 +156,7 @@ public abstract class XpingTestBase
         string workerKey,
         string className)
     {
-        var outcome = ResolveOutcome(context);
+        var outcome = MapOutcome(context.CurrentTestOutcome);
 
         // Resolve the test class first, then the method on it, so both the assembly name and the
         // pinned fingerprint come from actual reflection data.
@@ -387,36 +386,25 @@ public abstract class XpingTestBase
     }
 
     /// <summary>
-    /// Determines how the current test ended, as seen from <c>[TestCleanup]</c>.
+    /// Maps the outcome MSTest reports to <c>[TestCleanup]</c> to the outcome to record.
     /// </summary>
-    /// <param name="context">The context of the test that just finished.</param>
+    /// <param name="outcome">The test's <see cref="TestContext.CurrentTestOutcome"/>.</param>
     /// <returns>The outcome to record.</returns>
     /// <remarks>
     /// <para>
-    /// A timeout is detected from the cancellation token, not from
-    /// <see cref="TestContext.CurrentTestOutcome"/>, because MSTest never reports
-    /// <see cref="UnitTestOutcome.Timeout"/> to cleanup. What it reports instead depends on how the
-    /// test was written: <see cref="UnitTestOutcome.InProgress"/> when the test body was abandoned
-    /// mid-run, <see cref="UnitTestOutcome.Failed"/> when it observed its cancellation token, and —
-    /// for a cooperatively-cancelled test that ignored the token — <see cref="UnitTestOutcome.Passed"/>,
-    /// even though the runner goes on to fail it. Reading the outcome alone therefore records a
-    /// timed-out test as not-executed, failed, or passed depending on an unrelated detail.
+    /// MSTest never reports <see cref="UnitTestOutcome.Timeout"/> to cleanup, and it does not cancel
+    /// <see cref="TestContext.CancellationTokenSource"/> before cleanup runs either (checked on 3.8 and
+    /// 3.11). When <c>[Timeout]</c> stops a test, MSTest abandons the body and runs cleanup with the
+    /// outcome still <see cref="UnitTestOutcome.InProgress"/>. That holds whether the body is sync or
+    /// async. Every test that finished on its own reports <c>Passed</c> or <c>Failed</c>, so
+    /// <c>InProgress</c> means the test was stopped.
     /// </para>
     /// <para>
-    /// <c>IsCancellationRequested</c> is true for all three and false for every test that finished on
-    /// its own, including tests that declare a generous timeout and stay well inside it. It is also
-    /// true when the whole run is being torn down, which is still a test that was stopped rather than
-    /// one that disagreed with an assertion, so the classification holds.
+    /// A cooperative timeout (<c>CooperativeCancellation = true</c>) can't be detected here. A test
+    /// that observes its token reaches cleanup as <c>Failed</c>, with nothing to tell it apart from
+    /// a real failure. One that ignores its token runs to completion, and MSTest passes it.
     /// </para>
     /// </remarks>
-    private static TestOutcome ResolveOutcome(TestContext context)
-    {
-        if (context.CancellationTokenSource?.IsCancellationRequested == true)
-            return TestOutcome.Timeout;
-
-        return MapOutcome(context.CurrentTestOutcome);
-    }
-
     private static TestOutcome MapOutcome(UnitTestOutcome outcome)
     {
         return outcome switch
@@ -425,8 +413,9 @@ public abstract class XpingTestBase
             UnitTestOutcome.Failed => TestOutcome.Failed,
             UnitTestOutcome.Inconclusive => TestOutcome.Inconclusive,
 
-            // Kept for completeness. MSTest does not surface this value to cleanup, so a real timeout
-            // is classified by ResolveOutcome before reaching here.
+            UnitTestOutcome.InProgress => TestOutcome.Timeout,
+
+            // Kept for completeness: MSTest does not surface this value to cleanup.
             UnitTestOutcome.Timeout => TestOutcome.Timeout,
             UnitTestOutcome.Aborted => TestOutcome.Failed,
             _ => TestOutcome.NotExecuted
