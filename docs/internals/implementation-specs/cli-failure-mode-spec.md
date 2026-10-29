@@ -56,6 +56,14 @@ These changes are applied in place in the sections named.
 | C | D5: the message is "omitted when the message is empty" | Omitted when it is empty or only whitespace. A line of indentation alone would read as the gap between two modes | D5 |
 | D | D5: the sixth line is cut "when more would follow" | Also when the sixth line is one token wider than 68 columns: it is more than the line holds. A sixth line that fits is printed as it is | D5 |
 
+### Amendment 4 — from P4
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D5: the count line checks `FirstSeenInLatestSession` first, then `FirstSeenAfterWindowStart` | `FirstSeenAfterWindowStart = false` is checked first: `since the window opened`. In a one-run window the newest run is also the oldest, so `ToView` sets both `FirstSeenInLatestSession` (appeared at index 0) and `FirstSeenAfterWindowStart = false` (index 0 is not below `SessionCount - 1` = 0). The old order printed `first seen in the latest run` for a mode present in the window's oldest run, the regression signal D3 rules out. With more than one run the two flags cannot both hold, so only a one-run window changes. `--test` reaches it: a test that has run once has a history. `--id` cannot: no finding is produced under `MinimumSessionsPerTestToReport` (5) runs | D5 |
+| B | §3.5: `history-failure-modes` covers §3.2, the cap line and §3.3 | A history envelope holds one test (as Amendment 2A found for views). §3.2 is the test-history spec's §3.1 with the block added, and `history-flaky` is that fixture, so `history-flaky` pins §3.2. `history-failure-modes` is one test with 7 modes, one of them with a 900-character message: the cap line and §3.3. Still 61 fixtures, 122 files | §1.2, §3.5 |
+| C | §3.5: the `history-*` goldens gain the block | Every hand-built history fixture derives its modes from its own timeline: its attempts are replayed as sessions and resolved with `FailureModes.Of(context, fingerprint)`, as `TestHistoryBuilder.Found` resolves them. A fixture with a failed attempt and no recorded failure is rejected, so no fixture pins a block its RUNS rows contradict. `history-timeout-retry` gains two modes: its failed attempts, and its timed-out ones, which the fixture records without an exception, as a killed attempt can be, so they print the unavailable form (Amendment 1E) | §3.5 |
+
 ---
 
 ## 1. Ground truth
@@ -126,7 +134,8 @@ Every claim here was read in source at the cited line.
 - `FailureModeDto`, `FindingDto.FailureModes`, `TestHistoryDto.FailureModes` (§4).
 - `TerminalText` and `TerminalCharset` in `src/Xping.Cli/Reporting/`, and the renderer helpers `Recorded` and `Command` (D7).
 - Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text`,
-  `hostile-text-detail`, `hostile-text-history` (§3.5, Amendment 2A).
+  `hostile-text-detail`, `hostile-text-history` (§3.5, Amendments 2A and 4B). §3.2 is pinned by the
+  existing `history-flaky`.
 
 ### 1.3 The question this block answers
 
@@ -242,14 +251,16 @@ as findings are numbered:
       at MyApp.Tests.CheckoutTests.Completes()
 ```
 
-1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then:
+1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then, checked
+   in this order (Amendment 4A):
+   - Not `FirstSeenAfterWindowStart`: `since the window opened`, with no date. The mode was already
+     there in the window's oldest run, the header names that run's date, and the report cannot see
+     further back. This is the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
+     In a one-run window this holds alongside `FirstSeenInLatestSession`, and wins.
    - `FirstSeenInLatestSession`: `first seen in the latest run`.
-   - Otherwise, `FirstSeenAfterWindowStart`: `first seen <MM-dd HH:mm> at <sha>, <when>`, where
-     `<when>` is `<n> runs ago` (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo`
-     is 0. That case happens only when D3's discounting set aside every older failure.
-   - Otherwise: `since the window opened`, with no date. The mode was already there in the window's
-     oldest run, the header names that run's date, and the report cannot see further back. This is
-     the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
+   - Otherwise: `first seen <MM-dd HH:mm> at <sha>, <when>`, where `<when>` is `<n> runs ago`
+     (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo` is 0. That case happens only
+     when D3's discounting set aside every older failure.
    - The sha is cut to `ShaWidth` (7), as the RUNS rows cut it (`TextReportRenderer.cs:711`). No
      sha recorded: drop ` at <sha>`.
 
@@ -480,13 +491,15 @@ line inside the fence exceeds the width rule.
 |---|---|
 | `detail-failure-modes` | §3.1: three modes, a degraded one, an unavailable one, all three first-seen forms |
 | `detail-unavailable` | `AlwaysFailing` whose adapter recorded nothing |
-| `history-failure-modes` | §3.2, plus a test with 7 modes (cap line) and a 900-character message (§3.3) |
+| `history-failure-modes` | A test with 7 modes (cap line) and a 900-character message (§3.3). §3.2 is `history-flaky` (Amendment 4B) |
 | `hostile-text`, `hostile-text-detail`, `hostile-text-history` | §3.4, through the full report, `--id` and `--test`, one fixture each over one store (Amendment 2A). The goldens pin that store; the hostile-envelope test (D7) covers every field |
 
 The existing `detail-flaky`, `detail-always-failing`, `detail-broken-fixture`,
 `detail-shared-failure`, `detail-store`, `detail-repro-*` and `history-*` goldens change: D6's pairs
 go and the block arrives. Regenerate them all and review the diff. It must consist of those two
-changes and nothing else. 61 fixtures, 122 files.
+changes and nothing else. The hand-built `history-*` fixtures derive their modes from their own
+timelines (Amendment 4C), and `history-healthy`, which never failed, does not change. 61 fixtures,
+122 files.
 
 ---
 
@@ -611,8 +624,9 @@ Assert:
 ### P4 — `--test` block
 
 D5's placement in `WriteHistory`, and the absent block for a test with no failures. Fixture
-`history-failure-modes`. A real-store test through `Program.Run`: a test failing two ways shows both
-modes, with hashes equal to the `--id` evidence.
+`history-failure-modes`, and the modes of every hand-built history fixture (Amendment 4C). D5's
+first-seen order with its one-run regression test (Amendment 4A). A real-store test through
+`Program.Run`: a test failing two ways shows both modes, with hashes equal to the `--id` evidence.
 
 ### P5 — Goldens and documented samples
 
