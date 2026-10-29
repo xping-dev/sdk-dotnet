@@ -540,7 +540,8 @@ internal static class ReportFixtures
 
         return EnvelopeBuilder.BuildRepro(
             new Finding("f_00000000", kind, Severity.Medium, EvidenceLevel.Moderate, 20, model, evidence, 0.5),
-            target);
+            target,
+            ShellDialect.Posix);
 
         static TestReference Reference(SubjectDto test) =>
             new(test.Fingerprint!, test.FullyQualifiedName!, test.DisplayName ?? test.FullyQualifiedName!,

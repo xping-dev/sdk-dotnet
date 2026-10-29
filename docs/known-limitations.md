@@ -609,6 +609,21 @@ cell, 85% of the findings it wrongly produced published the recent arm as the wi
 
 ## General Limitations
 
+### Printed Commands Are Quoted For PowerShell 7.3+ On Windows, And POSIX Shells Elsewhere
+
+**Affected**: `xping report` drill-down, `History:` and repro commands, and their `--format json` fields
+
+The CLI can't see which shell started it, so it picks a quoting style by OS. The two styles differ
+only for a value holding an apostrophe: POSIX writes it `'\''`, PowerShell `''`.
+
+- **cmd.exe** isn't supported. It has no single quotes, so a quoted value is split at `|`, `&` or a
+  space, and keeps its quotes.
+- **Windows PowerShell 5.1** isn't supported. It passes a `"` inside an argument to `dotnet` without
+  escaping it, so a repro filter naming an NUnit test with a string argument, like `Echo("x")`,
+  breaks. Use PowerShell 7.3 or later.
+- **Git Bash on Windows** gets PowerShell quoting. A command whose values hold an apostrophe needs
+  the `''` rewritten as `'\''`.
+
 ### Source Location Comes From The PDB, And Points At The Start Of The Body
 
 **Affected Frameworks**: NUnit, MSTest, xUnit

@@ -23,6 +23,23 @@ public sealed class DrillDownTests
             DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, Directory: directory)));
     }
 
+    /// <summary>Amendment 8: every value of the command is quoted for the scope's shell.</summary>
+    [Fact]
+    public void InPowerShellAnEmbeddedQuoteIsDoubled()
+    {
+        var scope = new ReportScope("It's.Tests", WindowResolution.SinceDate, 20, AssemblyGiven: true, Since: "a,b", Directory: "/work/it's")
+        {
+            Shell = ShellDialect.PowerShell
+        };
+
+        Assert.Equal(
+            "xping report --id f_2a91c0de --assembly 'It''s.Tests' --since 'a,b' --directory '/work/it''s'",
+            DrillDown.ForFinding("f_2a91c0de", scope));
+        Assert.Equal(
+            "xping report --test 3a597eb2 --assembly 'It''s.Tests' --directory '/work/it''s'",
+            DrillDown.ForTest("3a597eb2", scope));
+    }
+
     [Fact]
     public void AnOrdinaryScopeReadsAsTyped()
     {

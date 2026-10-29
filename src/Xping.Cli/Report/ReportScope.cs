@@ -35,4 +35,11 @@ internal sealed record ReportScope(
     bool AssemblyGiven = false,
     int? Runs = null,
     string? Since = null,
-    string? Directory = null);
+    string? Directory = null)
+{
+    /// <summary>
+    /// Gets the shell every printed command is quoted for. <see cref="ShellDialect.Posix"/> unless
+    /// the caller sets it; <c>report</c> sets <see cref="ShellDialects.Current"/>.
+    /// </summary>
+    public ShellDialect Shell { get; init; }
+}

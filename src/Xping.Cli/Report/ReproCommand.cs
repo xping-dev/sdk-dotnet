@@ -53,10 +53,11 @@ internal static class ReproCommand
     /// </summary>
     /// <param name="finding">The finding.</param>
     /// <param name="target">The runner and project the window's newest session recorded.</param>
+    /// <param name="shell">The shell the command is quoted for.</param>
     /// <returns>
     /// The repro, or null when rerunning cannot show this kind of failure or the runner is unknown.
     /// </returns>
-    public static Repro? For(Finding finding, ReproTarget target)
+    public static Repro? For(Finding finding, ReproTarget target, ShellDialect shell)
     {
         ArgumentNullException.ThrowIfNull(finding);
         ArgumentNullException.ThrowIfNull(target);
@@ -96,7 +97,7 @@ internal static class ReproCommand
             return null;
 
         return new Repro(
-            Command(names, known, target.ProjectPath),
+            Command(names, known, target.ProjectPath, shell),
             once ? 1 : RunsNeeded((double)failing / judged),
             failing,
             judged);
@@ -149,20 +150,20 @@ internal static class ReproCommand
         return ([.. chosen.Select(member => member.FullyQualifiedName)], chosen[0].RunsFailed, chosen[0].RunsJudged, false);
     }
 
-    private static string Command(string[] names, Runner runner, string? projectPath)
+    private static string Command(string[] names, Runner runner, string? projectPath, ShellDialect shell)
     {
         bool vstest = runner == Runner.VSTest;
         var builder = new StringBuilder(vstest ? "dotnet test" : "dotnet run");
 
         if (projectPath != null)
-            builder.Append(vstest ? " " : " --project ").Append(ShellQuote.Of(projectPath));
+            builder.Append(vstest ? " " : " --project ").Append(ShellQuote.Of(projectPath, shell));
 
         string filter = string.Join("|", names.Select(name => "FullyQualifiedName=" + Escape(name, vstest)));
 
         return builder
             .Append(" -e XPING_ENABLED=false ")
             .Append(vstest ? "--filter " : "-- --filter ")
-            .Append(ShellQuote.Of(filter))
+            .Append(ShellQuote.Of(filter, shell))
             .ToString();
     }
 

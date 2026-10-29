@@ -29,6 +29,10 @@ Invoke it as `xping`, from any directory. This is how the tool refers to itself:
 prints — in help text, in error hints, in the `drillDown` field of `--format json` — is a bare
 `xping` command you can paste back into the shell.
 
+Printed commands are quoted for the shell you most likely use: PowerShell 7.3 or later on Windows,
+bash or zsh everywhere else. The `--format json` fields carry the same strings. cmd.exe and Windows
+PowerShell 5.1 aren't supported; see [known limitations](../known-limitations.md#printed-commands-are-quoted-for-powershell-73-on-windows-and-posix-shells-elsewhere).
+
 > Global tools install to `~/.dotnet/tools` (`%USERPROFILE%\.dotnet\tools` on Windows), which the
 > .NET SDK normally adds to your `PATH`. If your shell answers `command not found: xping`, add that
 > directory to `PATH` and reopen the terminal.
@@ -506,9 +510,10 @@ MTP:     dotnet run --project <path> -e XPING_ENABLED=false -- --filter <filter>
 - **The filter** is `FullyQualifiedName=` and the stored name, escaped for the runner. On NUnit it
   selects exactly the failing case, arguments and all. On MSTest and xUnit a data-driven test's rows
   share one name, so it runs every row, the failing one among them.
-- **Quoting is for bash and zsh**, like every command the report prints. A filter holding
-  parentheses or quotes is wrapped in single quotes, which cmd.exe passes through as part of the
-  filter. PowerShell reads it as written, except a name with an apostrophe.
+- **Quoting follows your OS**, like every command the report prints: PowerShell 7.3+ on Windows,
+  bash and zsh elsewhere. A filter holding parentheses or quotes is wrapped in single quotes. Don't
+  paste it into cmd.exe or Windows PowerShell 5.1: cmd.exe passes the quotes through as part of the
+  filter, and 5.1 drops the `"` around a string argument.
 
 **The run count** is how many runs it takes to see at least one failure 95% of the time, at the
 rate the test failed in the window: the runs it failed in out of the runs it ran in with a verdict.

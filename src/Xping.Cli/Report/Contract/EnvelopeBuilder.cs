@@ -448,7 +448,7 @@ internal static class EnvelopeBuilder
             metrics,
             BuildEvidence(finding.Evidence),
             DrillDown.ForFinding(finding.Id, scope),
-            BuildRepro(finding, target));
+            BuildRepro(finding, target, scope.Shell));
     }
 
     /// <summary>
@@ -456,10 +456,11 @@ internal static class EnvelopeBuilder
     /// </summary>
     /// <param name="finding">The finding.</param>
     /// <param name="target">The runner and project the window's newest session recorded.</param>
+    /// <param name="shell">The shell the command is quoted for.</param>
     /// <returns>The repro, or null where <see cref="ReproCommand"/> builds none.</returns>
-    internal static ReproDto? BuildRepro(Finding finding, ReproTarget target)
+    internal static ReproDto? BuildRepro(Finding finding, ReproTarget target, ShellDialect shell)
     {
-        if (ReproCommand.For(finding, target) is not { } repro)
+        if (ReproCommand.For(finding, target, shell) is not { } repro)
             return null;
 
         double rate = FindingOrder.Round(repro.Rate);

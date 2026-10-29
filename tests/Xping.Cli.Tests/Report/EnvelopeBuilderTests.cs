@@ -230,6 +230,26 @@ public sealed class EnvelopeBuilderTests
         Assert.Equal(0.444, repro.Rate);
     }
 
+    /// <summary>
+    /// Amendment 8A: the drill-down and the repro are quoted for the scope's shell, as the text report
+    /// prints them.
+    /// </summary>
+    [Fact]
+    public void EveryPrintedCommandIsQuotedForTheScopesShell()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Recorded(0, LocalSessionProperties.VSTestRunner, "tests/O'Brien/O'Brien.csproj"));
+        var scope = new ReportScope("MyApp.Tests", WindowResolution.Default, 1, Directory: "/work/it's")
+        {
+            Shell = ShellDialect.PowerShell
+        };
+
+        FindingDto finding = Build(context, Flaky(4, 9), test: null, scope).Findings[0];
+
+        Assert.EndsWith(" --directory '/work/it''s'", finding.DrillDown, StringComparison.Ordinal);
+        Assert.StartsWith("dotnet test 'tests/O''Brien/O''Brien.csproj' ", finding.Repro!.Command, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void NoRunnerRecordedMeansNoRepro()
     {
@@ -269,7 +289,7 @@ public sealed class EnvelopeBuilderTests
     {
         Finding finding = Flaky(4, 9).Findings[0] with { Evidence = FlakyEvidence(failing, judged) };
 
-        Assert.Equal(expected, EnvelopeBuilder.BuildRepro(finding, VSTest)!.Expectation);
+        Assert.Equal(expected, EnvelopeBuilder.BuildRepro(finding, VSTest, ShellDialect.Posix)!.Expectation);
     }
 
     /// <summary>
@@ -280,7 +300,7 @@ public sealed class EnvelopeBuilderTests
     {
         Finding finding = Flaky(4, 9).Findings[0] with { Evidence = FlakyEvidence(1, 20) };
 
-        ReproDto repro = EnvelopeBuilder.BuildRepro(finding, VSTest)!;
+        ReproDto repro = EnvelopeBuilder.BuildRepro(finding, VSTest, ShellDialect.Posix)!;
 
         Assert.Null(repro.Runs);
         Assert.Equal(59, repro.RunsNeeded);
@@ -302,7 +322,7 @@ public sealed class EnvelopeBuilderTests
             }
         };
 
-        ReproDto repro = EnvelopeBuilder.BuildRepro(finding, VSTest)!;
+        ReproDto repro = EnvelopeBuilder.BuildRepro(finding, VSTest, ShellDialect.Posix)!;
 
         Assert.Equal(1, repro.Runs);
         Assert.Equal("run once: it failed in 9 of 10 runs", repro.Expectation);

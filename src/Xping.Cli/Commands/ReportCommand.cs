@@ -233,7 +233,10 @@ internal sealed class ReportCommand(
                     resolution,
                     new ReportScope(
                         options.Assembly, WindowResolution.Store, resolution.RunCount,
-                        AssemblyGiven: true, Directory: options.Directory)),
+                        AssemblyGiven: true, Directory: options.Directory)
+                    {
+                        Shell = ShellDialects.Current
+                    }),
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
@@ -357,7 +360,10 @@ internal sealed class ReportCommand(
             assemblyGiven,
             options.Runs,
             options.Since,
-            options.Directory);
+            options.Directory)
+        {
+            Shell = ShellDialects.Current
+        };
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
             context,

@@ -147,6 +147,24 @@ internal sealed class SampleRunner : IDisposable
         string description) =>
         RunProcessAsync("/bin/sh", FindRepositoryRoot(), ["-c", command], environment, description);
 
+    /// <summary>
+    /// Runs <paramref name="command"/> through <c>pwsh</c> from the repository root, as a reader on
+    /// Windows pastes it, with the same cleaned environment as <see cref="DotnetAsync"/>.
+    /// </summary>
+    /// <param name="command">The command line, quoted for PowerShell.</param>
+    /// <param name="environment">Settings for the child on top of the cleaned environment.</param>
+    /// <param name="description">What is being run, for the timeout message.</param>
+    /// <remarks>
+    /// pwsh must be on <c>PATH</c>; CI's <c>ubuntu-latest</c> image ships it. A missing pwsh fails the
+    /// run rather than skipping it, so a green run always means the command was run.
+    /// </remarks>
+    public Task<(int ExitCode, string Output)> PowerShellAsync(
+        string command,
+        IReadOnlyDictionary<string, string> environment,
+        string description) =>
+        RunProcessAsync(
+            "pwsh", FindRepositoryRoot(), ["-NoProfile", "-NonInteractive", "-Command", command], environment, description);
+
     private async Task<(int ExitCode, string Output)> RunProcessAsync(
         string fileName,
         string workingDirectory,
