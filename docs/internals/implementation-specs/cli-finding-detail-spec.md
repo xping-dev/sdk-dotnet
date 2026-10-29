@@ -122,6 +122,19 @@ them as a block. This amendment records what it changes here, committed with tha
 | A | D4.1: `Flaky` metrics carry one `failure mode N` pair per signature, at most 5, then `more failure modes`. `AlwaysFailing` carries `failure mode` = its type | Dropped. `Flaky` keeps `failure modes <count>`. The detail view ends with the `FAILURE MODES` block (failure-mode spec D5), after the same-subject line | D4, D4.1 |
 | B | D4, §7: exemplars, stack frames and signature messages are deferred | Signatures (type, message, frames, count, first seen) are in, through `FailureModeDto`. Raw exemplars stay out of scope (failure-mode spec §7) | D4, §7 |
 
+### Amendment 8 — from #293 (PowerShell)
+
+Amendment 4 quoted for POSIX shells only: in PowerShell an embedded `'` written `'\''` does not
+parse, a bare `,` makes an array and a leading `@` splats. **Printed values are quoted for one of two
+dialects, chosen once per run by OS: PowerShell on Windows, POSIX everywhere else.**
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | One dialect, POSIX | `ShellDialect` `Posix` or `PowerShell`, from `OperatingSystem.IsWindows()`, carried on `ReportScope.Shell`. The JSON envelope's commands are the same strings as the text report's | Amendment 4 |
+| B | Plain set `A-Z a-z 0-9 . _ / : @ % + = , -` | `A-Z a-z 0-9 . _ / : % + = -`, shared by both dialects; quoting `,` and `@` costs POSIX nothing | Amendment 4 |
+| C | An embedded `'` is written `'\''` | POSIX: `'\''`. PowerShell: `''`, and each of `‘ ’ ‚ ‛` is doubled too, because PowerShell closes a single-quoted string on any of them | Amendment 4 |
+| D | `cmd.exe` is not served | Still not served, and neither is Windows PowerShell 5.1: it passes an embedded `"` to a native program unescaped, so a quoted test name in a repro filter breaks. PowerShell 7.3+ is the floor. Git Bash on Windows gets PowerShell quoting, which differs from POSIX only for a value holding `'` | Amendment 4 |
+
 ---
 
 ## 1. Ground truth
