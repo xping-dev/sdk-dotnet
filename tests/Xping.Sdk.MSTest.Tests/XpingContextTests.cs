@@ -178,7 +178,10 @@ public sealed class XpingContextTests : IAsyncLifetime
         // BatchSize 0 is invalid, and strict mode turns an invalid configuration into an error.
         var invalid = new XpingConfiguration
         {
-            Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore, StrictMode = true, BatchSize = 0,
+            Mode = XpingMode.LocalOnly,
+            LocalStorePath = _scratchStore,
+            StrictMode = true,
+            BatchSize = 0,
         };
 
         var exception = Record.Exception(() => XpingContext.Initialize(invalid));
