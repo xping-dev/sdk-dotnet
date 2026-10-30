@@ -29,7 +29,7 @@ FAILURE MODES                                            3 failure modes
       at MyApp.Checkout.Basket.Total()
       at MyApp.Tests.CheckoutTests.Completes()
 
-2.  2 failed attempts · since the window opened
+2.  2 failed attempts · since its first run in the window
     System.TimeoutException
     timed out after <num>ms
       at System.Net.Http.HttpConnectionPool.

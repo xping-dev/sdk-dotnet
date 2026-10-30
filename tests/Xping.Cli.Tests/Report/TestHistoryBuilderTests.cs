@@ -249,7 +249,7 @@ public sealed class TestHistoryBuilderTests
         Assert.Equal(2, mode.Occurrences);
         Assert.Equal(2, mode.FirstSeenSessionsAgo);
         Assert.Equal(TestSessionFactory.Session(2).StartedAt, mode.FirstSeenAt);
-        Assert.True(mode.FirstSeenAfterWindowStart);
+        Assert.True(mode.FirstSeenAfterFirstRun);
         Assert.False(mode.FirstSeenInLatestSession);
     }
 
@@ -259,13 +259,6 @@ public sealed class TestHistoryBuilderTests
     [Fact]
     public void FailureModesAreTheIndexsSignaturesMostFrequentFirst()
     {
-        static TestExecution Failing(string message) => TestSessionFactory.Execution(
-            Target,
-            TestOutcome.Failed,
-            exceptionType: "System.InvalidOperationException",
-            errorMessage: message,
-            stackTrace: $"   at MyApp.Tests.SampleTests.{Target}()");
-
         AnalysisContext context = TestSessionFactory.Context(
             Run(0, [Failing("expected apple")]),
             Run(1, [Failing("expected pear")]),
@@ -283,9 +276,89 @@ public sealed class TestHistoryBuilderTests
         Assert.False(modes[0].FramesDegraded);
 
         // Pear first appeared after the window opened; apple was there in its oldest run.
-        Assert.True(modes[0].FirstSeenAfterWindowStart);
-        Assert.False(modes[1].FirstSeenAfterWindowStart);
+        Assert.True(modes[0].FirstSeenAfterFirstRun);
+        Assert.False(modes[1].FirstSeenAfterFirstRun);
     }
+
+    /// <summary>
+    /// A test absent from the window's oldest runs that failed the same way from its first run did
+    /// not regress when it joined: the mode is measured from the test's first run, not the window's
+    /// (#319).
+    /// </summary>
+    [Fact]
+    public void AModeATestHadSinceItJoinedTheWindowIsNotNew()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, []),
+            Run(1, []),
+            Run(2, [Failing("boom")]),
+            Run(3, [Failing("boom")]),
+            Run(4, [Failing("boom")]));
+
+        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(context, Target, Match).FailureModes);
+
+        Assert.Equal(2, mode.FirstSeenSessionsAgo);
+        Assert.False(mode.FirstSeenAfterFirstRun);
+        Assert.False(mode.FirstSeenInLatestSession);
+    }
+
+    [Fact]
+    public void AModeThatStartedAfterALateTestsFirstRunIsNew()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, []),
+            Run(1, []),
+            Run(2, [TestSessionFactory.Execution(Target)]),
+            Run(3, [Failing("boom")]),
+            Run(4, [Failing("boom")]));
+
+        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(context, Target, Match).FailureModes);
+
+        Assert.True(mode.FirstSeenAfterFirstRun);
+        Assert.False(mode.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// A skipped run is not where a test's history starts: it could not have failed there.
+    /// </summary>
+    [Fact]
+    public void ASkippedFirstAppearanceIsNotTheRunAModeIsMeasuredFrom()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, []),
+            Run(1, [TestSessionFactory.Execution(Target, TestOutcome.Skipped)]),
+            Run(2, [Failing("boom")]),
+            Run(3, [Failing("boom")]));
+
+        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(context, Target, Match).FailureModes);
+
+        Assert.False(mode.FirstSeenAfterFirstRun);
+    }
+
+    /// <summary>
+    /// A test whose only run is the newest has nothing before it to compare against, so its mode is
+    /// neither new nor old: both flags say not new, rather than one saying each (#319).
+    /// </summary>
+    [Fact]
+    public void ATestThatRanOnlyInTheLatestRunHasNoNewMode()
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+            Run(0, []),
+            Run(1, []),
+            Run(2, [Failing("boom")]));
+
+        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(context, Target, Match).FailureModes);
+
+        Assert.False(mode.FirstSeenInLatestSession);
+        Assert.False(mode.FirstSeenAfterFirstRun);
+    }
+
+    private static TestExecution Failing(string message) => TestSessionFactory.Execution(
+        Target,
+        TestOutcome.Failed,
+        exceptionType: "System.InvalidOperationException",
+        errorMessage: message,
+        stackTrace: $"   at MyApp.Tests.SampleTests.{Target}()");
 
     [Fact]
     public void ATestThatNeverFailedHasNoFailureModes()

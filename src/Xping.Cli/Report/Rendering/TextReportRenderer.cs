@@ -663,17 +663,16 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// Says when a mode first appeared, in words only when it is new in the window.
     /// </summary>
     /// <remarks>
-    /// A mode already present in the window's oldest run gets no date: that date is the header's, and
-    /// the report cannot see whether the mode started there or long before. Checked first because in
-    /// a one-run window the oldest run is also the latest, and both flags hold (Amendment 4A).
+    /// A mode already present in the test's first run in the window gets no date: the report cannot
+    /// see whether the mode started there or long before.
     /// </remarks>
     private string FirstSeen(FailureModeDto mode)
     {
-        if (!mode.FirstSeenAfterWindowStart)
-            return "since the window opened";
-
         if (mode.FirstSeenInLatestSession)
             return "first seen in the latest run";
+
+        if (!mode.FirstSeenAfterFirstRun)
+            return "since its first run in the window";
 
         string sha = Recorded(mode.FirstSeenSha) is { Length: > 0 } recorded
             ? " at " + TerminalText.Head(recorded, ShaWidth)

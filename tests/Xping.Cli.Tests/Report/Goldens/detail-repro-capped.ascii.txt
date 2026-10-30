@@ -24,7 +24,7 @@ FINDING                                                       row 1 of 1
 FAILURE MODES                                             1 failure mode
 ------------------------------------------------------------------------
 
-1.  1 failed attempt | since the window opened
+1.  1 failed attempt | since its first run in the window
     System.InvalidOperationException
     Race condition detected
 ```

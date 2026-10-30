@@ -26,7 +26,7 @@ RUNS                                                        newest first
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failed attempts · since the window opened
+1.  6 failed attempts · since its first run in the window
     Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
     assert.areequal failed. expected:<<num>>. actual:<<num>>.
       at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
