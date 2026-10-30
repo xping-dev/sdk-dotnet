@@ -15,11 +15,16 @@ FINDING                                                       row 1 of 1
     assembly  SampleApp.MSTest
     source    tests/SampleApp.MSTest/CalculatorTests.cs:57
 
-    failed          4 of 9 executions (44.4%)
-    runs affected   4 of 9
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Race condition
-                    detected
+    failed         4 of 9 executions (44.4%)
+    runs affected  4 of 9
+    failure modes  1
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  4 failed attempts | since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

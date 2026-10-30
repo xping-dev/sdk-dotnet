@@ -157,17 +157,18 @@ public sealed class GoldenReportTests
     /// </summary>
     /// <remarks>
     /// This is what a pipe receives. The legend and the truncation line sit outside the fence and
-    /// are pasted with it, so they are held to the same rule as the block.
+    /// are pasted with it, so they are held to the same rule as the block. Printable means no
+    /// control character but the line breaks the renderer writes itself (D7).
     /// </remarks>
     [Theory]
-    [MemberData(nameof(ReportFixtures.Names), MemberType = typeof(ReportFixtures))]
+    [MemberData(nameof(ReportFixtures.PlainNames), MemberType = typeof(ReportFixtures))]
     public void TheAsciiReportCarriesNothingButPrintableAscii(string fixture)
     {
         string report = Render(ReportFixtures.Get(fixture), Drawn(ReportGlyphs.Ascii, color: false));
 
-        Assert.DoesNotContain('\u001b', report);
         Assert.All(report, c => Assert.True(
-            c < 0x80, $"non-ASCII '{c}' (U+{(int)c:X4}) in the ASCII rendering of {fixture}"));
+            c is '\n' or '\r' or (>= ' ' and < '\u007f'),
+            $"'{c}' (U+{(int)c:X4}) is not printable ASCII, in the ASCII rendering of {fixture}"));
     }
 
     /// <summary>
@@ -180,7 +181,7 @@ public sealed class GoldenReportTests
     /// adding a pair widens the permitted set and adding a literal does not.
     /// </remarks>
     [Theory]
-    [MemberData(nameof(ReportFixtures.Names), MemberType = typeof(ReportFixtures))]
+    [MemberData(nameof(ReportFixtures.PlainNames), MemberType = typeof(ReportFixtures))]
     public void TheUnicodeReportDrawsOnlyWithGlyphsThatHaveAnAsciiCounterpart(string fixture)
     {
         HashSet<char> permitted = [.. GlyphCharacters(ReportGlyphs.Unicode)];
@@ -258,7 +259,7 @@ public sealed class GoldenReportTests
             return;
 
         using var writer = new StringWriter();
-        new SummaryReportRenderer().Render(envelope, writer);
+        new SummaryReportRenderer(TerminalCharset.Ascii).Render(envelope, writer);
 
         string bands = ReportVocabulary.SeverityBands(envelope.Summary);
         string summary = writer.ToString().TrimEnd();

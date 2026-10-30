@@ -28,14 +28,16 @@ internal static class EvidenceSamples
         SignatureView signature = new(
             "abc123",
             "System.InvalidOperationException",
-            "Expected <n> but was <n>",
+            "expected <num> but was <num>",
             ["MyApp.Tests.CheckoutTests.Completes()"],
             Degraded: false,
             Unavailable: false,
             Occurrences: 12,
-            FirstSeenAt: new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
+            // Inside the detail fixtures' window (08-05 to 08-19, 20 runs) and far enough back for the
+            // always-failing sample's 19 failures, so no golden pins a date the store could not hold.
+            FirstSeenAt: new DateTime(2026, 8, 6, 9, 0, 0, DateTimeKind.Utc),
             FirstSeenSha: "a3f9c2e",
-            FirstSeenSessionsAgo: 4,
+            FirstSeenSessionsAgo: 18,
             FirstSeenInLatestSession: false,
             FirstSeenAfterWindowStart: true);
 

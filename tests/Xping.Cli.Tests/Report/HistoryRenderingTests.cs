@@ -367,6 +367,7 @@ public sealed class HistoryRenderingTests
             sessions,
             counts ?? new TestRunCountsDto(sessions.Count(s => s.Appeared), sessions.Length, 0, 0, 0, 0),
             timed ? new TestDurationDto(12, 13, 11, 13, 0.1, 6) : null,
+            [],
             withheld,
             [.. findings.Select((f, i) => new SameSubjectDto(f.Id, f.Kind, rows[i]))],
             []);

@@ -15,13 +15,18 @@ FINDING                                                       row 1 of 1
     assembly  SampleApp.MSTest
     source    tests/SampleApp.MSTest/CalculatorTests.cs:57
 
-    failed          1 of 20 executions (5%)
-    runs affected   1 of 20
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Race condition
-                    detected
-    repro           failed in 1 of 20 runs: too rare to reproduce by
-                    rerunning (59 runs needed)
+    failed         1 of 20 executions (5%)
+    runs affected  1 of 20
+    failure modes  1
+    repro          failed in 1 of 20 runs: too rare to reproduce by
+                   rerunning (59 runs needed)
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  1 failed attempt · since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

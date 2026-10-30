@@ -29,7 +29,8 @@ internal sealed class ReportGlyphs
         Separator = "·",        // ·
         Arrow = "→",            // →
         HistoryPass = '●',      // ●
-        HistoryFail = '○'       // ○
+        HistoryFail = '○',      // ○
+        Charset = TerminalCharset.Unicode
     };
 
     /// <summary>ASCII fallback for terminals that cannot.</summary>
@@ -44,7 +45,8 @@ internal sealed class ReportGlyphs
         Separator = "|",
         Arrow = "->",
         HistoryPass = '#',
-        HistoryFail = '.'
+        HistoryFail = '.',
+        Charset = TerminalCharset.Ascii
     };
 
     /// <summary>Gets the character used to draw horizontal rules.</summary>
@@ -76,6 +78,9 @@ internal sealed class ReportGlyphs
 
     /// <summary>Gets the sparkline character for a failing run.</summary>
     public char HistoryFail { get; private init; } = '.';
+
+    /// <summary>Gets what recorded text printed beside these glyphs may keep.</summary>
+    public TerminalCharset Charset { get; private init; } = TerminalCharset.Ascii;
 
     /// <summary>
     /// Selects a glyph set for the current console.

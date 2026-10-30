@@ -15,13 +15,18 @@ FINDING                                                       row 1 of 1
     assembly  SampleApp.MSTest
     source    tests/SampleApp.MSTest/CalculatorTests.cs:57
 
-    failed          4 of 9 executions (44.4%)
-    runs affected   4 of 9
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Race condition
-                    detected
-    repro           run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
-                    show a failure 95% of the time
+    failed         4 of 9 executions (44.4%)
+    runs affected  4 of 9
+    failure modes  1
+    repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
+                   show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · since the window opened
+    System.InvalidOperationException
+    Race condition detected
 ```
 
 rates: the marker on each finding says which runs its percentage was

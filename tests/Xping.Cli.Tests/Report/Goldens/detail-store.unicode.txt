@@ -19,8 +19,14 @@ FINDING                                                       row 1 of 2
 
     failed         20 of 20 executions (100%)
     runs affected  20 of 20
-    failure mode   System.InvalidOperationException
     repro          run once: it failed in 20 of 20 runs
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  20 failed attempts · since the window opened
+    System.InvalidOperationException
+    the database has not been provisioned.
 ```
 
 rates: the marker on each finding says which runs its percentage was

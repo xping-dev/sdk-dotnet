@@ -11,7 +11,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// <summary>
 /// The frames a signature was built from, and whether they are as good as intended.
 /// </summary>
-/// <param name="Frames">The frames, outermost first, method signature only.</param>
+/// <param name="Frames">The frames, innermost first as the trace lists them, method signature only.</param>
 /// <param name="Degraded">
 /// Whether the frames are worse than intended: framework frames used because no user frame was
 /// found, or no frames at all.

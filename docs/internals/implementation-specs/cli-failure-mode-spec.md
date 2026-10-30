@@ -17,6 +17,59 @@ Identical to `cli-report-format-spec.md`. This document is ground truth. An impl
 conflict stops and reports rather than adapting. Decisions and the data contract change by
 amendment only, committed before dependent code. **OQ** sections are gates.
 
+### Amendment 1 — from the P0 inventory
+
+P0 checked every citation against source and listed the tests and output sites the phases touch.
+These changes are applied in place in the sections named.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D7: `FlowFailures.Printable` is replaced by `TerminalText.Printable`, so one definition serves the whole CLI | Auth is out of D7. `FlowFailures.Printable` drops and trims rather than replacing, `DeviceFlowTests.cs:162-163` and `LoginDeviceTests.cs:119` pin that, and its result reaches auth's `--json` output as `oauthError`. Replacing it would change JSON, which D7 rules out. Auth is not report text and keeps its own tested rule | D7, P2 |
+| B | D7's covered values and stderr list | Added, in the text renderer: `Summary.FailedProviders` (`TextReportRenderer.cs:404`), metric **labels** as well as values (`:518`), `Repro.Expectation` (`:519`, `:1411`), the latest run's local `Contrast` (`:1160`), `SameSubject` ids (`:526`). Added, on stderr in `ReportCommand`: `TestResolver.OutsideWindowMessage` (`:200-202`), `CloudHint.Text` (`:472`), the window resolver's `FailureDetail` (`:533`, `:541-542`), the assembly and store path (`:538-539`, `:635`), `LookupWarnings.AheadAssemblies` (`:577-579`). On stdout, `WriteScopeNotice`'s assembly (`:752`). Outside `report`: the rejected `--project` echo (`Program.cs:601`) and `xping where`'s assembly names and store path (`WhereCommand.cs:37`, `:86-90`), with the `Unicode` or `Ascii` charset their output would use | D7, P2 |
+| C | D7: `EvidenceLevel` is a vocabulary value the hostile-envelope test keeps | It is printed raw (`TextReportRenderer.cs:1367`, `$"evidence {finding.EvidenceLevel}"`), so it reads through `Recorded` and the test rewrites it. Only kind, severity, population and status keep their values | D7 |
+| D | D7: the hostile-envelope test rewrites string properties and list elements | It also rewrites dictionary **keys** and values of string type. `Summary.NotMeasured` is keyed by kind and printed through `LabelFor` (`:335`), which echoes an unknown key as-is. That site reads the label through `Recorded`, so `LabelFor`'s fallback can't pass raw text through | D7 |
+| E | D4: the population is every failed attempt | Stated: a failed attempt includes a timed-out one (`TestOutcomeExtensions.IsFailure`). `--test` lists modes from timed-out attempts, which `--id` never does, because `TimingOut` carries no signature (`FailureModeProvider.cs:743-747`). The `--test` block describes how the test failed, and a timeout is one way | D4 |
+| F | §3.5 / P1: the D6 golden diff is "the pairs removed" | In every Flaky detail golden, `failure mode 1` (14 characters) was the longest label. Without it, the block's column narrows by one, and every pair in it moves one column left. That is part of the expected diff. AlwaysFailing does not shift, because `runs affected` (13) is longer than `failure mode` (12). No `history-*` golden carries a D6 pair | §3.5, P1 |
+| G | P1's test list | Adds: `FailureModeProviderTests.cs:423`, `:456` and `:475` (they assert the D6 pairs) are rewritten to assert `failureModes`. The positional `FindingDto` in `ReportFixtures.cs:1565-1581` and the positional `TestHistoryDto`s in `ReportFixtures.cs:1017-1026` and `HistoryRenderingTests.cs:363-372` gain the new field. The JSON sample at `docs/cli/command-reference.md:957-959` and `:889` move in P6 | P1, P6 |
+| H | §1.1: the normalised message is one line, lowercased, at most 4096 characters, `Normalise` at `:107-177` | One line. Lowercased outside quoted literals, which keep their case (`MessageNormaliser.cs:131-144`). Cut to 4096 **before** token substitution (`:119-120`), so the result can exceed 4096 slightly. `Normalise` is `:107-150`, `Substitute` `:161-178`. D5's 6-line cap is unaffected | §1.1 |
+| I | §1.1: `ReportCommand.cs:318-323` | The context is built at `:329` and passed to the history callback at `:376` | §1.1 |
+| J | — | `StackFrameExtractor.cs:14` documents frames as "outermost first". They are kept in trace order, which puts the throw site first. P1 corrects the comment to "innermost first, as the trace lists them" | §1.1, P1 |
+
+### Amendment 2 — from P2
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.5: one `hostile-text` fixture, through `--id`, `--test` and the full report | A golden renders one envelope, so one view. Three fixtures over the one store: `hostile-text` (the full report), `hostile-text-detail` (`--id`) and `hostile-text-history` (`--test`). 61 fixtures, 122 files | §1.2, §3.5 |
+| B | D7: every unsafe **rune** becomes `?` | A lone surrogate is not a rune. It is replaced by one `?` too: no terminal renders it, and an encoder writes it as a replacement character or throws | D7 |
+| C | D7: the messages outside the renderer apply `Printable` to what they echo | A message composed outside `ReportCommand` (`TestResolver`'s two, `CloudHint.Text`, the window resolver's `FailureDetail`) holds no command, and its own words are ASCII, so it is cleaned as a whole line. The result is the same as cleaning each echoed value | D7 |
+| D | D7: the always-unsafe set is a list of code points | Every rune of general category Cc, Cf, Zl or Zp. The list was a subset of those categories and missed others: tag characters U+E0000–E007F, U+180E, U+206A–206F, U+FFF9–FFFB. A category stays complete when Unicode adds a character | D7 |
+| E | D7: "replacement is one-for-one per rune" | So is every cut after it. A sha cut to 7, `Fit`'s left truncation and `xping where`'s 40-column name never split a surrogate pair, so no cut prints half an astral character. The hostile-envelope suffix gains U+1F600, and the test also rejects a lone surrogate in the output | D7 |
+| F | D7: "a renderer-authored label does not go through `Recorded`" | A vocabulary lookup that echoes an unknown value (`LabelFor`, `PopulationTokenFor`, `StatusWordsFor`) is read through `Recorded`, wherever its argument came from the envelope. The hostile-envelope test keeps those values for its D7 assertions, and a second pass rewrites them too and asserts only that nothing unsafe is printed | D7 |
+| G | D7: "ASCII end to end, except inside commands" | Also outside the renderer: the scope notice and `xping where` join their segments with the glyph set's separator rather than a literal `·` | D7 |
+
+### Amendment 3 — from P3
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D5: past the cap, "one line at indent 4" | One blank line, then that line, as between modes. Without it the line reads as the last mode's | D5 |
+| B | D5: a frame breaks "after the last `.` before its first `(`" | A constructor's method is `.ctor` or `.cctor`, its own dot included. In `Type..ctor(...)` the break is after the first of the two dots, so the continuation reads `.ctor(...)` | D5 |
+| C | D5: the message is "omitted when the message is empty" | Omitted when it is empty or only whitespace. A line of indentation alone would read as the gap between two modes | D5 |
+| D | D5: the sixth line is cut "when more would follow" | Also when the sixth line is one token wider than 68 columns: it is more than the line holds. A sixth line that fits is printed as it is | D5 |
+
+### Amendment 4 — from P4
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D5: the count line checks `FirstSeenInLatestSession` first, then `FirstSeenAfterWindowStart` | `FirstSeenAfterWindowStart = false` is checked first: `since the window opened`. In a one-run window the newest run is also the oldest, so `ToView` sets both `FirstSeenInLatestSession` (appeared at index 0) and `FirstSeenAfterWindowStart = false` (index 0 is not below `SessionCount - 1` = 0). The old order printed `first seen in the latest run` for a mode present in the window's oldest run, the regression signal D3 rules out. With more than one run the two flags cannot both hold, so only a one-run window changes. `--test` reaches it: a test that has run once has a history. `--id` cannot: no finding is produced under `MinimumSessionsPerTestToReport` (5) runs | D5 |
+| B | §3.5: `history-failure-modes` covers §3.2, the cap line and §3.3 | A history envelope holds one test (as Amendment 2A found for views). §3.2 is the test-history spec's §3.1 with the block added, and `history-flaky` is that fixture, so `history-flaky` pins §3.2. `history-failure-modes` is one test with 7 modes, one of them with a 900-character message: the cap line and §3.3. Still 61 fixtures, 122 files | §1.2, §3.5 |
+| C | §3.5: the `history-*` goldens gain the block | Every hand-built history fixture derives its modes from its own timeline: its attempts are replayed as sessions and resolved with `FailureModes.Of(context, fingerprint)`, as `TestHistoryBuilder.Found` resolves them. A fixture with a failed attempt and no recorded failure is rejected, so no fixture pins a block its RUNS rows contradict. `history-timeout-retry` gains two modes: its failed attempts, and its timed-out ones, which the fixture records without an exception, as a killed attempt can be, so they print the unavailable form (Amendment 1E) | §3.5 |
+
+### Amendment 5 — from P5
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | P5 regenerates the goldens and documented samples; P6 writes the docs | P3 and P4 regenerated the goldens and samples their blocks changed, so P5 has no separate work. It folds into P6: regenerating confirms an empty diff, then §3 and the docs follow | §6 |
+
 ---
 
 ## 1. Ground truth
@@ -43,9 +96,9 @@ Every claim here was read in source at the cited line.
   Otherwise they are framework frames with `Degraded` set. Each is a method signature with file and
   line removed, e.g. `MyApp.Services.OrderService.Place(Order order)`, innermost first.
 - **Messages.** `SignatureView.Message` is `MessageNormaliser.Normalise`'s output
-  (`MessageNormaliser.cs:107-177`): one line, whitespace collapsed (`:123`), run-varying values
-  replaced by tokens such as `<num>`, lowercased (`:177`), at most `MaxLength` = 4096 characters
-  (`:46`). The raw message in `FailureExemplar.ErrorMessage` is a different value: multi-line,
+  (`MessageNormaliser.cs:107-150`): one line, whitespace collapsed (`:123`), run-varying values
+  replaced by tokens such as `<num>`, lowercased outside quoted literals (`:131-144`), cut to `MaxLength` =
+  4096 characters before substitution (`:46`, `:119-120`). The raw message in `FailureExemplar.ErrorMessage` is a different value: multi-line,
   elided at `ExemplarCharBudget` = 500 (`EvidenceText.cs:26-34`). It is not shown here.
 - **First seen and count are counted over different failures** for `Flaky` and `AlwaysFailing`.
   `Occurrences` counts the failures that survived discounting: environmental sessions and
@@ -65,7 +118,7 @@ Every claim here was read in source at the cited line.
   field names. The renderer may not read `evidence`: "every value it prints was resolved before it
   was called" (`src/Xping.Cli/Report/Rendering/IReportRenderer.cs:15-18`).
 - **Per-test signatures for `--test`.** `TestHistoryBuilder.Found` receives the `AnalysisContext`
-  over the D5 window (`src/Xping.Cli/Commands/ReportCommand.cs:178`, `:318-323`).
+  over the D5 window (`src/Xping.Cli/Commands/ReportCommand.cs:178`, `:329`, `:376`).
   `context.Signatures.SignaturesOf(fingerprint)` (`SignatureIndex.cs:128-131`) returns that test's
   signatures over every failed attempt in the window, nothing discounted, ordered by count, then
   recency, then hash (`:232-245`). The hashes are the ones the providers use.
@@ -86,7 +139,9 @@ Every claim here was read in source at the cited line.
 
 - `FailureModeDto`, `FindingDto.FailureModes`, `TestHistoryDto.FailureModes` (§4).
 - `TerminalText` and `TerminalCharset` in `src/Xping.Cli/Reporting/`, and the renderer helpers `Recorded` and `Command` (D7).
-- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text` (§3.5).
+- Fixtures `detail-failure-modes`, `detail-unavailable`, `history-failure-modes`, `hostile-text`,
+  `hostile-text-detail`, `hostile-text-history` (§3.5, Amendments 2A and 4B). §3.2 is pinned by the
+  existing `history-flaky`.
 
 ### 1.3 The question this block answers
 
@@ -163,7 +218,8 @@ mode's oldest. It is a fix, with two regression tests:
 
 - **Population:** every failed attempt of this test over the D5 window, nothing discounted. That is
   the population the RUNS timeline draws: a failed first attempt that passed on retry is in it, as
-  it is in the timeline's `✗→✓`.
+  it is in the timeline's `✗→✓`. A timed-out attempt is a failed one (`IsFailure`), so `--test`
+  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E).
 - **Order:** the index's order: count, then recency, then hash.
 - **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
   `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
@@ -201,14 +257,16 @@ as findings are numbered:
       at MyApp.Tests.CheckoutTests.Completes()
 ```
 
-1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then:
+1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then, checked
+   in this order (Amendment 4A):
+   - Not `FirstSeenAfterWindowStart`: `since the window opened`, with no date. The mode was already
+     there in the window's oldest run, the header names that run's date, and the report cannot see
+     further back. This is the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
+     In a one-run window this holds alongside `FirstSeenInLatestSession`, and wins.
    - `FirstSeenInLatestSession`: `first seen in the latest run`.
-   - Otherwise, `FirstSeenAfterWindowStart`: `first seen <MM-dd HH:mm> at <sha>, <when>`, where
-     `<when>` is `<n> runs ago` (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo`
-     is 0. That case happens only when D3's discounting set aside every older failure.
-   - Otherwise: `since the window opened`, with no date. The mode was already there in the window's
-     oldest run, the header names that run's date, and the report cannot see further back. This is
-     the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
+   - Otherwise: `first seen <MM-dd HH:mm> at <sha>, <when>`, where `<when>` is `<n> runs ago`
+     (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo` is 0. That case happens only
+     when D3's discounting set aside every older failure.
    - The sha is cut to `ShaWidth` (7), as the RUNS rows cut it (`TextReportRenderer.cs:711`). No
      sha recorded: drop ` at <sha>`.
 
@@ -216,23 +274,25 @@ as findings are numbered:
 2. **Type line**, indent 4: `ExceptionType`, or `exception type not recorded` when null. A type
    with no break in reach overflows as one token (detail spec Amendment 2D).
 3. **Message**, indent 4, wrapped to `ContinuationBudget` (68) with `Wrap`. At most **6** lines.
-   When more would follow, the sixth line is the rest of the message cut hard to 65 columns, a word
-   or a token split if need be, followed by `...`. The marker always fits in the 68 columns,
-   including when the sixth line would be one long token. Omitted when the message is empty.
+   When more would follow, or the sixth line is one token wider than 68 columns (Amendment 3D), the
+   sixth line is the rest of the message cut hard to 65 columns, a word or a token split if need be,
+   followed by `...`. The marker always fits in the 68 columns, including when the sixth line would
+   be one long token. Omitted when the message is empty or only whitespace (Amendment 3C).
 4. **Frames**, innermost first as recorded, every frame (at most 5). Each is `at <frame>` at indent
    6, a budget of 66 columns. A frame that does not fit breaks once, after the last `.` before its
    first `(` that fits, and continues at indent 9 (budget 63), so the method name and its
    arguments stay together. A remainder still wider than 63 wraps further at spaces, at indent 9. No
-   such `.` in reach: the frame overflows as one token. When `Degraded` and there are frames, one
-   more dim line at indent 6: `(no test code on the stack; framework frames shown)`. No frames: no
-   frame lines and no note.
+   such `.` in reach: the frame overflows as one token. A constructor keeps its own dot: in
+   `Type..ctor(...)` the break is after the first of the two (Amendment 3B). When `Degraded` and
+   there are frames, one more dim line at indent 6:
+   `(no test code on the stack; framework frames shown)`. No frames: no frame lines and no note.
 5. **Unavailable.** When `Unavailable`, the mode prints its count line and one line at indent 4,
    `the adapter recorded no failure detail`, and nothing else.
 
 One blank line between modes.
 
-**Cap.** At most **5** modes are printed, the same cap D4.1 used. Past that, one line at indent 4:
-`N more failure modes in --format json`.
+**Cap.** At most **5** modes are printed, the same cap D4.1 used. Past that, one blank line and one
+line at indent 4: `N more failure modes in --format json` (Amendment 3A).
 
 **Charset.** The separator is `ReportGlyphs.Separator`. Every other character the block adds is
 ASCII. Recorded text goes through D7.
@@ -260,7 +320,7 @@ The block replaces them: the same information, plus the parts the pairs could no
 by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCharset` is
 `Unicode`, `Ascii` or `Command` (below). The text renderer derives the charset from its glyphs.
 
-- **Always unsafe:**
+- **Always unsafe** (Amendment 2D): every rune of general category Cc, Cf, Zl or Zp. That includes:
   - C0 controls U+0000–U+001F (including `ESC`, `CR`, `LF`, tab), `DEL` U+007F, C1 controls
     U+0080–U+009F;
   - the line and paragraph separators U+2028 and U+2029;
@@ -272,21 +332,22 @@ by `?`. It works per `Rune`, so an astral character becomes one `?`. `TerminalCh
   and replacing an `é` in an FQN would make it select nothing. A control or bidi character is never
   part of a command that works, so replacing it costs nothing.
 
-The auth path's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`), which strips
-`char.IsControl` characters, is replaced by `TerminalText.Printable(text, Unicode)`. One definition
-of "safe to print" serves the whole CLI.
+A lone surrogate is replaced by one `?` as well (Amendment 2B).
+
+Auth's `FlowFailures.Printable` (`Auth/Flows/FlowFailures.cs:63-66`) is left alone (Amendment 1A).
 
 **One choke point in the renderer.** No text renderer appends a DTO string directly.
 `TextReportRenderer`, `SummaryReportRenderer` and `CloudText` read every recorded value through one
 helper, `Recorded(string?)`, or through `Command(string?)` for a command. Each applies `Printable`
 with the right charset. Renderer-authored text (labels, vocabulary, glyphs, numbers it formats)
-does not go through them. A new field is safe only if it is read through one of the two, so the
+does not go through them, except a vocabulary lookup that echoes an unknown value (Amendment 2F). A new field is safe only if it is read through one of the two, so the
 rule is enforced by a test, not by the list below:
 
 - **The hostile-envelope test** (P2) takes every fixture envelope. It rewrites, by reflection over
-  the DTO graph, every `string` property and every `string` element of a list to append
-  `\u001b[31m\u202e\u2028é`. Values the renderer maps through `ReportVocabulary` (kind,
-  severity, population, evidence level, status) keep their own, because a fixture with an
+  the DTO graph, every `string` property, every `string` element of a list, and every `string` key and value
+  of a dictionary to append
+  `\u001b[31m\u202e\u2028é\U0001F600` (Amendment 2E). Values the renderer maps through `ReportVocabulary` (kind,
+  severity, population, status) keep their own, because a fixture with an
   unknown kind tests nothing about recorded text. It renders the result in both glyph sets with
   colour off, and asserts:
   - no output character is in the always-unsafe set, apart from the renderer's own `\n`/`\r`;
@@ -299,10 +360,11 @@ The values this covers today, for P0 to check against:
 - the header: assembly, branch, sha;
 - subject names, cause labels, member names;
 - locations and the trailer's path;
-- metric values, including retry mechanisms and declared reasons;
-- headlines and annotations;
-- the finding id and the selection id;
-- latest-run failure summaries and shas;
+- metric labels and values, including retry mechanisms and declared reasons;
+- headlines, annotations, `repro` sentences, the evidence level;
+- the finding id, the selection id, same-subject ids;
+- `Summary.FailedProviders` and the not-measured kinds;
+- latest-run failure summaries, contrasts and shas;
 - the `--test` query, FQN, short fingerprint, `FindingsWithheld`, and every RUNS row's sha
   (`TextReportRenderer.cs:711`);
 - every `FailureModeDto` field;
@@ -319,15 +381,22 @@ their assertion over every existing fixture, none of which has a non-ASCII comma
 test also rejects every control character but the renderer's `\n` and `\r`. The hostile-envelope
 test is where the command exception is checked.
 
-**Stderr.** `ReportCommand`'s messages that echo the query, candidate FQNs or assemblies
-(`TestResolver.NotFoundMessage`, `WriteAmbiguous`, the not-reported message) apply `Printable` with
-the charset the report would use. The commands they print apply `Command`.
+**Messages outside the renderer.** These apply `Printable` with the charset the report would use,
+and any command in them applies `Command`. One composed outside `ReportCommand` is cleaned whole
+(Amendment 2C):
+
+- `ReportCommand`'s messages that echo the query, candidates, assemblies, the store path, a
+  `--since` value or a sha: `TestResolver.NotFoundMessage`, `OutsideWindowMessage`,
+  `WriteAmbiguous`, the not-reported message, `CloudHint.Text`, the window resolver's
+  `FailureDetail`, `LookupWarnings.AheadAssemblies`, `WriteScopeNotice`;
+- `Program.cs:601`'s echo of a rejected `--project`;
+- `xping where`'s assembly names and store path.
 
 **Text output only.** JSON is unchanged: `ReportJsonOptions.Default` uses `JavaScriptEncoder.Default`,
 which escapes controls and non-ASCII, and a consumer needs the recorded value.
 
 Replacement is one-for-one per rune, so a cleaned value is never wider than the original. The
-width rules stay as they are.
+width rules stay as they are. No cut splits a surrogate pair (Amendment 2E).
 
 **Rejected:**
 
@@ -341,7 +410,7 @@ width rules stay as they are.
 ## 3. Target output
 
 These blocks illustrate §2. They are not normative (format spec D10). The goldens are generated
-in P5, and this section is regenerated from them.
+by the phase that changes them (Amendment 5), and this section is regenerated from them in P6.
 
 ### 3.1 `--id`, a flaky test with three modes
 
@@ -388,11 +457,24 @@ FAILURE MODES                                            3 failure modes
 
 ### 3.2 `--test`
 
-§3.1 of the test-history spec, after the RUNS block. The summary above it reads
-`0 passed, 6 passed on retry, 0 failed`: the six failed attempts are the first attempts of runs
-that passed on retry (D4).
+§3.1 of the test-history spec, from `history-flaky`. The summary line counts no failed run: the six
+failed attempts are the first attempts of runs that passed on retry (D4).
 
 ````
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
@@ -416,11 +498,13 @@ stack on line breaks. So a newline in those two fields reaches the output as a s
 frames, never as `?`. The other characters survive both, and so does a newline in a test name,
 exception type, member name or path.
 
-A test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E prints, under `--ascii`,
-`?[31m`, `?`, `?` and `?` at those positions in its name, its `test` pair and every failure-mode
-field that carries them. Under Unicode glyphs it prints `?[31m`, `?`, `é` and `?`. In the
-`Repro:` and `History:` commands, under both glyph sets, it prints `?[31m`, `?`, `é` and `?`. No
-line inside the fence exceeds the width rule.
+From `hostile-text-detail`: a test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E
+prints its name and its `test` pair as `Refund?[31m?Café?Total` under Unicode glyphs and
+`Refund?[31m?Caf??Total` under `--ascii`. Its failure mode's message, which carries its own `ESC`
+sequences, `é` and U+202E, prints `refund ?[31mdeclined?[0m for café ?order`, and `caf?` under
+`--ascii`. The `Repro:` command prints `Refund?[31m?Café?Total` under both glyph sets. `History:`
+names the test by fingerprint, so carries none of it. No line inside the fence exceeds the width
+rule.
 
 ### 3.5 Goldens to add
 
@@ -428,13 +512,15 @@ line inside the fence exceeds the width rule.
 |---|---|
 | `detail-failure-modes` | §3.1: three modes, a degraded one, an unavailable one, all three first-seen forms |
 | `detail-unavailable` | `AlwaysFailing` whose adapter recorded nothing |
-| `history-failure-modes` | §3.2, plus a test with 7 modes (cap line) and a 900-character message (§3.3) |
-| `hostile-text` | §3.4, through `--id`, `--test` and the full report. The golden pins one store; the hostile-envelope test (D7) covers every field |
+| `history-failure-modes` | A test with 7 modes (cap line) and a 900-character message (§3.3). §3.2 is `history-flaky` (Amendment 4B) |
+| `hostile-text`, `hostile-text-detail`, `hostile-text-history` | §3.4, through the full report, `--id` and `--test`, one fixture each over one store (Amendment 2A). The goldens pin that store; the hostile-envelope test (D7) covers every field |
 
 The existing `detail-flaky`, `detail-always-failing`, `detail-broken-fixture`,
 `detail-shared-failure`, `detail-store`, `detail-repro-*` and `history-*` goldens change: D6's pairs
 go and the block arrives. Regenerate them all and review the diff. It must consist of those two
-changes and nothing else. 59 fixtures, 118 files.
+changes and nothing else. The hand-built `history-*` fixtures derive their modes from their own
+timelines (Amendment 4C), and `history-healthy`, which never failed, does not change. 61 fixtures,
+122 files.
 
 ---
 
@@ -535,13 +621,12 @@ and for an astral rune. Then:
 
 - `Recorded` and `Command` in the text renderers, and every recorded or command read routed through
   them;
-- `FlowFailures.Printable` replaced;
 - the stderr messages;
 - the hostile-envelope test;
 - `TheAsciiReportCarriesNothingButPrintableAscii` tightened;
-- the `hostile-text` fixture.
+- the `hostile-text` fixtures (Amendment 2A).
 
-At this phase the fixture covers the existing views. P3 and P4 add the block to it, and the
+At this phase the fixtures cover the existing views. P3 and P4 add the block to them, and the
 hostile-envelope test covers `FailureModeDto` as soon as P1's field exists.
 
 ### P3 — `--id` block
@@ -560,17 +645,18 @@ Assert:
 ### P4 — `--test` block
 
 D5's placement in `WriteHistory`, and the absent block for a test with no failures. Fixture
-`history-failure-modes`. A real-store test through `Program.Run`: a test failing two ways shows both
-modes, with hashes equal to the `--id` evidence.
+`history-failure-modes`, and the modes of every hand-built history fixture (Amendment 4C). D5's
+first-seen order with its one-run regression test (Amendment 4A). A real-store test through
+`Program.Run`: a test failing two ways shows both modes, with hashes equal to the `--id` evidence.
 
-### P5 — Goldens and documented samples
+### P5 — folded into P6 (Amendment 5)
 
-Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. Regenerate the
-documented samples. The affected markers are in `docs/cli/command-reference.md`: `detail-test`,
-`detail-repro-flaky`, `history-flaky`, `history-repro`. Regenerate §3 of this document from the
-goldens.
+### P6 — Goldens, documented samples and docs
 
-### P6 — Docs
+Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. P3 and P4
+already regenerated them, so the diff is expected to be empty. Regenerate the documented samples.
+The affected markers are in `docs/cli/command-reference.md`: `detail-test`, `detail-repro-flaky`,
+`history-flaky`, `history-repro`. Regenerate §3 of this document from the goldens.
 
 `docs/cli/command-reference.md`:
 

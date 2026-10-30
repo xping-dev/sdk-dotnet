@@ -199,18 +199,32 @@ public sealed class EnvelopeBuilderTests
         using JsonDocument document = JsonDocument.Parse(Json(Build(context, AnalysisResult.Empty, History(context))));
         JsonElement root = document.RootElement;
 
-        Assert.Equal("1.24", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.25", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(
             ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));
 
         JsonElement test = root.GetProperty("test");
         Assert.Equal(
-            ["query", "test", "shortFingerprint", "sessions", "counts", "duration", "findingsWithheld", "findingRows", "candidates"],
+            [
+                "query", "test", "shortFingerprint", "sessions", "counts", "duration", "failureModes",
+                "findingsWithheld", "findingRows", "candidates"
+            ],
             test.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             ["notExecuted", "timeout"],
             test.GetProperty("sessions").EnumerateArray().Select(s => s.GetProperty("outcome").GetString()));
+
+        // The timed-out attempt is a failure, and it recorded nothing to sign.
+        JsonElement mode = Assert.Single(test.GetProperty("failureModes").EnumerateArray());
+        Assert.Equal(
+            [
+                "hash", "exceptionType", "message", "frames", "framesDegraded", "unavailable", "occurrences",
+                "firstSeenAt", "firstSeenSha", "firstSeenSessionsAgo", "firstSeenInLatestSession",
+                "firstSeenAfterWindowStart"
+            ],
+            mode.EnumerateObject().Select(property => property.Name));
+        Assert.True(mode.GetProperty("unavailable").GetBoolean());
     }
 
     /// <summary>

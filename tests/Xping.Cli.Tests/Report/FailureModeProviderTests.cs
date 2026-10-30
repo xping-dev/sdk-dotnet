@@ -413,14 +413,14 @@ public sealed class FailureModeProviderTests
     }
 
     /// <summary>
-    /// A flaky finding's metrics name each way it failed, most frequent first.
+    /// A flaky finding names each way it failed, most frequent first, and its metrics only count them.
     /// </summary>
     /// <remarks>
     /// "3 failure modes" is a count, and the question it raises is which three. A failure the
-    /// adapter recorded nothing about is still a mode, named for what it is rather than invented.
+    /// adapter recorded nothing about is still a mode, published as unavailable rather than invented.
     /// </remarks>
     [Fact]
-    public void FlakyMetricsNameEachFailureMode()
+    public void AFlakyFindingNamesEachFailureModeAndItsMetricsCountThem()
     {
         TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
             TestSessionFactory.Session(ordinal, [ordinal switch
@@ -438,15 +438,16 @@ public sealed class FailureModeProviderTests
         FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
 
         (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+        IReadOnlyList<FailureModeDto> modes = FailureModes.Of(candidate.Evidence);
 
+        Assert.Equal([("failure modes", "3")], metrics.Skip(2).Select(m => (m.Label, m.Value)));
         Assert.Equal(
             [
-                ("failure modes", "3"),
-                ("failure mode 1", "System.InvalidOperationException: unexpected null"),
-                ("failure mode 2", "System.TimeoutException: the operation timed out"),
-                ("failure mode 3", "not recorded by the adapter")
+                ("System.InvalidOperationException", "unexpected null", 3, false),
+                ("System.TimeoutException", "the operation timed out", 2, false),
+                (null, "", 1, true)
             ],
-            metrics.Skip(2).Select(m => (m.Label, m.Value)));
+            modes.Select(m => (m.ExceptionType, m.Message, m.Occurrences, m.Unavailable)));
     }
 
     /// <summary>
@@ -459,20 +460,18 @@ public sealed class FailureModeProviderTests
 
         FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
 
-        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+        IReadOnlyList<FailureModeDto> modes = FailureModes.Of(candidate.Evidence);
 
-        string[] modes = [.. metrics.Where(m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal)).Select(m => m.Value)];
-
-        Assert.Equal(2, modes.Length);
-        Assert.Equal(2, modes.Distinct(StringComparer.Ordinal).Count());
-        Assert.All(modes, mode => Assert.StartsWith("System.InvalidOperationException: ", mode, StringComparison.Ordinal));
+        Assert.Equal(2, modes.Count);
+        Assert.Equal(2, modes.Select(m => m.Message).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(modes, mode => Assert.Equal("System.InvalidOperationException", mode.ExceptionType));
     }
 
     /// <summary>
-    /// A test with more failure modes than a reader can use names five and counts the rest.
+    /// Every mode is published, however many: how many to print is the renderer's choice.
     /// </summary>
     [Fact]
-    public void FailureModesPastFiveBecomeACount()
+    public void EveryFailureModeIsPublishedAndNoneBecomesAMetric()
     {
         TestSession[] sessions = RunsFailingWith(
             passing: 10, [.. Enumerable.Range(0, 8).Select(i => $"unexpected {(char)('a' + i)}")]);
@@ -481,8 +480,9 @@ public sealed class FailureModeProviderTests
 
         (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
 
-        Assert.Equal(5, metrics.Count(m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal)));
-        Assert.Equal(("more failure modes", "3 more"), (metrics[^1].Label, metrics[^1].Value));
+        Assert.Equal(8, FailureModes.Of(candidate.Evidence).Count);
+        Assert.DoesNotContain(metrics, m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal));
+        Assert.DoesNotContain(metrics, m => m.Label == "more failure modes");
     }
 
     [Fact]
@@ -1601,6 +1601,83 @@ public sealed class FailureModeProviderTests
         Assert.False(evidence.Signature.FirstSeenAfterWindowStart);
         Assert.Equal(9, evidence.Signature.FirstSeenSessionsAgo);
     }
+
+    /// <summary>
+    /// A mode is dated by the failures it counts, so the date never names a run the count set aside.
+    /// </summary>
+    /// <remarks>
+    /// Its oldest failure fell in a run where a third of the suite went down. That run is discounted,
+    /// and a date pointing at it would sit beside a count that excludes it.
+    /// </remarks>
+    [Fact]
+    public void AModesFirstSeenIsItsOldestCountedFailureNotAnEnvironmentalOne()
+    {
+        TestSession[] sessions = SubjectFailingIn(environmental: 2, counted: 6);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(1, signature.Occurrences);
+        Assert.Equal(3, signature.FirstSeenSessionsAgo);
+        Assert.Equal(sessions[6].StartedAt, signature.FirstSeenAt);
+        Assert.Equal("sha-of-run-6", signature.FirstSeenSha);
+
+        // Whether it is new is asked of every failure: it was there in the run set aside.
+        Assert.True(signature.FirstSeenAfterWindowStart);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// <c>--test</c> lists a test's modes under the hashes its finding's evidence uses, so a reader
+    /// can join one to the other.
+    /// </summary>
+    [Fact]
+    public void ATestsFailureModesShareTheHashesOfItsFindingsEvidence()
+    {
+        AnalysisContext context = TestSessionFactory.Context(FailingFourWaysIn(total: 20, failing: 8));
+
+        FindingCandidate flaky = Assert.Single(
+            new FailureModeProvider().Analyze(context).Candidates, c => c.Kind == FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(flaky.Evidence);
+        string fingerprint = Assert.Single(flaky.Subject.Tests).TestFingerprint;
+
+        Assert.Equal(
+            evidence.DistinctSignatures.Select(s => s.Hash).Order(StringComparer.Ordinal),
+            FailureModes.Of(context, fingerprint).Select(m => m.Hash).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Setting the window's oldest run aside does not make a mode that was already there new.
+    /// </summary>
+    [Fact]
+    public void AModeInTheWindowsOldestRunIsNotNewWhenThatRunIsDiscounted()
+    {
+        TestSession[] sessions = SubjectFailingIn(environmental: 0, counted: 6);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(3, signature.FirstSeenSessionsAgo);
+        Assert.False(signature.FirstSeenAfterWindowStart);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// Ten runs, oldest first, in which <c>Subject</c> fails the same way twice: once in a run where a
+    /// third of the suite fails too, and once on its own.
+    /// </summary>
+    private static TestSession[] SubjectFailingIn(int environmental, int counted) =>
+    [
+        .. Enumerable.Range(0, 10).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                ordinal == environmental || ordinal == counted ? Failure("Subject") : Passing("Subject"),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    ordinal == environmental ? Failure($"Broken{i}") : Passing($"Broken{i}")),
+                .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+            ],
+            sha: $"sha-of-run-{ordinal}"))
+    ];
 
     [Fact]
     public void ClustersAreOrderedWidestFirstAndTiesBreakStably()

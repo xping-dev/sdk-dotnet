@@ -14,15 +14,27 @@ FINDING                                                       row 1 of 1
     assembly  MyApp.Tests
     source    tests/MyApp.Tests/CheckoutTests.cs:42
 
-    failed          7 of 20 executions (35%)
-    runs affected   5 of 20
-    failure modes   3
-    failure mode 1  System.InvalidOperationException: Expected <n> but
-                    was <n>
-    failure mode 2  System.TimeoutException: timed out after <n>ms
-    failure mode 3  not recorded by the adapter
-    repro           run 11 times: at 5 of 20 runs failing (25%), 11 runs
-                    show a failure 95% of the time
+    failed         7 of 20 executions (35%)
+    runs affected  5 of 20
+    failure modes  3
+    repro          run 11 times: at 5 of 20 runs failing (25%), 11 runs
+                   show a failure 95% of the time
+
+FAILURE MODES                                            3 failure modes
+------------------------------------------------------------------------
+
+1.  4 failed attempts | first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    System.InvalidOperationException
+    expected <num> but was <num>
+      at MyApp.Tests.CheckoutTests.Completes()
+
+2.  2 failed attempts | first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    System.TimeoutException
+    timed out after <n>ms
+      at MyApp.Tests.CheckoutTests.Completes()
+
+3.  1 failed attempt | first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    the adapter recorded no failure detail
 ```
 
 rates: the marker on each finding says which runs its percentage was

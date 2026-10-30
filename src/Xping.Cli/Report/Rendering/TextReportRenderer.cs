@@ -3,10 +3,12 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
+using Xping.Cli.Reporting;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Shared;
 
@@ -34,6 +36,12 @@ namespace Xping.Cli.Report.Rendering;
 /// usually small and the finding list often empty, and a reader who cannot see how much history the
 /// report rests on will read an empty list as "everything is fine" rather than "there is not much
 /// to go on yet".
+/// </para>
+/// <para>
+/// <b>No DTO string is appended directly.</b> Every recorded value is read through
+/// <see cref="Recorded"/>, every command through <see cref="Command"/>, so a test name carrying an
+/// escape sequence or a bidi override cannot reach the terminal (D7). Text this class writes itself
+/// — labels, vocabulary, glyphs, numbers — does not go through them.
 /// </para>
 /// </remarks>
 /// <param name="capabilities">What the output stream can draw.</param>
@@ -152,6 +160,22 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
     private const int ShaWidth = 7;
 
+    private const string FailureModesLabel = "FAILURE MODES";
+
+    /// <summary>How many failure modes a view lists; the rest are in the JSON (D5).</summary>
+    private const int FailureModesShown = 5;
+
+    /// <summary>How many lines a failure mode's message takes at most (D5).</summary>
+    private const int MessageLinesShown = 6;
+
+    /// <summary>Where a failure mode's frames start, under its type and message.</summary>
+    private const int FrameIndent = ContinuationIndent + 2;
+
+    /// <summary>Where a frame broken between its type and its method continues.</summary>
+    private const int FrameContinuationIndent = FrameIndent + 3;
+
+    private const string Ellipsis = "...";
+
     // Where the outcome column starts, which is where an absence line puts its rule glyph.
     private const int RunOutcomeColumn = RunIndent + RunWhenWidth + RunGap;
 
@@ -211,14 +235,14 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // --directory would break it across lines, and a command cut to fit does not run
         // (Amendment 6B).
         if (envelope.Selection?.History is { } command)
-            builder.AppendLine(capabilities.Dim("History: " + command));
+            builder.AppendLine(capabilities.Dim("History: " + Command(command)));
 
         // The sentence above says how many times; the command is here for the same reason History
         // is. Not in the list: it is one row per finding, a command away from this. The history view
         // writes its own above, naming the row.
         // Guarded as WriteDetail is, so a finding that view says is not reported prints no command.
         if (envelope.Selection is { Row: not null } && envelope.Findings is [{ Repro: { } repro }])
-            builder.AppendLine(capabilities.Dim("Repro: " + repro.Command));
+            builder.AppendLine(capabilities.Dim("Repro: " + Command(repro.Command)));
 
         output.Write(builder.ToString());
     }
@@ -232,6 +256,22 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private string CloudSeparator => capabilities.Glyphs.Separator == "|" ? "-" : capabilities.Glyphs.Separator;
 
+    /// <summary>Gets what recorded text may keep, which is what the glyphs beside it use.</summary>
+    private TerminalCharset Charset => capabilities.Glyphs.Charset;
+
+    /// <summary>
+    /// Reads a value the envelope recorded, made safe for the terminal in this glyph set.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(value))]
+    private string? Recorded(string? value) => value == null ? null : TerminalText.Printable(value, Charset);
+
+    /// <summary>
+    /// Reads a command the envelope composed, made safe for the terminal but runnable as printed.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(value))]
+    private static string? Command(string? value) =>
+        value == null ? null : TerminalText.Printable(value, TerminalCharset.Command);
+
     private void WriteHeader(StringBuilder builder, ReportEnvelope envelope)
     {
         WindowDto window = envelope.Window;
@@ -240,7 +280,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         var provenance = new List<string> { "Xping" };
 
         if (envelope.Context?.Assembly is { Length: > 0 } assembly)
-            provenance.Add(assembly);
+            provenance.Add(Recorded(assembly));
 
         provenance.Add(Runs(window.SessionCount));
         provenance.Add(Period(window));
@@ -332,7 +372,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         foreach (KeyValuePair<string, NotMeasuredDto> entry in unreadable.Take(UnmeasuredKindsShown))
         {
             segments.Add(
-                $"{ReportVocabulary.LabelFor(entry.Key)} " +
+                // Recorded: LabelFor echoes a kind it does not know (Amendment 1D).
+                $"{Recorded(ReportVocabulary.LabelFor(entry.Key))} " +
                 entry.Value.Unreadable.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -401,7 +442,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 $"{RunWord(envelope.Window.SessionCount)} covered part of the suite");
 
         if (summary.FailedProviders.Count > 0)
-            caveats.Add($"metrics unavailable: {string.Join(", ", summary.FailedProviders)}");
+            caveats.Add($"metrics unavailable: {string.Join(", ", summary.FailedProviders.Select(Recorded))}");
 
         if (caveats.Count > 0)
             builder.Append(capabilities.Glyphs.Warning).Append(' ')
@@ -487,7 +528,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Rendered anyway, the envelope says the same thing rather than an empty fence.
         if (envelope.Findings is not [var finding] || selection.Row is not { } row)
         {
-            builder.Append(selection.Id).AppendLine(" is not reported in this window.");
+            builder.Append(Recorded(selection.Id)).AppendLine(" is not reported in this window.");
             return;
         }
 
@@ -507,33 +548,208 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         {
             WritePairs(builder,
             [
-                ("test", subject.FullyQualifiedName),
-                ("assembly", subject.Assembly),
+                ("test", Recorded(subject.FullyQualifiedName)),
+                ("assembly", Recorded(subject.Assembly)),
                 ("source", Location(subject))
             ]);
         }
 
         WritePairs(builder,
         [
-            .. finding.Metrics.Select(metric => (metric.Label, (string?)metric.Value)),
-            ("repro", finding.Repro?.Expectation),
-            .. CloudText.Pairs(finding.Cloud)
+            .. finding.Metrics.Select(metric => (Recorded(metric.Label), (string?)Recorded(metric.Value))),
+            ("repro", Recorded(finding.Repro?.Expectation)),
+            .. CloudText.Pairs(finding.Cloud, Charset)
         ]);
 
         if (selection.SameSubject.Count > 0)
         {
             string also = "Also about this test: " + string.Join(", ", selection.SameSubject.Select(same =>
-                $"#{same.Row.ToString(CultureInfo.InvariantCulture)} {ReportVocabulary.LabelFor(same.Kind)} ({same.Id})"));
+                $"#{same.Row.ToString(CultureInfo.InvariantCulture)} {Recorded(ReportVocabulary.LabelFor(same.Kind))} ({Recorded(same.Id)})"));
 
             builder.AppendLine();
 
             foreach (string text in Wrap(also, ContinuationBudget))
                 builder.Append(' ', ContinuationIndent).AppendLine(text);
         }
+
+        WriteFailureModes(builder, finding.FailureModes, finding.FailureModes.Count);
     }
 
     /// <summary>
-    /// Writes one test's history: who it is, how its runs ended, each run, and its findings.
+    /// Writes how the subject failed: each failure mode's count, first sighting, type, message and
+    /// frames (failure-mode spec D5).
+    /// </summary>
+    /// <param name="builder">What the report is being written into.</param>
+    /// <param name="modes">The modes, in the order the view resolved them.</param>
+    /// <param name="total">How many modes there are, which the heading states however many are listed.</param>
+    /// <remarks>
+    /// Numbered in the row-number column, as findings are, so the block reads as a list of the same
+    /// shape. Nothing at all when there is no mode: an empty heading would say the subject failed.
+    /// </remarks>
+    private void WriteFailureModes(StringBuilder builder, IReadOnlyList<FailureModeDto> modes, int total)
+    {
+        if (modes.Count == 0)
+            return;
+
+        builder.AppendLine();
+        WriteHeading(builder, FailureModesLabel, $"{Count(total)} {Plural(total, "failure mode")}");
+
+        int listed = Math.Min(modes.Count, FailureModesShown);
+
+        for (int index = 0; index < listed; index++)
+        {
+            if (index > 0)
+                builder.AppendLine();
+
+            WriteFailureMode(builder, modes[index], index + 1);
+        }
+
+        if (total > listed)
+        {
+            int more = total - listed;
+
+            builder.AppendLine()
+                   .Append(' ', ContinuationIndent)
+                   .Append(Count(more)).Append(" more ").Append(Plural(more, "failure mode"))
+                   .AppendLine(" in --format json");
+        }
+    }
+
+    /// <summary>
+    /// Writes one failure mode: the count line, then the type, the message and the frames.
+    /// </summary>
+    private void WriteFailureMode(StringBuilder builder, FailureModeDto mode, int number)
+    {
+        string label = number.ToString(CultureInfo.InvariantCulture) + ".";
+        string count = $"{Count(mode.Occurrences)} {Plural(mode.Occurrences, "failed attempt")}";
+        List<string> header = Wrap($"{count} {capabilities.Glyphs.Separator} {FirstSeen(mode)}", ContinuationBudget);
+
+        builder.Append(label).Append(' ', Math.Max(1, RowLabelWidth - label.Length)).AppendLine(header[0]);
+
+        foreach (string line in header.Skip(1))
+            builder.Append(' ', ContinuationIndent).AppendLine(line);
+
+        if (mode.Unavailable)
+        {
+            builder.Append(' ', ContinuationIndent).AppendLine("the adapter recorded no failure detail");
+            return;
+        }
+
+        IEnumerable<string> type = Recorded(mode.ExceptionType) is { Length: > 0 } recorded
+            ? WrapValue(recorded, ContinuationBudget)
+            : ["exception type not recorded"];
+
+        foreach (string line in type)
+            builder.Append(' ', ContinuationIndent).AppendLine(line);
+
+        // Blank is empty: a line of indentation alone would read as the gap between two modes.
+        if (!string.IsNullOrWhiteSpace(mode.Message))
+        {
+            foreach (string line in MessageLines(Recorded(mode.Message)))
+                builder.Append(' ', ContinuationIndent).AppendLine(line);
+        }
+
+        foreach (string frame in mode.Frames)
+            WriteFrame(builder, Recorded(frame));
+
+        if (mode.FramesDegraded && mode.Frames.Count > 0)
+        {
+            builder.Append(' ', FrameIndent)
+                   .AppendLine(capabilities.Dim("(no test code on the stack; framework frames shown)"));
+        }
+    }
+
+    /// <summary>
+    /// Says when a mode first appeared, in words only when it is new in the window.
+    /// </summary>
+    /// <remarks>
+    /// A mode already present in the window's oldest run gets no date: that date is the header's, and
+    /// the report cannot see whether the mode started there or long before. Checked first because in
+    /// a one-run window the oldest run is also the latest, and both flags hold (Amendment 4A).
+    /// </remarks>
+    private string FirstSeen(FailureModeDto mode)
+    {
+        if (!mode.FirstSeenAfterWindowStart)
+            return "since the window opened";
+
+        if (mode.FirstSeenInLatestSession)
+            return "first seen in the latest run";
+
+        string sha = Recorded(mode.FirstSeenSha) is { Length: > 0 } recorded
+            ? " at " + TerminalText.Head(recorded, ShaWidth)
+            : string.Empty;
+
+        // Zero only where discounting set aside every older failure (D3): the counted ones began in
+        // the latest run, though the mode itself did not.
+        string when = mode.FirstSeenSessionsAgo == 0
+            ? "in the latest run"
+            : $"{Runs(mode.FirstSeenSessionsAgo)} ago";
+
+        return $"first seen {Format(mode.FirstSeenAt, "MM-dd HH:mm")}{sha}, {when}";
+    }
+
+    /// <summary>
+    /// Wraps a mode's message, capped at <see cref="MessageLinesShown"/> lines.
+    /// </summary>
+    /// <remarks>
+    /// The last line is cut hard rather than at a word, so the marker fits even when the rest is one
+    /// token that <see cref="Wrap"/> would otherwise print whole and past the fence. A sixth line
+    /// that is such a token is cut too: it is more than the line can hold.
+    /// </remarks>
+    private static List<string> MessageLines(string message)
+    {
+        List<string> lines = Wrap(message, ContinuationBudget);
+
+        if (lines.Count < MessageLinesShown)
+            return lines;
+
+        string rest = string.Join(' ', lines.Skip(MessageLinesShown - 1));
+
+        if (rest.Length <= ContinuationBudget)
+            return lines;
+
+        string last = TerminalText.Head(rest, ContinuationBudget - Ellipsis.Length).TrimEnd() + Ellipsis;
+
+        return [.. lines.Take(MessageLinesShown - 1), last];
+    }
+
+    /// <summary>
+    /// Writes one frame, broken once between its type and its method where it does not fit.
+    /// </summary>
+    /// <remarks>
+    /// After the last <c>.</c> before the argument list, so the method name and its arguments stay
+    /// together on the continuation: that is the half a reader searches for. A dot inside the
+    /// argument list may be a decimal point and is never a break.
+    /// </remarks>
+    private static void WriteFrame(StringBuilder builder, string frame)
+    {
+        const string prefix = "at ";
+        const int budget = FenceWidth - FrameIndent;
+
+        if (prefix.Length + frame.Length <= budget)
+        {
+            builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame);
+            return;
+        }
+
+        int dot = MethodDot(frame, budget - prefix.Length);
+
+        // No break in reach: the frame overflows whole rather than losing half an identifier.
+        if (dot < 0)
+        {
+            builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame);
+            return;
+        }
+
+        builder.Append(' ', FrameIndent).Append(prefix).AppendLine(frame[..(dot + 1)]);
+
+        foreach (string line in Wrap(frame[(dot + 1)..], FenceWidth - FrameContinuationIndent))
+            builder.Append(' ', FrameContinuationIndent).AppendLine(line);
+    }
+
+    /// <summary>
+    /// Writes one test's history: who it is, how its runs ended, each run, how it failed, and its
+    /// findings.
     /// </summary>
     /// <param name="builder">What the report is being written into.</param>
     /// <param name="envelope">The report, holding the findings about this test alone.</param>
@@ -554,15 +770,15 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Rendered anyway, the envelope says so rather than drawing an empty history.
         if (history.Test is not { } test || history.Counts is not { } counts)
         {
-            builder.Append('\'').Append(history.Query).AppendLine("' names no one test in this window.");
+            builder.Append('\'').Append(Recorded(history.Query)).AppendLine("' names no one test in this window.");
             return;
         }
 
         WriteHeading(
-            builder, TestLabel, history.ShortFingerprint is { Length: > 0 } fingerprint ? "fp " + fingerprint : string.Empty);
+            builder, TestLabel, history.ShortFingerprint is { Length: > 0 } fingerprint ? "fp " + Recorded(fingerprint) : string.Empty);
 
         // No assembly pair: the header above the fence names it.
-        WritePairs(builder, [("test", test.FullyQualifiedName), ("source", Location(test))], separate: false);
+        WritePairs(builder, [("test", Recorded(test.FullyQualifiedName)), ("source", Location(test))], separate: false);
 
         builder.AppendLine();
 
@@ -578,6 +794,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         builder.AppendLine();
         WriteHeading(builder, RunsLabel, RunsNote);
         WriteRuns(builder, history.Sessions);
+
+        // Every mode is listed whatever the findings say: a test can fail without reaching any
+        // finding's threshold, and the block counts attempts, so it reads beside RUNS (D4).
+        WriteFailureModes(builder, history.FailureModes, history.FailureModes.Count);
 
         builder.AppendLine();
         WriteHistoryFindings(builder, envelope, history);
@@ -708,7 +928,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     private void WriteRun(StringBuilder builder, TestSessionDto session)
     {
         string duration = session.DurationMs is { } milliseconds ? DurationFormatter.Format(milliseconds) : string.Empty;
-        string sha = session.Sha is { Length: > ShaWidth } full ? full[..ShaWidth] : session.Sha ?? string.Empty;
+        string sha = Recorded(session.Sha) is { } recorded ? TerminalText.Head(recorded, ShaWidth) : string.Empty;
 
         var row = new StringBuilder()
             .Append(' ', RunIndent)
@@ -802,7 +1022,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         if (findings.Count == 0)
         {
-            foreach (string line in Wrap(history.FindingsWithheld ?? "no findings", FenceWidth))
+            foreach (string line in Wrap(Recorded(history.FindingsWithheld) ?? "no findings", FenceWidth))
                 builder.AppendLine(line);
 
             return;
@@ -836,7 +1056,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.AppendLine();
         builder.AppendLine(capabilities.Dim(
-            $"{about} about this test {capabilities.Glyphs.Separator} all: {envelope.Truncated.Command}"));
+            $"{about} about this test {capabilities.Glyphs.Separator} all: {Command(envelope.Truncated.Command)}"));
 
         return true;
     }
@@ -1105,10 +1325,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     {
         string time = Format(latest.StartedAt, "HH:mm");
 
-        if (latest.Sha is not { Length: > 0 } sha)
+        if (Recorded(latest.Sha) is not { Length: > 0 } sha)
             return time;
 
-        return $"{time} {capabilities.Glyphs.Separator} {(sha.Length > 7 ? sha.Substring(0, 7) : sha)}";
+        return $"{time} {capabilities.Glyphs.Separator} {TerminalText.Head(sha, 7)}";
     }
 
     /// <summary>
@@ -1145,7 +1365,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure)
     {
-        string status = ReportVocabulary.StatusWordsFor(failure.Status);
+        string status = Recorded(ReportVocabulary.StatusWordsFor(failure.Status));
         string decorated = failure.Status == "new" ? capabilities.Emphasis(status) : status;
 
         // Padded against the plain word: escape codes occupy no columns, and padding to a length
@@ -1157,12 +1377,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Cloud's statement replaces the local one rather than joining it: it is about the same
         // history, over every run uploaded rather than the ones on this machine.
-        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud) ?? failure.Contrast, LatestRunBudget))
+        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud) ?? Recorded(failure.Contrast), LatestRunBudget))
             builder.Append(' ', LatestRunRowIndent).AppendLine(line);
 
         var trailer = new List<string>();
 
-        if (failure.FailureSummary is { Length: > 0 } summary)
+        if (Recorded(failure.FailureSummary) is { Length: > 0 } summary)
             trailer.Add(summary);
 
         if (Location(failure.Subject) is { } location)
@@ -1321,7 +1541,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     {
         string number = row.ToString(CultureInfo.InvariantCulture) + ".";
         string marker = ReportVocabulary.MarkerFor(finding.Severity);
-        string label = ReportVocabulary.LabelFor(finding.Kind);
+        // Recorded, as every vocabulary echo is: an unknown value comes back as it was (Amendment 2F).
+        string label = Recorded(ReportVocabulary.LabelFor(finding.Kind));
         int spacing = Math.Max(1, RowLabelWidth - number.Length);
 
         builder.Append(number)
@@ -1334,7 +1555,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // heading's, and every finding it could be a sibling of is on screen.
         bool aboutTheView = view == RowView.History && finding.Subject.Members == null;
 
-        if (!aboutTheView && finding.Annotation is { Length: > 0 } annotation)
+        if (!aboutTheView && Recorded(finding.Annotation) is { Length: > 0 } annotation)
         {
             int written = number.Length + spacing + marker.Length + 2 + label.Length;
 
@@ -1355,7 +1576,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         else
             WriteMembers(builder, finding.Subject);
 
-        foreach (string line in Wrap(finding.Headline, ContinuationBudget))
+        foreach (string line in Wrap(Recorded(finding.Headline), ContinuationBudget))
             builder.Append(' ', ContinuationIndent).AppendLine(line);
 
         // Between the evidence level and the id: the two say how much to believe the finding and
@@ -1364,20 +1585,20 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         var trailer = new List<string>
         {
-            $"evidence {finding.EvidenceLevel}",
-            ReportVocabulary.PopulationTokenFor(finding.Population),
-            finding.Id
+            $"evidence {Recorded(finding.EvidenceLevel)}",
+            Recorded(ReportVocabulary.PopulationTokenFor(finding.Population)),
+            Recorded(finding.Id)
         };
 
         // Cloud's confidence belongs with the local evidence level: both say how much to believe it.
         // The category goes first when the line is short of room — the detail view always has it —
         // because Fit() would otherwise cut the local evidence word off the front.
-        if (CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: true) is { } cloud)
+        if (CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: true, Charset) is { } cloud)
         {
             int rest = trailer.Sum(part => part.Length + SeparatorWidth);
             trailer.Insert(1, rest + cloud.Length <= budget
                 ? cloud
-                : CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: false)!);
+                : CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: false, Charset)!);
         }
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
@@ -1408,7 +1629,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Not on a cluster: its command and count are its likeliest members', which need not include
         // the view's test, and would contradict the runs above (Amendment 9A).
         if (aboutTheView && finding.Repro is { } repro)
-            WritePairs(builder, [("repro", repro.Expectation)], separate: false);
+            WritePairs(builder, [("repro", Recorded(repro.Expectation))], separate: false);
     }
 
     /// <summary>
@@ -1475,7 +1696,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.AppendLine();
         builder.AppendLine(capabilities.Dim(
-            $"Showing {string.Join(", ", counts)} {capabilities.Glyphs.Separator} all: {truncated.Command}"));
+            $"Showing {string.Join(", ", counts)} {capabilities.Glyphs.Separator} all: {Command(truncated.Command)}"));
 
         return true;
     }
@@ -1515,7 +1736,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             builder.AppendLine();
 
         builder.AppendLine(capabilities.Dim(
-            $"Detail of row {Count(RowOf(envelope, 0))}: {envelope.Findings[0].DrillDown}"));
+            $"Detail of row {Count(RowOf(envelope, 0))}: {Command(envelope.Findings[0].DrillDown)}"));
     }
 
     /// <summary>
@@ -1558,7 +1779,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             return;
 
         builder.AppendLine(capabilities.Dim(
-            $"Repro of row {Count(RowOf(envelope, chosen))}: {findings[chosen].Repro!.Command}"));
+            $"Repro of row {Count(RowOf(envelope, chosen))}: {Command(findings[chosen].Repro!.Command)}"));
     }
 
     /// <summary>
@@ -1588,7 +1809,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// down, and three of them establish that as well as forty do.
     /// </para>
     /// </remarks>
-    private static void WriteMembers(StringBuilder builder, SubjectDto subject)
+    private void WriteMembers(StringBuilder builder, SubjectDto subject)
     {
         if (subject.Members is not { Count: > 0 } members)
             return;
@@ -1647,12 +1868,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// above <c>0x7f</c>.
     /// </para>
     /// </remarks>
-    private static string Name(SubjectDto subject)
+    private string Name(SubjectDto subject)
     {
-        if (subject.ShortName is { Length: > 0 } name)
+        if (Recorded(subject.ShortName) is { Length: > 0 } name)
             return name;
 
-        string cause = subject.CauseLabel is { Length: > 0 } label ? label : "(cause not recorded)";
+        string cause = Recorded(subject.CauseLabel) is { Length: > 0 } label ? label : "(cause not recorded)";
 
         return subject.MemberCount is { } members ? $"{cause} ({Tests(members)})" : cause;
     }
@@ -1662,9 +1883,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// recorded.
     /// </summary>
     /// <returns>The location, or null where the SDK captured none.</returns>
-    private static string? Location(SubjectDto subject)
+    private string? Location(SubjectDto subject)
     {
-        if (subject.SourceFile is not { Length: > 0 } file)
+        if (Recorded(subject.SourceFile) is not { Length: > 0 } file)
             return null;
 
         return subject.SourceLineNumber is { } line
@@ -1687,14 +1908,14 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             : Format(window.From, "yyyy-MM-dd") + arrow + Format(window.To, "yyyy-MM-dd");
     }
 
-    private static string Revision(ContextDto? context)
+    private string Revision(ContextDto? context)
     {
         if (context == null)
             return string.Empty;
 
-        string sha = context.Sha is { Length: > 7 } full ? full.Substring(0, 7) : context.Sha ?? string.Empty;
+        string sha = Recorded(context.Sha) is { } recorded ? TerminalText.Head(recorded, 7) : string.Empty;
 
-        if (context.Branch is not { Length: > 0 } branch)
+        if (Recorded(context.Branch) is not { Length: > 0 } branch)
             return sha;
 
         return sha.Length == 0 ? branch : $"{branch}@{sha}";
@@ -1723,7 +1944,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (value.Length <= width || width <= 3)
             return value;
 
-        return string.Concat("...", value.AsSpan(value.Length - (width - 3)));
+        // Never from inside a surrogate pair: half an astral character is what Printable removed.
+        return "..." + TerminalText.Tail(value, width - 3);
     }
 
     /// <summary>
@@ -1752,9 +1974,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (value.Length <= width)
             return value;
 
-        int paren = value.IndexOf('(', StringComparison.Ordinal);
-        int end = paren < 0 ? value.Length : paren;
-        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+        int dot = MethodDot(value, value.Length);
 
         if (dot < 0)
             return value;
@@ -1764,6 +1984,30 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return width >= value.Length - dot + 4
             ? Fit(value, width)
             : string.Concat("...", value.AsSpan(dot + 1));
+    }
+
+    /// <summary>
+    /// Finds the dot that ends a name's type and starts its method: the last one before the argument
+    /// list, within <paramref name="limit"/> characters.
+    /// </summary>
+    /// <returns>The dot's index, or -1 where there is none in reach.</returns>
+    /// <remarks>
+    /// <para>
+    /// Never inside the argument list, where a dot belongs to a parameter's type or a decimal.
+    /// </para>
+    /// <para>
+    /// A constructor's method is <c>.ctor</c> or <c>.cctor</c>, its own dot included, so
+    /// <c>Order..ctor()</c> ends its type at the first of the two dots. Taking the second would leave
+    /// <c>ctor()</c>, which no frame and no search reads as a constructor.
+    /// </para>
+    /// </remarks>
+    private static int MethodDot(string value, int limit)
+    {
+        int paren = value.IndexOf('(', StringComparison.Ordinal);
+        int end = Math.Min(paren < 0 ? value.Length : paren, limit);
+        int dot = end == 0 ? -1 : value.LastIndexOf('.', end - 1);
+
+        return dot > 0 && value[dot - 1] == '.' ? dot - 1 : dot;
     }
 
     /// <summary>

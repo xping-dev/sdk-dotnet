@@ -17,8 +17,15 @@ FINDING                                                       row 1 of 1
 
     failed         19 of 20 executions (95%)
     runs affected  19 of 20
-    failure mode   System.InvalidOperationException
     repro          run once: it failed in 19 of 20 runs
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  19 failed attempts · first seen 08-06 09:00 at a3f9c2e, 18 runs ago
+    System.InvalidOperationException
+    expected <num> but was <num>
+      at MyApp.Tests.CheckoutTests.Completes()
 ```
 
 rates: the marker on each finding says which runs its percentage was

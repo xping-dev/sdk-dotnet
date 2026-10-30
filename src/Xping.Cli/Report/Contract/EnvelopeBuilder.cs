@@ -445,6 +445,7 @@ internal static class EnvelopeBuilder
             annotations.GetValueOrDefault(finding.Id),
             headline,
             metrics,
+            FailureModes.Of(finding.Evidence),
             BuildEvidence(finding.Evidence),
             DrillDown.ForFinding(finding.Id, scope),
             BuildRepro(finding, target, scope.Shell));

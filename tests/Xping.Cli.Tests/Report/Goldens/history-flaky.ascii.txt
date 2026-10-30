@@ -23,6 +23,14 @@ RUNS                                                        newest first
   08-20 13:20  x->+  attempt 2         12ms  c670fc3
   08-20 13:19  x->+  attempt 2         12ms  c670fc3
 
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  6 failed attempts | since the window opened
+    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
+    assert.areequal failed. expected:<<num>>. actual:<<num>>.
+      at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
+
 FINDINGS                                                      2 findings
 ------------------------------------------------------------------------
 

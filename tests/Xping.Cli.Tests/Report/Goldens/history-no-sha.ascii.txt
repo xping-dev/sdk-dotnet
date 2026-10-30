@@ -21,6 +21,14 @@ RUNS                                                        newest first
   08-20 06:00  +                      125ms
   08-20 00:00  +                      119ms
 
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  1 failed attempt | first seen 08-20 12:00, 3 runs ago
+    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
+    assert.areequal failed. expected:<<num>>. actual:<<num>>.
+      at SampleApp.MSTest.InvoiceTests.Total_IncludesTax()
+
 FINDINGS
 ------------------------------------------------------------------------
 

@@ -991,7 +991,7 @@ public sealed class ShareableOutputTests
             Finding("Flaky", "high", "Alpha", "failed 7 of 20 executions (35%)"));
 
         using var writer = new StringWriter();
-        new SummaryReportRenderer().Render(envelope, writer);
+        new SummaryReportRenderer(TerminalCharset.Ascii).Render(envelope, writer);
 
         Assert.Equal(
             "Xping: 1 finding (1 high) in 20 runs of MyApp.Tests",

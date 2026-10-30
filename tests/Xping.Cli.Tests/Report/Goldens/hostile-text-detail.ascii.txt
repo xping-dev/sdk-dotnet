@@ -1,0 +1,38 @@
+Xping | MyApp.Tests | 20 runs | 2026-08-01 09:00 -> 09:19 | main@eab9867
+13 tests | 12 healthy | 1 flagged
+* nothing to measure: concurrency 13 | time sensitive 13
+
+```
+FINDING                                                       row 1 of 1
+------------------------------------------------------------------------
+
+1.  HIGH  flaky
+    SampleTests.Refund?[31m?Caf??Total
+    failed 5 of 20 executions (25%) in 5 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_b0290552 | SampleTests.cs:10
+
+    test      MyApp.Tests.SampleTests.Refund?[31m?Caf??Total
+    assembly  MyApp.Tests
+    source    SampleTests.cs:10
+
+    failed         5 of 20 executions (25%)
+    runs affected  5 of 20
+    failure modes  1
+    repro          run 11 times: at 5 of 20 runs failing (25%), 11 runs
+                   show a failure 95% of the time
+
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  5 failed attempts | first seen 08-01 09:03 at eab9867, 16 runs ago
+    System.InvalidOperationException
+    refund ?[31mdeclined?[0m for caf? ?order
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding | all: xping report --all
+History: xping report --test fp-Refun --assembly MyApp.Tests
+Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter 'FullyQualifiedName=MyApp.Tests.SampleTests.Refund?[31m?Café?Total'

@@ -77,6 +77,8 @@ internal static class ReportFixtures
         "detail-repro-none",
         "detail-repro-mtp",
         "detail-repro-no-runner",
+        "detail-failure-modes",
+        "detail-unavailable",
         "history-flaky",
         "history-healthy",
         "history-timeout-retry",
@@ -84,12 +86,33 @@ internal static class ReportFixtures
         "history-below-floor",
         "history-cluster-member",
         "history-store",
-        "history-repro"
+        "history-repro",
+        "history-failure-modes",
+        "hostile-text",
+        "hostile-text-detail",
+        "hostile-text-history"
     ];
 
     /// <summary>The same keys, as a theory source.</summary>
     /// <returns>The keys.</returns>
     public static TheoryData<string> Names() => [.. Keys];
+
+    /// <summary>
+    /// Gets the fixtures whose recorded text carries control, bidi and non-ASCII characters (§3.4).
+    /// </summary>
+    public static IReadOnlySet<string> HostileKeys { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { "hostile-text", "hostile-text-detail", "hostile-text-history" };
+
+    /// <summary>
+    /// The keys whose recorded text is printable ASCII, as a theory source.
+    /// </summary>
+    /// <returns>The keys.</returns>
+    /// <remarks>
+    /// For the sweeps that hold the whole rendering to a charset. A hostile fixture's commands keep
+    /// the <c>é</c> its test name carries, and its Unicode rendering prints one; the hostile-envelope
+    /// test is where those are checked (D7).
+    /// </remarks>
+    public static TheoryData<string> PlainNames() => [.. Keys.Where(key => !HostileKeys.Contains(key))];
 
     /// <summary>
     /// Returns the envelope a key names.
@@ -264,6 +287,8 @@ internal static class ReportFixtures
         "detail-repro-mtp" => ReproFlaky(
             new ReproTarget(LocalSessionProperties.TestingPlatformRunner, SampleProject), failing: 4, judged: 9),
         "detail-repro-no-runner" => ReproFlaky(ReproTarget.Unknown, failing: 4, judged: 9),
+        "detail-failure-modes" => DetailFailureModes(),
+        "detail-unavailable" => DetailUnavailable(),
         "history-flaky" => HistoryFlaky(),
         "history-healthy" => HistoryHealthy(),
         "history-timeout-retry" => HistoryTimeoutRetry(),
@@ -272,6 +297,10 @@ internal static class ReportFixtures
         "history-cluster-member" => HistoryClusterMember(),
         "history-store" => HistoryFromStore(),
         "history-repro" => HistoryRepro(),
+        "history-failure-modes" => HistoryFailureModes(),
+        "hostile-text" => HostileText(),
+        "hostile-text-detail" => HostileTextDetail(),
+        "hostile-text-history" => HostileTextHistory(),
         _ when DetailKind(name) is { } kind => Detail(Envelope(Measured(kind)), 1),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "no such fixture")
     };
@@ -414,22 +443,21 @@ internal static class ReportFixtures
         ReportEnvelope envelope = SpecSection3();
 
         SignatureView signature = new(
-            "abc123", "System.InvalidOperationException", "Expected <n> but was <n>", [],
+            "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
             Degraded: false, Unavailable: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
             FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
 
         FindingDto cluster = envelope.Findings[2];
-        (string clusterHeadline, IReadOnlyList<MetricDto> clusterMetrics) = EvidenceHeadline.For(
-            FindingKind.BrokenFixture,
-            new BrokenFixtureEvidence(
-                nameof(Sdk.Core.Models.Executions.FailureSite.FixtureSetup), "UnprovisionedDatabase..ctor", signature with { Occurrences = 60 },
-                3, [], 60, 20, 20, 3, new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc), "eab9867", []));
+        var clusterEvidence = new BrokenFixtureEvidence(
+            nameof(Sdk.Core.Models.Executions.FailureSite.FixtureSetup), "UnprovisionedDatabase..ctor", signature with { Occurrences = 60 },
+            3, [], 60, 20, 20, 3, new DateTime(2026, 9, 5, 16, 21, 0, DateTimeKind.Utc), "eab9867", []);
+        (string clusterHeadline, IReadOnlyList<MetricDto> clusterMetrics) =
+            EvidenceHeadline.For(FindingKind.BrokenFixture, clusterEvidence);
 
         FindingDto flaky = envelope.Findings[4];
-        (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(
-            FindingKind.Flaky,
-            new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null));
+        var flakyEvidence = new FlakyEvidence(6, 20, 20, 6, 6, 20, 0.3, 0, 0, 1, [signature], [], null);
+        (string flakyHeadline, IReadOnlyList<MetricDto> flakyMetrics) = EvidenceHeadline.For(FindingKind.Flaky, flakyEvidence);
 
         return envelope with
         {
@@ -441,6 +469,7 @@ internal static class ReportFixtures
                 {
                     Headline = clusterHeadline,
                     Metrics = clusterMetrics,
+                    FailureModes = FailureModes.Of(clusterEvidence),
                     Subject = cluster.Subject with
                     {
                         Members =
@@ -454,7 +483,7 @@ internal static class ReportFixtures
                     }
                 },
                 envelope.Findings[3],
-                flaky with { Headline = flakyHeadline, Metrics = flakyMetrics, Subject = flaky.Subject with { Assembly = "SampleApp.XUnit" } },
+                flaky with { Headline = flakyHeadline, Metrics = flakyMetrics, FailureModes = FailureModes.Of(flakyEvidence), Subject = flaky.Subject with { Assembly = "SampleApp.XUnit" } },
                 .. envelope.Findings.Skip(5)
             ]
         };
@@ -505,6 +534,7 @@ internal static class ReportFixtures
             Population = ToCamelCase(PopulationRules.For(kind).ToString()),
             Headline = headline,
             Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence),
             Repro = Repro(kind, reproEvidence, finding.Subject, VSTest("tests/MyApp.Tests/MyApp.Tests.csproj"))
         };
     }
@@ -575,6 +605,7 @@ internal static class ReportFixtures
             Id = "f_1491bf4c",
             EvidenceLevel = "low",
             Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence),
             Subject = finding.Subject with { Assembly = "SampleApp.MSTest" }
         };
 
@@ -611,7 +642,8 @@ internal static class ReportFixtures
             Id = FindingId.Compute(FindingKind.SharedFailure, finding.Subject.GroupId!),
             Kind = nameof(FindingKind.SharedFailure),
             Population = ToCamelCase(PopulationRules.For(FindingKind.SharedFailure).ToString()),
-            Metrics = metrics
+            Metrics = metrics,
+            FailureModes = FailureModes.Of(sample)
         };
 
         var evidence = (SharedFailureEvidence)sample with { Members = MembersOf(finding.Subject) };
@@ -620,6 +652,94 @@ internal static class ReportFixtures
         {
             Repro = Repro(FindingKind.SharedFailure, evidence, finding.Subject, VSTest("tests/Ns.Tests/Ns.Tests.csproj"))
         }), 1);
+    }
+
+    /// <summary>
+    /// The failure-mode spec's §3.1: a flaky test with three modes, one degraded and one unavailable,
+    /// each first seen in a different form.
+    /// </summary>
+    /// <remarks>
+    /// The sha is recorded whole, so the golden pins the cut to seven. The degraded mode's frame is
+    /// too wide for its line and pins the break between the type and the method.
+    /// </remarks>
+    private static ReportEnvelope DetailFailureModes()
+    {
+        var sample = (FlakyEvidence)EvidenceSamples.For(FindingKind.Flaky);
+        SignatureView first = sample.DistinctSignatures[0];
+
+        var evidence = sample with
+        {
+            DistinctSignatures =
+            [
+                first with
+                {
+                    Message = "expected <num> but was <num>",
+                    Frames = ["MyApp.Checkout.Basket.Total()", "MyApp.Tests.CheckoutTests.Completes()"],
+                    Occurrences = 4,
+                    FirstSeenAt = new DateTime(2026, 8, 12, 9, 40, 0, DateTimeKind.Utc),
+                    FirstSeenSha = "b71e004c93d2a1f05e6b7c8d9e0f1a2b3c4d5e6f",
+                    FirstSeenSessionsAgo = 6,
+                    FirstSeenAfterWindowStart = true
+                },
+                first with
+                {
+                    Hash = "def456",
+                    ExceptionType = "System.TimeoutException",
+                    Message = "timed out after <num>ms",
+                    Frames = ["System.Net.Http.HttpConnectionPool.SendAsync(HttpRequestMessage request)"],
+                    Degraded = true,
+                    Occurrences = 2,
+                    FirstSeenSessionsAgo = 19,
+                    FirstSeenAfterWindowStart = false
+                },
+                first with
+                {
+                    Hash = "0a1b2c",
+                    ExceptionType = null,
+                    Message = string.Empty,
+                    Frames = [],
+                    Unavailable = true,
+                    Occurrences = 1,
+                    FirstSeenSessionsAgo = 0,
+                    FirstSeenInLatestSession = true,
+                    FirstSeenAfterWindowStart = true
+                }
+            ]
+        };
+
+        FindingDto finding = Measured(FindingKind.Flaky);
+
+        return Detail(Envelope(finding with { FailureModes = FailureModes.Of(evidence) }), 1);
+    }
+
+    /// <summary>
+    /// An always-failing test whose adapter recorded no failure detail: no type, message or frames.
+    /// </summary>
+    private static ReportEnvelope DetailUnavailable()
+    {
+        var sample = (AlwaysFailingEvidence)EvidenceSamples.For(FindingKind.AlwaysFailing);
+
+        var evidence = sample with
+        {
+            Signature = sample.Signature with
+            {
+                ExceptionType = null,
+                Message = string.Empty,
+                Frames = [],
+                Unavailable = true
+            }
+        };
+
+        (string headline, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(FindingKind.AlwaysFailing, evidence);
+
+        FindingDto finding = Measured(FindingKind.AlwaysFailing) with
+        {
+            Headline = headline,
+            Metrics = metrics,
+            FailureModes = FailureModes.Of(evidence)
+        };
+
+        return Detail(Envelope(finding), 1);
     }
 
     /// <summary>
@@ -664,6 +784,10 @@ internal static class ReportFixtures
     /// <summary>The suite every hand-built history belongs to: §3.1's sixteen tests.</summary>
     private const int HistoryTests = 16;
 
+    private const string AssertFailed = "Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException";
+
+    private const string SourceRoot = "/src/tests/SampleApp.MSTest/";
+
     /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
     private static ReportScope HistoryScope(string? assembly, int runs) =>
         new(assembly, WindowResolution.Store, runs, ShellDialect.Posix, AssemblyGiven: true);
@@ -698,7 +822,9 @@ internal static class ReportFixtures
 
         return History(
             name, "3a597eb2c0ffee11", "tests/SampleApp.MSTest/CalculatorTests.cs", 42,
-            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1),
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<4>. Actual:<5>. ", $"   at {name}() in {SourceRoot}CalculatorTests.cs:line 42"));
     }
 
     /// <summary>
@@ -753,9 +879,17 @@ internal static class ReportFixtures
             { Id = "f_6e1d0b7a", EvidenceLevel = "moderate" }
         ];
 
+        // A killed attempt carries no exception, so its timeouts are one mode the adapter recorded
+        // nothing for. TimingOut publishes none, and --test lists it anyway (Amendment 1E).
         return History(
             name, "b07e5c2d9f31", "tests/SampleApp.MSTest/GatewayTests.cs", 57,
-            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0));
+            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0),
+            failure: (_, attempt) => attempt.Outcome == TestOutcome.Timeout
+                ? new RecordedFailure(null, null, null)
+                : new RecordedFailure(
+                    "System.Net.Http.HttpRequestException",
+                    "Response status code does not indicate success: 503 (Service Unavailable).",
+                    $"   at {name}() in {SourceRoot}GatewayTests.cs:line 57"));
     }
 
     /// <summary>
@@ -794,7 +928,65 @@ internal static class ReportFixtures
             name, "5d1e2a0c77b4", "tests/SampleApp.MSTest/CalculatorTests.cs", 57,
             sessions,
             [finding with { Repro = Repro(FindingKind.Flaky, evidence, finding.Subject, VSTest(SampleProject)) }],
-            [1], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+            [1], flagged: 6, produced: new SeverityCountsDto(3, 4, 1),
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<1000>. Actual:<997>. The counter lost updates.",
+                $"   at {name}() in {SourceRoot}CalculatorTests.cs:line 57"));
+    }
+
+    /// <summary>
+    /// A test that failed seven ways, one of them with a 900-character message: the cap line and
+    /// the message cut (failure-mode spec §3.3, Amendment 4B).
+    /// </summary>
+    /// <remarks>
+    /// Through the pipeline, so the modes, the summary and the findings are the ones
+    /// <c>xping report --test</c> would resolve from these runs.
+    /// </remarks>
+    private static ReportEnvelope HistoryFailureModes()
+    {
+        const string name = "Export_WritesTheArchive";
+
+        string longMessage = string.Concat(Enumerable.Repeat(
+            "The underlying stream rejected the write while the archive was being flushed to disk. ", 11))[..900];
+
+        (string Type, string Message, string Frame)[] modes =
+        [
+            ("System.IO.IOException", longMessage, "MyApp.Export.ArchiveWriter.Flush()"),
+            ("System.TimeoutException", "The export did not finish in time.", "MyApp.Export.Exporter.RunAsync()"),
+            ("System.UnauthorizedAccessException", "Access to the export folder is denied.", "MyApp.Export.Exporter.Open()"),
+            ("System.InvalidOperationException", "The archive was already closed.", "MyApp.Export.ArchiveWriter.Add(String name)"),
+            ("System.ArgumentException", "The entry name 'report.csv' is a duplicate.", "MyApp.Export.ArchiveWriter.Add(String name)"),
+            ("System.ObjectDisposedException", "Cannot access a disposed object.", "MyApp.Export.ArchiveWriter.Flush()"),
+            ("System.FormatException", "The manifest is not valid JSON.", "MyApp.Export.Manifest.Parse(String text)")
+        ];
+
+        // The mode each run failed with, oldest first; -1 passed. Three, two, two, then one each.
+        int[] schedule = [-1, 0, 1, -1, 2, -1, 0, 3, -1, 1, -1, 4, 2, -1, 5, -1, 0, -1, 6, -1];
+
+        Sdk.Core.Models.TestSession[] sessions =
+        [
+            .. schedule.Select((mode, ordinal) => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 6).Select(i =>
+                        TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}")),
+                    mode < 0
+                        ? TestSessionFactory.Execution(name)
+                        : TestSessionFactory.Execution(
+                            name,
+                            TestOutcome.Failed,
+                            exceptionType: modes[mode].Type,
+                            errorMessage: modes[mode].Message,
+                            stackTrace: $"   at {modes[mode].Frame} in /src/MyApp/Export.cs:line 40\n" +
+                                        $"   at MyApp.Tests.SampleTests.{name}() in /src/tests/SampleTests.cs:line 10")
+                ],
+                sha: "eab9867a1c40",
+                branch: "main"))
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        return HistoryThroughPipeline(context, Analyze(context), name);
     }
 
     /// <summary>
@@ -821,7 +1013,10 @@ internal static class ReportFixtures
 
         return History(
             "SampleApp.MSTest.InvoiceTests.Total_IncludesTax", "5d02e8a1c4b7", "tests/SampleApp.MSTest/InvoiceTests.cs", 31,
-            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null);
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null,
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<119.00>. Actual:<100.00>.",
+                $"   at SampleApp.MSTest.InvoiceTests.Total_IncludesTax() in {SourceRoot}InvoiceTests.cs:line 31"));
     }
 
     /// <summary>
@@ -876,7 +1071,12 @@ internal static class ReportFixtures
 
         return History(
             name, "e4a90c1f3b28", "tests/SampleApp.MSTest/FixtureTests.cs", 19,
-            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0));
+            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0),
+            failure: (_, _) => new RecordedFailure(
+                "System.InvalidOperationException",
+                "The database 'orders' has not been provisioned.",
+                $"   at SampleApp.MSTest.UnprovisionedDatabase..ctor() in {SourceRoot}UnprovisionedDatabase.cs:line 12\n" +
+                $"   at {name}() in {SourceRoot}FixtureTests.cs:line 19"));
     }
 
     /// <summary>
@@ -972,8 +1172,11 @@ internal static class ReportFixtures
         int flagged,
         SeverityCountsDto produced,
         string? sha = HistorySha,
-        string? branch = "main")
+        string? branch = "main",
+        Func<int, TestAttemptDto, RecordedFailure>? failure = null)
     {
+        IReadOnlyList<FailureModeDto> modes = HistoryModes(name, sessions, failure);
+
         var subject = new SubjectDto(
             "test", fingerprint, name, name, SubjectNames.ShortName(name, name), null,
             sourceFile, line, HistoryAssembly, null, null, null);
@@ -1023,6 +1226,7 @@ internal static class ReportFixtures
             sessions,
             counts,
             duration,
+            modes,
             FindingsWithheld: null,
             [.. about.Select((f, i) => new SameSubjectDto(f.Id, f.Kind, rows[i]))],
             []);
@@ -1048,6 +1252,62 @@ internal static class ReportFixtures
                 about.Length, total, DrillDown.ForFullReport(HistoryScope(HistoryAssembly, sessions.Length)))
         };
     }
+
+    /// <summary>
+    /// Resolves a hand-built history's failure modes as <c>TestHistoryBuilder.Found</c> does, from
+    /// the attempts its rows hold.
+    /// </summary>
+    /// <param name="name">The test.</param>
+    /// <param name="sessions">Its rows, newest first.</param>
+    /// <param name="failure">
+    /// What a failed attempt recorded, given its row's position and the attempt. Required as soon as
+    /// any attempt failed: a block the timeline contradicts is a shape the builder cannot produce.
+    /// </param>
+    /// <returns>The modes, in the index's order.</returns>
+    /// <remarks>
+    /// The rows are replayed as sessions and indexed, so the count, the order, the first-seen date
+    /// and both flags come from the code that computes them, not from a copy of its rules. Every
+    /// session also runs a stable test, so a row the test is absent from is still a run.
+    /// </remarks>
+    internal static IReadOnlyList<FailureModeDto> HistoryModes(
+        string name, TestSessionDto[] sessions, Func<int, TestAttemptDto, RecordedFailure>? failure)
+    {
+        Sdk.Core.Models.Executions.TestExecution Replay(int row, TestAttemptDto attempt)
+        {
+            if (!attempt.Outcome.IsFailure())
+                return TestSessionFactory.Execution(name, attempt.Outcome, attempt: attempt.Attempt);
+
+            RecordedFailure recorded = failure?.Invoke(row, attempt)
+                ?? throw new InvalidOperationException($"'{name}' has a failed attempt and no recorded failure.");
+
+            return TestSessionFactory.Execution(
+                name,
+                attempt.Outcome,
+                attempt: attempt.Attempt,
+                exceptionType: recorded.ExceptionType,
+                errorMessage: recorded.Message,
+                stackTrace: recorded.StackTrace);
+        }
+
+        // Numbered by row, newest lowest: the window breaks a tie on start time by session id,
+        // ascending, so two rows that started together keep the order RUNS prints them in.
+        Sdk.Core.Models.TestSession[] replayed =
+        [
+            .. sessions.Select((session, row) => TestSessionFactory.Session(
+                row,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    .. session.Attempts.Select(attempt => Replay(row, attempt))
+                ],
+                sha: session.Sha,
+                startedAt: session.StartedAt))
+        ];
+
+        return FailureModes.Of(TestSessionFactory.Context(replayed), $"fp-{name}");
+    }
+
+    /// <summary>What one failed attempt recorded; all three null is an adapter that recorded nothing.</summary>
+    internal sealed record RecordedFailure(string? ExceptionType, string? Message, string? StackTrace);
 
     // Every attempt before the deciding one ended as the first did: a retry chain has no gaps, and
     // the row only reads the first attempt and the deciding one. The id is set by History.
@@ -1119,6 +1379,101 @@ internal static class ReportFixtures
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun,
             TestSessionFactory.Scope(context));
+    }
+
+    // ---------------------------------------------------------------------
+    // Hostile text — D7, §3.4
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The method name of the store's hostile test: an SGR escape, a newline, an <c>é</c> and a
+    /// right-to-left override, each where it lands mid-name.
+    /// </summary>
+    internal const string HostileMethod = "Refund\u001b[31m\nCaf\u00e9\u202eTotal";
+
+    /// <summary>
+    /// The full report over a store whose one flaky test has <see cref="HostileMethod"/> for a name
+    /// and a message carrying the same characters.
+    /// </summary>
+    private static ReportEnvelope HostileText()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            TestSessionFactory.Scope(context));
+    }
+
+    /// <summary>The hostile test's finding, selected as <c>--id</c> selects it.</summary>
+    private static ReportEnvelope HostileTextDetail()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        Finding finding = FindingOrder.WithSiblingsAdjacent(analysis.Findings)
+            .First(f => f.Subject.Tests.Any(t => t.FullyQualifiedName.Contains(HostileMethod, StringComparison.Ordinal)));
+
+        return EnvelopeBuilder.Build(
+            context,
+            analysis,
+            incompleteSessions: 0,
+            unreadableSessions: 0,
+            skewedSessions: 0,
+            LocalAnalysisConstants.DefaultTopFindings,
+            LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            TestSessionFactory.Scope(context),
+            finding.Id,
+            shortFingerprint: fingerprint =>
+                TestResolver.ShortFingerprintOf(context.Window.Sessions, context.Revision!.Assembly!, fingerprint));
+    }
+
+    /// <summary>The hostile test's history, its name typed as <c>--test</c> would receive it.</summary>
+    private static ReportEnvelope HostileTextHistory()
+    {
+        (AnalysisContext context, AnalysisResult analysis) = AnalyzeHostileStore();
+
+        return HistoryThroughPipeline(context, analysis, HostileMethod);
+    }
+
+    /// <summary>
+    /// Writes twenty runs in which the hostile test fails every fourth, and runs every provider.
+    /// </summary>
+    /// <remarks>
+    /// The message carries the same characters as the name. The normaliser folds its newline into a
+    /// space (§3.4), so the escape, the <c>é</c> and the override are what reach the output.
+    /// </remarks>
+    private static (AnalysisContext Context, AnalysisResult Analysis) AnalyzeHostileStore()
+    {
+        const int runs = 20;
+        var sessions = new List<Sdk.Core.Models.TestSession>();
+
+        for (int ordinal = 0; ordinal < runs; ordinal++)
+        {
+            bool fails = ordinal % 4 == 3;
+
+            List<Sdk.Core.Models.Executions.TestExecution> executions =
+            [
+                TestSessionFactory.Execution(
+                    HostileMethod,
+                    fails ? Sdk.Core.Models.Executions.TestOutcome.Failed : Sdk.Core.Models.Executions.TestOutcome.Passed,
+                    exceptionType: fails ? "System.InvalidOperationException" : null,
+                    errorMessage: fails ? "refund \u001b[31mdeclined\u001b[0m\nfor caf\u00e9 \u202eorder" : null),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}"))
+            ];
+
+            sessions.Add(TestSessionFactory.Session(
+                ordinal, executions, sha: "eab9867a1c40", branch: "main", customProperties: StoreRunner));
+        }
+
+        AnalysisContext context = TestSessionFactory.Context([.. sessions]);
+
+        return (context, Analyze(context));
     }
 
     /// <summary>What the SDK records on each of the store's sessions, so its repro is the builder's.</summary>
@@ -1579,6 +1934,7 @@ internal static class ReportFixtures
             null,
             headline,
             [new MetricDto("failed", "7 of 20 executions (35%)")],
+            [],
             null,
             "xping report --id f_2a91 --assembly MyApp.Tests",
             null);

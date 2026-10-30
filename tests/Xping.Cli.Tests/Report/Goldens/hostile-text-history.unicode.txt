@@ -1,0 +1,62 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-01 09:00 → 09:19 · main@eab9867
+13 tests · 12 healthy · 1 flagged
+◷ nothing to measure: concurrency 13 · time sensitive 13
+
+```
+TEST                                                         fp fp-Refun
+────────────────────────────────────────────────────────────────────────
+
+    test    MyApp.Tests.SampleTests.Refund?[31m?Café?Total
+    source  SampleTests.cs:10
+
+ran in 20 of 20 runs: 15 passed, 0 passed on retry, 5 failed
+duration p50 100ms · p95 100ms · range 100ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+  08-01 09:19  ✗                      100ms  eab9867
+  08-01 09:18  ✓                      100ms  eab9867
+  08-01 09:17  ✓                      100ms  eab9867
+  08-01 09:16  ✓                      100ms  eab9867
+  08-01 09:15  ✗                      100ms  eab9867
+  08-01 09:14  ✓                      100ms  eab9867
+  08-01 09:13  ✓                      100ms  eab9867
+  08-01 09:12  ✓                      100ms  eab9867
+  08-01 09:11  ✗                      100ms  eab9867
+  08-01 09:10  ✓                      100ms  eab9867
+  08-01 09:09  ✓                      100ms  eab9867
+  08-01 09:08  ✓                      100ms  eab9867
+  08-01 09:07  ✗                      100ms  eab9867
+  08-01 09:06  ✓                      100ms  eab9867
+  08-01 09:05  ✓                      100ms  eab9867
+  08-01 09:04  ✓                      100ms  eab9867
+  08-01 09:03  ✗                      100ms  eab9867
+  08-01 09:02  ✓                      100ms  eab9867
+  08-01 09:01  ✓                      100ms  eab9867
+  08-01 09:00  ✓                      100ms  eab9867
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  5 failed attempts · first seen 08-01 09:03 at eab9867, 16 runs ago
+    System.InvalidOperationException
+    refund ?[31mdeclined?[0m for café ?order
+
+FINDINGS                                                       1 finding
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  flaky
+    failed 5 of 20 executions (25%) in 5 of 20 runs, 1 failure mode
+    evidence high | -env-cluster | f_b0290552 | SampleTests.cs:10
+    repro  run 11 times: at 5 of 20 runs failing (25%), 11 runs show a
+           failure 95% of the time
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+1 finding about this test · all: xping report --all --assembly MyApp.Tests --runs 20
+Detail of row 1: xping report --id f_b0290552 --assembly MyApp.Tests --runs 20
+Repro of row 1: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter 'FullyQualifiedName=MyApp.Tests.SampleTests.Refund?[31m?Café?Total'

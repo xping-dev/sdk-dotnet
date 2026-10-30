@@ -307,9 +307,12 @@ internal sealed class SignatureIndex
     /// Returns the failure from the oldest session, which is where a signature was first seen.
     /// </summary>
     /// <remarks>
-    /// Sessions are ordered newest first, so the oldest carries the highest index.
+    /// Sessions are ordered newest first, so the oldest carries the highest index. Shared with the
+    /// providers, so a mode dated over the counted failures is dated by the same rule as the index.
     /// </remarks>
-    private static ExecutionRef Oldest(List<ExecutionRef> failures)
+    /// <param name="failures">The failures carrying one signature; never empty.</param>
+    /// <returns>The first of them from the oldest session.</returns>
+    internal static ExecutionRef Oldest(IReadOnlyList<ExecutionRef> failures)
     {
         ExecutionRef oldest = failures[0];
 

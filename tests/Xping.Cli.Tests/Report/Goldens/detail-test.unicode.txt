@@ -15,13 +15,18 @@ FINDING                                                       row 5 of 5
     assembly  SampleApp.XUnit
     source    src/SampleApp.XUnit/SampleTests.cs:83
 
-    failed          6 of 20 executions (30%)
-    runs affected   6 of 20
-    failure modes   1
-    failure mode 1  System.InvalidOperationException: Expected <n> but
-                    was <n>
+    failed         6 of 20 executions (30%)
+    runs affected  6 of 20
+    failure modes  1
 
     Also about this test: #4 unstable timing (f_66c10ec3)
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  6 failed attempts · since the window opened
+    System.InvalidOperationException
+    expected <num> but was <num>
 ```
 
 rates: the marker on each finding says which runs its percentage was
