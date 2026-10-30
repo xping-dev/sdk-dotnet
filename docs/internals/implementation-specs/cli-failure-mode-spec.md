@@ -64,6 +64,12 @@ These changes are applied in place in the sections named.
 | B | §3.5: `history-failure-modes` covers §3.2, the cap line and §3.3 | A history envelope holds one test (as Amendment 2A found for views). §3.2 is the test-history spec's §3.1 with the block added, and `history-flaky` is that fixture, so `history-flaky` pins §3.2. `history-failure-modes` is one test with 7 modes, one of them with a 900-character message: the cap line and §3.3. Still 61 fixtures, 122 files | §1.2, §3.5 |
 | C | §3.5: the `history-*` goldens gain the block | Every hand-built history fixture derives its modes from its own timeline: its attempts are replayed as sessions and resolved with `FailureModes.Of(context, fingerprint)`, as `TestHistoryBuilder.Found` resolves them. A fixture with a failed attempt and no recorded failure is rejected, so no fixture pins a block its RUNS rows contradict. `history-timeout-retry` gains two modes: its failed attempts, and its timed-out ones, which the fixture records without an exception, as a killed attempt can be, so they print the unavailable form (Amendment 1E) | §3.5 |
 
+### Amendment 5 — from P5
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | P5 regenerates the goldens and documented samples; P6 writes the docs | P3 and P4 regenerated the goldens and samples their blocks changed, so P5 has no separate work. It folds into P6: regenerating confirms an empty diff, then §3 and the docs follow | §6 |
+
 ---
 
 ## 1. Ground truth
@@ -628,14 +634,14 @@ D5's placement in `WriteHistory`, and the absent block for a test with no failur
 first-seen order with its one-run regression test (Amendment 4A). A real-store test through
 `Program.Run`: a test failing two ways shows both modes, with hashes equal to the `--id` evidence.
 
-### P5 — Goldens and documented samples
+### P5 — folded into P6 (Amendment 5)
 
-Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. Regenerate the
-documented samples. The affected markers are in `docs/cli/command-reference.md`: `detail-test`,
-`detail-repro-flaky`, `history-flaky`, `history-repro`. Regenerate §3 of this document from the
-goldens.
+### P6 — Goldens, documented samples and docs
 
-### P6 — Docs
+Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. P3 and P4
+already regenerated them, so the diff is expected to be empty. Regenerate the documented samples.
+The affected markers are in `docs/cli/command-reference.md`: `detail-test`, `detail-repro-flaky`,
+`history-flaky`, `history-repro`. Regenerate §3 of this document from the goldens.
 
 `docs/cli/command-reference.md`:
 
