@@ -126,14 +126,15 @@ them as a block. This amendment records what it changes here, committed with tha
 
 Amendment 4 quoted for POSIX shells only: in PowerShell an embedded `'` written `'\''` does not
 parse, a bare `,` makes an array and a leading `@` splats. **Printed values are quoted for one of two
-dialects, chosen once per run by OS: PowerShell on Windows, POSIX everywhere else.**
+dialects, chosen once per run: `XPING_SHELL` when set, else by OS — PowerShell on Windows, POSIX
+everywhere else.**
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | One dialect, POSIX | `ShellDialect` `Posix` or `PowerShell`, from `OperatingSystem.IsWindows()`, carried on `ReportScope.Shell`. The JSON envelope's commands are the same strings as the text report's | Amendment 4 |
-| B | Plain set `A-Z a-z 0-9 . _ / : @ % + = , -` | `A-Z a-z 0-9 . _ / : % + = -`, shared by both dialects; quoting `,` and `@` costs POSIX nothing | Amendment 4 |
+| A | One dialect, POSIX | `ShellDialect` `Posix` or `PowerShell`. `XPING_SHELL` (`posix` or `powershell`, any case) wins; unset, Windows gets PowerShell and every other OS POSIX. Any other value is warned about on standard error and the OS default applies: a report is never refused over how its commands are quoted. `report` resolves it once and passes it as `ReportScope.Shell`, a required parameter, and `EnvelopeBuilder.Build` requires its scope, so no command is built in a dialect nobody chose. The JSON envelope's commands are the same strings as the text report's | Amendment 4 |
+| B | Plain set `A-Z a-z 0-9 . _ / : @ % + = , -` | `A-Z a-z 0-9 . _ / : % + = -` in both dialects; quoting `,` and `@` costs POSIX nothing. PowerShell also leaves `\` bare, which it reads literally, so a Windows path prints as typed | Amendment 4 |
 | C | An embedded `'` is written `'\''` | POSIX: `'\''`. PowerShell: `''`, and each of `‘ ’ ‚ ‛` is doubled too, because PowerShell closes a single-quoted string on any of them | Amendment 4 |
-| D | `cmd.exe` is not served | Still not served, and neither is Windows PowerShell 5.1: it passes an embedded `"` to a native program unescaped, so a quoted test name in a repro filter breaks. PowerShell 7.3+ is the floor. Git Bash on Windows gets PowerShell quoting, which differs from POSIX only for a value holding `'` | Amendment 4 |
+| D | `cmd.exe` is not served | Still not served, and neither is Windows PowerShell 5.1: it passes an embedded `"` to a native program unescaped, so a quoted test name in a repro filter breaks. PowerShell 7.3+ is the floor. Git Bash on Windows, where coding agents usually run commands, sets `XPING_SHELL=posix` | Amendment 4 |
 
 ---
 

@@ -115,7 +115,7 @@ shells elsewhere. The repro command follows it.
 | # | Was | Now | Changed |
 |---|---|---|---|
 | A | D4: `<path>` and `<filter>` go through `ShellQuote` for a POSIX shell | They go through `ShellQuote` in the scope's dialect, which `ReproCommand.For` takes as a parameter | D4 |
-| B | §6: P3's runner test runs the command through `/bin/sh` | It also runs the rows holding `'` and `"` through `pwsh -NoProfile -Command`, with PowerShell quoting. CI's `ubuntu-latest` ships pwsh 7.4+. pwsh on Linux uses `Standard` argument passing, not Windows'; the two differ only for `.bat`/`.cmd` targets, and `dotnet` is neither | §6 |
+| B | §6: P3's runner test runs the command through `/bin/sh` | It also runs the NUnit `"50's off"` row, which holds both `'` and `"`, through `pwsh -NoProfile -Command` with PowerShell quoting, on both runners. CI's `ubuntu-latest` ships pwsh 7.4+; a machine without pwsh fails the test and says so. On Linux pwsh hands the program its arguments as a list, so the test pins PowerShell's parsing of the quoted command, not the Windows command line it would build from it | §6 |
 
 ---
 
