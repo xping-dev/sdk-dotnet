@@ -230,7 +230,7 @@ public sealed class SubjectNamesTests
         new(
             "abc123",
             exceptionType,
-            "Expected <n> but was <n>",
+            "expected <num> but was <num>",
             [],
             Degraded: false,
             Unavailable: false,

@@ -443,7 +443,7 @@ internal static class ReportFixtures
         ReportEnvelope envelope = SpecSection3();
 
         SignatureView signature = new(
-            "abc123", "System.InvalidOperationException", "Expected <n> but was <n>", [],
+            "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
             Degraded: false, Unavailable: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
             FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);

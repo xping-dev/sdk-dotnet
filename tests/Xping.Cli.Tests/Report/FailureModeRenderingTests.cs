@@ -32,7 +32,7 @@ public sealed class FailureModeRenderingTests
         Assert.True(also >= 0 && heading > also, "the block follows the same-subject line");
         Assert.Equal(string.Empty, fenced[heading - 1]);
         Assert.Equal("1.  6 failed attempts | since the window opened", fenced[heading + 3]);
-        Assert.Equal("    Expected <n> but was <n>", fenced[^1]);
+        Assert.Equal("    expected <num> but was <num>", fenced[^1]);
     }
 
     [Fact]

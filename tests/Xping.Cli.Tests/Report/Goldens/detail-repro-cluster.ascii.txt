@@ -26,7 +26,7 @@ FAILURE MODES                                             1 failure mode
 
 1.  12 failed attempts | first seen 08-06 09:00 at a3f9c2e, 18 runs ago
     System.InvalidOperationException
-    Expected <n> but was <n>
+    expected <num> but was <num>
       at MyApp.Tests.CheckoutTests.Completes()
 ```
 

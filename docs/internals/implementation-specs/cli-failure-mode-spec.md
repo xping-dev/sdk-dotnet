@@ -64,6 +64,12 @@ These changes are applied in place in the sections named.
 | B | §3.5: `history-failure-modes` covers §3.2, the cap line and §3.3 | A history envelope holds one test (as Amendment 2A found for views). §3.2 is the test-history spec's §3.1 with the block added, and `history-flaky` is that fixture, so `history-flaky` pins §3.2. `history-failure-modes` is one test with 7 modes, one of them with a 900-character message: the cap line and §3.3. Still 61 fixtures, 122 files | §1.2, §3.5 |
 | C | §3.5: the `history-*` goldens gain the block | Every hand-built history fixture derives its modes from its own timeline: its attempts are replayed as sessions and resolved with `FailureModes.Of(context, fingerprint)`, as `TestHistoryBuilder.Found` resolves them. A fixture with a failed attempt and no recorded failure is rejected, so no fixture pins a block its RUNS rows contradict. `history-timeout-retry` gains two modes: its failed attempts, and its timed-out ones, which the fixture records without an exception, as a killed attempt can be, so they print the unavailable form (Amendment 1E) | §3.5 |
 
+### Amendment 5 — from P5
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | P5 regenerates the goldens and documented samples; P6 writes the docs | P3 and P4 regenerated the goldens and samples their blocks changed, so P5 has no separate work. It folds into P6: regenerating confirms an empty diff, then §3 and the docs follow | §6 |
+
 ---
 
 ## 1. Ground truth
@@ -404,7 +410,7 @@ width rules stay as they are. No cut splits a surrogate pair (Amendment 2E).
 ## 3. Target output
 
 These blocks illustrate §2. They are not normative (format spec D10). The goldens are generated
-in P5, and this section is regenerated from them.
+by the phase that changes them (Amendment 5), and this section is regenerated from them in P6.
 
 ### 3.1 `--id`, a flaky test with three modes
 
@@ -451,11 +457,24 @@ FAILURE MODES                                            3 failure modes
 
 ### 3.2 `--test`
 
-§3.1 of the test-history spec, after the RUNS block. The summary above it reads
-`0 passed, 6 passed on retry, 0 failed`: the six failed attempts are the first attempts of runs
-that passed on retry (D4).
+§3.1 of the test-history spec, from `history-flaky`. The summary line counts no failed run: the six
+failed attempts are the first attempts of runs that passed on retry (D4).
 
 ````
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
@@ -479,11 +498,13 @@ stack on line breaks. So a newline in those two fields reaches the output as a s
 frames, never as `?`. The other characters survive both, and so does a newline in a test name,
 exception type, member name or path.
 
-A test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E prints, under `--ascii`,
-`?[31m`, `?`, `?` and `?` at those positions in its name, its `test` pair and every failure-mode
-field that carries them. Under Unicode glyphs it prints `?[31m`, `?`, `é` and `?`. In the
-`Repro:` and `History:` commands, under both glyph sets, it prints `?[31m`, `?`, `é` and `?`. No
-line inside the fence exceeds the width rule.
+From `hostile-text-detail`: a test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E
+prints its name and its `test` pair as `Refund?[31m?Café?Total` under Unicode glyphs and
+`Refund?[31m?Caf??Total` under `--ascii`. Its failure mode's message, which carries its own `ESC`
+sequences, `é` and U+202E, prints `refund ?[31mdeclined?[0m for café ?order`, and `caf?` under
+`--ascii`. The `Repro:` command prints `Refund?[31m?Café?Total` under both glyph sets. `History:`
+names the test by fingerprint, so carries none of it. No line inside the fence exceeds the width
+rule.
 
 ### 3.5 Goldens to add
 
@@ -628,14 +649,14 @@ D5's placement in `WriteHistory`, and the absent block for a test with no failur
 first-seen order with its one-run regression test (Amendment 4A). A real-store test through
 `Program.Run`: a test failing two ways shows both modes, with hashes equal to the `--id` evidence.
 
-### P5 — Goldens and documented samples
+### P5 — folded into P6 (Amendment 5)
 
-Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. Regenerate the
-documented samples. The affected markers are in `docs/cli/command-reference.md`: `detail-test`,
-`detail-repro-flaky`, `history-flaky`, `history-repro`. Regenerate §3 of this document from the
-goldens.
+### P6 — Goldens, documented samples and docs
 
-### P6 — Docs
+Regenerate all goldens with `XPING_UPDATE_GOLDENS` and review the diff against §3.5. P3 and P4
+already regenerated them, so the diff is expected to be empty. Regenerate the documented samples.
+The affected markers are in `docs/cli/command-reference.md`: `detail-test`, `detail-repro-flaky`,
+`history-flaky`, `history-repro`. Regenerate §3 of this document from the goldens.
 
 `docs/cli/command-reference.md`:
 

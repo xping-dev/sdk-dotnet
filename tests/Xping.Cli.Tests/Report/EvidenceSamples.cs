@@ -28,7 +28,7 @@ internal static class EvidenceSamples
         SignatureView signature = new(
             "abc123",
             "System.InvalidOperationException",
-            "Expected <n> but was <n>",
+            "expected <num> but was <num>",
             ["MyApp.Tests.CheckoutTests.Completes()"],
             Degraded: false,
             Unavailable: false,
