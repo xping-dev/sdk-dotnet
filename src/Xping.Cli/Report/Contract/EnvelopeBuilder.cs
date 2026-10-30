@@ -37,14 +37,14 @@ internal static class EnvelopeBuilder
     /// The newest session read against the rest, or <see langword="null"/> when the window holds
     /// no session.
     /// </param>
+    /// <param name="scope">
+    /// What the report was scoped to, which every command it prints repeats, and the shell those
+    /// commands are quoted for.
+    /// </param>
     /// <param name="id">
     /// The finding <c>--id</c> asked for, or <see langword="null"/> for the full report. When
     /// given, the findings shown are that one alone, or none; everything else is built exactly as
     /// the full report builds it.
-    /// </param>
-    /// <param name="scope">
-    /// What the report was scoped to, which every command it prints repeats; by default the
-    /// assembly the window covers and nothing the caller typed.
     /// </param>
     /// <param name="test">
     /// What <c>--test</c> resolved to, from <see cref="TestHistoryBuilder"/>, or
@@ -66,16 +66,15 @@ internal static class EnvelopeBuilder
         int skewedSessions,
         int? top,
         LatestRunAnalysis? latestRun,
+        ReportScope scope,
         string? id = null,
-        ReportScope? scope = null,
         TestHistoryDto? test = null,
         Func<string, string?>? shortFingerprint = null)
     {
         if (id != null && test != null)
             throw new ArgumentException("--id and --test are mutually exclusive.", nameof(test));
 
-        scope ??= new ReportScope(
-            context.Revision?.Assembly, context.Window.Resolution, context.Window.SessionCount);
+        ArgumentNullException.ThrowIfNull(scope);
 
         // Reordered before anything is cut. A sibling always follows the finding it points at, so a
         // limit either keeps both or drops the sibling — it can never leave a row saying "same test

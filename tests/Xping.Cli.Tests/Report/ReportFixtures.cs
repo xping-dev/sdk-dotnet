@@ -109,7 +109,7 @@ internal static class ReportFixtures
         // command it prints carries both, as the command builds them (Amendments 1 and 5B).
         ReportScope scope = envelope.Test != null
             ? HistoryScope(envelope.Context?.Assembly, envelope.Window.SessionCount)
-            : new ReportScope(envelope.Context?.Assembly, WindowResolution.Default, envelope.Window.SessionCount);
+            : new ReportScope(envelope.Context?.Assembly, WindowResolution.Default, envelope.Window.SessionCount, ShellDialect.Posix);
 
         return envelope with
         {
@@ -645,6 +645,7 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             latestRun,
+            TestSessionFactory.Scope(context),
             ordered[0].Id,
 
             // The fixture's window is its whole store, which is what the command reads them over.
@@ -665,7 +666,7 @@ internal static class ReportFixtures
 
     /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
     private static ReportScope HistoryScope(string? assembly, int runs) =>
-        new(assembly, WindowResolution.Store, runs, AssemblyGiven: true);
+        new(assembly, WindowResolution.Store, runs, ShellDialect.Posix, AssemblyGiven: true);
 
     /// <summary>
     /// The spec's §3.1: a flaky test the retry hides, absent from the fourteen newest runs, all of
@@ -940,9 +941,9 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             LatestRunAnalyzer.Analyze(context, analysis.Findings),
-            id: null,
             HistoryScope(assembly, context.Window.SessionCount),
-            TestHistoryBuilder.Found(context, query, match));
+            id: null,
+            test: TestHistoryBuilder.Found(context, query, match));
     }
 
     /// <summary>
@@ -1116,7 +1117,8 @@ internal static class ReportFixtures
             unreadableSessions: 0,
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
-            latestRun);
+            latestRun,
+            TestSessionFactory.Scope(context));
     }
 
     /// <summary>What the SDK records on each of the store's sessions, so its repro is the builder's.</summary>

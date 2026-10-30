@@ -84,7 +84,7 @@ public sealed class EnvelopeBuilderTests
         AnalysisContext context, AnalysisResult result, TestHistoryDto? test, ReportScope? scope = null) =>
         EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null,
-            latestRun: null, scope: scope, test: test);
+            latestRun: null, scope ?? TestSessionFactory.Scope(context), test: test);
 
     [Fact]
     public void OnlyTheFindingsAboutTheTestAreShownWithClustersLast()
@@ -132,7 +132,7 @@ public sealed class EnvelopeBuilderTests
     public void UnderAWholeStoreWindowEveryCommandPinsItsSize()
     {
         AnalysisContext context = Context(5);
-        var scope = new ReportScope(TestSessionFactory.DefaultAssembly, WindowResolution.Store, 5);
+        var scope = new ReportScope(TestSessionFactory.DefaultAssembly, WindowResolution.Store, 5, ShellDialect.Posix);
 
         ReportEnvelope envelope = Build(context, Findings(), History(context), scope);
 
@@ -186,7 +186,7 @@ public sealed class EnvelopeBuilderTests
 
         Assert.Throws<ArgumentException>(() => EnvelopeBuilder.Build(
             context, Findings(), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null,
-            latestRun: null, id: "f_first", test: History(context)));
+            latestRun: null, scope: TestSessionFactory.Scope(context), id: "f_first", test: History(context)));
     }
 
     [Fact]
@@ -239,10 +239,7 @@ public sealed class EnvelopeBuilderTests
     {
         AnalysisContext context = TestSessionFactory.Context(
             Recorded(0, LocalSessionProperties.VSTestRunner, "tests/O'Brien/O'Brien.csproj"));
-        var scope = new ReportScope("MyApp.Tests", WindowResolution.Default, 1, Directory: "/work/it's")
-        {
-            Shell = ShellDialect.PowerShell
-        };
+        var scope = new ReportScope("MyApp.Tests", WindowResolution.Default, 1, ShellDialect.PowerShell, Directory: "/work/it's");
 
         FindingDto finding = Build(context, Flaky(4, 9), test: null, scope).Findings[0];
 

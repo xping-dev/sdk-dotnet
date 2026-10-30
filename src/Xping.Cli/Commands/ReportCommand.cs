@@ -4,6 +4,7 @@
  */
 
 using System.Text;
+using Xping.Cli.Auth.Browser;
 using Xping.Cli.Cloud;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
@@ -15,6 +16,7 @@ using Xping.Cli.Report.Windowing;
 using Xping.Cli.Reporting;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Commands;
@@ -33,8 +35,13 @@ internal sealed class ReportCommand(
     FindingCoordinator coordinator,
     CloudEnricher enricher,
     GlobalOptions globalOptions,
-    ConsoleIO io)
+    ConsoleIO io,
+    IEnvironmentVariableProvider environment)
 {
+    // Once per run, so every command the report prints is quoted for the same shell.
+    private readonly (ShellDialect Dialect, string? Warning) _shell =
+        ShellDialects.Resolve(environment.GetVariable(ShellDialects.Variable), HostOsDetector.Current);
+
     /// <summary>
     /// Runs the report.
     /// </summary>
@@ -43,6 +50,9 @@ internal sealed class ReportCommand(
     /// <returns>Process exit code.</returns>
     public async Task<int> RunAsync(ReportOptions options, CancellationToken cancellationToken)
     {
+        if (_shell.Warning is { } warning)
+            await io.Error.WriteLineAsync(warning).ConfigureAwait(false);
+
         string startDirectory = options.Directory ?? Directory.GetCurrentDirectory();
 
         ILocalSessionStore store = sessionStoreFactory.Create(startDirectory: startDirectory);
@@ -232,11 +242,8 @@ internal sealed class ReportCommand(
             ? (TestHistoryBuilder.Ambiguous(
                     resolution,
                     new ReportScope(
-                        options.Assembly, WindowResolution.Store, resolution.RunCount,
-                        AssemblyGiven: true, Directory: options.Directory)
-                    {
-                        Shell = ShellDialects.Current
-                    }),
+                        options.Assembly, WindowResolution.Store, resolution.RunCount, _shell.Dialect,
+                        AssemblyGiven: true, Directory: options.Directory)),
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
@@ -357,13 +364,11 @@ internal sealed class ReportCommand(
             assembly,
             window.Resolution,
             window.SessionCount,
+            _shell.Dialect,
             assemblyGiven,
             options.Runs,
             options.Since,
-            options.Directory)
-        {
-            Shell = ShellDialects.Current
-        };
+            options.Directory);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
             context,
@@ -377,8 +382,8 @@ internal sealed class ReportCommand(
             resolved.SkewedSessions,
             options.Top,
             latestRun,
-            options.Id,
             scope,
+            options.Id,
             history?.Invoke(context, scope),
             shortFingerprint);
 

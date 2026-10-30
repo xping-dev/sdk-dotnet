@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Auth.Browser;
+
 namespace Xping.Cli.Report;
 
 /// <summary>
@@ -18,18 +20,47 @@ internal enum ShellDialect
 }
 
 /// <summary>
-/// Reads the <see cref="ShellDialect"/> a reader of this process's output most likely pastes into.
+/// Chooses the <see cref="ShellDialect"/> a reader of this process's output pastes into.
 /// </summary>
 /// <remarks>
-/// By OS, not by environment: <c>PSModulePath</c> is set system-wide on Windows, cmd.exe included,
-/// and <c>ComSpec</c> is always set, so neither names the parent shell. The two dialects differ only
-/// for a value holding a quote, so the miss that leaves (Git Bash on Windows) rarely shows.
+/// <para>
+/// <see cref="Variable"/> first, because nothing the process can see names the shell that started it:
+/// <c>PSModulePath</c> is set system-wide on Windows, cmd.exe included, and <c>ComSpec</c> is always
+/// set. The OS is the fallback, and Git Bash on Windows, where coding agents usually run commands, is
+/// the case it gets wrong.
+/// </para>
+/// <para>
+/// A value it does not know is warned about and the fallback applies. A report is never refused over
+/// how its commands are quoted.
+/// </para>
 /// </remarks>
 internal static class ShellDialects
 {
     /// <summary>
-    /// Gets the dialect for the operating system this process runs on.
+    /// The environment variable that names the dialect: <c>posix</c> or <c>powershell</c>.
     /// </summary>
-    public static ShellDialect Current { get; } =
-        OperatingSystem.IsWindows() ? ShellDialect.PowerShell : ShellDialect.Posix;
+    public const string Variable = "XPING_SHELL";
+
+    /// <summary>
+    /// Resolves the dialect.
+    /// </summary>
+    /// <param name="setting">The value of <see cref="Variable"/>, or <see langword="null"/>.</param>
+    /// <param name="os">The operating system this process runs on.</param>
+    /// <returns>The dialect, and a warning to print when the setting was not understood.</returns>
+    public static (ShellDialect Dialect, string? Warning) Resolve(string? setting, HostOs os)
+    {
+        ShellDialect fallback = os == HostOs.Windows ? ShellDialect.PowerShell : ShellDialect.Posix;
+
+        if (string.IsNullOrWhiteSpace(setting))
+            return (fallback, null);
+
+        return setting.Trim().ToUpperInvariant() switch
+        {
+            "POSIX" => (ShellDialect.Posix, null),
+            "POWERSHELL" => (ShellDialect.PowerShell, null),
+            _ => (fallback,
+                $"xping: {Variable}=\"{setting}\" is not posix or powershell; " +
+                $"commands are quoted for {(fallback == ShellDialect.PowerShell ? "powershell" : "posix")}.")
+        };
+    }
 }

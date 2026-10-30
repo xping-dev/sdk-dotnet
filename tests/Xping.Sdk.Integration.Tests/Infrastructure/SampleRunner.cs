@@ -8,6 +8,7 @@ namespace Xping.Sdk.Integration.Tests.Infrastructure;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -158,12 +159,25 @@ internal sealed class SampleRunner : IDisposable
     /// pwsh must be on <c>PATH</c>; CI's <c>ubuntu-latest</c> image ships it. A missing pwsh fails the
     /// run rather than skipping it, so a green run always means the command was run.
     /// </remarks>
-    public Task<(int ExitCode, string Output)> PowerShellAsync(
+    /// <exception cref="InvalidOperationException">pwsh is not on <c>PATH</c>.</exception>
+    public async Task<(int ExitCode, string Output)> PowerShellAsync(
         string command,
         IReadOnlyDictionary<string, string> environment,
-        string description) =>
-        RunProcessAsync(
-            "pwsh", FindRepositoryRoot(), ["-NoProfile", "-NonInteractive", "-Command", command], environment, description);
+        string description)
+    {
+        try
+        {
+            return await RunProcessAsync(
+                    "pwsh", FindRepositoryRoot(), ["-NoProfile", "-NonInteractive", "-Command", command], environment, description)
+                .ConfigureAwait(true);
+        }
+        catch (Win32Exception ex)
+        {
+            throw new InvalidOperationException(
+                "pwsh is not on PATH. These tests run the printed commands through PowerShell 7.3+: install it " +
+                "(https://aka.ms/powershell, or `brew install powershell`) and run them again.", ex);
+        }
+    }
 
     private async Task<(int ExitCode, string Output)> RunProcessAsync(
         string fileName,

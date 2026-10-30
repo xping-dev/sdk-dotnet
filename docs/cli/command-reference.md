@@ -30,8 +30,10 @@ prints — in help text, in error hints, in the `drillDown` field of `--format j
 `xping` command you can paste back into the shell.
 
 Printed commands are quoted for the shell you most likely use: PowerShell 7.3 or later on Windows,
-bash or zsh everywhere else. The `--format json` fields carry the same strings. cmd.exe and Windows
-PowerShell 5.1 aren't supported; see [known limitations](../known-limitations.md#printed-commands-are-quoted-for-powershell-73-on-windows-and-posix-shells-elsewhere).
+bash or zsh everywhere else. Set `XPING_SHELL` to `posix` or `powershell` to choose; Git Bash on
+Windows, and a coding agent running commands through it, wants `posix`. The `--format json` fields
+carry the same strings. cmd.exe and Windows PowerShell 5.1 aren't supported; see
+[known limitations](../known-limitations.md#printed-commands-are-quoted-for-one-shell-chosen-by-xping_shell-or-the-os).
 
 > Global tools install to `~/.dotnet/tools` (`%USERPROFILE%\.dotnet\tools` on Windows), which the
 > .NET SDK normally adds to your `PATH`. If your shell answers `command not found: xping`, add that
@@ -510,10 +512,10 @@ MTP:     dotnet run --project <path> -e XPING_ENABLED=false -- --filter <filter>
 - **The filter** is `FullyQualifiedName=` and the stored name, escaped for the runner. On NUnit it
   selects exactly the failing case, arguments and all. On MSTest and xUnit a data-driven test's rows
   share one name, so it runs every row, the failing one among them.
-- **Quoting follows your OS**, like every command the report prints: PowerShell 7.3+ on Windows,
-  bash and zsh elsewhere. A filter holding parentheses or quotes is wrapped in single quotes. Don't
-  paste it into cmd.exe or Windows PowerShell 5.1: cmd.exe passes the quotes through as part of the
-  filter, and 5.1 drops the `"` around a string argument.
+- **Quoting follows `XPING_SHELL`, or your OS**, like every command the report prints: PowerShell
+  7.3+ on Windows, bash and zsh elsewhere. A filter holding parentheses or quotes is wrapped in
+  single quotes. Don't paste it into cmd.exe or Windows PowerShell 5.1: cmd.exe passes the quotes
+  through as part of the filter, and 5.1 drops the `"` around a string argument.
 
 **The run count** is how many runs it takes to see at least one failure 95% of the time, at the
 rate the test failed in the window: the runs it failed in out of the runs it ran in with a verdict.
@@ -1367,6 +1369,7 @@ Prints the tool version, e.g. `1.0.0-rc.5`.
 |---|---|
 | `XPING_LOCAL_STORE` | Overrides the store location. Must match the value the SDK used. |
 | `XPING_NO_BANNER` | Suppresses the cloud invitation. |
+| `XPING_SHELL` | The shell printed commands are quoted for: `posix` or `powershell`. Default: `powershell` on Windows, `posix` elsewhere. Any other value prints a warning and the default applies. |
 | `XPING_APIKEY` | API key for Cloud data when you are not signed in. See [Credentials](#credentials). |
 | `XPING_PROJECTID` | The Cloud project to read. `--project` overrides it. |
 | `XPING_CLOUDURL` | The Xping Cloud to use. `--cloud-url` overrides it. |

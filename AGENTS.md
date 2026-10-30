@@ -96,6 +96,8 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
   `IEnvironmentVariableProvider` — no `Thread.Sleep`, no real env vars, no network.
 - The xUnit v3 adapter's tests run on xUnit v3 themselves (vstest, `xunit.v3.mtp-off`) and drive a
   real v3 pipeline over `tests/Xping.Sdk.XUnit.V3.Probe`, a class library whose tests fail on purpose.
+- The integration tests run printed repro commands through `/bin/sh` and through `pwsh`
+  (PowerShell 7.3+, e.g. `brew install powershell`). Without pwsh those rows fail and say so.
 - Adapter behavior that depends on a test runner (vstest shutdown, MSTest cleanup, xUnit
   discovery) needs a test against that framework, not just a mock.
 

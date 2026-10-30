@@ -34,6 +34,13 @@ internal static class TestSessionFactory
     public const string DefaultAssembly = "MyApp.Tests";
 
     /// <summary>
+    /// The scope of a report nobody typed anything into: the window's assembly and size, quoted for
+    /// a POSIX shell.
+    /// </summary>
+    public static ReportScope Scope(AnalysisContext context) =>
+        new(context.Revision?.Assembly, context.Window.Resolution, context.Window.SessionCount, ShellDialect.Posix);
+
+    /// <summary>
     /// Builds a session id that is stable for a given ordinal.
     /// </summary>
     /// <param name="ordinal">The session's position; 0 is the oldest.</param>

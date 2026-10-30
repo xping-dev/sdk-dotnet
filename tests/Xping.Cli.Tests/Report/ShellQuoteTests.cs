@@ -22,6 +22,7 @@ public sealed class ShellQuoteTests
     [InlineData("/work/it's", "'/work/it'\\''s'")]
     [InlineData("/work/it\u2019s", "'/work/it\u2019s'")]
     [InlineData(@"C:\My Repo\", @"'C:\My Repo\'")]
+    [InlineData(@"C:\work\svc", @"'C:\work\svc'")]
     [InlineData(@"FullyQualifiedName=Ns.C.Divide\(10,0\)", @"'FullyQualifiedName=Ns.C.Divide\(10,0\)'")]
     [InlineData("A|B", "'A|B'")]
     [InlineData("a,b", "'a,b'")]
@@ -33,7 +34,8 @@ public sealed class ShellQuoteTests
 
     /// <summary>
     /// PowerShell reads a bare <c>a,b</c> as an array and a leading <c>@</c> as a splat, and closes a
-    /// single-quoted string on a typographic quote as well as on <c>'</c>.
+    /// single-quoted string on a typographic quote as well as on <c>'</c>. A <c>\</c> means nothing to
+    /// it, so a Windows path stays bare.
     /// </summary>
     [Theory]
     [InlineData("../svc", "../svc")]
@@ -44,6 +46,8 @@ public sealed class ShellQuoteTests
     [InlineData("/work/it\u2019s", "'/work/it\u2019\u2019s'")]
     [InlineData("\u2018a\u201Ab\u201B", "'\u2018\u2018a\u201A\u201Ab\u201B\u201B'")]
     [InlineData(@"C:\My Repo\", @"'C:\My Repo\'")]
+    [InlineData(@"C:\work\svc\", @"C:\work\svc\")]
+    [InlineData(@"FullyQualifiedName=Ns.C.T\\x", @"FullyQualifiedName=Ns.C.T\\x")]
     [InlineData("a,b", "'a,b'")]
     [InlineData("@x", "'@x'")]
     public void InPowerShellAnEmbeddedQuoteIsDoubled(string value, string printed)

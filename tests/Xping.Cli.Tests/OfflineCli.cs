@@ -46,14 +46,28 @@ internal static class OfflineCli
     }
 
     /// <summary>
-    /// The process environment with the Cloud variables removed, and nothing else changed.
+    /// Applies the isolation, with one more variable the commands read and the process does not have.
     /// </summary>
-    private sealed class WithoutCloudVariables : IEnvironmentVariableProvider
+    /// <param name="name">The variable.</param>
+    /// <param name="value">Its value.</param>
+    public static Action<IServiceCollection> With(string name, string value) => services =>
+    {
+        Configure(services);
+        services.AddSingleton<IEnvironmentVariableProvider>(new WithoutCloudVariables((name, value)));
+    };
+
+    /// <summary>
+    /// The process environment with the Cloud variables removed, and nothing else changed but the
+    /// one variable a test sets.
+    /// </summary>
+    private sealed class WithoutCloudVariables((string Name, string Value)? set = null) : IEnvironmentVariableProvider
     {
         public string? GetVariable(string name) =>
-            HiddenVariables.Contains(name, StringComparer.OrdinalIgnoreCase) || name.StartsWith("Xping__", StringComparison.OrdinalIgnoreCase)
-                ? null
-                : System.Environment.GetEnvironmentVariable(name);
+            set is { } variable && string.Equals(variable.Name, name, StringComparison.OrdinalIgnoreCase)
+                ? variable.Value
+                : HiddenVariables.Contains(name, StringComparer.OrdinalIgnoreCase) || name.StartsWith("Xping__", StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : System.Environment.GetEnvironmentVariable(name);
     }
 }
 

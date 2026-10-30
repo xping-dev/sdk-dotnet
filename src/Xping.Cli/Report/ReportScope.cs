@@ -24,6 +24,10 @@ namespace Xping.Cli.Report;
 /// Required, like <paramref name="Resolution"/>: a scope that defaulted them would print a command
 /// for some other window without anything failing.
 /// </param>
+/// <param name="Shell">
+/// The shell every printed command is quoted for. Required for the same reason: a default would
+/// quote for some other shell without anything failing.
+/// </param>
 /// <param name="AssemblyGiven">Whether the caller named it with <c>--assembly</c>.</param>
 /// <param name="Runs">The <c>--runs</c> the caller gave, or <see langword="null"/>.</param>
 /// <param name="Since">The <c>--since</c> the caller gave, or <see langword="null"/>.</param>
@@ -32,14 +36,8 @@ internal sealed record ReportScope(
     string? Assembly,
     WindowResolution Resolution,
     int WindowRuns,
+    ShellDialect Shell,
     bool AssemblyGiven = false,
     int? Runs = null,
     string? Since = null,
-    string? Directory = null)
-{
-    /// <summary>
-    /// Gets the shell every printed command is quoted for. <see cref="ShellDialect.Posix"/> unless
-    /// the caller sets it; <c>report</c> sets <see cref="ShellDialects.Current"/>.
-    /// </summary>
-    public ShellDialect Shell { get; init; }
-}
+    string? Directory = null);

@@ -61,16 +61,15 @@ public sealed class ReproCommandRunTests : IDisposable
         string sample, TestRunner runner, string[] chosen, string[] expectedResults) =>
         RunReproAsync(sample, runner, chosen, expectedResults, powerShell: false);
 
-    // The rows whose quoting differs between the dialects: an apostrophe and a quote in the filter.
-    // pwsh on Linux passes arguments in Standard mode, which escapes an embedded " for the native
-    // program as Windows mode does for any target but a .bat or .cmd.
+    // The one name whose quoting differs between the dialects, with a " beside the apostrophe. This
+    // pins how PowerShell parses the printed command. It does not pin the Windows command line pwsh
+    // would build from it: on Linux pwsh hands the program its arguments as a list.
     [Theory]
-    [InlineData(TestRunner.VsTest, "StringParameterIsTracked(\"50%20off\")")]
-    [InlineData(TestRunner.VsTest, "StringParameterIsTracked(\"50's off\")")]
-    [InlineData(TestRunner.MtpExecutable, "StringParameterIsTracked(\"50%20off\")")]
-    [InlineData(TestRunner.MtpExecutable, "StringParameterIsTracked(\"50's off\")")]
-    public Task InPowerShellTheReproCommandRunsTheRecordedTest(TestRunner runner, string chosen) =>
-        RunReproAsync("SampleApp.NUnit", runner, [chosen], [chosen], powerShell: true);
+    [InlineData(TestRunner.VsTest)]
+    [InlineData(TestRunner.MtpExecutable)]
+    public Task InPowerShellTheReproCommandRunsTheRecordedTest(TestRunner runner) =>
+        RunReproAsync(
+            "SampleApp.NUnit", runner, ["StringParameterIsTracked(\"50's off\")"], ["StringParameterIsTracked(\"50's off\")"], powerShell: true);
 
     private async Task RunReproAsync(
         string sample, TestRunner runner, string[] chosen, string[] expectedResults, bool powerShell)
