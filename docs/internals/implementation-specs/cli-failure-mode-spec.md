@@ -457,11 +457,24 @@ FAILURE MODES                                            3 failure modes
 
 ### 3.2 `--test`
 
-§3.1 of the test-history spec, after the RUNS block. The summary above it reads
-`0 passed, 6 passed on retry, 0 failed`: the six failed attempts are the first attempts of runs
-that passed on retry (D4).
+§3.1 of the test-history spec, from `history-flaky`. The summary line counts no failed run: the six
+failed attempts are the first attempts of runs that passed on retry (D4).
 
 ````
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
@@ -485,11 +498,13 @@ stack on line breaks. So a newline in those two fields reaches the output as a s
 frames, never as `?`. The other characters survive both, and so does a newline in a test name,
 exception type, member name or path.
 
-A test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E prints, under `--ascii`,
-`?[31m`, `?`, `?` and `?` at those positions in its name, its `test` pair and every failure-mode
-field that carries them. Under Unicode glyphs it prints `?[31m`, `?`, `é` and `?`. In the
-`Repro:` and `History:` commands, under both glyph sets, it prints `?[31m`, `?`, `é` and `?`. No
-line inside the fence exceeds the width rule.
+From `hostile-text-detail`: a test whose recorded FQN holds `ESC[31m`, a newline, `é` and U+202E
+prints its name and its `test` pair as `Refund?[31m?Café?Total` under Unicode glyphs and
+`Refund?[31m?Caf??Total` under `--ascii`. Its failure mode's message, which carries its own `ESC`
+sequences, `é` and U+202E, prints `refund ?[31mdeclined?[0m for café ?order`, and `caf?` under
+`--ascii`. The `Repro:` command prints `Refund?[31m?Café?Total` under both glyph sets. `History:`
+names the test by fingerprint, so carries none of it. No line inside the fence exceeds the width
+rule.
 
 ### 3.5 Goldens to add
 
