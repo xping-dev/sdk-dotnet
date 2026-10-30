@@ -36,6 +36,13 @@ RUNS                                                        newest first
   08-01 09:01  x                      100ms  eab9867
   08-01 09:00  x                      100ms  eab9867
 
+FAILURE MODES                                             1 failure mode
+------------------------------------------------------------------------
+
+1.  20 failed attempts | since the window opened
+    System.InvalidOperationException
+    the database has not been provisioned.
+
 FINDINGS                                                       1 finding
 ------------------------------------------------------------------------
 

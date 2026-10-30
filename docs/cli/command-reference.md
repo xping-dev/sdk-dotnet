@@ -589,6 +589,14 @@ RUNS                                                        newest first
   08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
   08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
 
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  6 failed attempts · since the window opened
+    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
+    assert.areequal failed. expected:<<num>>. actual:<<num>>.
+      at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
+
 FINDINGS                                                      2 findings
 ────────────────────────────────────────────────────────────────────────
 
@@ -665,6 +673,16 @@ RUNS                                                        newest first
   08-20 19:56  ✗                       41ms  c670fc3
   08-20 17:45  ✗                       41ms  c670fc3
   08-20 15:34  ✓                       38ms  c670fc3
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · first seen 08-20 17:45 at c670fc3, 7 runs ago
+    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
+    assert.areequal failed. expected:<<num>>. actual:<<num>>. the
+    counter lost updates.
+      at SampleApp.MSTest.CalculatorTests.
+         FlakyTest_RaceCondition_FailsIntermittently()
 
 FINDINGS                                                       1 finding
 ────────────────────────────────────────────────────────────────────────

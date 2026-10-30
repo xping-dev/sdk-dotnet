@@ -615,6 +615,60 @@ public sealed class TestHistoryCommandTests : IDisposable
         Assert.Equal(1, repro.GetProperty("runs").GetInt32());
     }
 
+    /// <summary>
+    /// A test failing two ways shows both in <c>--test</c>, and they are the modes its flaky finding
+    /// publishes under <c>--id</c>: the same signatures, so the same hashes (failure-mode spec D4).
+    /// </summary>
+    [Fact]
+    public void ATestFailingTwoWaysShowsBothModesWithTheHashesItsFindingPublishes()
+    {
+        ILocalSessionStore store = LocalSessionStore.Create();
+
+        for (int i = 0; i < 10; i++)
+        {
+            (string Type, string Message)? failure = i switch
+            {
+                1 or 5 => ("System.InvalidOperationException", "The basket is empty."),
+                3 or 8 => ("System.TimeoutException", "The payment service did not answer."),
+                _ => null
+            };
+
+            store.Write(TestSessionFactory.Session(
+                i,
+                [
+                    TestSessionFactory.Execution("Stable0"),
+                    failure is { } f
+                        ? TestSessionFactory.Execution(
+                            "Checkout", TestOutcome.Failed, exceptionType: f.Type, errorMessage: f.Message,
+                            stackTrace: "   at MyApp.Tests.SampleTests.Checkout()")
+                        : TestSessionFactory.Execution("Checkout")
+                ]));
+        }
+
+        var (code, text, _) = Run("--test", "Checkout", "--ascii");
+
+        Assert.Equal(ExitCodes.Success, code);
+        Assert.Contains("FAILURE MODES", text, StringComparison.Ordinal);
+        Assert.Contains("    System.InvalidOperationException", text, StringComparison.Ordinal);
+        Assert.Contains("    System.TimeoutException", text, StringComparison.Ordinal);
+
+        JsonElement history = Json("--test", "Checkout");
+        JsonElement flaky = history.GetProperty("findings").EnumerateArray()
+            .Single(f => f.GetProperty("kind").GetString() == "Flaky");
+        JsonElement detail = Json("--id", flaky.GetProperty("id").GetString()!);
+
+        string[] shown = Hashes(history.GetProperty("test").GetProperty("failureModes"));
+        string[] published = Hashes(detail.GetProperty("findings")[0].GetProperty("failureModes"));
+
+        Assert.Equal(2, shown.Length);
+
+        // Compared as sets: --id orders by the discounted count, --test by every attempt (D4).
+        Assert.Equal(published.Order(StringComparer.Ordinal), shown.Order(StringComparer.Ordinal));
+    }
+
+    private static string[] Hashes(JsonElement modes) =>
+        [.. modes.EnumerateArray().Select(m => m.GetProperty("hash").GetString()!)];
+
     /// <summary>Writes eight runs of a parameterised <c>Add</c> with the given number of cases.</summary>
     private static void SeedParameterised(int cases, string? sha = null)
     {

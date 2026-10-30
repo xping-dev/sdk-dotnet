@@ -87,6 +87,7 @@ internal static class ReportFixtures
         "history-cluster-member",
         "history-store",
         "history-repro",
+        "history-failure-modes",
         "hostile-text",
         "hostile-text-detail",
         "hostile-text-history"
@@ -296,6 +297,7 @@ internal static class ReportFixtures
         "history-cluster-member" => HistoryClusterMember(),
         "history-store" => HistoryFromStore(),
         "history-repro" => HistoryRepro(),
+        "history-failure-modes" => HistoryFailureModes(),
         "hostile-text" => HostileText(),
         "hostile-text-detail" => HostileTextDetail(),
         "hostile-text-history" => HostileTextHistory(),
@@ -780,6 +782,10 @@ internal static class ReportFixtures
     /// <summary>The suite every hand-built history belongs to: §3.1's sixteen tests.</summary>
     private const int HistoryTests = 16;
 
+    private const string AssertFailed = "Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException";
+
+    private const string SourceRoot = "/src/tests/SampleApp.MSTest/";
+
     /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
     private static ReportScope HistoryScope(string? assembly, int runs) =>
         new(assembly, WindowResolution.Store, runs, AssemblyGiven: true);
@@ -814,7 +820,9 @@ internal static class ReportFixtures
 
         return History(
             name, "3a597eb2c0ffee11", "tests/SampleApp.MSTest/CalculatorTests.cs", 42,
-            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+            sessions, findings, [1, 2], flagged: 6, produced: new SeverityCountsDto(3, 4, 1),
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<4>. Actual:<5>. ", $"   at {name}() in {SourceRoot}CalculatorTests.cs:line 42"));
     }
 
     /// <summary>
@@ -869,9 +877,17 @@ internal static class ReportFixtures
             { Id = "f_6e1d0b7a", EvidenceLevel = "moderate" }
         ];
 
+        // A killed attempt carries no exception, so its timeouts are one mode the adapter recorded
+        // nothing for. TimingOut publishes none, and --test lists it anyway (Amendment 1E).
         return History(
             name, "b07e5c2d9f31", "tests/SampleApp.MSTest/GatewayTests.cs", 57,
-            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0));
+            sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0),
+            failure: (_, attempt) => attempt.Outcome == TestOutcome.Timeout
+                ? new RecordedFailure(null, null, null)
+                : new RecordedFailure(
+                    "System.Net.Http.HttpRequestException",
+                    "Response status code does not indicate success: 503 (Service Unavailable).",
+                    $"   at {name}() in {SourceRoot}GatewayTests.cs:line 57"));
     }
 
     /// <summary>
@@ -910,7 +926,65 @@ internal static class ReportFixtures
             name, "5d1e2a0c77b4", "tests/SampleApp.MSTest/CalculatorTests.cs", 57,
             sessions,
             [finding with { Repro = Repro(FindingKind.Flaky, evidence, finding.Subject, VSTest(SampleProject)) }],
-            [1], flagged: 6, produced: new SeverityCountsDto(3, 4, 1));
+            [1], flagged: 6, produced: new SeverityCountsDto(3, 4, 1),
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<1000>. Actual:<997>. The counter lost updates.",
+                $"   at {name}() in {SourceRoot}CalculatorTests.cs:line 57"));
+    }
+
+    /// <summary>
+    /// A test that failed seven ways, one of them with a 900-character message: the cap line and
+    /// the message cut (failure-mode spec §3.3, Amendment 4B).
+    /// </summary>
+    /// <remarks>
+    /// Through the pipeline, so the modes, the summary and the findings are the ones
+    /// <c>xping report --test</c> would resolve from these runs.
+    /// </remarks>
+    private static ReportEnvelope HistoryFailureModes()
+    {
+        const string name = "Export_WritesTheArchive";
+
+        string longMessage = string.Concat(Enumerable.Repeat(
+            "The underlying stream rejected the write while the archive was being flushed to disk. ", 11))[..900];
+
+        (string Type, string Message, string Frame)[] modes =
+        [
+            ("System.IO.IOException", longMessage, "MyApp.Export.ArchiveWriter.Flush()"),
+            ("System.TimeoutException", "The export did not finish in time.", "MyApp.Export.Exporter.RunAsync()"),
+            ("System.UnauthorizedAccessException", "Access to the export folder is denied.", "MyApp.Export.Exporter.Open()"),
+            ("System.InvalidOperationException", "The archive was already closed.", "MyApp.Export.ArchiveWriter.Add(String name)"),
+            ("System.ArgumentException", "The entry name 'report.csv' is a duplicate.", "MyApp.Export.ArchiveWriter.Add(String name)"),
+            ("System.ObjectDisposedException", "Cannot access a disposed object.", "MyApp.Export.ArchiveWriter.Flush()"),
+            ("System.FormatException", "The manifest is not valid JSON.", "MyApp.Export.Manifest.Parse(String text)")
+        ];
+
+        // The mode each run failed with, oldest first; -1 passed. Three, two, two, then one each.
+        int[] schedule = [-1, 0, 1, -1, 2, -1, 0, 3, -1, 1, -1, 4, 2, -1, 5, -1, 0, -1, 6, -1];
+
+        Sdk.Core.Models.TestSession[] sessions =
+        [
+            .. schedule.Select((mode, ordinal) => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 6).Select(i =>
+                        TestSessionFactory.Execution($"Stable{i.ToString("00", CultureInfo.InvariantCulture)}")),
+                    mode < 0
+                        ? TestSessionFactory.Execution(name)
+                        : TestSessionFactory.Execution(
+                            name,
+                            TestOutcome.Failed,
+                            exceptionType: modes[mode].Type,
+                            errorMessage: modes[mode].Message,
+                            stackTrace: $"   at {modes[mode].Frame} in /src/MyApp/Export.cs:line 40\n" +
+                                        $"   at MyApp.Tests.SampleTests.{name}() in /src/tests/SampleTests.cs:line 10")
+                ],
+                sha: "eab9867a1c40",
+                branch: "main"))
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        return HistoryThroughPipeline(context, Analyze(context), name);
     }
 
     /// <summary>
@@ -937,7 +1011,10 @@ internal static class ReportFixtures
 
         return History(
             "SampleApp.MSTest.InvoiceTests.Total_IncludesTax", "5d02e8a1c4b7", "tests/SampleApp.MSTest/InvoiceTests.cs", 31,
-            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null);
+            sessions, [], [], flagged: 6, produced: new SeverityCountsDto(3, 4, 1), sha: null, branch: null,
+            failure: (_, _) => new RecordedFailure(
+                AssertFailed, "Assert.AreEqual failed. Expected:<119.00>. Actual:<100.00>.",
+                $"   at SampleApp.MSTest.InvoiceTests.Total_IncludesTax() in {SourceRoot}InvoiceTests.cs:line 31"));
     }
 
     /// <summary>
@@ -992,7 +1069,12 @@ internal static class ReportFixtures
 
         return History(
             name, "e4a90c1f3b28", "tests/SampleApp.MSTest/FixtureTests.cs", 19,
-            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0));
+            sessions, findings, [3, 1], flagged: 5, produced: new SeverityCountsDto(3, 1, 0),
+            failure: (_, _) => new RecordedFailure(
+                "System.InvalidOperationException",
+                "The database 'orders' has not been provisioned.",
+                $"   at SampleApp.MSTest.UnprovisionedDatabase..ctor() in {SourceRoot}UnprovisionedDatabase.cs:line 12\n" +
+                $"   at {name}() in {SourceRoot}FixtureTests.cs:line 19"));
     }
 
     /// <summary>
@@ -1088,8 +1170,11 @@ internal static class ReportFixtures
         int flagged,
         SeverityCountsDto produced,
         string? sha = HistorySha,
-        string? branch = "main")
+        string? branch = "main",
+        Func<int, TestAttemptDto, RecordedFailure>? failure = null)
     {
+        IReadOnlyList<FailureModeDto> modes = HistoryModes(name, sessions, failure);
+
         var subject = new SubjectDto(
             "test", fingerprint, name, name, SubjectNames.ShortName(name, name), null,
             sourceFile, line, HistoryAssembly, null, null, null);
@@ -1139,7 +1224,7 @@ internal static class ReportFixtures
             sessions,
             counts,
             duration,
-            [],
+            modes,
             FindingsWithheld: null,
             [.. about.Select((f, i) => new SameSubjectDto(f.Id, f.Kind, rows[i]))],
             []);
@@ -1165,6 +1250,62 @@ internal static class ReportFixtures
                 about.Length, total, DrillDown.ForFullReport(HistoryScope(HistoryAssembly, sessions.Length)))
         };
     }
+
+    /// <summary>
+    /// Resolves a hand-built history's failure modes as <c>TestHistoryBuilder.Found</c> does, from
+    /// the attempts its rows hold.
+    /// </summary>
+    /// <param name="name">The test.</param>
+    /// <param name="sessions">Its rows, newest first.</param>
+    /// <param name="failure">
+    /// What a failed attempt recorded, given its row's position and the attempt. Required as soon as
+    /// any attempt failed: a block the timeline contradicts is a shape the builder cannot produce.
+    /// </param>
+    /// <returns>The modes, in the index's order.</returns>
+    /// <remarks>
+    /// The rows are replayed as sessions and indexed, so the count, the order, the first-seen date
+    /// and both flags come from the code that computes them, not from a copy of its rules. Every
+    /// session also runs a stable test, so a row the test is absent from is still a run.
+    /// </remarks>
+    internal static IReadOnlyList<FailureModeDto> HistoryModes(
+        string name, TestSessionDto[] sessions, Func<int, TestAttemptDto, RecordedFailure>? failure)
+    {
+        Sdk.Core.Models.Executions.TestExecution Replay(int row, TestAttemptDto attempt)
+        {
+            if (!attempt.Outcome.IsFailure())
+                return TestSessionFactory.Execution(name, attempt.Outcome, attempt: attempt.Attempt);
+
+            RecordedFailure recorded = failure?.Invoke(row, attempt)
+                ?? throw new InvalidOperationException($"'{name}' has a failed attempt and no recorded failure.");
+
+            return TestSessionFactory.Execution(
+                name,
+                attempt.Outcome,
+                attempt: attempt.Attempt,
+                exceptionType: recorded.ExceptionType,
+                errorMessage: recorded.Message,
+                stackTrace: recorded.StackTrace);
+        }
+
+        // Numbered by row, newest lowest: the window breaks a tie on start time by session id,
+        // ascending, so two rows that started together keep the order RUNS prints them in.
+        Sdk.Core.Models.TestSession[] replayed =
+        [
+            .. sessions.Select((session, row) => TestSessionFactory.Session(
+                row,
+                [
+                    TestSessionFactory.Execution("Stable"),
+                    .. session.Attempts.Select(attempt => Replay(row, attempt))
+                ],
+                sha: session.Sha,
+                startedAt: session.StartedAt))
+        ];
+
+        return FailureModes.Of(TestSessionFactory.Context(replayed), $"fp-{name}");
+    }
+
+    /// <summary>What one failed attempt recorded; all three null is an adapter that recorded nothing.</summary>
+    internal sealed record RecordedFailure(string? ExceptionType, string? Message, string? StackTrace);
 
     // Every attempt before the deciding one ended as the first did: a retry chain has no gaps, and
     // the row only reads the first attempt and the deciding one. The id is set by History.
