@@ -104,21 +104,15 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------
-    // GetExecutorServices
+    // StartExecutorServices
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void GetExecutorServices_BeforeInitialize_ThrowsInvalidOperationException()
-    {
-        Assert.Throws<InvalidOperationException>(() => XpingContext.GetExecutorServices());
-    }
-
-    [Fact]
-    public void GetExecutorServices_AfterInitialize_ReturnsNonNull()
+    public void StartExecutorServices_AfterInitialize_ReturnsNonNull()
     {
         XpingContext.Initialize(ScratchConfiguration());
 
-        var services = XpingContext.GetExecutorServices();
+        var services = XpingContext.StartExecutorServices();
 
         Assert.NotNull(services);
     }
@@ -297,7 +291,7 @@ public sealed class XpingContextTests : IAsyncLifetime
         // Once the runner sees the assembly finish it wraps up the run, and under `dotnet test` the
         // test host exits with the session half written. The session has to be over by then.
         XpingContext.Initialize(ScratchConfiguration());
-        XpingContext.GetExecutorServices(); // builds the host, as the framework constructor does
+        XpingContext.StartExecutorServices(); // builds the host, as the framework does for an executor
 
         bool? initializedWhenForwarded = null;
         var innerSink = new Mock<IMessageSink>();

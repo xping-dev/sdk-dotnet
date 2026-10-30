@@ -164,8 +164,10 @@ public sealed class XpingTestFrameworkTests(WholeProbeRun probe) : IClassFixture
     [Fact]
     public async Task TheTestsStillRunUntrackedWhenTheSdkFailsToStart()
     {
-        using ProbeRun run = await ProbeRun.RunAsync(createFramework: () =>
-            new XpingTestFramework(configFileName: null, () => throw new InvalidOperationException("host failed to start")));
+        using ProbeRun run = await ProbeRun.RunAsync(
+            createFramework: () => new XpingTestFramework(
+                configFileName: null, _ => throw new InvalidOperationException("host failed to start")),
+            expectSession: false);
 
         Assert.Contains(run.Messages.OfType<ITestStarting>(), m => m.TestDisplayName.EndsWith("OutcomeTests.Passes", StringComparison.Ordinal));
         Assert.NotEmpty(run.Messages.OfType<ITestPassed>());

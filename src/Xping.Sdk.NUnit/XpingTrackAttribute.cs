@@ -78,7 +78,8 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     // Resolved once in BeforeTest() and reused for every AfterTest() on this attribute instance.
     // The attribute can be applied at assembly, class, or method scope; in all cases the same
     // DI singletons are returned each time, so a single resolution per instance is enough.
-    private XpingAttributeServices _services = null!;
+    // Null while the SDK could not start: the test then runs untracked.
+    private XpingAttributeServices? _services;
 
     /// <summary>
     /// Gets the action targets (Test level).
@@ -91,17 +92,9 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     /// <param name="test">The test being executed.</param>
     void ITestAction.BeforeTest(ITest test)
     {
-        if (!XpingContext.IsInitialized)
-        {
-            XpingContext.Initialize();
-        }
-
-        // Resolve and cache services once per attribute instance. GetAttributeServices()
-        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
-        // later calls on the same instance are a no-op field read.
         try
         {
-            _services ??= XpingContext.GetAttributeServices();
+            _services ??= XpingContext.StartAttributeServices();
         }
         catch (XpingConfigurationException ex)
         {
@@ -109,10 +102,6 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             // every subsequent test. FailFast aborts the process immediately, which is the
             // correct behavior for strict mode where observability must be guaranteed.
             Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
         }
 
         if (test == null)
@@ -128,6 +117,9 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         test.Properties.Set(StartTimeKey, startTime);
         test.Properties.Set(StartTimestampKey, startTimestamp);
 
+        if (_services is null)
+            return;
+
         try
         {
             // Mark the test in flight so the tests it overlaps with can be measured. Reported under
@@ -139,8 +131,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         }
         catch
         {
-            // Swallow exceptions to avoid interfering with test execution: _services is unset when
-            // the SDK failed to initialize above.
+            // Swallow exceptions to avoid interfering with test execution
         }
     }
 
@@ -150,7 +141,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
     /// <param name="test">The test that was executed.</param>
     void ITestAction.AfterTest(ITest? test)
     {
-        if (test == null)
+        if (test == null || _services is null)
         {
             return;
         }

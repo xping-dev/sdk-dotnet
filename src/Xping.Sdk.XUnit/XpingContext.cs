@@ -48,17 +48,25 @@ public sealed class XpingContext : XpingContextOrchestrator
     protected override string TestFramework => LocalSessionProperties.XUnitFramework;
 
     /// <summary>
-    /// Resolves the fixed set of services required to construct <see cref="XpingTestFrameworkExecutor"/>.
-    /// Must be called after <see cref="Initialize()"/> has been invoked.
+    /// Starts the SDK, building the host on first use, and resolves the services
+    /// <see cref="XpingTestFrameworkExecutor"/> needs. Initializes the context when no one has.
     /// </summary>
-    /// <returns>A <see cref="XpingExecutorServices"/> holding all executor dependencies.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="Initialize()"/> has not been called before this method.
-    /// </exception>
-    internal static XpingExecutorServices GetExecutorServices()
+    /// <param name="report">Also told why the SDK could not start.</param>
+    /// <returns>The services, or <see langword="null"/> when the SDK could not start.</returns>
+    /// <exception cref="XpingConfigurationException">Strict mode, and the SDK could not start.</exception>
+    internal static XpingExecutorServices? StartExecutorServices(Action<string>? report = null) =>
+        StartExecutorServices(context => context.ResolveExecutorServices(), report);
+
+    /// <inheritdoc cref="StartExecutorServices(Action{string}?)"/>
+    /// <param name="resolve">Resolves the services from the built context.</param>
+    /// <param name="report">Also told why the SDK could not start.</param>
+    internal static XpingExecutorServices? StartExecutorServices(
+        Func<XpingContext, XpingExecutorServices> resolve,
+        Action<string>? report)
     {
-        // Builds the host on first access: Initialize() only installs the context.
-        return Context.Instance.ResolveExecutorServices();
+        // A run that falls back never installs the message sink that ends its session, so the failed
+        // context is dropped at once and the next run in a long-lived process tries again.
+        return Context.Start(resolve, report, retryNextRun: true);
     }
 
     /// <summary>
@@ -129,7 +137,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </summary>
     public static ValueTask ShutdownAsync() => Context.ShutdownAsync();
 
-    private XpingExecutorServices ResolveExecutorServices()
+    internal XpingExecutorServices ResolveExecutorServices()
     {
         return new XpingExecutorServices(
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),

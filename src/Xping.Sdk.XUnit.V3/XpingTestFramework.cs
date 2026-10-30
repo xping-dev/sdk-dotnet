@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Services.Statistics;
+using Xunit;
 using Xunit.v3;
 
 namespace Xping.Sdk.XUnit.V3;
@@ -23,7 +24,7 @@ namespace Xping.Sdk.XUnit.V3;
 public sealed class XpingTestFramework : XunitTestFramework
 {
     private readonly string? _configFileName;
-    private readonly Func<XpingExecutorServices> _resolveServices;
+    private readonly Func<XpingContext, XpingExecutorServices> _resolveServices;
 
     // Shared by the discoverer and the executor this framework creates. The runner may ask for the
     // executor before it discovers, so the executor is handed the place a count will be, not a count.
@@ -42,11 +43,11 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// </summary>
     /// <param name="configFileName">The optional xUnit configuration file, as xUnit passes it.</param>
     public XpingTestFramework(string? configFileName)
-        : this(configFileName, ResolveServices)
+        : this(configFileName, context => context.ResolveExecutorServices())
     {
     }
 
-    internal XpingTestFramework(string? configFileName, Func<XpingExecutorServices> resolveServices)
+    internal XpingTestFramework(string? configFileName, Func<XpingContext, XpingExecutorServices> resolveServices)
         : base(configFileName)
     {
         _configFileName = configFileName;
@@ -54,8 +55,6 @@ public sealed class XpingTestFramework : XunitTestFramework
 
         try
         {
-            XpingContext.Initialize();
-
             // Only here is the runner's own code on the call stack.
             XpingContext.RecordRunner(TestRunnerDetection.Detect(
                 CallerTypeNames(),
@@ -64,7 +63,7 @@ public sealed class XpingTestFramework : XunitTestFramework
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
+            Console.Error.WriteLine($"[Xping] Could not detect the test runner: {ex.Message}");
         }
     }
 
@@ -75,10 +74,12 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// <inheritdoc/>
     protected override ITestFrameworkExecutor CreateExecutor(Assembly assembly)
     {
-        XpingExecutorServices services;
+        XpingExecutorServices? services;
         try
         {
-            services = _resolveServices();
+            // The session ends with each run, and a long-lived process, such as an IDE's test server,
+            // may ask this framework for another. Starting initializes a context when none is open.
+            services = XpingContext.StartExecutorServices(_resolveServices, ReportToRunner);
         }
         catch (XpingConfigurationException ex)
         {
@@ -88,22 +89,15 @@ public sealed class XpingTestFramework : XunitTestFramework
             Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
             throw;
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
+
+        if (services is null)
             return base.CreateExecutor(assembly);
-        }
 
         return new XpingTestFrameworkExecutor(new XunitTestAssembly(assembly, _configFileName), services, _census);
     }
 
-    private static XpingExecutorServices ResolveServices()
-    {
-        // The session ends with each run, and a long-lived process, such as an IDE's test server,
-        // may ask this framework for another. Initialize() does nothing while a session is open.
-        XpingContext.Initialize();
-        return XpingContext.GetExecutorServices();
-    }
+    // Shown with diagnosticMessages enabled in xunit.runner.json.
+    private static void ReportToRunner(string message) => TestContext.Current.SendDiagnosticMessage(message);
 
     private static IEnumerable<string?> CallerTypeNames() =>
         new StackTrace().GetFrames()?.Select(frame => frame?.GetMethod()?.DeclaringType?.FullName) ?? [];

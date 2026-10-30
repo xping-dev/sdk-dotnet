@@ -13,13 +13,16 @@ namespace Xping.Sdk.XUnit;
 
 /// <summary>
 /// Custom xUnit test framework that integrates Xping SDK for automatic test tracking.
-/// Initializes the SDK when the framework is created. The session ends when the test assembly finishes,
+/// Starts the SDK when the runner asks for an executor. The session ends when the test assembly finishes,
 /// in <see cref="XpingMessageSink"/>: the runner never calls a <c>Dispose</c> declared here.
 /// </summary>
+/// <remarks>
+/// Runners also create the framework in processes that only discover tests, so nothing is built until an
+/// executor is asked for.
+/// </remarks>
 public sealed class XpingTestFramework : XunitTestFramework
 {
-    // Null when the SDK failed to start: the run then goes ahead untracked.
-    private readonly XpingExecutorServices? _services;
+    private readonly Func<XpingContext, XpingExecutorServices> _resolveServices;
 
     // Shared by the discoverer and the executor this framework creates. The runner asks for the
     // executor before it discovers, so the executor cannot be handed a finished count — only the
@@ -30,30 +33,15 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// Initializes a new instance of the <see cref="XpingTestFramework"/> class.
     /// </summary>
     /// <param name="messageSink">The message sink for diagnostic messages.</param>
-    public XpingTestFramework(IMessageSink messageSink) : this(messageSink, ResolveServices)
+    public XpingTestFramework(IMessageSink messageSink)
+        : this(messageSink, context => context.ResolveExecutorServices())
     {
     }
 
-    internal XpingTestFramework(IMessageSink messageSink, Func<XpingExecutorServices> resolveServices)
+    internal XpingTestFramework(IMessageSink messageSink, Func<XpingContext, XpingExecutorServices> resolveServices)
         : base(messageSink)
     {
-        try
-        {
-            _services = resolveServices();
-        }
-        catch (XpingConfigurationException ex)
-        {
-            // Re-throwing from a custom xUnit test framework constructor is insufficient —
-            // xUnit runners (e.g. xunit.runner.visualstudio used by `dotnet test`) catch
-            // framework constructor exceptions and fall back to default behavior, so tests
-            // continue to run untracked. FailFast aborts the process immediately and returns
-            // a non-zero exit code, which is the correct behavior for strict mode.
-            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
-        }
+        _resolveServices = resolveServices;
     }
 
     /// <summary>
@@ -67,31 +55,44 @@ public sealed class XpingTestFramework : XunitTestFramework
     }
 
     /// <summary>
-    /// Creates the test framework executor.
+    /// Creates the test framework executor: one that records with Xping, or xUnit's own when the SDK
+    /// could not start, so the tests still run.
     /// </summary>
     /// <param name="assemblyName">The assembly containing the tests.</param>
     /// <returns>The test framework executor.</returns>
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName)
     {
-        if (_services is null)
+        XpingExecutorServices? services;
+        try
+        {
+            // Started per executor, not once per framework: the session ends with each run, and a
+            // long-lived process may ask this framework for another.
+            services = XpingContext.StartExecutorServices(_resolveServices, ReportToRunner);
+        }
+        catch (XpingConfigurationException ex)
+        {
+            // Strict mode must fail the run visibly, and nothing has run yet, so no result is lost.
+            // An exception would not do: the runner reports it and carries on without an executor's
+            // worth of results, which a CI step can read as a pass.
+            Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
+            throw;
+        }
+
+        if (services is null)
             return base.CreateExecutor(assemblyName);
 
         return new XpingTestFrameworkExecutor(
             assemblyName,
             SourceInformationProvider,
             DiagnosticMessageSink,
-            _services.ExecutionTracker,
-            _services.RetryDetector,
-            _services.IdentityGenerator,
-            _services.CaptureStackTraces,
-            _services.StatisticsAccumulator,
+            services.ExecutionTracker,
+            services.RetryDetector,
+            services.IdentityGenerator,
+            services.CaptureStackTraces,
+            services.StatisticsAccumulator,
             _census);
     }
 
-    // GetExecutorServices() builds the DI host on first access, so a host that cannot start fails here.
-    private static XpingExecutorServices ResolveServices()
-    {
-        XpingContext.Initialize();
-        return XpingContext.GetExecutorServices();
-    }
+    // Shown with diagnosticMessages enabled in xunit.runner.json.
+    private void ReportToRunner(string message) => DiagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
 }

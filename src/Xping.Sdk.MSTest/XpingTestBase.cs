@@ -46,7 +46,8 @@ public abstract class XpingTestBase
 
     // Resolved once on first XpingTestInitialize() call and reused for every cleanup on this instance.
     // The DI singletons are the same each time, so a single resolution per instance is enough.
-    private XpingBaseServices _services = null!;
+    // Null while the SDK could not start: the test then runs untracked.
+    private XpingBaseServices? _services;
 
     /// <summary>
     /// Gets or sets the test context which provides information about and functionality for the current test run.
@@ -59,15 +60,10 @@ public abstract class XpingTestBase
     [TestInitialize]
     public void XpingTestInitialize()
     {
-        // Self-initialize if XpingAssemblyInitialize was not included in the test project.
-        if (!XpingContext.IsInitialized)
-            XpingContext.Initialize();
-
-        // Resolve and cache services once per test class instance, so later calls on the same
-        // instance are a no-op field read. A host that failed to build throws here.
+        // Initializes the context too, when XpingAssemblyInitialize is not in the test project.
         try
         {
-            _services ??= XpingContext.GetBaseServices();
+            _services ??= XpingContext.StartBaseServices(message => TestContext?.WriteLine(message));
         }
         catch (XpingConfigurationException ex)
         {
@@ -76,14 +72,13 @@ public abstract class XpingTestBase
             // is the correct behavior for strict mode where observability must be guaranteed.
             Environment.FailFast($"[Xping] Strict mode configuration error: {ex.Message}", ex);
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Xping] SDK initialization failed: {ex.Message}");
-        }
 
         _startTime = DateTime.UtcNow;
         _startTimestamp = Stopwatch.GetTimestamp();
         _workerKey = Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture);
+
+        if (_services is null)
+            return;
 
         try
         {
@@ -93,8 +88,7 @@ public abstract class XpingTestBase
         }
         catch
         {
-            // Swallow exceptions to avoid interfering with test execution: _services is unset when
-            // the SDK failed to initialize above.
+            // Swallow exceptions to avoid interfering with test execution
         }
     }
 
@@ -106,7 +100,7 @@ public abstract class XpingTestBase
     {
         try
         {
-            if (TestContext == null)
+            if (TestContext == null || _services is null)
                 return;
 
             var endTimestamp = Stopwatch.GetTimestamp();
@@ -130,7 +124,7 @@ public abstract class XpingTestBase
         }
         finally
         {
-            if (_workerKey != null)
+            if (_workerKey != null && _services != null)
             {
                 try
                 {

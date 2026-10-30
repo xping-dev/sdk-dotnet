@@ -15,7 +15,7 @@ namespace Xping.Sdk.XUnit.Tests.Retry;
 
 /// <summary>
 /// Tests for the internal <c>XUnitRetryDetector</c>, exercised via
-/// <see cref="XpingContext.GetExecutorServices()"/>.
+/// <see cref="XpingContext.StartExecutorServices(Action{string}?)"/>.
 /// </summary>
 [Collection("XpingContext")]
 public sealed class XUnitRetryDetectorTests : IAsyncLifetime
@@ -32,7 +32,7 @@ public sealed class XUnitRetryDetectorTests : IAsyncLifetime
         // LocalOnly, not the ambient config: in CI that carries the pipeline's XPING_APIKEY, and every
         // test here would upload an empty session to Xping Cloud on shutdown (#260).
         XpingContext.Initialize(new XpingConfiguration { Mode = XpingMode.LocalOnly, LocalStorePath = _scratchStore });
-        _detector = XpingContext.GetExecutorServices().RetryDetector;
+        _detector = XpingContext.StartExecutorServices()!.RetryDetector;
 
         // Register the inner RetryAttribute so the detector recognises it.
         // "RetryAttribute" → stripped to "Retry" by the detector.

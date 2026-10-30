@@ -835,6 +835,7 @@ How the run fails:
 | Error | Adapter | What you see |
 |---|---|---|
 | Configuration error, at startup | all | The test process terminates (`Environment.FailFast`) before any test runs. |
+| SDK fails to start, such as an `appsettings.json` that does not parse | all | Same as a configuration error. Strict mode must then come from `XPING_STRICTMODE`, `Xping__StrictMode`, or code: the SDK cannot read it from the file that failed. |
 | Upload error, at the end of the run | xUnit | An error from the runner (`Catastrophic failure: XpingNetworkException`). |
 | | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result, so that test shows as failed. |
 | | NUnit on vstest | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
@@ -843,6 +844,16 @@ How the run fails:
 In every case `dotnet test` exits non-zero, and every test that ran stays in TRX and other reports.
 
 > **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there. Under NUnit it is what fails the run: `FinalizeAsync()` only throws, NUnit logs that as a warning, and `dotnet test` exits with code 0. Under MSTest an exception from `FinalizeAsync()` fails the run too, but it leaves the host running.
+
+**When the SDK cannot start in resilient mode,** it prints `[Xping] SDK initialization failed: <reason>` once and the tests run untracked. Where that line shows up depends on the runner:
+
+| Runner | Where to look |
+|---|---|
+| NUnit | `dotnet test` output, at the default verbosity. |
+| xUnit (v2 and v3) | `dotnet test -v n`, or the runner's diagnostics with `"diagnosticMessages": true` in `xunit.runner.json`. |
+| MSTest | The output of the first test that ran, kept in TRX (`dotnet test --logger trx`). |
+
+The next run in the same process tries again, so an IDE's test server recovers once the cause is fixed.
 
 **When to use strict mode:**
 - Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure
@@ -860,6 +871,7 @@ In every case `dotnet test` exits non-zero, and every test that ran stays in TRX
 |----------|--------------------------|-------------|
 | Missing `ApiKey` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
 | Invalid `ApiEndpoint` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
+| SDK fails to start (e.g. `appsettings.json` does not parse) | `[Xping] SDK initialization failed` printed, tests run untracked | Test run fails before any test runs |
 | Network error during upload | Error logged, tests complete without observability data | `XpingNetworkException` thrown, test run fails |
 | Valid configuration + upload succeeds | SDK active, tests tracked | SDK active, tests tracked |
 

@@ -77,12 +77,6 @@ public sealed class XpingContextTests : IAsyncLifetime
     }
 
     [Fact]
-    public void GetExecutorServices_BeforeInitialize_Throws()
-    {
-        Assert.Throws<InvalidOperationException>(XpingContext.GetExecutorServices);
-    }
-
-    [Fact]
     public async Task FinalizeAsync_BeforeTheHostIsBuilt_DoesNothing()
     {
         XpingContext.Initialize(LocalConfiguration());
@@ -123,7 +117,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     public async Task ShutdownAsync_AfterTheHostWasBuilt_EndsTheContext()
     {
         XpingContext.Initialize(LocalConfiguration());
-        XpingContext.GetExecutorServices();
+        XpingContext.StartExecutorServices();
 
         await XpingContext.ShutdownAsync();
 
@@ -136,7 +130,7 @@ public sealed class XpingContextTests : IAsyncLifetime
         XpingContext.Initialize(LocalConfiguration());
         XpingContext.Initialize(UnreachableCloudConfiguration(strictMode: true));
 
-        Assert.NotNull(XpingContext.GetExecutorServices());
+        Assert.NotNull(XpingContext.StartExecutorServices());
     }
 
     /// <summary>
