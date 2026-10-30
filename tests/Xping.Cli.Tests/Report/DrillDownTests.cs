@@ -20,7 +20,21 @@ public sealed class DrillDownTests
     {
         Assert.Equal(
             $"xping report --all --directory {printed}",
-            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, Directory: directory)));
+            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, ShellDialect.Posix, Directory: directory)));
+    }
+
+    /// <summary>Amendment 8: every value of the command is quoted for the scope's shell.</summary>
+    [Fact]
+    public void InPowerShellAnEmbeddedQuoteIsDoubled()
+    {
+        var scope = new ReportScope("It's.Tests", WindowResolution.SinceDate, 20, ShellDialect.PowerShell, AssemblyGiven: true, Since: "a,b", Directory: "/work/it's");
+
+        Assert.Equal(
+            "xping report --id f_2a91c0de --assembly 'It''s.Tests' --since 'a,b' --directory '/work/it''s'",
+            DrillDown.ForFinding("f_2a91c0de", scope));
+        Assert.Equal(
+            "xping report --test 3a597eb2 --assembly 'It''s.Tests' --directory '/work/it''s'",
+            DrillDown.ForTest("3a597eb2", scope));
     }
 
     [Fact]
@@ -28,13 +42,13 @@ public sealed class DrillDownTests
     {
         Assert.Equal(
             "xping report --id f_2a91c0de --assembly MyApp.Tests --since 2026-08-01",
-            DrillDown.ForFinding("f_2a91c0de", new ReportScope("MyApp.Tests", WindowResolution.SinceDate, 20, Since: "2026-08-01")));
+            DrillDown.ForFinding("f_2a91c0de", new ReportScope("MyApp.Tests", WindowResolution.SinceDate, 20, ShellDialect.Posix, Since: "2026-08-01")));
     }
 
     [Fact]
     public void AWholeStoreWindowIsPinnedToItsSize()
     {
-        var scope = new ReportScope("MyApp.Tests", WindowResolution.Store, 48);
+        var scope = new ReportScope("MyApp.Tests", WindowResolution.Store, 48, ShellDialect.Posix);
 
         Assert.Equal("xping report --id f_2a91c0de --assembly MyApp.Tests --runs 48", DrillDown.ForFinding("f_2a91c0de", scope));
         Assert.Equal("xping report --all --assembly MyApp.Tests --runs 48", DrillDown.ForFullReport(scope));
@@ -43,7 +57,7 @@ public sealed class DrillDownTests
     [Fact]
     public void TheRunsTheCallerTypedWinOverTheWindowSize()
     {
-        var scope = new ReportScope("MyApp.Tests", WindowResolution.Runs, 5, Runs: 5);
+        var scope = new ReportScope("MyApp.Tests", WindowResolution.Runs, 5, ShellDialect.Posix, Runs: 5);
 
         Assert.Equal("xping report --all --runs 5", DrillDown.ForFullReport(scope));
     }
@@ -53,7 +67,7 @@ public sealed class DrillDownTests
     {
         Assert.Equal(
             "xping report --all",
-            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20)));
+            DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, ShellDialect.Posix)));
     }
 
     /// <summary>
@@ -63,7 +77,7 @@ public sealed class DrillDownTests
     public void AHistoryNamesTheAssemblyAndDirectoryAndNoWindow()
     {
         var scope = new ReportScope(
-            "MyApp.Tests", WindowResolution.Store, 48, AssemblyGiven: true, Runs: 5, Since: "2026-08-01", Directory: "/work/My Repo");
+            "MyApp.Tests", WindowResolution.Store, 48, ShellDialect.Posix, AssemblyGiven: true, Runs: 5, Since: "2026-08-01", Directory: "/work/My Repo");
 
         Assert.Equal(
             "xping report --test 3a597eb2 --assembly MyApp.Tests --directory '/work/My Repo'",

@@ -4,6 +4,7 @@
  */
 
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Commands;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
@@ -158,6 +159,50 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         using JsonDocument detail = JsonDocument.Parse(output);
         Assert.Equal(8, detail.RootElement.GetProperty("window").GetProperty("sessionCount").GetInt32());
+    }
+
+    /// <summary>
+    /// <c>XPING_SHELL</c> picks the quoting of every command the report prints, whatever the OS
+    /// (finding-detail Amendment 8A).
+    /// </summary>
+    [Fact]
+    public void XpingShellChoosesHowTheDrillDownIsQuoted()
+    {
+        SeedVanishing();
+        string directory = Path.Combine(_root, "it's");
+        Directory.CreateDirectory(directory);
+
+        foreach ((string shell, string quoted) in (ReadOnlySpan<(string, string)>)[
+            ("powershell", $"'{_root}/it''s'"),
+            ("posix", $"'{_root}/it'\\''s'")])
+        {
+            var (code, output, error) = RunIn(
+                OfflineCli.With(ShellDialects.Variable, shell), "--directory", directory, "--format", "json");
+
+            Assert.Equal(0, code);
+            Assert.Empty(error);
+
+            using JsonDocument document = JsonDocument.Parse(output);
+            Assert.EndsWith(
+                $" --directory {quoted}",
+                document.RootElement.GetProperty("findings")[0].GetProperty("drillDown").GetString(),
+                StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// A value <c>XPING_SHELL</c> does not know is warned about, and the report still runs.
+    /// </summary>
+    [Fact]
+    public void AnUnknownXpingShellIsWarnedAboutAndTheReportRuns()
+    {
+        SeedVanishing();
+
+        var (code, output, error) = RunIn(OfflineCli.With(ShellDialects.Variable, "bash"), "--format", "json");
+
+        Assert.Equal(0, code);
+        Assert.StartsWith("xping: XPING_SHELL=\"bash\" is not posix or powershell; commands are quoted for ", error, StringComparison.Ordinal);
+        Assert.NotEmpty(JsonDocument.Parse(output).RootElement.GetProperty("findings").EnumerateArray());
     }
 
     /// <summary>
@@ -483,12 +528,15 @@ public sealed class FindingDetailCommandTests : IDisposable
         return document.RootElement.Clone();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
+    private static (int Code, string Output, string Error) Run(params string[] args) =>
+        RunIn(OfflineCli.Configure, args);
+
+    private static (int Code, string Output, string Error) RunIn(Action<IServiceCollection> services, params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
+        int code = Program.Run(["report", .. args], output, error, configureServices: services);
         return (code, output.ToString(), error.ToString());
     }
 }

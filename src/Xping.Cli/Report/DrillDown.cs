@@ -87,13 +87,13 @@ internal static class DrillDown
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        var builder = new StringBuilder("xping report --test ").Append(ShellQuote.Of(fingerprint));
+        var builder = new StringBuilder("xping report --test ").Append(ShellQuote.Of(fingerprint, scope.Shell));
 
         if (!string.IsNullOrEmpty(scope.Assembly))
-            builder.Append(" --assembly ").Append(ShellQuote.Of(scope.Assembly));
+            builder.Append(" --assembly ").Append(ShellQuote.Of(scope.Assembly, scope.Shell));
 
         if (!string.IsNullOrEmpty(scope.Directory))
-            builder.Append(" --directory ").Append(ShellQuote.Of(scope.Directory));
+            builder.Append(" --directory ").Append(ShellQuote.Of(scope.Directory, scope.Shell));
 
         return builder.ToString();
     }
@@ -103,7 +103,7 @@ internal static class DrillDown
         var builder = new StringBuilder(command);
 
         if (!string.IsNullOrEmpty(assembly))
-            builder.Append(" --assembly ").Append(ShellQuote.Of(assembly));
+            builder.Append(" --assembly ").Append(ShellQuote.Of(assembly, scope.Shell));
 
         // A whole-store window has no flag of its own, and a bare command would open report's
         // default window instead. Its size is pinned, not its sessions: a run stored in between
@@ -114,10 +114,10 @@ internal static class DrillDown
             builder.Append(" --runs ").Append(runs.ToString(CultureInfo.InvariantCulture));
 
         if (!string.IsNullOrEmpty(scope.Since))
-            builder.Append(" --since ").Append(ShellQuote.Of(scope.Since));
+            builder.Append(" --since ").Append(ShellQuote.Of(scope.Since, scope.Shell));
 
         if (!string.IsNullOrEmpty(scope.Directory))
-            builder.Append(" --directory ").Append(ShellQuote.Of(scope.Directory));
+            builder.Append(" --directory ").Append(ShellQuote.Of(scope.Directory, scope.Shell));
 
         return builder.ToString();
     }
