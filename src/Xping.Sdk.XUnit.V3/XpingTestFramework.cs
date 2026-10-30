@@ -23,6 +23,7 @@ namespace Xping.Sdk.XUnit.V3;
 public sealed class XpingTestFramework : XunitTestFramework
 {
     private readonly string? _configFileName;
+    private readonly Func<XpingExecutorServices> _resolveServices;
 
     // Shared by the discoverer and the executor this framework creates. The runner may ask for the
     // executor before it discovers, so the executor is handed the place a count will be, not a count.
@@ -41,9 +42,15 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// </summary>
     /// <param name="configFileName">The optional xUnit configuration file, as xUnit passes it.</param>
     public XpingTestFramework(string? configFileName)
+        : this(configFileName, ResolveServices)
+    {
+    }
+
+    internal XpingTestFramework(string? configFileName, Func<XpingExecutorServices> resolveServices)
         : base(configFileName)
     {
         _configFileName = configFileName;
+        _resolveServices = resolveServices;
 
         try
         {
@@ -71,10 +78,7 @@ public sealed class XpingTestFramework : XunitTestFramework
         XpingExecutorServices services;
         try
         {
-            // The session ends with each run, and a long-lived process, such as an IDE's test server,
-            // may ask this framework for another. Initialize() does nothing while a session is open.
-            XpingContext.Initialize();
-            services = XpingContext.GetExecutorServices();
+            services = _resolveServices();
         }
         catch (XpingConfigurationException ex)
         {
@@ -91,6 +95,14 @@ public sealed class XpingTestFramework : XunitTestFramework
         }
 
         return new XpingTestFrameworkExecutor(new XunitTestAssembly(assembly, _configFileName), services, _census);
+    }
+
+    private static XpingExecutorServices ResolveServices()
+    {
+        // The session ends with each run, and a long-lived process, such as an IDE's test server,
+        // may ask this framework for another. Initialize() does nothing while a session is open.
+        XpingContext.Initialize();
+        return XpingContext.GetExecutorServices();
     }
 
     private static IEnumerable<string?> CallerTypeNames() =>

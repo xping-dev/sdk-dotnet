@@ -161,6 +161,18 @@ public sealed class XpingTestFrameworkTests(WholeProbeRun probe) : IClassFixture
         Assert.Equal(cases, _run.AssemblyStatistics.GetProperty("selectedTestCases").GetInt32());
     }
 
+    [Fact]
+    public async Task TheTestsStillRunUntrackedWhenTheSdkFailsToStart()
+    {
+        using ProbeRun run = await ProbeRun.RunAsync(createFramework: () =>
+            new XpingTestFramework(configFileName: null, () => throw new InvalidOperationException("host failed to start")));
+
+        Assert.Contains(run.Messages.OfType<ITestStarting>(), m => m.TestDisplayName.EndsWith("OutcomeTests.Passes", StringComparison.Ordinal));
+        Assert.NotEmpty(run.Messages.OfType<ITestPassed>());
+        Assert.Empty(run.Messages.OfType<IErrorMessage>());
+        Assert.Equal(0, run.SessionCount);
+    }
+
     private static string? Fingerprint(JsonElement execution) =>
         execution.GetProperty("identity").GetProperty("testFingerprint").GetString();
 

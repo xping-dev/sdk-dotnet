@@ -18,9 +18,8 @@ namespace Xping.Sdk.XUnit;
 /// </summary>
 public sealed class XpingTestFramework : XunitTestFramework
 {
-    // Initialized in constructor after XpingContext.Initialize() is called, so we can
-    // be sure the context is ready and any configuration issues have been surfaced.
-    private readonly XpingExecutorServices _services = null!;
+    // Null when the SDK failed to start: the run then goes ahead untracked.
+    private readonly XpingExecutorServices? _services;
 
     // Shared by the discoverer and the executor this framework creates. The runner asks for the
     // executor before it discovers, so the executor cannot be handed a finished count — only the
@@ -31,16 +30,16 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// Initializes a new instance of the <see cref="XpingTestFramework"/> class.
     /// </summary>
     /// <param name="messageSink">The message sink for diagnostic messages.</param>
-    public XpingTestFramework(IMessageSink messageSink) : base(messageSink)
+    public XpingTestFramework(IMessageSink messageSink) : this(messageSink, ResolveServices)
     {
-        XpingContext.Initialize();
+    }
 
-        // Resolve and cache services for xUnit test execution. GetExecutorServices()
-        // materializes the Lazy<XpingContext> on the first call (building the DI host), so
-        // later calls on the same instance are a no-op field read.
+    internal XpingTestFramework(IMessageSink messageSink, Func<XpingExecutorServices> resolveServices)
+        : base(messageSink)
+    {
         try
         {
-            _services = XpingContext.GetExecutorServices();
+            _services = resolveServices();
         }
         catch (XpingConfigurationException ex)
         {
@@ -74,6 +73,9 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// <returns>The test framework executor.</returns>
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName)
     {
+        if (_services is null)
+            return base.CreateExecutor(assemblyName);
+
         return new XpingTestFrameworkExecutor(
             assemblyName,
             SourceInformationProvider,
@@ -84,5 +86,12 @@ public sealed class XpingTestFramework : XunitTestFramework
             _services.CaptureStackTraces,
             _services.StatisticsAccumulator,
             _census);
+    }
+
+    // GetExecutorServices() builds the DI host on first access, so a host that cannot start fails here.
+    private static XpingExecutorServices ResolveServices()
+    {
+        XpingContext.Initialize();
+        return XpingContext.GetExecutorServices();
     }
 }
