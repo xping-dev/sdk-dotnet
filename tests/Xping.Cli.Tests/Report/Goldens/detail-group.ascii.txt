@@ -29,7 +29,7 @@ FAILURE MODES                                             1 failure mode
 
 1.  60 failed attempts | since the window opened
     System.InvalidOperationException
-    Expected <n> but was <n>
+    expected <num> but was <num>
 ```
 
 rates: the marker on each finding says which runs its percentage was

@@ -151,7 +151,7 @@ The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's 
 
 The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it.
 
-Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal. Recorded text, such as test names and failure messages, is printed with every control, bidi and invisible formatting character replaced by `?`, so a recorded escape sequence cannot recolour or reorder your terminal; under `--ascii` and in piped output every non-ASCII character is replaced too, except inside a printed command, where it is needed to select the test. `--format json` carries the recorded values unchanged.
+Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal. Recorded text, such as test names and failure messages, is printed with every control, bidi and invisible formatting character replaced by `?` (a failure message's line breaks have already become spaces, and a stack trace's separate its frames), so a recorded escape sequence cannot recolour or reorder your terminal; under `--ascii` and in piped output every non-ASCII character is replaced too, except inside a printed command, where it is needed to select the test. `--format json` carries the recorded values unchanged.
 
 Rows are ordered most severe first, so the top of the block is the part worth reading. The one thing that interrupts that order is a second finding about a test already listed, which sits under the first rather than at its own rank and says so.
 
@@ -412,7 +412,7 @@ FAILURE MODES                                             1 failure mode
 
 1.  6 failed attempts · since the window opened
     System.InvalidOperationException
-    Expected <n> but was <n>
+    expected <num> but was <num>
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -424,10 +424,12 @@ History: xping report --test fp-Sampl --assembly SampleApp.XUnit
 ````
 
 **`FAILURE MODES`** lists the distinct ways the test failed, the most frequent first. A mode is
-one exception type with one message, its run-varying values such as numbers and dates replaced by
-tokens like `<num>`, and the stack frames it was thrown through. Flaky findings list every mode;
-always failing, broken fixture and shared failure findings list their one; other kinds print no
-block. Each mode reads:
+one exception type with one message and the stack frames it was thrown through. The message is
+normalised so that runs group: run-varying values such as numbers and dates become tokens like
+`<num>`, and it is lowercased outside quoted text. A flaky finding lists every mode among the
+failures it counted. An always failing finding lists only its most common mode, and its `dominant
+mode` line says when that does not cover every failure. A broken fixture or shared failure lists
+its one. Other kinds print no block. Each mode reads:
 
 ```
 1.  4 failed attempts · first seen 08-12 09:40 at b71e004, 6 runs ago
@@ -439,14 +441,19 @@ block. Each mode reads:
 
 - **The count** is the failures the finding counted. For a flaky or always failing test it leaves
   out the runs its population marker excludes.
-- **First seen** takes one of three forms. `since the window opened`: the mode was already there in
-  the window's oldest run, and the report can't see further back. `first seen in the latest run`:
-  it is new just now. `first seen <date> at <sha>, N runs ago`: it appeared inside the window, at
-  that run and commit.
+- **First seen** says whether the mode is new, asked of every failure in the window, discounted or
+  not. `since the window opened`: it was already there in the window's oldest run, and the report
+  can't see further back. `first seen in the latest run`: it is new just now. Otherwise it
+  appeared inside the window, and the line gives the date and commit of the oldest failure the
+  finding counted: `first seen <date> at <sha>, N runs ago`. When the mode's older failures fell
+  in runs the finding set aside, that failure can be newer than the mode itself, down to
+  `first seen <date> at <sha>, in the latest run`. ` at <sha>` is left out when no commit was
+  recorded.
 - **The message** is wrapped and stops after 6 lines, ending in `...`.
 - **Frames** are your own code, innermost first, up to 5. When none of it was on the stack, the
   framework's frames are shown with the note `(no test code on the stack; framework frames
   shown)`.
+- **`exception type not recorded`** stands in for a type the adapter did not record.
 - **`the adapter recorded no failure detail`** replaces the type, message and frames when the
   failure was recorded without an exception, as a killed test can be.
 
@@ -664,7 +671,8 @@ deleted: those runs were filtered to other tests.
 
 `FAILURE MODES` is [the same block as under `--id`](#finding-ids), built from the test's own
 failures rather than a finding's. It counts every failed attempt in the window, a timed-out one
-included, and discounts nothing. A first attempt that passed on retry counts, so a test whose
+included, and discounts nothing, so it can list a mode `--id` leaves out and dates every mode from
+its oldest failure. A first attempt that passed on retry counts, so a test whose
 summary reads `0 failed` can list modes, as above, and its count can be higher than its finding's
 under `--id`. A test that never failed in the window has no block.
 

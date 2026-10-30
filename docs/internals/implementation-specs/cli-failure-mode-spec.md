@@ -410,7 +410,7 @@ width rules stay as they are. No cut splits a surrogate pair (Amendment 2E).
 ## 3. Target output
 
 These blocks illustrate §2. They are not normative (format spec D10). The goldens are generated
-in P5, and this section is regenerated from them.
+by the phase that changes them (Amendment 5), and this section is regenerated from them in P6.
 
 ### 3.1 `--id`, a flaky test with three modes
 
