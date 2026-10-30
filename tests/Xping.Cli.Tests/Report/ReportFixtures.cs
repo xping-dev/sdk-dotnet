@@ -1406,7 +1406,8 @@ internal static class ReportFixtures
             unreadableSessions: 0,
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
-            LatestRunAnalyzer.Analyze(context, analysis.Findings));
+            LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            TestSessionFactory.Scope(context));
     }
 
     /// <summary>The hostile test's finding, selected as <c>--id</c> selects it.</summary>
@@ -1425,6 +1426,7 @@ internal static class ReportFixtures
             skewedSessions: 0,
             LocalAnalysisConstants.DefaultTopFindings,
             LatestRunAnalyzer.Analyze(context, analysis.Findings),
+            TestSessionFactory.Scope(context),
             finding.Id,
             shortFingerprint: fingerprint =>
                 TestResolver.ShortFingerprintOf(context.Window.Sessions, context.Revision!.Assembly!, fingerprint));
