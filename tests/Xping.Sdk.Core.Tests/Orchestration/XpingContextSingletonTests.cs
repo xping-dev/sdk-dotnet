@@ -374,6 +374,33 @@ public sealed class XpingContextSingletonTests
             () => singleton.Start(context => context, report: null, retryNextRun: false));
     }
 
+    /// <summary>
+    /// NUnit and MSTest start from every test, on parallel workers: callers that fail together must
+    /// still report it once.
+    /// </summary>
+    [Fact]
+    public async Task Start_ConcurrentStartsFailTogether_ReportOnce()
+    {
+        var singleton = CreateSingleton();
+        var reports = new List<string>();
+        using var bothResolving = new Barrier(2);
+
+        // Each waits for the other inside resolve, so both are past the failed-earlier check.
+        Harness? Fails() => singleton.Start<Harness>(
+            _ =>
+            {
+                bothResolving.SignalAndWait(TimeSpan.FromSeconds(30));
+                throw new InvalidOperationException("service missing");
+            },
+            message => { lock (reports) reports.Add(message); },
+            retryNextRun: false);
+
+        Harness?[] resolved = await Task.WhenAll(Task.Run(Fails), Task.Run(Fails));
+
+        Assert.All(resolved, Assert.Null);
+        Assert.Single(reports);
+    }
+
     [Fact]
     public void Start_ContextRejectsItsConfiguration_RethrowsTheConfigurationError()
     {

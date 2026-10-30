@@ -6,11 +6,13 @@
 namespace Xping.Sdk.NUnit.Tests;
 
 using System;
+using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using global::NUnit.Framework;
 using global::NUnit.Framework.Interfaces;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
 using Xunit;
 using Assert = Xunit.Assert;
@@ -60,6 +62,36 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
         var attribute = new XpingTrackAttribute();
 
         Assert.Throws<ArgumentNullException>(() => ((ITestAction)attribute).BeforeTest(null!));
+    }
+
+    /// <summary>
+    /// A start that failed holds until the session ends, so every later test runs untracked rather
+    /// than failing on services that never started.
+    /// </summary>
+    [Fact]
+    public async Task ATestAfterTheSdkFailedToStartRunsUntracked()
+    {
+        // BatchSize 0 is invalid, and strict mode turns an invalid configuration into a failed start.
+        XpingContext.Initialize(new XpingConfiguration
+        {
+            Mode = XpingMode.LocalOnly,
+            LocalStorePath = _scratchStore,
+            StrictMode = true,
+            BatchSize = 0,
+        });
+        Assert.Throws<XpingConfigurationException>(() => XpingContext.StartAttributeServices());
+        ITestAction attribute = new XpingTrackAttribute();
+        ITest test = SampleTest();
+
+        Exception? exception = Record.Exception(() =>
+        {
+            attribute.BeforeTest(test);
+            attribute.AfterTest(test);
+        });
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        Assert.Null(exception);
+        Assert.False(Directory.Exists(_scratchStore));
     }
 
     [Fact]
@@ -281,11 +313,7 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
     private static (TimeSpan? budget, TimeoutBudgetSource? source) InvokeResolveTimeoutBudget(
         object? timeoutProperty)
     {
-        MethodInfo target = typeof(XpingTrackAttributeTests).GetMethod(
-            nameof(SampleTestMethod), BindingFlags.NonPublic | BindingFlags.Static)!;
-
-        var test = new global::NUnit.Framework.Internal.TestMethod(
-            new global::NUnit.Framework.Internal.MethodWrapper(typeof(XpingTrackAttributeTests), target));
+        var test = SampleTest();
 
         if (timeoutProperty != null)
             test.Properties.Set("Timeout", timeoutProperty);
@@ -296,6 +324,15 @@ public sealed class XpingTrackAttributeTests : IAsyncLifetime
 
         object? value = method.Invoke(null, [test]);
         return ((TimeSpan? budget, TimeoutBudgetSource? source))value!;
+    }
+
+    private static global::NUnit.Framework.Internal.TestMethod SampleTest()
+    {
+        MethodInfo target = typeof(XpingTrackAttributeTests).GetMethod(
+            nameof(SampleTestMethod), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        return new global::NUnit.Framework.Internal.TestMethod(
+            new global::NUnit.Framework.Internal.MethodWrapper(typeof(XpingTrackAttributeTests), target));
     }
 
     private static void SampleTestMethod()

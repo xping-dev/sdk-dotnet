@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Assert = Xunit.Assert;
 
 namespace Xping.Sdk.MSTest.Tests;
@@ -48,6 +49,39 @@ public sealed class XpingTestBaseLifecycleTests : IAsyncLifetime
         JsonElement execution = await RunAsync(UnitTestOutcome.Passed).ConfigureAwait(true);
 
         Assert.Equal("passed", execution.GetProperty("outcome").GetString());
+    }
+
+    /// <summary>
+    /// A start that failed holds until the session ends, so every later test runs untracked rather
+    /// than failing on services that never started.
+    /// </summary>
+    [Fact]
+    public async Task ATestAfterTheSdkFailedToStartRunsUntracked()
+    {
+        // BatchSize 0 is invalid, and strict mode turns an invalid configuration into a failed start.
+        XpingContext.Initialize(new XpingConfiguration
+        {
+            Mode = XpingMode.LocalOnly,
+            LocalStorePath = _scratchStore,
+            StrictMode = true,
+            BatchSize = 0,
+        });
+        Assert.Throws<XpingConfigurationException>(() => XpingContext.StartBaseServices());
+        var test = new TimedTestClass
+        {
+            TestContext = new LifecycleTestContext(
+                nameof(TimedTestClass.TimesOut), typeof(TimedTestClass).FullName!, UnitTestOutcome.Passed),
+        };
+
+        Exception? exception = Record.Exception(() =>
+        {
+            test.XpingTestInitialize();
+            test.XpingTestCleanup();
+        });
+        await XpingContext.FinalizeAndShutdownAsync().ConfigureAwait(true);
+
+        Assert.Null(exception);
+        Assert.False(Directory.Exists(_scratchStore));
     }
 
     private async Task<JsonElement> RunAsync(UnitTestOutcome reported)
