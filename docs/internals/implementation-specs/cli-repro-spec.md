@@ -107,6 +107,16 @@ not. Resolved here and committed before P5's tests.
 | A | Amendment 2D, §7: xUnit v3 needs `--filter-method`, out of scope | v3 takes D3's filter on both runners: `FullyQualifiedName=` through xunit.runner.visualstudio on VSTest, and `-- --filter` on the MTP executable. `Xping.TestFramework` is still not read. No code change | D3, D4, §7 |
 | B | §6: P3 covers NUnit, MSTest and xUnit v2 | P5 adds the v3 sample to P3's runner test, on VSTest and MTP, with a data-driven test and a two-member filter | §6 |
 
+### Amendment 8 — from #293 (PowerShell)
+
+`cli-finding-detail-spec.md` Amendment 8 quotes printed values for PowerShell on Windows and for POSIX
+shells elsewhere. The repro command follows it.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D4: `<path>` and `<filter>` go through `ShellQuote` for a POSIX shell | They go through `ShellQuote` in the scope's dialect, which `ReproCommand.For` takes as a parameter | D4 |
+| B | §6: P3's runner test runs the command through `/bin/sh` | It also runs the NUnit `"50's off"` row, which holds both `'` and `"`, through `pwsh -NoProfile -Command` with PowerShell quoting, on both runners. CI's `ubuntu-latest` ships pwsh 7.4+; a machine without pwsh fails the test and says so. On Linux pwsh hands the program its arguments as a list, so the test pins PowerShell's parsing of the quoted command, not the Windows command line it would build from it | §6 |
+
 ---
 
 ## 1. Ground truth

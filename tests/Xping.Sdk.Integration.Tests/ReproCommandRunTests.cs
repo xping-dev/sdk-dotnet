@@ -57,9 +57,25 @@ public sealed class ReproCommandRunTests : IDisposable
     [InlineData("SampleApp.XUnitV3", TestRunner.VsTest, new[] { "ParameterizedTestIsTracked" }, new[] { "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)" })]
     [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, new[] { "ParameterizedTestIsTracked" }, new[] { "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)" })]
     [InlineData("SampleApp.XUnitV3", TestRunner.MtpExecutable, new[] { "ParameterizedTestIsTracked", "PassingTestIsTracked" }, new[] { "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 1, b: 2, expected: 3)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 5, b: 5, expected: 10)", "SampleApp.XUnitV3.SampleTests.ParameterizedTestIsTracked(a: 0, b: 0, expected: 0)", "SampleApp.XUnitV3.SampleTests.PassingTestIsTracked" })]
-    public async Task TheReproCommandRunsTheRecordedTestsAndWritesNoSession(
-        string sample, TestRunner runner, string[] chosen, string[] expectedResults)
+    public Task TheReproCommandRunsTheRecordedTestsAndWritesNoSession(
+        string sample, TestRunner runner, string[] chosen, string[] expectedResults) =>
+        RunReproAsync(sample, runner, chosen, expectedResults, powerShell: false);
+
+    // The one name whose quoting differs between the dialects, with a " beside the apostrophe. This
+    // pins how PowerShell parses the printed command. It does not pin the Windows command line pwsh
+    // would build from it: on Linux pwsh hands the program its arguments as a list.
+    [Theory]
+    [InlineData(TestRunner.VsTest)]
+    [InlineData(TestRunner.MtpExecutable)]
+    public Task InPowerShellTheReproCommandRunsTheRecordedTest(TestRunner runner) =>
+        RunReproAsync(
+            "SampleApp.NUnit", runner, ["StringParameterIsTracked(\"50's off\")"], ["StringParameterIsTracked(\"50's off\")"], powerShell: true);
+
+    private async Task RunReproAsync(
+        string sample, TestRunner runner, string[] chosen, string[] expectedResults, bool powerShell)
     {
+        ShellDialect shell = powerShell ? ShellDialect.PowerShell : ShellDialect.Posix;
+
         string recordFilter = string.Join("|", chosen
             .Select(name => name.Split('(')[0])
             .Distinct(StringComparer.Ordinal)
@@ -80,13 +96,13 @@ public sealed class ReproCommandRunTests : IDisposable
 
         // The same mapping report uses, so a change to it, or to the properties the SDK stamps, shows here.
         ReproTarget target = ReproTarget.From(session);
-        Repro? repro = ReproCommand.For(Finding(names, sample), target);
+        Repro? repro = ReproCommand.For(Finding(names, sample), target, shell);
         repro.Should().NotBeNull("the session recorded runner {0} and project {1}", target.Runner, target.ProjectPath);
 
         // Appended after the command, so it runs as printed; the TRX names the tests the filter selected.
         string trx = runner == TestRunner.VsTest
-            ? $" --logger trx --results-directory {ShellQuote.Of(_repro.ResultsPath)}"
-            : $" --report-trx --results-directory {ShellQuote.Of(_repro.ResultsPath)}";
+            ? $" --logger trx --results-directory {ShellQuote.Of(_repro.ResultsPath, shell)}"
+            : $" --report-trx --results-directory {ShellQuote.Of(_repro.ResultsPath, shell)}";
 
         // LocalOnly would record the run; only the command's -e stops it. MSBuild reads the other two
         // from the environment, so the command runs unchanged: XpingTestRunner builds the MTP flavour
@@ -96,8 +112,10 @@ public sealed class ReproCommandRunTests : IDisposable
         if (runner != TestRunner.VsTest)
             environment["XpingTestRunner"] = "MTP";
 
-        (exitCode, output) = await _repro
-            .ShellAsync(repro!.Command + trx, environment, $"repro of {string.Join(", ", names)}")
+        string description = $"repro of {string.Join(", ", names)}";
+        (exitCode, output) = await (powerShell
+                ? _repro.PowerShellAsync(repro!.Command + trx, environment, description)
+                : _repro.ShellAsync(repro!.Command + trx, environment, description))
             .ConfigureAwait(true);
 
         exitCode.Should().Be(0, "Command: {0}\nOutput:\n{1}", repro.Command, output);

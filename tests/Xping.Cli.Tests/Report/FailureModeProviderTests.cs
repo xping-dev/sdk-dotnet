@@ -1781,7 +1781,7 @@ public sealed class FailureModeProviderTests
             ]);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
 
         // Without this line the discounting silently changes every rate in the report, with nothing
         // on screen to explain it.
@@ -1803,13 +1803,13 @@ public sealed class FailureModeProviderTests
         AnalysisResult result = Run(context);
 
         ReportEnvelope full = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
 
         Assert.True(full.Findings.Count >= 2);
         FindingDto second = full.Findings[1];
 
         ReportEnvelope selected = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context),
             id: second.Id.ToUpperInvariant());
 
         Assert.Equal(Json(second), Json(Assert.Single(selected.Findings)));
@@ -1830,7 +1830,7 @@ public sealed class FailureModeProviderTests
         AnalysisResult result = Run(context);
 
         ReportEnvelope selected = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null,
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context),
             id: FindingId.Compute(FindingKind.Flaky, "fp-Gone"));
 
         Assert.Empty(selected.Findings);
@@ -1861,7 +1861,7 @@ public sealed class FailureModeProviderTests
         ReportEnvelope typed = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
             scope: new ReportScope(
-                "My App.Tests", WindowResolution.Runs, 7, AssemblyGiven: false, Runs: 7, Directory: "../svc"));
+                "My App.Tests", WindowResolution.Runs, 7, ShellDialect.Posix, AssemblyGiven: false, Runs: 7, Directory: "../svc"));
 
         Assert.NotEmpty(typed.Findings);
         Assert.All(typed.Findings, finding => Assert.Equal(
@@ -1872,7 +1872,7 @@ public sealed class FailureModeProviderTests
         ReportEnvelope named = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
             scope: new ReportScope(
-                "MyApp.Tests", WindowResolution.SinceDate, 20, AssemblyGiven: true, Since: "2026-08-01"));
+                "MyApp.Tests", WindowResolution.SinceDate, 20, ShellDialect.Posix, AssemblyGiven: true, Since: "2026-08-01"));
 
         Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
     }
@@ -1889,7 +1889,7 @@ public sealed class FailureModeProviderTests
         AnalysisResult result = Run(context);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null);
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null, scope: TestSessionFactory.Scope(context));
 
         Assert.NotEmpty(envelope.Findings);
         Assert.All(envelope.Findings, finding =>
@@ -1907,7 +1907,7 @@ public sealed class FailureModeProviderTests
         AnalysisContext context = TestSessionFactory.Context(sessions);
 
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
     }

@@ -123,7 +123,7 @@ public sealed class ReproCommandTests
             Sessions = 20
         };
 
-        Repro repro = ReproCommand.For(Group(evidence), VSTest)!;
+        Repro repro = ReproCommand.For(Group(evidence), VSTest, ShellDialect.Posix)!;
 
         Assert.Equal(Prefix + "FullyQualifiedName=Ns.A.One", repro.Command);
         Assert.Equal(4, repro.Runs);
@@ -139,7 +139,7 @@ public sealed class ReproCommandTests
             Members = [Member("Ns.A.One", 20, 20, 20)]
         };
 
-        Assert.Equal(1, ReproCommand.For(Group(evidence), VSTest)!.Runs);
+        Assert.Equal(1, ReproCommand.For(Group(evidence), VSTest, ShellDialect.Posix)!.Runs);
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class ReproCommandTests
             Sessions = 20
         };
 
-        Repro repro = ReproCommand.For(Group(evidence), VSTest)!;
+        Repro repro = ReproCommand.For(Group(evidence), VSTest, ShellDialect.Posix)!;
 
         // One at 6 of 20 first; then three at 3 of 20, where Four's extra failure wins, then
         // ordinal order puts Three before Two.
@@ -188,7 +188,7 @@ public sealed class ReproCommandTests
 
         Assert.Equal(
             Prefix + "'FullyQualifiedName=Ns.A.Rows|FullyQualifiedName=Ns.B.Two|FullyQualifiedName=Ns.C.Three'",
-            ReproCommand.For(Group(evidence), VSTest)!.Command);
+            ReproCommand.For(Group(evidence), VSTest, ShellDialect.Posix)!.Command);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public sealed class ReproCommandTests
             Members = [Member("Ns.A.One", 0, 0, 0)]
         };
 
-        Assert.Null(ReproCommand.For(Group(evidence), VSTest));
+        Assert.Null(ReproCommand.For(Group(evidence), VSTest, ShellDialect.Posix));
     }
 
     /// <summary>D2's dashes: a rerun cannot show these failures.</summary>
@@ -243,6 +243,23 @@ public sealed class ReproCommandTests
     public void OnVSTestTheNameIsEscapedForTheFilterMSBuildAndTheShell(string name, string filter)
     {
         Assert.Equal(Prefix + filter, Build(name, Flaky(4, 9))!.Command);
+    }
+
+    /// <summary>
+    /// Amendment 8A: in PowerShell an embedded quote is doubled, and the project path is quoted the
+    /// same way.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "Ns.C.S(\"it's\")", @"'FullyQualifiedName=Ns.C.S\(\""it''s\""\)'")]
+    [InlineData(null, "Ns.Outer+Inner.Nested", "FullyQualifiedName=Ns.Outer+Inner.Nested")]
+    [InlineData("tests/O'Brien/O'Brien.csproj", "Ns.C.S(\"it's\")", @"'FullyQualifiedName=Ns.C.S\(\""it''s\""\)'")]
+    public void InPowerShellAnEmbeddedQuoteIsDoubled(string? project, string name, string filter)
+    {
+        Repro repro = Build(
+            name, Flaky(4, 9), target: new ReproTarget(LocalSessionProperties.VSTestRunner, project), shell: ShellDialect.PowerShell)!;
+
+        string path = project == null ? "" : " 'tests/O''Brien/O''Brien.csproj'";
+        Assert.Equal($"dotnet test{path} -e XPING_ENABLED=false --filter {filter}", repro.Command);
     }
 
     /// <summary>Amendment 2B: <c>dotnet run</c> hands the filter to the app, so only the filter syntax is escaped.</summary>
@@ -314,7 +331,8 @@ public sealed class ReproCommandTests
         string name,
         FindingEvidence evidence,
         FindingKind kind = FindingKind.Flaky,
-        ReproTarget? target = null) =>
+        ReproTarget? target = null,
+        ShellDialect shell = ShellDialect.Posix) =>
         ReproCommand.For(
             new Finding(
                 "f_00000000",
@@ -325,7 +343,8 @@ public sealed class ReproCommandTests
                 new FindingSubject.SingleTest(new TestReference("fp", name, name, null, null, "MyApp.Tests")),
                 evidence,
                 0.5),
-            target ?? VSTest);
+            target ?? VSTest,
+            shell);
 
     private static Finding Group(FindingEvidence evidence) =>
         new(

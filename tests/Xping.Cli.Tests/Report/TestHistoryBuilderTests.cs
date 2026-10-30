@@ -191,7 +191,7 @@ public sealed class TestHistoryBuilderTests
 
         TestHistoryDto history = TestHistoryBuilder.Ambiguous(
             resolution,
-            new ReportScope(null, WindowResolution.Store, 5, Runs: 3, Directory: "../svc"));
+            new ReportScope(null, WindowResolution.Store, 5, ShellDialect.Posix, Runs: 3, Directory: "../svc"));
 
         Assert.Equal(
             [
@@ -216,7 +216,7 @@ public sealed class TestHistoryBuilderTests
         var found = new TestResolution(TestResolutionKind.Found, Target, null, [Match], 1, 5);
 
         Assert.Throws<ArgumentException>(() => TestHistoryBuilder.Ambiguous(
-            found, new ReportScope(null, WindowResolution.Store, 5)));
+            found, new ReportScope(null, WindowResolution.Store, 5, ShellDialect.Posix)));
     }
 
     [Fact]

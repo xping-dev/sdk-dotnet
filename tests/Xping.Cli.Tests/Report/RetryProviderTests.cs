@@ -704,7 +704,7 @@ public sealed class RetryProviderTests
     private static string Serialize(AnalysisContext context)
     {
         ReportEnvelope envelope = EnvelopeBuilder.Build(
-            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null);
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
 
         return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
     }
