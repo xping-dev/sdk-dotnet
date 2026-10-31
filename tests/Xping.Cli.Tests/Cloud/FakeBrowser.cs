@@ -78,7 +78,9 @@ internal sealed class FakeBrowser : IBrowserLauncher
         try
         {
             using var handler = new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
-            using var client = new HttpClient(handler, disposeHandler: false);
+            // A visit no listener answers fails the test in seconds rather than after the
+            // 100-second default (#324).
+            using var client = new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(10) };
 
             for (int visit = 0; visit < Visits; visit++)
             {

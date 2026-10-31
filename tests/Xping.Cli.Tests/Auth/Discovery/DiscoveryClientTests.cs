@@ -262,7 +262,8 @@ public sealed class DiscoveryClientTests : IAsyncLifetime, IAsyncDisposable
     [Fact]
     public async Task AServerThatIsNotListeningIsReportedAsAConnectionFailure()
     {
-        string cloudUrl = $"http://127.0.0.1:{UnusedPort()}";
+        using Socket silent = BoundButNotListening();
+        string cloudUrl = $"http://127.0.0.1:{((IPEndPoint)silent.LocalEndPoint!).Port}";
 
         AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
             () => _host.Discovery.GetAsync(cloudUrl, useCache: false, CancellationToken.None));
@@ -418,12 +419,12 @@ public sealed class DiscoveryClientTests : IAsyncLifetime, IAsyncDisposable
         _host = new AuthTestHost(version);
     }
 
-    private static int UnusedPort()
+    // Held for the whole test: a connection to it is refused, and no other test's listener can take
+    // the port, as one could a port probed and released (#324).
+    private static Socket BoundButNotListening()
     {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        int port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
+        var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        return socket;
     }
 }

@@ -35,23 +35,23 @@ jobs:
         timeout-minutes: 2
 
       - name: Run Core Tests
-        run: dotnet test tests/Xping.Sdk.Core.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.Core.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 5
 
       - name: Run NUnit Adapter Tests
-        run: dotnet test tests/Xping.Sdk.NUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.NUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 5
 
       - name: Run xUnit Adapter Tests
-        run: dotnet test tests/Xping.Sdk.XUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.XUnit.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 5
 
       - name: Run xUnit v3 Adapter Tests
-        run: dotnet test tests/Xping.Sdk.XUnit.V3.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.XUnit.V3.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 5
 
       - name: Run MSTest Adapter Tests
-        run: dotnet test tests/Xping.Sdk.MSTest.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.MSTest.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 5
 
       # 10 minutes, matching the integration step. This is the largest suite here, and coverage
@@ -62,12 +62,24 @@ jobs:
       # unlocked keyring must not turn them on here. The Monte Carlo calibration tests run in
       # nightly.yml: they were ~515s of this step and only fail when the statistics change.
       - name: Run CLI Tests
-        run: dotnet test tests/Xping.Cli.Tests/ --no-build --filter "Category!=CredentialStore&Category!=Calibration" --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Cli.Tests/ --no-build --filter "Category!=CredentialStore&Category!=Calibration" --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 10
 
       - name: Run Integration Tests
-        run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage
+        run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 3m --blame-hang-dump-type mini
         timeout-minutes: 10
+
+      # --blame-hang-timeout kills a test host stuck on one test for 3 minutes; the sequence file
+      # names the test that was running, so a hang no longer ends as a silent step timeout (#324).
+      - name: Upload hang diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blame-hang
+          path: |
+            coverage/**/Sequence_*.xml
+            coverage/**/*.dmp
+          if-no-files-found: ignore
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
