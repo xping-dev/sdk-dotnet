@@ -313,6 +313,24 @@ public sealed class LocalHistoryWriteTests : IDisposable
         uploader.Verify(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    [Fact]
+    public async Task TheStoreIsResolvedWhenTheSessionStartsNotWhenItIsWritten()
+    {
+        // Resolution reads process state a test may change mid-run (HOME, the current directory),
+        // so it must be fixed before the first test runs.
+        var store = new Mock<ILocalSessionStore>();
+        store.SetupGet(s => s.StorePath).Returns(Path.Combine(_temp, "store"));
+        var uploader = new Mock<IXpingUploader>();
+        uploader
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = true });
+
+        await using Harness orchestrator = CreateUploading(Path.Combine(_temp, "unused"), uploader.Object, store.Object);
+
+        store.VerifyGet(s => s.StorePath, Times.Once);
+        store.Verify(s => s.Write(It.IsAny<TestSession>()), Times.Never);
+    }
+
     private static Harness CreateUploading(string storePath, IXpingUploader uploader, ILocalSessionStore? store = null)
     {
         // Composed by hand rather than through AddXping: a zero FlushInterval fails validation

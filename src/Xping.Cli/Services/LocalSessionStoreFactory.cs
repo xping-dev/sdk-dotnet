@@ -24,7 +24,10 @@ internal interface ILocalSessionStoreFactory
     /// Creates a store.
     /// </summary>
     /// <param name="options">Retention settings, or <see langword="null"/> for the defaults.</param>
-    /// <param name="startDirectory">Directory to resolve the store from.</param>
+    /// <param name="startDirectory">
+    /// Directory to start the repository walk from. Ignored when <c>XPING_LOCAL_STORE</c> names
+    /// the store.
+    /// </param>
     /// <returns>The store, which may report itself unavailable.</returns>
     ILocalSessionStore Create(LocalStoreOptions? options = null, string? startDirectory = null);
 }
@@ -47,5 +50,5 @@ internal sealed class LocalSessionStoreFactory(ILoggerFactory loggerFactory, IEn
             options,
             loggerFactory.CreateLogger("Xping.Cli.LocalSessionStore"),
             startDirectory,
-            environment.GetVariable(StoreVariable) is { } path && !string.IsNullOrWhiteSpace(path) ? path.Trim() : null);
+            environment.GetVariable(StoreVariable)?.Trim());
 }

@@ -69,7 +69,6 @@ public class LocalStoreScanBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-
         try
         {
             if (Directory.Exists(_root))

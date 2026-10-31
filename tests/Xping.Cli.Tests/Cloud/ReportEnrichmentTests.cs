@@ -7,6 +7,7 @@ using System.Net;
 using System.Text.Json;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Commands;
+using Xping.Cli.Services;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -36,7 +37,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     public ReportEnrichmentTests()
     {
         Directory.CreateDirectory(_root);
-        _host.Environment["XPING_LOCAL_STORE"] = _root;
+        _host.Environment[LocalSessionStoreFactory.StoreVariable] = _root;
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
 
         _host.Cloud.AddProject(Project, displayName: Assembly);
