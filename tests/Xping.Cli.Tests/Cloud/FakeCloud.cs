@@ -198,10 +198,15 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     {
         // An answer still held (HoldTokenResponses) or in flight must not hold the test: when the
         // token fires, Kestrel aborts the connections that are left.
-        using (var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+        try
+        {
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await _app.StopAsync(patience.Token).ConfigureAwait(false);
-
-        await _app.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            await _app.DisposeAsync().ConfigureAwait(false);
+        }
 
         // Contract §7.1, for every test that talks to the fake: never both credential headers
         // (Report_BothHeadersNever, cli-auth-cli-spec §18.2).
