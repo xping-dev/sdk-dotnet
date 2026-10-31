@@ -1078,6 +1078,7 @@ public sealed class DurationProviderTests
     [InlineData(0.70, 200)]
     [InlineData(0.50, 1000)]
     [InlineData(0.70, 1000)]
+    [Trait("Category", Calibration.Category)]
     public void NoTrueShiftIsReportedAsARegressionMoreThanOnceInAHundred(
         double coefficient, int median)
     {
@@ -1115,6 +1116,7 @@ public sealed class DurationProviderTests
     [Theory]
     [InlineData(0.8, 0.2, 0.0, 0.005)]      // the baseline is the wilder arm: far under the level
     [InlineData(0.2, 0.8, 0.04, 0.09)]      // the recent slice is: above it
+    [Trait("Category", Calibration.Category)]
     public void AWiderRecentSliceIsWhereTheOneInAHundredStops(
         double baselineSigma, double currentSigma, double low, double high)
     {
@@ -1149,6 +1151,7 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
+    [Trait("Category", Calibration.Category)]
     public void AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt()
     {
         // The cell above, asked what the reader actually gets. Every finding it produces is false —
@@ -1199,6 +1202,7 @@ public sealed class DurationProviderTests
     }
 
     [Fact]
+    [Trait("Category", Calibration.Category)]
     public void APlantedDoublingOnASteadyTestIsStillReported()
     {
         // The other side of the bargain, and the issue's second acceptance criterion. The criterion

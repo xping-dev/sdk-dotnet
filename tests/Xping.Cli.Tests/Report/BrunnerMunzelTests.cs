@@ -174,6 +174,7 @@ public sealed class BrunnerMunzelTests
     [InlineData(0.35)]
     [InlineData(0.50)]
     [InlineData(0.70)]
+    [Trait("Category", Calibration.Category)]
     public void TheRejectionRateIsTheLevelItIsReadAtWhenTheArmsAreEquallyDispersed(double coefficient)
     {
         // Seventeen baseline runs against three, drawn from one lognormal distribution with no
@@ -207,6 +208,7 @@ public sealed class BrunnerMunzelTests
     [InlineData(0.4, 0.2, 0.0000, 0.0050)]      // twice
     [InlineData(0.2, 0.4, 0.0250, 0.0500)]      // recent arm twice the wilder
     [InlineData(0.2, 0.8, 0.0550, 0.0900)]      // four times
+    [Trait("Category", Calibration.Category)]
     public void AWiderRecentSliceIsWhereTheCalibrationStops(
         double baselineSigma, double currentSigma, double low, double high)
     {
@@ -246,6 +248,7 @@ public sealed class BrunnerMunzelTests
     }
 
     [Fact]
+    [Trait("Category", Calibration.Category)]
     public void ATrueSlowdownIsStillFoundAtThreeRecentRuns()
     {
         // The companion to the rate above: a test that only ever declines is not a test. A true

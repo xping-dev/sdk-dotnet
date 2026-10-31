@@ -1,0 +1,33 @@
+name: Nightly
+
+# The CLI's Monte Carlo calibration tests (Category=Calibration): false-positive rates and power of
+# the duration and Brunner-Munzel scoring, over thousands of simulated suites. They take minutes and
+# only fail when the statistics change, so they run here rather than on every PR (#325). A PR that
+# changes src/Xping.Cli/Report/Scoring or src/Xping.Cli/Report/Providers runs them by hand.
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build tests/Xping.Cli.Tests --configuration Release
+
+      - name: Run calibration tests
+        run: dotnet test tests/Xping.Cli.Tests --no-build --configuration Release --filter "Category=Calibration" --logger "console;verbosity=normal"
