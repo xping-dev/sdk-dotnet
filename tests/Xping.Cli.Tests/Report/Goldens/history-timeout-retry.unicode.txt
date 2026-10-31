@@ -34,7 +34,7 @@ FAILURE MODES                                            2 failure modes
       at SampleApp.MSTest.GatewayTests.Charge_CompletesWithinTheBudget()
 
 2.  4 failed attempts · first seen 08-20 23:40 at c670fc3, 6 runs ago
-    the adapter recorded no failure detail
+    timed out, no failure detail recorded
 
 FINDINGS                                                       1 finding
 ────────────────────────────────────────────────────────────────────────

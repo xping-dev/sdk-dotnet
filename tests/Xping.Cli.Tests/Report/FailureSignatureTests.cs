@@ -163,6 +163,48 @@ public sealed class FailureSignatureTests
     }
 
     [Fact]
+    public void AFailureWithNothingRecordedIsNotMarkedTimedOut() =>
+        Assert.False(Signature().TimedOut);
+
+    [Fact]
+    public void ATimeoutWithNothingRecordedIsMarkedTimedOut()
+    {
+        FailureSignature signature = BlankTimeout("fp-Alpha");
+
+        Assert.True(signature.Unavailable);
+        Assert.True(signature.TimedOut);
+    }
+
+    [Fact]
+    public void ABlankTimeoutAndABlankFailureOfOneTestDoNotShareASignature()
+    {
+        // The outcome is the one thing known about either, and merging them would count both as
+        // one mode the reader cannot split (#320).
+        Assert.NotEqual(Signature(fingerprint: "fp-Alpha").Hash, BlankTimeout("fp-Alpha").Hash);
+    }
+
+    [Fact]
+    public void TheSameTestTimingOutBlankKeepsOneSignatureAcrossRuns() =>
+        Assert.Equal(BlankTimeout("fp-Alpha").Hash, BlankTimeout("fp-Alpha").Hash);
+
+    [Fact]
+    public void TwoTestsTimingOutBlankDoNotShareASignature() =>
+        Assert.NotEqual(BlankTimeout("fp-Alpha").Hash, BlankTimeout("fp-Beta").Hash);
+
+    [Fact]
+    public void ATimeoutWithDetailIsSignedLikeAFailure()
+    {
+        // A signed hash ignores the outcome, so the flag would not hold for every failure carrying it.
+        FailureSignature timeout = FailureSignatureFactory.Create(
+            TestSessionFactory.Execution(
+                "Alpha", TestOutcome.Timeout, errorMessage: "boom", exceptionType: "System.Exception"),
+            "fp-Alpha");
+
+        Assert.False(timeout.TimedOut);
+        Assert.Equal(Signature("System.Exception", "boom", fingerprint: "fp-Alpha").Hash, timeout.Hash);
+    }
+
+    [Fact]
     public void AnUnavailableSignatureCannotCollideWithARealOne()
     {
         Assert.NotEqual(
@@ -185,4 +227,8 @@ public sealed class FailureSignatureTests
         Assert.Equal("d0f8e1e5a2b25e4c".Length, signature.Hash.Length);
         Assert.All(signature.Hash, c => Assert.Contains(c, "0123456789abcdef"));
     }
+
+    private static FailureSignature BlankTimeout(string fingerprint) =>
+        FailureSignatureFactory.Create(TestSessionFactory.Execution("Alpha", TestOutcome.Timeout), fingerprint);
+
 }

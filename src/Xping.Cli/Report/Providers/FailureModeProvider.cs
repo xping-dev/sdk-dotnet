@@ -25,6 +25,7 @@ namespace Xping.Cli.Report.Providers;
 /// Whether the adapter recorded nothing to build a signature from. True for every failure from an
 /// adapter that does not capture failure detail, and the reason such failures never group.
 /// </param>
+/// <param name="TimedOut">Whether it is unavailable because its attempts timed out before recording anything.</param>
 /// <param name="Occurrences">Failures carrying this signature.</param>
 /// <param name="FirstSeenAt">
 /// Start of the oldest session among the failures <paramref name="Occurrences"/> counts, so the
@@ -52,6 +53,7 @@ internal sealed record SignatureView(
     IReadOnlyList<string> Frames,
     bool Degraded,
     bool Unavailable,
+    bool TimedOut,
     int Occurrences,
     DateTime FirstSeenAt,
     string? FirstSeenSha,
@@ -1148,6 +1150,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             signature.Frames,
             signature.Degraded,
             signature.Unavailable,
+            signature.TimedOut,
             occurrences,
             firstSeenAt,
             firstSeenSha,

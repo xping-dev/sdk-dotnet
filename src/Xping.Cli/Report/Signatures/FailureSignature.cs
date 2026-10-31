@@ -33,10 +33,15 @@ namespace Xping.Cli.Report.Signatures;
 /// Whether the adapter recorded nothing to build a signature from. Such a signature is keyed on the
 /// test itself and can never group with another test's failure.
 /// </param>
+/// <param name="TimedOut">
+/// Whether this is an unavailable signature from a timed-out attempt. Never set on a signed one: its
+/// hash ignores the outcome, so its failures can mix timeouts and failures.
+/// </param>
 internal sealed record FailureSignature(
     string Hash,
     string? ExceptionType,
     string NormalisedMessage,
     IReadOnlyList<string> Frames,
     bool Degraded,
-    bool Unavailable);
+    bool Unavailable,
+    bool TimedOut);

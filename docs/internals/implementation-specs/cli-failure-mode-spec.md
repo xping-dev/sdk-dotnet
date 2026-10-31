@@ -2,7 +2,7 @@
 
 **Status:** Draft, binding once merged
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
-**Schema:** `1.24` → `1.25`
+**Schema:** `1.24` → `1.25`; `1.26` by Amendment 6
 **Depends on:** `cli-report-format-spec.md` D5 (heading machinery), D10 (example/rule authority,
 width and charset discipline). `cli-finding-detail-spec.md` D4 (the text detail view) and D4.1
 (`Flaky` metrics, superseded here by its Amendment 7). `cli-test-history-spec.md` D5 (window) and
@@ -69,6 +69,15 @@ These changes are applied in place in the sections named.
 | # | Was | Now | Changed |
 |---|---|---|---|
 | A | P5 regenerates the goldens and documented samples; P6 writes the docs | P3 and P4 regenerated the goldens and samples their blocks changed, so P5 has no separate work. It folds into P6: regenerating confirms an empty diff, then §3 and the docs follow | §6 |
+
+### Amendment 6 — from #320
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D4: a timed-out attempt is a failed one, and a blank one prints the unavailable form | A failure with nothing recorded is signed on its outcome as well as its test: a blank `Timeout` hashes on `unsignable\|timeout\|<fingerprint>`, a blank `Failed` on `unsignable\|<fingerprint>`. The two no longer merge into one mode with one count. A signed failure's hash still ignores the outcome | D4 |
+| B | D5 item 5: one unavailable line | A blank timeout prints `timed out, no failure detail recorded`. The outcome is known, so the line does not blame the adapter. Any other unavailable mode keeps `the adapter recorded no failure detail` | D5 |
+| C | §4.2: `FailureModeDto` ends its flags at `Unavailable` | It gains `TimedOut` after `Unavailable`: true only on an unavailable mode whose attempts timed out, which the split hash makes all of them. False on a signed mode, which can mix outcomes. Schema `1.25` → `1.26` | §4.1, §4.2 |
+| D | Amendment 4C: `history-timeout-retry`'s timed-out mode prints the unavailable form | It prints `timed out, no failure detail recorded` | §3.5 |
 
 ---
 
@@ -219,7 +228,8 @@ mode's oldest. It is a fix, with two regression tests:
 - **Population:** every failed attempt of this test over the D5 window, nothing discounted. That is
   the population the RUNS timeline draws: a failed first attempt that passed on retry is in it, as
   it is in the timeline's `✗→✓`. A timed-out attempt is a failed one (`IsFailure`), so `--test`
-  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E).
+  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E). A blank timeout is a
+  mode of its own, never merged with a blank failure (Amendment 6A).
 - **Order:** the index's order: count, then recency, then hash.
 - **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
   `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
@@ -287,7 +297,8 @@ as findings are numbered:
    there are frames, one more dim line at indent 6:
    `(no test code on the stack; framework frames shown)`. No frames: no frame lines and no note.
 5. **Unavailable.** When `Unavailable`, the mode prints its count line and one line at indent 4,
-   `the adapter recorded no failure detail`, and nothing else.
+   `the adapter recorded no failure detail`, and nothing else. When `TimedOut` as well, that line
+   is `timed out, no failure detail recorded` (Amendment 6B).
 
 One blank line between modes.
 
@@ -543,6 +554,7 @@ internal sealed record FailureModeDto(
     IReadOnlyList<string> Frames,
     bool FramesDegraded,
     bool Unavailable,
+    bool TimedOut,
     int Occurrences,
     DateTime FirstSeenAt,
     string? FirstSeenSha,

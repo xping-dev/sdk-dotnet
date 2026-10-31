@@ -52,6 +52,7 @@ internal static class FailureModes
             view.Frames,
             view.Degraded,
             view.Unavailable,
+            view.TimedOut,
             view.Occurrences,
             view.FirstSeenAt,
             view.FirstSeenSha,

@@ -33,6 +33,7 @@ internal static class FailureSignatureFactory
     // Distinguishes a signature that stands for "nothing was recorded" from one built out of real
     // components that happened to be short.
     private const string UnsignablePrefix = "unsignable";
+    private const string TimeoutKey = "timeout";
 
     /// <summary>
     /// Builds the signature for one failed execution.
@@ -45,7 +46,9 @@ internal static class FailureSignatureFactory
     /// compare against another failure, and the honest signature is one that groups with nothing. It
     /// is keyed on the test itself, so a suite whose adapter records no failure detail at all cannot
     /// collapse into a single false shared cause — every one of its tests would otherwise carry the
-    /// same empty signature and cluster together.
+    /// same empty signature and cluster together. It is keyed on the outcome too: a timed-out attempt
+    /// killed before it recorded anything is known to have timed out, and merging it with a failure
+    /// that recorded nothing would hide which of the two happened how often.
     /// </remarks>
     public static FailureSignature Create(TestExecution execution, string fingerprint)
     {
@@ -59,7 +62,7 @@ internal static class FailureSignatureFactory
         FrameExtraction frames = StackFrameExtractor.Extract(execution.StackTrace);
 
         if (exceptionType == null && message.Length == 0 && frames.Frames.Count == 0)
-            return Unsignable(fingerprint);
+            return Unsignable(fingerprint, execution.Outcome == TestOutcome.Timeout);
 
         var canonical = new StringBuilder();
         canonical.Append(exceptionType).Append(FieldSeparator);
@@ -79,23 +82,32 @@ internal static class FailureSignatureFactory
             message,
             frames.Frames,
             frames.Degraded,
-            Unavailable: false);
+            Unavailable: false,
+            TimedOut: false);
     }
 
     /// <summary>
     /// Builds the signature for a failure the adapter recorded no detail about.
     /// </summary>
     /// <param name="fingerprint">The failing test's stable identity.</param>
-    /// <returns>A signature that can only ever group with this same test's other blank failures.</returns>
-    private static FailureSignature Unsignable(string fingerprint) =>
+    /// <param name="timedOut">Whether the attempt timed out rather than failed.</param>
+    /// <returns>
+    /// A signature that can only ever group with this same test's other blank failures of the same
+    /// outcome.
+    /// </returns>
+    private static FailureSignature Unsignable(string fingerprint, bool timedOut) =>
         new(
-            Hash(string.Create(
-                CultureInfo.InvariantCulture, $"{UnsignablePrefix}{FieldSeparator}{fingerprint}")),
+            Hash(timedOut
+                ? string.Create(CultureInfo.InvariantCulture,
+                    $"{UnsignablePrefix}{FieldSeparator}{TimeoutKey}{FieldSeparator}{fingerprint}")
+                : string.Create(CultureInfo.InvariantCulture,
+                    $"{UnsignablePrefix}{FieldSeparator}{fingerprint}")),
             ExceptionType: null,
             NormalisedMessage: string.Empty,
             Frames: [],
             Degraded: true,
-            Unavailable: true);
+            Unavailable: true,
+            TimedOut: timedOut);
 
     private static string Hash(string canonical)
     {
