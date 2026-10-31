@@ -446,7 +446,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
-            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
+            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
 
         FindingDto cluster = envelope.Findings[2];
         var clusterEvidence = new BrokenFixtureEvidence(
@@ -589,7 +589,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "Race condition detected", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: failing,
             FirstSeenAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "c670fc3",
-            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterWindowStart: false);
+            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
 
         var evidence = new FlakyEvidence(
             failing, judged, judged, failing, failing, judged,
@@ -679,7 +679,7 @@ internal static class ReportFixtures
                     FirstSeenAt = new DateTime(2026, 8, 12, 9, 40, 0, DateTimeKind.Utc),
                     FirstSeenSha = "b71e004c93d2a1f05e6b7c8d9e0f1a2b3c4d5e6f",
                     FirstSeenSessionsAgo = 6,
-                    FirstSeenAfterWindowStart = true
+                    FirstSeenAfterFirstRun = true
                 },
                 first with
                 {
@@ -690,7 +690,7 @@ internal static class ReportFixtures
                     Degraded = true,
                     Occurrences = 2,
                     FirstSeenSessionsAgo = 19,
-                    FirstSeenAfterWindowStart = false
+                    FirstSeenAfterFirstRun = false
                 },
                 first with
                 {
@@ -702,7 +702,7 @@ internal static class ReportFixtures
                     Occurrences = 1,
                     FirstSeenSessionsAgo = 0,
                     FirstSeenInLatestSession = true,
-                    FirstSeenAfterWindowStart = true
+                    FirstSeenAfterFirstRun = true
                 }
             ]
         };

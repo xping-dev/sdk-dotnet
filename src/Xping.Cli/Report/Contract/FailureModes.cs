@@ -42,7 +42,7 @@ internal static class FailureModes
     /// <param name="fingerprint">The test.</param>
     /// <returns>Its modes in the index's order: count, then recency, then hash.</returns>
     public static IReadOnlyList<FailureModeDto> Of(AnalysisContext context, string fingerprint) =>
-        [.. context.Signatures.SignaturesOf(fingerprint).Select(o => From(FailureModeProvider.ViewOf(context, o)))];
+        [.. context.Signatures.SignaturesOf(fingerprint).Select(o => From(FailureModeProvider.ViewOf(context, fingerprint, o)))];
 
     private static FailureModeDto From(SignatureView view) =>
         new(
@@ -58,5 +58,5 @@ internal static class FailureModes
             view.FirstSeenSha,
             view.FirstSeenSessionsAgo,
             view.FirstSeenInLatestSession,
-            view.FirstSeenAfterWindowStart);
+            view.FirstSeenAfterFirstRun);
 }

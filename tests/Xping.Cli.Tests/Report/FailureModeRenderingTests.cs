@@ -31,7 +31,7 @@ public sealed class FailureModeRenderingTests
 
         Assert.True(also >= 0 && heading > also, "the block follows the same-subject line");
         Assert.Equal(string.Empty, fenced[heading - 1]);
-        Assert.Equal("1.  6 failed attempts | since the window opened", fenced[heading + 3]);
+        Assert.Equal("1.  6 failed attempts | since its first run in the window", fenced[heading + 3]);
         Assert.Equal("    expected <num> but was <num>", fenced[^1]);
     }
 
@@ -62,7 +62,7 @@ public sealed class FailureModeRenderingTests
     [Fact]
     public void AModePresentInTheOldestRunHasNoDate()
     {
-        Assert.Contains("2.  2 failed attempts | since the window opened", Fenced(Render(Get("detail-failure-modes"))));
+        Assert.Contains("2.  2 failed attempts | since its first run in the window", Fenced(Render(Get("detail-failure-modes"))));
     }
 
     [Fact]
@@ -350,7 +350,7 @@ public sealed class FailureModeRenderingTests
         string[] fenced = Fenced(Render(Get("history-flaky")));
 
         Assert.Contains(fenced, l => l.EndsWith(": 0 passed, 6 passed on retry, 0 failed", StringComparison.Ordinal));
-        Assert.Equal(["1.  6 failed attempts | since the window opened"], fenced.Where(l => l.StartsWith("1.  6 ", StringComparison.Ordinal)));
+        Assert.Equal(["1.  6 failed attempts | since its first run in the window"], fenced.Where(l => l.StartsWith("1.  6 ", StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -368,12 +368,11 @@ public sealed class FailureModeRenderingTests
     }
 
     /// <summary>
-    /// In a one-run window the newest run is the oldest, so a mode in it is both "only in the latest
-    /// run" and "present in the oldest run". The oldest run wins: the report cannot see whether the
-    /// mode is new (Amendment 4A).
+    /// In a one-run window the test's first run is its latest, so nothing says whether a mode in it
+    /// is new. Neither flag claims it is, in JSON as in text (#319).
     /// </summary>
     [Fact]
-    public void InAOneRunWindowAModeIsSinceTheWindowOpened()
+    public void InAOneRunWindowAModeIsSinceTheTestsFirstRunAndNotNew()
     {
         AnalysisContext context = TestSessionFactory.Context(TestSessionFactory.Session(
             0,
@@ -384,14 +383,39 @@ public sealed class FailureModeRenderingTests
 
         FailureModeDto mode = Assert.Single(FailureModes.Of(context, "fp-Broken"));
 
-        // Both flags hold: this is the case the order decides.
-        Assert.True(mode.FirstSeenInLatestSession);
-        Assert.False(mode.FirstSeenAfterWindowStart);
+        Assert.False(mode.FirstSeenInLatestSession);
+        Assert.False(mode.FirstSeenAfterFirstRun);
 
         ReportEnvelope history = Get("history-flaky");
         string[] block = Block(Render(history with { Test = history.Test! with { FailureModes = [mode] } }));
 
-        Assert.Equal("1.  1 failed attempt | since the window opened", block[0]);
+        Assert.Equal("1.  1 failed attempt | since its first run, the latest", block[0]);
+    }
+
+    /// <summary>
+    /// A cluster has no one test whose first run "its" could name; its reference is the first of
+    /// its tests to run.
+    /// </summary>
+    [Fact]
+    public void AClustersModeThatIsNotNewIsSinceItsTestsFirstRan()
+    {
+        ReportEnvelope group = Get("detail-group");
+        FailureModeDto mode = Mode() with { FirstSeenAfterFirstRun = false };
+        string[] block = Block(Render(group with { Findings = [group.Findings[0] with { FailureModes = [mode] }] }));
+
+        Assert.Equal("1.  3 failed attempts | since its tests first ran in the window", block[0]);
+    }
+
+    /// <summary>
+    /// A finding's date covers only the failures it counted, so a mode dated to the latest run may
+    /// be one its test had all along. Only a history can say its first run was the latest.
+    /// </summary>
+    [Fact]
+    public void AFindingsModeDatedToTheLatestRunIsNotCalledTheTestsFirstRun()
+    {
+        FailureModeDto mode = Mode() with { FirstSeenSessionsAgo = 0, FirstSeenAfterFirstRun = false };
+
+        Assert.Equal("1.  3 failed attempts | since its first run in the window", Block(Render(With(mode)))[0]);
     }
 
     [Fact]
@@ -464,7 +488,7 @@ public sealed class FailureModeRenderingTests
             FirstSeenSha: "b71e004c93d2",
             FirstSeenSessionsAgo: 6,
             FirstSeenInLatestSession: false,
-            FirstSeenAfterWindowStart: true);
+            FirstSeenAfterFirstRun: true);
 
     /// <summary>The flaky detail view, its modes replaced.</summary>
     private static ReportEnvelope With(params FailureModeDto[] modes)

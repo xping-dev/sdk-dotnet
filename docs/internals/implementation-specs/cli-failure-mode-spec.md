@@ -2,7 +2,7 @@
 
 **Status:** Draft, binding once merged
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
-**Schema:** `1.24` → `1.25`; `1.26` by Amendment 6
+**Schema:** `1.24` → `1.25`, then `1.26` (Amendment 6E), then `1.27` (Amendment 7C)
 **Depends on:** `cli-report-format-spec.md` D5 (heading machinery), D10 (example/rule authority,
 width and charset discipline). `cli-finding-detail-spec.md` D4 (the text detail view) and D4.1
 (`Flaky` metrics, superseded here by its Amendment 7). `cli-test-history-spec.md` D5 (window) and
@@ -60,7 +60,7 @@ These changes are applied in place in the sections named.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | D5: the count line checks `FirstSeenInLatestSession` first, then `FirstSeenAfterWindowStart` | `FirstSeenAfterWindowStart = false` is checked first: `since the window opened`. In a one-run window the newest run is also the oldest, so `ToView` sets both `FirstSeenInLatestSession` (appeared at index 0) and `FirstSeenAfterWindowStart = false` (index 0 is not below `SessionCount - 1` = 0). The old order printed `first seen in the latest run` for a mode present in the window's oldest run, the regression signal D3 rules out. With more than one run the two flags cannot both hold, so only a one-run window changes. `--test` reaches it: a test that has run once has a history. `--id` cannot: no finding is produced under `MinimumSessionsPerTestToReport` (5) runs | D5 |
+| A | D5: the count line checks `FirstSeenInLatestSession` first, then `FirstSeenAfterWindowStart` | `FirstSeenAfterWindowStart = false` is checked first: `since the window opened`. In a one-run window the newest run is also the oldest, so `ToView` sets both `FirstSeenInLatestSession` (appeared at index 0) and `FirstSeenAfterWindowStart = false` (index 0 is not below `SessionCount - 1` = 0). The old order printed `first seen in the latest run` for a mode present in the window's oldest run, the regression signal D3 rules out. With more than one run the two flags cannot both hold, so only a one-run window changes. `--test` reaches it: a test that has run once has a history. `--id` cannot: no finding is produced under `MinimumSessionsPerTestToReport` (5) runs. Superseded by Amendment 6D | D5 |
 | B | §3.5: `history-failure-modes` covers §3.2, the cap line and §3.3 | A history envelope holds one test (as Amendment 2A found for views). §3.2 is the test-history spec's §3.1 with the block added, and `history-flaky` is that fixture, so `history-flaky` pins §3.2. `history-failure-modes` is one test with 7 modes, one of them with a 900-character message: the cap line and §3.3. Still 61 fixtures, 122 files | §1.2, §3.5 |
 | C | §3.5: the `history-*` goldens gain the block | Every hand-built history fixture derives its modes from its own timeline: its attempts are replayed as sessions and resolved with `FailureModes.Of(context, fingerprint)`, as `TestHistoryBuilder.Found` resolves them. A fixture with a failed attempt and no recorded failure is rejected, so no fixture pins a block its RUNS rows contradict. `history-timeout-retry` gains two modes: its failed attempts, and its timed-out ones, which the fixture records without an exception, as a killed attempt can be, so they print the unavailable form (Amendment 1E) | §3.5 |
 
@@ -70,13 +70,24 @@ These changes are applied in place in the sections named.
 |---|---|---|---|
 | A | P5 regenerates the goldens and documented samples; P6 writes the docs | P3 and P4 regenerated the goldens and samples their blocks changed, so P5 has no separate work. It folds into P6: regenerating confirms an empty diff, then §3 and the docs follow | §6 |
 
-### Amendment 6 — from #320
+### Amendment 6 — from #319
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D3: the flags are measured against the window's oldest run | They are measured against the **reference run**: the oldest session in which the test has an attempt with a verdict (`Passed`, `Failed` or `Timeout`). For a cluster it is the oldest such session across its member tests. A test absent from the window's oldest runs (partial runs, a test added later) that failed the same way since its first run printed `first seen <date> at <sha>, N runs ago`: a regression signal for a mode that was there all along. A skipped first appearance is not the reference: the test could not fail there, so it says nothing about the mode | D3, D4 |
+| B | `FirstSeenAfterWindowStart`: absent from the window's oldest run | Renamed `FirstSeenAfterFirstRun`: the mode's oldest appearance is newer than the reference run. JSON key `firstSeenAfterFirstRun` | D3, §4.2 |
+| C | `FirstSeenInLatestSession`: appeared only in the newest run | Appeared only in the newest run, **and** the reference run is older than it. When a test's only verdict run is the newest (a one-run window, or a test that ran once), `ToView` set both `FirstSeenInLatestSession` and not `FirstSeenAfterWindowStart`, and JSON emitted both. The two flags can no longer both say "new" and "not new" | D3, §4.2 |
+| D | D5: `since the window opened`, checked first (Amendment 4A) | `since its first run in the window`. True whether the test was in the window's oldest run or joined later. The flags no longer conflict, so the order of the checks no longer matters. Supersedes Amendment 4A | D5 |
+| E | Schema `1.25` | `1.26`: `failureModes[].firstSeenAfterWindowStart` is renamed `firstSeenAfterFirstRun`, and both flags change meaning (6A–6C) | §4.1 |
+| F | 6D: one phrase for every mode that is not new | Two cases read differently. A cluster's mode (`--id` on a group subject): `since its tests first ran in the window`, because "its first run" has no one test to refer to and the reference is the oldest member's. A history's mode whose `FirstSeenSessionsAgo` is 0: `since its first run, the latest`. Both flags are false there only when the test had no run with a verdict before the latest, and "since its first run in the window" would read as a long-standing failure for a test that just appeared. Only a history can tell: its date covers every failed attempt, while a finding's covers only the failures it counted (D3), so a finding's mode can be dated to the latest run when its test had it all along | D5 |
+
+### Amendment 7 — from #320
 
 | # | Was | Now | Changed |
 |---|---|---|---|
 | A | D4: a timed-out attempt is a failed one, and a blank one prints the unavailable form | Every signature is keyed on whether the attempt timed out. A timeout prefixes its canonical string with `timeout`, and a failed attempt adds nothing, so its hash does not move. A blank `Timeout` hashes on `unsignable\|timeout\|<fingerprint>`, a blank `Failed` on `unsignable\|<fingerprint>`. A mode is therefore all timeouts or none, under `--id` (`Flaky`, `AlwaysFailing`) as under `--test`: a blank timeout no longer merges with a blank failure, and a `Flaky` test with both counts one more mode | D4 |
 | B | D5 item 5: one unavailable line | A blank timeout prints `timed out, no failure detail recorded`. The outcome is known, so the line does not blame the adapter. Any other unavailable mode keeps `the adapter recorded no failure detail` | D5 |
-| C | §4.2: `FailureModeDto` ends its flags at `Unavailable` | It gains `TimedOut` after `Unavailable`: whether the mode's attempts timed out, signed or not. Schema `1.25` → `1.26` | §4.1, §4.2 |
+| C | §4.2: `FailureModeDto` ends its flags at `Unavailable` | It gains `TimedOut` after `Unavailable`: whether the mode's attempts timed out, signed or not. Schema `1.26` → `1.27` | §4.1, §4.2 |
 | D | Amendment 4C: `history-timeout-retry`'s timed-out mode prints the unavailable form | It prints `timed out, no failure detail recorded` | §3.5 |
 | E | — | The `AlwaysFailing` gate (`AlwaysFailingModalShareMin`) compares the larger of the modal share and the unavailable modes' pooled share. The split in A must not turn a test that fails every run without detail into a flaky one: 6 blank failures and 4 blank timeouts are modes of 60% and 40%, and pooled they clear the gate. `Signature` and `ModalSignatureShare` stay the modal mode's own. When the pool decides, no signed mode can hold more than the 30% it leaves, so the modal mode is a pooled one | §1.1 |
 
@@ -198,11 +209,13 @@ For `Flaky` and `AlwaysFailing`, `DistinctSignatures` derives `FirstSeenAt`, `Fi
 `BuildPerTest` computes them for the whole set. The count and the date on D5's count line then
 describe the same failures, and the date never points at a run the count excludes.
 
-The two flags stay on the index's undiscounted `SignatureOccurrence.OldestSessionIndex`, as
-`ToView` computes them today:
+The two flags stay on the index's undiscounted `SignatureOccurrence.OldestSessionIndex`. They
+are measured against the reference run (Amendment 6A): the oldest session in which the test, or
+for a cluster any member test, has an attempt with a verdict.
 
-- `FirstSeenInLatestSession`: the mode appeared nowhere in the window before the newest run.
-- `FirstSeenAfterWindowStart`: the mode was absent from the window's oldest run.
+- `FirstSeenInLatestSession`: the mode appeared nowhere before the newest run, and the test ran
+  with a verdict before it.
+- `FirstSeenAfterFirstRun`: the mode was absent from the reference run.
 
 They answer *is this mode new?*, and discounting must not change that answer. A mode whose older
 failures all fell in environmental runs is not new because those runs were set aside. Deriving the
@@ -220,7 +233,7 @@ mode's oldest. It is a fix, with two regression tests:
 - A flaky test whose oldest failure of a mode is in an environmental session, after the window's
   oldest run, reports the date and sha of its oldest counted failure.
 - A flaky test whose mode appears in the window's oldest run, which is environmental, still has
-  `FirstSeenAfterWindowStart = false`.
+  `FirstSeenAfterFirstRun = false`.
 
 ### D4 — `--test` builds its block from the test's own failures
 
@@ -232,11 +245,11 @@ mode's oldest. It is a fix, with two regression tests:
   lists modes `--id` never does: `TimingOut` carries none (Amendment 1E). A test whose timeouts
   stay under `TimingOutShareMin` is `Flaky` or `AlwaysFailing` instead, and its `--id` block lists
   them too. Either way, timed-out attempts are modes of their own, never merged with failed ones
-  (Amendment 6A).
+  (Amendment 7A).
 - **Order:** the index's order: count, then recency, then hash.
 - **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
   `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
-  them.
+  them, against the test's own reference run (Amendment 6A).
 - **Not from findings.** A test that failed without reaching any finding's threshold still shows
   how it failed.
 - **The unit is the attempt.** The summary line above counts runs by their deciding attempt
@@ -270,12 +283,13 @@ as findings are numbered:
       at MyApp.Tests.CheckoutTests.Completes()
 ```
 
-1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then, checked
-   in this order (Amendment 4A):
-   - Not `FirstSeenAfterWindowStart`: `since the window opened`, with no date. The mode was already
-     there in the window's oldest run, the header names that run's date, and the report cannot see
-     further back. This is the `FirstSeenAfterWindowStart` contract (`FailureModeProvider.cs:33-36`).
-     In a one-run window this holds alongside `FirstSeenInLatestSession`, and wins.
+1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then
+   (Amendment 6D):
+   - Not `FirstSeenAfterFirstRun`: no date. The mode was already there in the test's first run
+     with a verdict, and the report cannot see further back (Amendment 6F):
+     - a cluster's mode: `since its tests first ran in the window`;
+     - a history's mode with `FirstSeenSessionsAgo` 0: `since its first run, the latest`;
+     - otherwise: `since its first run in the window`.
    - `FirstSeenInLatestSession`: `first seen in the latest run`.
    - Otherwise: `first seen <MM-dd HH:mm> at <sha>, <when>`, where `<when>` is `<n> runs ago`
      (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo` is 0. That case happens only
@@ -301,7 +315,7 @@ as findings are numbered:
    `(no test code on the stack; framework frames shown)`. No frames: no frame lines and no note.
 5. **Unavailable.** When `Unavailable`, the mode prints its count line and one line at indent 4,
    `the adapter recorded no failure detail`, and nothing else. When `TimedOut` as well, that line
-   is `timed out, no failure detail recorded` (Amendment 6B).
+   is `timed out, no failure detail recorded` (Amendment 7B).
 
 One blank line between modes.
 
@@ -457,7 +471,7 @@ FAILURE MODES                                            3 failure modes
       at MyApp.Checkout.Basket.Total()
       at MyApp.Tests.CheckoutTests.Completes()
 
-2.  2 failed attempts · since the window opened
+2.  2 failed attempts · since its first run in the window
     System.TimeoutException
     timed out after <num>ms
       at System.Net.Http.HttpConnectionPool.
@@ -492,7 +506,7 @@ RUNS                                                        newest first
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failed attempts · since the window opened
+1.  6 failed attempts · since its first run in the window
     Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
     assert.areequal failed. expected:<<num>>. actual:<<num>>.
       at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
@@ -545,10 +559,10 @@ timelines (Amendment 4C), and `history-healthy`, which never failed, does not ch
 `CurrentSchemaVersion` → `"1.25"`. The history comment gains: *1.25 adds `failureModes` to each
 finding and to `test`, drops the `failure mode N`, `more failure modes` and `AlwaysFailing`
 `failure mode` metrics, and takes `Flaky` and `AlwaysFailing` first-seen dates from the failures
-their counts cover.*
-
-Amendment 6 → `"1.26"`, and the comment gains: *1.26 adds `timedOut` to each failure mode, and
-signs timed-out attempts apart from failed ones.*
+their counts cover.* Then `"1.26"` (Amendment 6E), and the comment gains: *1.26 renames
+`firstSeenAfterWindowStart` to `firstSeenAfterFirstRun`, and measures both flags from the test's
+own first run in the window.* Then `"1.27"` (Amendment 7C), and the comment gains: *1.27 adds
+`timedOut` to each failure mode, and signs timed-out attempts apart from failed ones.*
 
 ### 4.2 `FailureModeDto`
 
@@ -566,7 +580,7 @@ internal sealed record FailureModeDto(
     string? FirstSeenSha,
     int FirstSeenSessionsAgo,
     bool FirstSeenInLatestSession,
-    bool FirstSeenAfterWindowStart);
+    bool FirstSeenAfterFirstRun);
 ```
 
 `FirstSeenInLatestSession` is carried rather than read off `FirstSeenSessionsAgo == 0`: under D3

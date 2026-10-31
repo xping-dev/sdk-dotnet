@@ -416,7 +416,7 @@ FINDING                                                       row 5 of 5
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failed attempts · since the window opened
+1.  6 failed attempts · since its first run in the window
     System.InvalidOperationException
     expected <num> but was <num>
 ```
@@ -448,13 +448,16 @@ its one. Other kinds print no block. Each mode reads:
 - **The count** is the failures the finding counted. For a flaky or always failing test it leaves
   out the runs its population marker excludes.
 - **First seen** says whether the mode is new, asked of every failure in the window, discounted or
-  not. `since the window opened`: it was already there in the window's oldest run, and the report
-  can't see further back. `first seen in the latest run`: it is new just now. Otherwise it
-  appeared inside the window, and the line gives the date and commit of the oldest failure the
-  finding counted: `first seen <date> at <sha>, N runs ago`. When the mode's older failures fell
-  in runs the finding set aside, that failure can be newer than the mode itself, down to
-  `first seen <date> at <sha>, in the latest run`. ` at <sha>` is left out when no commit was
-  recorded.
+  not, and measured from the test's own first run in the window, so a test that joined late is not
+  called a regression. `since its first run in the window`: it was already there in that run, and
+  the report can't see further back. A group of tests reads `since its tests first ran in the
+  window`, measured from the first of them to run, and `report --test` for a test whose only run is
+  the latest reads `since its first run, the latest`. `first seen in the latest run`: it is new just
+  now, and the test ran without it before. Otherwise it appeared after the test's first run, and the
+  line gives the date and commit of the oldest failure the finding counted: `first seen <date> at
+  <sha>, N runs ago`. When the mode's older failures fell in runs the finding set aside, that
+  failure can be newer than the mode itself, down to `first seen <date> at <sha>, in the latest
+  run`. ` at <sha>` is left out when no commit was recorded.
 - **The message** is wrapped and stops after 6 lines, ending in `...`.
 - **Frames** are your own code, innermost first, up to 5. When none of it was on the stack, the
   framework's frames are shown with the note `(no test code on the stack; framework frames
@@ -530,7 +533,7 @@ FINDING                                                       row 1 of 1
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  4 failed attempts · since the window opened
+1.  4 failed attempts · since its first run in the window
     System.InvalidOperationException
     Race condition detected
 ```
@@ -641,7 +644,7 @@ RUNS                                                        newest first
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failed attempts · since the window opened
+1.  6 failed attempts · since its first run in the window
     Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
     assert.areequal failed. expected:<<num>>. actual:<<num>>.
       at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
@@ -956,12 +959,14 @@ the `Flaky`, `AlwaysFailing` and `TimingOut` evidence records.
 `SharedFailure`, and an empty list for every other kind. Each carries the exception type (`null` when
 the adapter recorded none), the normalised message, up to five frames innermost first, the
 `occurrences` the finding counted, and when it was first seen among those occurrences.
-`firstSeenInLatestSession` and `firstSeenAfterWindowStart` say whether the mode is new, asked of
-every failure in the window, so `firstSeenSessionsAgo` of `0` alone does not mean new. `hash` joins a
+`firstSeenInLatestSession` and `firstSeenAfterFirstRun` say whether the mode is new, asked of
+every failure in the window and measured from the test's first run in it with a verdict (for a
+cluster, its members' oldest), so `firstSeenSessionsAgo` of `0` alone does not mean new. A test
+whose only run is the latest has neither flag set. `hash` joins a
 mode to `evidence.exemplars[].signatureHash`. `unavailable` is `true` when nothing was recorded to
 group the failure by. `timedOut` is `true` when the mode's attempts timed out; a mode never mixes
-timed-out and failed attempts. `report --test
---format json` carries the same list for the test, counted over every failed attempt in the window.
+timed-out and failed attempts. `report --test --format json` carries the same list for the test,
+counted over every failed attempt in the window.
 
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
@@ -982,7 +987,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.26",
+  "schemaVersion": "1.27",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
@@ -1057,7 +1062,7 @@ are not each other and `tests` is what they add up to:
           "message": "summary for <date> has no rows", "frames": ["Billing.SummaryTests.GenerateMonthlySummary()"],
           "framesDegraded": false, "unavailable": false, "timedOut": false, "occurrences": 4,
           "firstSeenAt": "2026-08-12T09:14:00Z", "firstSeenSha": "c670fc3d1e2f", "firstSeenSessionsAgo": 14,
-          "firstSeenInLatestSession": false, "firstSeenAfterWindowStart": true
+          "firstSeenInLatestSession": false, "firstSeenAfterFirstRun": true
         },
         { "hash": "…", "exceptionType": "System.TimeoutException", "…": "…" },
         { "hash": "…", "exceptionType": null, "unavailable": true, "…": "…" }

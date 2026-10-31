@@ -199,7 +199,7 @@ public sealed class EnvelopeBuilderTests
         using JsonDocument document = JsonDocument.Parse(Json(Build(context, AnalysisResult.Empty, History(context))));
         JsonElement root = document.RootElement;
 
-        Assert.Equal("1.26", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.27", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(
             ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));
@@ -222,7 +222,7 @@ public sealed class EnvelopeBuilderTests
                 "hash", "exceptionType", "message", "frames", "framesDegraded", "unavailable", "timedOut",
                 "occurrences",
                 "firstSeenAt", "firstSeenSha", "firstSeenSessionsAgo", "firstSeenInLatestSession",
-                "firstSeenAfterWindowStart"
+                "firstSeenAfterFirstRun"
             ],
             mode.EnumerateObject().Select(property => property.Name));
         Assert.True(mode.GetProperty("unavailable").GetBoolean());
