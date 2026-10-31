@@ -4,6 +4,7 @@
  */
 
 using Microsoft.Extensions.Logging;
+using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Services;
@@ -23,14 +24,31 @@ internal interface ILocalSessionStoreFactory
     /// Creates a store.
     /// </summary>
     /// <param name="options">Retention settings, or <see langword="null"/> for the defaults.</param>
-    /// <param name="startDirectory">Directory to resolve the store from.</param>
+    /// <param name="startDirectory">
+    /// Directory to start the repository walk from. Ignored when <c>XPING_LOCAL_STORE</c> names
+    /// the store.
+    /// </param>
     /// <returns>The store, which may report itself unavailable.</returns>
     ILocalSessionStore Create(LocalStoreOptions? options = null, string? startDirectory = null);
 }
 
-internal sealed class LocalSessionStoreFactory(ILoggerFactory loggerFactory) : ILocalSessionStoreFactory
+/// <remarks>
+/// <c>XPING_LOCAL_STORE</c> comes through <see cref="IEnvironmentVariableProvider"/>, so a test can
+/// point a command at a fixture store without setting a process-wide variable that the SDK
+/// recording that same test run would also see.
+/// </remarks>
+internal sealed class LocalSessionStoreFactory(ILoggerFactory loggerFactory, IEnvironmentVariableProvider environment)
+    : ILocalSessionStoreFactory
 {
+    /// <summary>
+    /// The variable that names the store, shared with the SDK.
+    /// </summary>
+    internal const string StoreVariable = "XPING_LOCAL_STORE";
+
     public ILocalSessionStore Create(LocalStoreOptions? options = null, string? startDirectory = null) =>
         LocalSessionStore.Create(
-            options, loggerFactory.CreateLogger("Xping.Cli.LocalSessionStore"), startDirectory);
+            options,
+            loggerFactory.CreateLogger("Xping.Cli.LocalSessionStore"),
+            startDirectory,
+            environment.GetVariable(StoreVariable)?.Trim());
 }

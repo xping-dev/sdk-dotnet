@@ -43,9 +43,8 @@ public class LocalStoreBenchmarks
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-bench", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, _root);
 
-        _store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
+        _store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
 
         _executions2000 = Enumerable.Range(0, 2000).Select(BuildExecution).ToList();
 
@@ -60,8 +59,6 @@ public class LocalStoreBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
-
         try
         {
             if (Directory.Exists(_root))

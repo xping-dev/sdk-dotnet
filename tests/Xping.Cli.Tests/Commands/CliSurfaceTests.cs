@@ -26,13 +26,11 @@ public sealed class CliSurfaceTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-surface-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -54,7 +52,7 @@ public sealed class CliSurfaceTests : IDisposable
     /// </summary>
     private void Seed(string assembly, params bool[] outcomes)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < outcomes.Length; i++)
         {
@@ -72,9 +70,9 @@ public sealed class CliSurfaceTests : IDisposable
     /// <summary>
     /// Writes <paramref name="count"/> passing sessions for the given assembly.
     /// </summary>
-    private static void SeedSessions(string assembly, int count, int startOrdinal = 0)
+    private void SeedSessions(string assembly, int count, int startOrdinal = 0)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < count; i++)
         {
@@ -90,7 +88,7 @@ public sealed class CliSurfaceTests : IDisposable
     /// </summary>
     private void SeedMixedSessions(string first, string second, int count)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < count; i++)
         {
@@ -109,21 +107,21 @@ public sealed class CliSurfaceTests : IDisposable
     /// </summary>
     private void SeedUnattributableSession()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         store.Write(TestSessionFactory.Session(
             _nextOrdinal++,
             [TestSessionFactory.Execution("Mystery", assembly: string.Empty)]));
     }
 
-    private static (int Code, string Output) Run(params string[] args)
+    private (int Code, string Output) Run(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
         // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Configure);
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString() + error.ToString());
     }
 
@@ -151,7 +149,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var error = new StringWriter();
 
         int code = Program.Run(
-            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
+            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
 
         string report = output.ToString();
 
@@ -187,7 +185,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
+        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
 
         foreach (string line in ReportText.Fenced(output.ToString()))
         {
@@ -223,7 +221,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var piped = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Configure);
+        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
 
         // The terminal run is padded and carries the call to action; the report between the fences
         // is what the two have to agree on.
@@ -411,7 +409,7 @@ public sealed class CliSurfaceTests : IDisposable
             ["report", "--json"], output, error, input: null, isTerminal: true,
             configureServices: services =>
             {
-                OfflineCli.Configure(services);
+                OfflineCli.Store(_root)(services);
                 services.AddHttpClient(CloudHttp.ClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient(AuthHttpClients.OAuth).ConfigurePrimaryHttpMessageHandler(() => handler);
             });
@@ -543,7 +541,7 @@ public sealed class CliSurfaceTests : IDisposable
         // Assert
         Assert.Equal(1, code);
         Assert.Contains("Refusing to delete", output, StringComparison.Ordinal);
-        Assert.Equal(3, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
+        Assert.Equal(3, LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions.Count);
     }
 
     [Fact]
@@ -558,7 +556,7 @@ public sealed class CliSurfaceTests : IDisposable
         // Assert
         Assert.Equal(0, code);
         Assert.Contains("Deleted 3 runs", output, StringComparison.Ordinal);
-        Assert.Empty(LocalSessionStore.Create().ReadRecent(100).Sessions);
+        Assert.Empty(LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions);
     }
 
     [Fact]
@@ -575,7 +573,7 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.Equal(0, code);
         Assert.Contains("Deleted 2 runs", output, StringComparison.Ordinal);
 
-        var remaining = LocalSessionStore.Create().ReadRecent(100).Sessions;
+        var remaining = LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions;
         Assert.Equal(3, remaining.Count);
         Assert.All(
             remaining,
@@ -637,6 +635,6 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         Assert.Contains("No runs recorded for assembly", output, StringComparison.Ordinal);
-        Assert.Single(LocalSessionStore.Create().ReadRecent(100).Sessions);
+        Assert.Single(LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions);
     }
 }

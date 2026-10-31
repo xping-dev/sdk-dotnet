@@ -31,13 +31,11 @@ public sealed class TestHistoryCommandTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-history-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -98,7 +96,7 @@ public sealed class TestHistoryCommandTests : IDisposable
     [Fact]
     public void TheDefaultWindowIsEveryRunTheStoreHolds()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         for (int i = 0; i < 25; i++)
             store.Write(TestSessionFactory.Session(i, "Stable"));
 
@@ -466,7 +464,7 @@ public sealed class TestHistoryCommandTests : IDisposable
     public void ASuiteWhoseEveryRunIsAheadOfTheClockIsNamed()
     {
         SeedVanishing();
-        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+        LocalSessionStore.Create(storePath: _root).Write(TestSessionFactory.Session(
             40,
             [TestSessionFactory.Execution("Elsewhere", assembly: Other)],
             startedAt: DateTime.UtcNow.AddDays(10)));
@@ -562,9 +560,9 @@ public sealed class TestHistoryCommandTests : IDisposable
     /// The shape <c>FindingDetailCommandTests</c> seeds, for the reasons <c>ReportEnvelopeTests</c>
     /// gives.
     /// </remarks>
-    private static void SeedVanishing()
+    private void SeedVanishing()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 8; i++)
         {
@@ -586,7 +584,7 @@ public sealed class TestHistoryCommandTests : IDisposable
     [Fact]
     public void AFindingAboutTheTestCarriesItsReproInJson()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         var recorded = new Dictionary<string, string>
         {
             [LocalSessionProperties.Runner] = LocalSessionProperties.VSTestRunner,
@@ -622,7 +620,7 @@ public sealed class TestHistoryCommandTests : IDisposable
     [Fact]
     public void ATestFailingTwoWaysShowsBothModesWithTheHashesItsFindingPublishes()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 10; i++)
         {
@@ -670,9 +668,9 @@ public sealed class TestHistoryCommandTests : IDisposable
         [.. modes.EnumerateArray().Select(m => m.GetProperty("hash").GetString()!)];
 
     /// <summary>Writes eight runs of a parameterised <c>Add</c> with the given number of cases.</summary>
-    private static void SeedParameterised(int cases, string? sha = null)
+    private void SeedParameterised(int cases, string? sha = null)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 8; i++)
         {
@@ -689,15 +687,15 @@ public sealed class TestHistoryCommandTests : IDisposable
     }
 
     /// <summary>Writes runs of a second assembly, newer than every other, so it is the one report scopes to.</summary>
-    private static void SeedOtherAssembly()
+    private void SeedOtherAssembly()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 20; i < 26; i++)
             store.Write(TestSessionFactory.Session(i, [TestSessionFactory.Execution("Elsewhere", assembly: Other)]));
     }
 
-    private static JsonElement Json(params string[] args)
+    private JsonElement Json(params string[] args)
     {
         var (_, output, _) = Run([.. args, "--format", "json"]);
 
@@ -705,12 +703,12 @@ public sealed class TestHistoryCommandTests : IDisposable
         return document.RootElement.Clone();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
+    private (int Code, string Output, string Error) Run(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString(), error.ToString());
     }
 }

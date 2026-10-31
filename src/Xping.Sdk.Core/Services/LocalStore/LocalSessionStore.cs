@@ -20,20 +20,26 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 public static class LocalSessionStore
 {
     /// <summary>
-    /// Creates a store over the default location for the current repository.
+    /// Creates a store over the given location, or the default one for the current repository.
     /// </summary>
     /// <param name="options">Retention settings. Defaults are used when <see langword="null"/>.</param>
     /// <param name="logger">Diagnostics sink. Storage problems are logged here at debug level.</param>
     /// <param name="startDirectory">
     /// Directory to begin repository-root discovery from. Defaults to the entry assembly's location.
     /// </param>
+    /// <param name="storePath">
+    /// The store root, when the caller has one (from <c>XPING_LOCAL_STORE</c>, say). Skips
+    /// repository-root discovery. The store never reads the environment itself.
+    /// </param>
     /// <returns>A store, which may report <see cref="ILocalSessionStore.IsAvailable"/> as false.</returns>
     public static ILocalSessionStore Create(
         LocalStoreOptions? options = null,
         ILogger? logger = null,
-        string? startDirectory = null) =>
+        string? startDirectory = null,
+        string? storePath = null) =>
         new JsonSessionStore(
             options ?? new LocalStoreOptions(),
             logger ?? NullLogger.Instance,
-            startDirectory);
+            startDirectory,
+            storePath);
 }

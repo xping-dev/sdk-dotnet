@@ -16,8 +16,6 @@ using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Sdk.Core.Tests.LocalStore;
 
-// Mutates the XPING_LOCAL_STORE environment variable, which is process-wide state.
-[Collection("Sequential")]
 public sealed class LocalStoreReviewFixesTests : IDisposable
 {
     private readonly string _root;
@@ -26,15 +24,10 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-review-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, _root);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -71,8 +64,8 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
             .WithSessionState(TestSessionState.Finalized)
             .Build();
 
-    private static JsonSessionStore CreateStore() =>
-        new(new LocalStoreOptions(), NullLogger.Instance);
+    private JsonSessionStore CreateStore() =>
+        new(new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
 
     [Fact]
     public void AMalformedSessionDoesNotBreakDelete()
@@ -109,9 +102,6 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
             return; // chmod semantics differ; the behaviour is verified on Unix CI.
 
         // Arrange — a repository root that cannot be written to.
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
-
         string repo = Path.Combine(_root, "readonly-repo");
         Directory.CreateDirectory(Path.Combine(repo, ".git"));
         string start = Path.Combine(repo, "tests", "bin");
@@ -144,9 +134,6 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
     [Fact]
     public void ResolveStillPrefersAWritableRepositoryRoot()
     {
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
-
         string repo = Path.Combine(_root, "writable-repo");
         Directory.CreateDirectory(Path.Combine(repo, ".git"));
         string start = Path.Combine(repo, "tests", "bin");

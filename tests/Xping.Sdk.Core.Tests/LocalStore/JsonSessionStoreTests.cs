@@ -16,7 +16,7 @@ using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Sdk.Core.Tests.LocalStore;
 
-// Mutates the XPING_LOCAL_STORE environment variable, which is process-wide state.
+// One test sets XPING_LOCAL_STORE, which is process-wide state.
 [Collection("Sequential")]
 public sealed class JsonSessionStoreTests : IDisposable
 {
@@ -26,15 +26,10 @@ public sealed class JsonSessionStoreTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-session-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, _root);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -45,8 +40,8 @@ public sealed class JsonSessionStoreTests : IDisposable
         }
     }
 
-    private static JsonSessionStore CreateStore(LocalStoreOptions? options = null) =>
-        new(options ?? new LocalStoreOptions(), NullLogger.Instance);
+    private JsonSessionStore CreateStore(LocalStoreOptions? options = null) =>
+        new(options ?? new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
 
     private string SessionsDirectory => LocalStorePathResolver.GetSessionsDirectory(_root);
 
@@ -166,6 +161,32 @@ public sealed class JsonSessionStoreTests : IDisposable
             .AddExecutions(executions)
             .WithSessionState(TestSessionState.Finalized)
             .Build();
+    }
+
+    [Fact]
+    public void ASessionLandsInTheRepositoryStoreWhenXpingLocalStoreIsSetAfterTheStoreIsBuilt()
+    {
+        // The SDK builds its store at Initialize but resolves the root on the first write, at the
+        // end of the run. A test that points a tool at a fixture store in between must not take
+        // the run's own session with it.
+        string repo = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        string fixture = Path.Combine(_root, "fixture");
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, startDirectory: repo);
+
+        System.Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", fixture);
+        try
+        {
+            Assert.True(store.Write(BuildSession(new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc))));
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
+        }
+
+        Assert.Single(Directory.GetFiles(
+            LocalStorePathResolver.GetSessionsDirectory(Path.Combine(repo, LocalStorePathResolver.StoreDirectoryName))));
+        Assert.False(Directory.Exists(fixture));
     }
 
     [Fact]

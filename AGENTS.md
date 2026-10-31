@@ -93,7 +93,11 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
   (`TheRunnersOwnSourceInformationIsUsedWhenItSuppliedAny`). Both are used.
 - Every bug fix gets a regression test that fails without the fix.
 - Test time and environment through `ITimeProvider` / `TimeProvider` and
-  `IEnvironmentVariableProvider` — no `Thread.Sleep`, no real env vars, no network.
+  `IEnvironmentVariableProvider` — no `Thread.Sleep`, no real env vars, no network. Exception:
+  a test of how the SDK reads the process environment itself (the `XPING_*` binding, or proof that
+  something ignores a variable) sets the real one, in the `Sequential` collection, and clears it.
+  These test projects record themselves, so a test must never point the CLI or a store at a fixture
+  through the process environment.
 - The xUnit v3 adapter's tests run on xUnit v3 themselves (vstest, `xunit.v3.mtp-off`) and drive a
   real v3 pipeline over `tests/Xping.Sdk.XUnit.V3.Probe`, a class library whose tests fail on purpose.
 - The integration tests run printed repro commands through `/bin/sh` and through `pwsh`

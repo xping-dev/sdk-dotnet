@@ -100,6 +100,8 @@ export XPING_LOCAL_STORE=/var/tmp/xping-store
 
 Both the SDK and the CLI read this variable, and they must agree: if you set it for your test run, set it for `xping report` too, or the CLI will look somewhere else and find nothing.
 
+The SDK reads it once, when it initializes. A test that changes the variable during the run, for example to point a tool it tests at a fixture store, does not move where the run itself is recorded.
+
 Useful for read-only checkouts, containers where the repository root is not writable, and keeping history outside a workspace that gets wiped between builds.
 
 The same setting is available in code and `appsettings.json` as `LocalStorePath`; the environment variable wins when both are set. A path set that way reaches only the SDK — export the variable for the CLI.

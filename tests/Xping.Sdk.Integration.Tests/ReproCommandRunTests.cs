@@ -17,6 +17,7 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Services.LocalStore;
 using Xping.Sdk.Core.Services.Serialization;
 using Xping.Sdk.Integration.Tests.Infrastructure;
 using Xunit;
@@ -123,16 +124,9 @@ public sealed class ReproCommandRunTests : IDisposable
         _repro.StoredSessionCount().Should().Be(0, "the command sets XPING_ENABLED=false. Output:\n{0}", output);
     }
 
-    // Deserialized with the options the local store reads with; the store itself only opens the
-    // repository's default location, which XPING_LOCAL_STORE steers through this process's environment.
-    private TestSession ReadStoredSession()
-    {
-        string file = Directory.GetFiles(Path.Combine(_recording.StorePath, "sessions"), "*.json.gz")
+    private TestSession ReadStoredSession() =>
+        LocalSessionStore.Create(storePath: _recording.StorePath).ReadRecent(10).Sessions
             .Should().ContainSingle().Subject;
-
-        using var gzip = new GZipStream(File.OpenRead(file), CompressionMode.Decompress);
-        return JsonSerializer.Deserialize<TestSession>(gzip, XpingSerializerOptions.FileOptions)!;
-    }
 
     // The kind and counts only size the run count, which this test does not run: one name is a flaky
     // test at 1 of 2 runs, several a shared failure.

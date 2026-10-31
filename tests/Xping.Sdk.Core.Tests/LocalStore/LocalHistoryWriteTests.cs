@@ -40,17 +40,19 @@ public sealed class LocalHistoryWriteTests : IDisposable
         public Task<UploadResult> FinalizeAsync() => FinalizeSessionAsync(CancellationToken.None);
     }
 
+    private const string StoreVariable = "XPING_LOCAL_STORE";
+
     private readonly string _temp;
 
     public LocalHistoryWriteTests()
     {
         _temp = Path.Combine(Path.GetTempPath(), "xping-history-tests", Guid.NewGuid().ToString("N"));
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
 
         try
         {
@@ -155,7 +157,7 @@ public sealed class LocalHistoryWriteTests : IDisposable
         // configuration, can be pointed at the same place.
         string configured = Path.Combine(_temp, "configured");
         string exported = Path.Combine(_temp, "exported");
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, exported);
+        System.Environment.SetEnvironmentVariable(StoreVariable, exported);
 
         await using (Harness orchestrator = Create(configured))
         {
@@ -309,6 +311,24 @@ public sealed class LocalHistoryWriteTests : IDisposable
 
         store.Verify(s => s.Write(It.IsAny<TestSession>()), Times.Once);
         uploader.Verify(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task TheStoreIsResolvedWhenTheSessionStartsNotWhenItIsWritten()
+    {
+        // Resolution reads process state a test may change mid-run (HOME, the current directory),
+        // so it must be fixed before the first test runs.
+        var store = new Mock<ILocalSessionStore>();
+        store.SetupGet(s => s.StorePath).Returns(Path.Combine(_temp, "store"));
+        var uploader = new Mock<IXpingUploader>();
+        uploader
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UploadResult { Success = true });
+
+        await using Harness orchestrator = CreateUploading(Path.Combine(_temp, "unused"), uploader.Object, store.Object);
+
+        store.VerifyGet(s => s.StorePath, Times.Once);
+        store.Verify(s => s.Write(It.IsAny<TestSession>()), Times.Never);
     }
 
     private static Harness CreateUploading(string storePath, IXpingUploader uploader, ILocalSessionStore? store = null)

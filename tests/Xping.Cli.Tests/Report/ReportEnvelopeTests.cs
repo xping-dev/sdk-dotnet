@@ -26,13 +26,11 @@ public sealed class ReportEnvelopeTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-envelope-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -70,9 +68,9 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// only the most convenient finding to make several of; neither bound is what is under test.
     /// </para>
     /// </remarks>
-    private static void SeedVanishing(int vanishingTests = 1, int total = 8, int presentIn = 5)
+    private void SeedVanishing(int vanishingTests = 1, int total = 8, int presentIn = 5)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < total; i++)
         {
@@ -99,9 +97,9 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// The shape an ordinary inner loop produces, and the one issue #204 was reported on: a stretch
     /// of full runs, then a `dotnet test --filter` loop long enough to fill the current slice.
     /// </remarks>
-    private static void SeedFilteredTail(bool filtered)
+    private void SeedFilteredTail(bool filtered)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 17; i++)
         {
@@ -217,9 +215,9 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// The one shape that produces a group subject, which is the only subject carrying a cause. Two
     /// stable tests ride along so the failing runs still cover the suite.
     /// </remarks>
-    private static void SeedBrokenFixture(string? member)
+    private void SeedBrokenFixture(string? member)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 8; i++)
         {
@@ -291,9 +289,9 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal("fixture setup", subject.GetProperty("causeLabel").GetString());
     }
 
-    private static void SeedWithRevision(int count, string sha, string branch)
+    private void SeedWithRevision(int count, string sha, string branch)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < count; i++)
         {
@@ -302,16 +300,16 @@ public sealed class ReportEnvelopeTests : IDisposable
         }
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
+    private (int Code, string Output, string Error) Run(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString(), error.ToString());
     }
 
-    private static JsonElement RunJson(params string[] args)
+    private JsonElement RunJson(params string[] args)
     {
         var (_, output, _) = Run([.. args, "--format", "json"]);
 
@@ -383,9 +381,9 @@ public sealed class ReportEnvelopeTests : IDisposable
     /// Writes <paramref name="passing"/> green runs of a two-test suite, then one run in which
     /// <c>Alpha</c> fails: the shape the section exists for, and one no finding can reach.
     /// </summary>
-    private static void SeedRegression(int passing, string? sha = null)
+    private void SeedRegression(int passing, string? sha = null)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < passing; i++)
         {
@@ -487,7 +485,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     {
         // The vanishing fixture's newest sessions carry no failure, so add one: a test that failed
         // in every one of eight sessions is `AlwaysFailing`, and the section defers to it.
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         for (int i = 0; i < 8; i++)
         {
             store.Write(TestSessionFactory.Session(
@@ -515,7 +513,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         // accounts for it and the section counts it on the closing line; under --kind Flaky that
         // finding is never produced, so the section lists it instead — and the row says what its
         // history is without claiming why nothing explains it.
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         for (int i = 0; i < 8; i++)
         {
             store.Write(TestSessionFactory.Session(
@@ -543,7 +541,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     {
         // Four runs: an outage, two clean, then one failure. Counting the outage would make the
         // regression read as a test that has failed before.
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         string[] names = [.. Enumerable.Range(0, 30).Select(i => $"T{i:00}")];
 
         for (int session = 0; session < 4; session++)
@@ -579,7 +577,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         // "Zulu" fails in every run and "Alpha" in most, so Zulu ranks first and Alpha's
         // fingerprint sorts first. The ids follow the rank, because that is what the row numbers
         // on the "also failing" line are.
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         for (int i = 0; i < 8; i++)
         {
             store.Write(TestSessionFactory.Session(
@@ -603,7 +601,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     [Fact]
     public void ACappedLatestRunIsLiftedByTheOneTruncationCommand()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         int many = LocalAnalysisConstants.LatestRunMaxRows + 2;
         string[] names = [.. Enumerable.Range(0, many).Select(i => $"T{i:00}")];
         string[] padding = [.. Enumerable.Range(0, 60).Select(i => $"P{i:00}")];
@@ -632,7 +630,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     [Fact]
     public void EveryContrastIsAscii()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         store.Write(TestSessionFactory.Session(0, [TestSessionFactory.Execution("Known", TestOutcome.Failed, errorMessage: "boom"), TestSessionFactory.Execution("Regressed")]));
         store.Write(TestSessionFactory.Session(1, [TestSessionFactory.Execution("Known"), TestSessionFactory.Execution("Regressed")]));
         store.Write(TestSessionFactory.Session(
@@ -863,7 +861,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         // A machine sharing this checkout whose clock runs four days fast. Its stamp is the largest
         // in the store, so the window would take it as the instant every other finding is aged
         // against — and it does not have to be the run carrying a finding to do that.
-        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+        LocalSessionStore.Create(storePath: _root).Write(TestSessionFactory.Session(
             99,
             [TestSessionFactory.Execution("Stable0")],
             startedAt: DateTime.UtcNow.AddDays(4)));
@@ -890,7 +888,7 @@ public sealed class ReportEnvelopeTests : IDisposable
     {
         SeedVanishing();
 
-        LocalSessionStore.Create().Write(TestSessionFactory.Session(
+        LocalSessionStore.Create(storePath: _root).Write(TestSessionFactory.Session(
             99,
             [TestSessionFactory.Execution("Stable0")],
             startedAt: DateTime.UtcNow.AddDays(4)));

@@ -218,6 +218,12 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
                 ? null
                 : services.GetService<ILocalSessionStore>();
 
+            // Resolve where the session will be written now, not at the first write at finalization.
+            // Resolution reads process state (the profile folder's HOME / LOCALAPPDATA, the current
+            // directory), and a test suite that changes any of it would otherwise redirect where
+            // its own run is recorded (#314).
+            _ = _localSessionStore?.StorePath;
+
             // Only set up timer and events if healthy and enabled
             if (_isHealthy)
             {
