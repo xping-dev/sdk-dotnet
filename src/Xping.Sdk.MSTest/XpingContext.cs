@@ -102,17 +102,21 @@ public sealed class XpingContext : XpingContextOrchestrator
     public static Task FlushAsync() => Context.FlushAsync();
 
     /// <summary>
-    /// Resolves the fixed set of services required by <see cref="XpingTestBase"/> to record test executions.
-    /// Must be called after <see cref="Initialize()"/> has been invoked.
+    /// Starts the SDK, building the host unless <see cref="Initialize()"/> already has, and resolves the
+    /// services <see cref="XpingTestBase"/> needs to record test executions. Initializes the context when
+    /// no one has.
     /// </summary>
-    /// <returns>A <see cref="XpingBaseServices"/> holding all base class dependencies.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="Initialize()"/> has not been called before this method.
-    /// </exception>
-    public static XpingBaseServices GetBaseServices()
+    /// <param name="report">Also told why the SDK could not start.</param>
+    /// <returns>
+    /// The services, or <see langword="null"/> when the SDK could not start: tests then run untracked until
+    /// the session ends.
+    /// </returns>
+    /// <exception cref="XpingConfigurationException">Strict mode, and the SDK could not start.</exception>
+    internal static XpingBaseServices? StartBaseServices(Action<string>? report = null)
     {
-        // Initialize() has already built the host, or failed to; a failure is rethrown here.
-        return Context.Instance.ResolveBaseServices();
+        // Called before every test. A failure is kept until the session ends rather than retried, and
+        // reported, for each of them.
+        return Context.Start(context => context.ResolveBaseServices(), report, retryNextRun: false);
     }
 
     /// <summary>
@@ -223,7 +227,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </summary>
     public static ValueTask ShutdownAsync() => Context.ShutdownAsync();
 
-    private XpingBaseServices ResolveBaseServices()
+    internal XpingBaseServices ResolveBaseServices()
     {
         return new XpingBaseServices(
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),

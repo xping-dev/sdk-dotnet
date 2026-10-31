@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Builders;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Services.Environment;
@@ -38,9 +39,19 @@ public sealed class XpingContextSingletonTests
 
     private readonly List<XpingConfiguration?> _created = [];
     private readonly List<IHost> _hosts = [];
+    private readonly Mock<IEnvironmentVariableProvider> _environment = new();
+
+    // How many builds fail before one succeeds, as when appsettings.json does not parse.
+    private int _failingBuilds;
 
     private XpingContextSingleton<Harness> CreateSingleton() => new(configuration =>
     {
+        if (_failingBuilds > 0)
+        {
+            _failingBuilds--;
+            throw new InvalidOperationException("host failed to build");
+        }
+
         _created.Add(configuration);
         var uploader = new Mock<IXpingUploader>();
         var detector = new Mock<IEnvironmentDetector>();
@@ -48,7 +59,7 @@ public sealed class XpingContextSingletonTests
         IHost host = ServiceHelper.BuildOrchestratorHost(uploader, detector);
         _hosts.Add(host);
         return new Harness(host);
-    });
+    }, _environment.Object);
 
     [Fact]
     public void Initialize_DoesNotBuildTheContext()
@@ -254,5 +265,151 @@ public sealed class XpingContextSingletonTests
         singleton.Initialize(null);
         Assert.NotSame(first, singleton.Instance);
         await singleton.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task Start_InitializesBuildsAndResolves()
+    {
+        var singleton = CreateSingleton();
+
+        Harness? resolved = singleton.Start(context => context, report: null, retryNextRun: false);
+
+        Assert.Same(singleton.Instance, resolved);
+        await singleton.ShutdownAsync();
+    }
+
+    [Fact]
+    public void Start_HostFailsToBuild_ReturnsNullAndReportsWhy()
+    {
+        var singleton = CreateSingleton();
+        _failingBuilds = 1;
+        var reports = new List<string>();
+
+        Harness? resolved = singleton.Start(context => context, reports.Add, retryNextRun: false);
+
+        Assert.Null(resolved);
+        Assert.Contains("[Xping] SDK initialization failed: host failed to build", Assert.Single(reports), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// NUnit and MSTest start before every test, and their session still ends: a failure must hold until
+    /// then, not be rebuilt and reported for each test.
+    /// </summary>
+    [Fact]
+    public async Task Start_AfterAFailedStart_ReturnsNullWithoutRetryingUntilTheSessionEnds()
+    {
+        var singleton = CreateSingleton();
+        _failingBuilds = 1;
+        var reports = new List<string>();
+        singleton.Start(context => context, reports.Add, retryNextRun: false);
+
+        Harness? again = singleton.Start(context => context, reports.Add, retryNextRun: false);
+
+        Assert.Null(again);
+        Assert.Single(reports);
+        Assert.True(singleton.IsInitialized);
+        Assert.Throws<InvalidOperationException>(() => singleton.Instance);
+        Assert.Null(singleton.Built);
+
+        Assert.Null(await singleton.EndSessionAsync());
+        Assert.NotNull(singleton.Start(context => context, reports.Add, retryNextRun: false));
+        await singleton.ShutdownAsync();
+    }
+
+    /// <summary>
+    /// xUnit's session ends in a sink that only a started SDK installs, so nothing else would drop the
+    /// failed context, and every later run in a long-lived process would stay untracked.
+    /// </summary>
+    [Fact]
+    public async Task Start_RetryingNextRun_UninstallsTheFailedContextSoTheNextStartBuildsAgain()
+    {
+        var singleton = CreateSingleton();
+        var configuration = new XpingConfiguration();
+        singleton.Initialize(configuration);
+        _failingBuilds = 1;
+
+        Assert.Null(singleton.Start(context => context, report: null, retryNextRun: true));
+        Assert.False(singleton.IsInitialized);
+
+        Assert.NotNull(singleton.Start(context => context, report: null, retryNextRun: true));
+        Assert.Same(configuration, Assert.Single(_created));
+        await singleton.ShutdownAsync();
+    }
+
+    [Fact]
+    public void Start_ResolvingFailsAfterTheHostBuilt_LeavesNoContextToFinalize()
+    {
+        var singleton = CreateSingleton();
+
+        XpingConfiguration? resolved = singleton.Start<XpingConfiguration>(
+            _ => throw new InvalidOperationException("service missing"), report: null, retryNextRun: false);
+
+        Assert.Null(resolved);
+        Assert.Null(singleton.Built);
+    }
+
+    [Fact]
+    public void Start_HostFailsToBuildWithStrictModeSetInCode_Throws()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(new XpingConfiguration { StrictMode = true });
+        _failingBuilds = 1;
+
+        var ex = Assert.Throws<XpingConfigurationException>(
+            () => singleton.Start(context => context, report: null, retryNextRun: false));
+
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+    }
+
+    [Theory]
+    [InlineData("XPING_STRICTMODE")]
+    [InlineData("Xping__StrictMode")]
+    public void Start_HostFailsToBuildWithStrictModeFromTheEnvironment_Throws(string variable)
+    {
+        var singleton = CreateSingleton();
+        _environment.Setup(e => e.GetVariable(variable)).Returns("true");
+        _failingBuilds = 1;
+
+        Assert.Throws<XpingConfigurationException>(
+            () => singleton.Start(context => context, report: null, retryNextRun: false));
+    }
+
+    /// <summary>
+    /// NUnit and MSTest start from every test, on parallel workers: callers that fail together must
+    /// still report it once.
+    /// </summary>
+    [Fact]
+    public async Task Start_ConcurrentStartsFailTogether_ReportOnce()
+    {
+        var singleton = CreateSingleton();
+        var reports = new List<string>();
+        using var bothResolving = new Barrier(2);
+
+        // Each waits for the other inside resolve, so both are past the failed-earlier check.
+        Harness? Fails() => singleton.Start<Harness>(
+            _ =>
+            {
+                bothResolving.SignalAndWait(TimeSpan.FromSeconds(30));
+                throw new InvalidOperationException("service missing");
+            },
+            message => { lock (reports) reports.Add(message); },
+            retryNextRun: false);
+
+        Harness?[] resolved = await Task.WhenAll(Task.Run(Fails), Task.Run(Fails));
+
+        Assert.All(resolved, Assert.Null);
+        Assert.Single(reports);
+    }
+
+    [Fact]
+    public void Start_ContextRejectsItsConfiguration_RethrowsTheConfigurationError()
+    {
+        var expected = new XpingConfigurationException("invalid");
+        var singleton = new XpingContextSingleton<Harness>(_ => throw expected, _environment.Object);
+
+        var ex = Assert.Throws<XpingConfigurationException>(
+            () => singleton.Start(context => context, report: null, retryNextRun: false));
+
+        Assert.Same(expected, ex);
     }
 }

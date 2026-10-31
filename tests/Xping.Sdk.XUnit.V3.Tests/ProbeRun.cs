@@ -50,10 +50,16 @@ internal sealed class ProbeRun : IDisposable
     /// How many runs one framework serves, as it may in a long-lived process. The session read back is
     /// the only one when this is 1.
     /// </param>
+    /// <param name="createFramework">Builds the framework under test; a default one when <see langword="null"/>.</param>
+    /// <param name="expectSession">
+    /// <see langword="false"/> for a run that should store nothing: the session is then not read back.
+    /// </param>
     public static async Task<ProbeRun> RunAsync(
         Func<ITestCase, bool>? filter = null,
         Action<IMessageSinkMessage>? onMessage = null,
-        int runs = 1)
+        int runs = 1,
+        Func<XpingTestFramework>? createFramework = null,
+        bool expectSession = true)
     {
         var run = new ProbeRun();
 
@@ -61,7 +67,8 @@ internal sealed class ProbeRun : IDisposable
         XpingContext.Initialize(new XpingConfiguration { Mode = XpingMode.LocalOnly, LocalStorePath = run._store });
         RetryTests.Reset();
 
-        var framework = new XpingTestFramework();
+        createFramework ??= () => new XpingTestFramework();
+        XpingTestFramework framework = createFramework();
         try
         {
             for (int i = 0; i < runs; i++)
@@ -85,7 +92,7 @@ internal sealed class ProbeRun : IDisposable
         }
 
         run.SessionCount = SessionFiles(run._store).Length;
-        if (runs > 1)
+        if (runs > 1 || !expectSession)
             return run;
 
         run.Session = ReadSession(run._store);

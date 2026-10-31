@@ -76,17 +76,20 @@ public sealed class XpingContext : XpingContextOrchestrator
     public static Task FlushAsync() => Context.FlushAsync();
 
     /// <summary>
-    /// Resolves the fixed set of services required by <see cref="XpingTrackAttribute"/> to record test executions.
-    /// Must be called after <see cref="Initialize()"/> has been invoked.
+    /// Starts the SDK, building the host on first use, and resolves the services
+    /// <see cref="XpingTrackAttribute"/> needs to record test executions. Initializes the context when no
+    /// one has.
     /// </summary>
-    /// <returns>A <see cref="XpingAttributeServices"/> holding all attribute dependencies.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="Initialize()"/> has not been called before this method.
-    /// </exception>
-    public static XpingAttributeServices GetAttributeServices()
+    /// <returns>
+    /// The services, or <see langword="null"/> when the SDK could not start: tests then run untracked until
+    /// the session ends.
+    /// </returns>
+    /// <exception cref="XpingConfigurationException">Strict mode, and the SDK could not start.</exception>
+    internal static XpingAttributeServices? StartAttributeServices()
     {
-        // Builds the host on first access: Initialize() only installs the context.
-        return Context.Instance.ResolveAttributeServices();
+        // Called before every test. A failure is kept until the session ends rather than retried, and
+        // reported, for each of them. No runner channel beyond stderr: the NUnit adapter shows stderr.
+        return Context.Start(context => context.ResolveAttributeServices(), report: null, retryNextRun: false);
     }
 
     /// <summary>
@@ -167,7 +170,7 @@ public sealed class XpingContext : XpingContextOrchestrator
     /// </summary>
     public static ValueTask ShutdownAsync() => Context.ShutdownAsync();
 
-    private XpingAttributeServices ResolveAttributeServices()
+    internal XpingAttributeServices ResolveAttributeServices()
     {
         return new XpingAttributeServices(
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),

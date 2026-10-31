@@ -8,7 +8,7 @@ using Xping.Sdk.Core.Configuration;
 namespace Xping.Sdk.XUnit.Tests;
 
 /// <summary>
-/// Tests for <see cref="XpingExecutorServices"/> resolved via <see cref="XpingContext.GetExecutorServices"/>.
+/// Tests for <see cref="XpingExecutorServices"/> resolved via <see cref="XpingContext.StartExecutorServices(Action{string}?)"/>.
 /// </summary>
 [Collection("XpingContext")]
 public sealed class XpingExecutorServicesTests : IAsyncLifetime
@@ -34,7 +34,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     public void ExecutionTracker_ShouldNotBeNull()
     {
         XpingContext.Initialize(ScratchConfiguration());
-        var services = XpingContext.GetExecutorServices();
+        var services = XpingContext.StartExecutorServices()!;
 
         Assert.NotNull(services.ExecutionTracker);
     }
@@ -43,7 +43,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     public void RetryDetector_ShouldNotBeNull()
     {
         XpingContext.Initialize(ScratchConfiguration());
-        var services = XpingContext.GetExecutorServices();
+        var services = XpingContext.StartExecutorServices()!;
 
         Assert.NotNull(services.RetryDetector);
     }
@@ -52,7 +52,7 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     public void IdentityGenerator_ShouldNotBeNull()
     {
         XpingContext.Initialize(ScratchConfiguration());
-        var services = XpingContext.GetExecutorServices();
+        var services = XpingContext.StartExecutorServices()!;
 
         Assert.NotNull(services.IdentityGenerator);
     }
@@ -62,12 +62,12 @@ public sealed class XpingExecutorServicesTests : IAsyncLifetime
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void GetExecutorServices_CalledTwice_ReturnsSameServiceInstances()
+    public void StartExecutorServices_CalledTwice_ReturnsSameServiceInstances()
     {
         XpingContext.Initialize(ScratchConfiguration());
 
-        var s1 = XpingContext.GetExecutorServices();
-        var s2 = XpingContext.GetExecutorServices();
+        var s1 = XpingContext.StartExecutorServices()!;
+        var s2 = XpingContext.StartExecutorServices()!;
 
         // All three services should be singleton-scoped within the host.
         Assert.Same(s1.ExecutionTracker, s2.ExecutionTracker);

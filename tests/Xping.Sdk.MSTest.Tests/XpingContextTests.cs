@@ -173,7 +173,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     /// the run in strict mode.
     /// </summary>
     [Fact]
-    public void Initialize_HostBuildFails_DoesNotThrowAndGetBaseServicesRethrows()
+    public void Initialize_HostBuildFails_DoesNotThrowAndStartBaseServicesThrows()
     {
         // BatchSize 0 is invalid, and strict mode turns an invalid configuration into an error.
         var invalid = new XpingConfiguration
@@ -188,7 +188,7 @@ public sealed class XpingContextTests : IAsyncLifetime
 
         Assert.Null(exception);
         Assert.True(XpingContext.IsInitialized);
-        Assert.Throws<XpingConfigurationException>(() => XpingContext.GetBaseServices());
+        Assert.Throws<XpingConfigurationException>(() => XpingContext.StartBaseServices());
     }
 
     [Fact]
