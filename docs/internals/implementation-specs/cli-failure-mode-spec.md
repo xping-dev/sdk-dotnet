@@ -74,10 +74,11 @@ These changes are applied in place in the sections named.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | D4: a timed-out attempt is a failed one, and a blank one prints the unavailable form | A failure with nothing recorded is signed on its outcome as well as its test: a blank `Timeout` hashes on `unsignable\|timeout\|<fingerprint>`, a blank `Failed` on `unsignable\|<fingerprint>`. The two no longer merge into one mode with one count. A signed failure's hash still ignores the outcome | D4 |
+| A | D4: a timed-out attempt is a failed one, and a blank one prints the unavailable form | Every signature is keyed on whether the attempt timed out. A timeout prefixes its canonical string with `timeout`, and a failed attempt adds nothing, so its hash does not move. A blank `Timeout` hashes on `unsignable\|timeout\|<fingerprint>`, a blank `Failed` on `unsignable\|<fingerprint>`. A mode is therefore all timeouts or none, under `--id` (`Flaky`, `AlwaysFailing`) as under `--test`: a blank timeout no longer merges with a blank failure, and a `Flaky` test with both counts one more mode | D4 |
 | B | D5 item 5: one unavailable line | A blank timeout prints `timed out, no failure detail recorded`. The outcome is known, so the line does not blame the adapter. Any other unavailable mode keeps `the adapter recorded no failure detail` | D5 |
-| C | §4.2: `FailureModeDto` ends its flags at `Unavailable` | It gains `TimedOut` after `Unavailable`: true only on an unavailable mode whose attempts timed out, which the split hash makes all of them. False on a signed mode, which can mix outcomes. Schema `1.25` → `1.26` | §4.1, §4.2 |
+| C | §4.2: `FailureModeDto` ends its flags at `Unavailable` | It gains `TimedOut` after `Unavailable`: whether the mode's attempts timed out, signed or not. Schema `1.25` → `1.26` | §4.1, §4.2 |
 | D | Amendment 4C: `history-timeout-retry`'s timed-out mode prints the unavailable form | It prints `timed out, no failure detail recorded` | §3.5 |
+| E | — | The `AlwaysFailing` gate (`AlwaysFailingModalShareMin`) compares the larger of the modal share and the unavailable modes' pooled share. The split in A must not turn a test that fails every run without detail into a flaky one: 6 blank failures and 4 blank timeouts are modes of 60% and 40%, and pooled they clear the gate. `Signature` and `ModalSignatureShare` stay the modal mode's own. When the pool decides, no signed mode can hold more than the 30% it leaves, so the modal mode is a pooled one | §1.1 |
 
 ---
 
@@ -228,8 +229,10 @@ mode's oldest. It is a fix, with two regression tests:
 - **Population:** every failed attempt of this test over the D5 window, nothing discounted. That is
   the population the RUNS timeline draws: a failed first attempt that passed on retry is in it, as
   it is in the timeline's `✗→✓`. A timed-out attempt is a failed one (`IsFailure`), so `--test`
-  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E). A blank timeout is a
-  mode of its own, never merged with a blank failure (Amendment 6A).
+  lists modes `--id` never does: `TimingOut` carries none (Amendment 1E). A test whose timeouts
+  stay under `TimingOutShareMin` is `Flaky` or `AlwaysFailing` instead, and its `--id` block lists
+  them too. Either way, timed-out attempts are modes of their own, never merged with failed ones
+  (Amendment 6A).
 - **Order:** the index's order: count, then recency, then hash.
 - **Count, first seen and flags** come from `SignatureOccurrence` (`Occurrences`,
   `OldestSessionIndex`, `FirstSeenAt`, `FirstSeenSha`). The flags are computed as `ToView` computes
@@ -543,6 +546,9 @@ timelines (Amendment 4C), and `history-healthy`, which never failed, does not ch
 finding and to `test`, drops the `failure mode N`, `more failure modes` and `AlwaysFailing`
 `failure mode` metrics, and takes `Flaky` and `AlwaysFailing` first-seen dates from the failures
 their counts cover.*
+
+Amendment 6 → `"1.26"`, and the comment gains: *1.26 adds `timedOut` to each failure mode, and
+signs timed-out attempts apart from failed ones.*
 
 ### 4.2 `FailureModeDto`
 

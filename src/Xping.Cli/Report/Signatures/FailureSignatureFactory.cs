@@ -46,9 +46,13 @@ internal static class FailureSignatureFactory
     /// compare against another failure, and the honest signature is one that groups with nothing. It
     /// is keyed on the test itself, so a suite whose adapter records no failure detail at all cannot
     /// collapse into a single false shared cause — every one of its tests would otherwise carry the
-    /// same empty signature and cluster together. It is keyed on the outcome too: a timed-out attempt
-    /// killed before it recorded anything is known to have timed out, and merging it with a failure
-    /// that recorded nothing would hide which of the two happened how often.
+    /// same empty signature and cluster together.
+    /// <para>
+    /// Every signature is keyed on whether the attempt timed out. A timeout killed before it recorded
+    /// anything is still known to have timed out, and merging it with a failure that recorded nothing
+    /// would hide which of the two happened how often. A failed attempt adds nothing to the key, so
+    /// its hash does not move.
+    /// </para>
     /// </remarks>
     public static FailureSignature Create(TestExecution execution, string fingerprint)
     {
@@ -58,13 +62,14 @@ internal static class FailureSignatureFactory
             ? null
             : execution.ExceptionType.Trim();
 
+        bool timedOut = execution.Outcome == TestOutcome.Timeout;
         string message = MessageNormaliser.Normalise(execution.ErrorMessage);
         FrameExtraction frames = StackFrameExtractor.Extract(execution.StackTrace);
 
         if (exceptionType == null && message.Length == 0 && frames.Frames.Count == 0)
-            return Unsignable(fingerprint, execution.Outcome == TestOutcome.Timeout);
+            return Unsignable(fingerprint, timedOut);
 
-        var canonical = new StringBuilder();
+        var canonical = new StringBuilder(OutcomeKey(timedOut));
         canonical.Append(exceptionType).Append(FieldSeparator);
         canonical.Append(message).Append(FieldSeparator);
 
@@ -83,7 +88,7 @@ internal static class FailureSignatureFactory
             frames.Frames,
             frames.Degraded,
             Unavailable: false,
-            TimedOut: false);
+            timedOut);
     }
 
     /// <summary>
@@ -97,17 +102,18 @@ internal static class FailureSignatureFactory
     /// </returns>
     private static FailureSignature Unsignable(string fingerprint, bool timedOut) =>
         new(
-            Hash(timedOut
-                ? string.Create(CultureInfo.InvariantCulture,
-                    $"{UnsignablePrefix}{FieldSeparator}{TimeoutKey}{FieldSeparator}{fingerprint}")
-                : string.Create(CultureInfo.InvariantCulture,
-                    $"{UnsignablePrefix}{FieldSeparator}{fingerprint}")),
+            Hash(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{UnsignablePrefix}{FieldSeparator}{OutcomeKey(timedOut)}{fingerprint}")),
             ExceptionType: null,
             NormalisedMessage: string.Empty,
             Frames: [],
             Degraded: true,
             Unavailable: true,
             TimedOut: timedOut);
+
+    private static string OutcomeKey(bool timedOut) =>
+        timedOut ? TimeoutKey + FieldSeparator : string.Empty;
 
     private static string Hash(string canonical)
     {

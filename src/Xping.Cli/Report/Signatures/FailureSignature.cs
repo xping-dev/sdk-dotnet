@@ -34,8 +34,8 @@ namespace Xping.Cli.Report.Signatures;
 /// test itself and can never group with another test's failure.
 /// </param>
 /// <param name="TimedOut">
-/// Whether this is an unavailable signature from a timed-out attempt. Never set on a signed one: its
-/// hash ignores the outcome, so its failures can mix timeouts and failures.
+/// Whether the failures carrying it timed out. Part of the hash, so a signature never mixes timed-out
+/// and failed attempts.
 /// </param>
 internal sealed record FailureSignature(
     string Hash,

@@ -631,6 +631,48 @@ public sealed class FailureModeProviderTests
         Assert.Equal(10, evidence.DistinctSignatureCount);
     }
 
+    /// <summary>
+    /// Builds sessions in which one test passes <paramref name="passing"/> times, then fails with
+    /// nothing recorded <paramref name="failed"/> times and times out with nothing recorded
+    /// <paramref name="timedOut"/> times.
+    /// </summary>
+    private static TestSession[] RunsFailingBlank(int passing, int failed, int timedOut) =>
+    [
+        .. Enumerable.Range(0, passing + failed + timedOut).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                ordinal < passing ? Passing("Subject")
+                : ordinal < passing + failed ? TestSessionFactory.Execution("Subject", TestOutcome.Failed)
+                : TestSessionFactory.Execution("Subject", TestOutcome.Timeout)
+            ]))
+    ];
+
+    [Fact]
+    public void ATestFailingEveryRunWithNothingRecordedIsAlwaysFailingThoughSomeAttemptsTimedOut()
+    {
+        // Blank timeouts and blank failures are two modes (#320), 60% and 40%, neither dominant on
+        // its own. Both recorded nothing, so the gate pools them, and the timeouts are too few for
+        // TimingOut.
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(RunsFailingBlank(passing: 0, failed: 6, timedOut: 4)), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.True(evidence.Signature.Unavailable);
+        Assert.False(evidence.Signature.TimedOut);
+        Assert.Equal(6, evidence.Signature.Occurrences);
+        Assert.Equal(0.6, evidence.ModalSignatureShare);
+    }
+
+    [Fact]
+    public void AFlakyTestCountsItsBlankTimeoutsAsAModeOfTheirOwn()
+    {
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(RunsFailingBlank(passing: 10, failed: 3, timedOut: 2)), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(2, evidence.DistinctSignatureCount);
+        Assert.Equal([false, true], evidence.DistinctSignatures.Select(s => s.TimedOut));
+        Assert.Equal([3, 2], evidence.DistinctSignatures.Select(s => s.Occurrences));
+    }
+
     [Fact]
     public void AtTheDominantShareTheTestIsBrokenAndBelowItFlaky()
     {

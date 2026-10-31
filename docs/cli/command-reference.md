@@ -463,8 +463,10 @@ its one. Other kinds print no block. Each mode reads:
 - **`the adapter recorded no failure detail`** replaces the type, message and frames when the
   failure was recorded without an exception.
 - **`timed out, no failure detail recorded`** replaces them for a timeout recorded without an
-  exception, as a killed test can be. Under `--test`, these timeouts are a mode of their own,
-  counted apart from failures that recorded nothing.
+  exception, as a killed test can be.
+
+Timed-out attempts are always modes of their own, counted apart from failed attempts, in `--id`
+and `--test` alike.
 
 At most 5 modes are printed, then `N more failure modes in --format json`; the heading counts all
 of them. `failureModes` in [`--format json`](#--format-json) carries every mode.
@@ -957,7 +959,8 @@ the adapter recorded none), the normalised message, up to five frames innermost 
 `firstSeenInLatestSession` and `firstSeenAfterWindowStart` say whether the mode is new, asked of
 every failure in the window, so `firstSeenSessionsAgo` of `0` alone does not mean new. `hash` joins a
 mode to `evidence.exemplars[].signatureHash`. `unavailable` is `true` when nothing was recorded to
-group the failure by, and `timedOut` is `true` when such a mode's attempts timed out. `report --test
+group the failure by. `timedOut` is `true` when the mode's attempts timed out; a mode never mixes
+timed-out and failed attempts. `report --test
 --format json` carries the same list for the test, counted over every failed attempt in the window.
 
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used

@@ -169,7 +169,7 @@ public sealed class FailureSignatureTests
     [Fact]
     public void ATimeoutWithNothingRecordedIsMarkedTimedOut()
     {
-        FailureSignature signature = BlankTimeout("fp-Alpha");
+        FailureSignature signature = BlankTimeout("Alpha");
 
         Assert.True(signature.Unavailable);
         Assert.True(signature.TimedOut);
@@ -180,29 +180,35 @@ public sealed class FailureSignatureTests
     {
         // The outcome is the one thing known about either, and merging them would count both as
         // one mode the reader cannot split (#320).
-        Assert.NotEqual(Signature(fingerprint: "fp-Alpha").Hash, BlankTimeout("fp-Alpha").Hash);
+        Assert.NotEqual(Signature(fingerprint: "fp-Alpha").Hash, BlankTimeout("Alpha").Hash);
     }
 
     [Fact]
     public void TheSameTestTimingOutBlankKeepsOneSignatureAcrossRuns() =>
-        Assert.Equal(BlankTimeout("fp-Alpha").Hash, BlankTimeout("fp-Alpha").Hash);
+        Assert.Equal(BlankTimeout("Alpha").Hash, BlankTimeout("Alpha").Hash);
 
     [Fact]
     public void TwoTestsTimingOutBlankDoNotShareASignature() =>
-        Assert.NotEqual(BlankTimeout("fp-Alpha").Hash, BlankTimeout("fp-Beta").Hash);
+        Assert.NotEqual(BlankTimeout("Alpha").Hash, BlankTimeout("Beta").Hash);
 
     [Fact]
-    public void ATimeoutWithDetailIsSignedLikeAFailure()
+    public void ATimeoutWithDetailIsMarkedTimedOutAndSignedApartFromTheSameFailure()
     {
-        // A signed hash ignores the outcome, so the flag would not hold for every failure carrying it.
+        // The runner's timeout message is most real timeouts. A mode is then all timeouts or none,
+        // so timedOut holds for every attempt in it.
         FailureSignature timeout = FailureSignatureFactory.Create(
             TestSessionFactory.Execution(
                 "Alpha", TestOutcome.Timeout, errorMessage: "boom", exceptionType: "System.Exception"),
             "fp-Alpha");
 
-        Assert.False(timeout.TimedOut);
-        Assert.Equal(Signature("System.Exception", "boom", fingerprint: "fp-Alpha").Hash, timeout.Hash);
+        Assert.True(timeout.TimedOut);
+        Assert.False(timeout.Unavailable);
+        Assert.NotEqual(Signature("System.Exception", "boom", fingerprint: "fp-Alpha").Hash, timeout.Hash);
     }
+
+    [Fact]
+    public void AFailureWithDetailIsNotMarkedTimedOut() =>
+        Assert.False(Signature("System.Exception", "boom").TimedOut);
 
     [Fact]
     public void AnUnavailableSignatureCannotCollideWithARealOne()
@@ -228,7 +234,6 @@ public sealed class FailureSignatureTests
         Assert.All(signature.Hash, c => Assert.Contains(c, "0123456789abcdef"));
     }
 
-    private static FailureSignature BlankTimeout(string fingerprint) =>
-        FailureSignatureFactory.Create(TestSessionFactory.Execution("Alpha", TestOutcome.Timeout), fingerprint);
-
+    private static FailureSignature BlankTimeout(string name) =>
+        FailureSignatureFactory.Create(TestSessionFactory.Execution(name, TestOutcome.Timeout), $"fp-{name}");
 }
