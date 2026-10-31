@@ -104,6 +104,10 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
   (PowerShell 7.3+, e.g. `brew install powershell`). Without pwsh those rows fail and say so.
 - Adapter behavior that depends on a test runner (vstest shutdown, MSTest cleanup, xUnit
   discovery) needs a test against that framework, not just a mock.
+- The CLI's Monte Carlo calibration tests (false-positive rates and power) are tagged
+  `Category=Calibration`. CI skips them on PRs and runs them in `nightly.yml`. A PR that changes
+  `src/Xping.Cli/Report/Scoring/**` or `src/Xping.Cli/Report/Providers/**` runs
+  `dotnet test tests/Xping.Cli.Tests -c Release --filter Category=Calibration` before merging.
 
 ## Workflow
 
