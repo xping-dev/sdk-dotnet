@@ -7,24 +7,24 @@ using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Sdk.Core.Tests.LocalStore;
 
-// Mutates the XPING_LOCAL_STORE environment variable, which is process-wide state.
+// Sets XPING_LOCAL_STORE, which is process-wide state, to prove the resolver ignores it.
 [Collection("Sequential")]
 public sealed class LocalStorePathResolverTests : IDisposable
 {
+    private const string StoreVariable = "XPING_LOCAL_STORE";
+
     private readonly string _temp;
 
     public LocalStorePathResolverTests()
     {
         _temp = Path.Combine(Path.GetTempPath(), "xping-path-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_temp);
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
 
         try
         {
@@ -37,15 +37,18 @@ public sealed class LocalStorePathResolverTests : IDisposable
     }
 
     [Fact]
-    public void EnvironmentVariableOverridesEverythingElse()
+    public void TheEnvironmentVariableDoesNotMoveTheResolvedStore()
     {
-        // Arrange
-        string expected = Path.Combine(_temp, "explicit-store");
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, expected);
+        // The store resolves lazily, at the end of the run. A suite that sets the variable for the
+        // tool it tests must not redirect where its own run is recorded, so the variable is read
+        // once, into the configuration, and never here.
+        string repo = Path.Combine(_temp, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        System.Environment.SetEnvironmentVariable(StoreVariable, Path.Combine(_temp, "fixture-store"));
 
-        // Act & Assert
-        Assert.Equal(expected, LocalStorePathResolver.Resolve(_temp));
+        Assert.Equal(
+            Path.Combine(repo, LocalStorePathResolver.StoreDirectoryName),
+            LocalStorePathResolver.Resolve(repo));
     }
 
     [Fact]

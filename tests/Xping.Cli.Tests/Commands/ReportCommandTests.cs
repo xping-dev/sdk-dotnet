@@ -21,13 +21,11 @@ public sealed class ReportCommandTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-cli-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -43,10 +41,10 @@ public sealed class ReportCommandTests : IDisposable
     /// <summary>
     /// Writes one session per entry, containing the named tests.
     /// </summary>
-    private static void Seed(
+    private void Seed(
         string assembly, int startOrdinal, params string[][] testsPerSession)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < testsPerSession.Length; i++)
         {
@@ -60,16 +58,16 @@ public sealed class ReportCommandTests : IDisposable
     /// <summary>
     /// Writes <paramref name="count"/> sessions running the same tests every time.
     /// </summary>
-    private static void SeedStable(string assembly, int count, int startOrdinal = 0) =>
+    private void SeedStable(string assembly, int count, int startOrdinal = 0) =>
         Seed(assembly, startOrdinal, [.. Enumerable.Repeat<string[]>(["Alpha", "Beta"], count)]);
 
     /// <summary>
     /// Writes <paramref name="count"/> sessions that each recorded both assemblies, as one test host
     /// running two test projects does.
     /// </summary>
-    private static void SeedMixed(string first, string second, int count)
+    private void SeedMixed(string first, string second, int count)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < count; i++)
         {
@@ -82,16 +80,16 @@ public sealed class ReportCommandTests : IDisposable
         }
     }
 
-    private static (int Code, string Output) RunReport(params string[] args)
+    private (int Code, string Output) RunReport(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Configure);
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString() + error.ToString());
     }
 
-    private static JsonElement RunJson(params string[] args)
+    private JsonElement RunJson(params string[] args)
     {
         var (_, output) = RunReport([.. args, "--format", "json"]);
 

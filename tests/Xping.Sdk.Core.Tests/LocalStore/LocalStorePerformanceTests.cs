@@ -43,15 +43,10 @@ public sealed class LocalStorePerformanceTests : IDisposable
         _output = output;
         _root = Path.Combine(Path.GetTempPath(), "xping-perf-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, _root);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(
-            LocalStorePathResolver.EnvironmentVariableName, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -100,7 +95,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
     public void WritingATwoThousandTestRunStaysWellInsideBudget()
     {
         // Arrange
-        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
         var session = BuildSession(SuiteSize, DateTime.UtcNow);
 
         store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-1))); // warm the path
@@ -152,7 +147,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
     {
         // Arrange — a full analysis window of large runs, the worst realistic read.
         // This cost is paid by `xping report`, not by a test run: the SDK only writes.
-        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
         for (int i = 0; i < ReportWindow.DefaultRuns; i++)
             store.Write(BuildSession(SuiteSize, DateTime.UtcNow.AddMinutes(-i)));
 
@@ -175,7 +170,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
         // the per-assembly count over all of them. Copies of one file stand in for distinct runs:
         // retention reads names, not contents.
         var options = new LocalStoreOptions();
-        var store = new JsonSessionStore(options, NullLogger.Instance);
+        var store = new JsonSessionStore(options, NullLogger.Instance, storePath: _root);
         DateTime start = DateTime.UtcNow.AddHours(-1);
 
         store.Write(BuildSession(SuiteSize, start, "MyCompany.Product.Tests"));
@@ -207,7 +202,7 @@ public sealed class LocalStorePerformanceTests : IDisposable
     public void StoreSizeStaysReasonableForALargeSuite()
     {
         // Arrange
-        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance);
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, storePath: _root);
 
         // Act
         for (int i = 0; i < 12; i++)

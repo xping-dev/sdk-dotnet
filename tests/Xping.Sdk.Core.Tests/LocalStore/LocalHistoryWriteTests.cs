@@ -40,17 +40,19 @@ public sealed class LocalHistoryWriteTests : IDisposable
         public Task<UploadResult> FinalizeAsync() => FinalizeSessionAsync(CancellationToken.None);
     }
 
+    private const string StoreVariable = "XPING_LOCAL_STORE";
+
     private readonly string _temp;
 
     public LocalHistoryWriteTests()
     {
         _temp = Path.Combine(Path.GetTempPath(), "xping-history-tests", Guid.NewGuid().ToString("N"));
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
     }
 
     public void Dispose()
     {
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
+        System.Environment.SetEnvironmentVariable(StoreVariable, null);
 
         try
         {
@@ -155,7 +157,7 @@ public sealed class LocalHistoryWriteTests : IDisposable
         // configuration, can be pointed at the same place.
         string configured = Path.Combine(_temp, "configured");
         string exported = Path.Combine(_temp, "exported");
-        System.Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, exported);
+        System.Environment.SetEnvironmentVariable(StoreVariable, exported);
 
         await using (Harness orchestrator = Create(configured))
         {

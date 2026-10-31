@@ -46,11 +46,10 @@ public class LocalStoreScanBenchmarks
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-bench-scan", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, _root);
 
         // No size limit: at 25 assemblies the default 100 MB would prune the store below what the
         // run limit allows, and the benchmark would measure a smaller store than it claims.
-        _store = new JsonSessionStore(new LocalStoreOptions { MaxBytes = long.MaxValue }, NullLogger.Instance);
+        _store = new JsonSessionStore(new LocalStoreOptions { MaxBytes = long.MaxValue }, NullLogger.Instance, storePath: _root);
 
         DateTime start = DateTime.UtcNow.AddHours(-1);
         for (int run = 0; run < RunsPerAssembly; run++)
@@ -70,7 +69,6 @@ public class LocalStoreScanBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        Environment.SetEnvironmentVariable(LocalStorePathResolver.EnvironmentVariableName, null);
 
         try
         {

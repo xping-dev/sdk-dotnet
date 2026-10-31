@@ -33,13 +33,11 @@ public sealed class RecordedTextMessagesTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-recorded-text-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -158,23 +156,23 @@ public sealed class RecordedTextMessagesTests : IDisposable
         Assert.All(text, c => Assert.True(
             c is '\n' or '\r' or (>= ' ' and < '\u007f'), $"U+{(int)c:X4} in '{text}'"));
 
-    private static void Seed(string test, string assembly = TestSessionFactory.DefaultAssembly, int startOrdinal = 0) =>
+    private void Seed(string test, string assembly = TestSessionFactory.DefaultAssembly, int startOrdinal = 0) =>
         Seed([TestSessionFactory.Execution(test, assembly: assembly)], startOrdinal);
 
-    private static void Seed(TestExecution[] executions, int startOrdinal = 0)
+    private void Seed(TestExecution[] executions, int startOrdinal = 0)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 6; i++)
             store.Write(TestSessionFactory.Session(startOrdinal + i, executions));
     }
 
-    private static (int Code, string Output, string Error) Run(bool isTerminal, params string[] args)
+    private (int Code, string Output, string Error) Run(bool isTerminal, params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(args, output, error, input: null, isTerminal, configureServices: OfflineCli.Configure);
+        int code = Program.Run(args, output, error, input: null, isTerminal, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString(), error.ToString());
     }
 }

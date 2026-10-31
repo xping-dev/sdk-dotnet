@@ -50,21 +50,35 @@ internal static class OfflineCli
     /// </summary>
     /// <param name="name">The variable.</param>
     /// <param name="value">Its value.</param>
-    public static Action<IServiceCollection> With(string name, string value) => services =>
+    public static Action<IServiceCollection> With(string name, string value) => With([(name, value)]);
+
+    /// <summary>
+    /// Applies the isolation, with the commands reading the local store at <paramref name="root"/>.
+    /// </summary>
+    /// <remarks>
+    /// Through the commands' environment, never the process's: the SDK recording this test run
+    /// reads <c>XPING_LOCAL_STORE</c> too, and the run's own session would land in the fixture.
+    /// </remarks>
+    /// <param name="root">The store root.</param>
+    /// <param name="variables">More variables the commands read and the process does not have.</param>
+    public static Action<IServiceCollection> Store(string root, params (string Name, string Value)[] variables) =>
+        With([("XPING_LOCAL_STORE", root), .. variables]);
+
+    private static Action<IServiceCollection> With((string Name, string Value)[] variables) => services =>
     {
         Configure(services);
-        services.AddSingleton<IEnvironmentVariableProvider>(new WithoutCloudVariables((name, value)));
+        services.AddSingleton<IEnvironmentVariableProvider>(new WithoutCloudVariables(variables));
     };
 
     /// <summary>
     /// The process environment with the Cloud variables removed, and nothing else changed but the
-    /// one variable a test sets.
+    /// variables a test sets.
     /// </summary>
-    private sealed class WithoutCloudVariables((string Name, string Value)? set = null) : IEnvironmentVariableProvider
+    private sealed class WithoutCloudVariables(params (string Name, string Value)[] set) : IEnvironmentVariableProvider
     {
         public string? GetVariable(string name) =>
-            set is { } variable && string.Equals(variable.Name, name, StringComparison.OrdinalIgnoreCase)
-                ? variable.Value
+            Array.Find(set, variable => string.Equals(variable.Name, name, StringComparison.OrdinalIgnoreCase)) is { Name: not null } match
+                ? match.Value
                 : HiddenVariables.Contains(name, StringComparer.OrdinalIgnoreCase) || name.StartsWith("Xping__", StringComparison.OrdinalIgnoreCase)
                     ? null
                     : System.Environment.GetEnvironmentVariable(name);

@@ -18,8 +18,7 @@ namespace Xping.Cli.Tests.Cloud;
 /// pipeline, binding, enrichment, hints and exit code (cli-auth-cli-spec §11, §18.2).
 /// </summary>
 /// <remarks>
-/// Sequential because the local store is found through the process-wide <c>XPING_LOCAL_STORE</c>,
-/// as the other report tests find theirs.
+/// Sequential because the CTA banner is suppressed through a process-wide variable.
 /// </remarks>
 [Collection("Sequential")]
 public sealed class ReportEnrichmentTests : IAsyncDisposable
@@ -37,7 +36,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     public ReportEnrichmentTests()
     {
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
+        _host.Environment["XPING_LOCAL_STORE"] = _root;
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
 
         _host.Cloud.AddProject(Project, displayName: Assembly);
@@ -49,7 +48,6 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
         await _host.DisposeAsync().ConfigureAwait(false);
 
@@ -384,9 +382,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     /// Writes eight runs in which <c>Removed0</c> vanishes after five and whose newest run fails
     /// <c>Stable0</c>: two findings, each about one test.
     /// </summary>
-    private static void Seed(string assembly = Assembly, string? pin = null, int startOrdinal = 0)
+    private void Seed(string assembly = Assembly, string? pin = null, int startOrdinal = 0)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
         Dictionary<string, string>? properties = pin is null ? null : new() { [LocalSessionProperties.ProjectId] = pin };
 
         for (int i = 0; i < 8; i++)

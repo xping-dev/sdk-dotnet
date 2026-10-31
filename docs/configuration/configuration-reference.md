@@ -969,7 +969,7 @@ XpingContext.Initialize(new XpingConfiguration
 });
 ```
 
-The CLI reads the same environment variable, so an exported `XPING_LOCAL_STORE` moves both sides together. A value set in code or `appsettings.json` moves only the SDK; export the variable when running the CLI against it (`--directory` starts the CLI's repository walk somewhere else, it does not name a store).
+The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during the run does not move the run's own history. The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both sides together. A value set in code or `appsettings.json` moves only the SDK; export the variable when running the CLI against it (`--directory` starts the CLI's repository walk somewhere else, it does not name a store).
 
 ### Complete JSON Configuration
 

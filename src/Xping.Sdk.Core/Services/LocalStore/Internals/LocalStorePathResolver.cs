@@ -16,11 +16,16 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// <remarks>
 /// Resolution order:
 /// <list type="number">
-/// <item><description><c>XPING_LOCAL_STORE</c>, when set.</description></item>
 /// <item><description>The nearest ancestor of the test assembly containing <c>.git</c>, <c>*.sln</c>
 /// or <c>*.slnx</c>, plus <c>/.xping</c>.</description></item>
 /// <item><description>A per-repository folder under the user's local application data.</description></item>
 /// </list>
+/// <para>
+/// An explicit path (<c>XPING_LOCAL_STORE</c> or <see cref="Configuration.XpingConfiguration.LocalStorePath"/>)
+/// never reaches this class: callers read it once and hand it to the store. The store resolves its
+/// root lazily, on the first write at the end of the run, and a test suite that sets the variable
+/// for the tool it tests would otherwise redirect where its own run is recorded.
+/// </para>
 /// <para>
 /// The repository root is preferred over the user profile because flakiness history is only
 /// meaningful per repository — a shared profile-wide store would blend unrelated projects and would
@@ -34,7 +39,6 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </remarks>
 internal static class LocalStorePathResolver
 {
-    internal const string EnvironmentVariableName = "XPING_LOCAL_STORE";
     internal const string StoreDirectoryName = ".xping";
     internal const string SessionsDirectoryName = "sessions";
 
@@ -47,10 +51,6 @@ internal static class LocalStorePathResolver
     /// <returns>The absolute path of the store root, or <see langword="null"/>.</returns>
     public static string? Resolve(string? startDirectory = null)
     {
-        string? explicitPath = System.Environment.GetEnvironmentVariable(EnvironmentVariableName);
-        if (!string.IsNullOrWhiteSpace(explicitPath))
-            return explicitPath;
-
         string? origin = startDirectory ?? GetAssemblyDirectory();
 
         string? repoRoot = RepositoryRoot.Find(origin);

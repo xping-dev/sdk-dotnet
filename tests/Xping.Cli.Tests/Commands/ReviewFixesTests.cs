@@ -22,13 +22,11 @@ public sealed class ReviewFixesTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-reviewfix-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -44,9 +42,9 @@ public sealed class ReviewFixesTests : IDisposable
     /// <summary>
     /// Writes passing sessions for the given assembly.
     /// </summary>
-    private static void SeedSessions(string assembly, int count)
+    private void SeedSessions(string assembly, int count)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < count; i++)
         {
@@ -62,9 +60,9 @@ public sealed class ReviewFixesTests : IDisposable
     /// The cloud invitation is only offered once the developer has been shown a problem worth
     /// solving, so a store with no findings cannot exercise it.
     /// </remarks>
-    private static void SeedVanishingSessions(bool connected = false)
+    private void SeedVanishingSessions(bool connected = false)
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         var properties = new Dictionary<string, string>
         {
@@ -82,14 +80,14 @@ public sealed class ReviewFixesTests : IDisposable
         }
     }
 
-    private static (int Code, string Output) Run(params string[] args)
+    private (int Code, string Output) Run(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
         // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Configure);
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
         return (code, output.ToString() + error.ToString());
     }
 
@@ -110,7 +108,7 @@ public sealed class ReviewFixesTests : IDisposable
         // Assert
         Assert.Equal(2, code);
         Assert.Contains("Required argument missing", output, StringComparison.Ordinal);
-        Assert.Equal(3, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
+        Assert.Equal(3, LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions.Count);
     }
 
     [Fact]
@@ -122,7 +120,7 @@ public sealed class ReviewFixesTests : IDisposable
 
         Assert.Equal(2, code);
         Assert.Contains("Unrecognized command or argument", output, StringComparison.Ordinal);
-        Assert.Equal(2, LocalSessionStore.Create().ReadRecent(100).Sessions.Count);
+        Assert.Equal(2, LocalSessionStore.Create(storePath: _root).ReadRecent(100).Sessions.Count);
     }
 
     [Fact]

@@ -32,13 +32,11 @@ public sealed class FindingDetailCommandTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-detail-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", _root);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("XPING_LOCAL_STORE", null);
         Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
@@ -177,7 +175,7 @@ public sealed class FindingDetailCommandTests : IDisposable
             ("posix", $"'{_root}/it'\\''s'")])
         {
             var (code, output, error) = RunIn(
-                OfflineCli.With(ShellDialects.Variable, shell), "--directory", directory, "--format", "json");
+                OfflineCli.Store(_root, (ShellDialects.Variable, shell)), "--directory", directory, "--format", "json");
 
             Assert.Equal(0, code);
             Assert.Empty(error);
@@ -198,7 +196,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     {
         SeedVanishing();
 
-        var (code, output, error) = RunIn(OfflineCli.With(ShellDialects.Variable, "bash"), "--format", "json");
+        var (code, output, error) = RunIn(OfflineCli.Store(_root, (ShellDialects.Variable, "bash")), "--format", "json");
 
         Assert.Equal(0, code);
         Assert.StartsWith("xping: XPING_SHELL=\"bash\" is not posix or powershell; commands are quoted for ", error, StringComparison.Ordinal);
@@ -487,9 +485,9 @@ public sealed class FindingDetailCommandTests : IDisposable
     /// than vanishing ones keeps the later runs above the partial-run share and the family small
     /// enough to clear its correction.
     /// </remarks>
-    private static void SeedVanishing()
+    private void SeedVanishing()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 8; i++)
         {
@@ -509,18 +507,18 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     /// <summary>Writes runs of a second assembly, newer than every other, so it is the one scoped to.</summary>
-    private static void SeedOtherAssembly()
+    private void SeedOtherAssembly()
     {
-        ILocalSessionStore store = LocalSessionStore.Create();
+        ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 20; i < 26; i++)
             store.Write(TestSessionFactory.Session(i, [TestSessionFactory.Execution("Elsewhere", assembly: Other)]));
     }
 
-    private static string FirstId(params string[] args) =>
+    private string FirstId(params string[] args) =>
         Json(args).GetProperty("findings")[0].GetProperty("id").GetString()!;
 
-    private static JsonElement Json(params string[] args)
+    private JsonElement Json(params string[] args)
     {
         var (_, output, _) = Run([.. args, "--format", "json"]);
 
@@ -528,8 +526,8 @@ public sealed class FindingDetailCommandTests : IDisposable
         return document.RootElement.Clone();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args) =>
-        RunIn(OfflineCli.Configure, args);
+    private (int Code, string Output, string Error) Run(params string[] args) =>
+        RunIn(OfflineCli.Store(_root), args);
 
     private static (int Code, string Output, string Error) RunIn(Action<IServiceCollection> services, params string[] args)
     {

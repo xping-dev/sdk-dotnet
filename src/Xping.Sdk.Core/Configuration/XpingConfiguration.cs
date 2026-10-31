@@ -231,7 +231,8 @@ public sealed class XpingConfiguration
     /// Set it to keep a session out of that shared history: a test host that drives the SDK as its
     /// subject, for example, points it at a scratch directory so its synthetic runs never land next
     /// to the real ones. Can also be set with the <c>XPING_LOCAL_STORE</c> environment variable,
-    /// which the CLI honours too.
+    /// which the CLI honours too. The variable is read once, when the SDK initializes: a test that
+    /// changes it later does not move where its own run is recorded.
     /// </para>
     /// </remarks>
     public string? LocalStorePath { get; set; }
