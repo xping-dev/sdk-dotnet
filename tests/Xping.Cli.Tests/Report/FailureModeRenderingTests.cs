@@ -378,7 +378,33 @@ public sealed class FailureModeRenderingTests
         ReportEnvelope history = Get("history-flaky");
         string[] block = Block(Render(history with { Test = history.Test! with { FailureModes = [mode] } }));
 
-        Assert.Equal("1.  1 failed attempt | since its first run in the window", block[0]);
+        Assert.Equal("1.  1 failed attempt | since its first run, the latest", block[0]);
+    }
+
+    /// <summary>
+    /// A cluster has no one test whose first run "its" could name; its reference is the first of
+    /// its tests to run.
+    /// </summary>
+    [Fact]
+    public void AClustersModeThatIsNotNewIsSinceItsTestsFirstRan()
+    {
+        ReportEnvelope group = Get("detail-group");
+        FailureModeDto mode = Mode() with { FirstSeenAfterFirstRun = false };
+        string[] block = Block(Render(group with { Findings = [group.Findings[0] with { FailureModes = [mode] }] }));
+
+        Assert.Equal("1.  3 failed attempts | since its tests first ran in the window", block[0]);
+    }
+
+    /// <summary>
+    /// A finding's date covers only the failures it counted, so a mode dated to the latest run may
+    /// be one its test had all along. Only a history can say its first run was the latest.
+    /// </summary>
+    [Fact]
+    public void AFindingsModeDatedToTheLatestRunIsNotCalledTheTestsFirstRun()
+    {
+        FailureModeDto mode = Mode() with { FirstSeenSessionsAgo = 0, FirstSeenAfterFirstRun = false };
+
+        Assert.Equal("1.  3 failed attempts | since its first run in the window", Block(Render(With(mode)))[0]);
     }
 
     [Fact]

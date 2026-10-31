@@ -275,7 +275,7 @@ public sealed class TestHistoryBuilderTests
         Assert.Equal([$"MyApp.Tests.SampleTests.{Target}()"], modes[0].Frames);
         Assert.False(modes[0].FramesDegraded);
 
-        // Pear first appeared after the window opened; apple was there in its oldest run.
+        // Pear first appeared after the test's first run; apple was there in it.
         Assert.True(modes[0].FirstSeenAfterFirstRun);
         Assert.False(modes[1].FirstSeenAfterFirstRun);
     }

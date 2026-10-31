@@ -1142,7 +1142,7 @@ internal sealed class FailureModeProvider : IFindingProvider
     /// Gets the run a cluster's newness is measured from: the oldest first run among its members.
     /// </summary>
     /// <remarks>
-    /// The oldest, so a cluster is new only when it appeared after every member had already run
+    /// The oldest, so a cluster is new when it appeared after the first member to run had run
     /// without it. A member that joined late cannot make a mode the others had all along look new.
     /// </remarks>
     private static int FirstRunOf(AnalysisContext context, SignatureGroup cluster) =>

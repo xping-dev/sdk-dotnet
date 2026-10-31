@@ -2,7 +2,7 @@
 
 **Status:** Draft, binding once merged
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
-**Schema:** `1.24` → `1.25`
+**Schema:** `1.24` → `1.25`, then `1.26` (Amendment 6E)
 **Depends on:** `cli-report-format-spec.md` D5 (heading machinery), D10 (example/rule authority,
 width and charset discipline). `cli-finding-detail-spec.md` D4 (the text detail view) and D4.1
 (`Flaky` metrics, superseded here by its Amendment 7). `cli-test-history-spec.md` D5 (window) and
@@ -79,6 +79,7 @@ These changes are applied in place in the sections named.
 | C | `FirstSeenInLatestSession`: appeared only in the newest run | Appeared only in the newest run, **and** the reference run is older than it. When a test's only verdict run is the newest (a one-run window, or a test that ran once), `ToView` set both `FirstSeenInLatestSession` and not `FirstSeenAfterWindowStart`, and JSON emitted both. The two flags can no longer both say "new" and "not new" | D3, §4.2 |
 | D | D5: `since the window opened`, checked first (Amendment 4A) | `since its first run in the window`. True whether the test was in the window's oldest run or joined later. The flags no longer conflict, so the order of the checks no longer matters. Supersedes Amendment 4A | D5 |
 | E | Schema `1.25` | `1.26`: `failureModes[].firstSeenAfterWindowStart` is renamed `firstSeenAfterFirstRun`, and both flags change meaning (6A–6C) | §4.1 |
+| F | 6D: one phrase for every mode that is not new | Two cases read differently. A cluster's mode (`--id` on a group subject): `since its tests first ran in the window`, because "its first run" has no one test to refer to and the reference is the oldest member's. A history's mode whose `FirstSeenSessionsAgo` is 0: `since its first run, the latest`. Both flags are false there only when the test had no run with a verdict before the latest, and "since its first run in the window" would read as a long-standing failure for a test that just appeared. Only a history can tell: its date covers every failed attempt, while a finding's covers only the failures it counted (D3), so a finding's mode can be dated to the latest run when its test had it all along | D5 |
 
 ---
 
@@ -271,8 +272,11 @@ as findings are numbered:
 
 1. **Count line.** `1 failed attempt` or `N failed attempts`, the glyph separator, then
    (Amendment 6D):
-   - Not `FirstSeenAfterFirstRun`: `since its first run in the window`, with no date. The mode was
-     already there in the test's first run with a verdict, and the report cannot see further back.
+   - Not `FirstSeenAfterFirstRun`: no date. The mode was already there in the test's first run
+     with a verdict, and the report cannot see further back (Amendment 6F):
+     - a cluster's mode: `since its tests first ran in the window`;
+     - a history's mode with `FirstSeenSessionsAgo` 0: `since its first run, the latest`;
+     - otherwise: `since its first run in the window`.
    - `FirstSeenInLatestSession`: `first seen in the latest run`.
    - Otherwise: `first seen <MM-dd HH:mm> at <sha>, <when>`, where `<when>` is `<n> runs ago`
      (`1 run ago`), or `in the latest run` when `FirstSeenSessionsAgo` is 0. That case happens only
@@ -453,7 +457,7 @@ FAILURE MODES                                            3 failure modes
       at MyApp.Checkout.Basket.Total()
       at MyApp.Tests.CheckoutTests.Completes()
 
-2.  2 failed attempts · since the window opened
+2.  2 failed attempts · since its first run in the window
     System.TimeoutException
     timed out after <num>ms
       at System.Net.Http.HttpConnectionPool.
@@ -488,7 +492,7 @@ RUNS                                                        newest first
 FAILURE MODES                                             1 failure mode
 ────────────────────────────────────────────────────────────────────────
 
-1.  6 failed attempts · since the window opened
+1.  6 failed attempts · since its first run in the window
     Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
     assert.areequal failed. expected:<<num>>. actual:<<num>>.
       at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
@@ -541,7 +545,9 @@ timelines (Amendment 4C), and `history-healthy`, which never failed, does not ch
 `CurrentSchemaVersion` → `"1.25"`. The history comment gains: *1.25 adds `failureModes` to each
 finding and to `test`, drops the `failure mode N`, `more failure modes` and `AlwaysFailing`
 `failure mode` metrics, and takes `Flaky` and `AlwaysFailing` first-seen dates from the failures
-their counts cover.*
+their counts cover.* Then `"1.26"` (Amendment 6E), and the comment gains: *1.26 renames
+`firstSeenAfterWindowStart` to `firstSeenAfterFirstRun`, and measures both flags from the test's
+own first run in the window.*
 
 ### 4.2 `FailureModeDto`
 

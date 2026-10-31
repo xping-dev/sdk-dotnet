@@ -572,7 +572,26 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 builder.Append(' ', ContinuationIndent).AppendLine(text);
         }
 
-        WriteFailureModes(builder, finding.FailureModes, finding.FailureModes.Count);
+        WriteFailureModes(
+            builder,
+            finding.FailureModes,
+            finding.FailureModes.Count,
+            finding.Subject.Type == "group" ? ModeOwner.Group : ModeOwner.Finding);
+    }
+
+    /// <summary>
+    /// Whose failure modes a block lists, which decides how a mode that is not new is described.
+    /// </summary>
+    private enum ModeOwner
+    {
+        /// <summary>One test's finding. Its first-seen date covers only the failures it counted.</summary>
+        Finding,
+
+        /// <summary>A cluster's finding. Its first run is the oldest first run among its tests.</summary>
+        Group,
+
+        /// <summary>One test's history. Its first-seen date covers every failed attempt.</summary>
+        History
     }
 
     /// <summary>
@@ -582,11 +601,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// <param name="builder">What the report is being written into.</param>
     /// <param name="modes">The modes, in the order the view resolved them.</param>
     /// <param name="total">How many modes there are, which the heading states however many are listed.</param>
+    /// <param name="owner">Whose modes they are.</param>
     /// <remarks>
     /// Numbered in the row-number column, as findings are, so the block reads as a list of the same
     /// shape. Nothing at all when there is no mode: an empty heading would say the subject failed.
     /// </remarks>
-    private void WriteFailureModes(StringBuilder builder, IReadOnlyList<FailureModeDto> modes, int total)
+    private void WriteFailureModes(
+        StringBuilder builder, IReadOnlyList<FailureModeDto> modes, int total, ModeOwner owner)
     {
         if (modes.Count == 0)
             return;
@@ -601,7 +622,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             if (index > 0)
                 builder.AppendLine();
 
-            WriteFailureMode(builder, modes[index], index + 1);
+            WriteFailureMode(builder, modes[index], index + 1, owner);
         }
 
         if (total > listed)
@@ -618,11 +639,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// <summary>
     /// Writes one failure mode: the count line, then the type, the message and the frames.
     /// </summary>
-    private void WriteFailureMode(StringBuilder builder, FailureModeDto mode, int number)
+    private void WriteFailureMode(StringBuilder builder, FailureModeDto mode, int number, ModeOwner owner)
     {
         string label = number.ToString(CultureInfo.InvariantCulture) + ".";
         string count = $"{Count(mode.Occurrences)} {Plural(mode.Occurrences, "failed attempt")}";
-        List<string> header = Wrap($"{count} {capabilities.Glyphs.Separator} {FirstSeen(mode)}", ContinuationBudget);
+        List<string> header = Wrap($"{count} {capabilities.Glyphs.Separator} {FirstSeen(mode, owner)}", ContinuationBudget);
 
         builder.Append(label).Append(' ', Math.Max(1, RowLabelWidth - label.Length)).AppendLine(header[0]);
 
@@ -663,16 +684,31 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// Says when a mode first appeared, in words only when it is new in the window.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A mode already present in the test's first run in the window gets no date: the report cannot
     /// see whether the mode started there or long before.
+    /// </para>
+    /// <para>
+    /// Only a history can say that first run was the latest. Its date covers every failed attempt, so
+    /// a mode that is not new and was first seen in the latest run means the test had no run before
+    /// it. A finding's date covers only the failures it counted, and can name the latest run for a
+    /// mode its test had all along (D3).
+    /// </para>
     /// </remarks>
-    private string FirstSeen(FailureModeDto mode)
+    private string FirstSeen(FailureModeDto mode, ModeOwner owner)
     {
         if (mode.FirstSeenInLatestSession)
             return "first seen in the latest run";
 
         if (!mode.FirstSeenAfterFirstRun)
-            return "since its first run in the window";
+        {
+            return owner switch
+            {
+                ModeOwner.Group => "since its tests first ran in the window",
+                ModeOwner.History when mode.FirstSeenSessionsAgo == 0 => "since its first run, the latest",
+                _ => "since its first run in the window"
+            };
+        }
 
         string sha = Recorded(mode.FirstSeenSha) is { Length: > 0 } recorded
             ? " at " + TerminalText.Head(recorded, ShaWidth)
@@ -796,7 +832,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Every mode is listed whatever the findings say: a test can fail without reaching any
         // finding's threshold, and the block counts attempts, so it reads beside RUNS (D4).
-        WriteFailureModes(builder, history.FailureModes, history.FailureModes.Count);
+        WriteFailureModes(builder, history.FailureModes, history.FailureModes.Count, ModeOwner.History);
 
         builder.AppendLine();
         WriteHistoryFindings(builder, envelope, history);

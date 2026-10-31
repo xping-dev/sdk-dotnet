@@ -450,13 +450,14 @@ its one. Other kinds print no block. Each mode reads:
 - **First seen** says whether the mode is new, asked of every failure in the window, discounted or
   not, and measured from the test's own first run in the window, so a test that joined late is not
   called a regression. `since its first run in the window`: it was already there in that run, and
-  the report can't see further back. `first seen in the latest run`: it is new just now, and the
-  test ran without it before. Otherwise it appeared after the test's first run, and the line gives
-  the date and commit of the oldest failure the finding counted: `first seen <date> at <sha>, N runs
-  ago`. When the mode's older failures fell
-  in runs the finding set aside, that failure can be newer than the mode itself, down to
-  `first seen <date> at <sha>, in the latest run`. ` at <sha>` is left out when no commit was
-  recorded.
+  the report can't see further back. A group of tests reads `since its tests first ran in the
+  window`, measured from the first of them to run, and `report --test` for a test whose only run is
+  the latest reads `since its first run, the latest`. `first seen in the latest run`: it is new just
+  now, and the test ran without it before. Otherwise it appeared after the test's first run, and the
+  line gives the date and commit of the oldest failure the finding counted: `first seen <date> at
+  <sha>, N runs ago`. When the mode's older failures fell in runs the finding set aside, that
+  failure can be newer than the mode itself, down to `first seen <date> at <sha>, in the latest
+  run`. ` at <sha>` is left out when no commit was recorded.
 - **The message** is wrapped and stops after 6 lines, ending in `...`.
 - **Frames** are your own code, innermost first, up to 5. When none of it was on the stack, the
   framework's frames are shown with the note `(no test code on the stack; framework frames
