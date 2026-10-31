@@ -198,10 +198,17 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     {
         // An answer still held (HoldTokenResponses) or in flight must not hold the test: when the
         // token fires, Kestrel aborts the connections that are left.
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await _app.StopAsync(patience.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (patience.IsCancellationRequested)
+        {
+            // Parallel classes each run a fake; the port says which one did not stop.
+            throw new TimeoutException(
+                string.Create(CultureInfo.InvariantCulture, $"FakeCloud on port {Port} did not stop within 5 seconds."),
+                ex);
         }
         finally
         {
