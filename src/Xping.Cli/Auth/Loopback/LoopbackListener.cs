@@ -151,15 +151,9 @@ internal sealed class LoopbackListener : IAsyncDisposable
         if (Interlocked.Exchange(ref _stopped, 1) != 0)
             return;
 
-        try
-        {
-            _listener.Stop();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already closed.
-        }
-
+        // Close alone, never Stop then Close: on macOS and Linux the managed listener removes its
+        // endpoint in Stop and, in Close, creates it again to remove it a second time. That binds
+        // the port anew, and throws "Address already in use" if anything took it in between (#324).
         _listener.Close();
     }
 

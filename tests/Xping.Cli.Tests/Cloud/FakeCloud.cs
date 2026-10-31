@@ -6,13 +6,17 @@
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Web;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Primitives;
 
 namespace Xping.Cli.Tests.Cloud;
 
@@ -22,6 +26,9 @@ namespace Xping.Cli.Tests.Cloud;
 /// <remarks>
 /// <para>
 /// Listens on an ephemeral <c>127.0.0.1</c> port, so its Cloud URL is a valid <c>http</c> one.
+/// Kestrel binds port 0 and the OS hands out the port at bind time. <see cref="HttpListener"/>
+/// cannot: it needs a port probed and released first, and in one process its managed listeners
+/// share an endpoint per port, so parallel test classes could end up on one port (#324).
 /// Codes, refresh rotation and device codes run on the injected <see cref="TimeProvider"/>.
 /// </para>
 /// <para>
@@ -39,8 +46,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan ReuseLeeway = TimeSpan.FromSeconds(30);
 
-    private readonly HttpListener _listener;
-    private readonly Task _loop;
+    private readonly WebApplication _app;
     private readonly TimeProvider _time;
     private readonly Lock _gate = new();
     private readonly List<RecordedRequest> _requests = [];
@@ -56,9 +62,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     public FakeCloud(TimeProvider time)
     {
         _time = time;
-        (_listener, Port) = Bind();
+        _app = Start(HandleAsync);
+        Port = new Uri(_app.Urls.Single()).Port;
         CloudUrl = string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}");
-        _loop = Task.Run(AcceptLoopAsync);
     }
 
     public int Port { get; }
@@ -190,16 +196,23 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _listener.Stop();
-        _listener.Close();
-
+        // An answer still held (HoldTokenResponses) or in flight must not hold the test: when the
+        // token fires, Kestrel aborts the connections that are left.
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            await _loop.ConfigureAwait(false);
+            await _app.StopAsync(patience.Token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException)
+        catch (OperationCanceledException ex) when (patience.IsCancellationRequested)
         {
-            // Stopping the listener ends the loop this way.
+            // Parallel classes each run a fake; the port says which one did not stop.
+            throw new TimeoutException(
+                string.Create(CultureInfo.InvariantCulture, $"FakeCloud on port {Port} did not stop within 5 seconds."),
+                ex);
+        }
+        finally
+        {
+            await _app.DisposeAsync().ConfigureAwait(false);
         }
 
         // Contract §7.1, for every test that talks to the fake: never both credential headers
@@ -207,60 +220,34 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         Assert.DoesNotContain(Requests, r => r.Headers.ContainsKey("Authorization") && r.Headers.ContainsKey("X-API-Key"));
     }
 
-    private static (HttpListener Listener, int Port) Bind()
+    private static WebApplication Start(RequestDelegate handle)
     {
-        // HttpListener cannot bind port 0; a port is probed and then taken, and the race with
-        // another process taking it in between is retried.
-        for (int attempt = 0; ; attempt++)
-        {
-            int port;
-            using (var probe = new TcpListener(IPAddress.Loopback, 0))
-            {
-                probe.Start();
-                port = ((IPEndPoint)probe.LocalEndpoint).Port;
-            }
+        WebApplicationBuilder builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions());
+        builder.WebHost.UseKestrelCore().ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
 
-            var listener = new HttpListener();
-            listener.Prefixes.Add(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/"));
+        WebApplication app = builder.Build();
+        app.Run(handle);
 
-            try
-            {
-                listener.Start();
-                return (listener, port);
-            }
-            catch (HttpListenerException) when (attempt < 5)
-            {
-                listener.Close();
-            }
-        }
+        // Kestrel has bound by the time this returns; the constructor needs the port.
+        app.StartAsync().GetAwaiter().GetResult();
+        return app;
     }
 
-    private async Task AcceptLoopAsync()
+    private async Task HandleAsync(HttpContext context)
     {
-        while (_listener.IsListening)
-        {
-            HttpListenerContext context;
-            try
-            {
-                context = await _listener.GetContextAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException)
-            {
-                return;
-            }
+        HttpRequest request = context.Request;
 
-            _ = Task.Run(() => HandleAsync(context));
-        }
-    }
-
-    private async Task HandleAsync(HttpListenerContext context)
-    {
-        HttpListenerRequest request = context.Request;
-        string path = request.Url!.AbsolutePath;
+        // As sent, still escaped: a test asserts how the CLI escaped its route values, which
+        // Request.Path would have decoded.
+        string path = context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget.Split('?')[0];
+        string query = request.QueryString.Value ?? string.Empty;
+        NameValueCollection headers = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string name, StringValues values) in request.Headers)
+            headers[name] = values.ToString();
 
         string body;
-        using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
-            body = await reader.ReadToEndAsync().ConfigureAwait(false);
+        using (var reader = new StreamReader(request.Body, Encoding.UTF8))
+            body = await reader.ReadToEndAsync(context.RequestAborted).ConfigureAwait(false);
 
         NameValueCollection form = string.Equals(request.ContentType, "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
             ? HttpUtility.ParseQueryString(body)
@@ -270,10 +257,10 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             _requests.Add(new RecordedRequest(
-                request.HttpMethod,
+                request.Method,
                 path,
-                request.Url.Query,
-                request.Headers.AllKeys.Where(k => k is not null).ToDictionary(k => k!, k => request.Headers[k]!, StringComparer.OrdinalIgnoreCase),
+                query,
+                headers.AllKeys.ToDictionary(k => k!, k => headers[k]!, StringComparer.OrdinalIgnoreCase),
                 form.AllKeys.Where(k => k is not null).ToDictionary(k => k!, k => form[k]!, StringComparer.Ordinal),
                 body,
                 _time.GetUtcNow()));
@@ -287,16 +274,16 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         {
             // A body cut short: aborting before any byte is written still sends an empty 200.
             context.Response.StatusCode = 200;
-            context.Response.ContentLength64 = 1000;
-            await context.Response.OutputStream.WriteAsync("{\"acc"u8.ToArray()).ConfigureAwait(false);
-            await context.Response.OutputStream.FlushAsync().ConfigureAwait(false);
-            context.Response.Abort();
+            context.Response.ContentLength = 1000;
+            await context.Response.Body.WriteAsync("{\"acc"u8.ToArray()).ConfigureAwait(false);
+            await context.Response.Body.FlushAsync().ConfigureAwait(false);
+            context.Abort();
             return;
         }
 
         Reply reply = fault switch
         {
-            null => Route(request.HttpMethod, path, form, request.QueryString, request.Headers),
+            null => Route(request.Method, path, form, HttpUtility.ParseQueryString(query), headers),
             { Problem: true } => Problem((int)fault.Status, fault.Error ?? "Error.Injected", fault.Description) with
             {
                 RetryAfter = fault.RetryAfter
@@ -305,7 +292,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         };
 
         if (path == "/connect/token" && HoldTokenResponses is { } hold)
-            await hold.ConfigureAwait(false);
+            await hold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";
@@ -318,9 +305,8 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             context.Response.Headers["Retry-After"] = retryAfter.ToString(CultureInfo.InvariantCulture);
 
         byte[] bytes = Encoding.UTF8.GetBytes(reply.Body);
-        context.Response.ContentLength64 = bytes.Length;
-        await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
-        context.Response.Close();
+        context.Response.ContentLength = bytes.Length;
+        await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
     }
 
     private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers) =>
