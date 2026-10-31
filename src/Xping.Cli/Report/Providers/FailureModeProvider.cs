@@ -25,6 +25,7 @@ namespace Xping.Cli.Report.Providers;
 /// Whether the adapter recorded nothing to build a signature from. True for every failure from an
 /// adapter that does not capture failure detail, and the reason such failures never group.
 /// </param>
+/// <param name="TimedOut">Whether its failures timed out rather than failed.</param>
 /// <param name="Occurrences">Failures carrying this signature.</param>
 /// <param name="FirstSeenAt">
 /// Start of the oldest session among the failures <paramref name="Occurrences"/> counts, so the
@@ -54,6 +55,7 @@ internal sealed record SignatureView(
     IReadOnlyList<string> Frames,
     bool Degraded,
     bool Unavailable,
+    bool TimedOut,
     int Occurrences,
     DateTime FirstSeenAt,
     string? FirstSeenSha,
@@ -798,13 +800,21 @@ internal sealed class FailureModeProvider : IFindingProvider
         SignatureView? modal = signatures.Count > 0 ? signatures[0] : null;
         double modalShare = modal == null ? 0 : (double)modal.Occurrences / failures.Count;
 
+        // The gate pools the modes that recorded nothing. They differ only in whether the attempt
+        // timed out, and a test that fails every run without detail is broken whichever way each
+        // attempt ended. Splitting them must not turn it flaky. The share published below stays the
+        // modal mode's own: when the pool is what clears the gate, no signed mode can hold more than
+        // the 30% the pool leaves, so the modal mode is one of the pooled ones.
+        double unavailableShare =
+            (double)signatures.Where(s => s.Unavailable).Sum(s => s.Occurrences) / failures.Count;
+
         // A dominant failure mode occurring on almost every run is a broken test, not a flaky one,
         // and is reported apart because the remedy is entirely different — and because leaving it in
         // the flaky bucket is how a real regression gets ignored. Both arms are classifications
         // against the published thresholds; neither says anything about why the test fails.
         if (modal != null &&
             failureRate >= LocalAnalysisConstants.AlwaysFailingRate &&
-            modalShare >= LocalAnalysisConstants.AlwaysFailingModalShareMin)
+            Math.Max(modalShare, unavailableShare) >= LocalAnalysisConstants.AlwaysFailingModalShareMin)
         {
             return Examination.Of(new FindingCandidate(
                 FindingKind.AlwaysFailing,
@@ -1163,6 +1173,7 @@ internal sealed class FailureModeProvider : IFindingProvider
             signature.Frames,
             signature.Degraded,
             signature.Unavailable,
+            signature.TimedOut,
             occurrences,
             firstSeenAt,
             firstSeenSha,

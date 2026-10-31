@@ -86,7 +86,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         JsonElement finding = Finding(json, FindingFingerprint);
         Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetDouble());
         Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("category").GetString());
-        Assert.Equal("1.26", json.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.27", json.GetProperty("schemaVersion").GetString());
         Assert.Empty(text.Error);
     }
 

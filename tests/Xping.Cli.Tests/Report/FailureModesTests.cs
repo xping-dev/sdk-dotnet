@@ -58,6 +58,7 @@ public sealed class FailureModesTests
                 signature.Frames,
                 signature.Degraded,
                 signature.Unavailable,
+                signature.TimedOut,
                 signature.Occurrences,
                 signature.FirstSeenAt,
                 signature.FirstSeenSha,

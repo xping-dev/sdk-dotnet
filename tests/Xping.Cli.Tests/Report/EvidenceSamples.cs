@@ -32,6 +32,7 @@ internal static class EvidenceSamples
             ["MyApp.Tests.CheckoutTests.Completes()"],
             Degraded: false,
             Unavailable: false,
+            TimedOut: false,
             Occurrences: 12,
             // Inside the detail fixtures' window (08-05 to 08-19, 20 runs) and far enough back for the
             // always-failing sample's 19 failures, so no golden pins a date the store could not hold.

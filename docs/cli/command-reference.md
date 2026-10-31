@@ -464,7 +464,12 @@ its one. Other kinds print no block. Each mode reads:
   shown)`.
 - **`exception type not recorded`** stands in for a type the adapter did not record.
 - **`the adapter recorded no failure detail`** replaces the type, message and frames when the
-  failure was recorded without an exception, as a killed test can be.
+  failure was recorded without an exception.
+- **`timed out, no failure detail recorded`** replaces them for a timeout recorded without an
+  exception, as a killed test can be.
+
+Timed-out attempts are always modes of their own, counted apart from failed attempts, in `--id`
+and `--test` alike.
 
 At most 5 modes are printed, then `N more failure modes in --format json`; the heading counts all
 of them. `failureModes` in [`--format json`](#--format-json) carries every mode.
@@ -958,8 +963,10 @@ the adapter recorded none), the normalised message, up to five frames innermost 
 every failure in the window and measured from the test's first run in it with a verdict (for a
 cluster, its members' oldest), so `firstSeenSessionsAgo` of `0` alone does not mean new. A test
 whose only run is the latest has neither flag set. `hash` joins a
-mode to `evidence.exemplars[].signatureHash`. `report --test --format json` carries the same list
-for the test, counted over every failed attempt in the window.
+mode to `evidence.exemplars[].signatureHash`. `unavailable` is `true` when nothing was recorded to
+group the failure by. `timedOut` is `true` when the mode's attempts timed out; a mode never mixes
+timed-out and failed attempts. `report --test --format json` carries the same list for the test,
+counted over every failed attempt in the window.
 
 `context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
 (`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
@@ -980,7 +987,7 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.26",
+  "schemaVersion": "1.27",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
@@ -1053,7 +1060,7 @@ are not each other and `tests` is what they add up to:
         {
           "hash": "9c41e07b2d3a", "exceptionType": "System.InvalidOperationException",
           "message": "summary for <date> has no rows", "frames": ["Billing.SummaryTests.GenerateMonthlySummary()"],
-          "framesDegraded": false, "unavailable": false, "occurrences": 4,
+          "framesDegraded": false, "unavailable": false, "timedOut": false, "occurrences": 4,
           "firstSeenAt": "2026-08-12T09:14:00Z", "firstSeenSha": "c670fc3d1e2f", "firstSeenSessionsAgo": 14,
           "firstSeenInLatestSession": false, "firstSeenAfterFirstRun": true
         },

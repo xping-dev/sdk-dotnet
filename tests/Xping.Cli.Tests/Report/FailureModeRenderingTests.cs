@@ -147,6 +147,16 @@ public sealed class FailureModeRenderingTests
     }
 
     [Fact]
+    public void AnUnavailableTimeoutSaysItTimedOut()
+    {
+        string[] block = Block(Render(With(Mode() with { Unavailable = true, TimedOut = true, FramesDegraded = true, Frames = [] })));
+
+        Assert.Equal(
+            ["1.  3 failed attempts | first seen 08-12 09:40 at b71e004, 6 runs ago", "    timed out, no failure detail recorded"],
+            block);
+    }
+
+    [Fact]
     public void AFrameTooWideBreaksBeforeItsMethodAndContinuesUnderIt()
     {
         string[] block = Block(Render(With(Mode() with
@@ -353,7 +363,8 @@ public sealed class FailureModeRenderingTests
         string[] block = Block(Render(Get("history-timeout-retry")));
 
         Assert.Contains("2.  4 failed attempts | first seen 08-20 23:40 at c670fc3, 6 runs ago", block);
-        Assert.Contains("    the adapter recorded no failure detail", block);
+        Assert.Contains("    timed out, no failure detail recorded", block);
+        Assert.DoesNotContain("    the adapter recorded no failure detail", block);
     }
 
     /// <summary>
@@ -471,6 +482,7 @@ public sealed class FailureModeRenderingTests
             ["MyApp.Checkout.Basket.Total()"],
             FramesDegraded: false,
             Unavailable: false,
+            TimedOut: false,
             Occurrences: 3,
             FirstSeenAt: new DateTime(2026, 8, 12, 9, 40, 0, DateTimeKind.Utc),
             FirstSeenSha: "b71e004c93d2",

@@ -220,7 +220,7 @@ public sealed class ShareableOutputTests
     public void AHeadlineNamesTheFailureTypeOnlyWhenTheAdapterRecordedOne()
     {
         SignatureView unnamed = new(
-            "abc123", null, "no detail", [], false, true, 19,
+            "abc123", null, "no detail", [], false, true, false, 19,
             new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), null, 0, true, false);
 
         var (headline, _) = EvidenceHeadline.For(

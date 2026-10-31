@@ -652,7 +652,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         if (mode.Unavailable)
         {
-            builder.Append(' ', ContinuationIndent).AppendLine("the adapter recorded no failure detail");
+            // A timeout's outcome is known, so it is not the adapter's loss.
+            builder.Append(' ', ContinuationIndent).AppendLine(mode.TimedOut
+                ? "timed out, no failure detail recorded"
+                : "the adapter recorded no failure detail");
             return;
         }
 

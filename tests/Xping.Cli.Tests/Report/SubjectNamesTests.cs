@@ -234,6 +234,7 @@ public sealed class SubjectNamesTests
             [],
             Degraded: false,
             Unavailable: false,
+            TimedOut: false,
             Occurrences: 12,
             FirstSeenAt: new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
             FirstSeenSha: "a3f9c2e",

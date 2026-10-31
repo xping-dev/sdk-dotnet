@@ -444,7 +444,7 @@ internal static class ReportFixtures
 
         SignatureView signature = new(
             "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
-            Degraded: false, Unavailable: false, Occurrences: 6,
+            Degraded: false, Unavailable: false, TimedOut: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
             FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
 
@@ -587,7 +587,7 @@ internal static class ReportFixtures
 
         SignatureView signature = new(
             "abc123", "System.InvalidOperationException", "Race condition detected", [],
-            Degraded: false, Unavailable: false, Occurrences: failing,
+            Degraded: false, Unavailable: false, TimedOut: false, Occurrences: failing,
             FirstSeenAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "c670fc3",
             FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
 
@@ -879,8 +879,9 @@ internal static class ReportFixtures
             { Id = "f_6e1d0b7a", EvidenceLevel = "moderate" }
         ];
 
-        // A killed attempt carries no exception, so its timeouts are one mode the adapter recorded
-        // nothing for. TimingOut publishes none, and --test lists it anyway (Amendment 1E).
+        // A killed attempt carries no exception, so its timeouts are one mode that recorded nothing
+        // and says it timed out. TimingOut publishes none, and --test lists it anyway (Amendments 1E
+        // and 6).
         return History(
             name, "b07e5c2d9f31", "tests/SampleApp.MSTest/GatewayTests.cs", 57,
             sessions, findings, [2], flagged: 3, produced: new SeverityCountsDto(2, 1, 0),

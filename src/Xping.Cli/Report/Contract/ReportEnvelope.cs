@@ -99,9 +99,11 @@ internal sealed record ReportEnvelope(
     /// where a <c>Flaky</c> or <c>AlwaysFailing</c> signature's first-seen date, sha and sessions ago
     /// came to be taken from the failures its count covers. 1.26 is where a failure mode's
     /// <c>firstSeenAfterWindowStart</c> became <c>firstSeenAfterFirstRun</c>, and both its flags came
-    /// to be measured from the test's own first run in the window rather than the window's oldest.
+    /// to be measured from the test's own first run in the window rather than the window's oldest. 1.27 is where each failure mode gained <c>timedOut</c>, and
+    /// timed-out attempts became modes of their own rather than sharing one with failed attempts,
+    /// whether or not they recorded detail.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.26";
+    public const string CurrentSchemaVersion = "1.27";
 }
 
 /// <summary>
@@ -456,6 +458,9 @@ internal sealed record MetricDto(string Label, string Value);
 /// Whether no test code was on the stack, so the frames are the framework's, or there are none.
 /// </param>
 /// <param name="Unavailable">Whether the adapter recorded nothing to build a signature from.</param>
+/// <param name="TimedOut">
+/// Whether its attempts timed out rather than failed. A mode never mixes the two.
+/// </param>
 /// <param name="Occurrences">Failed attempts carrying it.</param>
 /// <param name="FirstSeenAt">Start of the oldest session among those attempts.</param>
 /// <param name="FirstSeenSha">Commit that session ran at, when one was recorded.</param>
@@ -480,6 +485,7 @@ internal sealed record FailureModeDto(
     IReadOnlyList<string> Frames,
     bool FramesDegraded,
     bool Unavailable,
+    bool TimedOut,
     int Occurrences,
     DateTime FirstSeenAt,
     string? FirstSeenSha,

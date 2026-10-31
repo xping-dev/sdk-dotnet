@@ -149,7 +149,7 @@ public sealed class ReproCommandRunTests : IDisposable
                 1);
         }
 
-        var signature = new SignatureView("hash", null, "message", [], false, false, names.Length, DateTime.UnixEpoch, null, 0, true, false);
+        var signature = new SignatureView("hash", null, "message", [], false, false, false, names.Length, DateTime.UnixEpoch, null, 0, true, false);
         ClusterMember[] members = [.. names.Select(name => new ClusterMember(name, name, 1, 1, 2))];
 
         return new Finding(

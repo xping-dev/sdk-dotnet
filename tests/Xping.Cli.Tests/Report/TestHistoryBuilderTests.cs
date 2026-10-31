@@ -242,15 +242,19 @@ public sealed class TestHistoryBuilderTests
     [Fact]
     public void FailureModesCountEveryFailedAttemptOfTheWindow()
     {
-        // Neither failure recorded any detail, so both carry the test's one unavailable signature.
-        FailureModeDto mode = Assert.Single(TestHistoryBuilder.Found(Mixed(), Target, Match).FailureModes);
+        // Neither recorded any detail, but one timed out: two modes, not one counting both (#320).
+        IReadOnlyList<FailureModeDto> modes = TestHistoryBuilder.Found(Mixed(), Target, Match).FailureModes;
 
-        Assert.True(mode.Unavailable);
-        Assert.Equal(2, mode.Occurrences);
-        Assert.Equal(2, mode.FirstSeenSessionsAgo);
-        Assert.Equal(TestSessionFactory.Session(2).StartedAt, mode.FirstSeenAt);
-        Assert.True(mode.FirstSeenAfterFirstRun);
-        Assert.False(mode.FirstSeenInLatestSession);
+        Assert.Equal(2, modes.Count);
+        Assert.All(modes, m => Assert.True(m.Unavailable));
+        Assert.All(modes, m => Assert.Equal(1, m.Occurrences));
+        Assert.Equal([true, false], modes.Select(m => m.TimedOut));
+        Assert.Equal([1, 2], modes.Select(m => m.FirstSeenSessionsAgo));
+
+        FailureModeDto failed = modes[1];
+        Assert.Equal(TestSessionFactory.Session(2).StartedAt, failed.FirstSeenAt);
+        Assert.True(failed.FirstSeenAfterFirstRun);
+        Assert.False(failed.FirstSeenInLatestSession);
     }
 
     /// <summary>
