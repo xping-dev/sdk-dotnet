@@ -1585,7 +1585,7 @@ public sealed class FailureModeProviderTests
         SignatureView signature = evidence.DistinctSignatures[0];
 
         Assert.True(signature.FirstSeenInLatestSession);
-        Assert.True(signature.FirstSeenAfterWindowStart);
+        Assert.True(signature.FirstSeenAfterFirstRun);
         Assert.Equal(0, signature.FirstSeenSessionsAgo);
     }
 
@@ -1598,7 +1598,7 @@ public sealed class FailureModeProviderTests
             Single(candidates, FindingKind.AlwaysFailing).Evidence);
 
         Assert.False(evidence.Signature.FirstSeenInLatestSession);
-        Assert.False(evidence.Signature.FirstSeenAfterWindowStart);
+        Assert.False(evidence.Signature.FirstSeenAfterFirstRun);
         Assert.Equal(9, evidence.Signature.FirstSeenSessionsAgo);
     }
 
@@ -1623,8 +1623,81 @@ public sealed class FailureModeProviderTests
         Assert.Equal("sha-of-run-6", signature.FirstSeenSha);
 
         // Whether it is new is asked of every failure: it was there in the run set aside.
-        Assert.True(signature.FirstSeenAfterWindowStart);
+        Assert.True(signature.FirstSeenAfterFirstRun);
         Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// A test that joined the window late and failed this way in its first run did not regress when
+    /// it joined, so the mode is not new, though the window's oldest runs never saw it (#319).
+    /// </summary>
+    [Fact]
+    public void AModeALateTestHadFromItsFirstRunIsNotNew()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 12).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. ordinal < 4 ? [] : new[] { ordinal is 4 or 8 ? Failure("Subject") : Passing("Subject") },
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(7, signature.FirstSeenSessionsAgo);
+        Assert.False(signature.FirstSeenAfterFirstRun);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// A cluster is measured from its members' first run, so tests that joined together and failed
+    /// together from the start are not a new cluster (#319).
+    /// </summary>
+    [Fact]
+    public void AClusterWhoseMembersFailedFromTheirFirstRunIsNotNew()
+    {
+        string[] members = ["Alpha", "Beta", "Gamma"];
+        TestSession[] sessions = [.. Enumerable.Range(0, 9).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. ordinal < 4
+                        ? []
+                        : members.Select(m => ordinal is 4 or 8 ? SharedFailure(m) : Passing(m)),
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal(4, evidence.Signature.FirstSeenSessionsAgo);
+        Assert.False(evidence.Signature.FirstSeenAfterFirstRun);
+        Assert.False(evidence.Signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// One member that joined late does not make a cluster the others had all along look new.
+    /// </summary>
+    [Fact]
+    public void AClusterIsMeasuredFromItsOldestMembersFirstRun()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 9).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    ordinal is 6 or 8 ? SharedFailure("Alpha") : Passing("Alpha"),
+                    ordinal is 6 or 8 ? SharedFailure("Beta") : Passing("Beta"),
+                    .. ordinal < 6 ? [] : new[] { ordinal is 6 or 8 ? SharedFailure("Gamma") : Passing("Gamma") },
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        // Alpha and Beta ran from the window's start without it, so it arrived at run 6.
+        Assert.Equal(2, evidence.Signature.FirstSeenSessionsAgo);
+        Assert.True(evidence.Signature.FirstSeenAfterFirstRun);
     }
 
     /// <summary>
@@ -1658,7 +1731,7 @@ public sealed class FailureModeProviderTests
         SignatureView signature = Assert.Single(evidence.DistinctSignatures);
 
         Assert.Equal(3, signature.FirstSeenSessionsAgo);
-        Assert.False(signature.FirstSeenAfterWindowStart);
+        Assert.False(signature.FirstSeenAfterFirstRun);
         Assert.False(signature.FirstSeenInLatestSession);
     }
 

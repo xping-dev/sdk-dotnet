@@ -161,6 +161,30 @@ internal sealed class TestIndex
     public int SessionsRunIn(string fingerprint) => _sessionsRunIn.GetValueOrDefault(fingerprint);
 
     /// <summary>
+    /// Gets the oldest session in which any attempt of a test ran to a verdict.
+    /// </summary>
+    /// <param name="fingerprint">The test to look up.</param>
+    /// <returns>That session's position in the window, or -1 when the test never reached a verdict.</returns>
+    /// <remarks>
+    /// The run a failure mode's newness is measured from. Any attempt counts, not only the deciding
+    /// one: a first attempt that failed is where a mode can first appear even when a retry was skipped.
+    /// A skipped appearance does not count, because the test could not have failed there.
+    /// </remarks>
+    public int OldestVerdictSessionOf(string fingerprint)
+    {
+        IReadOnlyList<ExecutionRef> executions = ExecutionsOf(fingerprint);
+
+        // Newest first, so the oldest verdict is the last one found walking back from the end.
+        for (int i = executions.Count - 1; i >= 0; i--)
+        {
+            if (executions[i].HasVerdict)
+                return executions[i].SessionIndex;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// Gets the display identity of one test.
     /// </summary>
     /// <param name="fingerprint">The test to look up.</param>

@@ -63,7 +63,7 @@ public sealed class FailureModesTests
                 signature.FirstSeenSha,
                 signature.FirstSeenSessionsAgo,
                 signature.FirstSeenInLatestSession,
-                signature.FirstSeenAfterWindowStart),
+                signature.FirstSeenAfterFirstRun),
             mode);
     }
 }

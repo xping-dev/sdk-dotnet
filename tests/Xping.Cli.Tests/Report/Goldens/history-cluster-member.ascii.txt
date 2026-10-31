@@ -28,7 +28,7 @@ RUNS                                                        newest first
 FAILURE MODES                                             1 failure mode
 ------------------------------------------------------------------------
 
-1.  10 failed attempts | since the window opened
+1.  10 failed attempts | since its first run in the window
     System.InvalidOperationException
     the database 'orders' has not been provisioned.
       at SampleApp.MSTest.UnprovisionedDatabase..ctor()

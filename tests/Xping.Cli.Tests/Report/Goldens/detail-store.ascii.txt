@@ -24,7 +24,7 @@ FINDING                                                       row 1 of 2
 FAILURE MODES                                             1 failure mode
 ------------------------------------------------------------------------
 
-1.  20 failed attempts | since the window opened
+1.  20 failed attempts | since its first run in the window
     System.InvalidOperationException
     the database has not been provisioned.
 ```

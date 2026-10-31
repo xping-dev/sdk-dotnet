@@ -39,7 +39,7 @@ internal static class EvidenceSamples
             FirstSeenSha: "a3f9c2e",
             FirstSeenSessionsAgo: 18,
             FirstSeenInLatestSession: false,
-            FirstSeenAfterWindowStart: true);
+            FirstSeenAfterFirstRun: true);
 
         FailureExemplar exemplar = new(
             "11111111-1111-1111-1111-111111111111",

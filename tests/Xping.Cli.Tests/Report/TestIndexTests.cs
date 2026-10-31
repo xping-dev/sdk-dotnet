@@ -165,6 +165,48 @@ public sealed class TestIndexTests
         Assert.Equal(10, index.SessionsRunIn(SubjectFingerprint));
     }
 
+    /// <summary>
+    /// A failure mode's newness is measured from this run, so a skipped first appearance, where the
+    /// test could not have failed, is passed over.
+    /// </summary>
+    [Fact]
+    public void OldestVerdictSessionOfSkipsAnAppearanceWithNoVerdict()
+    {
+        TestIndex index = TestSessionFactory.Context(
+            TestSessionFactory.Session(0, "Other"),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution(Subject, TestOutcome.Skipped)]),
+            TestSessionFactory.Session(2, [TestSessionFactory.Execution(Subject, TestOutcome.Failed)]),
+            TestSessionFactory.Session(3, [TestSessionFactory.Execution(Subject)])).Tests;
+
+        Assert.Equal(1, index.OldestVerdictSessionOf(SubjectFingerprint));
+    }
+
+    /// <summary>
+    /// Any attempt counts: a failed first attempt is where a mode can appear, whatever its retry did.
+    /// </summary>
+    [Fact]
+    public void OldestVerdictSessionOfCountsAnAttemptThatDidNotDecideTheRun()
+    {
+        TestIndex index = TestSessionFactory.Context(
+            TestSessionFactory.Session(
+                0,
+                [
+                    TestSessionFactory.Execution(Subject, TestOutcome.Failed, attempt: 1, maxRetries: 1, errorMessage: "boom"),
+                    TestSessionFactory.Execution(Subject, TestOutcome.Skipped, attempt: 2, maxRetries: 1)
+                ]),
+            TestSessionFactory.Session(1, [TestSessionFactory.Execution(Subject)])).Tests;
+
+        Assert.Equal(1, index.OldestVerdictSessionOf(SubjectFingerprint));
+    }
+
+    [Fact]
+    public void OldestVerdictSessionOfIsMinusOneForAFingerprintTheWindowNeverSaw()
+    {
+        TestIndex index = TestIndex.Build(Window(total: 20, presentIn: 10, attempts: 1));
+
+        Assert.Equal(-1, index.OldestVerdictSessionOf("fp-NeverRan"));
+    }
+
     [Fact]
     public void SessionsRunInIsZeroForAFingerprintTheWindowNeverSaw()
     {
