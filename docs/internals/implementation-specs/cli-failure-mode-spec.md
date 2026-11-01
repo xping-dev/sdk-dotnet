@@ -97,7 +97,7 @@ These changes are applied in place in the sections named.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | §4.2: `FailureModeDto` carries the local composite signature only | It gains `ErrorMessageHash`, the SDK's hash as stored in the session file, never recomputed. A mode whose executions carry different hashes takes the most frequent. It is a local field, present with or without Cloud | §4.2 |
+| A | §4.2: `FailureModeDto` carries the local composite signature only | It gains `ErrorMessageHash`, the SDK's hash as stored in the session file, never recomputed. A mode whose executions carry different hashes takes the most frequent, and on a tie the ordinally smallest, so the value does not depend on enumeration order. It is a local field, present with or without Cloud | §4.2 |
 | B | — | Each mode carries a Cloud match (`matched`, `unseen`, `unsignable`, `unknown`) and its row gains one trailing token: `cloud: same error on 6 machines · 34 CI · 2 local · since 2026-10-11`, `cloud: unseen`, `cloud: unknown`, or nothing for `unsignable` | D5, §4.2 |
 
 The composite signature stays the local grouping key; `ErrorMessageHash` is never an input to it.

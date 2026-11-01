@@ -1327,8 +1327,6 @@ API key set, `logout` says "not signed in" and suggests unsetting `XPING_APIKEY`
 
 ## 13. Exit codes
 
-`report` uses 0–4 (Amendment 1B).
-
 Today's codes 0–3 keep their meaning per command. New codes start at 10 so they never collide with
 a `report` meaning and are easy to recognise in scripts:
 
@@ -1338,6 +1336,7 @@ a `report` meaning and are easy to recognise in scripts:
 | 1 | — | as today (`report` threshold, `where`/`clear` failures, root without args) | existing |
 | 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; `report` unavailable. For the auth commands also an invalid `XPING_CLOUDURL` or settings file (`"error": "configuration"`); `report` turns that into a hint (§11.6) | all |
 | 3 | — | `report --id` not reported | existing |
+| 4 | — | `report --test` matched more than one test (`ExitCodes.TestAmbiguous`, Amendment 1B) | `report` |
 | 10 | `AuthRequired` | `auth status` with no credential of any kind | `auth status` |
 | 11 | `LoginDeclined` | consent denied in the browser | `login` |
 | 12 | `LoginTimedOut` | 5-minute loopback wait or device code expiry | `login` |
@@ -1348,7 +1347,7 @@ a `report` meaning and are easy to recognise in scripts:
 | 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure; `auth status` with no credential when a store could not be read | `login`, `logout`, `auth status` |
 | 130 | `Cancelled` | Ctrl+C (`Program.Run` maps it for every command) | all |
 
-`report` never returns a code above 3 for a Cloud problem; Cloud problems are hints (§10.4). Ctrl+C
+`report` never returns a code above 4, and never a Cloud-specific one (Amendment 1B); Cloud problems are hints (§10.4). Ctrl+C
 is 130 for every command. The table is repeated in
 `docs/cli/command-reference.md` (phase 8).
 

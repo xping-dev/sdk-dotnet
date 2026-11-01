@@ -107,9 +107,9 @@ quoted rows.
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | §8: the name and headline lines are identical with or without Cloud; Cloud adds a trailer segment only | The row's label token is layered (Cloud spec §7.2): a Cloud verdict takes the label (`cloud broken`) and the local kind moves to a second line (`local: flaky in 12 runs here`); with no verdict the label is `local {kind}` and the second line says why. Rank, order, `--kind` and `--fail-on` stay local | §8 |
+| A | §8: the name and headline lines are identical with or without Cloud; Cloud adds a trailer segment only | The row's label token is layered (Cloud spec §7.2). A verdict of `known-flaky`, `broken`, `unstable` or `passing` takes the label (`cloud broken`) and the local kind moves to a second line (`local: flaky in 12 runs here`). `no-history`, no `cloud` object, or a digest that is not `ok` keeps the label `local {kind}`, and the second line says why (`cloud: no canonical history`, or the per-row reason of Cloud spec §7.6). `disagreesWithLocal` puts `≠` (`!=` in ASCII) between the two labels; observation kinds get Cloud spec §7.3's `cloud: {flaky.state}` line. Rank, order, `--kind` and `--fail-on` stay local | §8 |
 | B | Amendment 4: trailer `confidence 0.62 · moderately reliable` | The trailer is Cloud spec §7.3: `confidence 0.22 ▼0.61 · evidence adequate (ESS 34) · 35 d`, with its own fit order. Nothing local is cut for it | §8, Amendment 4 |
-| C | Amendment 4: header `· cloud` when at least one finding was enriched | `· cloud` when `context.cloud.status` is `ok`, `· cloud (partial)` when `partial` (Cloud spec §7.5). Any other status prints the reason line below the header (Cloud spec §7.6) | §8, Amendment 4 |
+| C | Amendment 4: header `· cloud` when at least one finding was enriched | `· cloud` when `context.cloud.status` is `ok`, `· cloud (partial)` when `partial` (Cloud spec §7.5). `unavailable`, `login-required` and the other failure statuses print the reason line below the header (Cloud spec §7.6). `not-attempted` prints nothing there: on a terminal the stderr banner covers it | §8, Amendment 4 |
 
 Amendment 4's rule stands: the renderer composes every Cloud string, and the builder never resolves
 Cloud text.

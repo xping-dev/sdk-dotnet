@@ -298,7 +298,8 @@ Cloud match and is never an input to the composite.
 `FailureSignatureFactory.Create`. A mode groups executions by the composite; the mode's
 `ErrorMessageHash` is the hash shared by its executions, or, when a composite groups executions
 with different message hashes (possible when the normaliser and the composite disagree on a
-literal), the most frequent one. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
+literal), the most frequent one, and on a tie the ordinally smallest, so the value does not
+depend on enumeration order. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
 it into `FailureModeDto.ErrorMessageHash`. It is a local field, labelled local, present with or
 without Cloud.
 
@@ -664,7 +665,7 @@ the superseded text stays for history.
 | `cli-latest-run-spec.md` | Amendment 7 — Cloud line added, not substituted | Reverses Amendment 6's replacement: the local contrast sentence stays; the Cloud line is §7.5 here. |
 | `cli-test-history-spec.md` | Amendment 11 — `CLOUD` block and `RUNS IN CLOUD` | Fills §8 "Reserved for Cloud" with §8 here; `TestHistoryDto.Cloud`. |
 | `cli-failure-mode-spec.md` | Amendment 8 — per-mode Cloud token | §8 "nothing is reserved" is replaced by §5.2 and §7.4 here: `errorMessageHash` on every mode, a `cloud` match per mode. |
-| `cli-finding-detail-spec.md` | Amendment 9 — Cloud pairs | The `cloud *` pairs of §7.4 here replace the two pairs of cli-auth §11.3. |
+| `cli-finding-detail-spec.md` | Amendment 9 — Cloud pairs | The `cloud *` pairs of §7.4 here replace the three pairs of cli-auth §11.3 (`cloud confidence`, `cloud evidence`, `cloud trend`). |
 
 ---
 

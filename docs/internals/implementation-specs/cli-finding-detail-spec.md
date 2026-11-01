@@ -142,7 +142,7 @@ everywhere else.**
 
 | # | Was | Now | Changed |
 |---|---|---|---|
-| A | Amendment 5: `cloud confidence`, `cloud evidence`, `cloud trend` from cli-auth §11.3 | The `cloud *` pairs of Cloud spec §7.4: `cloud verdict`, `cloud confidence`, `cloud evidence`, `cloud flaky`, `cloud canonical`, `cloud transition`, `cloud lifetime`, `cloud fetched`. Each names its window | Amendment 5, §8 |
+| A | Amendment 5: `cloud confidence`, `cloud evidence`, `cloud trend` from cli-auth §11.3 | The `cloud *` pairs of Cloud spec §7.4: `cloud verdict`, `cloud confidence`, `cloud evidence`, `cloud flaky`, `cloud canonical`, `cloud transition`, `cloud lifetime`, `cloud fetched`. `cloud confidence`, `cloud evidence` and `cloud flaky` name their window; the others carry none, and `cloud lifetime` is never windowed | Amendment 5, §8 |
 
 Amendment 5's rule stands: the renderer appends the pairs from `FindingDto.Cloud`, and
 `findings[].metrics` stays local.

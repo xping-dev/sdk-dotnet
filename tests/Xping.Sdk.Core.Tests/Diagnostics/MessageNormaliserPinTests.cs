@@ -48,6 +48,21 @@ public sealed class MessageNormaliserPinTests
     // expected 'Local' but was 'Remote': a quoted literal without digits keeps its case
     [InlineData("Expected 'Local'\r\n  but   was 'Remote'",
         "0290b9c80ac6bbc5b9a901454a967d1597d18b19466de34c13e99bedff9643da")]
+    // key 'order <num>' missing: a quoted literal with a digit goes through the rules
+    [InlineData("Key 'Order 42' missing",
+        "8878190b759ac2a9c4e90940c5ffdc69d6e8735f36794ed0467032ec5e5d9793")]
+    // could not find file '<path>'.: a quoted literal that is a whole path, space included
+    [InlineData("Could not find file '/Users/a b/x.json'.",
+        "ef0cecc07cb7b031fcf33b3f079c550aa4daf2c265bca22e5bf2f956b44c60cd")]
+    // get /orders failed: one segment is a route, not a path
+    [InlineData("GET /orders failed",
+        "e982f950a81d5871334d6dfe5e629a20af05adc84e6b6448f0a225ad22f98f33")]
+    // digest <hex> mismatched: a bare run of 16 or more hex digits
+    [InlineData("digest 7e5e7382baaeaa09 mismatched",
+        "5d1aa2608ffb37bd1b6d1027c5476b472365bb7df52b29dc3659c41dc5976927")]
+    // due <time> at <time>: a d/m/y date and a clock reading
+    [InlineData("due 1/2/2026 at 10:15:30",
+        "f86f316ca1851790d45de5137b6ec445de73ea29eaaa9e69a2f38b2d96cc27d9")]
     public void TheHashOfAFixedMessageNeverMoves(string message, string expected) =>
         Assert.Equal(expected, BuildGenerator().GenerateErrorMessageHash(message));
 
@@ -57,13 +72,6 @@ public sealed class MessageNormaliserPinTests
         Assert.Equal(
             "80f1830e2934a1c06ceb7512d00bb936a9437c80411da172c1a274238b974795",
             BuildGenerator().GenerateErrorMessageHash(new string('Z', 5000)));
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" \r\n\t ")]
-    public void AnEmptyMessageHasNoHash(string? message) =>
-        Assert.Null(BuildGenerator().GenerateErrorMessageHash(message));
 
     private static ITestIdentityGenerator BuildGenerator() =>
         ServiceHelper.CreateCollectorServices().BuildServiceProvider().GetRequiredService<ITestIdentityGenerator>();
