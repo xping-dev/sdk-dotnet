@@ -136,6 +136,17 @@ everywhere else.**
 | C | An embedded `'` is written `'\''` | POSIX: `'\''`. PowerShell: `''`, and each of `‘ ’ ‚ ‛` is doubled too, because PowerShell closes a single-quoted string on any of them | Amendment 4 |
 | D | `cmd.exe` is not served | Still not served, and neither is Windows PowerShell 5.1: it passes an embedded `"` to a native program unescaped, so a quoted test name in a repro filter breaks. PowerShell 7.3+ is the floor. Git Bash on Windows, where coding agents usually run commands, sets `XPING_SHELL=posix` | Amendment 4 |
 
+### Amendment 9 — Cloud pairs
+
+`cloud-data-in-cli-cli-spec.md` (#329) §7.4 supersedes Amendment 5's pairs.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Amendment 5: `cloud confidence`, `cloud evidence`, `cloud trend` from cli-auth §11.3 | The `cloud *` pairs of Cloud spec §7.4: `cloud verdict`, `cloud confidence`, `cloud evidence`, `cloud flaky`, `cloud canonical`, `cloud transition`, `cloud lifetime`, `cloud fetched`. Each names its window | Amendment 5, §8 |
+
+Amendment 5's rule stands: the renderer appends the pairs from `FindingDto.Cloud`, and
+`findings[].metrics` stays local.
+
 ---
 
 ## 1. Ground truth
@@ -944,6 +955,8 @@ and `1.21`. `README.md:183-193` gains one line. `nuspec/README.Cli.md:83-85` gai
 ---
 
 ## 8. Reserved for Cloud
+
+Superseded by Amendment 9.
 
 Not implemented. Recorded so the detail layout does not have to change when it is.
 
