@@ -76,16 +76,16 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Contains("evidence moderate | confidence 0.94 | ", text.Output, StringComparison.Ordinal);
 
         JsonElement cloud = json.GetProperty("context").GetProperty("cloud");
-        Assert.Equal("stored-login", cloud.GetProperty("credential").GetString());
+        Assert.Equal("login", cloud.GetProperty("credential").GetString());
         Assert.Equal("ok", cloud.GetProperty("status").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, cloud.GetProperty("workspaceId").GetString());
-        Assert.Equal(Project, cloud.GetProperty("project").GetProperty("projectKey").GetString());
-        Assert.Equal("name-match", cloud.GetProperty("project").GetProperty("source").GetString());
+        Assert.Equal(Project, ProjectRow(json).GetProperty("projectKey").GetString());
+        Assert.Equal("name-match", ProjectRow(json).GetProperty("source").GetString());
 
         JsonElement finding = Finding(json, FindingFingerprint);
-        Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetDouble());
-        Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("category").GetString());
-        Assert.Equal("1.27", json.GetProperty("schemaVersion").GetString());
+        Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetProperty("score").GetDouble());
+        Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("confidence").GetProperty("category").GetString());
+        Assert.Equal("1.28", json.GetProperty("schemaVersion").GetString());
         Assert.Empty(text.Error);
     }
 
@@ -130,7 +130,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         JsonElement json = Report("--json").Json();
 
-        Assert.Equal("session", json.GetProperty("context").GetProperty("cloud").GetProperty("project").GetProperty("source").GetString());
+        Assert.Equal("session", ProjectRow(json).GetProperty("source").GetString());
         Assert.DoesNotContain(_host.Cloud.GatewayRequests, r => r.Path == FakeCloud.GatewayPrefix + "v1/projects");
     }
 
@@ -143,7 +143,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         JsonElement json = Report("--json").Json();
 
-        Assert.Equal("name-match", json.GetProperty("context").GetProperty("cloud").GetProperty("project").GetProperty("source").GetString());
+        Assert.Equal("name-match", ProjectRow(json).GetProperty("source").GetString());
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         JsonElement json = Report("--json", "--project", Project).Json();
 
-        JsonElement project = json.GetProperty("context").GetProperty("cloud").GetProperty("project");
+        JsonElement project = ProjectRow(json);
         Assert.Equal((Project, "flag"), (project.GetProperty("projectKey").GetString(), project.GetProperty("source").GetString()));
     }
 
@@ -189,7 +189,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult result = Report("--json");
 
         Assert.Equal(0, result.Code);
-        Assert.Equal(JsonValueKind.Null, result.Json().GetProperty("context").GetProperty("cloud").ValueKind);
+        Assert.Equal("not-attempted", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
         Assert.Empty(_host.Cloud.Requests);
         Assert.Empty(result.Error);
     }
@@ -238,7 +238,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         int seen = _host.Cloud.GatewayRequests.Count;
         JsonElement withLogin = Report("--json").Json();
-        Assert.Equal("stored-login", Credential(withLogin));
+        Assert.Equal("login", Credential(withLogin));
         Assert.All(_host.Cloud.GatewayRequests.Skip(seen), r =>
         {
             Assert.StartsWith("Bearer ", r.Headers["Authorization"], StringComparison.Ordinal);
@@ -340,7 +340,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         Assert.Equal(0, result.Code);
         Assert.StartsWith("Cloud data unavailable: could not reach ", result.Error, StringComparison.Ordinal);
-        Assert.Equal("stored-login", Credential(result.Json()));
+        Assert.Equal("login", Credential(result.Json()));
         Assert.DoesNotContain(_host.Cloud.Requests, r => r.Headers.ContainsKey("X-API-Key"));
         Assert.NotNull(_host.StoredRecord());
     }
@@ -356,7 +356,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal(
             "Cloud data unavailable: no matching Cloud project for Unknown.Tests. Use --project <key>.",
             Assert.Single(ReportText.Lines(result.Error), l => l.Length > 0));
-        Assert.Equal("unavailable", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
+        Assert.Equal("no-project", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }
 
     [Theory]
@@ -417,6 +417,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     private string[] ReportArgs(params string[] args) => ["report", "--directory", _root, .. args];
 
     private CliResult Report(params string[] args) => _host.Run(ReportArgs(args));
+
+    private static JsonElement ProjectRow(JsonElement report) =>
+        report.GetProperty("context").GetProperty("cloud").GetProperty("projects")[0];
 
     private static string? Credential(JsonElement report) =>
         report.GetProperty("context").GetProperty("cloud").GetProperty("credential").GetString();

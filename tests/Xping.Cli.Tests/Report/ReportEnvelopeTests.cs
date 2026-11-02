@@ -324,7 +324,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.27", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.28", root.GetProperty("schemaVersion").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -911,7 +911,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.27", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.28", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

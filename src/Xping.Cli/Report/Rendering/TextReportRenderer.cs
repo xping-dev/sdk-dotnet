@@ -291,7 +291,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Only when something on the page came from Cloud. A Cloud that could not answer is said on
         // standard error; a header claiming "cloud" over purely local rows would be the lie.
         if (envelope.Findings.Any(f => CloudText.HasScore(f.Cloud))
-            || envelope.LatestRun?.Failures.Any(f => CloudText.HasScore(f.Cloud)) == true)
+            || envelope.LatestRun?.Failures.Any(f => CloudText.HasScore(f.Cloud?.Digest)) == true)
         {
             provenance.Add("cloud");
         }
@@ -1415,7 +1415,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Cloud's statement replaces the local one rather than joining it: it is about the same
         // history, over every run uploaded rather than the ones on this machine.
-        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud) ?? Recorded(failure.Contrast), LatestRunBudget))
+        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud?.Digest) ?? Recorded(failure.Contrast), LatestRunBudget))
             builder.Append(' ', LatestRunRowIndent).AppendLine(line);
 
         var trailer = new List<string>();

@@ -179,15 +179,26 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     [Theory]
     [InlineData("not json")]
     [InlineData("{}")]
-    [InlineData("{\"tests\":[{\"state\":\"ok\"}]}")]
-    [InlineData("{\"tests\":[null]}")]
-    [InlineData("{\"tests\":[],\"sessions\":[{\"sessionKey\":\"k\"}]}")]
+    [InlineData("{\"tests\":null}")]
     public async Task ADigestThatCannotBeReadIsAnInvalidResponse(string body)
     {
         _host.Cloud.SetGatewayBody(DigestPath, body);
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         await Assert.ThrowsAsync<CloudResponseException>(() => client.GetDigestAsync(Project, Request, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("{\"tests\":[{\"state\":\"ok\"}]}")]
+    [InlineData("{\"tests\":[null]}")]
+    [InlineData("{\"tests\":[],\"sessions\":[{\"sessionKey\":\"k\"}]}")]
+    public async Task AnItemTheCliCannotReadIsLeftForTheEnricherAndDoesNotFailTheBatch(string body)
+    {
+        // Contract §8.2 F4: such an item costs its own test, which only the enricher can attribute.
+        _host.Cloud.SetGatewayBody(DigestPath, body);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        Assert.NotNull(await client.GetDigestAsync(Project, Request, CancellationToken.None));
     }
 
     [Theory]

@@ -67,7 +67,7 @@ internal static class FailureSignatureFactory
         FrameExtraction frames = StackFrameExtractor.Extract(execution.StackTrace);
 
         if (exceptionType == null && message.Length == 0 && frames.Frames.Count == 0)
-            return Unsignable(fingerprint, timedOut);
+            return Unsignable(fingerprint, timedOut, execution.ErrorMessageHash);
 
         var canonical = new StringBuilder(OutcomeKey(timedOut));
         canonical.Append(exceptionType).Append(FieldSeparator);
@@ -88,7 +88,8 @@ internal static class FailureSignatureFactory
             frames.Frames,
             frames.Degraded,
             Unavailable: false,
-            timedOut);
+            timedOut,
+            execution.ErrorMessageHash);
     }
 
     /// <summary>
@@ -96,11 +97,12 @@ internal static class FailureSignatureFactory
     /// </summary>
     /// <param name="fingerprint">The failing test's stable identity.</param>
     /// <param name="timedOut">Whether the attempt timed out rather than failed.</param>
+    /// <param name="errorMessageHash">The SDK's hash of the message, as stored.</param>
     /// <returns>
     /// A signature that can only ever group with this same test's other blank failures of the same
     /// outcome.
     /// </returns>
-    private static FailureSignature Unsignable(string fingerprint, bool timedOut) =>
+    private static FailureSignature Unsignable(string fingerprint, bool timedOut, string? errorMessageHash) =>
         new(
             Hash(string.Create(
                 CultureInfo.InvariantCulture,
@@ -110,7 +112,8 @@ internal static class FailureSignatureFactory
             Frames: [],
             Degraded: true,
             Unavailable: true,
-            TimedOut: timedOut);
+            TimedOut: timedOut,
+            ErrorMessageHash: errorMessageHash);
 
     private static string OutcomeKey(bool timedOut) =>
         timedOut ? TimeoutKey + FieldSeparator : string.Empty;

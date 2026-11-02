@@ -431,7 +431,7 @@ internal sealed class ReportCommand(
         // one-line summary has no slot for Cloud data, so it is not worth a request.
         if (options.Format != ReportFormat.Summary)
         {
-            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions));
+            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions), window.Sessions, analysis.Findings);
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);

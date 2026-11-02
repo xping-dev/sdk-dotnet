@@ -17,9 +17,7 @@ namespace Xping.Cli.Tests.Report;
 /// </summary>
 public sealed class CloudRenderingTests
 {
-    private static readonly CloudTestDto Cloud = new(
-        0.62, "moderately-reliable", "robust", 812, "stable", -0.03, true, null,
-        new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero));
+    private static readonly CloudDigestDto Cloud = Digest(0.62, "moderately-reliable");
 
     private static readonly OutputCapabilities Unicode = Drawn(ReportGlyphs.Unicode, color: false);
 
@@ -36,7 +34,7 @@ public sealed class CloudRenderingTests
     [Fact]
     public void TheRowTrailerCarriesConfidenceRightAfterTheLocalEvidence()
     {
-        ReportEnvelope enriched = Enriched(Cloud with { Category = "reliable" });
+        ReportEnvelope enriched = Enriched(Digest(0.62, "reliable"));
         enriched = enriched with { Findings = [enriched.Findings[0] with { Id = "f_1" }, .. enriched.Findings.Skip(1)] };
 
         string report = Render(enriched, Unicode);
@@ -62,7 +60,7 @@ public sealed class CloudRenderingTests
     public void AsciiUsesItsOwnSeparatorInsideTheSegment()
     {
         // Not "|": that joins the trailer's own segments, and the category would read as one.
-        ReportEnvelope enriched = Enriched(Cloud with { Category = "reliable" });
+        ReportEnvelope enriched = Enriched(Digest(0.62, "reliable"));
         enriched = enriched with { Findings = [enriched.Findings[0] with { Id = "f_1" }, .. enriched.Findings.Skip(1)] };
 
         string report = Render(enriched, Capabilities(redirected: true));
@@ -74,7 +72,7 @@ public sealed class CloudRenderingTests
     [Fact]
     public void TheHeaderMakesNoCloudClaimWhenNoRowShowsACloudValue()
     {
-        string header = Lines(Render(Enriched(Cloud with { Confidence = null, Category = null }), Unicode))[0];
+        string header = Lines(Render(Enriched(Digest(null, null)), Unicode))[0];
 
         Assert.DoesNotContain("cloud", header, StringComparison.Ordinal);
     }
@@ -82,7 +80,7 @@ public sealed class CloudRenderingTests
     [Fact]
     public void InsufficientDataShowsNoTrailer()
     {
-        string report = Render(Enriched(Cloud with { Confidence = null, Category = "insufficient-data" }), Unicode);
+        string report = Render(Enriched(Digest(null, "insufficient-data")), Unicode);
 
         Assert.DoesNotContain("confidence", report, StringComparison.Ordinal);
     }
@@ -122,8 +120,8 @@ public sealed class CloudRenderingTests
         using JsonDocument after = JsonDocument.Parse(JsonSerializer.Serialize(enriched, ReportJsonOptions.Default));
 
         JsonElement finding = after.RootElement.GetProperty("findings")[0];
-        Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetDouble());
-        Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("category").GetString());
+        Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetProperty("score").GetDouble());
+        Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("confidence").GetProperty("category").GetString());
         Assert.Equal(
             before.RootElement.GetProperty("findings")[0].GetProperty("metrics").GetRawText(),
             finding.GetProperty("metrics").GetRawText());
@@ -133,7 +131,24 @@ public sealed class CloudRenderingTests
         Assert.Equal(JsonValueKind.Null, before.RootElement.GetProperty("findings")[0].GetProperty("cloud").ValueKind);
     }
 
-    private static ReportEnvelope Enriched(CloudTestDto? cloud = null)
+    private static CloudDigestDto Digest(double? score, string? category) =>
+        new(
+            "ok",
+            new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero),
+            DisagreesWithLocal: false,
+            Identity: null,
+            "passing",
+            null,
+            null,
+            812,
+            new CloudConfidenceDto(
+                "scored", score, null, null, category, "stable", -0.03, 120, "robust", null, null, null, null, null, null, "current"),
+            null,
+            null,
+            null,
+            []);
+
+    private static ReportEnvelope Enriched(CloudDigestDto? cloud = null)
     {
         cloud ??= Cloud;
         ReportEnvelope envelope = Get("latest-run");
@@ -143,7 +158,7 @@ public sealed class CloudRenderingTests
             Findings = [.. envelope.Findings.Select(f => f.Subject.Members == null ? f with { Cloud = cloud } : f)],
             LatestRun = envelope.LatestRun! with
             {
-                Failures = [.. envelope.LatestRun.Failures.Select(f => f with { Cloud = cloud })]
+                Failures = [.. envelope.LatestRun.Failures.Select(f => f with { Cloud = new CloudFailureDto(cloud, "unseen", null) })]
             }
         };
     }
