@@ -23,6 +23,16 @@ implementation session that needs one of them answered stops and asks.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be read as in RFC 2119.
 
+### Amendment 1 — from phase 1
+
+Phase 1 read §3 against the code and found two conflicts. Both are resolved here, decided by the
+owner on 2026-11-02, and committed before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.3: the credential slice covers a proactive token refresh, with the cross-process lock's 5 s `Patience` cut by the slice | The refresh is not part of the credential step. `BearerTokenHandler` refreshes inside the first DataGateway request, so it runs under that request's `AttemptTimeout` (3 s) and the total budget, not the 1 s slice. The slice covers credential resolution only: settings, the keychain probe, choosing a credential. `CrossProcessLock.Patience` drops from 5 s to 2 s, so the "proceed without the lock" rule (cli-auth §9.4) can still apply inside a 3 s attempt. A refresh that does not finish in time costs that run's Cloud data (`unavailable`, `timeout`); the refresh itself runs to the end in the background as today. Putting the refresh under the 1 s slice was rejected: a network refresh often takes longer, and the first report after every 15-minute token lifetime would read `credential-timeout`. **Contract §7.3 lists token refresh under `CredentialBudgetMs`; it needs the matching amendment in the dashboard repo** | §3.3, cli-auth §9.4 |
+| B | §3.2: the retry keeps `HttpClientResiliencePredicates.IsTransient` (5xx, 408, network errors, the attempt timeout) | Contract §7.3 wins: one retry on **5xx only**, and only when `budget.HasAtLeast(1 s)`. 408, network errors and the attempt timeout are not retried; after a 3 s attempt timeout at most 1 s is left anyway. The retry waits `CloudResilience.RetryDelay` = 200 ms, no backoff, no jitter | §3.2 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -150,7 +160,9 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `CloudBudget.Credential` | 1 000 ms [none] | §7.3 `CredentialBudgetMs` |
 | `CloudHttp.AttemptTimeout` | 3 000 ms [10 s] | §7.3 `CloudRequestTimeoutMs` |
 | `CloudHttp.TotalTimeout` | equals `CloudBudget.Total` [30 s] | the `HttpClient.Timeout` can never outlive the budget |
-| `CloudResilience.MaxRetryAttempts` | 1 [3], and only when `budget.HasAtLeast(1 s)` | §7.3 |
+| `CloudResilience.MaxRetryAttempts` | 1 [3], on 5xx only, and only when `budget.HasAtLeast(1 s)` (Amendment 1B) | §7.3 |
+| `CloudResilience.RetryDelay` | 200 ms [2 s exponential, jittered] (Amendment 1B) | — |
+| `CrossProcessLock.Patience` | 2 s [5 s] (Amendment 1A) | cli-auth §9.4 |
 | `CloudResilience` 429 | never retried, never waited for [once if `Retry-After ≤ 10 s`] | §7.3 |
 | `CloudEnricher.MaxConcurrency` | 4 (unchanged) | §7.2 `MaxConcurrentRequests` |
 | `CloudEnricher.MaxEnrichedTests` | 200 | §7.2 |

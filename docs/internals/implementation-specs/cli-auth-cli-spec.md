@@ -1046,7 +1046,8 @@ agent and a human). Contract §6.6 gives a 30-second reuse leeway; the CLI MUST 
 old refresh token inside that leeway. Design:
 
 1. `CrossProcessLock`: a lock file `~/.xping/locks/{sha256(cloudUrl) first 16 hex}.lock` opened
-   with `FileShare.None`. Acquire with retry every 100 ms for up to 5 s; on timeout proceed
+   with `FileShare.None`. Acquire with retry every 100 ms for up to 5 s (2 s since
+   `cloud-data-in-cli-cli-spec.md` Amendment 1A, inside a 3 s attempt); on timeout proceed
    without the lock (the leeway still protects) and log at verbose. The wait runs inside the
    10-second per-attempt timeout (§10.2), so it must be shorter than that, or the attempt would
    time out before the "proceed without the lock" rule could apply.
