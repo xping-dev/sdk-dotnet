@@ -36,6 +36,23 @@ owner on 2026-11-02, and committed before the code that depends on them.
 | D | §19 Q-2: verify on macOS whether the keychain probe tolerates the slice's cancellation | It does not: `MacOsKeychainStore` probes and reads with synchronous `SecItemCopyMatching` calls that never see the token, so a keychain waiting on an access prompt would hold the report. As Q-2 prescribed, the slice applies around the resolution: `CloudEnricher` runs `CredentialResolver.ResolveAsync` on the thread pool and stops waiting when the slice ends. The abandoned call ends with the process | §3.3, §19 |
 | E | §2.2: `GetProjectAsync` stays | Removed. Its one caller checked a configured key that found no tests; the digest's 404 is that answer now (contract §6.1), so nothing calls it | §2.2 |
 
+### Amendment 2 — from phase 2
+
+Phase 2 found no conflict with the contract or the code. It found cases §3–§6 leave open, and
+decided them here before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.4: `not-attempted` for "no credential" | Also `not-attempted` when a credential exists and there is nothing to ask (no single-test subject, a clean run): the digest needs 1–100 tests. `credential` and `workspaceId` are then filled. Settings that cannot be read are `not-attempted` with `cloudUrl` null and the settings error as the hint. A defect caught by the fail-open wrapper is `unavailable` / `none`. `elapsedMs` is 0 whenever nothing was asked, so the local-layer tests of §8.3 stay deterministic | §3.4, §3.5 |
+| B | §3.4: the signal table names exceptions loosely | `CloudApiClient` answers a 5xx after the retry with `CloudApiException` (it was `AuthFailureException` "HTTP 503"), so `server` is told from `network` by type. A 401 on an API key is `login-required` (no sign-in to be over; the key was refused). A plain 401 on a stored login, without `invalid_token`, costs its batch as `network` (a proxy's page: nothing says the sign-in is over, cli-auth §8.2). 426 is `server`. `login-required` and `forbidden` end every batch of the attempt; every other failure costs only its batch | §3.4 |
+| C | §4.2: hashes and the latest session | A hash is sent only in the shape the digest accepts (64 lowercase hex); a fingerprint longer than 128 is not a target. Either would cost its whole batch a 400 (contract §6.1), and the store is a file anyone can edit. "The latest local session" is every session sharing the newest session's key (one host run writes one per assembly). A test's final attempt is its highest attempt number, the latest start on a tie | §4.1, §4.2 |
+| D | §4.3: session keys per request | They ride on each project's first batch only: the answer is the same for every batch. Assemblies bound to one project key are one project, asked once. `MaxEnrichedTests`, `MaxHashesPerTest` and the new `MaxFingerprintLength` = 128 live on `TargetPlanner`, which applies them | §3.2, §4.3 |
+| E | §5.3: `Match(string? errorMessageHash, CloudDigestDto? digest, string? algorithmReason)` | `Match(…, bool algorithmMismatch)`: the matcher needs whether, not why | §5.3 |
+| F | §6.3: the digest mirrors contract §6.2 one to one | `CloudDigestDto` leaves out `fingerprint`: the subject beside it carries it. An item in a state other than `ok` or `unknown`, or without a state, is stitched as `unknown` and makes its project `partial` / `invalid-response` (contract F4). `CloudApiClient` therefore rejects a digest only when it has no `tests` list; an item it cannot read is the enricher's to attribute. A requested fingerprint the answer leaves out is lost as `invalid-response` | §6.3, §2.2 |
+| G | §6.5: `runsState` | A test Cloud does not know has no runs: `ok`, empty, nothing asked; so is a runs 404. A runs request that fails is `unavailable` (`budget` when the total ran out) and never changes `context.cloud`. Without a credential, `test.cloud` is present with `runsState` `not-attempted` | §6.5, §3.3 |
+| H | §3.4, §11: the hint | Built once from the outcome. `login-required` wins even when the API key answered in its place, because the next run without the key would show nothing. `partial` reads `Cloud data partial: {n} of {m} tests answered ({reason}).` | §3.4, §11 |
+| I | §3.4: precedence | When several assemblies disagree and nothing answered, the row with the higher status by the precedence wins, `no-project` over `unavailable`. When something answered and a row is not `ok`, the report is `partial` with the first such row's reason (contract §9.4) | §3.4 |
+
 ---
 
 ## 1. Purpose, scope, traceability
