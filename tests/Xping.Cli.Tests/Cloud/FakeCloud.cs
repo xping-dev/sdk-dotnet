@@ -283,7 +283,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
         Reply reply = fault switch
         {
-            null => Route(request.Method, path, form, HttpUtility.ParseQueryString(query), headers),
+            null => Route(request.Method, path, form, HttpUtility.ParseQueryString(query), headers, body),
             { Problem: true } => Problem((int)fault.Status, fault.Error ?? "Error.Injected", fault.Description) with
             {
                 RetryAfter = fault.RetryAfter
@@ -293,6 +293,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
         if (path == "/connect/token" && HoldTokenResponses is { } hold)
             await hold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
+
+        if (path.StartsWith(GatewayPrefix, StringComparison.Ordinal) && HoldGatewayResponses is { } gatewayHold)
+            await gatewayHold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";
@@ -309,10 +312,10 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
     }
 
-    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers) =>
+    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers, string body) =>
         (method, path) switch
         {
-            (_, _) when path.StartsWith(GatewayPrefix, StringComparison.Ordinal) => Gateway(method, path, query, headers),
+            (_, _) when path.StartsWith(GatewayPrefix, StringComparison.Ordinal) => Gateway(method, path, query, headers, body),
             ("GET", "/.well-known/openid-configuration") => Discovery(),
             ("GET", "/connect/authorize") => Authorize(query),
             (_, "/moved") => new Reply(302, string.Empty, CloudUrl + "/connect/token"),

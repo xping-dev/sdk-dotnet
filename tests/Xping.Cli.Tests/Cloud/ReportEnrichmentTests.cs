@@ -42,7 +42,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         _host.Cloud.AddProject(Project, displayName: Assembly);
         _host.Cloud.AddTest(Project, FindingFingerprint);
-        _host.Cloud.AddTest(Project, FailureFingerprint, test => test["confidenceScore"] = 0.94);
+        _host.Cloud.AddTest(Project, FailureFingerprint, test => test["confidence"]!["score"] = 0.94);
         _host.Cloud.AddApiKey(ApiKey);
         _host.Cloud.AddApiKey(FlagKey);
     }
@@ -411,8 +411,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
     private void FailEveryTestRead(HttpStatusCode status)
     {
-        foreach (string fingerprint in (string[])[FindingFingerprint, FailureFingerprint])
-            _host.Cloud.FailGateway($"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/{fingerprint}", 50, status, "Injected");
+        _host.Cloud.FailGateway($"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/digest", 50, status, "Injected");
     }
 
     private string[] ReportArgs(params string[] args) => ["report", "--directory", _root, .. args];

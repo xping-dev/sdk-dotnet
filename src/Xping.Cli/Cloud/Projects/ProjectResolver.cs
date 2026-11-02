@@ -50,9 +50,14 @@ internal sealed class ProjectResolver(ProjectCache cache)
     private const int PageSize = 50;
     private const string ListOrigin = "the Cloud project named after the assembly";
 
-    // A workspace with more projects than this is not searched to the end: the enrichment budget
-    // would be spent listing, and --project is the documented way out.
-    private const int MaxPages = 20;
+    /// <summary>
+    /// The most project list pages the name match reads (contract §7.3).
+    /// </summary>
+    /// <remarks>
+    /// A workspace with more projects than this is not searched to the end: the 4 s budget would be
+    /// spent listing, and <c>--project</c> is the documented way out.
+    /// </remarks>
+    public const int MaxProjectListPages = 2;
 
     /// <summary>
     /// Returns the binding for <paramref name="assembly"/>, or <see langword="null"/> when nothing
@@ -108,7 +113,7 @@ internal sealed class ProjectResolver(ProjectCache cache)
     {
         ArgumentNullException.ThrowIfNull(client);
 
-        for (int page = 1; page <= MaxPages; page++)
+        for (int page = 1; page <= MaxProjectListPages; page++)
         {
             PagedResult<ProjectSummary> projects =
                 await client.ListProjectsAsync(page, PageSize, cancellationToken).ConfigureAwait(false);

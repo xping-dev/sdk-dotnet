@@ -17,10 +17,11 @@ internal interface ICloudApiClientFactory
     /// </summary>
     /// <param name="credential">A sign-in or an API key; the caller has already handled none.</param>
     /// <param name="cloudUrl">The normalized Cloud URL the credential belongs to.</param>
+    /// <param name="budget">The report's Cloud budget; a retry is made only while it can pay for one.</param>
     /// <param name="cancellationToken">Cancels discovery for an API key.</param>
     /// <exception cref="ArgumentException"><paramref name="credential"/> is none.</exception>
     /// <exception cref="AuthFailureException">
     /// An API key's DataGateway could not be discovered: Cloud unreachable or incompatible.
     /// </exception>
-    Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CancellationToken cancellationToken);
+    Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CloudBudget budget, CancellationToken cancellationToken);
 }

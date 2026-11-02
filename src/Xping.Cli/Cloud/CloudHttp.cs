@@ -6,7 +6,7 @@
 namespace Xping.Cli.Cloud;
 
 /// <summary>
-/// The DataGateway client's name and time limits (cli-auth-cli-spec §2.2, §10.2).
+/// The DataGateway client's name and time limits (cloud-data-in-cli-cli-spec §3.2).
 /// </summary>
 internal static class CloudHttp
 {
@@ -16,12 +16,12 @@ internal static class CloudHttp
     public const string ClientName = "xping-cloud";
 
     /// <summary>
-    /// How long one attempt may take.
+    /// How long one attempt may take (contract §7.3 <c>CloudRequestTimeoutMs</c>).
     /// </summary>
-    public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(3);
 
     /// <summary>
-    /// How long one request may take, retries included.
+    /// How long one request may take, retry included: never longer than the whole budget.
     /// </summary>
-    public static readonly TimeSpan TotalTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan TotalTimeout = CloudBudget.Total;
 }

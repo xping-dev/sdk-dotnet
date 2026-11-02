@@ -33,9 +33,16 @@ internal sealed class FakeCredentialStore(CredentialStoreKind kind, string displ
 
     public int? MaxSecretBytes => null;
 
+    /// <summary>
+    /// Gets or sets an event the probe waits for without a token, as a native keychain call waiting
+    /// on an access prompt does.
+    /// </summary>
+    public ManualResetEventSlim? BlockProbe { get; set; }
+
     public KeychainProbe Probe(string cloudUrl)
     {
         Probed.Add(cloudUrl);
+        BlockProbe?.Wait();
         return ProbeResult;
     }
 

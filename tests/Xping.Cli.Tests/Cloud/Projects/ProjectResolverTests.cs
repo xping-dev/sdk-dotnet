@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Auth;
 using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Digest;
 using Xping.Cli.Cloud.Projects;
 using Xping.Cli.Configuration;
 using Xping.Cli.Tests.Auth.Store;
@@ -81,6 +82,18 @@ public sealed class ProjectResolverTests : IDisposable
         ProjectBinding? binding = await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None);
 
         Assert.Equal(("shop", ProjectResolver.NameMatch, false), (binding!.Key, binding.Source, binding.FromCache));
+        Assert.Equal([1, 2], _client.Pages);
+    }
+
+    [Fact]
+    public async Task NoMoreThanTwoPagesAreListed()
+    {
+        // Contract §7.3: listing must not spend the budget; --project is the way out.
+        _client.Add(150, extra: new ProjectSummary("shop", Assembly, "shop"));
+
+        ProjectBinding? binding = await _resolver.ResolveAsync(_client, Assembly, Lookup(), CancellationToken.None);
+
+        Assert.Null(binding);
         Assert.Equal([1, 2], _client.Pages);
     }
 
@@ -224,8 +237,11 @@ public sealed class ProjectResolverTests : IDisposable
         public Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken) =>
             Task.FromResult(Projects.FirstOrDefault(p => p.Id == projectKey));
 
-        public Task<CloudTest?> GetTestAsync(string projectKey, string testFingerprint, CancellationToken cancellationToken) =>
-            Task.FromResult<CloudTest?>(null);
+        public Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult<DigestResponse?>(null);
+
+        public Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken) =>
+            Task.FromResult<RunsResponse?>(null);
 
         public void Dispose()
         {
