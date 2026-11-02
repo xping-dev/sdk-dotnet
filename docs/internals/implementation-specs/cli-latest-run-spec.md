@@ -171,6 +171,17 @@ in `LatestRunFailureDto.Cloud`, and `TextReportRenderer` prints the Cloud senten
 `Contrast` when it is set. `Contrast` stays the only place the **local** sentence is composed, and
 in JSON it is always the local sentence, so a Cloud value never appears outside a `cloud` object.
 
+### Amendment 7 — Cloud line added, not substituted
+
+`cloud-data-in-cli-cli-spec.md` (#329) §7.5 reverses Amendment 6's replacement.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §8, Amendment 6: the Cloud sentence replaces the local contrast | The local contrast sentence stays, unshortened. A second line under it carries Cloud: `cloud  broken on main since 2026-10-11 · same error on 6 machines and CI · confidence 0.22 (35 d)`, dropped right to left to fit. `CloudText.Contrast` is deleted | §8, Amendment 6 |
+
+`Contrast` stays the only place the local sentence is composed, and the renderer composes the Cloud
+line from the failure's `cloud` object.
+
 ---
 
 ## 1. Ground truth and problem
@@ -720,6 +731,8 @@ sample if it shows a report.
 ---
 
 ## 8. Reserved for Cloud
+
+Superseded by Amendment 7.
 
 Not implemented. Recorded because this section is where Cloud adds the most value per line, and the
 row shape should not have to change to accommodate it.

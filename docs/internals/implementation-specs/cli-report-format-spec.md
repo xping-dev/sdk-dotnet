@@ -100,6 +100,20 @@ rewritten in the detail spec's P2 to name `xping report --id`, and no spec reser
 rejected, for the reasons D7 gives; the detail spec's D7 rejects them again on the same grounds and
 chooses a third thing D7 did not consider — one real command, for row 1, below the fence.
 
+### Amendment 5 — Cloud layering
+
+`cloud-data-in-cli-cli-spec.md` (#329) refills §8's two slots and supersedes Amendment 4's two
+quoted rows.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §8: the name and headline lines are identical with or without Cloud; Cloud adds a trailer segment only | The row's label token is layered (Cloud spec §7.2). A verdict of `known-flaky`, `broken`, `unstable` or `passing` takes the label (`cloud broken`) and the local kind moves to a second line (`local: flaky in 12 runs here`). `no-history`, no `cloud` object, or a digest that is not `ok` keeps the label `local {kind}`, and the second line says why (`cloud: no canonical history`, or the per-row reason of Cloud spec §7.6). `disagreesWithLocal` puts `≠` (`!=` in ASCII) between the two labels; observation kinds get Cloud spec §7.3's `cloud: {flaky.state}` line. Rank, order, `--kind` and `--fail-on` stay local | §8 |
+| B | Amendment 4: trailer `confidence 0.62 · moderately reliable` | The trailer is Cloud spec §7.3: `confidence 0.22 ▼0.61 · evidence adequate (ESS 34) · 35 d`, with its own fit order. Nothing local is cut for it | §8, Amendment 4 |
+| C | Amendment 4: header `· cloud` when at least one finding was enriched | `· cloud` when `context.cloud.status` is `ok`, `· cloud (partial)` when `partial` (Cloud spec §7.5). `unavailable`, `login-required` and the other failure statuses print the reason line below the header (Cloud spec §7.6). `not-attempted` prints nothing there: on a terminal the stderr banner covers it | §8, Amendment 4 |
+
+Amendment 4's rule stands: the renderer composes every Cloud string, and the builder never resolves
+Cloud text.
+
 ---
 
 ## 1. Ground truth
@@ -766,6 +780,8 @@ renders.
 ---
 
 ## 8. Reserved for Cloud
+
+Superseded by Amendment 5.
 
 Not implemented. Recorded so the layout does not have to change when it is.
 

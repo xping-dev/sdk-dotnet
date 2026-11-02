@@ -130,6 +130,18 @@ records what it changes here, committed with that spec.
 | A | The view is TEST, RUNS, FINDINGS | A `FAILURE MODES` block sits between RUNS and FINDINGS (failure-mode spec D5). It is built from the test's own failed attempts over the D5 window, nothing discounted, through `SignatureIndex.SignaturesOf`, not from its findings (failure-mode spec D4). Each mode counts failed attempts, not runs, so a test that always passed on retry reads `0 failed` in the summary and still lists its modes. Not printed when the test has no failed attempt in the window | D10, §3.1 |
 | B | §4.2: `TestHistoryDto` has no failure modes | It gains `FailureModes`, after `Duration` (failure-mode spec §4.3) | §4.2 |
 
+### Amendment 11 — `CLOUD` block and `RUNS IN CLOUD`
+
+`cloud-data-in-cli-cli-spec.md` (#329) §8 fills §8 here.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §8: Cloud history is reserved, not specified | `--test` gains a `CLOUD` block between the local counts and the timeline (verdict, confidence, evidence, flaky state, signatures, lifetime, last run), and under it `RUNS IN CLOUD`, the newest Cloud runs across machines and branches. The local timeline, counts, durations and failure modes are unchanged | §8, §3 |
+| B | §4.2: `TestHistoryDto` has no Cloud member | It gains `Cloud` (`test.cloud` in JSON, Cloud spec §6.5) | §4.2 |
+| C | — | Each `FAILURE MODES` row gains the per-mode Cloud token of Cloud spec §7.4 | D10 |
+
+Exit codes are unchanged (0 / 3 / 4).
+
 ---
 
 ## 1. Ground truth
@@ -734,6 +746,8 @@ directly to `feat/141-report-test`.
 ---
 
 ## 8. Reserved for Cloud
+
+Superseded by Amendment 11.
 
 - History beyond local retention. Cloud keeps more than 30 days and 50 runs; a Cloud-backed `--test`
   could extend the timeline past what the local store holds. Not specified here.

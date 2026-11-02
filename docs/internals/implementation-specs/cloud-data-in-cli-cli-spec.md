@@ -298,7 +298,8 @@ Cloud match and is never an input to the composite.
 `FailureSignatureFactory.Create`. A mode groups executions by the composite; the mode's
 `ErrorMessageHash` is the hash shared by its executions, or, when a composite groups executions
 with different message hashes (possible when the normaliser and the composite disagree on a
-literal), the most frequent one. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
+literal), the most frequent one, and on a tie the ordinally smallest, so the value does not
+depend on enumeration order. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
 it into `FailureModeDto.ErrorMessageHash`. It is a local field, labelled local, present with or
 without Cloud.
 
@@ -648,7 +649,7 @@ None required. Verified against the contract:
   pin is written by the orchestrator (`XpingContextOrchestrator.cs:1181-1182`).
 - The normaliser is frozen by the contract (§5.2). Any change to `MessageNormaliser` is a contract
   amendment first; a test in `Xping.Sdk.Core.Tests` pins its output for a fixed set of messages so a
-  change cannot land silently (§17.1, added by phase 1).
+  change cannot land silently (§17.1, added by phase 0).
 
 ---
 
@@ -659,12 +660,12 @@ the superseded text stays for history.
 
 | Document | Amendment | What it says |
 |---|---|---|
-| `cli-auth-cli-spec.md` | §10, §11 superseded | "The Cloud API client, enrichment targets, budget, envelope `cloud` objects and hint lines are now specified by `cloud-data-in-cli-cli-spec.md` §2–§7, §11. §16 stands." Also §13's "0–3" → "0–4". |
+| `cli-auth-cli-spec.md` | Amendment 1 — §10, §11 superseded | "The Cloud API client, enrichment targets, budget, envelope `cloud` objects and hint lines are now specified by `cloud-data-in-cli-cli-spec.md` §2–§7, §11. §16 stands." Also §13's "0–3" → "0–4". |
 | `cli-report-format-spec.md` | Amendment 5 — Cloud layering | §8's two slots are refilled by §7.2–§7.3 and §7.6 here: the label token and the trailer. Amendment 4's "renderer composes, builder never resolves Cloud text" stands. |
 | `cli-latest-run-spec.md` | Amendment 7 — Cloud line added, not substituted | Reverses Amendment 6's replacement: the local contrast sentence stays; the Cloud line is §7.5 here. |
-| `cli-test-history-spec.md` | Amendment N — `CLOUD` block and `RUNS IN CLOUD` | Fills §8 "Reserved for Cloud" with §8 here; `TestHistoryDto.Cloud`. |
-| `cli-failure-mode-spec.md` | Amendment N — per-mode Cloud token | §8 "nothing is reserved" is replaced by §5.2 and §7.4 here: `errorMessageHash` on every mode, a `cloud` match per mode. |
-| `cli-finding-detail-spec.md` | Amendment N — Cloud pairs | The `cloud *` pairs of §7.4 here replace the two pairs of cli-auth §11.3. |
+| `cli-test-history-spec.md` | Amendment 11 — `CLOUD` block and `RUNS IN CLOUD` | Fills §8 "Reserved for Cloud" with §8 here; `TestHistoryDto.Cloud`. |
+| `cli-failure-mode-spec.md` | Amendment 8 — per-mode Cloud token | §8 "nothing is reserved" is replaced by §5.2 and §7.4 here: `errorMessageHash` on every mode, a `cloud` match per mode. |
+| `cli-finding-detail-spec.md` | Amendment 9 — Cloud pairs | The `cloud *` pairs of §7.4 here replace the three pairs of cli-auth §11.3 (`cloud confidence`, `cloud evidence`, `cloud trend`). |
 
 ---
 
