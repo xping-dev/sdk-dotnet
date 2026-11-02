@@ -92,6 +92,34 @@ public sealed class CloudEnricherTests : IDisposable
             cloud);
     }
 
+    [Theory]
+    [InlineData("flaky", true)]
+    [InlineData("not-flaky", false)]
+    [InlineData("inconclusive", null)]
+    [InlineData("not-examined", null)]
+    public async Task OnlyALedgerVerdictReadsAsFlakyOrNot(string state, bool? flaky)
+    {
+        // Contract §4.3: inconclusive and not examined are not "not flaky".
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.FlakyState = state;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        Assert.Equal(flaky, result.Envelope.Findings.First(f => f.Cloud != null).Cloud!.Flaky);
+    }
+
+    [Fact]
+    public async Task AKnownTestWithoutAScoreReadsAsNoData()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Unscored = true;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        CloudTestDto cloud = result.Envelope.Findings.First(f => f.Cloud != null).Cloud!;
+        Assert.Equal((null, null, "no-data", null, null), (cloud.Confidence, cloud.Category, cloud.EvidenceLevel, cloud.Trend, cloud.Delta));
+    }
+
     [Fact]
     public async Task AGroupFindingIsNotRead()
     {
@@ -451,6 +479,10 @@ public sealed class CloudEnricherTests : IDisposable
 
         public HashSet<string> Unreadable { get; } = [];
 
+        public string FlakyState { get; set; } = "flaky";
+
+        public bool Unscored { get; set; }
+
         public HashSet<string> Stray { get; } = [];
 
         public TaskCompletionSource Hanging { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -530,9 +562,9 @@ public sealed class CloudEnricherTests : IDisposable
                     null,
                     812,
                     "known-flaky",
-                    new DigestConfidence(
+                    Unscored ? null : new DigestConfidence(
                         "scored", 0.62, null, null, "moderately-reliable", "stable", -0.03, 48, "robust", null, null, null, null, null, null, "current"),
-                    new DigestFlaky("flaky", null, null, null, null, null, null, "current"),
+                    new DigestFlaky(FlakyState, null, null, null, null, null, null, "current"),
                     null,
                     null,
                     []);

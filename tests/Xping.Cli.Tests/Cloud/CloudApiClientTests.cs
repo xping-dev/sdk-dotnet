@@ -3,8 +3,10 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Auth;
@@ -63,27 +65,72 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task TheDigestIsReadWithEveryBlock()
+    public async Task TheDigestIsReadWithEveryBlockAndEveryField()
     {
+        _host.Cloud.AddTest(Project, "fp-seen", digest => digest["signatures"] = new JsonArray(new JsonObject
+        {
+            ["errorMessageHash"] = Hash,
+            ["exceptionType"] = "InvalidOperationException",
+            ["runs"] = 36,
+            ["canonicalRuns"] = 34,
+            ["ciRuns"] = 34,
+            ["localRuns"] = 2,
+            ["machines"] = 6,
+            ["firstSeenAt"] = "2026-09-11T09:14:00Z",
+            ["lastSeenAt"] = "2026-09-28T12:00:00Z",
+            ["stackTraceHashes"] = new JsonArray("c0ffee"),
+            ["window"] = new JsonObject { ["kind"] = "days", ["length"] = 35, ["end"] = "2026-09-28T12:05:00Z" }
+        }));
         _host.Cloud.AddSession(SessionKey);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        DigestResponse? response = await client.GetDigestAsync(
+            Project, new DigestRequest([new DigestRequestTest("fp-seen", [Hash])], [SessionKey]), CancellationToken.None);
+
+        DigestWindow days35 = new("days", 35, At("2026-09-28T12:05:00Z"), null);
+        DigestWindow days14 = new("days", 14, At("2026-09-28T12:05:00Z"), null);
+        var expected = new DigestResponse(
+            _host.Time.GetUtcNow(),
+            "emh-1",
+            365,
+            [
+                new TestDigest(
+                    "fp-seen",
+                    "ok",
+                    "Shop.Tests.CheckoutTests.Checkout_Succeeds",
+                    At("2026-09-28T12:00:00Z"),
+                    812,
+                    "known-flaky",
+                    new DigestConfidence(
+                        "scored", 0.62, 0.55, 0.69, "moderately-reliable", "stable", -0.03, 48.0, "robust", 40, 6, 2,
+                        days35, days14, At("2026-09-28T12:05:00Z"), "current"),
+                    new DigestFlaky(
+                        "flaky", "timing", "major", At("2026-09-20T08:00:00Z"), At("2026-09-28T12:05:00Z"),
+                        days14, At("2026-09-28T12:05:00Z"), "current"),
+                    new DigestCanonical(10, 3, 0, null, "passed", At("2026-09-28T12:00:00Z"), new DigestWindow("runs", 10, null, At("2026-09-25T08:00:00Z"))),
+                    new DigestTransition("flakiness-introduced", null, "major", At("2026-09-20T08:00:00Z")),
+                    [
+                        new DigestSignature(
+                            Hash, "InvalidOperationException", true, 36, 34, 34, 2, 6,
+                            At("2026-09-11T09:14:00Z"), At("2026-09-28T12:00:00Z"), ["c0ffee"], days35)
+                    ])
+            ],
+            [new DigestSession(SessionKey, "complete", true, true)]);
+
+        // Field by field, so a member the wire names differently from the record reads as missing.
+        Assert.Equivalent(expected, response, strict: true);
+    }
+
+    [Fact]
+    public async Task ARequestedSignatureCloudHasNotSeenIsAnsweredWithZeroRuns()
+    {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         DigestResponse? response = await client.GetDigestAsync(Project, Request, CancellationToken.None);
 
-        Assert.Equal(("emh-1", 365), (response!.SignatureAlgorithm, response.RetentionDays));
-        TestDigest digest = Assert.Single(response.Tests);
-        Assert.Equal((Fingerprint, "ok", "known-flaky", 812), (digest.Fingerprint, digest.State, digest.Verdict, digest.TotalRuns));
-        Assert.Equal((0.62, "moderately-reliable", "robust"), (digest.Confidence!.Score, digest.Confidence.Category, digest.Confidence.EvidenceLevel));
-        Assert.Equal(("days", 35), (digest.Confidence.Window!.Kind, digest.Confidence.Window.Length));
-        Assert.Equal(("flaky", "timing"), (digest.Flaky!.State, digest.Flaky.Category));
-        Assert.Equal((10, 3), (digest.Canonical!.Runs, digest.Canonical.Failed));
-        Assert.Equal("flakiness-introduced", digest.LastTransition!.Type);
-
-        // A requested signature Cloud has never seen is still answered, with zero runs.
-        DigestSignature signature = Assert.Single(digest.Signatures!);
+        DigestSignature signature = Assert.Single(Assert.Single(response!.Tests).Signatures!);
         Assert.Equal((Hash, true, 0), (signature.ErrorMessageHash, signature.Requested, signature.Runs));
-
-        Assert.Equal(new DigestSession(SessionKey, "complete", true, true), Assert.Single(response.Sessions!));
+        Assert.Equal("unknown", Assert.Single(response.Sessions!).State);
     }
 
     [Fact]
@@ -101,7 +148,14 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     [Fact]
     public async Task TheRunHistoryIsAGetWithItsLimit()
     {
-        _host.Cloud.AddRun(Project, Fingerprint);
+        _host.Cloud.AddRun(Project, Fingerprint, run =>
+        {
+            run["sessionKey"] = SessionKey;
+            run["attempts"] = 2;
+            run["firstAttemptOutcome"] = "passed";
+            run["pullRequestNumber"] = 42;
+            run["errorMessageHash"] = Hash;
+        });
         _host.Cloud.AddRun(Project, Fingerprint, run => run["outcome"] = "passed");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
@@ -109,9 +163,17 @@ public sealed class CloudApiClientTests : IAsyncDisposable
 
         RecordedRequest request = Assert.Single(_host.Cloud.GatewayRequests);
         Assert.Equal(("GET", "/gw/v1/projects/shop-tests/tests/fp-checkout-0001/runs", "?limit=1"), (request.Method, request.Path, request.Query));
-        Assert.Equal((365, true), (history!.RetentionDays, history.HasMore));
-        CloudRun run = Assert.Single(history.Runs);
-        Assert.Equal(("failed", "canonical", true, "gh-runner-17"), (run.Outcome, run.Tier, run.IsCi, run.MachineName));
+        Assert.Equivalent(
+            new RunsResponse(
+                365,
+                true,
+                [
+                    new CloudRun(
+                        SessionKey, At("2026-09-28T12:00:00Z"), "failed", 2, "passed", 812, "canonical", true, "gh-runner-17",
+                        "main", "0053b0ef0053b0ef0053b0ef0053b0ef0053b0ef", 42, "InvalidOperationException", Hash)
+                ]),
+            history,
+            strict: true);
     }
 
     [Theory]
@@ -364,4 +426,6 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     }
 
     private CloudApiClientFactory Factory => _services.GetRequiredService<CloudApiClientFactory>();
+
+    private static DateTimeOffset At(string value) => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
 }

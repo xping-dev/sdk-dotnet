@@ -241,10 +241,6 @@ internal sealed class CloudEnricher(
         {
             attempt.Fail(ex.Message);
         }
-        catch (CloudResponseException ex)
-        {
-            attempt.Fail(ex.Message);
-        }
         catch (OperationCanceledException)
         {
             // The token is the budget linked with the caller's. A caller's cancellation is rethrown
