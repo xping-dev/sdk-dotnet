@@ -92,12 +92,9 @@ internal sealed class CloudApiClient : ICloudApiClient
         if (body is null)
             return null;
 
-        DigestResponse? digest = Read<DigestResponse>(body);
-
-        // The fingerprint and state key and classify every test; anything else may be missing and is
-        // rendered as absent.
-        return digest is { Tests: { } tests } && tests.All(t => t is { Fingerprint.Length: > 0, State.Length: > 0 })
-            && (digest.Sessions is null || digest.Sessions.All(s => s is { SessionKey.Length: > 0, State.Length: > 0 }))
+        // Only a body without a test list is unreadable. An item the CLI cannot read costs that test,
+        // not its batch (contract §8.2 F4), so CloudEnricher sorts the items.
+        return Read<DigestResponse>(body) is { Tests: not null } digest
             ? digest
             : throw new CloudResponseException("The DataGateway answered the digest with a body the CLI cannot read.");
     }
@@ -215,7 +212,7 @@ internal sealed class CloudApiClient : ICloudApiClient
                 return new CloudApiException(code, title, "Xping Cloud is rate limiting requests; try again in a minute.");
 
             case >= 500:
-                return AuthFailureException.Unreachable(_gatewayUri, string.Create(CultureInfo.InvariantCulture, $"HTTP {code}"));
+                return new CloudApiException(code, title, string.Create(CultureInfo.InvariantCulture, $"Xping Cloud failed to answer (HTTP {code})."));
 
             default:
                 return new CloudApiException(code, title, Describe(code, problem));

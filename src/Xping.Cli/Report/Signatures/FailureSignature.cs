@@ -20,6 +20,11 @@ namespace Xping.Cli.Report.Signatures;
 /// hash cannot be shown to a developer or a model; running on the machine that has the text is what
 /// lets the signature carry its readable components.
 /// </para>
+/// <para>
+/// The composite <see cref="Hash"/> is the local key. The SDK's <see cref="ErrorMessageHash"/> is
+/// carried beside it for the Cloud match and is never an input to the composite
+/// (cloud-data-in-cli-cli-spec §5.1).
+/// </para>
 /// </remarks>
 /// <param name="Hash">Stable identity used to group failures. Never <see cref="object.GetHashCode"/>.</param>
 /// <param name="ExceptionType">The type the adapter recorded, or <see langword="null"/> when it recorded none.</param>
@@ -37,6 +42,10 @@ namespace Xping.Cli.Report.Signatures;
 /// Whether the failures carrying it timed out. Part of the hash, so a signature never mixes timed-out
 /// and failed attempts.
 /// </param>
+/// <param name="ErrorMessageHash">
+/// The SDK's hash of the message, as stored; null when the adapter recorded none. On a signature
+/// that stands for several failures, the one most of them carry (see <see cref="Indexes.SignatureIndex"/>).
+/// </param>
 internal sealed record FailureSignature(
     string Hash,
     string? ExceptionType,
@@ -44,4 +53,5 @@ internal sealed record FailureSignature(
     IReadOnlyList<string> Frames,
     bool Degraded,
     bool Unavailable,
-    bool TimedOut);
+    bool TimedOut,
+    string? ErrorMessageHash);

@@ -113,6 +113,8 @@ internal static class TestSessionFactory
     /// <param name="failureSiteMember">The lifecycle member that failed, when one was named.</param>
     /// <param name="fingerprint">The fingerprint, when it must not derive from the name.</param>
     /// <param name="fullyQualifiedName">The FQN, when it must not derive from the name.</param>
+    /// <param name="errorMessageHash">The SDK's message hash, as an adapter would have stored it.</param>
+    /// <param name="startOffsetMs">How long after the shared epoch the attempt started.</param>
     /// <returns>The execution.</returns>
     public static TestExecution Execution(
         string name,
@@ -136,7 +138,9 @@ internal static class TestSessionFactory
         FailureSite? failureSite = null,
         string? failureSiteMember = null,
         string? fingerprint = null,
-        string? fullyQualifiedName = null)
+        string? fullyQualifiedName = null,
+        string? errorMessageHash = null,
+        int startOffsetMs = 0)
     {
         TestIdentity identity = new TestIdentityBuilder()
             .WithTestFingerprint(fingerprint ?? $"fp-{name}")
@@ -181,14 +185,15 @@ internal static class TestSessionFactory
             .WithTestName(name)
             .WithOutcome(outcome)
             .WithDuration(TimeSpan.FromMilliseconds(durationMs))
-            .WithStartTime(Epoch)
-            .WithEndTime(Epoch.AddMilliseconds(durationMs))
+            .WithStartTime(Epoch.AddMilliseconds(startOffsetMs))
+            .WithEndTime(Epoch.AddMilliseconds(startOffsetMs + durationMs))
             .WithRetry(retryMetadata)
             .WithStackTraceOmitted(stackTraceOmitted)
             .WithTimeoutBudget(
                 timeoutBudgetMs is { } budgetMs ? TimeSpan.FromMilliseconds(budgetMs) : null,
                 timeoutBudgetMs is null ? null : TimeoutBudgetSource.Declared)
-            .WithFailureSite(failureSite, failureSiteMember);
+            .WithFailureSite(failureSite, failureSiteMember)
+            .WithErrorMessageHash(errorMessageHash);
 
         // Attached only when asked for. The execution builder already defaults the record, and that
         // default reports a concurrency of zero — which is precisely how concurrency analysis

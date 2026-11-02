@@ -179,12 +179,30 @@ internal sealed class SignatureIndex
             }
         }
 
+        // Each execution carries its own message hash, and the signature kept per composite was
+        // whichever execution came last. The composite and the SDK hash normalise the same message,
+        // but nothing forces them to agree on every literal, so the group is given the hash most of
+        // its failures carry, ordinally smallest on a tie, and never one that depends on read order
+        // (cloud-data-in-cli-cli-spec §5.2).
+        foreach (var (hash, failures) in perSignature)
+            signatures[hash] = signatures[hash] with { ErrorMessageHash = ModalMessageHash(failures) };
+
         return new SignatureIndex(
             byExecution,
             BuildPerTest(perTest, signatures),
             BuildPerSignature(perSignature, signatures),
             [.. perSignature.Keys.OrderBy(h => h, StringComparer.Ordinal)]);
     }
+
+    private static string? ModalMessageHash(List<ExecutionRef> failures) =>
+        failures
+            .Select(f => f.Execution.ErrorMessageHash)
+            .OfType<string>()
+            .GroupBy(h => h, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => g.Key)
+            .FirstOrDefault();
 
     private static void Add<TKey>(
         Dictionary<TKey, List<ExecutionRef>> target, TKey key, ExecutionRef reference)

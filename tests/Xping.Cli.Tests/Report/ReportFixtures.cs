@@ -446,7 +446,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
-            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
+            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false, ErrorMessageHash: null);
 
         FindingDto cluster = envelope.Findings[2];
         var clusterEvidence = new BrokenFixtureEvidence(
@@ -589,7 +589,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "Race condition detected", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: failing,
             FirstSeenAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "c670fc3",
-            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
+            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false, ErrorMessageHash: null);
 
         var evidence = new FlakyEvidence(
             failing, judged, judged, failing, failing, judged,

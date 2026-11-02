@@ -488,7 +488,8 @@ public sealed class FailureModeRenderingTests
             FirstSeenSha: "b71e004c93d2",
             FirstSeenSessionsAgo: 6,
             FirstSeenInLatestSession: false,
-            FirstSeenAfterFirstRun: true);
+            FirstSeenAfterFirstRun: true,
+            ErrorMessageHash: null);
 
     /// <summary>The flaky detail view, its modes replaced.</summary>
     private static ReportEnvelope With(params FailureModeDto[] modes)

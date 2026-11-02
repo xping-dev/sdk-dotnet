@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using Xping.Cli.Report;
 using Xping.Cli.Report.Signatures;
 using Xping.Sdk.Core.Models.Executions;
 using Xping.Sdk.Core.Tests.Diagnostics;
@@ -232,6 +233,45 @@ public sealed class FailureSignatureTests
 
         Assert.Equal("d0f8e1e5a2b25e4c".Length, signature.Hash.Length);
         Assert.All(signature.Hash, c => Assert.Contains(c, "0123456789abcdef"));
+    }
+
+    [Fact]
+    public void TheSdkMessageHashIsCarriedBesideTheCompositeAndNeverChangesIt()
+    {
+        string hash = new('a', 64);
+        TestExecution execution = TestSessionFactory.Execution("Alpha", TestOutcome.Failed, errorMessage: "boom", errorMessageHash: hash);
+
+        FailureSignature signature = FailureSignatureFactory.Create(execution, "fp-Alpha");
+
+        Assert.Equal(hash, signature.ErrorMessageHash);
+        Assert.Equal(Signature("System.Exception", "boom").Hash, signature.Hash);
+    }
+
+    [Fact]
+    public void AModeCarriesTheHashMostOfItsFailuresHaveAndTheSmallerOneOnATie()
+    {
+        // cloud-data-in-cli-cli-spec §5.2: one composite can group messages the SDK hashed apart,
+        // and the mode's hash must not depend on the order the store was read in.
+        string a = new('a', 64);
+        string b = new('b', 64);
+        string c = new('c', 64);
+
+        Assert.Equal(b, ModeHash(b, a, b));
+        Assert.Equal(a, ModeHash(c, a, null, c, a));
+        Assert.Equal(a, ModeHash(a, c));
+        Assert.Null(ModeHash(null, null));
+    }
+
+    private static string? ModeHash(params string?[] hashes)
+    {
+        AnalysisContext context = TestSessionFactory.Context(
+        [
+            .. hashes.Select((hash, i) => TestSessionFactory.Session(
+                i,
+                [TestSessionFactory.Execution("Alpha", TestOutcome.Failed, errorMessage: "boom", errorMessageHash: hash)]))
+        ]);
+
+        return Assert.Single(context.Signatures.SignaturesOf("fp-Alpha")).Signature.ErrorMessageHash;
     }
 
     private static FailureSignature BlankTimeout(string name) =>

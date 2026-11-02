@@ -60,15 +60,15 @@ public sealed class CloudResilienceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ASecondServerErrorEndsTheReadAsUnreachable()
+    public async Task ASecondServerErrorEndsTheReadAsAServerFailure()
     {
         _host.Cloud.FailGateway(DigestPath, 2, HttpStatusCode.ServiceUnavailable, "Error.Unavailable");
         using ICloudApiClient client = await ClientAsync();
 
-        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
+        CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
             () => _host.DriveAsync(client.GetDigestAsync(Project, Request, CancellationToken.None)));
 
-        Assert.Equal(AuthExitCodes.CloudUnreachable, failure.ExitCode);
+        Assert.Equal(503, failure.StatusCode);
         Assert.Contains("HTTP 503", failure.Message, StringComparison.Ordinal);
         Assert.Equal(2, _host.Cloud.GatewayRequests.Count);
     }
@@ -80,7 +80,7 @@ public sealed class CloudResilienceTests : IAsyncDisposable
         _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.ServiceUnavailable, "Error.Unavailable");
         using ICloudApiClient client = await ClientAsync();
 
-        await Assert.ThrowsAsync<AuthFailureException>(
+        await Assert.ThrowsAsync<CloudApiException>(
             () => _host.DriveAsync(client.GetDigestAsync(Project, Request, CancellationToken.None)));
 
         Assert.Single(_host.Cloud.GatewayRequests);

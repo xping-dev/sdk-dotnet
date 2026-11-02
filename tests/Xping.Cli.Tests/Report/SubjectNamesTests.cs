@@ -240,5 +240,6 @@ public sealed class SubjectNamesTests
             FirstSeenSha: "a3f9c2e",
             FirstSeenSessionsAgo: 4,
             FirstSeenInLatestSession: false,
-            FirstSeenAfterFirstRun: true);
+            FirstSeenAfterFirstRun: true,
+            ErrorMessageHash: null);
 }
