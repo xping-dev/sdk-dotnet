@@ -23,6 +23,19 @@ implementation session that needs one of them answered stops and asks.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be read as in RFC 2119.
 
+### Amendment 1 — from phase 1
+
+Phase 1 read §3 against the code and found two conflicts. Both are resolved here, decided by the
+owner on 2026-11-02, and committed before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.3: the credential slice covers a proactive token refresh, with the cross-process lock's 5 s `Patience` cut by the slice | The refresh is not part of the credential step. `BearerTokenHandler` refreshes inside the first DataGateway request, so it runs under that request's `AttemptTimeout` (3 s) and the total budget, not the 1 s slice. The slice covers credential resolution only: settings, the keychain probe, choosing a credential. `CrossProcessLock.Patience` drops from 5 s to 2 s, so the "proceed without the lock" rule (cli-auth §9.4) can still apply inside a 3 s attempt. A refresh that does not finish in time costs that run's Cloud data (`unavailable`, `timeout`); the refresh itself runs to the end in the background as today. Putting the refresh under the 1 s slice was rejected: a network refresh often takes longer, and the first report after every 15-minute token lifetime would read `credential-timeout`. **Contract §7.3 lists token refresh under `CredentialBudgetMs`; it needs the matching amendment in the dashboard repo** | §3.3, cli-auth §9.4 |
+| B | §3.2: the retry keeps `HttpClientResiliencePredicates.IsTransient` (5xx, 408, network errors, the attempt timeout) | Contract §7.3 wins: one retry on **5xx only**, and only when `budget.HasAtLeast(1 s)`. 408, network errors and the attempt timeout are not retried; after a 3 s attempt timeout at most 1 s is left anyway. The retry waits `CloudResilience.RetryDelay` = 200 ms, no backoff, no jitter | §3.2 |
+| C | §2.2: the digest DTO is `Digest`, in `Cloud/Digest/` | `TestDigest`: a type named like its namespace (`Xping.Cli.Cloud.Digest`) cannot be referred to by its simple name inside `Xping.Cli.Cloud` | §2.2 |
+| D | §19 Q-2: verify on macOS whether the keychain probe tolerates the slice's cancellation | It does not: `MacOsKeychainStore` probes and reads with synchronous `SecItemCopyMatching` calls that never see the token, so a keychain waiting on an access prompt would hold the report. As Q-2 prescribed, the slice applies around the resolution: `CloudEnricher` runs `CredentialResolver.ResolveAsync` on the thread pool and stops waiting when the slice ends. The abandoned call ends with the process | §3.3, §19 |
+| E | §2.2: `GetProjectAsync` stays | Removed. Its one caller checked a configured key that found no tests; the digest's 404 is that answer now (contract §6.1), so nothing calls it | §2.2 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -110,9 +123,9 @@ Everything in contract §10, and:
 
 | Component | File | Change |
 |---|---|---|
-| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` and `GetProjectAsync` stay. |
+| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` stays; `GetProjectAsync` is removed (Amendment 1E). |
 | `CloudApiClient` | `Cloud/CloudApiClient.cs` | Implement the two calls. `POST {gw}/v1/projects/{key}/tests/digest` with a JSON body; `GET {gw}/v1/projects/{key}/tests/{fp}/runs?limit=`. 404 → null (project or test not in the workspace). The body is serialised with the SDK `IXpingSerializer` `ApiOptions` (camelCase), as today's responses are read. |
-| Cloud DTOs | `Cloud/Digest/*.cs` (new folder) | `DigestRequest`, `DigestRequestTest`, `DigestResponse`, `Digest`, `DigestConfidence`, `DigestFlaky`, `DigestCanonical`, `DigestTransition`, `DigestSignature`, `DigestWindow`, `DigestSession`, `RunsResponse`, `CloudRun`. Records, one file each or one file per group. These are the wire shapes of contract §6; they are not the envelope DTOs (§6). |
+| Cloud DTOs | `Cloud/Digest/*.cs` (new folder) | `DigestRequest`, `DigestRequestTest`, `DigestResponse`, `TestDigest`, `DigestConfidence`, `DigestFlaky`, `DigestCanonical`, `DigestTransition`, `DigestSignature`, `DigestWindow`, `DigestSession`, `RunsResponse`, `CloudRun`. Records, one file each or one file per group. These are the wire shapes of contract §6; they are not the envelope DTOs (§6). |
 | `CloudTest` | `Cloud/CloudTest.cs` | Deleted. |
 | `CloudHttp`, `CloudResilience` | `Cloud/` | Constants replaced per §3.2. |
 | `CloudBudget` | `Cloud/CloudBudget.cs` (new) | Owns the total deadline and the credential slice; answers `Remaining` and `HasAtLeast(TimeSpan)`. Built on `TimeProvider`. |
@@ -150,7 +163,9 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `CloudBudget.Credential` | 1 000 ms [none] | §7.3 `CredentialBudgetMs` |
 | `CloudHttp.AttemptTimeout` | 3 000 ms [10 s] | §7.3 `CloudRequestTimeoutMs` |
 | `CloudHttp.TotalTimeout` | equals `CloudBudget.Total` [30 s] | the `HttpClient.Timeout` can never outlive the budget |
-| `CloudResilience.MaxRetryAttempts` | 1 [3], and only when `budget.HasAtLeast(1 s)` | §7.3 |
+| `CloudResilience.MaxRetryAttempts` | 1 [3], on 5xx only, and only when `budget.HasAtLeast(1 s)` (Amendment 1B) | §7.3 |
+| `CloudResilience.RetryDelay` | 200 ms [2 s exponential, jittered] (Amendment 1B) | — |
+| `CrossProcessLock.Patience` | 2 s [5 s] (Amendment 1A) | cli-auth §9.4 |
 | `CloudResilience` 429 | never retried, never waited for [once if `Retry-After ≤ 10 s`] | §7.3 |
 | `CloudEnricher.MaxConcurrency` | 4 (unchanged) | §7.2 `MaxConcurrentRequests` |
 | `CloudEnricher.MaxEnrichedTests` | 200 | §7.2 |
@@ -162,24 +177,23 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `ProjectResolver.MaxProjectListPages` | 2 [20] | §7.3 |
 | `SignatureAlgorithmId` | `"emh-1"` | contract §5.2 |
 
-The retry predicate keeps `HttpClientResiliencePredicates.IsTransient` for 5xx, 408 and network
-errors (`CloudResilience.cs:61`); 429 is removed from it, and the `Retry-After` reader
-(`CloudResilience.cs:63-79`) is deleted. The retry is skipped, not shortened, when less than one
-second of budget remains: `CloudResilience` receives the `CloudBudget` and checks it in
-`ShouldHandle`.
+The retry predicate is a 5xx answer and nothing else (Amendment 1B): not 408, not a network error,
+not the attempt timeout, not 429. The `Retry-After` reader (`CloudResilience.cs:63-79`) is deleted.
+The retry is skipped, not shortened, when less than one second of budget remains: `CloudResilience`
+receives the `CloudBudget` and checks it in `ShouldHandle`.
 
 ### 3.3 Budget mechanics
 
 - `CloudBudget` starts when `ReportCommand` calls `EnrichAsync`, after local analysis and after the
   envelope exists. It creates the linked `CancellationTokenSource` that today sits at
   `CloudEnricher.cs:144`, with `Total` as its delay.
-- The credential step (`CredentialResolver`, the keychain probe, settings parsing, and a proactive
-  refresh through `TokenRefresher` with the cross-process lock whose `Patience` is 5 s at
-  `CrossProcessLock.cs:32`) runs under a second token linked to the first with the `Credential`
-  delay. On its expiry the enricher returns `unavailable` / `credential-timeout`. The lock's own
-  5 s patience is therefore cut to what the slice allows; `CrossProcessLock` already proceeds
-  without the lock when it cannot get it (`CrossProcessLock.cs:78-79`), and the slice cancellation
-  reaches it through the token.
+- The credential step (`CredentialResolver`, the keychain probe, settings parsing) runs under a
+  second token linked to the first with the `Credential` delay, and on the thread pool, because
+  the keychain backends are synchronous and never see the token (Amendment 1D). On its expiry the
+  enricher returns `unavailable` / `credential-timeout`. A token refresh is not part of it: it
+  runs inside the first DataGateway request, under that request's 3 s attempt timeout, and the
+  cross-process lock's `Patience` is 2 s so its "proceed without the lock" rule still applies
+  there (Amendment 1A).
 - The `login-required` fallback to the ambient API key (`CloudEnricher.cs:150-163`) stays and runs
   inside the same total. It re-sends only the batches that did not answer.
 - The `--test` runs request is sent after every digest batch has answered or failed, and only if
@@ -761,7 +775,7 @@ finds a contract or spec conflict stops and reports.
 | # | Question | Proposed answer |
 |---|---|---|
 | Q-1 | Does the `--test` subject count against `MaxEnrichedTests` when it is also a finding subject? | It is one target; the cap is on distinct fingerprints. No contract change. |
-| Q-2 | The credential slice cancels a keychain probe mid-call on macOS; does the keychain API tolerate cancellation? | The probe already runs with a token (cli-auth §7.3). If a backend ignores the token, the slice still expires the enrichment and the probe finishes in the background of the process, which exits normally. Verify in phase 1 on macOS; if the process hangs, the slice must apply at the backend selector instead. |
+| Q-2 | **Answered by Amendment 1D.** The credential slice cancels a keychain probe mid-call on macOS; does the keychain API tolerate cancellation? | The probe already runs with a token (cli-auth §7.3). If a backend ignores the token, the slice still expires the enrichment and the probe finishes in the background of the process, which exits normally. Verify in phase 1 on macOS; if the process hangs, the slice must apply at the backend selector instead. |
 | Q-3 | `CtaThrottle` reads `DateTime.UtcNow` and `Environment` directly, so the banner cannot be tested with the injected clock. | Out of scope here; leave as is, test the stderr move with a redirected `io.Error` only. |
 | Q-4 | Should the reason line (§7.6) print under `not-attempted` on a pipe, where there is no banner? | No. A pipe reader has the JSON or is a script; contract F2 keeps pipes quiet. |
 

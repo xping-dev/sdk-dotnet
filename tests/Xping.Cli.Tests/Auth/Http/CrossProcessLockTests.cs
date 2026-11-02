@@ -72,13 +72,13 @@ public sealed class CrossProcessLockTests : IDisposable
     }
 
     [Fact]
-    public async Task AfterFiveSecondsTheRefreshProceedsWithoutTheLock()
+    public async Task AfterThePatienceTheRefreshProceedsWithoutTheLock()
     {
         using IDisposable first = await _lock.AcquireAsync(CloudUrl, CancellationToken.None);
 
         using IDisposable second = await ClockDriver.DriveAsync(_time, _lock.AcquireAsync(CloudUrl, CancellationToken.None));
 
-        Assert.True(_time.GetUtcNow() >= new DateTimeOffset(2026, 9, 29, 10, 0, 5, TimeSpan.Zero));
+        Assert.True(_time.GetUtcNow() >= new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero) + CrossProcessLock.Patience);
         Assert.IsNotType<FileStream>(second);
     }
 }

@@ -6,10 +6,10 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
+using Xping.Cli.Cloud.Digest;
 using Xping.Cli.Cloud.Projects;
 using Xping.Cli.Configuration;
 using Xping.Cli.Report.Contract;
@@ -50,8 +50,8 @@ internal sealed record EnrichmentResult(ReportEnvelope Envelope, IReadOnlyList<C
 /// <para>
 /// Never required and never in charge: every failure ends in the local report exactly as it would
 /// have been, plus at most a hint line, and nothing here can change the report's exit code. The
-/// whole enrichment runs inside <see cref="Budget"/> so a slow Cloud cannot make a local report
-/// slow.
+/// whole enrichment runs inside a <see cref="CloudBudget"/> so a slow Cloud cannot make a local
+/// report slow.
 /// </para>
 /// <para>
 /// The fallback of §8.1 is decided here because only the caller of the pipeline sees the outcome:
@@ -69,17 +69,18 @@ internal sealed class CloudEnricher(
     ILogger<CloudEnricher> logger)
 {
     /// <summary>
-    /// The wall-clock limit on one report's enrichment (§10.2, §11.5).
-    /// </summary>
-    public static readonly TimeSpan Budget = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// The most test reads in flight at once (§11.5).
+    /// The most digest requests in flight at once (contract §7.2).
     /// </summary>
     public const int MaxConcurrency = 4;
 
+    /// <summary>
+    /// The most tests in one digest request (contract §6.1).
+    /// </summary>
+    public const int MaxDigestBatchSize = 100;
+
     private const string Unavailable = "Cloud data unavailable: ";
     private const string LoginRequiredReason = "your sign-in is no longer valid. Run xping login.";
+    private const string CredentialTimeoutReason = "reading the Xping Cloud sign-in took too long. Showing local results only.";
 
     /// <summary>
     /// Returns <paramref name="envelope"/> with Cloud data added where it could be read.
@@ -108,6 +109,8 @@ internal sealed class CloudEnricher(
     private async Task<EnrichmentResult> EnrichCoreAsync(
         ReportEnvelope envelope, EnrichmentRequest request, CancellationToken cancellationToken)
     {
+        using var budget = new CloudBudget(timeProvider, cancellationToken);
+
         CliConfiguration configuration;
         try
         {
@@ -118,7 +121,24 @@ internal sealed class CloudEnricher(
             return new EnrichmentResult(envelope, [new CloudHint(Unavailable + ex.Message, Always: false)]);
         }
 
-        ResolvedCredential credential = await resolver.ResolveAsync(configuration, cancellationToken).ConfigureAwait(false);
+        // The keychain backends are synchronous native calls that never look at a token, and one
+        // waiting on an access prompt would hold the report until someone answers it. The slice is
+        // therefore applied around the resolution, not through it (§19 Q-2): the abandoned call
+        // costs the Cloud data and ends with the process.
+        ResolvedCredential credential;
+        try
+        {
+            credential = await Task.Run(() => resolver.ResolveAsync(configuration, budget.CredentialToken), budget.CredentialToken)
+                .WaitAsync(budget.CredentialToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (budget.CredentialExpired && !cancellationToken.IsCancellationRequested)
+        {
+            // Phase 2 reports this as unavailable / credential-timeout in context.cloud; until then
+            // the hint is the one trace of it.
+            return new EnrichmentResult(envelope, [new CloudHint(Unavailable + CredentialTimeoutReason, Always: false)]);
+        }
+
         logger.LogInformation("credential: {Credential}", Describe(credential));
 
         foreach (string problem in credential.StoreFailures.Concat(credential.Warnings))
@@ -141,11 +161,8 @@ internal sealed class CloudEnricher(
             return new EnrichmentResult(WithContext(envelope, notAttempted), []);
         }
 
-        using var budget = new CancellationTokenSource(Budget, timeProvider);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(budget.Token, cancellationToken);
-
         var hints = new List<CloudHint>();
-        Attempt attempt = await AttemptAsync(credential, cloudUrl, configuration, request, targets, linked.Token).ConfigureAwait(false);
+        Attempt attempt = await AttemptAsync(credential, cloudUrl, configuration, request, targets, budget).ConfigureAwait(false);
 
         if (attempt.LoginRequired && credential.Source == CredentialSource.StoredLogin)
         {
@@ -158,7 +175,7 @@ internal sealed class CloudEnricher(
                     "credential: fell back to API key ({Origin}) because the stored login is no longer valid", fallback.ApiKey?.Origin);
 
                 credential = fallback;
-                attempt = await AttemptAsync(credential, cloudUrl, configuration, request, targets, linked.Token).ConfigureAwait(false);
+                attempt = await AttemptAsync(credential, cloudUrl, configuration, request, targets, budget).ConfigureAwait(false);
             }
         }
 
@@ -187,14 +204,15 @@ internal sealed class CloudEnricher(
         CliConfiguration configuration,
         EnrichmentRequest request,
         IReadOnlyList<Target> targets,
-        CancellationToken cancellationToken)
+        CloudBudget budget)
     {
+        CancellationToken cancellationToken = budget.Token;
         var attempt = new Attempt();
         var lookup = new ProjectLookup(cloudUrl, WorkspaceOf(credential), configuration.ProjectId, request.SessionPins);
 
         try
         {
-            using ICloudApiClient client = await clientFactory.CreateAsync(credential, cloudUrl, cancellationToken).ConfigureAwait(false);
+            using ICloudApiClient client = await clientFactory.CreateAsync(credential, cloudUrl, budget, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -256,14 +274,11 @@ internal sealed class CloudEnricher(
         }
 
         attempt.Bind(assembly, binding);
-        int found = await FetchAsync(client, binding, targets, attempt, cancellationToken).ConfigureAwait(false);
-
-        if (found > 0)
+        if (await FetchAsync(client, binding, targets, attempt, cancellationToken).ConfigureAwait(false))
             return;
 
-        // Nothing found tells a missing project and tests Cloud has never seen apart only by asking.
-        // A remembered name match is listed again instead (§11.2); a match listed in this run is
-        // known to exist.
+        // The digest answers 404 for a project the workspace does not have. A remembered name match
+        // is listed again (§11.2); a match listed in this run is known to exist.
         if (binding.IsNameMatch)
         {
             if (await projectResolver.RebindAsync(client, assembly, binding, lookup, cancellationToken).ConfigureAwait(false) is { } fresh)
@@ -275,43 +290,75 @@ internal sealed class CloudEnricher(
             return;
         }
 
-        // A key the user typed or the SDK recorded is never checked otherwise, and a typo in it would
-        // read as "Cloud has no data" with no hint at all.
-        if (await client.GetProjectAsync(binding.Key, cancellationToken).ConfigureAwait(false) is null)
-            attempt.Fail($"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
+        // A typo in a key the user typed or the SDK recorded must not read as "Cloud has no data".
+        attempt.Fail($"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
     }
 
-    private async Task<int> FetchAsync(
+    /// <summary>
+    /// Reads the digest of every target, a batch per request.
+    /// </summary>
+    /// <returns><see langword="false"/> when the workspace has no project with the binding's key.</returns>
+    /// <remarks>
+    /// Phase 1 of cloud-data-in-cli-cli-spec §18: the digest replaces the per-test read, and its
+    /// answer is mapped onto the envelope's existing Cloud view until phase 2 rewrites both.
+    /// </remarks>
+    private async Task<bool> FetchAsync(
         ICloudApiClient client, ProjectBinding binding, IReadOnlyList<Target> targets, Attempt attempt, CancellationToken cancellationToken)
     {
-        int found = 0;
+        int missing = 0;
         var options = new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrency, CancellationToken = cancellationToken };
 
-        await Parallel.ForEachAsync(targets, options, async (target, token) =>
+        await Parallel.ForEachAsync(targets.Chunk(MaxDigestBatchSize), options, async (batch, token) =>
         {
-            CloudTest? test = await client.GetTestAsync(binding.Key, target.Fingerprint, token).ConfigureAwait(false);
-            attempt.Answered[target.Fingerprint] = true;
-
-            if (test is not null)
+            var digestRequest = new DigestRequest([.. batch.Select(t => new DigestRequestTest(t.Fingerprint, []))], []);
+            DigestResponse? response;
+            try
             {
-                attempt.Tests[target.Fingerprint] = ToDto(test);
-                Interlocked.Increment(ref found);
+                response = await client.GetDigestAsync(binding.Key, digestRequest, token).ConfigureAwait(false);
+            }
+            catch (CloudResponseException ex)
+            {
+                // An answer that cannot be read costs that batch, not its siblings in flight.
+                attempt.Fail(ex.Message);
+                return;
+            }
+
+            if (response is null)
+            {
+                Interlocked.Increment(ref missing);
+                return;
+            }
+
+            // Only what was asked counts as answered: a stray fingerprint must not make up for a
+            // missing one in the status.
+            HashSet<string> requested = [.. batch.Select(t => t.Fingerprint)];
+            foreach (TestDigest digest in response.Tests.Where(d => requested.Contains(d.Fingerprint)))
+            {
+                attempt.Answered[digest.Fingerprint] = true;
+
+                if (digest.State == "ok")
+                    attempt.Tests[digest.Fingerprint] = ToDto(digest);
             }
         }).ConfigureAwait(false);
 
-        return found;
+        return missing == 0;
     }
 
-    private CloudTestDto ToDto(CloudTest test) =>
+    private CloudTestDto ToDto(TestDigest digest) =>
         new(
-            test.ConfidenceScore,
-            test.ConfidenceScore is null ? null : Kebab(test.ScoreCategory),
-            Kebab(test.EvidenceLevel)!,
-            test.TotalExecutions,
-            Kebab(test.ScoreTrend),
-            test.ScoreDelta,
-            test.IsFlaky,
-            test.LastExecutedAtUtc,
+            digest.Confidence?.Score,
+            digest.Confidence?.Score is null ? null : digest.Confidence.Category,
+            digest.Confidence?.EvidenceLevel ?? "no-data",
+            digest.TotalRuns ?? 0,
+            digest.Confidence?.Trend,
+            digest.Confidence?.Delta,
+            digest.Flaky?.State switch
+            {
+                "flaky" => true,
+                "not-flaky" => false,
+                _ => null
+            },
+            digest.LastExecutedAt,
             timeProvider.GetUtcNow());
 
     /// <summary>
@@ -391,13 +438,6 @@ internal sealed class CloudEnricher(
         return credential.ApiKey is { } key ? $"API key ({key.Origin})" : "none (local only)";
     }
 
-    /// <summary>
-    /// <c>ModeratelyReliable</c> → <c>moderately-reliable</c>, as every other token in the envelope
-    /// is written.
-    /// </summary>
-    internal static string? Kebab(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : JsonNamingPolicy.KebabCaseLower.ConvertName(value.Trim());
-
     private sealed record Target(string Assembly, string Fingerprint);
 
     /// <summary>
@@ -408,7 +448,7 @@ internal sealed class CloudEnricher(
         /// <summary>Gets the tests Cloud had data for, by fingerprint.</summary>
         public ConcurrentDictionary<string, CloudTestDto> Tests { get; } = new(StringComparer.Ordinal);
 
-        /// <summary>Gets the fingerprints Cloud answered for, with data or a 404.</summary>
+        /// <summary>Gets the fingerprints Cloud answered for, known to it or not.</summary>
         public ConcurrentDictionary<string, bool> Answered { get; } = new(StringComparer.Ordinal);
 
         public bool LoginRequired { get; set; }

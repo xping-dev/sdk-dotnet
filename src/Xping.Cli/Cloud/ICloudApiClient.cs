@@ -5,11 +5,12 @@
 
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
+using Xping.Cli.Cloud.Digest;
 
 namespace Xping.Cli.Cloud;
 
 /// <summary>
-/// Typed reads from the DataGateway with one credential (cli-auth-cli-spec §10.1).
+/// Typed reads from the DataGateway with one credential (cloud-data-in-cli-cli-spec §2.2).
 /// </summary>
 /// <remarks>
 /// Every method can throw <see cref="LoginRequiredException"/> (the sign-in is over),
@@ -29,12 +30,16 @@ internal interface ICloudApiClient : IDisposable
     Task<PagedResult<ProjectSummary>> ListProjectsAsync(int pageNumber, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Reads one project, or <see langword="null"/> when the workspace has none with that key.
+    /// Reads the digest of a batch of tests (contract §6.1), or <see langword="null"/> when the
+    /// workspace has no project with that key.
     /// </summary>
-    Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken);
+    /// <exception cref="CloudResponseException">The answer could not be read.</exception>
+    Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Reads one test, or <see langword="null"/> when Xping Cloud has no data for it.
+    /// Reads the newest <paramref name="limit"/> runs of one test (contract §6.3), or
+    /// <see langword="null"/> when the workspace has no such project or test.
     /// </summary>
-    Task<CloudTest?> GetTestAsync(string projectKey, string testFingerprint, CancellationToken cancellationToken);
+    /// <exception cref="CloudResponseException">The answer could not be read.</exception>
+    Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken);
 }

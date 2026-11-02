@@ -10,6 +10,7 @@ using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Digest;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Tests.Auth.Store;
@@ -79,7 +80,7 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
-    public async Task CloudValuesAreKebabCasedAndStampedWithTheReadTime()
+    public async Task TheDigestIsMappedOntoTheCloudViewAndStampedWithTheReadTime()
     {
         _environment["XPING_APIKEY"] = ApiKey;
 
@@ -89,6 +90,34 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(
             new CloudTestDto(0.62, "moderately-reliable", "robust", 812, "stable", -0.03, true, null, _time.GetUtcNow()),
             cloud);
+    }
+
+    [Theory]
+    [InlineData("flaky", true)]
+    [InlineData("not-flaky", false)]
+    [InlineData("inconclusive", null)]
+    [InlineData("not-examined", null)]
+    public async Task OnlyALedgerVerdictReadsAsFlakyOrNot(string state, bool? flaky)
+    {
+        // Contract §4.3: inconclusive and not examined are not "not flaky".
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.FlakyState = state;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        Assert.Equal(flaky, result.Envelope.Findings.First(f => f.Cloud != null).Cloud!.Flaky);
+    }
+
+    [Fact]
+    public async Task AKnownTestWithoutAScoreReadsAsNoData()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Unscored = true;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        CloudTestDto cloud = result.Envelope.Findings.First(f => f.Cloud != null).Cloud!;
+        Assert.Equal((null, null, "no-data", null, null), (cloud.Confidence, cloud.Category, cloud.EvidenceLevel, cloud.Trend, cloud.Delta));
     }
 
     [Fact]
@@ -105,37 +134,108 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
-    public async Task NoMoreThanFourReadsAreInFlightAtOnce()
+    public async Task NoMoreThanFourDigestRequestsAreInFlightAtOnce()
     {
         _environment["XPING_APIKEY"] = ApiKey;
         _factory.Client.Delay = TimeSpan.FromMilliseconds(20);
 
-        await EnrichAsync(Many(12));
+        await EnrichAsync(Many(1000));
 
-        Assert.Equal(12, _factory.Client.Reads.Count);
+        Assert.Equal(1000, _factory.Client.Reads.Count);
         Assert.InRange(_factory.Client.MaxInFlight, 2, CloudEnricher.MaxConcurrency);
+    }
+
+    [Fact]
+    public async Task TestsAreAskedAboutInBatchesOfAHundredInReportOrder()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+
+        EnrichmentResult result = await EnrichAsync(Many(250));
+
+        Assert.Equal([100, 100, 50], _factory.Client.Batches.Select(b => b.Count).Order().Reverse());
+        Assert.Contains(_factory.Client.Batches, b => b[0] == "fp-0" && b[^1] == "fp-99");
+        Assert.All(result.Envelope.Findings, f => Assert.NotNull(f.Cloud));
     }
 
     [Fact]
     public async Task ReadsStillPendingWhenTheBudgetRunsOutAreLeftOutAndTheStatusIsPartial()
     {
         _environment["XPING_APIKEY"] = ApiKey;
-        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
-        string slow = Fingerprints(envelope)[^1];
-        _factory.Client.Hang.Add(slow);
 
-        Task<EnrichmentResult> enrichment = EnrichAsync(envelope);
+        // The second batch hangs; the first answers.
+        _factory.Client.Hang.Add("fp-120");
+
+        Task<EnrichmentResult> enrichment = EnrichAsync(Many(150));
         await _factory.Client.Hanging.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        _time.Advance(CloudEnricher.Budget);
+        while (_factory.Client.Reads.Count < 100)
+            await Task.Delay(10);
+        _time.Advance(CloudBudget.Total);
         EnrichmentResult result = await enrichment.WaitAsync(TimeSpan.FromSeconds(30));
 
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
         Assert.Equal("partial", cloud.Status);
         Assert.Contains("timeout", cloud.Reason, StringComparison.Ordinal);
-        Assert.Contains(result.Envelope.Findings, f => f.Cloud != null);
-        Assert.All(result.Envelope.Findings.Where(f => f.Subject.Fingerprint == slow), f => Assert.Null(f.Cloud));
-        Assert.All(result.Envelope.LatestRun!.Failures.Where(f => f.Subject.Fingerprint == slow), f => Assert.Null(f.Cloud));
+        Assert.All(result.Envelope.Findings.Take(100), f => Assert.NotNull(f.Cloud));
+        Assert.All(result.Envelope.Findings.Skip(100), f => Assert.Null(f.Cloud));
         Assert.False(Assert.Single(result.Hints).Always);
+    }
+
+    [Fact]
+    public async Task AKeychainThatBlocksPastTheCredentialSliceCostsTheCloudDataNotTheReport()
+    {
+        SignIn();
+        using var prompt = new ManualResetEventSlim();
+        _keychain.BlockProbe = prompt;
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
+
+        // On another thread: without the slice around it, the blocked probe holds the caller too.
+        Task<EnrichmentResult> enrichment = Task.Run(() => EnrichAsync(envelope));
+        while (_keychain.Probed.Count == 0)
+            await Task.Delay(10);
+        _time.Advance(CloudBudget.Credential);
+
+        try
+        {
+            EnrichmentResult result = await enrichment.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Same(envelope, result.Envelope);
+            Assert.Empty(_factory.Created);
+            Assert.Equal(
+                "Cloud data unavailable: reading the Xping Cloud sign-in took too long. Showing local results only.",
+                Assert.Single(result.Hints).Text);
+        }
+        finally
+        {
+            prompt.Set();
+        }
+    }
+
+    [Fact]
+    public async Task AnUnreadableBatchCostsOnlyItsOwnTests()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Unreadable.Add("fp-120");
+
+        EnrichmentResult result = await EnrichAsync(Many(250));
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal("partial", cloud.Status);
+        Assert.Contains("cannot read", cloud.Reason, StringComparison.Ordinal);
+        Assert.Equal(3, _factory.Client.Batches.Count);
+        Assert.Equal(150, result.Envelope.Findings.Count(f => f.Cloud != null));
+        Assert.All(result.Envelope.Findings.Skip(100).Take(100), f => Assert.Null(f.Cloud));
+    }
+
+    [Fact]
+    public async Task AnAnswerForATestNotAskedAboutDoesNotCountAsAnAnswer()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Stray.Add("fp-1");
+
+        EnrichmentResult result = await EnrichAsync(Many(3));
+
+        Assert.Equal("partial", result.Envelope.Context!.Cloud!.Status);
+        Assert.Null(result.Envelope.Findings[1].Cloud);
     }
 
     [Fact]
@@ -253,7 +353,6 @@ public sealed class CloudEnricherTests : IDisposable
     public async Task AConfiguredKeyThatNamesNoProjectIsSaidRatherThanReadAsNoData(string origin)
     {
         _environment["XPING_APIKEY"] = ApiKey;
-        _factory.Client.Missing = true;
         _factory.Client.ProjectMissing = true;
 
         EnrichmentResult result = await EnrichAsync(
@@ -289,16 +388,6 @@ public sealed class CloudEnricherTests : IDisposable
 
         Assert.All(result.Envelope.Findings, f => Assert.Null(f.Cloud));
         Assert.Equal("unavailable", result.Envelope.Context!.Cloud!.Status);
-    }
-
-    [Fact]
-    public void KebabCaseSplitsPascalCaseAndKeepsAcronymsWhole()
-    {
-        Assert.Equal("moderately-reliable", CloudEnricher.Kebab("ModeratelyReliable"));
-        Assert.Equal("insufficient-data", CloudEnricher.Kebab("InsufficientData"));
-        Assert.Equal("high", CloudEnricher.Kebab("HIGH"));
-        Assert.Equal("robust", CloudEnricher.Kebab("robust"));
-        Assert.Null(CloudEnricher.Kebab(" "));
     }
 
     private void SignIn() =>
@@ -365,7 +454,7 @@ public sealed class CloudEnricherTests : IDisposable
 
         public List<ResolvedCredential> Created { get; } = [];
 
-        public Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CancellationToken cancellationToken)
+        public Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CloudBudget budget, CancellationToken cancellationToken)
         {
             Created.Add(credential);
             return Task.FromResult<ICloudApiClient>(ClientFor?.Invoke(credential) ?? Client);
@@ -380,9 +469,21 @@ public sealed class CloudEnricherTests : IDisposable
 
         public IReadOnlyList<string> Reads => [.. ReadsQueue];
 
+        public ConcurrentQueue<IReadOnlyList<string>> BatchesQueue { get; } = new();
+
+        public IReadOnlyList<IReadOnlyList<string>> Batches => [.. BatchesQueue];
+
         public ConcurrentQueue<string> ProjectsRead { get; } = new();
 
         public HashSet<string> Hang { get; } = [];
+
+        public HashSet<string> Unreadable { get; } = [];
+
+        public string FlakyState { get; set; } = "flaky";
+
+        public bool Unscored { get; set; }
+
+        public HashSet<string> Stray { get; } = [];
 
         public TaskCompletionSource Hanging { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -401,10 +502,7 @@ public sealed class CloudEnricherTests : IDisposable
         public Task<PagedResult<ProjectSummary>> ListProjectsAsync(int pageNumber, int pageSize, CancellationToken cancellationToken) =>
             Task.FromResult(new PagedResult<ProjectSummary>([], 0, pageNumber, pageSize));
 
-        public Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken) =>
-            Task.FromResult(ProjectMissing ? null : new ProjectSummary(projectKey, null, null));
-
-        public async Task<CloudTest?> GetTestAsync(string projectKey, string testFingerprint, CancellationToken cancellationToken)
+        public async Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken)
         {
             if (Throw is { } exception)
                 throw exception;
@@ -416,8 +514,16 @@ public sealed class CloudEnricherTests : IDisposable
             try
             {
                 ProjectsRead.Enqueue(projectKey);
+                if (ProjectMissing)
+                    return null;
 
-                if (Hang.Contains(testFingerprint))
+                List<string> fingerprints = [.. request.Tests.Select(t => t.Fingerprint)];
+                BatchesQueue.Enqueue(fingerprints);
+
+                if (fingerprints.Exists(Unreadable.Contains))
+                    throw new CloudResponseException("The DataGateway answered the digest with a body the CLI cannot read.");
+
+                if (fingerprints.Exists(Hang.Contains))
                 {
                     Hanging.TrySetResult();
                     await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
@@ -426,17 +532,42 @@ public sealed class CloudEnricherTests : IDisposable
                 if (Delay > TimeSpan.Zero)
                     await Task.Delay(Delay, CancellationToken.None).ConfigureAwait(false);
 
-                ReadsQueue.Enqueue(testFingerprint);
+                foreach (string fingerprint in fingerprints)
+                    ReadsQueue.Enqueue(fingerprint);
 
-                return Missing
-                    ? null
-                    : new CloudTest(testFingerprint, 0.62, "ModeratelyReliable", "Robust", 812, true, "Stable", -0.03, null);
+                // A stray answer takes the place of the test it was scripted for.
+                return new DigestResponse(
+                    DateTimeOffset.UnixEpoch,
+                    "emh-1",
+                    365,
+                    [.. fingerprints.Select(f => Digest(Stray.Contains(f) ? "fp-stray" : f))],
+                    []);
             }
             finally
             {
                 Interlocked.Decrement(ref _inFlight);
             }
         }
+
+        public Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken) =>
+            Task.FromResult<RunsResponse?>(null);
+
+        private TestDigest Digest(string fingerprint) =>
+            Missing
+                ? new TestDigest(fingerprint, "unknown", null, null, null, null, null, null, null, null, null)
+                : new TestDigest(
+                    fingerprint,
+                    "ok",
+                    null,
+                    null,
+                    812,
+                    "known-flaky",
+                    Unscored ? null : new DigestConfidence(
+                        "scored", 0.62, null, null, "moderately-reliable", "stable", -0.03, 48, "robust", null, null, null, null, null, null, "current"),
+                    new DigestFlaky(FlakyState, null, null, null, null, null, null, "current"),
+                    null,
+                    null,
+                    []);
 
         public void Dispose()
         {

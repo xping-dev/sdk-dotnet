@@ -45,14 +45,16 @@ internal sealed class CloudApiClientFactory(
     /// </summary>
     /// <param name="credential">A sign-in or an API key; the caller has already handled none.</param>
     /// <param name="cloudUrl">The normalized Cloud URL the credential belongs to.</param>
+    /// <param name="budget">The report's Cloud budget; a retry is made only while it can pay for one.</param>
     /// <param name="cancellationToken">Cancels discovery for an API key.</param>
     /// <exception cref="ArgumentException"><paramref name="credential"/> is none.</exception>
     /// <exception cref="AuthFailureException">
     /// An API key's DataGateway could not be discovered: Cloud unreachable or incompatible.
     /// </exception>
-    public async Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CancellationToken cancellationToken)
+    public async Task<ICloudApiClient> CreateAsync(ResolvedCredential credential, string cloudUrl, CloudBudget budget, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(credential);
+        ArgumentNullException.ThrowIfNull(budget);
 
         if (credential is { Source: CredentialSource.StoredLogin, Login: { } login })
         {
@@ -68,26 +70,27 @@ internal sealed class CloudApiClientFactory(
             return Create(
                 new BearerTokenHandler(refresher, loggerFactory.CreateLogger<BearerTokenHandler>()),
                 login.Record.DataGatewayUri,
-                refresher);
+                refresher,
+                budget);
         }
 
         if (credential.ApiKey is { } apiKey)
         {
             // A sign-in records its DataGateway; a key learns it from discovery, cached for a day.
             DiscoveryDocument document = await discovery.GetAsync(cloudUrl, useCache: true, cancellationToken).ConfigureAwait(false);
-            return Create(new ApiKeyHandler(apiKey.Value), document.DataGatewayUri, refresher: null);
+            return Create(new ApiKeyHandler(apiKey.Value), document.DataGatewayUri, refresher: null, budget);
         }
 
         throw new ArgumentException("There is no credential to read Xping Cloud with.", nameof(credential));
     }
 
-    private CloudApiClient Create(DelegatingHandler credentialHandler, string gatewayUri, TokenRefresher? refresher)
+    private CloudApiClient Create(DelegatingHandler credentialHandler, string gatewayUri, TokenRefresher? refresher, CloudBudget budget)
     {
         // The factory's handler is pooled and ignores Dispose, so disposing the chain is safe.
         credentialHandler.InnerHandler = handlerFactory.CreateHandler(CloudHttp.ClientName);
 
 #pragma warning disable CA2000 // Owned by the HttpClient, which the returned client disposes.
-        var resilience = new ResilienceHandler(CloudResilience.Build(timeProvider)) { InnerHandler = credentialHandler };
+        var resilience = new ResilienceHandler(CloudResilience.Build(timeProvider, budget)) { InnerHandler = credentialHandler };
 #pragma warning restore CA2000
 
         var http = new HttpClient(resilience, disposeHandler: true) { Timeout = CloudHttp.TotalTimeout };

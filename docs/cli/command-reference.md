@@ -891,7 +891,7 @@ The report finds the Cloud project from, in order: `--project`, `XPING_PROJECTID
 in `appsettings*.json` (read from `--directory` when given), the project id the SDK recorded with the
 runs, and a Cloud project whose name is the test assembly's.
 
-Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at ten
+Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at four
 seconds), a key that cannot read, no matching project — you get the local report and one line on
 stderr saying why, at a terminal or with `--verbose`. The one line printed everywhere, because only a
 person can fix it, is `Cloud data unavailable: your sign-in is no longer valid. Run xping login.`

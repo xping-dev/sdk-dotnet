@@ -29,7 +29,7 @@ internal sealed class CrossProcessLock(XpingHome home, TimeProvider timeProvider
     /// <summary>
     /// How long to wait for another process to finish its refresh.
     /// </summary>
-    public static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan Patience = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// How often to try again while another process holds the lock.
