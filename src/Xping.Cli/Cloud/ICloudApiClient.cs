@@ -30,11 +30,6 @@ internal interface ICloudApiClient : IDisposable
     Task<PagedResult<ProjectSummary>> ListProjectsAsync(int pageNumber, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Reads one project, or <see langword="null"/> when the workspace has none with that key.
-    /// </summary>
-    Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken);
-
-    /// <summary>
     /// Reads the digest of a batch of tests (contract §6.1), or <see langword="null"/> when the
     /// workspace has no project with that key.
     /// </summary>

@@ -78,16 +78,6 @@ internal sealed class CloudApiClient : ICloudApiClient
         return page with { Items = [.. page.Items.Where(p => p is { Id.Length: > 0 })] };
     }
 
-    public async Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(projectKey);
-
-        ProjectSummary? project = await GetAsync<ProjectSummary>($"projects/{Uri.EscapeDataString(projectKey)}", cancellationToken)
-            .ConfigureAwait(false);
-
-        return project is null || !string.IsNullOrEmpty(project.Id) ? project : throw Incomplete("project");
-    }
-
     public async Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectKey);

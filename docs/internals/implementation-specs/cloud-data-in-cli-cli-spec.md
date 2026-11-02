@@ -34,6 +34,7 @@ owner on 2026-11-02, and committed before the code that depends on them.
 | B | §3.2: the retry keeps `HttpClientResiliencePredicates.IsTransient` (5xx, 408, network errors, the attempt timeout) | Contract §7.3 wins: one retry on **5xx only**, and only when `budget.HasAtLeast(1 s)`. 408, network errors and the attempt timeout are not retried; after a 3 s attempt timeout at most 1 s is left anyway. The retry waits `CloudResilience.RetryDelay` = 200 ms, no backoff, no jitter | §3.2 |
 | C | §2.2: the digest DTO is `Digest`, in `Cloud/Digest/` | `TestDigest`: a type named like its namespace (`Xping.Cli.Cloud.Digest`) cannot be referred to by its simple name inside `Xping.Cli.Cloud` | §2.2 |
 | D | §19 Q-2: verify on macOS whether the keychain probe tolerates the slice's cancellation | It does not: `MacOsKeychainStore` probes and reads with synchronous `SecItemCopyMatching` calls that never see the token, so a keychain waiting on an access prompt would hold the report. As Q-2 prescribed, the slice applies around the resolution: `CloudEnricher` runs `CredentialResolver.ResolveAsync` on the thread pool and stops waiting when the slice ends. The abandoned call ends with the process | §3.3, §19 |
+| E | §2.2: `GetProjectAsync` stays | Removed. Its one caller checked a configured key that found no tests; the digest's 404 is that answer now (contract §6.1), so nothing calls it | §2.2 |
 
 ---
 
@@ -122,7 +123,7 @@ Everything in contract §10, and:
 
 | Component | File | Change |
 |---|---|---|
-| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` and `GetProjectAsync` stay. |
+| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` stays; `GetProjectAsync` is removed (Amendment 1E). |
 | `CloudApiClient` | `Cloud/CloudApiClient.cs` | Implement the two calls. `POST {gw}/v1/projects/{key}/tests/digest` with a JSON body; `GET {gw}/v1/projects/{key}/tests/{fp}/runs?limit=`. 404 → null (project or test not in the workspace). The body is serialised with the SDK `IXpingSerializer` `ApiOptions` (camelCase), as today's responses are read. |
 | Cloud DTOs | `Cloud/Digest/*.cs` (new folder) | `DigestRequest`, `DigestRequestTest`, `DigestResponse`, `TestDigest`, `DigestConfidence`, `DigestFlaky`, `DigestCanonical`, `DigestTransition`, `DigestSignature`, `DigestWindow`, `DigestSession`, `RunsResponse`, `CloudRun`. Records, one file each or one file per group. These are the wire shapes of contract §6; they are not the envelope DTOs (§6). |
 | `CloudTest` | `Cloud/CloudTest.cs` | Deleted. |
@@ -176,24 +177,23 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `ProjectResolver.MaxProjectListPages` | 2 [20] | §7.3 |
 | `SignatureAlgorithmId` | `"emh-1"` | contract §5.2 |
 
-The retry predicate keeps `HttpClientResiliencePredicates.IsTransient` for 5xx, 408 and network
-errors (`CloudResilience.cs:61`); 429 is removed from it, and the `Retry-After` reader
-(`CloudResilience.cs:63-79`) is deleted. The retry is skipped, not shortened, when less than one
-second of budget remains: `CloudResilience` receives the `CloudBudget` and checks it in
-`ShouldHandle`.
+The retry predicate is a 5xx answer and nothing else (Amendment 1B): not 408, not a network error,
+not the attempt timeout, not 429. The `Retry-After` reader (`CloudResilience.cs:63-79`) is deleted.
+The retry is skipped, not shortened, when less than one second of budget remains: `CloudResilience`
+receives the `CloudBudget` and checks it in `ShouldHandle`.
 
 ### 3.3 Budget mechanics
 
 - `CloudBudget` starts when `ReportCommand` calls `EnrichAsync`, after local analysis and after the
   envelope exists. It creates the linked `CancellationTokenSource` that today sits at
   `CloudEnricher.cs:144`, with `Total` as its delay.
-- The credential step (`CredentialResolver`, the keychain probe, settings parsing, and a proactive
-  refresh through `TokenRefresher` with the cross-process lock whose `Patience` is 5 s at
-  `CrossProcessLock.cs:32`) runs under a second token linked to the first with the `Credential`
-  delay. On its expiry the enricher returns `unavailable` / `credential-timeout`. The lock's own
-  5 s patience is therefore cut to what the slice allows; `CrossProcessLock` already proceeds
-  without the lock when it cannot get it (`CrossProcessLock.cs:78-79`), and the slice cancellation
-  reaches it through the token.
+- The credential step (`CredentialResolver`, the keychain probe, settings parsing) runs under a
+  second token linked to the first with the `Credential` delay, and on the thread pool, because
+  the keychain backends are synchronous and never see the token (Amendment 1D). On its expiry the
+  enricher returns `unavailable` / `credential-timeout`. A token refresh is not part of it: it
+  runs inside the first DataGateway request, under that request's 3 s attempt timeout, and the
+  cross-process lock's `Patience` is 2 s so its "proceed without the lock" rule still applies
+  there (Amendment 1A).
 - The `login-required` fallback to the ambient API key (`CloudEnricher.cs:150-163`) stays and runs
   inside the same total. It re-sends only the batches that did not answer.
 - The `--test` runs request is sent after every digest batch has answered or failed, and only if

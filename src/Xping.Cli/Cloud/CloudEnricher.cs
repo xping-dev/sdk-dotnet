@@ -80,6 +80,7 @@ internal sealed class CloudEnricher(
 
     private const string Unavailable = "Cloud data unavailable: ";
     private const string LoginRequiredReason = "your sign-in is no longer valid. Run xping login.";
+    private const string CredentialTimeoutReason = "reading the Xping Cloud sign-in took too long. Showing local results only.";
 
     /// <summary>
     /// Returns <paramref name="envelope"/> with Cloud data added where it could be read.
@@ -124,9 +125,20 @@ internal sealed class CloudEnricher(
         // waiting on an access prompt would hold the report until someone answers it. The slice is
         // therefore applied around the resolution, not through it (§19 Q-2): the abandoned call
         // costs the Cloud data and ends with the process.
-        ResolvedCredential credential = await Task.Run(() => resolver.ResolveAsync(configuration, budget.CredentialToken), budget.CredentialToken)
-            .WaitAsync(budget.CredentialToken)
-            .ConfigureAwait(false);
+        ResolvedCredential credential;
+        try
+        {
+            credential = await Task.Run(() => resolver.ResolveAsync(configuration, budget.CredentialToken), budget.CredentialToken)
+                .WaitAsync(budget.CredentialToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (budget.CredentialExpired && !cancellationToken.IsCancellationRequested)
+        {
+            // Phase 2 reports this as unavailable / credential-timeout in context.cloud; until then
+            // the hint is the one trace of it.
+            return new EnrichmentResult(envelope, [new CloudHint(Unavailable + CredentialTimeoutReason, Always: false)]);
+        }
+
         logger.LogInformation("credential: {Credential}", Describe(credential));
 
         foreach (string problem in credential.StoreFailures.Concat(credential.Warnings))
@@ -303,7 +315,17 @@ internal sealed class CloudEnricher(
         await Parallel.ForEachAsync(targets.Chunk(MaxDigestBatchSize), options, async (batch, token) =>
         {
             var digestRequest = new DigestRequest([.. batch.Select(t => new DigestRequestTest(t.Fingerprint, []))], []);
-            DigestResponse? response = await client.GetDigestAsync(binding.Key, digestRequest, token).ConfigureAwait(false);
+            DigestResponse? response;
+            try
+            {
+                response = await client.GetDigestAsync(binding.Key, digestRequest, token).ConfigureAwait(false);
+            }
+            catch (CloudResponseException ex)
+            {
+                // An answer that cannot be read costs that batch, not its siblings in flight.
+                attempt.Fail(ex.Message);
+                return;
+            }
 
             if (response is null)
             {
@@ -311,7 +333,10 @@ internal sealed class CloudEnricher(
                 return;
             }
 
-            foreach (TestDigest digest in response.Tests)
+            // Only what was asked counts as answered: a stray fingerprint must not make up for a
+            // missing one in the status.
+            HashSet<string> requested = [.. batch.Select(t => t.Fingerprint)];
+            foreach (TestDigest digest in response.Tests.Where(d => requested.Contains(d.Fingerprint)))
             {
                 attempt.Answered[digest.Fingerprint] = true;
 

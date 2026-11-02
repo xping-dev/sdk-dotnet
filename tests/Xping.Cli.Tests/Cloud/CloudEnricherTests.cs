@@ -172,11 +172,42 @@ public sealed class CloudEnricherTests : IDisposable
 
             Assert.Same(envelope, result.Envelope);
             Assert.Empty(_factory.Created);
+            Assert.Equal(
+                "Cloud data unavailable: reading the Xping Cloud sign-in took too long. Showing local results only.",
+                Assert.Single(result.Hints).Text);
         }
         finally
         {
             prompt.Set();
         }
+    }
+
+    [Fact]
+    public async Task AnUnreadableBatchCostsOnlyItsOwnTests()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Unreadable.Add("fp-120");
+
+        EnrichmentResult result = await EnrichAsync(Many(250));
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal("partial", cloud.Status);
+        Assert.Contains("cannot read", cloud.Reason, StringComparison.Ordinal);
+        Assert.Equal(3, _factory.Client.Batches.Count);
+        Assert.Equal(150, result.Envelope.Findings.Count(f => f.Cloud != null));
+        Assert.All(result.Envelope.Findings.Skip(100).Take(100), f => Assert.Null(f.Cloud));
+    }
+
+    [Fact]
+    public async Task AnAnswerForATestNotAskedAboutDoesNotCountAsAnAnswer()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Stray.Add("fp-1");
+
+        EnrichmentResult result = await EnrichAsync(Many(3));
+
+        Assert.Equal("partial", result.Envelope.Context!.Cloud!.Status);
+        Assert.Null(result.Envelope.Findings[1].Cloud);
     }
 
     [Fact]
@@ -418,6 +449,10 @@ public sealed class CloudEnricherTests : IDisposable
 
         public HashSet<string> Hang { get; } = [];
 
+        public HashSet<string> Unreadable { get; } = [];
+
+        public HashSet<string> Stray { get; } = [];
+
         public TaskCompletionSource Hanging { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Exception? Throw { get; set; }
@@ -434,9 +469,6 @@ public sealed class CloudEnricherTests : IDisposable
 
         public Task<PagedResult<ProjectSummary>> ListProjectsAsync(int pageNumber, int pageSize, CancellationToken cancellationToken) =>
             Task.FromResult(new PagedResult<ProjectSummary>([], 0, pageNumber, pageSize));
-
-        public Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken) =>
-            Task.FromResult(ProjectMissing ? null : new ProjectSummary(projectKey, null, null));
 
         public async Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken)
         {
@@ -456,6 +488,9 @@ public sealed class CloudEnricherTests : IDisposable
                 List<string> fingerprints = [.. request.Tests.Select(t => t.Fingerprint)];
                 BatchesQueue.Enqueue(fingerprints);
 
+                if (fingerprints.Exists(Unreadable.Contains))
+                    throw new CloudResponseException("The DataGateway answered the digest with a body the CLI cannot read.");
+
                 if (fingerprints.Exists(Hang.Contains))
                 {
                     Hanging.TrySetResult();
@@ -468,8 +503,13 @@ public sealed class CloudEnricherTests : IDisposable
                 foreach (string fingerprint in fingerprints)
                     ReadsQueue.Enqueue(fingerprint);
 
+                // A stray answer takes the place of the test it was scripted for.
                 return new DigestResponse(
-                    DateTimeOffset.UnixEpoch, "emh-1", 365, [.. fingerprints.Select(Digest)], []);
+                    DateTimeOffset.UnixEpoch,
+                    "emh-1",
+                    365,
+                    [.. fingerprints.Select(f => Digest(Stray.Contains(f) ? "fp-stray" : f))],
+                    []);
             }
             finally
             {

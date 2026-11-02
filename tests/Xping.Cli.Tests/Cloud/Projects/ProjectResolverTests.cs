@@ -234,9 +234,6 @@ public sealed class ProjectResolverTests : IDisposable
                 [.. Projects.Skip((pageNumber - 1) * pageSize).Take(pageSize)], Projects.Count, pageNumber, pageSize));
         }
 
-        public Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken) =>
-            Task.FromResult(Projects.FirstOrDefault(p => p.Id == projectKey));
-
         public Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken) =>
             Task.FromResult<DigestResponse?>(null);
 

@@ -161,24 +161,21 @@ public sealed class CloudApiClientTests : IAsyncDisposable
 
         Assert.Null(await client.GetDigestAsync("unknown-project", Request, CancellationToken.None));
         Assert.Null(await client.GetRunsAsync(Project, "fp-unknown", 50, CancellationToken.None));
-        Assert.Null(await client.GetProjectAsync("unknown-project", CancellationToken.None));
     }
 
     [Fact]
-    public async Task ProjectsAreListedAndReadWithTheirNames()
+    public async Task ProjectsAreListedWithTheirNames()
     {
         _host.Cloud.AddProject("api-tests", displayName: "Api.Tests");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         PagedResult<ProjectSummary> first = await client.ListProjectsAsync(1, 1, CancellationToken.None);
         PagedResult<ProjectSummary> second = await client.ListProjectsAsync(2, 1, CancellationToken.None);
-        ProjectSummary? project = await client.GetProjectAsync(Project, CancellationToken.None);
 
         Assert.Equal([new ProjectSummary(Project, "Shop.Tests", "shop")], first.Items);
         Assert.True(first.HasNextPage);
         Assert.Equal("Api.Tests", Assert.Single(second.Items).DisplayName);
         Assert.False(second.HasNextPage);
-        Assert.Equal(new ProjectSummary(Project, "Shop.Tests", "shop"), project);
         Assert.Equal("?pageNumber=2&pageSize=1", _host.Cloud.GatewayRequests[1].Query);
     }
 
@@ -345,10 +342,10 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        await client.GetProjectAsync(Project, CancellationToken.None);
+        await client.GetDigestAsync(Project, Request, CancellationToken.None);
 
         Assert.Single(_host.Cloud.RequestsTo("/.well-known/openid-configuration"));
-        Assert.Equal("/gw/v1/projects/shop-tests", Assert.Single(_host.Cloud.GatewayRequests).Path);
+        Assert.Equal(DigestPath, Assert.Single(_host.Cloud.GatewayRequests).Path);
     }
 
     private async Task<ICloudApiClient> ApiKeyClientAsync(string key = ApiKey)
