@@ -368,21 +368,34 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain("CI.Actor", info.CustomProperties.Keys);
     }
 
-    [Theory]
-    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_ACTOR", "GITHUB_ACTOR_ID", "583231")]
-    [InlineData("TF_BUILD", "True", "BUILD_REQUESTEDFOR", "BUILD_REQUESTEDFORID", "6a2f1c3e-0000-4000-8000-000000000002")]
-    public async Task ActorIdIsReadFromThePlatformsIdVariable(
-        string platformVariable, string platformValue, string actorVariable, string idVariable, string id)
+    [Fact]
+    public async Task ActorIdIsReadFromGitHubActorId()
     {
-        _env[platformVariable] = platformValue;
-        _env[actorVariable] = "Jane Dev";
-        _env[idVariable] = id;
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_ACTOR"] = "octocat";
+        _env["GITHUB_ACTOR_ID"] = "583231";
 
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
-        Assert.Equal(id, info.CustomProperties["CI.ActorId"]);
+        Assert.Equal("583231", info.CustomProperties["CI.ActorId"]);
+    }
+
+    // CI.ActorId is GitHub's alone in the contract; Azure's requested-for ID is not a value Xping Cloud reads.
+    [Fact]
+    public async Task AzurePipelinesSendsNoActorId()
+    {
+        _env["TF_BUILD"] = "True";
+        _env["BUILD_REQUESTEDFOR"] = "Jane Dev";
+        _env["BUILD_REQUESTEDFORID"] = "6a2f1c3e-0000-4000-8000-000000000002";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("Jane Dev", info.CustomProperties["CI.Actor"]);
+        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
     }
 
     [Theory]
@@ -429,15 +442,13 @@ public sealed class EnvironmentDetectorTests
     [Fact]
     public async Task ActorHintsAreNotSentWithoutAnActor()
     {
-        _env["TF_BUILD"] = "True";
-        _env["BUILD_REQUESTEDFORID"] = "6a2f1c3e-0000-4000-8000-000000000002";
-        _env["BUILD_REQUESTEDFOREMAIL"] = "jane@example.com";
+        _env["GITLAB_CI"] = "true";
+        _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
         IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
-        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
         Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
     }
 
@@ -453,7 +464,6 @@ public sealed class EnvironmentDetectorTests
         _env["TF_BUILD"] = "True";
         _env["BUILD_REASON"] = reason;
         _env["BUILD_REQUESTEDFOR"] = requestedFor;
-        _env["BUILD_REQUESTEDFORID"] = "6a2f1c3e-0000-4000-8000-000000000002";
         _env["BUILD_REQUESTEDFOREMAIL"] = "build@example.com";
 
         IEnvironmentDetector detector = CreateDetector();

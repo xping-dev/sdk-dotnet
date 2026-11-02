@@ -890,8 +890,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     }
 
     // A scheduled build is requested for a service identity, not a person, and so is a build the
-    // service queued itself; counting either would bill a seat for a bot. BUILD_REQUESTEDFORID is the
-    // stable identity behind BUILD_REQUESTEDFOR, which is only a display name.
+    // service queued itself; counting either would bill a seat for a bot.
     private void AddAzurePipelinesActor(Dictionary<string, string> properties)
     {
         if (string.Equals(GetVariable("BUILD_REASON"), "Schedule", StringComparison.OrdinalIgnoreCase))
@@ -901,8 +900,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         if (requestedFor is null || IsAzureServiceIdentity(requestedFor))
             return;
 
-        AddActor(properties, requestedFor, id: GetVariable("BUILD_REQUESTEDFORID"),
-            email: GetVariable("BUILD_REQUESTEDFOREMAIL"));
+        AddActor(properties, requestedFor, id: null, email: GetVariable("BUILD_REQUESTEDFOREMAIL"));
     }
 
     // "Microsoft.VisualStudio.Services.TFS" queues system builds; the build service accounts are named
