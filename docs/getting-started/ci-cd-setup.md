@@ -73,6 +73,30 @@ Cloud posts PR comments only for github.com repositories.
 
 ---
 
+## Who Triggered the Run
+
+Xping Cloud counts a workspace's active committers from each uploaded CI run: the PR author when
+there is a PR context, otherwise `CI.Actor`. Every platform that names who triggered the run sends
+it as `CI.Actor`. `CI.ActorId` and `CI.ActorEmail` are sent alongside where the platform has them;
+Xping Cloud only uses them to link a committer to a workspace member, never to count one.
+
+| Platform | `CI.Actor` | `CI.ActorId` | `CI.ActorEmail` |
+|---|---|---|---|
+| GitHub Actions | `GITHUB_ACTOR` | `GITHUB_ACTOR_ID` | — |
+| Azure Pipelines | `BUILD_REQUESTEDFOR` | — | `BUILD_REQUESTEDFOREMAIL` |
+| GitLab CI/CD | `GITLAB_USER_LOGIN` | — | `GITLAB_USER_EMAIL` |
+| Jenkins | `CHANGE_AUTHOR` (multibranch PR builds only) | — | `CHANGE_AUTHOR_EMAIL` |
+| CircleCI | `CIRCLE_USERNAME` | — | — |
+| Bitbucket Pipelines | `BITBUCKET_STEP_TRIGGERER_UUID` (an account UUID) | — | — |
+| AppVeyor | `APPVEYOR_REPO_COMMIT_AUTHOR` | — | `APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL` |
+| TeamCity, Travis CI | — | — | — |
+
+A run with neither a PR author nor `CI.Actor` (a Jenkins push build, any TeamCity or Travis build)
+adds no committer. Local runs never do: their `Git.Actor` comes from your Git config and is not
+counted.
+
+---
+
 ## GitHub Actions
 
 ### Configuration
@@ -134,7 +158,7 @@ Xping automatically captures:
 - `GITHUB_SERVER_URL` - Normalized into `CI.ServerUrl` and the PR context's server (github.com, GHE.com or GitHub Enterprise Server)
 - `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` - Normalized into `CI.Branch`
 - `GITHUB_REPOSITORY` - Repository name
-- `GITHUB_ACTOR` - User who triggered the workflow
+- `GITHUB_ACTOR` / `GITHUB_ACTOR_ID` - Normalized into `CI.Actor` / `CI.ActorId` (see [Who Triggered the Run](#who-triggered-the-run))
 
 If tests run inside a container (`docker run`), pass the `GITHUB_*` variables, including
 `GITHUB_SERVER_URL`, **and** mount the runner's temp directory so the file at `GITHUB_EVENT_PATH`
@@ -212,7 +236,7 @@ Xping automatically captures:
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
   `CI.ServerUrl`, the same server the PR context records
-- `BUILD_REQUESTEDFOR` - User who triggered the build
+- `BUILD_REQUESTEDFOR` / `BUILD_REQUESTEDFOREMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` (see [Who Triggered the Run](#who-triggered-the-run))
 
 On a pull request build, Xping also records the PR context (number, branches, head commit) for
 repositories in Azure Repos or on GitHub:
@@ -289,7 +313,7 @@ Xping automatically captures:
 - `CI_DEFAULT_BRANCH` - Normalized into `CI.DefaultBranch` unless `XPING_DEFAULTBRANCH` is set (see [Setting the Default Branch](#setting-the-default-branch))
 - `CI_PROJECT_PATH` - Repository path
 - `CI_SERVER_URL` - Normalized into `CI.ServerUrl`
-- `GITLAB_USER_LOGIN` - User who triggered the pipeline
+- `GITLAB_USER_LOGIN` / `GITLAB_USER_EMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` (see [Who Triggered the Run](#who-triggered-the-run))
 
 In a merge request pipeline, on gitlab.com or a self-managed instance, Xping also records the MR
 context (number, branches, head commit). The MR context comes from:
@@ -387,7 +411,8 @@ Xping automatically captures:
   else `BRANCH_NAME`, else `GIT_BRANCH` without a leading `origin/` or `refs/remotes/origin/` (other
   remotes are kept as is)
 - `JOB_NAME` - Job name
-- `BUILD_USER` - User who triggered the build (if available)
+- `CHANGE_AUTHOR` / `CHANGE_AUTHOR_EMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` on multibranch PR builds;
+  a push build sends no actor (see [Who Triggered the Run](#who-triggered-the-run))
 
 ---
 
@@ -449,7 +474,7 @@ Xping automatically captures:
 - `CIRCLE_PULL_REQUEST` - Normalized into `CI.IsPullRequest` (`true` whenever the branch has an open PR)
 - `CIRCLE_BRANCH` - Branch name
 - `CIRCLE_PROJECT_REPONAME` - Repository name
-- `CIRCLE_USERNAME` - User who triggered the build
+- `CIRCLE_USERNAME` - Normalized into `CI.Actor` (see [Who Triggered the Run](#who-triggered-the-run))
 
 ---
 

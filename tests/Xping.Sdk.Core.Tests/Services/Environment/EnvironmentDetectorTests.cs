@@ -294,6 +294,115 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
     }
 
+    // Xping Cloud counts committers from CI.Actor, so every platform that names who triggered the run
+    // must send it under that one name.
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", "GITHUB_ACTOR", "octocat")]
+    [InlineData("TF_BUILD", "True", "BUILD_REQUESTEDFOR", "Jane Dev")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "CHANGE_AUTHOR", "janedev")]
+    [InlineData("GITLAB_CI", "true", "GITLAB_USER_LOGIN", "janedev")]
+    [InlineData("CIRCLECI", "true", "CIRCLE_USERNAME", "janedev")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", "BITBUCKET_STEP_TRIGGERER_UUID", "{a1b2c3d4-0000-4000-8000-000000000001}")]
+    [InlineData("APPVEYOR", "True", "APPVEYOR_REPO_COMMIT_AUTHOR", "Jane Dev")]
+    public async Task ActorIsReadFromThePlatformsActorVariable(
+        string platformVariable, string platformValue, string actorVariable, string actor)
+    {
+        _env[platformVariable] = platformValue;
+        _env[actorVariable] = actor;
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(actor, info.CustomProperties["CI.Actor"]);
+        Assert.DoesNotContain("CI.RequestedFor", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.Username", info.CustomProperties.Keys);
+    }
+
+    // A Jenkins push build, TeamCity and Travis name no actor; the run must then add no committer
+    // rather than one made up from something else.
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true")]
+    [InlineData("TF_BUILD", "True")]
+    [InlineData("JENKINS_URL", "https://jenkins.example")]
+    [InlineData("GITLAB_CI", "true")]
+    [InlineData("CIRCLECI", "true")]
+    [InlineData("TRAVIS", "true")]
+    [InlineData("TEAMCITY_VERSION", "2025.07")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}")]
+    [InlineData("APPVEYOR", "True")]
+    public async Task ActorIsNotSentWhenThePlatformNamesNoActor(string platformVariable, string platformValue)
+    {
+        _env[platformVariable] = platformValue;
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.Actor", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task ActorIdIsReadFromGitHubActorId()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_ACTOR_ID"] = "583231";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("583231", info.CustomProperties["CI.ActorId"]);
+    }
+
+    [Theory]
+    [InlineData("TF_BUILD", "True", "BUILD_REQUESTEDFOREMAIL")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "CHANGE_AUTHOR_EMAIL")]
+    [InlineData("GITLAB_CI", "true", "GITLAB_USER_EMAIL")]
+    [InlineData("APPVEYOR", "True", "APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL")]
+    public async Task ActorEmailIsReadFromThePlatformsEmailVariable(
+        string platformVariable, string platformValue, string emailVariable)
+    {
+        _env[platformVariable] = platformValue;
+        _env[emailVariable] = "jane@example.com";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("jane@example.com", info.CustomProperties["CI.ActorEmail"]);
+    }
+
+    // CI_COMMIT_AUTHOR is who wrote the commit, not who ran the pipeline, so it stays its own property.
+    [Fact]
+    public async Task GitLabCommitAuthorIsSentApartFromTheActor()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_COMMIT_AUTHOR"] = "Jane Dev <jane@example.com>";
+        _env["GITLAB_USER_LOGIN"] = "maintainer";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("Jane Dev <jane@example.com>", info.CustomProperties["CI.CommitAuthor"]);
+        Assert.Equal("maintainer", info.CustomProperties["CI.Actor"]);
+    }
+
+    [Fact]
+    public async Task GitLabCommitAuthorIsNotSentWhenUnset()
+    {
+        _env["GITLAB_CI"] = "true";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.CommitAuthor", info.CustomProperties.Keys);
+    }
+
     [Theory]
     [InlineData("GITHUB_ACTIONS", "true", "GITHUB_SERVER_URL", "https://GHES.acme.com/", "https://ghes.acme.com")]
     [InlineData("GITLAB_CI", "true", "CI_SERVER_URL", "https://gitlab.acme.com:8443/gitlab", "https://gitlab.acme.com:8443/gitlab")]
