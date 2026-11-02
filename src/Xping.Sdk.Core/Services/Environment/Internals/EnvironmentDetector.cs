@@ -491,7 +491,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         AddPullRequestFlag(properties, isGitHubPullRequest.Value);
                     }
 
-                    AddIfNotNull(properties, "CI.Actor", GetVariable("GITHUB_ACTOR"));
+                    AddActor(properties, GetVariable("GITHUB_ACTOR"), id: GetVariable("GITHUB_ACTOR_ID"), email: null);
                     AddIfNotNull(properties, "CI.Workflow", GetVariable("GITHUB_WORKFLOW"));
                     break;
 
@@ -505,7 +505,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.Branch", AzurePipelinesBranch(isAzurePullRequest));
                     AddIfNotNull(properties, "CI.CommitSha", GetVariable("BUILD_SOURCEVERSION"));
                     AddPullRequestFlag(properties, isAzurePullRequest);
-                    AddIfNotNull(properties, "CI.RequestedFor", GetVariable("BUILD_REQUESTEDFOR"));
+                    AddAzurePipelinesActor(properties);
                     break;
 
                 case CIPlatform.Jenkins:
@@ -527,6 +527,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         : GetFirstNonEmptyValue(
                             GetVariable("BRANCH_NAME"),
                             StripOriginRemote(GetVariable("GIT_BRANCH"))));
+                    // Only PR builds name a person, the PR's author: Branch Source as CHANGE_AUTHOR, GHPRB as
+                    // ghprbPullAuthorLogin. A push build has no actor to send.
+                    if (isBranchSourcePullRequest)
+                        AddActor(properties, GetVariable("CHANGE_AUTHOR"), id: null, email: GetVariable("CHANGE_AUTHOR_EMAIL"));
+                    else if (isGhprbPullRequest)
+                        AddActor(properties, GetVariable("ghprbPullAuthorLogin"), id: null, email: GetVariable("ghprbPullAuthorEmail"));
                     break;
 
                 case CIPlatform.GitLabCI:
@@ -542,7 +548,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                         GetVariable("CI_COMMIT_BRANCH"),
                         GetVariable("CI_COMMIT_REF_NAME")));
                     AddIfNotNull(properties, "CI.CommitAuthor", GetVariable("CI_COMMIT_AUTHOR"));
-                    AddIfNotNull(properties, "CI.Actor", GetVariable("GITLAB_USER_LOGIN"));
+                    AddActor(properties, GetVariable("GITLAB_USER_LOGIN"), id: null, email: GetVariable("GITLAB_USER_EMAIL"));
                     break;
 
                 case CIPlatform.CircleCI:
@@ -554,7 +560,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     // CircleCI also sets this on a plain branch build whenever the branch has an open PR. That
                     // commit is still unmerged PR code, so counting it as a PR is correct.
                     AddPullRequestFlag(properties, HasValue("CIRCLE_PULL_REQUEST"));
-                    AddIfNotNull(properties, "CI.Username", GetVariable("CIRCLE_USERNAME"));
+                    AddActor(properties, GetVariable("CIRCLE_USERNAME"), id: null, email: null);
                     break;
 
                 case CIPlatform.TravisCI:
@@ -583,6 +589,9 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.Branch", GetVariable("BITBUCKET_BRANCH"));
                     AddIfNotNull(properties, "CI.CommitSha", GetVariable("BITBUCKET_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("BITBUCKET_PR_ID"));
+                    // Bitbucket exposes no login, only the account UUID of whoever started the build (the
+                    // pipelines user on a scheduled build). It is stable, which is all counting needs.
+                    AddActor(properties, GetVariable("BITBUCKET_STEP_TRIGGERER_UUID"), id: null, email: null);
                     break;
 
                 case CIPlatform.AppVeyor:
@@ -592,6 +601,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.Branch", GetVariable("APPVEYOR_REPO_BRANCH"));
                     AddIfNotNull(properties, "CI.CommitSha", GetVariable("APPVEYOR_REPO_COMMIT"));
                     AddPullRequestFlag(properties, HasValue("APPVEYOR_PULL_REQUEST_NUMBER"));
+                    AddActor(properties, GetVariable("APPVEYOR_REPO_COMMIT_AUTHOR"), id: null,
+                        email: GetVariable("APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL"));
                     break;
             }
 
@@ -863,6 +874,40 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             return null;
         }
     }
+
+    // CI.Actor is who Xping Cloud counts as a committer. CI.ActorId and CI.ActorEmail only help it link
+    // that committer to a member, so they are never sent without an actor, and the email - personal
+    // data that counting doesn't need - only while CollectCiActorEmail allows it.
+    private void AddActor(Dictionary<string, string> properties, string? actor, string? id, string? email)
+    {
+        if (string.IsNullOrWhiteSpace(actor))
+            return;
+
+        properties["CI.Actor"] = actor!;
+        AddIfNotNull(properties, "CI.ActorId", id);
+        if (_configuration.CollectCiActorEmail)
+            AddIfNotNull(properties, "CI.ActorEmail", email);
+    }
+
+    // A scheduled build is requested for a service identity, not a person, and so is a build the
+    // service queued itself; counting either would bill a seat for a bot.
+    private void AddAzurePipelinesActor(Dictionary<string, string> properties)
+    {
+        if (string.Equals(GetVariable("BUILD_REASON"), "Schedule", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string? requestedFor = GetVariable("BUILD_REQUESTEDFOR");
+        if (requestedFor is null || IsAzureServiceIdentity(requestedFor))
+            return;
+
+        AddActor(properties, requestedFor, id: null, email: GetVariable("BUILD_REQUESTEDFOREMAIL"));
+    }
+
+    // "Microsoft.VisualStudio.Services.TFS" queues system builds; the build service accounts are named
+    // "Project Collection Build Service (org)" and "<Project> Build Service (org)".
+    private static bool IsAzureServiceIdentity(string requestedFor) =>
+        string.Equals(requestedFor.Trim(), "Microsoft.VisualStudio.Services.TFS", StringComparison.OrdinalIgnoreCase)
+        || requestedFor.IndexOf(" Build Service (", StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static bool IsValidSha(string value)
     {

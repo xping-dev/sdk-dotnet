@@ -161,6 +161,14 @@ public sealed class XpingConfiguration
     public bool CollectLocalGitAuthor { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether a CI run records the email address its platform gives for
+    /// the person behind the run, as the <c>CI.ActorEmail</c> environment property.
+    /// Xping Cloud uses it only to link a committer to a workspace member; set this to <c>false</c> to
+    /// keep email addresses out of the local store and uploads. <c>CI.Actor</c> is sent either way.
+    /// </summary>
+    public bool CollectCiActorEmail { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the branch Xping Cloud treats as the repository's default branch for runs of this
     /// pipeline. Optional.
     /// </summary>

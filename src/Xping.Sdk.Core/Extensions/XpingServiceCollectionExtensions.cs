@@ -726,6 +726,10 @@ public static class XpingServiceCollectionExtensions
             && bool.TryParse(collectGitAuthor, out var cga))
             config.CollectLocalGitAuthor = cga;
 
+        if (GetEnv("COLLECTCIACTOREMAIL") is { } collectActorEmail
+            && bool.TryParse(collectActorEmail, out var cae))
+            config.CollectCiActorEmail = cae;
+
         // Strict Mode Options
         if (GetEnv("STRICTMODE") is { } strictMode
             && bool.TryParse(strictMode, out var sm))
@@ -840,6 +844,7 @@ public static class XpingServiceCollectionExtensions
         target.UploadTimeout = source.UploadTimeout;
         target.EnablePullRequestDetection = source.EnablePullRequestDetection;
         target.CollectLocalGitAuthor = source.CollectLocalGitAuthor;
+        target.CollectCiActorEmail = source.CollectCiActorEmail;
         target.StrictMode = source.StrictMode;
         target.DefaultBranch = source.DefaultBranch;
         target.LocalStorePath = source.LocalStorePath;

@@ -204,6 +204,7 @@ public sealed class EnvironmentDetectorTests
         Assert.Equal("GitHubActions", info.CustomProperties["CIPlatform"]);
         Assert.Equal("feature/refactor-environment", info.CustomProperties["CI.Branch"]);
         Assert.Equal("refs/pull/17/merge", info.CustomProperties["CI.Ref"]);
+        Assert.Equal("octocat", info.CustomProperties["CI.Actor"]);
         Assert.DoesNotContain("IsDeveloperMachine", info.CustomProperties.Keys);
     }
 
@@ -292,6 +293,207 @@ public sealed class EnvironmentDetectorTests
 
         Assert.Equal("0123abcd", info.CustomProperties["CI.CommitSha"]);
         Assert.DoesNotContain(info.CustomProperties.Keys, key => _platformSpecificCommitKeys.Contains(key));
+    }
+
+    // Xping Cloud counts committers from CI.Actor, so every platform that names a person for the run
+    // must send it under that one name. Jenkins names one only on a PR build, so its rows carry the
+    // PR marker as the extra variable.
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true", null, null, "GITHUB_ACTOR", "octocat")]
+    [InlineData("TF_BUILD", "True", null, null, "BUILD_REQUESTEDFOR", "Jane Dev")]
+    [InlineData("TF_BUILD", "True", "BUILD_REASON", "IndividualCI", "BUILD_REQUESTEDFOR", "Jane Dev")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "CHANGE_ID", "17", "CHANGE_AUTHOR", "janedev")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "ghprbPullId", "17", "ghprbPullAuthorLogin", "janedev")]
+    [InlineData("GITLAB_CI", "true", null, null, "GITLAB_USER_LOGIN", "janedev")]
+    [InlineData("CIRCLECI", "true", null, null, "CIRCLE_USERNAME", "janedev")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}", null, null, "BITBUCKET_STEP_TRIGGERER_UUID", "{a1b2c3d4-0000-4000-8000-000000000001}")]
+    [InlineData("APPVEYOR", "True", null, null, "APPVEYOR_REPO_COMMIT_AUTHOR", "Jane Dev")]
+    public async Task ActorIsReadFromThePlatformsActorVariable(
+        string platformVariable, string platformValue, string? extraVariable, string? extraValue,
+        string actorVariable, string actor)
+    {
+        _env[platformVariable] = platformValue;
+        if (extraVariable is not null)
+            _env[extraVariable] = extraValue;
+        _env[actorVariable] = actor;
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal(actor, info.CustomProperties["CI.Actor"]);
+        Assert.DoesNotContain("CI.RequestedFor", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.Username", info.CustomProperties.Keys);
+    }
+
+    // A Jenkins push build, TeamCity and Travis name no actor; the run must then add no committer
+    // rather than one made up from something else.
+    [Theory]
+    [InlineData("GITHUB_ACTIONS", "true")]
+    [InlineData("TF_BUILD", "True")]
+    [InlineData("JENKINS_URL", "https://jenkins.example")]
+    [InlineData("GITLAB_CI", "true")]
+    [InlineData("CIRCLECI", "true")]
+    [InlineData("TRAVIS", "true")]
+    [InlineData("TEAMCITY_VERSION", "2025.07")]
+    [InlineData("BITBUCKET_PIPELINE_UUID", "{uuid}")]
+    [InlineData("APPVEYOR", "True")]
+    public async Task ActorIsNotSentWhenThePlatformNamesNoActor(string platformVariable, string platformValue)
+    {
+        _env[platformVariable] = platformValue;
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.Actor", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
+    }
+
+    // The PR author variables can leak into a push build (a job's environment copied from a PR job);
+    // only a build the detector itself flags as a PR names its author.
+    [Theory]
+    [InlineData("CHANGE_AUTHOR")]
+    [InlineData("ghprbPullAuthorLogin")]
+    public async Task JenkinsPushBuildSendsNoActor(string authorVariable)
+    {
+        _env["JENKINS_URL"] = "https://jenkins.example";
+        _env[authorVariable] = "janedev";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.Actor", info.CustomProperties.Keys);
+    }
+
+    [Fact]
+    public async Task ActorIdIsReadFromGitHubActorId()
+    {
+        _env["GITHUB_ACTIONS"] = "true";
+        _env["GITHUB_ACTOR"] = "octocat";
+        _env["GITHUB_ACTOR_ID"] = "583231";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("583231", info.CustomProperties["CI.ActorId"]);
+    }
+
+    // CI.ActorId is GitHub's alone in the contract; Azure's requested-for ID is not a value Xping Cloud reads.
+    [Fact]
+    public async Task AzurePipelinesSendsNoActorId()
+    {
+        _env["TF_BUILD"] = "True";
+        _env["BUILD_REQUESTEDFOR"] = "Jane Dev";
+        _env["BUILD_REQUESTEDFORID"] = "6a2f1c3e-0000-4000-8000-000000000002";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("Jane Dev", info.CustomProperties["CI.Actor"]);
+        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
+    }
+
+    [Theory]
+    [InlineData("TF_BUILD", "True", null, null, "BUILD_REQUESTEDFOR", "BUILD_REQUESTEDFOREMAIL")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "CHANGE_ID", "17", "CHANGE_AUTHOR", "CHANGE_AUTHOR_EMAIL")]
+    [InlineData("JENKINS_URL", "https://jenkins.example", "ghprbPullId", "17", "ghprbPullAuthorLogin", "ghprbPullAuthorEmail")]
+    [InlineData("GITLAB_CI", "true", null, null, "GITLAB_USER_LOGIN", "GITLAB_USER_EMAIL")]
+    [InlineData("APPVEYOR", "True", null, null, "APPVEYOR_REPO_COMMIT_AUTHOR", "APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL")]
+    public async Task ActorEmailIsReadFromThePlatformsEmailVariable(
+        string platformVariable, string platformValue, string? extraVariable, string? extraValue,
+        string actorVariable, string emailVariable)
+    {
+        _env[platformVariable] = platformValue;
+        if (extraVariable is not null)
+            _env[extraVariable] = extraValue;
+        _env[actorVariable] = "janedev";
+        _env[emailVariable] = "jane@example.com";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("jane@example.com", info.CustomProperties["CI.ActorEmail"]);
+    }
+
+    // The email is personal data that counting doesn't need, so turning collection off must keep it out
+    // while the committer is still counted.
+    [Fact]
+    public async Task ActorEmailIsNotSentWhenCollectionIsOff()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["GITLAB_USER_LOGIN"] = "janedev";
+        _env["GITLAB_USER_EMAIL"] = "jane@example.com";
+
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = false });
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("janedev", info.CustomProperties["CI.Actor"]);
+        Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
+    }
+
+    // A link hint with nothing to link it to would only be personal data on its own.
+    [Fact]
+    public async Task ActorHintsAreNotSentWithoutAnActor()
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["GITLAB_USER_EMAIL"] = "jane@example.com";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
+    }
+
+    // A scheduled build, or one the service queued itself, is requested for a service identity; counting
+    // it would bill a seat for a bot.
+    [Theory]
+    [InlineData("Schedule", "Jane Dev")]
+    [InlineData("IndividualCI", "Microsoft.VisualStudio.Services.TFS")]
+    [InlineData("ResourceTrigger", "Project Collection Build Service (fabrikam)")]
+    [InlineData("BuildCompletion", "Payments Build Service (fabrikam)")]
+    public async Task AzurePipelinesSendsNoActorForAServiceIdentity(string reason, string requestedFor)
+    {
+        _env["TF_BUILD"] = "True";
+        _env["BUILD_REASON"] = reason;
+        _env["BUILD_REQUESTEDFOR"] = requestedFor;
+        _env["BUILD_REQUESTEDFOREMAIL"] = "build@example.com";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.DoesNotContain("CI.Actor", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorId", info.CustomProperties.Keys);
+        Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
+    }
+
+    // CI_COMMIT_AUTHOR is who wrote the commit, not who ran the pipeline, so it stays its own property.
+    [Theory]
+    [InlineData("Jane Dev <jane@example.com>")]
+    [InlineData(null)]
+    public async Task GitLabCommitAuthorIsSentApartFromTheActor(string? commitAuthor)
+    {
+        _env["GITLAB_CI"] = "true";
+        _env["CI_COMMIT_AUTHOR"] = commitAuthor;
+        _env["GITLAB_USER_LOGIN"] = "maintainer";
+
+        IEnvironmentDetector detector = CreateDetector();
+
+        EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
+
+        Assert.Equal("maintainer", info.CustomProperties["CI.Actor"]);
+        if (commitAuthor is null)
+            Assert.DoesNotContain("CI.CommitAuthor", info.CustomProperties.Keys);
+        else
+            Assert.Equal(commitAuthor, info.CustomProperties["CI.CommitAuthor"]);
     }
 
     [Theory]
