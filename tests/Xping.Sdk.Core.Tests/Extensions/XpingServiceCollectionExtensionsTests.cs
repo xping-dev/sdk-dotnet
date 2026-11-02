@@ -718,6 +718,21 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.True(bound.CollectLocalGitAuthor);
     }
 
+    [Fact]
+    public void BindEnvVars_COLLECTCIACTOREMAIL_ShouldParseBool()
+    {
+        using var _key = WithEnv("XPING_APIKEY", "k");
+        using var _proj = WithEnv("XPING_PROJECTID", "p");
+        using var _ = WithEnv("XPING_COLLECTCIACTOREMAIL", "false");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.False(bound.CollectCiActorEmail);
+    }
+
     // ---------------------------------------------------------------------------
     // BindEnvironmentVariablesWithPrefix — applies on the instance path too
     // ---------------------------------------------------------------------------

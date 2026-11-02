@@ -58,6 +58,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
+| `CollectCiActorEmail` | bool | `true` | `XPING_COLLECTCIACTOREMAIL` | Record the CI actor's email address as `CI.ActorEmail` |
 | `DefaultBranch` | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch for this pipeline's CI runs. Replaces the value the platform reports |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 | `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
@@ -813,6 +814,50 @@ XpingContext.Initialize(config);
 
 ---
 
+### CollectCiActorEmail
+
+**Type:** `bool`  
+**Default:** `true`  
+**Environment Variable:** `XPING_COLLECTCIACTOREMAIL`
+
+On a CI run, controls whether the SDK records the email address the platform gives for the person
+behind the run as the `CI.ActorEmail` custom property. It is read from `BUILD_REQUESTEDFOREMAIL`
+(Azure Pipelines), `GITLAB_USER_EMAIL` (GitLab), `CHANGE_AUTHOR_EMAIL` or `ghprbPullAuthorEmail`
+(Jenkins) and `APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL` (AppVeyor).
+
+Xping Cloud uses the email only to link a committer to a workspace member automatically; it never
+counts committers by it. Set this to `false` to keep email addresses out of the local store and
+uploads. Committers are still counted from `CI.Actor`, and are then linked to members by hand. See
+[Who Is Behind the Run](../getting-started/ci-cd-setup.md#who-is-behind-the-run).
+
+**This setting has no effect on:**
+- Local runs, which never send `CI.ActorEmail`
+- `CI.Actor` and `CI.ActorId`, which are sent either way
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "CollectCiActorEmail": false
+  }
+}
+```
+
+```bash
+export XPING_COLLECTCIACTOREMAIL="false"
+```
+
+```csharp
+var config = new XpingConfiguration
+{
+    CollectCiActorEmail = false
+};
+XpingContext.Initialize(config);
+```
+
+---
+
 ## Advanced Settings
 
 > **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
@@ -989,7 +1034,8 @@ The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during 
     "RetryDelay": "00:00:02",
     "UploadTimeout": "00:00:30",
     "EnablePullRequestDetection": true,
-    "CollectLocalGitAuthor": false
+    "CollectLocalGitAuthor": false,
+    "CollectCiActorEmail": true
   }
 }
 ```
