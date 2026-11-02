@@ -431,7 +431,13 @@ internal sealed class ReportCommand(
         // one-line summary has no slot for Cloud data, so it is not worth a request.
         if (options.Format != ReportFormat.Summary)
         {
-            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions), window.Sessions, analysis.Findings);
+            // Under --id and --test the page holds the selection only. Asking about every finding
+            // behind it would spend the budget the subject's run history needs on rows nobody sees.
+            IReadOnlyList<Finding> findings = envelope.Selection is null && envelope.Test is null
+                ? analysis.Findings
+                : [.. analysis.Findings.Where(f => envelope.Findings.Any(shown => shown.Id == f.Id))];
+
+            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions), window.Sessions, findings);
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);

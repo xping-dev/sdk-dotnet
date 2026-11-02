@@ -327,10 +327,16 @@ public sealed class CloudEnricherTests : IDisposable
         using var key = new ScriptedClient();
         _factory.ClientFor = credential => credential.Source == CredentialSource.StoredLogin ? login : key;
 
-        EnrichmentResult result = await EnrichAsync(Many(150));
+        ReportEnvelope envelope = Many(150);
+        TestSession session = Session(envelope.Findings[0].Subject.Assembly!);
+
+        EnrichmentResult result = await EnrichAsync(envelope, sessions: [session]);
 
         Assert.Equal([CredentialSource.StoredLogin, CredentialSource.ApiKeyEnv], _factory.Created.Select(c => c.Source));
         Assert.Empty(login.Reads.Intersect(key.Reads));
+
+        // Both credentials asked about the session; it is still one session.
+        Assert.Single(result.Envelope.Context!.Cloud!.Sessions);
         Assert.Equal(150, login.Reads.Count + key.Reads.Count);
         Assert.Equal(Enumerable.Range(100, 50).Select(i => $"fp-{i}"), key.Reads.Order(StringComparer.Ordinal).OrderBy(f => f.Length));
 
@@ -384,7 +390,41 @@ public sealed class CloudEnricherTests : IDisposable
         EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
 
         Assert.Equal("login-required", result.Envelope.Context!.Cloud!.Status);
-        Assert.True(Assert.Single(result.Hints).Always);
+        CloudHint hint = Assert.Single(result.Hints);
+
+        // There is no sign-in to be over: the key is what was refused.
+        Assert.Equal(
+            ("Cloud data unavailable: Xping Cloud does not accept this API key. Check the key, or sign in with `xping login`.", true),
+            (hint.Text, hint.Always));
+    }
+
+    [Fact]
+    public async Task AFallbackKeyThatAlsoFailsLeavesTheSignInAsTheProblem()
+    {
+        // §3.4: "the fallback also failed" is login-required, whatever the key's own failure was.
+        SignIn();
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.ClientFor = credential => credential.Source == CredentialSource.StoredLogin
+            ? new ScriptedClient { Throw = new LoginRequiredException() }
+            : new ScriptedClient { Throw = new CloudApiException(403, "Error.ApiKey.InsufficientScope", "This API key cannot read Cloud data.") };
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        Assert.Equal(("login-required", "api-key"), (result.Envelope.Context!.Cloud!.Status, result.Envelope.Context.Cloud.Credential));
+        Assert.Equal("Cloud data unavailable: your sign-in is no longer valid. Run xping login.", Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task APlain401OnASignInCostsTheReadsAsANetworkFailure()
+    {
+        // Amendment 2B: without invalid_token nothing says the sign-in is over (a proxy's page).
+        SignIn();
+        _factory.Client.Throw = new CloudApiException(401, null, "Xping Cloud refused the request (HTTP 401).");
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"));
+
+        Assert.Equal(("unavailable", "network"), (result.Envelope.Context!.Cloud!.Status, result.Envelope.Context.Cloud.Reason));
+        Assert.False(Assert.Single(result.Hints).Always);
     }
 
     [Fact]
@@ -695,6 +735,80 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
+    public async Task ANameMatchStillMissingAfterItWasListedAgainIsNoProject()
+    {
+        SignIn();
+        _environment.Remove("XPING_PROJECTID");
+        ReportEnvelope envelope = Many(1);
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+        _factory.Client.Projects = [new ProjectSummary("old-key", assembly, null)];
+        await EnrichAsync(envelope);
+
+        _factory.Client.Projects = [new ProjectSummary("new-key", assembly, null)];
+        _factory.Client.MissingProjects.UnionWith(["old-key", "new-key"]);
+        EnrichmentResult result = await EnrichAsync(envelope);
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(("no-project", "not-found"), (cloud.Status, cloud.Reason));
+        Assert.Equal($"Cloud data unavailable: no matching Cloud project for {assembly}. Use --project <key>.", Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task AListingThatFailsWhileRebindingCostsThatAssemblyWithItsOwnReason()
+    {
+        SignIn();
+        _environment.Remove("XPING_PROJECTID");
+        ReportEnvelope envelope = Many(1);
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+        _factory.Client.Projects = [new ProjectSummary("old-key", assembly, null)];
+        await EnrichAsync(envelope);
+
+        _factory.Client.MissingProjects.Add("old-key");
+        _factory.Client.ListThrow = new AuthFailureException(1, AuthErrorCodes.CloudUnreachable, "x") { Reason = "timeout" };
+        EnrichmentResult result = await EnrichAsync(envelope);
+
+        Assert.Equal(("unavailable", "timeout"), (result.Envelope.Context!.Cloud!.Status, result.Envelope.Context.Cloud.Reason));
+    }
+
+    [Fact]
+    public async Task ANameMatchSharingAKeyWithAPinIsListedAgainAloneAndThePinIsReported()
+    {
+        // The pinned assembly must not be read under the name match's new project.
+        SignIn();
+        _environment.Remove("XPING_PROJECTID");
+        ReportEnvelope envelope = Many(2);
+        envelope = envelope with
+        {
+            Findings = [envelope.Findings[0], envelope.Findings[1] with { Subject = envelope.Findings[1].Subject with { Assembly = "Other.Tests" } }]
+        };
+        string pinned = envelope.Findings[0].Subject.Assembly!;
+        var pins = new Dictionary<string, string> { [pinned] = "shared-key" };
+        _factory.Client.Projects = [new ProjectSummary("shared-key", "Other.Tests", null)];
+        await EnrichAsync(envelope, pins: pins);
+
+        _factory.Client.Projects = [new ProjectSummary("new-key", "Other.Tests", null)];
+        _factory.Client.MissingProjects.Add("shared-key");
+        EnrichmentResult result = await EnrichAsync(envelope, pins: pins);
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(
+            [new CloudProjectDto(pinned, "shared-key", "session", "no-project", "not-found"), new CloudProjectDto("Other.Tests", "new-key", "name-match", "ok", "none")],
+            cloud.Projects);
+        Assert.Null(result.Envelope.Findings[0].Cloud);
+        Assert.NotNull(result.Envelope.Findings[1].Cloud);
+    }
+
+    [Fact]
+    public async Task ADefectInTheStitcherIsCaughtWithoutRunningItAgain()
+    {
+        ReportEnvelope broken = ReportFixtures.Get("latest-run") with { Findings = null! };
+
+        EnrichmentResult result = await EnrichAsync(broken);
+
+        Assert.Equal(("unavailable", "none"), (result.Envelope.Context!.Cloud!.Status, result.Envelope.Context.Cloud.Reason));
+    }
+
+    [Fact]
     public async Task AFailureOutsideTheReadsStillLeavesTheLocalReport()
     {
         _environment["XPING_APIKEY"] = ApiKey;
@@ -741,7 +855,7 @@ public sealed class CloudEnricherTests : IDisposable
     /// </summary>
     private static List<Finding> FindingsOf(ReportEnvelope envelope) =>
     [
-        .. envelope.Findings
+        .. (envelope.Findings ?? [])
             .Where(f => f.Subject.Fingerprint is not null)
             .Select(f => new Finding(
                 f.Id,
@@ -916,8 +1030,12 @@ public sealed class CloudEnricherTests : IDisposable
 
         public HashSet<string> MissingProjects { get; } = [];
 
+        public Exception? ListThrow { get; set; }
+
         public Task<PagedResult<ProjectSummary>> ListProjectsAsync(int pageNumber, int pageSize, CancellationToken cancellationToken) =>
-            Task.FromResult(new PagedResult<ProjectSummary>(Projects, Projects.Count, pageNumber, pageSize));
+            ListThrow is { } exception
+                ? Task.FromException<PagedResult<ProjectSummary>>(exception)
+                : Task.FromResult(new PagedResult<ProjectSummary>(Projects, Projects.Count, pageNumber, pageSize));
 
         public async Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken)
         {

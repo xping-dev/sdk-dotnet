@@ -114,6 +114,7 @@ internal sealed class CloudEnricher(
 
     private const string Unavailable = "Cloud data unavailable: ";
     private const string LoginRequiredReason = "your sign-in is no longer valid. Run xping login.";
+    private const string RefusedKeyReason = "Xping Cloud does not accept this API key. Check the key, or sign in with `xping login`.";
     private const string CredentialTimeoutReason = "reading the Xping Cloud sign-in took too long. Showing local results only.";
 
     /// <summary>
@@ -138,7 +139,14 @@ internal sealed class CloudEnricher(
             // A defect here costs the Cloud data, and the agent still finds context.cloud.
             logger.LogInformation(ex, "Cloud enrichment failed: {Message}", ex.Message);
             var failed = new CloudContextDto("unavailable", "none", 0, null, null, null, null, null, null, 0, 0, [], []);
-            return new EnrichmentResult(Unchanged(envelope, failed, "unavailable"), []);
+            // Only the context is set: the defect may be in the stitcher, and running it again here
+            // would throw past the one place that keeps Cloud from breaking the local report.
+            return new EnrichmentResult(
+                envelope with
+                {
+                    Context = envelope.Context is { } context ? context with { Cloud = failed } : new ContextDto(null, null, null, failed)
+                },
+                []);
         }
     }
 
@@ -203,8 +211,9 @@ internal sealed class CloudEnricher(
         var ledger = new Ledger();
         await AttemptAsync(credential, cloudUrl, configuration, request, envelope, plan, plan.Targets, budget, ledger).ConfigureAwait(false);
 
-        bool loginRequired = ledger.CredentialFailure?.Status == "login-required";
-        if (loginRequired && credential.Source == CredentialSource.StoredLogin)
+        // A sign-in that is over, as opposed to a key refused: only a sign-in has a fallback.
+        bool loginRequired = ledger.CredentialFailure?.Status == "login-required" && credential.Source == CredentialSource.StoredLogin;
+        if (loginRequired)
         {
             ResolvedCredential fallback = credential.FallbackToApiKey();
             if (fallback.Source != CredentialSource.None)
@@ -223,6 +232,11 @@ internal sealed class CloudEnricher(
                     [.. plan.Targets.Where(t => !ledger.Answers.ContainsKey(t.Fingerprint))],
                     budget,
                     ledger).ConfigureAwait(false);
+
+                // A fallback that answered nothing leaves the sign-in as the problem a person must fix
+                // (§3.4): its own refusal or outage must not read as the reason there is no Cloud data.
+                if (ledger.Answers.IsEmpty)
+                    ledger.CredentialFailure = new RefusedCredential("login-required", LoginRequiredReason);
             }
         }
 
@@ -244,7 +258,7 @@ internal sealed class CloudEnricher(
             plan.Targets.Count,
             ledger.Answers.Count,
             projects,
-            [.. ledger.Sessions.OrderBy(s => s.ProjectKey, StringComparer.Ordinal).ThenBy(s => s.SessionKey, StringComparer.Ordinal)]);
+            [.. ledger.Sessions.Values.OrderBy(s => s.ProjectKey, StringComparer.Ordinal).ThenBy(s => s.SessionKey, StringComparer.Ordinal)]);
 
         CloudTestHistoryDto? test = envelope.Test?.Test is null
             ? null
@@ -293,11 +307,16 @@ internal sealed class CloudEnricher(
 
                 if (missing.Count > 0)
                 {
-                    List<ProjectRead> rebound = await RebindAsync(client, missing, lookup, budget, ledger).ConfigureAwait(false);
-                    await ReadAsync(client, credential, cloudUrl, rebound, budget, ledger).ConfigureAwait(false);
+                    List<ProjectRead> rebound = await RebindAsync(client, credential, cloudUrl, missing, lookup, budget, ledger).ConfigureAwait(false);
+                    foreach (ProjectRead gone in await ReadAsync(client, credential, cloudUrl, rebound, budget, ledger).ConfigureAwait(false))
+                    {
+                        // Listed under its name just now, and still not readable: as good as absent.
+                        foreach (string assembly in gone.Assemblies)
+                            ledger.Rows[assembly] = new Row(gone.Binding, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                    }
                 }
 
-                await ReadHistoryAsync(client, credential, cloudUrl, envelope, projects, budget, ledger).ConfigureAwait(false);
+                await ReadHistoryAsync(client, credential, cloudUrl, envelope, budget, ledger).ConfigureAwait(false);
             }
             finally
             {
@@ -354,11 +373,12 @@ internal sealed class CloudEnricher(
             bound.Add((binding, assembly.Key, [.. assembly]));
         }
 
-        // Several assemblies can share a project; it is asked once, its session keys together.
+        // Several assemblies can share a project; it is asked once, its session keys together. A name
+        // match is kept apart from a key bound another way: only it may be listed again on a 404.
         return
         [
             .. bound
-                .GroupBy(b => b.Binding.Key, StringComparer.Ordinal)
+                .GroupBy(b => (b.Binding.Key, b.Binding.IsNameMatch))
                 .Select(g => new ProjectRead(
                     g.First().Binding,
                     [.. g.Select(b => b.Assembly)],
@@ -388,7 +408,7 @@ internal sealed class CloudEnricher(
         CloudBudget budget,
         Ledger ledger)
     {
-        var missing = new ConcurrentDictionary<string, ProjectRead>(StringComparer.Ordinal);
+        var missing = new ConcurrentDictionary<(string Key, bool IsNameMatch), ProjectRead>();
 
         // The session keys ride on a project's first batch only: the answer is the same for each.
         IEnumerable<(ProjectRead Project, CloudTarget[] Targets, IReadOnlyList<string> SessionKeys)> batches = projects.SelectMany(
@@ -416,7 +436,7 @@ internal sealed class CloudEnricher(
 
                 if (response is null)
                 {
-                    missing.TryAdd(batch.Project.Binding.Key, batch.Project);
+                    missing.TryAdd((batch.Project.Binding.Key, batch.Project.Binding.IsNameMatch), batch.Project);
                     return;
                 }
 
@@ -436,7 +456,13 @@ internal sealed class CloudEnricher(
     /// because a typo in a key the user typed or the SDK recorded must not read as "Cloud has no data".
     /// </summary>
     private async Task<List<ProjectRead>> RebindAsync(
-        ICloudApiClient client, IReadOnlyList<ProjectRead> missing, ProjectLookup lookup, CloudBudget budget, Ledger ledger)
+        ICloudApiClient client,
+        ResolvedCredential credential,
+        string cloudUrl,
+        IReadOnlyList<ProjectRead> missing,
+        ProjectLookup lookup,
+        CloudBudget budget,
+        Ledger ledger)
     {
         var rebound = new List<ProjectRead>();
 
@@ -454,17 +480,30 @@ internal sealed class CloudEnricher(
                 continue;
             }
 
-            // A name match is per assembly, so a project bound by name has one.
-            string only = project.Assemblies[0];
-            ProjectBinding? fresh = await projectResolver.RebindAsync(client, only, stale, lookup, budget.Token).ConfigureAwait(false);
-            if (fresh is null)
+            // A name match is per assembly, so each is listed again on its own.
+            foreach (string assembly in project.Assemblies)
             {
-                ledger.Rows[only] = new Row(null, new Failure("not-found", $"no matching Cloud project for {only}. Use --project <key>."));
-                continue;
-            }
+                CloudTarget[] targets = [.. project.Targets.Where(t => t.Assembly == assembly)];
+                ProjectBinding? fresh;
+                try
+                {
+                    fresh = await projectResolver.RebindAsync(client, assembly, stale, lookup, budget.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (CredentialFailure(ex, credential) is null && IsReadFailure(ex, budget))
+                {
+                    ledger.Lose(targets, Classify(ex, cloudUrl));
+                    continue;
+                }
 
-            ledger.Rows[only] = new Row(fresh, null);
-            rebound.Add(project with { Binding = fresh });
+                if (fresh is null)
+                {
+                    ledger.Rows[assembly] = new Row(null, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                    continue;
+                }
+
+                ledger.Rows[assembly] = new Row(fresh, null);
+                rebound.Add(project with { Binding = fresh, Assemblies = [assembly], Targets = targets });
+            }
         }
 
         return rebound;
@@ -478,7 +517,6 @@ internal sealed class CloudEnricher(
         ResolvedCredential credential,
         string cloudUrl,
         ReportEnvelope envelope,
-        IReadOnlyList<ProjectRead> projects,
         CloudBudget budget,
         Ledger ledger)
     {
@@ -578,7 +616,7 @@ internal sealed class CloudEnricher(
             return new CloudOutcome(
                 refused.Status,
                 "none",
-                refused.Status == "login-required" ? loginHint ?? new CloudHint(Unavailable + LoginRequiredReason, Always: true) : new CloudHint(Unavailable + refused.Message, Always: true));
+                loginHint ?? new CloudHint(Unavailable + refused.Message, Always: true));
         }
 
         if (projects.All(p => p.Status == "ok"))
@@ -615,7 +653,7 @@ internal sealed class CloudEnricher(
         LoginRequiredException => new RefusedCredential("login-required", LoginRequiredReason),
         CloudApiException { StatusCode: 403 } refused => new RefusedCredential("forbidden", refused.Message),
         CloudApiException { StatusCode: 401 } when credential.Source != CredentialSource.StoredLogin
-            => new RefusedCredential("login-required", LoginRequiredReason),
+            => new RefusedCredential("login-required", RefusedKeyReason),
         _ => null
     };
 
@@ -638,6 +676,7 @@ internal sealed class CloudEnricher(
         CloudApiException { StatusCode: >= 500 } server => new Failure(
             "server",
             string.Create(CultureInfo.InvariantCulture, $"could not reach {cloudUrl} (HTTP {server.StatusCode}). Showing local results only.")),
+        CloudApiException { StatusCode: 401 } => new Failure("network", ex.Message),
         CloudApiException => new Failure("server", ex.Message),
         AuthFailureException { ErrorCode: AuthErrorCodes.CloudUnreachable } unreachable => new Failure(
             unreachable.Reason == "timeout" ? "timeout" : "network",
@@ -740,7 +779,7 @@ internal sealed class CloudEnricher(
         public ConcurrentDictionary<string, Row> Rows { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Gets the session states Cloud answered.</summary>
-        public ConcurrentBag<CloudSessionDto> Sessions { get; } = [];
+        public ConcurrentDictionary<(string SessionKey, string ProjectKey), CloudSessionDto> Sessions { get; } = new();
 
         public RefusedCredential? CredentialFailure { get; set; }
 
@@ -752,7 +791,8 @@ internal sealed class CloudEnricher(
 
         public void Lose(IEnumerable<CloudTarget> targets, Failure failure)
         {
-            foreach (CloudTarget target in targets)
+            // A test already answered stays answered: a later failure in the same attempt is not its.
+            foreach (CloudTarget target in targets.Where(t => !Answers.ContainsKey(t.Fingerprint)))
                 Lost[target.Fingerprint] = failure;
         }
 
@@ -794,7 +834,7 @@ internal sealed class CloudEnricher(
             }
 
             foreach (DigestSession session in (response.Sessions ?? []).Where(s => s is { SessionKey.Length: > 0, State.Length: > 0 }))
-                Sessions.Add(new CloudSessionDto(session.SessionKey, projectKey, session.State, session.Scored ?? false, session.FlakyExamined ?? false));
+                Sessions[(session.SessionKey, projectKey)] = new CloudSessionDto(session.SessionKey, projectKey, session.State, session.Scored ?? false, session.FlakyExamined ?? false);
         }
     }
 }

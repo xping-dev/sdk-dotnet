@@ -174,6 +174,22 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     }
 
     [Fact]
+    public void UnderTestOnlyTheSelectedTestIsAskedAbout()
+    {
+        // The page shows one test; asking about every finding behind it would spend the budget its
+        // run history needs.
+        Seed();
+        _host.SignIn();
+
+        JsonElement json = Report("--json", "--test", "Stable0").Json();
+
+        string[] bodies = [.. _host.Cloud.GatewayRequests.Where(r => r.Path.EndsWith("/tests/digest", StringComparison.Ordinal)).Select(r => r.Body)];
+        Assert.Contains(bodies, b => b.Contains(FailureFingerprint, StringComparison.Ordinal));
+        Assert.DoesNotContain(bodies, b => b.Contains(FindingFingerprint, StringComparison.Ordinal));
+        Assert.Equal("ok", json.GetProperty("test").GetProperty("cloud").GetProperty("digest").GetProperty("state").GetString());
+    }
+
+    [Fact]
     public void AnInvalidProjectFlagIsAParseError()
     {
         Seed();
