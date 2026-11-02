@@ -9,7 +9,7 @@ namespace Xping.Cli.Auth;
 /// Exit codes of <c>login</c>, <c>logout</c> and <c>auth status</c>.
 /// </summary>
 /// <remarks>
-/// They start at 10 so they never collide with a <c>report</c> meaning (0-3) and are easy to tell
+/// They start at 10 so they never collide with a <c>report</c> meaning (0-4) and are easy to tell
 /// apart in a script. <c>report</c> never returns one of them: Cloud problems there are hints, not
 /// failures.
 /// </remarks>

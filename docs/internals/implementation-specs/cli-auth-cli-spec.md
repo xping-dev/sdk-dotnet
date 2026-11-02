@@ -32,6 +32,16 @@ Decisions confirmed by the owner on 2026-09-29, before this draft:
 | A-7 | Cross-platform credential-store tests do not run on every PR. They run in a separate workflow, weekly on `main` only (§17.2), to protect the free CI minutes. |
 | A-8 | Credential precedence (revised 2026-09-30, replaces the brief's order): `--api-key` flag, then the stored login, then `XPING_APIKEY` / `Xping:ApiKey`. The explicit flag wins because it was typed for this command; the ambient key comes last because on a developer machine it is almost always the SDK's upload key, and trying it first would waste a request per command. CI has no stored login, so it still uses the key. Fallback rules in §8.1. |
 
+### Amendment 1 — Cloud data in the CLI
+
+`cloud-data-in-cli-cli-spec.md` (#329) supersedes §10 and §11. The superseded text stays for
+history.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §10: `ICloudApiClient` reads one test at a time (`GetTestAsync`), with its own timeouts and retries | The Cloud API client, enrichment targets, budget, envelope `cloud` objects and hint lines are specified by `cloud-data-in-cli-cli-spec.md` §2–§7 and §11. §16 stands. §11.2's binding order stands, with the page cap of that spec's §3.2 | §10, §11 |
+| B | §13: "Today's codes 0–3" and "`report` never returns a code above 3 for a Cloud problem" | `report` uses 0–4 (`ExitCodes.TestAmbiguous` = 4, from `cli-test-history-spec.md`). Cloud problems still never change it (`cloud-data-in-cli-cli-spec.md` §9) | §13 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -1107,6 +1117,8 @@ Status is decided first, `title` second (contract §8.2).
 
 ## 10. Cloud API client
 
+Superseded by `cloud-data-in-cli-cli-spec.md` (Amendment 1A).
+
 ### 10.1 Endpoints and DTOs
 
 `ICloudApiClient`, all `GET` under `{dataGatewayUri}/v1/` (contract §7.7):
@@ -1166,6 +1178,8 @@ revoked login.
 ---
 
 ## 11. Integration into existing commands
+
+Superseded by `cloud-data-in-cli-cli-spec.md` (Amendment 1A), except §11.2's binding order.
 
 ### 11.1 Which commands
 
@@ -1322,6 +1336,7 @@ a `report` meaning and are easy to recognise in scripts:
 | 1 | — | as today (`report` threshold, `where`/`clear` failures, root without args) | existing |
 | 2 | — | parse or validation error, including an invalid `--cloud-url`, `--project` or `--workspace`; `report` unavailable. For the auth commands also an invalid `XPING_CLOUDURL` or settings file (`"error": "configuration"`); `report` turns that into a hint (§11.6) | all |
 | 3 | — | `report --id` not reported | existing |
+| 4 | — | `report --test` matched more than one test (`ExitCodes.TestAmbiguous`, Amendment 1B) | `report` |
 | 10 | `AuthRequired` | `auth status` with no credential of any kind | `auth status` |
 | 11 | `LoginDeclined` | consent denied in the browser | `login` |
 | 12 | `LoginTimedOut` | 5-minute loopback wait or device code expiry | `login` |
@@ -1332,7 +1347,7 @@ a `report` meaning and are easy to recognise in scripts:
 | 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure; `auth status` with no credential when a store could not be read | `login`, `logout`, `auth status` |
 | 130 | `Cancelled` | Ctrl+C (`Program.Run` maps it for every command) | all |
 
-`report` never returns a code above 3 for a Cloud problem; Cloud problems are hints (§10.4). Ctrl+C
+`report` never returns a code above 4, and never a Cloud-specific one (Amendment 1B); Cloud problems are hints (§10.4). Ctrl+C
 is 130 for every command. The table is repeated in
 `docs/cli/command-reference.md` (phase 8).
 

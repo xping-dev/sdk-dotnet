@@ -91,6 +91,17 @@ These changes are applied in place in the sections named.
 | D | Amendment 4C: `history-timeout-retry`'s timed-out mode prints the unavailable form | It prints `timed out, no failure detail recorded` | §3.5 |
 | E | — | The `AlwaysFailing` gate (`AlwaysFailingModalShareMin`) compares the larger of the modal share and the unavailable modes' pooled share. The split in A must not turn a test that fails every run without detail into a flaky one: 6 blank failures and 4 blank timeouts are modes of 60% and 40%, and pooled they clear the gate. `Signature` and `ModalSignatureShare` stay the modal mode's own. When the pool decides, no signed mode can hold more than the 30% it leaves, so the modal mode is a pooled one | §1.1 |
 
+### Amendment 8 — per-mode Cloud token
+
+`cloud-data-in-cli-cli-spec.md` (#329) §5.2 and §7.4 replace §8's "nothing is reserved".
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §4.2: `FailureModeDto` carries the local composite signature only | It gains `ErrorMessageHash`, the SDK's hash as stored in the session file, never recomputed. A mode whose executions carry different hashes takes the most frequent, and on a tie the ordinally smallest, so the value does not depend on enumeration order. It is a local field, present with or without Cloud | §4.2 |
+| B | — | Each mode carries a Cloud match (`matched`, `unseen`, `unsignable`, `unknown`) and its row gains one trailing token: `cloud: same error on 6 machines · 34 CI · 2 local · since 2026-10-11`, `cloud: unseen`, `cloud: unknown`, or nothing for `unsignable` | D5, §4.2 |
+
+The composite signature stays the local grouping key; `ErrorMessageHash` is never an input to it.
+
 ---
 
 ## 1. Ground truth
@@ -709,6 +720,8 @@ The affected markers are in `docs/cli/command-reference.md`: `detail-test`, `det
 - **The full report's rows.** They print no block. `--id` and `--test` are where detail goes.
 
 ## 8. Reserved for Cloud
+
+Superseded by Amendment 8.
 
 Xping Cloud's test data carries no signatures (`Cloud/CloudTest.cs:21-30`). A cloud-enriched
 finding shows its local modes. Nothing here is reserved.
