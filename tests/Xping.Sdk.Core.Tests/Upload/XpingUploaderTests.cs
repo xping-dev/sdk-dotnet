@@ -429,17 +429,19 @@ public sealed class XpingUploaderTests
     {
         // UploadTimeout applies per attempt. If it capped the whole retry sequence (as
         // HttpClient.Timeout did), the retry would be canceled along with the first attempt.
+        // The retry only has what is left of the 2 × UploadTimeout total, so 1s left a loaded CI
+        // agent too little slack: a late timer or JIT pause let the total cap cancel the retry.
         using var handler = new HangingThenRespondingHandler(hangingAttempts: 1);
         var uploader = BuildUploader(handler, o =>
         {
             o.MaxRetries = 1;
             o.RetryDelay = TimeSpan.Zero;
-            o.UploadTimeout = TimeSpan.FromSeconds(1);
+            o.UploadTimeout = TimeSpan.FromSeconds(3);
         });
 
         var result = await uploader.UploadAsync(BuildSession());
 
-        Assert.True(result.Success);
+        Assert.True(result.Success, result.ErrorMessage);
         Assert.Equal(2, handler.CallCount);
     }
 
