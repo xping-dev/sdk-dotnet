@@ -921,8 +921,8 @@ runs, and a Cloud project whose name is the test assembly's.
 
 Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at four
 seconds), a key that cannot read, no matching project — you get the local report with one line above
-the block saying why, such as `cloud: unavailable (timeout) · showing local results only` or
-`cloud: login required · run xping login`, and at most one line on stderr, at a terminal or with
+the block saying why, such as `cloud: unavailable (budget) · showing local results only` when the
+four seconds ran out or `cloud: login required · run xping login`, and at most one line on stderr, at a terminal or with
 `--verbose`. Two lines are printed everywhere,
 because only a person can fix them: `Cloud data unavailable: your sign-in is no longer valid. Run
 xping login.` and the line for a key Cloud refuses. When some tests were answered and others were
