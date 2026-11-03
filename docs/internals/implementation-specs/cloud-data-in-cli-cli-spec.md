@@ -75,6 +75,9 @@ Decided by the owner on 2026-11-03, committed before the code that depends on th
 | L | §7.2–§8: `≠`, `▼`, `▲`, `—`, `…` | Each is a `ReportGlyphs` pair (`!=`, `v`, `^`, `-`, `...`): the golden charset sweep rejects a non-ASCII character no pair defines | §7 |
 | M | §7.6: the line per status | `unavailable ({reason}) · showing local results only`; `login required · run xping login`; `forbidden · API keys need the Team plan; run xping login instead` with an API key, else `forbidden · showing local results only`; `partial: {n} of {m} tests answered ({reason})`; a status this build does not know prints verbatim with its reason | §7.6 |
 | N | §8: the block when no digest | `CLOUD` heading with the §7.6 reason as its only line when the status is report-wide; `not answered` under `partial`; `not in project {key}` for `unknown`. Labels inside the block are unprefixed (the heading says `CLOUD`); the detail view's are prefixed `cloud` | §8 |
+| O | §7.3, 3C: confidence is a trailer segment, fitted into the room the local segments leave | The confidence score is Xping's headline signal and gets a fixed line. The trailer is local only; it has no Cloud segment. Every finding with an `ok` digest gets, first under its name: `cloud confidence {score} {▼▲delta} · {category} · {window}`, plus `· pending` when `freshness == pending`. `insufficient-evidence`: `cloud evidence sparse (ESS 4 of 10, 14 d)`. `not-scored` or no confidence block: no line. The line wraps and is never cut. The §7.2 second line and `cloud name differs` follow it. The category is Cloud's own label, printed as sent (contract R6). Supersedes 3C | §7.2, §7.3 |
+| P | 3G: the latest-run confidence token is the one dropped | It leads the line, `cloud  confidence 0.22 (35 d) · broken since …`, and nothing is dropped: every segment wraps | §7.5 |
+| Q | §7.4, §8: `verdict` is the first pair | `confidence` is the first pair, in the detail view and the `--test` block | §7.4, §8 |
 
 ---
 
