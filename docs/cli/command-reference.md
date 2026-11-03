@@ -975,7 +975,8 @@ counted over every failed attempt in the window.
 credential or nothing to ask. Then `reason`: `none`, `credential-timeout`, `budget`, `timeout`,
 `network`, `server`, `rate-limited`, `invalid-response`, `not-found`, or `signature-algorithm` when
 Cloud matches failures with a different hash than this CLI. It also carries the `credential`
-(`login` or `api-key`), `elapsedMs`, `fetchedAt`, how many tests were asked about
+(`login` or `api-key`), the signed-in `workspaceId` and its `workspace` name (both `null` for an
+API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fetchedAt`, how many tests were asked about
 (`requestedTests`) and answered (`enrichedTests`), one row per assembly in `projects` with its
 `projectKey`, `source` (`flag`, `env`, `config`, `session` or `name-match`), `status` and `reason`,
 and in `sessions` whether Cloud has received and scored this machine's newest runs.
@@ -1011,7 +1012,7 @@ are not each other and `tests` is what they add up to:
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
     "cloud": {
       "status": "ok", "reason": "none", "elapsedMs": 412,
-      "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J8…",
+      "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J8…", "workspace": "Acme",
       "fetchedAt": "2026-08-19T16:30:00+00:00", "signatureAlgorithm": "emh-1", "retentionDays": 365,
       "requestedTests": 4, "enrichedTests": 4,
       "projects": [

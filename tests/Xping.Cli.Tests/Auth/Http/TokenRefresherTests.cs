@@ -54,7 +54,7 @@ public sealed class TokenRefresherTests : IAsyncDisposable
         Assert.Equal(token, stored.AccessToken);
         Assert.NotEqual(refresh, stored.RefreshToken);
         Assert.Equal(Now + TimeSpan.FromMinutes(15), stored.AccessTokenExpiresAt);
-        Assert.Equal(FakeCloud.WorkspaceId, stored.WorkspaceId);
+        Assert.Equal((FakeCloud.WorkspaceId, FakeCloud.WorkspaceName), (stored.WorkspaceId, stored.WorkspaceName));
         Assert.Equal(_host.Cloud.GatewayUri, stored.DataGatewayUri);
     }
 
@@ -312,6 +312,9 @@ public sealed class TokenRefresherTests : IAsyncDisposable
             access,
             expiresAt,
             FakeCloud.WorkspaceId,
+
+            // No name, as before the claim existed: a refresh must pick up the one the new token carries.
+            null,
             "01J8SESSION",
             FakeCloud.UserId,
             FakeCloud.Email,

@@ -25,6 +25,7 @@ namespace Xping.Cli.Auth.Store;
 /// <c>expires_in</c>, not read from <c>exp</c>, so the machine's clock skew applies consistently.
 /// </param>
 /// <param name="WorkspaceId">The workspace the session is bound to.</param>
+/// <param name="WorkspaceName">That workspace's display name, or null when the token carries none.</param>
 /// <param name="Sid">The session id.</param>
 /// <param name="Sub">The user id.</param>
 /// <param name="Email">The user's e-mail address.</param>
@@ -37,6 +38,7 @@ internal sealed record CredentialRecord(
     string? AccessToken,
     DateTimeOffset? AccessTokenExpiresAt,
     string? WorkspaceId,
+    string? WorkspaceName,
     string? Sid,
     string? Sub,
     string? Email,
@@ -68,7 +70,7 @@ internal sealed record CredentialRecord(
         builder.Append(CultureInfo.InvariantCulture,
             $"SchemaVersion = {SchemaVersion}, CloudUrl = {CloudUrl}, AccessTokenExpiresAt = {AccessTokenExpiresAt:O}, ")
             .Append(CultureInfo.InvariantCulture,
-            $"WorkspaceId = {WorkspaceId}, Sid = {Sid}, Sub = {Sub}, Email = {Email}, DataGatewayUri = {DataGatewayUri}, StoredAt = {StoredAt:O}");
+            $"WorkspaceId = {WorkspaceId}, WorkspaceName = {WorkspaceName}, Sid = {Sid}, Sub = {Sub}, Email = {Email}, DataGatewayUri = {DataGatewayUri}, StoredAt = {StoredAt:O}");
         return true;
     }
 }

@@ -81,6 +81,18 @@ Decided by the owner on 2026-11-03, committed before the code that depends on th
 | R | `cloud confidence …`, `cloud evidence …`, `cloud name differs: …`, the reason line and the latest-run line as `cloud  …` | Every line that says where its value came from starts `cloud:` or `local:`, so a reader reads the source the same way on every line: `cloud: confidence 0.22 ▼0.61 · …`, `cloud: evidence sparse (…)`, `cloud: known as {testName}`, `cloud: unavailable (timeout) · …` above the fence, `cloud: confidence 0.22 (35 d) · broken since …` on a latest-run row. Labels (`cloud broken`, `local flaky`), the header token and the `cloud …` pair labels are names, not sources, and keep no colon | §7.2, §7.5, §7.6, §10 |
 | S | §7.2: the verdict takes the label of every kind but contract L4's seven | `DurationRegression`, `RetryDeepening`, `ParallelSensitive` and `TimeSensitive` keep their local label too, with Cloud's flaky state on the line under the name. They describe how a test behaves on this machine (time, retries, concurrency, clock), not whether it passes, and §12 already calls duration regression a local observation: a `cloud passing` label over "slower" answers a question the row did not ask. Only `Flaky` and `AlwaysFailing`, the two kinds a verdict speaks to, take the verdict's label. **Contract L4 lists seven observation kinds; it needs the matching amendment in the dashboard repo** | §7.2 |
 
+### Amendment 4 — from #335
+
+Contract §7.4 puts the workspace **name** in `context.cloud`, and §9.5 names it in the
+`no-project` hint, but nothing on the wire carried it: the access token had `workspace_id` only
+(cli-auth §3.2) and no DataGateway answer names the workspace. Decided by the owner on
+2026-11-03.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §6.2: `context.cloud` has `workspaceId` and no name | `workspace` (string or null) follows `workspaceId`. Its source is a new access-token claim, `workspace_name`, issued by the Portal next to `workspace_id`. `AccessTokenClaims` reads it, and `CredentialRecord.WorkspaceName` stores it at sign-in and on every refresh, so a renamed workspace shows its new name within one token lifetime. It is null for an API key (no token) and for a token without the claim. A claim was chosen over a digest field because `no-project` is exactly the case where the digest answers 404 with no body; and over a workspace endpoint because it costs no request inside the 4 s budget. Schema stays `1.28`: the field lands before 1.28 leaves the feature branch. **Contract §6.1's claim list needs `workspace_name`, and the Portal needs to issue it: a follow-up in the dashboard repo** | §6.2, cli-auth §3.2, §7.2 |
+| B | §7.6 and Amendment 3B: `not in this workspace: project {key}` | With a name: `cloud  not in workspace {name}: project {key} · pass --project <key>`, and `no project in workspace {name} for {assembly}` when no key was found; the `--json`/pipe hint is contract §9.5's `project {key} is not in workspace {name}; run xping login to choose another workspace`. Without a name (API key, or the claim not issued yet), Amendment 3B's wording stands. Implemented once phase 3's renderer is on the feature branch | §7.6, §11 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -405,7 +417,7 @@ them) and MUST write unknown enum strings verbatim.
 ```json
 "cloud": {
   "status": "partial", "reason": "timeout", "elapsedMs": 2140,
-  "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J…",
+  "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J…", "workspace": "Acme",
   "fetchedAt": "2026-11-01T10:02:11Z", "signatureAlgorithm": "emh-1", "retentionDays": 365,
   "requestedTests": 14, "enrichedTests": 9,
   "projects": [
@@ -419,6 +431,8 @@ them) and MUST write unknown enum strings verbatim.
 ```
 
 `credential` is `login` or `api-key` (today's `stored-login` becomes `login`, contract §9.6).
+`workspace` is the name contract §7.4 asks for, read from the access token's `workspace_name`
+claim (Amendment 4A); `workspaceId` and `workspace` are null for an API key.
 `projects[].status` uses the same vocabulary as the root `status`. `sessions[]` is empty when no
 project answered.
 

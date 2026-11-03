@@ -138,7 +138,7 @@ internal sealed class CloudEnricher(
         {
             // A defect here costs the Cloud data, and the agent still finds context.cloud.
             logger.LogInformation(ex, "Cloud enrichment failed: {Message}", ex.Message);
-            var failed = new CloudContextDto("unavailable", "none", 0, null, null, null, null, null, null, 0, 0, [], []);
+            var failed = new CloudContextDto("unavailable", "none", 0, null, null, null, null, null, null, null, 0, 0, [], []);
             // Only the context is set: the defect may be in the stitcher, and running it again here
             // would throw past the one place that keeps Cloud from breaking the local report.
             return new EnrichmentResult(
@@ -183,7 +183,7 @@ internal sealed class CloudEnricher(
         catch (OperationCanceledException) when (budget.CredentialExpired && !cancellationToken.IsCancellationRequested)
         {
             var timedOut = new CloudContextDto(
-                "unavailable", "credential-timeout", Milliseconds(budget.Elapsed), cloudUrl, null, null, null, null, null, 0, 0, [], []);
+                "unavailable", "credential-timeout", Milliseconds(budget.Elapsed), cloudUrl, null, null, null, null, null, null, 0, 0, [], []);
 
             return new EnrichmentResult(
                 Unchanged(envelope, timedOut, "unavailable"),
@@ -252,6 +252,7 @@ internal sealed class CloudEnricher(
             cloudUrl,
             CredentialToken(credential),
             WorkspaceOf(credential),
+            WorkspaceNameOf(credential),
             ledger.Answers.IsEmpty ? null : ledger.Answers.Values.Max(a => a.Digest.FetchedAt),
             ledger.SignatureAlgorithm,
             ledger.RetentionDays,
@@ -704,6 +705,7 @@ internal sealed class CloudEnricher(
             cloudUrl,
             credential is null ? null : CredentialToken(credential),
             credential is null ? null : WorkspaceOf(credential),
+            credential is null ? null : WorkspaceNameOf(credential),
             null,
             null,
             null,
@@ -718,6 +720,8 @@ internal sealed class CloudEnricher(
         credential.Source == CredentialSource.StoredLogin ? "login" : "api-key";
 
     private static string? WorkspaceOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceId;
+
+    private static string? WorkspaceNameOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceName;
 
     /// <summary>
     /// The <c>--verbose</c> line naming the credential in use (§8.2). Never the key or a token.

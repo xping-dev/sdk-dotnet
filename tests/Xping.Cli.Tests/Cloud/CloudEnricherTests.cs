@@ -59,7 +59,7 @@ public sealed class CloudEnricherTests : IDisposable
 
         // Contract R5: the object is always there, so an agent never has to guess.
         Assert.Equal(
-            new CloudContextDto("not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, 0, 0, [], []),
+            new CloudContextDto("not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, null, 0, 0, [], []),
             result.Envelope.Context!.Cloud! with { Projects = [], Sessions = [] });
         Assert.Equal(envelope.Findings, result.Envelope.Findings);
         Assert.Empty(result.Hints);
@@ -344,7 +344,7 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(("Cloud data unavailable: your sign-in is no longer valid. Run xping login.", true), (hint.Text, hint.Always));
 
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
-        Assert.Equal(("api-key", "ok", (string?)null, 150), (cloud.Credential, cloud.Status, cloud.WorkspaceId, cloud.EnrichedTests));
+        Assert.Equal(("api-key", "ok", (string?)null, (string?)null, 150), (cloud.Credential, cloud.Status, cloud.WorkspaceId, cloud.Workspace, cloud.EnrichedTests));
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(("login", "login-required", "none"), (cloud.Credential, cloud.Status, cloud.Reason));
         Assert.Equal("login-required", cloud.Projects[0].Status);
         Assert.Equal("Cloud data unavailable: your sign-in is no longer valid. Run xping login.", Assert.Single(result.Hints).Text);
-        Assert.Equal(CredentialTestData.Record().WorkspaceId, cloud.WorkspaceId);
+        Assert.Equal((CredentialTestData.Record().WorkspaceId, "Acme"), (cloud.WorkspaceId, cloud.Workspace));
         Assert.True(result.Hints[0].Always);
     }
 

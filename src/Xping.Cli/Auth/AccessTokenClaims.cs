@@ -20,12 +20,13 @@ namespace Xping.Cli.Auth;
 /// <param name="Sid">The session id, as listed on the Portal's CLI sessions page.</param>
 /// <param name="Email">The user's e-mail address.</param>
 /// <param name="WorkspaceId">The workspace the session is bound to.</param>
-internal sealed record AccessTokenClaims(string? Sub, string? Sid, string? Email, string? WorkspaceId)
+/// <param name="WorkspaceName">That workspace's display name.</param>
+internal sealed record AccessTokenClaims(string? Sub, string? Sid, string? Email, string? WorkspaceId, string? WorkspaceName)
 {
     /// <summary>
     /// No claims could be read.
     /// </summary>
-    public static AccessTokenClaims None { get; } = new(null, null, null, null);
+    public static AccessTokenClaims None { get; } = new(null, null, null, null, null);
 
     /// <summary>
     /// Reads the claims of <paramref name="accessToken"/>.
@@ -48,7 +49,8 @@ internal sealed record AccessTokenClaims(string? Sub, string? Sid, string? Email
                 StringClaim(document.RootElement, "sub"),
                 StringClaim(document.RootElement, "sid"),
                 StringClaim(document.RootElement, "email"),
-                StringClaim(document.RootElement, "workspace_id"));
+                StringClaim(document.RootElement, "workspace_id"),
+                StringClaim(document.RootElement, "workspace_name"));
         }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {

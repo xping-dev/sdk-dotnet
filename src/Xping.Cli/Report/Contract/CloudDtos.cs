@@ -31,6 +31,9 @@ namespace Xping.Cli.Report.Contract;
 /// <param name="CloudUrl">The normalized Xping Cloud URL, or null when the settings could not be read.</param>
 /// <param name="Credential"><c>login</c> or <c>api-key</c>: the credential last used; null without one.</param>
 /// <param name="WorkspaceId">The signed-in workspace, or null for an API key.</param>
+/// <param name="Workspace">
+/// That workspace's name, from the access token; null for an API key or a token without the claim.
+/// </param>
 /// <param name="FetchedAt">When the answers were read, by this machine's clock; null when none came.</param>
 /// <param name="SignatureAlgorithm">The signature algorithm Cloud answered with, or null.</param>
 /// <param name="RetentionDays">The workspace plan's retention, or null.</param>
@@ -45,6 +48,7 @@ internal sealed record CloudContextDto(
     string? CloudUrl,
     string? Credential,
     string? WorkspaceId,
+    string? Workspace,
     DateTimeOffset? FetchedAt,
     string? SignatureAlgorithm,
     int? RetentionDays,

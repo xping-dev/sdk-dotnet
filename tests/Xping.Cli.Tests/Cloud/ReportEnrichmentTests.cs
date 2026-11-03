@@ -81,6 +81,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal("login", cloud.GetProperty("credential").GetString());
         Assert.Equal("ok", cloud.GetProperty("status").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, cloud.GetProperty("workspaceId").GetString());
+        Assert.Equal(FakeCloud.WorkspaceName, cloud.GetProperty("workspace").GetString());
         Assert.Equal(Project, ProjectRow(json).GetProperty("projectKey").GetString());
         Assert.Equal("name-match", ProjectRow(json).GetProperty("source").GetString());
 

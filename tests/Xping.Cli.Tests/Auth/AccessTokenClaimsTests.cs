@@ -14,9 +14,9 @@ public sealed class AccessTokenClaimsTests
     [Fact]
     public void TheDisplayClaimsAreReadFromThePayload()
     {
-        string token = Jwt("""{"sub":"u1","sid":"s1","email":"jane@example.com","workspace_id":"w1","exp":1}""");
+        string token = Jwt("""{"sub":"u1","sid":"s1","email":"jane@example.com","workspace_id":"w1","workspace_name":"Acme","exp":1}""");
 
-        Assert.Equal(new AccessTokenClaims("u1", "s1", "jane@example.com", "w1"), AccessTokenClaims.Read(token));
+        Assert.Equal(new AccessTokenClaims("u1", "s1", "jane@example.com", "w1", "Acme"), AccessTokenClaims.Read(token));
     }
 
     [Fact]
