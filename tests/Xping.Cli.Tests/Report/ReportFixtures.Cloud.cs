@@ -86,7 +86,7 @@ internal static partial class ReportFixtures
                 score,
                 score is null ? null : score - 0.08,
                 score is null ? null : score + 0.09,
-                score is null ? "insufficient-data" : "highly-unreliable",
+                Category(score),
                 "significant-degradation",
                 delta,
                 score is null ? 4 : 34,
@@ -124,6 +124,17 @@ internal static partial class ReportFixtures
                 Signature(CloudHash, "InvalidOperationException", requested: true, runs: 36, ci: 34, local: 2, machines: 6),
                 Signature("c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0", "TimeoutException", requested: false, runs: 2, ci: 0, local: 2, machines: 1)
             ]);
+
+    // Cloud's bands, so a fixture never pairs a score with a category Cloud would not send.
+    private static string Category(double? score) => score switch
+    {
+        null => "insufficient-data",
+        >= 0.9 => "highly-reliable",
+        >= 0.75 => "reliable",
+        >= 0.5 => "moderately-reliable",
+        >= 0.3 => "unreliable",
+        _ => "highly-unreliable"
+    };
 
     private static CloudSignatureDto Signature(
         string hash, string type, bool requested, int runs, int ci, int local, int machines) =>

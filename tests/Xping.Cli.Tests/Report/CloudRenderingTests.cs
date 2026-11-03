@@ -120,7 +120,7 @@ public sealed class CloudRenderingTests
 
         Assert.True(row > 0);
         Assert.Equal("    SampleTests.ExceptionTest_ThrowsOnMissingDependency", lines[row + 1]);
-        Assert.Equal("    local: always failing in 20 runs here", lines[row + 2]);
+        Assert.Equal("    local: always failing in 20 runs here", lines[row + 3]);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class CloudRenderingTests
         int row = Array.IndexOf(lines, "2.  HIGH  local timing out");
 
         Assert.True(row > 0);
-        Assert.Equal("    cloud: not flaky in 14 d", lines[row + 2]);
+        Assert.Equal("    cloud: not flaky in 14 d", lines[row + 3]);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class CloudRenderingTests
         int row = Array.IndexOf(lines, label);
 
         Assert.True(row > 0);
-        Assert.StartsWith("    cloud: passing on the canonical branch ", lines[row + 2], StringComparison.Ordinal);
+        Assert.StartsWith("    cloud: passing on the canonical branch ", lines[row + 3], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -204,81 +204,75 @@ public sealed class CloudRenderingTests
     }
 
     // ---------------------------------------------------------------------
-    // The trailer (§7.3, Amendment 3C)
+    // The confidence line (Amendment 3O)
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void TheTrailerCarriesTheScoreWithItsWindowRightAfterTheLocalEvidence()
+    public void TheConfidenceIsTheFirstLineUnderTheName()
     {
-        string report = Render(Single(nameof(FindingKind.Flaky), CloudDigest("broken")), Unicode);
+        string[] lines = Lines(Render(Get("cloud-broken"), Unicode));
+        int row = Array.IndexOf(lines, "1.  HIGH  cloud broken");
 
-        Assert.Contains("    evidence moderate | confidence 0.22 (35 d) | -env-cluster | f_1", report, StringComparison.Ordinal);
+        Assert.True(row > 0);
+        Assert.Equal("    cloud confidence 0.22 ▼0.61 · highly unreliable · 35 d", lines[row + 2]);
+        Assert.Equal("    local: always failing in 20 runs here", lines[row + 3]);
     }
 
     [Fact]
-    public void TheTrailerShortensByTheDeltaThenTheEvidenceThenTheSegment()
+    public void EveryScoredRowCarriesItsConfidenceWhateverItsLabel()
     {
-        CloudDigestDto digest = CloudDigest("broken");
-        const string full = "confidence 0.22 ▼0.61 (35 d) · evidence adequate (ESS 34, 14 d)";
-        const string noDelta = "confidence 0.22 (35 d) · evidence adequate (ESS 34, 14 d)";
-        const string plain = "confidence 0.22 (35 d)";
+        string[] lines = Lines(Render(Get("cloud-broken"), Unicode));
 
-        Assert.Equal(full, UnicodeText.Trailer(digest, full.Length));
-        Assert.Equal(noDelta, UnicodeText.Trailer(digest, full.Length - 1));
-        Assert.Equal(plain, UnicodeText.Trailer(digest, noDelta.Length - 1));
-        Assert.Null(UnicodeText.Trailer(digest, plain.Length - 1));
+        // Four single-test findings, every one scored; the cluster is never asked about.
+        Assert.Equal(4, lines.Count(l => l.StartsWith("    cloud confidence ", StringComparison.Ordinal)));
     }
 
     [Fact]
-    public void TheTrailerNeverDropsAWindowOrAnEssOnItsOwn()
+    public void TheTrailerStaysLocal()
     {
-        CloudDigestDto digest = CloudDigest("broken");
+        string report = Render(Get("cloud-broken"), Unicode);
 
-        foreach (int room in Enumerable.Range(0, 80))
-        {
-            if (UnicodeText.Trailer(digest, room) is not { } segment)
-                continue;
-
-            Assert.Contains("(35 d)", segment, StringComparison.Ordinal);
-            Assert.True(!segment.Contains("evidence", StringComparison.Ordinal) || segment.Contains("(ESS 34, 14 d)", StringComparison.Ordinal));
-        }
+        Assert.Contains("    evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66", report, StringComparison.Ordinal);
+        Assert.DoesNotContain(Lines(report), l => l.Contains(" | confidence", StringComparison.Ordinal));
     }
 
     [Fact]
     public void InsufficientEvidenceShowsTheEssAgainstWhatItNeedsAndNoScore()
     {
-        Assert.Equal("evidence sparse (ESS 4 of 10, 14 d)", UnicodeText.Trailer(CloudDigest("no-history", score: null), 80));
+        CloudDigestDto digest = CloudDigest("no-history", score: null);
+
+        Assert.Equal("cloud evidence sparse (ESS 4 of 10, 14 d)", UnicodeText.ConfidenceLine(digest.Confidence));
     }
 
     [Fact]
     public void APendingScoreSaysSoAndASmallDeltaIsNotShown()
     {
-        string? segment = UnicodeText.Trailer(CloudDigest("broken", delta: 0.004, freshness: "pending"), 22 + 10);
+        CloudDigestDto digest = CloudDigest("broken", delta: 0.004, freshness: "pending");
 
-        Assert.Equal("confidence 0.22 (35 d) · pending", segment);
+        Assert.Equal("cloud confidence 0.22 · highly unreliable · 35 d · pending", UnicodeText.ConfidenceLine(digest.Confidence));
     }
 
     [Fact]
-    public void TheTrailerKeepsThePathsFileName()
+    public void AConfidenceCloudDidNotScoreHasNoLine()
     {
-        // The local path is never cut for Cloud: with it, the segment does not fit, so it is left
-        // to the detail view.
-        string report = Render(Get("cloud-broken"), Unicode);
+        CloudConfidenceDto notScored = CloudDigest("broken").Confidence! with { State = "not-scored", Score = null };
 
-        Assert.Contains("    evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66", report, StringComparison.Ordinal);
+        Assert.Null(UnicodeText.ConfidenceLine(notScored));
+        Assert.Null(UnicodeText.ConfidenceLine(null));
     }
 
     [Fact]
-    public void AsciiUsesItsOwnGlyphsInsideTheSegment()
+    public void AsciiUsesItsOwnGlyphsOnTheConfidenceLine()
     {
         var text = new CloudText(ReportGlyphs.Ascii);
 
-        Assert.Equal("confidence 0.22 v0.61 (35 d) - evidence adequate (ESS 34, 14 d)", text.Trailer(CloudDigest("broken"), 80));
-        Assert.StartsWith("confidence 0.58 ^0.04 (35 d)", text.Trailer(CloudDigest("broken", score: 0.58, delta: 0.04), 80), StringComparison.Ordinal);
+        Assert.Equal("cloud confidence 0.22 v0.61 - highly unreliable - 35 d", text.ConfidenceLine(CloudDigest("broken").Confidence));
+        Assert.StartsWith("cloud confidence 0.58 ^0.04 ", text.ConfidenceLine(CloudDigest("broken", score: 0.58, delta: 0.04).Confidence), StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------
-    // Latest run (§7.5, Amendment 3G)
+    // ---------------------------------------------------------------------
+    // Latest run (§7.5, Amendment 3G, 3P)
     // ---------------------------------------------------------------------
 
     [Fact]
@@ -288,12 +282,12 @@ public sealed class CloudRenderingTests
         int sentence = Array.IndexOf(lines, "                 passed the previous 19 runs, failed just now");
 
         Assert.True(sentence > 0);
-        Assert.Equal("                 cloud  broken since 2026-10-11", lines[sentence + 1]);
+        Assert.Equal("                 cloud  confidence 0.22 (35 d) · broken since 2026-10-11", lines[sentence + 1]);
         Assert.Equal("                        same error on 6 machines and CI", lines[sentence + 2]);
     }
 
     [Fact]
-    public void TheConfidenceJoinsTheLatestRunLineWhereItFits()
+    public void TheConfidenceLeadsTheLatestRunLine()
     {
         ReportEnvelope envelope = Get("cloud-broken");
         CloudDigestDto passing = CloudDigest("passing", score: 0.97);
@@ -305,7 +299,7 @@ public sealed class CloudRenderingTests
             }
         };
 
-        Assert.Contains("                 cloud  passing · confidence 0.97 (35 d)", LatestRunSection(Render(envelope, Unicode)));
+        Assert.Contains("                 cloud  confidence 0.97 (35 d) · passing", LatestRunSection(Render(envelope, Unicode)));
     }
 
     [Fact]

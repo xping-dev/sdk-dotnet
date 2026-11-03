@@ -1637,18 +1637,17 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// Writes a latest-run row's Cloud line, wrapped at its segments (§7.5, Amendment 3G).
     /// </summary>
     /// <remarks>
-    /// The verdict and the match are what a reader came for, so they wrap rather than drop; the
-    /// confidence is the one segment the row can do without, and is left out where it would need a
-    /// line of its own.
+    /// Nothing is dropped: the confidence leads and the verdict and the match follow, wrapped at
+    /// their boundaries (Amendment 3P).
     /// </remarks>
     private void WriteLatestRunCloud(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
     {
         const string prefix = "cloud  ";
         const int width = LatestRunBudget - 7;
 
-        (IReadOnlyList<string> segments, string? confidence) = cloudText.LatestRun(failure, context);
+        IReadOnlyList<string> segments = cloudText.LatestRun(failure, context);
 
-        if (segments.Count == 0 && confidence is null)
+        if (segments.Count == 0)
             return;
 
         string joint = $" {cloudText.Separator} ";
@@ -1670,14 +1669,6 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 lines.Add(line);
                 line = segment;
             }
-        }
-
-        if (confidence is not null)
-        {
-            if (line.Length == 0)
-                line = confidence;
-            else if (line.Length + joint.Length + confidence.Length <= width)
-                line += joint + confidence;
         }
 
         lines.Add(line);
@@ -1890,20 +1881,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             Recorded(finding.Id)
         };
 
-        // Cloud's confidence belongs with the local evidence level: both say how much to believe it.
-        // It gets the room the local segments leave, in the widest form that fits, because Fit()
-        // would otherwise cut the local evidence word off the front (§7.3, Amendment 3C).
-        // The path keeps at least its file name: it is local, and nothing local is cut for Cloud.
-        int rest = trailer.Sum(part => part.Length + SeparatorWidth);
-
-        if (Location(finding.Subject) is { } path)
-        {
-            int slash = path.LastIndexOf('/');
-            rest += (slash < 0 ? path.Length : Math.Min(path.Length, path.Length - slash + 3)) + SeparatorWidth;
-        }
-
-        if (cloudText.Trailer(finding.Cloud, budget - rest) is { } cloud)
-            trailer.Insert(1, cloud);
+        // Local only. Cloud's confidence has its own line under the name (Amendment 3O).
 
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.

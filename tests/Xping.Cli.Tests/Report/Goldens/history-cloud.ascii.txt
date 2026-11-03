@@ -15,9 +15,9 @@ duration p50 12ms | p95 13ms | range 11-13ms
 CLOUD                                payments - fetched 2026-11-01 10:02
 ------------------------------------------------------------------------
 
-    verdict     known flaky
-    confidence  0.41 v0.12 - highly unreliable - 35 d window - computed
+    confidence  0.41 v0.12 - unreliable - 35 d window - computed
                 2026-10-31 09:00
+    verdict     known flaky
     evidence    adequate - ESS 34 - 34 canonical, 0 speculative, 2
                 untracked - 14 d window
     flaky       flaky (timing, major) since 2026-10-02
@@ -62,11 +62,13 @@ FINDINGS                                                      2 findings
 ------------------------------------------------------------------------
 
 1.  HIGH  cloud known-flaky
+    cloud confidence 0.41 v0.12 - unreliable - 35 d
     local: flaky in 20 runs here
     failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
     evidence low | -env-cluster | f_8f042eab | .../CalculatorTests.cs:42
 
 2.  MED   local masked by retry
+    cloud confidence 0.41 v0.12 - unreliable - 35 d
     cloud: flaky (timing, major) since 2026-10-02
     passed on retry 6 times in 6 of 20 runs, up to attempt 2
     evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42

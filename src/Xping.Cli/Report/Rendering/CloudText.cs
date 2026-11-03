@@ -107,7 +107,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
-    /// A finding's label and the Cloud lines under its name (§7.2, Amendment 3D–3F, 3I).
+    /// A finding's label and the Cloud lines under its name (§7.2, Amendment 3D–3F, 3I, 3O).
     /// </summary>
     /// <param name="finding">The finding.</param>
     /// <param name="context">What the report asked Cloud.</param>
@@ -130,7 +130,13 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (digest.State != "ok")
             return (labelled, [$"cloud: {NotInProject(context!, finding.Subject.Assembly)}"]);
 
+        // The score first: it is what Xping adds that no local run can, and it is on the same line
+        // of every scored row so a reader scanning the list reads one column of it (Amendment 3O).
         var lines = new List<string>();
+
+        if (ConfidenceLine(digest.Confidence) is { } confidence)
+            lines.Add(confidence);
+
         string label;
         string? verdict = Verdict(digest);
         string? flaky = FlakyPhrase(digest.Flaky);
@@ -163,57 +169,25 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
-    /// The finding trailer's Cloud segment, the widest form that fits <paramref name="room"/>, or
-    /// null when none does or there is no score to show (§7.3, Amendment 3C).
+    /// The latest-run Cloud line's segments, the confidence first (§7.5, Amendment 3A, 3G, 3P).
     /// </summary>
-    /// <remarks>
-    /// Shortened by dropping the delta, then the whole evidence token, then the segment. The window
-    /// stays with the score and the ESS with the evidence level, or neither is printed (contract
-    /// §4.4, §4.8).
-    /// </remarks>
-    public string? Trailer(CloudDigestDto? digest, int room)
-    {
-        if (digest is not { State: "ok", Confidence: { } confidence })
-            return null;
-
-        string? evidence = EvidenceToken(confidence);
-
-        if (confidence.State == "insufficient-evidence")
-            return evidence is not null && evidence.Length <= room ? evidence : null;
-
-        if (confidence.Score is not { } score)
-            return null;
-
-        string window = Window(confidence.Window) is { } length ? $" ({length})" : string.Empty;
-        string pending = confidence.Freshness == "pending" ? Joint + "pending" : string.Empty;
-        string plain = $"confidence {Score(score)}{window}{pending}";
-        string withDelta = $"confidence {Score(score)}{Delta(confidence.Delta)}{window}{pending}";
-
-        string[] forms = evidence is null
-            ? [withDelta, plain]
-            : [withDelta + Joint + evidence, plain + Joint + evidence, plain];
-
-        return forms.FirstOrDefault(form => form.Length <= room);
-    }
-
-    /// <summary>
-    /// The latest-run Cloud line's segments (§7.5, Amendment 3A, 3G): the parts that wrap, and the
-    /// confidence token, which is dropped where it does not fit.
-    /// </summary>
-    public (IReadOnlyList<string> Segments, string? Confidence) LatestRun(LatestRunFailureDto failure, CloudContextDto? context)
+    public IReadOnlyList<string> LatestRun(LatestRunFailureDto failure, CloudContextDto? context)
     {
         if (!Attempted(context))
-            return ([], null);
+            return [];
 
         if (failure.Cloud is not { } cloud)
-            return (context!.Status == "partial" ? ["not answered"] : [], null);
+            return context!.Status == "partial" ? ["not answered"] : [];
 
         CloudDigestDto digest = cloud.Digest;
 
         if (digest.State != "ok")
-            return ([NotInProject(context!, failure.Subject.Assembly)], null);
+            return [NotInProject(context!, failure.Subject.Assembly)];
 
         var segments = new List<string>();
+
+        if (digest.Confidence is { Score: { } score } scored)
+            segments.Add($"confidence {Score(score)}" + (Window(scored.Window) is { } length ? $" ({length})" : string.Empty));
 
         string? since = digest.Canonical?.FailingSince is { } failingSince ? " since " + Date(failingSince) : null;
         string? verdict = digest.Verdict switch
@@ -231,11 +205,42 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (MatchPhrase(cloud.Match, cloud.Signature) is { } match)
             segments.Add(match);
 
-        string? confidence = digest.Confidence is { Score: { } score } scored
-            ? $"confidence {Score(score)}" + (Window(scored.Window) is { } length ? $" ({length})" : string.Empty)
-            : null;
+        return segments;
+    }
 
-        return (segments, confidence);
+    /// <summary>
+    /// The finding's confidence line, <c>cloud confidence 0.22 ▼0.61 · highly unreliable · 35 d</c>;
+    /// for a score Cloud withheld, the evidence it lacks; null when there is no score to speak of
+    /// (Amendment 3O).
+    /// </summary>
+    /// <remarks>
+    /// The window stays with the score and the ESS with the evidence level (contract §4.4, §4.8).
+    /// The category is Cloud's own word for the score, printed as sent: nothing here turns a number
+    /// into a verdict (contract R6).
+    /// </remarks>
+    public string? ConfidenceLine(CloudConfidenceDto? confidence)
+    {
+        if (confidence is null)
+            return null;
+
+        if (confidence.State == "insufficient-evidence")
+            return EvidenceToken(confidence) is { } evidence ? "cloud " + evidence : null;
+
+        if (confidence.Score is not { } score)
+            return null;
+
+        var parts = new List<string> { $"cloud confidence {Score(score)}{Delta(confidence.Delta)}" };
+
+        if (confidence.Category is { } category)
+            parts.Add(Words(category));
+
+        if (Window(confidence.Window) is { } window)
+            parts.Add(window);
+
+        if (confidence.Freshness == "pending")
+            parts.Add("pending");
+
+        return string.Join(Joint, parts);
     }
 
     /// <summary>
@@ -277,8 +282,8 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         List<(string Label, string? Value)> pairs =
         [
-            (prefix + "verdict", verdict),
             (prefix + "confidence", ConfidencePair(digest.Confidence)),
+            (prefix + "verdict", verdict),
             (prefix + "evidence", EvidencePair(digest.Confidence)),
             (prefix + "flaky", FlakyPair(digest.Flaky)),
             (prefix + "canonical", CanonicalPair(digest)),
