@@ -359,9 +359,10 @@ stopped; exit 14). There is no `state_mismatch`: a callback with the wrong `stat
 under `--json` writes one, including `configuration`. Its `message` is scrubbed (§15.2) like the
 stderr text.
 
-The workspace **name** is not in any token claim and not returned by the token endpoint. The
-success block shows the workspace id only (it is in the token and costs nothing); there is no
-name lookup and no extra request during `login` (Q-2, answered).
+The workspace **name** comes from the access token's `workspace_name` claim (cloud-data-in-cli
+Amendment 4A) and is stored with the record; it is not returned by the token endpoint. The
+success block still shows the workspace id only; there is no name lookup and no extra request
+during `login` (Q-2, answered).
 
 ### 3.3 `xping logout`
 
@@ -705,6 +706,7 @@ One `CredentialRecord` per Cloud URL, serialized with `IXpingSerializer` (camelC
   "accessToken": "<jwt or null>",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z",
   "workspaceId": "01J8...",
+  "workspaceName": "Acme",
   "sid": "01J8...",
   "sub": "01J8...",
   "email": "jane@example.com",
@@ -715,7 +717,7 @@ One `CredentialRecord` per Cloud URL, serialized with `IXpingSerializer` (camelC
 
 `accessTokenExpiresAt` is `now + expires_in` computed by the CLI from the token response, not
 read from `exp`, so clock skew between machine and server is applied consistently. `workspaceId`,
-`sid`, `sub` and `email` are copied from the decoded (unverified) access token payload at store
+`workspaceName`, `sid`, `sub` and `email` are copied from the decoded (unverified) access token payload at store
 time, for display only (contract §6.1). `code_verifier`, `state`, the authorization code and the
 device code are never part of the record (contract §10.4).
 

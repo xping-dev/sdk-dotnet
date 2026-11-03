@@ -59,7 +59,7 @@ public sealed class CloudEnricherTests : IDisposable
 
         // Contract R5: the object is always there, so an agent never has to guess.
         Assert.Equal(
-            new CloudContextDto("not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, 0, 0, [], []),
+            new CloudContextDto("not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, null, 0, 0, [], []),
             result.Envelope.Context!.Cloud! with { Projects = [], Sessions = [] });
         Assert.Equal(envelope.Findings, result.Envelope.Findings);
         Assert.Empty(result.Hints);
@@ -344,7 +344,7 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(("Cloud data unavailable: your sign-in is no longer valid. Run xping login.", true), (hint.Text, hint.Always));
 
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
-        Assert.Equal(("api-key", "ok", (string?)null, 150), (cloud.Credential, cloud.Status, cloud.WorkspaceId, cloud.EnrichedTests));
+        Assert.Equal(("api-key", "ok", (string?)null, (string?)null, 150), (cloud.Credential, cloud.Status, cloud.WorkspaceId, cloud.Workspace, cloud.EnrichedTests));
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(("login", "login-required", "none"), (cloud.Credential, cloud.Status, cloud.Reason));
         Assert.Equal("login-required", cloud.Projects[0].Status);
         Assert.Equal("Cloud data unavailable: your sign-in is no longer valid. Run xping login.", Assert.Single(result.Hints).Text);
-        Assert.Equal(CredentialTestData.Record().WorkspaceId, cloud.WorkspaceId);
+        Assert.Equal((CredentialTestData.Record().WorkspaceId, "Acme"), (cloud.WorkspaceId, cloud.Workspace));
         Assert.True(result.Hints[0].Always);
     }
 
@@ -529,6 +529,65 @@ public sealed class CloudEnricherTests : IDisposable
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
         Assert.Equal(("no-project", "not-found"), (cloud.Status, cloud.Reason));
         Assert.Equal(key, cloud.Projects[0].ProjectKey);
+    }
+
+    [Fact]
+    public async Task ASignedInKeyThatNamesNoProjectSaysWhichWorkspaceItIsNotIn()
+    {
+        SignIn();
+        _factory.Client.ProjectMissing = true;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"), projectFlag: "billing");
+
+        Assert.Equal(
+            "Cloud data unavailable: project billing (from --project) is not in workspace Acme. Check the key, or run xping login to choose another workspace.",
+            Assert.Single(result.Hints).Text);
+        Assert.Equal("Acme", result.Envelope.Context!.Cloud!.Workspace);
+    }
+
+    [Fact]
+    public async Task ASignedInAssemblyNoSourceBindsNamesTheWorkspace()
+    {
+        _environment.Remove("XPING_PROJECTID");
+        SignIn();
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+
+        EnrichmentResult result = await EnrichAsync(envelope);
+
+        Assert.Equal(
+            $"Cloud data unavailable: no matching Cloud project for {assembly} in workspace Acme. Use --project <key>.",
+            Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task ASignedInKeyRecordedWithTheRunsKeepsThePlainHint()
+    {
+        _environment.Remove("XPING_PROJECTID");
+        SignIn();
+        _factory.Client.ProjectMissing = true;
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+
+        EnrichmentResult result = await EnrichAsync(envelope, pins: new Dictionary<string, string> { [assembly] = "pinned" });
+
+        // The user never typed the key, so nothing tells them to sign in to another workspace for it.
+        Assert.Equal(
+            "Cloud data unavailable: no Cloud project 'pinned' (from the project id recorded with the runs). Check the key, or pass --project <key>.",
+            Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task ASignInWithoutAWorkspaceNameKeepsTheKeyHint()
+    {
+        _keychain.Add(CredentialTestData.Record() with { WorkspaceName = null });
+        _factory.Client.ProjectMissing = true;
+
+        EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"), projectFlag: "billing");
+
+        Assert.Equal(
+            "Cloud data unavailable: no Cloud project 'billing' (from --project). Check the key, or pass --project <key>.",
+            Assert.Single(result.Hints).Text);
     }
 
     [Fact]
@@ -750,7 +809,7 @@ public sealed class CloudEnricherTests : IDisposable
 
         CloudContextDto cloud = result.Envelope.Context!.Cloud!;
         Assert.Equal(("no-project", "not-found"), (cloud.Status, cloud.Reason));
-        Assert.Equal($"Cloud data unavailable: no matching Cloud project for {assembly}. Use --project <key>.", Assert.Single(result.Hints).Text);
+        Assert.Equal($"Cloud data unavailable: no matching Cloud project for {assembly} in workspace Acme. Use --project <key>.", Assert.Single(result.Hints).Text);
     }
 
     [Fact]

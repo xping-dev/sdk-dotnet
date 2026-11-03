@@ -39,6 +39,8 @@ namespace Xping.Cli.Tests.Cloud;
 internal sealed partial class FakeCloud : IAsyncDisposable
 {
     public const string WorkspaceId = "01J8K2V6XN7Y0Q4R5S6T7V8V9X";
+
+    public const string WorkspaceName = "Acme Payments";
     public const string UserId = "01J8K2V6XN7Y0Q4R5S6T7V8V9W";
     public const string Email = "jane@example.com";
 
@@ -550,6 +552,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             ["aud"] = "xping-datagateway",
             ["sub"] = UserId,
             ["workspace_id"] = WorkspaceId,
+            ["workspace_name"] = WorkspaceName,
             ["sid"] = session.Id,
             ["email"] = Email,
             ["scope"] = "user:read",

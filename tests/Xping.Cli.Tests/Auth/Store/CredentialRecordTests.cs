@@ -21,7 +21,7 @@ public sealed class CredentialRecordTests
         Assert.Equal(
             [
                 "schemaVersion", "cloudUrl", "refreshToken", "accessToken", "accessTokenExpiresAt", "workspaceId",
-                "sid", "sub", "email", "dataGatewayUri", "storedAt"
+                "workspaceName", "sid", "sub", "email", "dataGatewayUri", "storedAt"
             ],
             names);
         Assert.Equal(1, json.RootElement.GetProperty("schemaVersion").GetInt32());

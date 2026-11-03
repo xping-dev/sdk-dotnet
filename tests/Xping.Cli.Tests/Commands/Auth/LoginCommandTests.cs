@@ -46,6 +46,7 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(FakeCloud.Email, record.Email);
         Assert.Equal(FakeCloud.UserId, record.Sub);
         Assert.Equal(FakeCloud.WorkspaceId, record.WorkspaceId);
+        Assert.Equal(FakeCloud.WorkspaceName, record.WorkspaceName);
         Assert.NotNull(record.Sid);
         Assert.NotNull(record.AccessToken);
         Assert.Equal(host.Time.GetUtcNow() + TimeSpan.FromMinutes(15), record.AccessTokenExpiresAt);

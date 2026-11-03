@@ -138,7 +138,7 @@ internal sealed class CloudEnricher(
         {
             // A defect here costs the Cloud data, and the agent still finds context.cloud.
             logger.LogInformation(ex, "Cloud enrichment failed: {Message}", ex.Message);
-            var failed = new CloudContextDto("unavailable", "none", 0, null, null, null, null, null, null, 0, 0, [], []);
+            var failed = new CloudContextDto("unavailable", "none", 0, null, null, null, null, null, null, null, 0, 0, [], []);
             // Only the context is set: the defect may be in the stitcher, and running it again here
             // would throw past the one place that keeps Cloud from breaking the local report.
             return new EnrichmentResult(
@@ -183,7 +183,7 @@ internal sealed class CloudEnricher(
         catch (OperationCanceledException) when (budget.CredentialExpired && !cancellationToken.IsCancellationRequested)
         {
             var timedOut = new CloudContextDto(
-                "unavailable", "credential-timeout", Milliseconds(budget.Elapsed), cloudUrl, null, null, null, null, null, 0, 0, [], []);
+                "unavailable", "credential-timeout", Milliseconds(budget.Elapsed), cloudUrl, null, null, null, null, null, null, 0, 0, [], []);
 
             return new EnrichmentResult(
                 Unchanged(envelope, timedOut, "unavailable"),
@@ -252,6 +252,7 @@ internal sealed class CloudEnricher(
             cloudUrl,
             CredentialToken(credential),
             WorkspaceOf(credential),
+            WorkspaceNameOf(credential),
             ledger.Answers.IsEmpty ? null : ledger.Answers.Values.Max(a => a.Digest.FetchedAt),
             ledger.SignatureAlgorithm,
             ledger.RetentionDays,
@@ -312,7 +313,7 @@ internal sealed class CloudEnricher(
                     {
                         // Listed under its name just now, and still not readable: as good as absent.
                         foreach (string assembly in gone.Assemblies)
-                            ledger.Rows[assembly] = new Row(gone.Binding, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                            ledger.Rows[assembly] = new Row(gone.Binding, NoMatch(credential, assembly));
                     }
                 }
 
@@ -365,7 +366,7 @@ internal sealed class CloudEnricher(
 
             if (binding is null)
             {
-                ledger.Rows[assembly.Key] = new Row(null, new Failure("not-found", $"no matching Cloud project for {assembly.Key}. Use --project <key>."));
+                ledger.Rows[assembly.Key] = new Row(null, NoMatch(credential, assembly.Key));
                 continue;
             }
 
@@ -474,7 +475,7 @@ internal sealed class CloudEnricher(
                 foreach (string assembly in project.Assemblies)
                 {
                     ledger.Rows[assembly] = new Row(
-                        stale, new Failure("not-found", $"no Cloud project '{stale.Key}' (from {stale.Origin}). Check the key, or pass --project <key>."));
+                        stale, NoProjectUnder(credential, stale));
                 }
 
                 continue;
@@ -497,7 +498,7 @@ internal sealed class CloudEnricher(
 
                 if (fresh is null)
                 {
-                    ledger.Rows[assembly] = new Row(null, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                    ledger.Rows[assembly] = new Row(null, NoMatch(credential, assembly));
                     continue;
                 }
 
@@ -704,6 +705,7 @@ internal sealed class CloudEnricher(
             cloudUrl,
             credential is null ? null : CredentialToken(credential),
             credential is null ? null : WorkspaceOf(credential),
+            credential is null ? null : WorkspaceNameOf(credential),
             null,
             null,
             null,
@@ -718,6 +720,25 @@ internal sealed class CloudEnricher(
         credential.Source == CredentialSource.StoredLogin ? "login" : "api-key";
 
     private static string? WorkspaceOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceId;
+
+    private static string? WorkspaceNameOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceName;
+
+    /// <summary>No project in the workspace carries the assembly's name.</summary>
+    private static Failure NoMatch(ResolvedCredential credential, string assembly) =>
+        new("not-found", WorkspaceNameOf(credential) is { } workspace
+            ? $"no matching Cloud project for {assembly} in workspace {workspace}. Use --project <key>."
+            : $"no matching Cloud project for {assembly}. Use --project <key>.");
+
+    /// <summary>
+    /// A key names no project. A key the user configured, under a sign-in, may belong to another
+    /// workspace, so its hint is contract §9.5's, keeping where the key came from so a typo is
+    /// still fixed at its source (Amendment 4B). It never says whether the project exists
+    /// elsewhere. A key recorded with the runs was never typed, so it keeps the plain hint.
+    /// </summary>
+    private static Failure NoProjectUnder(ResolvedCredential credential, ProjectBinding binding) =>
+        new("not-found", !binding.IsSessionPin && WorkspaceNameOf(credential) is { } workspace
+            ? $"project {binding.Key} (from {binding.Origin}) is not in workspace {workspace}. Check the key, or run xping login to choose another workspace."
+            : $"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
 
     /// <summary>
     /// The <c>--verbose</c> line naming the credential in use (§8.2). Never the key or a token.

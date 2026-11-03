@@ -18,6 +18,9 @@ internal sealed record ProjectBinding(string Key, string Source, string Origin, 
 {
     /// <summary>The binding came from matching the assembly name against the project list.</summary>
     public bool IsNameMatch => Source == ProjectResolver.NameMatch;
+
+    /// <summary>The key was recorded with the runs, not typed by the user.</summary>
+    public bool IsSessionPin => Source == ProjectResolver.Session;
 }
 
 /// <summary>
@@ -47,6 +50,9 @@ internal sealed class ProjectResolver(ProjectCache cache)
     /// <summary>The <see cref="ProjectBinding.Source"/> of a match by display name.</summary>
     public const string NameMatch = "name-match";
 
+    /// <summary>The <see cref="ProjectBinding.Source"/> of a project id recorded with the runs.</summary>
+    public const string Session = "session";
+
     private const int PageSize = 50;
     private const string ListOrigin = "the Cloud project named after the assembly";
 
@@ -72,7 +78,7 @@ internal sealed class ProjectResolver(ProjectCache cache)
             return new ProjectBinding(configured.Value, SourceOf(configured.Source), configured.Origin);
 
         if (lookup.SessionPins.TryGetValue(assembly, out string? pin))
-            return new ProjectBinding(pin, "session", "the project id recorded with the runs");
+            return new ProjectBinding(pin, Session, "the project id recorded with the runs");
 
         if (lookup.WorkspaceId is { } workspaceId && cache.Read(lookup.CloudUrl, workspaceId, assembly) is { } cached)
             return new ProjectBinding(cached.Id, NameMatch, ListOrigin, FromCache: true);

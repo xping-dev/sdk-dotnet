@@ -86,6 +86,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal("login", cloud.GetProperty("credential").GetString());
         Assert.Equal("ok", cloud.GetProperty("status").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, cloud.GetProperty("workspaceId").GetString());
+        Assert.Equal(FakeCloud.WorkspaceName, cloud.GetProperty("workspace").GetString());
         Assert.Equal(Project, ProjectRow(json).GetProperty("projectKey").GetString());
         Assert.Equal("name-match", ProjectRow(json).GetProperty("source").GetString());
 
@@ -322,7 +323,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     [Fact]
     public void Report_OtherAssembly_NoProject()
     {
-        // One report covers one assembly (Amendment 4A): the bound one reads Cloud, and the other,
+        // One report covers one assembly (Amendment 5A): the bound one reads Cloud, and the other,
         // which no project is named after, says so once and keeps its local labels.
         Seed(assembly: "Other.Tests");
         Seed(startOrdinal: 8);
@@ -339,7 +340,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         string[] lines = ReportText.Lines(text.Output);
         Assert.Contains(
-            "cloud: no project in this workspace for Other.Tests - pass --project <key>",
+            $"cloud: no project in workspace {FakeCloud.WorkspaceName} for Other.Tests - pass --project <key>",
             Unwrapped(lines.SkipWhile(l => !l.StartsWith("cloud: ", StringComparison.Ordinal))),
             StringComparison.Ordinal);
         Assert.DoesNotContain(lines, l => l.StartsWith("    cloud: ", StringComparison.Ordinal));
@@ -585,7 +586,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult result = Report("--json");
 
         Assert.Equal(
-            "Cloud data unavailable: no matching Cloud project for Unknown.Tests. Use --project <key>.",
+            $"Cloud data unavailable: no matching Cloud project for Unknown.Tests in workspace {FakeCloud.WorkspaceName}. Use --project <key>.",
             Assert.Single(ReportText.Lines(result.Error), l => l.Length > 0));
         Assert.Equal("no-project", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }

@@ -135,6 +135,7 @@ public sealed class BearerTokenHandlerTests : IAsyncDisposable
             access,
             _host.Time.GetUtcNow() + TimeSpan.FromMinutes(15),
             FakeCloud.WorkspaceId,
+            FakeCloud.WorkspaceName,
             "01J8SESSION",
             FakeCloud.UserId,
             FakeCloud.Email,

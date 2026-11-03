@@ -356,11 +356,15 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     {
         const string fix = "pass --project <key>";
 
+        // Without a name (an API key, or a token issued before the claim) the line says "this
+        // workspace" (Amendment 3B); with one it names it (Amendment 4B, contract §7.4).
+        string workspace = context.Workspace is { } name ? "workspace " + Recorded(name) : "this workspace";
+
         return context.Projects.FirstOrDefault(p => p.Status == "no-project") switch
         {
-            { ProjectKey: { } key } => $"not in this workspace: project {Recorded(key)}{Joint}{fix}",
-            { } row => $"no project in this workspace for {Recorded(row.Assembly)}{Joint}{fix}",
-            null => $"no project in this workspace{Joint}{fix}"
+            { ProjectKey: { } key } => $"not in {workspace}: project {Recorded(key)}{Joint}{fix}",
+            { } row => $"no project in {workspace} for {Recorded(row.Assembly)}{Joint}{fix}",
+            null => $"no project in {workspace}{Joint}{fix}"
         };
     }
 

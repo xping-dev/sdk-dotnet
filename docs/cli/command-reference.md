@@ -933,7 +933,9 @@ not, the line is `Cloud data partial: 9 of 14 tests answered (timeout).`, with t
 |---|---|
 | `could not reach https://app.xping.io (timeout). Showing local results only.` | Nothing; the next report tries again |
 | `no matching Cloud project for Checkout.Tests. Use --project <key>.` | Pass `--project`, or set `XPING_PROJECTID` |
+| `no matching Cloud project for Checkout.Tests in workspace Acme. Use --project <key>.` | The same, when you are signed in |
 | `no Cloud project 'checkout' (from XPING_PROJECTID). Check the key, or pass --project <key>.` | Fix the project key |
+| `project checkout (from XPING_PROJECTID) is not in workspace Acme. Check the key, or run xping login to choose another workspace.` | Fix the key, or sign in to the workspace that has the project |
 | ``This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.`` | The key is upload-only; sign in, or use a key with read scope |
 | ``This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.`` | Sign in; the workspace's plan does not allow API keys to read |
 | `Xping Cloud is rate limiting requests; try again in a minute.` | Wait |
@@ -1005,7 +1007,8 @@ counted over every failed attempt in the window.
 credential or nothing to ask. Then `reason`: `none`, `credential-timeout`, `budget`, `timeout`,
 `network`, `server`, `rate-limited`, `invalid-response`, `not-found`, or `signature-algorithm` when
 Cloud matches failures with a different hash than this CLI. It also carries the `credential`
-(`login` or `api-key`), `elapsedMs`, `fetchedAt`, how many tests were asked about
+(`login` or `api-key`), the signed-in `workspaceId` and its `workspace` name (both `null` for an
+API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fetchedAt`, how many tests were asked about
 (`requestedTests`) and answered (`enrichedTests`), one row per assembly in `projects` with its
 `projectKey`, `source` (`flag`, `env`, `config`, `session` or `name-match`), `status` and `reason`,
 and in `sessions` whether Cloud has received and scored this machine's newest runs.
@@ -1041,7 +1044,7 @@ are not each other and `tests` is what they add up to:
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
     "cloud": {
       "status": "ok", "reason": "none", "elapsedMs": 412,
-      "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J8…",
+      "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J8…", "workspace": "Acme",
       "fetchedAt": "2026-08-19T16:30:00+00:00", "signatureAlgorithm": "emh-1", "retentionDays": 365,
       "requestedTests": 4, "enrichedTests": 4,
       "projects": [
