@@ -81,6 +81,15 @@ Decided by the owner on 2026-11-03, committed before the code that depends on th
 | R | `cloud confidence …`, `cloud evidence …`, `cloud name differs: …`, the reason line and the latest-run line as `cloud  …` | Every line that says where its value came from starts `cloud:` or `local:`, so a reader reads the source the same way on every line: `cloud: confidence 0.22 ▼0.61 · …`, `cloud: evidence sparse (…)`, `cloud: known as {testName}`, `cloud: unavailable (timeout) · …` above the fence, `cloud: confidence 0.22 (35 d) · broken since …` on a latest-run row. Labels (`cloud broken`, `local flaky`), the header token and the `cloud …` pair labels are names, not sources, and keep no colon | §7.2, §7.5, §7.6, §10 |
 | S | §7.2: the verdict takes the label of every kind but contract L4's seven | `DurationRegression`, `RetryDeepening`, `ParallelSensitive` and `TimeSensitive` keep their local label too, with Cloud's flaky state on the line under the name. They describe how a test behaves on this machine (time, retries, concurrency, clock), not whether it passes, and §12 already calls duration regression a local observation: a `cloud passing` label over "slower" answers a question the row did not ask. Only `Flaky` and `AlwaysFailing`, the two kinds a verdict speaks to, take the verdict's label. **Contract L4 lists seven observation kinds; it needs the matching amendment in the dashboard repo** | §7.2 |
 
+### Amendment 4 — from phase 4
+
+Phase 4 read §17.2 against `ReportCommand` and found the conflict below. Decided by the owner on
+2026-11-03, committed before the tests that depend on it.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §17.2: `Report_TwoAssemblies_OneProjectMissing` | A report covers one assembly: the store reads each session down to the chosen assembly's executions (`SessionAssemblies`), so one `xping report` never sends the enricher two. The two-row case stays a unit test (`CloudEnricherTests.TwoAssembliesOneUnboundIsPartialWithARowEach`). The end-to-end test is `Report_OtherAssembly_NoProject`: a store with two assemblies, one bound to a project; the report on the bound one is `ok`, and the report with `--assembly` on the other is `no-project` with its §7.6 reason line | §17.2 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -771,7 +780,7 @@ end to end against it:
 
 `Report_Digest_Ok`, `Report_Digest_PartialBatch`, `Report_Digest_Timeout_LocalIntact`,
 `Report_Digest_RateLimited_NoWait`, `Report_NoCredential_NotAttemptedObject`,
-`Report_ApiKey_Forbidden_Hint`, `Report_TwoAssemblies_OneProjectMissing`,
+`Report_ApiKey_Forbidden_Hint`, `Report_OtherAssembly_NoProject` (Amendment 4A),
 `ReportTest_CloudBlock_And_Runs`, `ReportTest_Runs_SkippedOnBudget`, `Report_Banner_OnStderr`.
 
 ### 17.3 Goldens
