@@ -30,6 +30,7 @@ internal sealed partial class FakeCloud
     private readonly Dictionary<string, JsonObject> _digestSessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ApiKeyScript> _apiKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _bodies = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Task> _holds = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets or sets whether every access token is refused as invalid, including ones issued later.
@@ -47,10 +48,18 @@ internal sealed partial class FakeCloud
     public bool RunsHaveMore { get; set; }
 
     /// <summary>
-    /// Gets or sets a task every DataGateway answer waits for after the request was recorded, as a
-    /// slow Cloud would.
+    /// Makes every answer to <paramref name="path"/> wait for <paramref name="until"/> after the
+    /// request was recorded, as a slow Cloud would.
     /// </summary>
-    public Task? HoldGatewayResponses { get; set; }
+    /// <remarks>
+    /// Per path, and taken in the same lock that records the request: a test that sees the request
+    /// and moves on to hold the next path cannot leave this one waiting on the wrong gate.
+    /// </remarks>
+    public void HoldGateway(string path, Task until)
+    {
+        lock (_gate)
+            _holds[path] = until;
+    }
 
     /// <summary>
     /// Gets the DataGateway base URI the discovery document announces.

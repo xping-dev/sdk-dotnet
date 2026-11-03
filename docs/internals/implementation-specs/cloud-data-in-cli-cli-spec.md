@@ -93,6 +93,15 @@ Contract §7.4 puts the workspace **name** in `context.cloud`, and §9.5 names i
 | A | §6.2: `context.cloud` has `workspaceId` and no name | `workspace` (string or null) follows `workspaceId`. Its source is a new access-token claim, `workspace_name`, issued by the Portal next to `workspace_id`. `AccessTokenClaims` reads it, and `CredentialRecord.WorkspaceName` stores it at sign-in and on every refresh, so a renamed workspace shows its new name within one token lifetime. It is null for an API key (no token) and for a token without the claim. A claim was chosen over a digest field because `no-project` is exactly the case where the digest answers 404 with no body; and over a workspace endpoint because it costs no request inside the 4 s budget. Schema stays `1.28`: the field lands before 1.28 leaves the feature branch. **Contract §6.1's claim list needs `workspace_name`, and the Portal needs to issue it: a follow-up in the dashboard repo** | §6.2, cli-auth §3.2, §7.2 |
 | B | §7.6 and Amendment 3B: `not in this workspace: project {key}` | With a name the reason line reads `cloud: not in workspace {name}: project {key} · pass --project <key>`, `cloud: no project in workspace {name} for {assembly} · …`, or `cloud: no project in workspace {name} · …` with no row. The hint for a key from the flag, the environment or the settings that names no project is contract §9.5's, with where the key came from so a typo is still fixed at its source: `project {key} (from {origin}) is not in workspace {name}. Check the key, or run xping login to choose another workspace.` It never says whether the project exists elsewhere. A key recorded with the runs (`source: session`) was never typed and keeps the plain `no Cloud project '{key}' (from …)` hint. The name-match hint gains the name: `no matching Cloud project for {assembly} in workspace {name}. Use --project <key>.` Without a name (an API key, or a token without the claim; a blank claim counts as none), Amendment 3B's line and today's hints stand. The name passes through `TerminalText.Printable` like every Cloud value | §7.6, §11 |
 
+### Amendment 5 — from phase 4
+
+Phase 4 read §17.2 against `ReportCommand` and found the conflict below. Decided by the owner on
+2026-11-03, committed before the tests that depend on it.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §17.2: `Report_TwoAssemblies_OneProjectMissing` | A report covers one assembly: the store reads each session down to the chosen assembly's executions (`SessionAssemblies`), so one `xping report` never sends the enricher two. The two-row case stays a unit test (`CloudEnricherTests.TwoAssembliesOneUnboundIsPartialWithARowEach`). The end-to-end test is `Report_OtherAssembly_NoProject`: a store with two assemblies, one bound to a project; the report on the bound one is `ok`, and the report with `--assembly` on the other is `no-project` with its §7.6 reason line | §17.2 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -785,7 +794,7 @@ end to end against it:
 
 `Report_Digest_Ok`, `Report_Digest_PartialBatch`, `Report_Digest_Timeout_LocalIntact`,
 `Report_Digest_RateLimited_NoWait`, `Report_NoCredential_NotAttemptedObject`,
-`Report_ApiKey_Forbidden_Hint`, `Report_TwoAssemblies_OneProjectMissing`,
+`Report_ApiKey_Forbidden_Hint`, `Report_OtherAssembly_NoProject` (Amendment 5A),
 `ReportTest_CloudBlock_And_Runs`, `ReportTest_Runs_SkippedOnBudget`, `Report_Banner_OnStderr`.
 
 ### 17.3 Goldens
