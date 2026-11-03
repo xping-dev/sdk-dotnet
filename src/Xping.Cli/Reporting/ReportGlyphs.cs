@@ -30,6 +30,11 @@ internal sealed class ReportGlyphs
         Arrow = "→",            // →
         HistoryPass = '●',      // ●
         HistoryFail = '○',      // ○
+        NotEqual = "≠",         // ≠
+        Down = "▼",             // ▼
+        Up = "▲",               // ▲
+        Dash = "—",             // —
+        Ellipsis = "…",         // …
         Charset = TerminalCharset.Unicode
     };
 
@@ -46,6 +51,11 @@ internal sealed class ReportGlyphs
         Arrow = "->",
         HistoryPass = '#',
         HistoryFail = '.',
+        NotEqual = "!=",
+        Down = "v",
+        Up = "^",
+        Dash = "-",
+        Ellipsis = "...",
         Charset = TerminalCharset.Ascii
     };
 
@@ -78,6 +88,21 @@ internal sealed class ReportGlyphs
 
     /// <summary>Gets the sparkline character for a failing run.</summary>
     public char HistoryFail { get; private init; } = '.';
+
+    /// <summary>Gets the marker between a local and a Cloud label that disagree.</summary>
+    public string NotEqual { get; private init; } = "!=";
+
+    /// <summary>Gets the marker for a score that fell.</summary>
+    public string Down { get; private init; } = "v";
+
+    /// <summary>Gets the marker for a score that rose.</summary>
+    public string Up { get; private init; } = "^";
+
+    /// <summary>Gets what stands in an empty column.</summary>
+    public string Dash { get; private init; } = "-";
+
+    /// <summary>Gets what ends a shortened value.</summary>
+    public string Ellipsis { get; private init; } = "...";
 
     /// <summary>Gets what recorded text printed beside these glyphs may keep.</summary>
     public TerminalCharset Charset { get; private init; } = TerminalCharset.Ascii;

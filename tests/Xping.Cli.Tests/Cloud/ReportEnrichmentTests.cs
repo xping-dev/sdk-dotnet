@@ -72,8 +72,10 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         Assert.Equal(0, text.Code);
         Assert.EndsWith(" | cloud", ReportText.Lines(text.Output).First(l => l.Length > 0), StringComparison.Ordinal);
-        Assert.Contains("evidence low | confidence 0.62 | ", text.Output, StringComparison.Ordinal);
-        Assert.Contains("evidence moderate | confidence 0.94 | ", text.Output, StringComparison.Ordinal);
+        string[] lines = ReportText.Lines(text.Output);
+        Assert.Contains(lines, l => l.EndsWith("  cloud known-flaky", StringComparison.Ordinal));
+        Assert.Contains("    local: flaky in 8 runs here", lines);
+        Assert.Contains(lines, l => l.EndsWith("  local stopped running", StringComparison.Ordinal));
 
         JsonElement cloud = json.GetProperty("context").GetProperty("cloud");
         Assert.Equal("login", cloud.GetProperty("credential").GetString());
@@ -157,8 +159,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal(0, _host.Run("logout").Code);
         CliResult local = Report();
 
-        Assert.DoesNotContain("xping.io/start", enriched.Output, StringComparison.Ordinal);
-        Assert.Contains("xping.io/start", local.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("xping.io/start", enriched.Error, StringComparison.Ordinal);
+        Assert.Contains("xping.io/start", local.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("xping.io/start", local.Output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -220,8 +223,10 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
         CliResult down = await _host.DriveAsync(_host.Start(ReportArgs()));
 
+        // The local report is intact; the one line added says why Cloud is missing from it (§7.6).
         Assert.Equal(local.Code, down.Code);
-        Assert.Equal(local.Output, down.Output);
+        Assert.Equal(local.Output, WithoutReasonLine(down.Output));
+        Assert.Contains("cloud  unavailable (server)", down.Output, StringComparison.Ordinal);
         string hint = Assert.Single(ReportText.Lines(down.Error), l => l.Length > 0);
         Assert.StartsWith("Cloud data unavailable: could not reach ", hint, StringComparison.Ordinal);
         Assert.EndsWith(". Showing local results only.", hint, StringComparison.Ordinal);
@@ -336,7 +341,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult result = Report();
 
         Assert.Equal(local.Code, result.Code);
-        Assert.Equal(local.Output, result.Output);
+        Assert.Equal(local.Output, WithoutReasonLine(result.Output));
         string hint = Assert.Single(ReportText.Lines(result.Error), l => l.Length > 0);
         Assert.StartsWith("Cloud data unavailable: ", hint, StringComparison.Ordinal);
         Assert.Contains("xping login", hint, StringComparison.Ordinal);
@@ -439,6 +444,13 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
     private static string? Credential(JsonElement report) =>
         report.GetProperty("context").GetProperty("cloud").GetProperty("credential").GetString();
+
+    // What a Cloud that did not answer adds to the text: the reason line (§7.6), and "local" in front
+    // of each kind, which says whose word it is (Amendment 3E). Everything else is the local report.
+    private static string WithoutReasonLine(string output) =>
+        string.Join('\n', output.Split('\n')
+            .Where(line => !line.Contains("cloud  ", StringComparison.Ordinal))
+            .Select(line => line.Replace("  local ", "  ", StringComparison.Ordinal)));
 
     private static JsonElement Finding(JsonElement report, string fingerprint) =>
         report.GetProperty("findings").EnumerateArray()

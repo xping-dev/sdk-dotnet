@@ -143,6 +143,69 @@ public sealed class HostileEnvelopeTests
     }
 
     /// <summary>
+    /// A digest with values this build does not know and blocks Cloud left out renders, and prints
+    /// the unknown values as sent (contract §4, F4).
+    /// </summary>
+    /// <remarks>
+    /// Every block null, every enum one no vocabulary maps, a signature and a run with nothing but
+    /// nulls: the shapes a newer Cloud, or a broken one, can send and the CLI must survive.
+    /// </remarks>
+    [Theory]
+    [InlineData("cloud-broken")]
+    [InlineData("cloud-partial")]
+    [InlineData("detail-cloud")]
+    [InlineData("history-cloud")]
+    public void ACloudLayerWithUnknownValuesAndMissingBlocksRenders(string fixture)
+    {
+        CloudSignatureDto empty = new(null, null, null, null, null, null, null, null, null, null, [], null);
+        CloudDigestDto sparse = new(
+            "ok", DateTimeOffset.UnixEpoch, true, "renamed", "regressing", null, null, null,
+            new CloudConfidenceDto("recalibrating", null, null, null, null, null, null, null, null, null, null, null,
+                new CloudWindowDto("weeks", null, null, null), null, null, "stale"),
+            new CloudFlakyDto("haunted", null, null, null, null, null, null, null),
+            new CloudCanonicalDto(null, null, null, null, null, null, null),
+            new CloudTransitionDto(null, null, null, null),
+            [empty]);
+
+        ReportEnvelope envelope = ReportFixtures.Get(fixture);
+        envelope = envelope with
+        {
+            Context = envelope.Context! with { Cloud = envelope.Context.Cloud! with { Status = "degraded", Reason = "solar-flare" } },
+            Findings =
+            [
+                .. envelope.Findings.Select(f => f with
+                {
+                    Cloud = f.Cloud is null ? null : sparse,
+                    FailureModes = [.. f.FailureModes.Select(m => m with { Cloud = new CloudMatchDto("resembles", null) })]
+                })
+            ],
+            LatestRun = envelope.LatestRun is { } latest
+                ? latest with { Failures = [.. latest.Failures.Select(f => f with { Cloud = new CloudFailureDto(sparse, "resembles", empty) })] }
+                : null,
+            Test = envelope.Test is { } test
+                ? test with
+                {
+                    Cloud = new CloudTestHistoryDto(
+                        sparse,
+                        [new CloudRunDto(null, null, "quarantined", null, null, null, null, null, null, null, null, null, null, null)],
+                        "ok",
+                        null,
+                        false)
+                }
+                : null
+        };
+
+        foreach ((string mode, ReportGlyphs glyphs) in Modes)
+        {
+            string report = Render(envelope, Drawn(glyphs, color: false));
+
+            AssertSafe(report, $"the {mode} rendering of {fixture} with a sparse digest");
+            Assert.Contains("cloud  degraded (solar-flare)", report, StringComparison.Ordinal);
+            Assert.Contains("regressing", report, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// The rewrite reaches the output at all, so the test above is not passing on nothing.
     /// </summary>
     [Fact]

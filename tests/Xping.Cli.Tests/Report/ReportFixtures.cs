@@ -32,7 +32,7 @@ namespace Xping.Cli.Tests.Report;
 /// have produced.
 /// </para>
 /// </remarks>
-internal static class ReportFixtures
+internal static partial class ReportFixtures
 {
     /// <summary>Gets the keys the golden sweep and the width and charset sweeps enumerate.</summary>
     /// <remarks>
@@ -88,6 +88,13 @@ internal static class ReportFixtures
         "history-store",
         "history-repro",
         "history-failure-modes",
+        "cloud-broken",
+        "cloud-known-flaky",
+        "cloud-disagree",
+        "cloud-partial",
+        "cloud-login-required",
+        "detail-cloud",
+        "history-cloud",
         "hostile-text",
         "hostile-text-detail",
         "hostile-text-history"
@@ -298,6 +305,13 @@ internal static class ReportFixtures
         "history-store" => HistoryFromStore(),
         "history-repro" => HistoryRepro(),
         "history-failure-modes" => HistoryFailureModes(),
+        "cloud-broken" => CloudBroken(),
+        "cloud-known-flaky" => CloudKnownFlaky(),
+        "cloud-disagree" => CloudDisagree(),
+        "cloud-partial" => CloudPartial(),
+        "cloud-login-required" => CloudLoginRequired(),
+        "detail-cloud" => DetailCloud(),
+        "history-cloud" => HistoryCloud(),
         "hostile-text" => HostileText(),
         "hostile-text-detail" => HostileTextDetail(),
         "hostile-text-history" => HostileTextHistory(),

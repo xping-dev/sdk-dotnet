@@ -1,0 +1,66 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
+412 tests · 411 healthy · 1 flagged
+
+```
+FINDING                                                       row 1 of 1
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   cloud broken
+    CheckoutTests.Completes
+    local: flaky in 20 runs here
+    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
+    evidence moderate | -env-cluster | f_89134598 | ...eckoutTests.cs:42
+
+    test      MyApp.Tests.CheckoutTests.Completes
+    assembly  MyApp.Tests
+    source    tests/MyApp.Tests/CheckoutTests.cs:42
+
+    failed            7 of 20 executions (35%)
+    runs affected     5 of 20
+    failure modes     3
+    repro             run 11 times: at 5 of 20 runs failing (25%), 11
+                      runs show a failure 95% of the time
+    cloud verdict     broken on the canonical branch since 2026-10-11
+                      09:14
+    cloud confidence  0.22 ▼0.61 · highly unreliable · 35 d window ·
+                      computed 2026-10-31 09:00
+    cloud evidence    adequate · ESS 34 · 34 canonical, 0 speculative, 2
+                      untracked · 14 d window
+    cloud flaky       not flaky · examined 2026-10-31 09:00 · 14 d
+                      window
+    cloud canonical   failed 10/10 · 34 in a row since 2026-10-11 09:14
+                      · newest failed 2026-10-31 08:59
+    cloud transition  reliability degraded reliable → highly unreliable
+                      at 2026-10-11 09:14
+    cloud lifetime    1812 runs · last 2026-10-31 08:59
+    cloud fetched     2026-11-01 10:02
+
+FAILURE MODES                                            3 failure modes
+────────────────────────────────────────────────────────────────────────
+
+1.  4 failed attempts · first seen 08-12 09:40 at b71e004, 6 runs ago
+    cloud: same error on 6 machines · 34 CI · 2 local · since 2026-10-11
+    System.InvalidOperationException
+    expected <num> but was <num>
+      at MyApp.Checkout.Basket.Total()
+      at MyApp.Tests.CheckoutTests.Completes()
+
+2.  2 failed attempts · since its first run in the window
+    cloud: unseen
+    System.TimeoutException
+    timed out after <num>ms
+      at System.Net.Http.HttpConnectionPool.
+         SendAsync(HttpRequestMessage request)
+      (no test code on the stack; framework frames shown)
+
+3.  1 failed attempt · first seen in the latest run
+    the adapter recorded no failure detail
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Showing 1 of 1 finding · all: xping report --all
+History: xping report --test fp-MyApp --assembly MyApp.Tests
+Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=MyApp.Tests.CheckoutTests.Completes

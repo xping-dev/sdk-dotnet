@@ -1,0 +1,80 @@
+Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3 · cloud
+16 tests · 10 healthy · 6 flagged
+⚠ 14 of 20 runs covered part of the suite
+
+```
+TEST                                                         fp 3a597eb2
+────────────────────────────────────────────────────────────────────────
+
+    test    SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
+    source  tests/SampleApp.MSTest/CalculatorTests.cs:42
+
+ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
+duration p50 12ms · p95 13ms · range 11-13ms
+
+CLOUD                                payments · fetched 2026-11-01 10:02
+────────────────────────────────────────────────────────────────────────
+
+    verdict     known flaky
+    confidence  0.41 ▼0.12 · highly unreliable · 35 d window · computed
+                2026-10-31 09:00
+    evidence    adequate · ESS 34 · 34 canonical, 0 speculative, 2
+                untracked · 14 d window
+    flaky       flaky (timing, major) since 2026-10-02
+    canonical   failed 4/10 · newest passed 2026-10-31 08:59
+    signatures  ab12… InvalidOperationException · 36 runs · 6 machines ·
+                34 CI · since 2026-10-11 (seen here)
+                c9d0… TimeoutException · 2 runs · 1 machine · local only
+                · since 2026-10-11
+    lifetime    1812 runs · last 2026-10-31 08:59
+    last run    complete, scored (session 4f1c0c9e)
+
+RUNS IN CLOUD                newest 4 runs in Cloud (retention 365 days)
+────────────────────────────────────────────────────────────────────────
+
+  10-31 08:59  ✗ failed   canonical    CI  ...nner-17  main      0053b0e
+  10-31 07:10  ✓ passed   untracked    —   adrian-mbp  feat/x    0053b0e
+  10-31 03:59  ✗ timeout  speculative  CI  ...arge-04  ...ender  0053b0e
+  10-30 08:59  ✓ passed   canonical    CI  ...unner-3  main      0053b0e
+  more runs in Cloud
+
+RUNS                                                        newest first
+────────────────────────────────────────────────────────────────────────
+
+               ─     absent from 14 runs, 14 partial
+  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
+  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
+  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
+  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
+
+FAILURE MODES                                             1 failure mode
+────────────────────────────────────────────────────────────────────────
+
+1.  6 failed attempts · since its first run in the window
+    cloud: same error on 6 machines · 34 CI · 2 local · since 2026-10-11
+    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
+    assert.areequal failed. expected:<<num>>. actual:<<num>>.
+      at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
+
+FINDINGS                                                      2 findings
+────────────────────────────────────────────────────────────────────────
+
+1.  HIGH  cloud known-flaky
+    local: flaky in 20 runs here
+    failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
+    evidence low | -env-cluster | f_8f042eab | .../CalculatorTests.cs:42
+
+2.  MED   local masked by retry
+    cloud: flaky (timing, major) since 2026-10-02
+    passed on retry 6 times in 6 of 20 runs, up to attempt 2
+    evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
+Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
