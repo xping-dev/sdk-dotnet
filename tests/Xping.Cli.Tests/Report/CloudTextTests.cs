@@ -310,6 +310,27 @@ public sealed class CloudTextTests
     }
 
     [Fact]
+    public void ANoProjectNamesTheWorkspaceWhenTheSignInKnowsIt()
+    {
+        CloudContextDto context = CloudContext(Envelope(), "no-project", "not-found") with { Workspace = "Acme" };
+        CloudProjectDto row = new("MyApp.Tests", null, null, "no-project", "not-found");
+
+        Assert.Equal("no project in workspace Acme · pass --project <key>", Text.Reason(context with { Projects = [] }));
+        Assert.Equal("no project in workspace Acme for MyApp.Tests · pass --project <key>", Text.Reason(context with { Projects = [row] }));
+        Assert.Equal(
+            "not in workspace Acme: project billing · pass --project <key>",
+            Text.Reason(context with { Projects = [row with { ProjectKey = "billing" }] }));
+    }
+
+    [Fact]
+    public void AWorkspaceNameIsMadeSafeForTheTerminal()
+    {
+        CloudContextDto context = CloudContext(Envelope(), "no-project", "not-found") with { Workspace = "Ac\u001b[2Jme", Projects = [] };
+
+        Assert.DoesNotContain("\u001b", Text.Reason(context), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NothingIsSaidWhenCloudAnsweredOrWasNeverAsked()
     {
         Assert.Null(Text.Reason(null));

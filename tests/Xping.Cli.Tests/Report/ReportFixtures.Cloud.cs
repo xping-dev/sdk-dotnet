@@ -51,6 +51,10 @@ internal static partial class ReportFixtures
             "https://app.xping.io",
             credential,
             credential == "login" ? "01JCLOUDWORKSPACE0000000000" : null,
+
+            // No name, as a sign-in from before the workspace_name claim: the goldens keep the
+            // "this workspace" wording, and the named form is tested in CloudTextTests.
+            null,
             answered ? Fetched : null,
             answered ? "emh-1" : null,
             answered ? 365 : null,

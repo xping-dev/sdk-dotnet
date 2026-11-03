@@ -381,7 +381,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult result = Report("--json");
 
         Assert.Equal(
-            "Cloud data unavailable: no matching Cloud project for Unknown.Tests. Use --project <key>.",
+            $"Cloud data unavailable: no matching Cloud project for Unknown.Tests in workspace {FakeCloud.WorkspaceName}. Use --project <key>.",
             Assert.Single(ReportText.Lines(result.Error), l => l.Length > 0));
         Assert.Equal("no-project", result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }

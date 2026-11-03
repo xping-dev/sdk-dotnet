@@ -313,7 +313,7 @@ internal sealed class CloudEnricher(
                     {
                         // Listed under its name just now, and still not readable: as good as absent.
                         foreach (string assembly in gone.Assemblies)
-                            ledger.Rows[assembly] = new Row(gone.Binding, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                            ledger.Rows[assembly] = new Row(gone.Binding, NoMatch(credential, assembly));
                     }
                 }
 
@@ -366,7 +366,7 @@ internal sealed class CloudEnricher(
 
             if (binding is null)
             {
-                ledger.Rows[assembly.Key] = new Row(null, new Failure("not-found", $"no matching Cloud project for {assembly.Key}. Use --project <key>."));
+                ledger.Rows[assembly.Key] = new Row(null, NoMatch(credential, assembly.Key));
                 continue;
             }
 
@@ -475,7 +475,7 @@ internal sealed class CloudEnricher(
                 foreach (string assembly in project.Assemblies)
                 {
                     ledger.Rows[assembly] = new Row(
-                        stale, new Failure("not-found", $"no Cloud project '{stale.Key}' (from {stale.Origin}). Check the key, or pass --project <key>."));
+                        stale, NoProjectUnder(credential, stale));
                 }
 
                 continue;
@@ -498,7 +498,7 @@ internal sealed class CloudEnricher(
 
                 if (fresh is null)
                 {
-                    ledger.Rows[assembly] = new Row(null, new Failure("not-found", $"no matching Cloud project for {assembly}. Use --project <key>."));
+                    ledger.Rows[assembly] = new Row(null, NoMatch(credential, assembly));
                     continue;
                 }
 
@@ -722,6 +722,22 @@ internal sealed class CloudEnricher(
     private static string? WorkspaceOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceId;
 
     private static string? WorkspaceNameOf(ResolvedCredential credential) => credential.Login?.Record.WorkspaceName;
+
+    /// <summary>No project in the workspace carries the assembly's name.</summary>
+    private static Failure NoMatch(ResolvedCredential credential, string assembly) =>
+        new("not-found", WorkspaceNameOf(credential) is { Length: > 0 } workspace
+            ? $"no matching Cloud project for {assembly} in workspace {workspace}. Use --project <key>."
+            : $"no matching Cloud project for {assembly}. Use --project <key>.");
+
+    /// <summary>
+    /// A key from the flag, the environment or the settings names no project. With a sign-in the
+    /// key may belong to another workspace, so the hint is contract §9.5's; it never says whether
+    /// the project exists elsewhere.
+    /// </summary>
+    private static Failure NoProjectUnder(ResolvedCredential credential, ProjectBinding binding) =>
+        new("not-found", WorkspaceNameOf(credential) is { Length: > 0 } workspace
+            ? $"project {binding.Key} is not in workspace {workspace}; run xping login to choose another workspace."
+            : $"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
 
     /// <summary>
     /// The <c>--verbose</c> line naming the credential in use (§8.2). Never the key or a token.
