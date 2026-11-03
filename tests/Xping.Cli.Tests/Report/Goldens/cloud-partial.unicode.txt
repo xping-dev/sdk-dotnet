@@ -1,6 +1,6 @@
 Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867 · cloud (partial)
 16 tests · 10 healthy · 6 flagged
-cloud: partial: 9 of 14 tests answered (timeout)
+cloud: partial, 9 of 14 tests answered (timeout)
 
 ```
 LATEST RUN  16:21 · eab9867                               2 new failures

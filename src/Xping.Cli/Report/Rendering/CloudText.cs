@@ -101,7 +101,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
             "forbidden" => $"forbidden{Joint}showing local results only",
             "no-project" => NoProject(context),
             "partial" =>
-                $"partial: {Count(context.EnrichedTests)} of {Count(context.RequestedTests)} tests answered ({reason})",
+                $"partial, {Count(context.EnrichedTests)} of {Count(context.RequestedTests)} tests answered ({reason})",
             _ => $"{Recorded(context.Status)} ({reason})"
         };
     }

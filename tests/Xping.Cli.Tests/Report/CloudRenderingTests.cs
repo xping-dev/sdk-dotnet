@@ -69,7 +69,7 @@ public sealed class CloudRenderingTests
     [InlineData("forbidden", "none", "api-key", "cloud: forbidden · API keys need the Team plan; run xping login instead")]
     [InlineData("forbidden", "none", "login", "cloud: forbidden · showing local results only")]
     [InlineData("no-project", "not-found", "login", "cloud: not in this workspace: project payments · pass --project <key>")]
-    [InlineData("partial", "timeout", "login", "cloud: partial: 9 of 14 tests answered (timeout)")]
+    [InlineData("partial", "timeout", "login", "cloud: partial, 9 of 14 tests answered (timeout)")]
     [InlineData("throttled", "rate-limited", "login", "cloud: throttled (rate-limited)")]
     public void TheReasonLineSitsAboveTheFenceOnce(string status, string reason, string credential, string expected)
     {
