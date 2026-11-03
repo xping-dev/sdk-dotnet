@@ -28,6 +28,16 @@ public sealed class AccessTokenClaimsTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ABlankClaimIsNoClaim(string blank)
+    {
+        string token = Jwt($$"""{"workspace_id":"w1","workspace_name":"{{blank}}"}""");
+
+        Assert.Null(AccessTokenClaims.Read(token).WorkspaceName);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("opaque-token")]

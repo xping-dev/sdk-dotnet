@@ -58,8 +58,10 @@ internal sealed record AccessTokenClaims(string? Sub, string? Sid, string? Email
         }
     }
 
+    // A blank claim is no claim: callers then test for null alone, and --json never writes "".
     private static string? StringClaim(JsonElement payload, string name) =>
         payload.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
+        && value.GetString() is { } text && !string.IsNullOrWhiteSpace(text)
+            ? text
             : null;
 }

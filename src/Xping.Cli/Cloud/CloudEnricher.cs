@@ -725,18 +725,19 @@ internal sealed class CloudEnricher(
 
     /// <summary>No project in the workspace carries the assembly's name.</summary>
     private static Failure NoMatch(ResolvedCredential credential, string assembly) =>
-        new("not-found", WorkspaceNameOf(credential) is { Length: > 0 } workspace
+        new("not-found", WorkspaceNameOf(credential) is { } workspace
             ? $"no matching Cloud project for {assembly} in workspace {workspace}. Use --project <key>."
             : $"no matching Cloud project for {assembly}. Use --project <key>.");
 
     /// <summary>
-    /// A key from the flag, the environment or the settings names no project. With a sign-in the
-    /// key may belong to another workspace, so the hint is contract §9.5's; it never says whether
-    /// the project exists elsewhere.
+    /// A key names no project. A key the user configured, under a sign-in, may belong to another
+    /// workspace, so its hint is contract §9.5's, keeping where the key came from so a typo is
+    /// still fixed at its source (Amendment 4B). It never says whether the project exists
+    /// elsewhere. A key recorded with the runs was never typed, so it keeps the plain hint.
     /// </summary>
     private static Failure NoProjectUnder(ResolvedCredential credential, ProjectBinding binding) =>
-        new("not-found", WorkspaceNameOf(credential) is { Length: > 0 } workspace
-            ? $"project {binding.Key} is not in workspace {workspace}; run xping login to choose another workspace."
+        new("not-found", !binding.IsSessionPin && WorkspaceNameOf(credential) is { } workspace
+            ? $"project {binding.Key} (from {binding.Origin}) is not in workspace {workspace}. Check the key, or run xping login to choose another workspace."
             : $"no Cloud project '{binding.Key}' (from {binding.Origin}). Check the key, or pass --project <key>.");
 
     /// <summary>

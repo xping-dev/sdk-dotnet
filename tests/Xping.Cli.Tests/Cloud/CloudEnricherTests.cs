@@ -540,7 +540,7 @@ public sealed class CloudEnricherTests : IDisposable
         EnrichmentResult result = await EnrichAsync(ReportFixtures.Get("latest-run"), projectFlag: "billing");
 
         Assert.Equal(
-            "Cloud data unavailable: project billing is not in workspace Acme; run xping login to choose another workspace.",
+            "Cloud data unavailable: project billing (from --project) is not in workspace Acme. Check the key, or run xping login to choose another workspace.",
             Assert.Single(result.Hints).Text);
         Assert.Equal("Acme", result.Envelope.Context!.Cloud!.Workspace);
     }
@@ -557,6 +557,23 @@ public sealed class CloudEnricherTests : IDisposable
 
         Assert.Equal(
             $"Cloud data unavailable: no matching Cloud project for {assembly} in workspace Acme. Use --project <key>.",
+            Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task ASignedInKeyRecordedWithTheRunsKeepsThePlainHint()
+    {
+        _environment.Remove("XPING_PROJECTID");
+        SignIn();
+        _factory.Client.ProjectMissing = true;
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+
+        EnrichmentResult result = await EnrichAsync(envelope, pins: new Dictionary<string, string> { [assembly] = "pinned" });
+
+        // The user never typed the key, so nothing tells them to sign in to another workspace for it.
+        Assert.Equal(
+            "Cloud data unavailable: no Cloud project 'pinned' (from the project id recorded with the runs). Check the key, or pass --project <key>.",
             Assert.Single(result.Hints).Text);
     }
 

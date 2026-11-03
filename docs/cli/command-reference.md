@@ -905,7 +905,7 @@ not, the line is `Cloud data partial: 9 of 14 tests answered (timeout).`, with t
 | `no matching Cloud project for Checkout.Tests. Use --project <key>.` | Pass `--project`, or set `XPING_PROJECTID` |
 | `no matching Cloud project for Checkout.Tests in workspace Acme. Use --project <key>.` | The same, when you are signed in |
 | `no Cloud project 'checkout' (from XPING_PROJECTID). Check the key, or pass --project <key>.` | Fix the project key |
-| `project checkout is not in workspace Acme; run xping login to choose another workspace.` | Fix the key, or sign in to the workspace that has the project |
+| `project checkout (from XPING_PROJECTID) is not in workspace Acme. Check the key, or run xping login to choose another workspace.` | Fix the key, or sign in to the workspace that has the project |
 | ``This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.`` | The key is upload-only; sign in, or use a key with read scope |
 | ``This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.`` | Sign in; the workspace's plan does not allow API keys to read |
 | `Xping Cloud is rate limiting requests; try again in a minute.` | Wait |

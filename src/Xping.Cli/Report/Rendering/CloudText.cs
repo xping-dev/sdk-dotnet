@@ -358,7 +358,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         // Without a name (an API key, or a token issued before the claim) the line says "this
         // workspace" (Amendment 3B); with one it names it (Amendment 4B, contract §7.4).
-        string workspace = context.Workspace is { Length: > 0 } name ? "workspace " + Recorded(name) : "this workspace";
+        string workspace = context.Workspace is { } name ? "workspace " + Recorded(name) : "this workspace";
 
         return context.Projects.FirstOrDefault(p => p.Status == "no-project") switch
         {
