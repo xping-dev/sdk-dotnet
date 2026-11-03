@@ -131,6 +131,29 @@ internal sealed class CliFlowHost : IAsyncDisposable
     }
 
     /// <summary>
+    /// Waits until the command <paramref name="running"/> has sent a request to <paramref name="path"/>.
+    /// </summary>
+    /// <remarks>
+    /// A command that ends without sending it fails the wait at once, with its own exception if it
+    /// threw, rather than after the patience runs out.
+    /// </remarks>
+    public async Task WaitForRequestAsync(string path, Task<CliResult> running)
+    {
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        while (!Cloud.Requests.Any(r => r.Path == path))
+        {
+            if (running.IsCompleted)
+            {
+                CliResult result = await running.ConfigureAwait(false);
+                Assert.Fail($"The command exited {result.Code} without a request to {path}.\n{result.Error}");
+            }
+
+            await Task.Delay(10, patience.Token).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Reads the stored sign-in for the fake's Cloud URL, as the CLI would.
     /// </summary>
     public CredentialRecord? StoredRecord()

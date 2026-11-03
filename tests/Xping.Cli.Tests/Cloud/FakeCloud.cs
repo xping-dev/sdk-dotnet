@@ -254,6 +254,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             : [];
 
         Fault? fault;
+        Task? gatewayHold;
         lock (_gate)
         {
             _requests.Add(new RecordedRequest(
@@ -268,6 +269,8 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             fault = _faults.TryPeek(out Fault? next) && string.Equals(next.Path, path, StringComparison.Ordinal)
                 ? _faults.Dequeue()
                 : null;
+
+            gatewayHold = _holds.GetValueOrDefault(path);
         }
 
         if (fault is { Drop: true })
@@ -294,7 +297,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         if (path == "/connect/token" && HoldTokenResponses is { } hold)
             await hold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
 
-        if (path.StartsWith(GatewayPrefix, StringComparison.Ordinal) && HoldGatewayResponses is { } gatewayHold)
+        if (gatewayHold is not null)
             await gatewayHold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
 
         context.Response.StatusCode = reply.Status;

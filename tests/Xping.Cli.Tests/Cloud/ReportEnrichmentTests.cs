@@ -113,12 +113,18 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal(local.Code, text.Code);
         Assert.Equal(2, _host.Cloud.GatewayRequests.Count(r => r.Path == DigestPath));
         string[] lines = ReportText.Lines(text.Output);
+        Assert.EndsWith(" | cloud (partial)", lines.First(l => l.Length > 0), StringComparison.Ordinal);
         string reason = Assert.Single(lines, l => l.StartsWith("cloud: partial, ", StringComparison.Ordinal));
         Assert.Matches(@"^cloud: partial, \d+ of \d+ tests answered \(server\)$", reason);
 
         // Either request may be the refused one; both hold tests Cloud does not know.
         Assert.Contains("    cloud: not answered", lines);
         Assert.Contains($"    cloud: not in project {Project}", lines);
+
+        _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.BadRequest, "Injected");
+        JsonElement cloud = Report("--json").Json().GetProperty("context").GetProperty("cloud");
+        Assert.Equal(("partial", "server"), (cloud.GetProperty("status").GetString(), cloud.GetProperty("reason").GetString()));
+        Assert.InRange(cloud.GetProperty("enrichedTests").GetInt32(), 1, cloud.GetProperty("requestedTests").GetInt32() - 1);
     }
 
     [Fact]
@@ -129,16 +135,17 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         CliResult local = Report();
         _host.SignIn();
         var never = new TaskCompletionSource();
-        _host.Cloud.HoldGatewayResponses = never.Task;
+        _host.Cloud.HoldGateway(DigestPath, never.Task);
 
+        // The attempt's own limit, short of the whole budget, so only the attempt times out.
         Task<CliResult> report = _host.Start(ReportArgs());
-        await WaitForRequestAsync(DigestPath);
-        _host.Time.Advance(CloudBudget.Total);
+        await _host.WaitForRequestAsync(DigestPath, report);
+        _host.Time.Advance(CloudHttp.AttemptTimeout);
         CliResult result = await _host.DriveAsync(report);
 
         Assert.Equal(local.Code, result.Code);
         Assert.Equal(local.Output, WithoutReasonLine(result.Output));
-        Assert.Contains("cloud: unavailable (budget)", result.Output, StringComparison.Ordinal);
+        Assert.Contains("cloud: unavailable (timeout)", result.Output, StringComparison.Ordinal);
         Assert.Single(_host.Cloud.GatewayRequests, r => r.Path == DigestPath);
     }
 
@@ -331,8 +338,10 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal(("Other.Tests", "no-project"), (row.GetProperty("assembly").GetString(), row.GetProperty("status").GetString()));
 
         string[] lines = ReportText.Lines(text.Output);
-        int reason = Array.IndexOf(lines, "cloud: no project in this workspace for Other.Tests - pass --project");
-        Assert.Equal("       <key>", lines[reason + 1]);
+        Assert.Contains(
+            "cloud: no project in this workspace for Other.Tests - pass --project <key>",
+            Unwrapped(lines.SkipWhile(l => !l.StartsWith("cloud: ", StringComparison.Ordinal))),
+            StringComparison.Ordinal);
         Assert.DoesNotContain(lines, l => l.StartsWith("    cloud: ", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.EndsWith("  local flaky", StringComparison.Ordinal));
     }
@@ -367,23 +376,27 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     [Fact]
     public async Task ReportTest_Runs_SkippedOnBudget()
     {
-        // The project list and the digest are held until the clock has used more than three of the
-        // four seconds, each under its own three-second attempt timeout: less than the second the
-        // run history needs is left, so it is not asked for (contract §7.3).
+        // The project list and the digest are each held for less than an attempt's limit, and
+        // together for more than the budget leaves the run history: it is not asked for (contract §7.3).
+        TimeSpan projectsWait = CloudHttp.AttemptTimeout - TimeSpan.FromSeconds(0.5);
+        TimeSpan digestWait = CloudBudget.Total - CloudEnricher.MinimumForRuns - projectsWait + TimeSpan.FromSeconds(0.1);
+        Assert.InRange(digestWait, TimeSpan.FromTicks(1), CloudHttp.AttemptTimeout - TimeSpan.FromTicks(1));
+
         Seed();
         _host.Cloud.AddRun(Project, FailureFingerprint);
         _host.SignIn();
+        const string ProjectsPath = $"{FakeCloud.GatewayPrefix}v1/projects";
         var projects = new TaskCompletionSource();
         var digest = new TaskCompletionSource();
-        _host.Cloud.HoldGatewayResponses = projects.Task;
+        _host.Cloud.HoldGateway(ProjectsPath, projects.Task);
+        _host.Cloud.HoldGateway(DigestPath, digest.Task);
 
         Task<CliResult> report = _host.Start(ReportArgs("--json", "--test", "Stable0"));
-        await WaitForRequestAsync($"{FakeCloud.GatewayPrefix}v1/projects");
-        _host.Time.Advance(TimeSpan.FromSeconds(2.5));
-        _host.Cloud.HoldGatewayResponses = digest.Task;
+        await _host.WaitForRequestAsync(ProjectsPath, report);
+        _host.Time.Advance(projectsWait);
         projects.SetResult();
-        await WaitForRequestAsync(DigestPath);
-        _host.Time.Advance(TimeSpan.FromSeconds(0.6));
+        await _host.WaitForRequestAsync(DigestPath, report);
+        _host.Time.Advance(digestWait);
         digest.SetResult();
         CliResult result = await _host.DriveAsync(report);
 
@@ -642,16 +655,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         _host.Cloud.FailGateway(DigestPath, 50, status, "Injected");
     }
 
-    /// <summary>
-    /// Waits until the command under test has sent a request to <paramref name="path"/>.
-    /// </summary>
-    private async Task WaitForRequestAsync(string path)
-    {
-        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-
-        while (!_host.Cloud.GatewayRequests.Any(r => r.Path == path))
-            await Task.Delay(10, patience.Token).ConfigureAwait(false);
-    }
+    // A reason line and its continuations as one line: where it wraps depends on the names in it.
+    private static string Unwrapped(IEnumerable<string> lines) =>
+        string.Join(' ', lines.TakeWhile(l => l.Length > 0).Select(l => l.Trim()));
 
     private string[] ReportArgs(params string[] args) => ["report", "--directory", _root, .. args];
 
