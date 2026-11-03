@@ -33,6 +33,7 @@ internal static class SignedInRecord
             // to both ends of the comparison (§7.2).
             receivedAt + tokens.ExpiresIn,
             claims.WorkspaceId,
+            claims.WorkspaceName,
             claims.Sid,
             claims.Sub,
             claims.Email,
