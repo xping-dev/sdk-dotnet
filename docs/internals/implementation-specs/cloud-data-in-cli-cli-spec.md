@@ -54,6 +54,28 @@ decided them here before the code that depends on them.
 | I | §3.4: precedence | When several assemblies disagree and nothing answered, the row with the higher status by the precedence wins, `no-project` over `unavailable`. When something answered and a row is not `ok`, the report is `partial` with the first such row's reason (contract §9.4) | §3.4 |
 | J | §4.1: step 2 takes every ranked finding | Under `--id` and `--test` the page holds the selection only, so step 2 takes the ranked findings the envelope still shows. Asking about up to 200 tests nobody sees would spend the budget the subject's run history needs (§3.3). Contract §7.2's "before `--top`" is about truncation, which a selection is not | §4.1 |
 
+### Amendment 3 — from phase 3
+
+Phase 3 read §7, §8 and §11 against the contract and the renderer and found the conflicts below.
+Decided by the owner on 2026-11-03, committed before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §7.5, §8: `broken on main since …` | The digest does not name the canonical branch (contract §4.2, §6.2), so no branch is named. The detail view and the `--test` block say `broken on the canonical branch since {date}`, `unstable on the canonical branch`, `passing on the canonical branch`, `known flaky`, `no canonical history`. The latest-run Cloud line uses the short forms `broken since {date}`, `unstable`, `passing`, `known flaky`, `no canonical history` | §7.5, §8 |
+| B | §7.6: `not in workspace Acme: project billing` | The envelope carries `workspaceId`, not the name contract §7.4 asks for (sdk #335 adds it). Until then: `cloud  not in this workspace: project {key} · pass --project <key>`, or `no project in this workspace for {assembly}` when no key was found | §7.6 |
+| C | §7.3: segment `confidence 0.22 ▼0.61 · evidence adequate (ESS 34) · 35 d`; fit order drops the window, the delta, ESS, the segment | A value never loses its window, and the Cloud evidence level never loses its ESS (contract §4.4, §4.8). Segment: `confidence 0.22 ▼0.61 (35 d) · evidence adequate (ESS 34, 14 d)`, `· pending` after the confidence when `freshness == pending`. Fit order: drop the delta, then the whole evidence token, then the whole segment. `insufficient-evidence`: `evidence sparse (ESS 4 of 10, 14 d)` alone. `not-scored` or no confidence block: no segment | §7.3 |
+| D | §7.2: `passing` always takes the label; `≠` "between the two labels" | Contract L3 wins: a finding with `disagreesWithLocal` keeps its local label first and reads `local {kind} ≠ cloud {verdict}`. Its second line is `cloud: {verdict phrase} · {flaky phrase}` | §7.2 |
+| E | §7.2: `cloud` null → `local {kind}` and the reason line | Contract R1 and §7.1: with `context.cloud` null or `not-attempted`, a row is exactly today's. The layered label applies only when the Cloud layer was attempted. Group findings never carry a digest and get `local {kind}` with no second line | §7.1, §7.2 |
+| F | §7.2, §7.6: the reason per row | A report-wide status (`unavailable`, `login-required`, `forbidden`, `no-project`) is said once, on the reason line; its rows read `local {kind}` with no second line. Rows get a second line only for `partial` with no digest (`cloud: not answered`) and for `state == unknown` (`cloud: not in project {key}`) | §7.2, §7.6 |
+| G | §7.5: the Cloud line is one line, dropped right to left | At 55 columns the verdict and its date leave no room for the match phrase. The line wraps at segment boundaries; continuations align after `cloud  `. Only the confidence token is dropped, when it does not fit the last line | §7.5 |
+| H | §8: `RUNS IN CLOUD` row and heading | Both overflowed the fence. Heading annotation: `newest {n} runs in Cloud (retention {d} days)`; `hasMore` is a dim line under the rows, `more runs in Cloud`. Row: `MM-dd HH:mm`, outcome glyph and word, tier, `CI` or `—`, machine, branch, short SHA, sized to the widest value in the list and capped at 10 (machine) and 8 (branch), cut from the left. The short hash and `(attempt {n})` follow when the row still fits. `runsState` other than `ok` is the annotation `not fetched ({runsState})` | §8 |
+| I | §7.2: where the second line goes | Under the name (and a cluster's members), above the local headline, so the name keeps its own line (report-format D2). `cloud name differs: {testName}` (§10) follows it | §7.2, §10 |
+| J | §7.4: a trailing token per failure mode | A line of its own under the mode's count line, `cloud: …`: the count line is already near the fence | §7.4 |
+| K | §7.4, §8: `1 812 runs` | Counts print as the local report prints them, `1812 runs`. Cloud times print in UTC as sent: `yyyy-MM-dd HH:mm` in pairs, `yyyy-MM-dd` for a `since` | §7.4, §8 |
+| L | §7.2–§8: `≠`, `▼`, `▲`, `—`, `…` | Each is a `ReportGlyphs` pair (`!=`, `v`, `^`, `-`, `...`): the golden charset sweep rejects a non-ASCII character no pair defines | §7 |
+| M | §7.6: the line per status | `unavailable ({reason}) · showing local results only`; `login required · run xping login`; `forbidden · API keys need the Team plan; run xping login instead` with an API key, else `forbidden · showing local results only`; `partial: {n} of {m} tests answered ({reason})`; a status this build does not know prints verbatim with its reason | §7.6 |
+| N | §8: the block when no digest | `CLOUD` heading with the §7.6 reason as its only line when the status is report-wide; `not answered` under `partial`; `not in project {key}` for `unknown`. Labels inside the block are unprefixed (the heading says `CLOUD`); the detail view's are prefixed `cloud` | §8 |
+
 ---
 
 ## 1. Purpose, scope, traceability
