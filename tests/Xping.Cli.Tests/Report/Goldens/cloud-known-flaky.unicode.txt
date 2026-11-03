@@ -1,0 +1,20 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
+412 tests · 411 healthy · 1 flagged
+
+```
+NEEDS ATTENTION (1 medium)                             most severe first
+────────────────────────────────────────────────────────────────────────
+
+1.  MED   cloud known-flaky
+    CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+    cloud: confidence 0.58 ▲0.04 · moderately reliable · 35 d · pending
+    local: flaky in 20 runs here
+    failed 4 of 20 executions (20%) in 4 of 20 runs, 1 failure mode
+    evidence moderate | -env-cluster | f_5da7c018 | ...eckoutTests.cs:27
+```
+
+rates: the marker on each finding says which runs its percentage was
+counted out of; compare two only where the markers match.
+https://docs.xping.io/cli/command-reference.html#the-population-marker
+
+Detail of row 1: xping report --id f_5da7c018 --assembly MyApp.Tests

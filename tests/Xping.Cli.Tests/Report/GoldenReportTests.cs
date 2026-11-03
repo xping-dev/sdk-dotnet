@@ -194,7 +194,11 @@ public sealed class GoldenReportTests
 
     /// <summary>Returns every character a glyph set can draw with.</summary>
     private static IEnumerable<char> GlyphCharacters(ReportGlyphs glyphs) =>
-        new[] { glyphs.Pass, glyphs.Fail, glyphs.Skip, glyphs.Warning, glyphs.Pending, glyphs.Separator, glyphs.Arrow }
+        new[]
+        {
+            glyphs.Pass, glyphs.Fail, glyphs.Skip, glyphs.Warning, glyphs.Pending, glyphs.Separator, glyphs.Arrow,
+            glyphs.NotEqual, glyphs.Down, glyphs.Up, glyphs.Dash, glyphs.Ellipsis
+        }
             .SelectMany(g => g)
             .Concat([glyphs.HorizontalRule, glyphs.HistoryPass, glyphs.HistoryFail]);
 

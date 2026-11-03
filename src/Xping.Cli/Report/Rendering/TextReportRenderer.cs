@@ -143,6 +143,23 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
     private const string FindingsLabel = "FINDINGS";
 
+    // The history view's Cloud blocks (§8). Between the local counts and the local runs, so the
+    // reader meets the verdict before the timeline it may contradict.
+    private const string CloudLabel = "CLOUD";
+
+    private const string CloudRunsLabel = "RUNS IN CLOUD";
+
+    // A Cloud run row's columns (Amendment 3H): the outcome holds "✗ timeout", the tier
+    // "speculative"; the machine and branch are cut from the left at these widths, which with the
+    // short SHA land the row on the fence.
+    private const int CloudOutcomeWidth = 9;
+
+    private const int CloudTierWidth = 11;
+
+    private const int CloudMachineWidth = 10;
+
+    private const int CloudBranchWidth = 8;
+
     // A history row's columns (D7), in display columns. The gaps between them are two wide. The
     // detail column holds "inconcl. @99"; a longer value, or a duration past eight, widens its own
     // row only, and the fence still has eleven columns spare.
@@ -247,14 +264,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         output.Write(builder.ToString());
     }
 
-    /// <summary>
-    /// Gets what joins the score and its category inside the trailer's Cloud segment.
-    /// </summary>
-    /// <remarks>
-    /// The glyph set's separator, except in ASCII, where it is <c>|</c> — the character that joins
-    /// the trailer's own segments, which would make the category read as a field of its own.
-    /// </remarks>
-    private string CloudSeparator => capabilities.Glyphs.Separator == "|" ? "-" : capabilities.Glyphs.Separator;
+    /// <summary>Gets the words for Xping Cloud's view of a test, in this glyph set.</summary>
+    private readonly CloudText cloudText = new(capabilities.Glyphs);
 
     /// <summary>Gets what recorded text may keep, which is what the glyphs beside it use.</summary>
     private TerminalCharset Charset => capabilities.Glyphs.Charset;
@@ -288,13 +299,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (Revision(envelope.Context) is { Length: > 0 } revision)
             provenance.Add(revision);
 
-        // Only when something on the page came from Cloud. A Cloud that could not answer is said on
-        // standard error; a header claiming "cloud" over purely local rows would be the lie.
-        if (envelope.Findings.Any(f => CloudText.HasScore(f.Cloud))
-            || envelope.LatestRun?.Failures.Any(f => CloudText.HasScore(f.Cloud?.Digest)) == true)
-        {
-            provenance.Add("cloud");
-        }
+        // When Cloud answered, whether or not a row on this page shows a value from it: a verdict of
+        // "no canonical history" is Cloud's answer too. A Cloud that could not answer says so on the
+        // reason line below, never in the provenance (§7.5).
+        if (CloudText.HeaderToken(envelope.Context?.Cloud) is { } token)
+            provenance.Add(token);
 
         builder.AppendLine(string.Join(separator, provenance));
 
@@ -326,6 +335,18 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         WriteUnmeasured(builder, summary, separator);
         WriteCaveats(builder, envelope, separator);
+
+        // Last, above the fence: it qualifies everything in the block, and a pasted block keeps it.
+        // Dim, because it is about the source and not about any test (§7.6).
+        // Wrapped like the block it sits over: it is pasted with it.
+        if (cloudText.Reason(envelope.Context?.Cloud) is { } reason)
+        {
+            const string prefix = "cloud: ";
+            List<string> lines = Wrap(reason, FenceWidth - prefix.Length);
+
+            for (int index = 0; index < lines.Count; index++)
+                builder.AppendLine(capabilities.Dim((index == 0 ? prefix : new string(' ', prefix.Length)) + lines[index]));
+        }
     }
 
     /// <summary>
@@ -501,7 +522,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             if (index > 0)
                 builder.AppendLine();
 
-            WriteFinding(builder, envelope.Findings[index], index + 1);
+            WriteFinding(builder, envelope.Findings[index], index + 1, envelope.Context?.Cloud);
         }
     }
 
@@ -538,7 +559,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             $"row {row.ToString(CultureInfo.InvariantCulture)} of " +
             envelope.Summary.Findings.ToString(CultureInfo.InvariantCulture));
 
-        WriteFinding(builder, finding, row, RowView.Detail);
+        WriteFinding(builder, finding, row, envelope.Context?.Cloud, RowView.Detail);
 
         SubjectDto subject = finding.Subject;
 
@@ -558,7 +579,11 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         [
             .. finding.Metrics.Select(metric => (Recorded(metric.Label), (string?)Recorded(metric.Value))),
             ("repro", Recorded(finding.Repro?.Expectation)),
-            .. CloudText.Pairs(finding.Cloud, Charset)
+            .. cloudText.Pairs(
+                finding.Cloud,
+                "cloud ",
+                finding.Cloud?.DisagreesWithLocal == true ? $"({capabilities.Glyphs.NotEqual} local)" : null,
+                fetched: true)
         ]);
 
         if (selection.SameSubject.Count > 0)
@@ -649,6 +674,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         foreach (string line in header.Skip(1))
             builder.Append(' ', ContinuationIndent).AppendLine(line);
+
+        // Its own line under the count, which is already near the fence (Amendment 3J).
+        if (cloudText.Mode(mode.Cloud) is { } cloud)
+        {
+            foreach (string line in Wrap(cloud, ContinuationBudget))
+                builder.Append(' ', ContinuationIndent).AppendLine(line);
+        }
 
         if (mode.Unavailable)
         {
@@ -829,6 +861,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 builder.AppendLine(line);
         }
 
+        WriteHistoryCloud(builder, envelope, history, test);
+
         builder.AppendLine();
         WriteHeading(builder, RunsLabel, RunsNote);
         WriteRuns(builder, history.Sessions);
@@ -839,6 +873,169 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.AppendLine();
         WriteHistoryFindings(builder, envelope, history);
+    }
+
+    /// <summary>
+    /// Writes what Xping Cloud says about the history's test, and its runs there (§8, Amendment 3H,
+    /// 3N).
+    /// </summary>
+    /// <remarks>
+    /// Nothing at all when the Cloud layer did not run: without a credential the history is exactly
+    /// the local one (contract R1). When it ran and has nothing for this test, the heading stays and
+    /// says why, so the reader does not take the absence for a clean bill.
+    /// </remarks>
+    private void WriteHistoryCloud(StringBuilder builder, ReportEnvelope envelope, TestHistoryDto history, SubjectDto test)
+    {
+        CloudContextDto? context = envelope.Context?.Cloud;
+
+        if (!CloudText.Attempted(context))
+            return;
+
+        string? key = CloudText.ProjectKey(context, test.Assembly);
+        CloudDigestDto? digest = history.Cloud?.Digest;
+        string joint = cloudText.Joint;
+
+        string annotation = string.Join(joint, new[]
+        {
+            key is null ? null : Recorded(key),
+            digest is { State: "ok" } ? "fetched " + CloudText.Time(digest.FetchedAt) : null
+        }.OfType<string>());
+
+        builder.AppendLine();
+        WriteHeading(builder, CloudLabel, annotation);
+
+        string? absent = digest switch
+        {
+            { State: "ok" } => null,
+            { } => cloudText.NotInProject(context!, test.Assembly),
+            null when context!.Status is "ok" or "partial" => "not answered",
+            null => cloudText.Reason(context)
+        };
+
+        if (absent is not null)
+        {
+            foreach (string line in Wrap(absent, FenceWidth - PairIndent))
+                builder.Append(' ', PairIndent).AppendLine(line);
+
+            return;
+        }
+
+        string? disagreement = envelope.Findings.FirstOrDefault(f => f.Cloud?.DisagreesWithLocal == true) is { } disagreeing
+            ? $"({capabilities.Glyphs.NotEqual} local: {Recorded(ReportVocabulary.LabelFor(disagreeing.Kind))})"
+            : null;
+
+        List<(string Label, string? Value)> pairs = [.. cloudText.Pairs(digest, string.Empty, disagreement, fetched: false)];
+
+        // Requested first: those are the ones this machine failed with. A signature this machine
+        // recorded is marked, so a reader can tell "everywhere" from "here too".
+        HashSet<string> here = [.. history.FailureModes.Select(m => m.ErrorMessageHash).OfType<string>()];
+        List<(string Label, string? Value)> signatures =
+        [
+            .. digest!.Signatures
+                .OrderByDescending(signature => signature.Requested == true)
+                .Select((signature, index) => (
+                    index == 0 ? "signatures" : string.Empty,
+                    (string?)cloudText.Signature(signature, signature.ErrorMessageHash is { } hash && here.Contains(hash))))
+        ];
+
+        // Pairs always holds the lifetime row, valued or not; an empty one is dropped when written.
+        pairs.InsertRange(pairs.FindIndex(pair => pair.Label == "lifetime"), signatures);
+        pairs.Add(("last run", cloudText.LastRun(context, key)));
+
+        WritePairs(builder, pairs, separate: false);
+
+        WriteCloudRuns(builder, history.Cloud!);
+    }
+
+    /// <summary>
+    /// Writes the test's newest runs in Cloud, one row each, newest first (§8, Amendment 3H).
+    /// </summary>
+    /// <remarks>
+    /// A line rather than a section when there are no rows to put under it, so the history keeps one
+    /// blank line between its sections.
+    /// </remarks>
+    private void WriteCloudRuns(StringBuilder builder, CloudTestHistoryDto cloud)
+    {
+        builder.AppendLine();
+
+        if (cloud.RunsState != "ok")
+        {
+            builder.Append(CloudRunsLabel).Append("  not fetched (").Append(Recorded(cloud.RunsState)).AppendLine(")");
+            return;
+        }
+
+        if (cloud.Runs.Count == 0)
+        {
+            builder.Append(CloudRunsLabel).AppendLine("  no runs in Cloud");
+            return;
+        }
+
+        string retention = cloud.RetentionDays is { } days
+            ? $" (retention {days.ToString(CultureInfo.InvariantCulture)} days)"
+            : string.Empty;
+
+        WriteHeading(builder, CloudRunsLabel, $"newest {Runs(cloud.Runs.Count)} in Cloud{retention}");
+
+        string dash = capabilities.Glyphs.Dash;
+
+        List<(CloudRunDto Run, string Tier, string Machine, string Branch)> rows =
+        [
+            .. cloud.Runs.Select(run => (
+                run,
+                Fit(Recorded(run.Tier) is { Length: > 0 } tier ? tier : dash, CloudTierWidth),
+                Fit(Recorded(run.MachineName) is { Length: > 0 } machine ? machine : dash, CloudMachineWidth),
+                Fit(Recorded(run.Branch) is { Length: > 0 } branch ? branch : dash, CloudBranchWidth)))
+        ];
+
+        int tierWidth = rows.Max(row => row.Tier.Length);
+        int machineWidth = rows.Max(row => row.Machine.Length);
+        int branchWidth = rows.Max(row => row.Branch.Length);
+
+        foreach ((CloudRunDto run, string tier, string machine, string branch) in rows)
+        {
+            string when = run.StartedAt is { } at
+                ? at.UtcDateTime.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
+                : dash.PadRight(RunWhenWidth);
+
+            string outcome = run.Outcome switch
+            {
+                "passed" => $"{capabilities.Glyphs.Pass} passed",
+                "failed" => $"{capabilities.Glyphs.Fail} failed",
+                "timeout" => $"{capabilities.Glyphs.Fail} timeout",
+                _ => "  " + Recorded(run.Outcome)
+            };
+
+            string sha = Recorded(run.CommitSha) is { Length: > 0 } recorded ? TerminalText.Head(recorded, ShaWidth) : string.Empty;
+
+            string line = string.Join(
+                new string(' ', RunGap),
+                when,
+                outcome.PadRight(CloudOutcomeWidth),
+                tier.PadRight(tierWidth),
+                (run.IsCi == true ? "CI" : dash).PadRight(2),
+                machine.PadRight(machineWidth),
+                branch.PadRight(branchWidth),
+                sha).TrimEnd();
+
+            line = new string(' ', RunIndent) + line;
+
+            // Only where the row still fits: they say which failure and how hard it was to get, and a
+            // reader who needs either reads the JSON.
+            foreach (string? extra in new[]
+            {
+                cloudText.ShortHash(run.ErrorMessageHash),
+                run.Attempts is > 1 and { } attempts ? $"(attempt {attempts.ToString(CultureInfo.InvariantCulture)})" : null
+            })
+            {
+                if (extra is not null && line.Length + 2 + extra.Length <= FenceWidth)
+                    line += "  " + extra;
+            }
+
+            builder.AppendLine(line);
+        }
+
+        if (cloud.HasMore)
+            builder.Append(' ', RunIndent).AppendLine(capabilities.Dim("more runs in Cloud"));
     }
 
     /// <summary>
@@ -1071,7 +1268,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             if (index > 0)
                 builder.AppendLine();
 
-            WriteFinding(builder, findings[index], RowOf(envelope, index), RowView.History);
+            WriteFinding(builder, findings[index], RowOf(envelope, index), envelope.Context?.Cloud, RowView.History);
         }
     }
 
@@ -1283,9 +1480,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// read. A run that failed too widely to itemise is news, and gets one line saying so.
     /// </para>
     /// <para>
-    /// Every sentence here was composed in the envelope. The renderer lays the rows out and phrases
-    /// nothing, so that a stronger statement of the same history — which is what Cloud will supply
-    /// — is a change to one string and not to this file.
+    /// Every local sentence here was composed in the envelope; the renderer lays the rows out and
+    /// phrases nothing local. Cloud's line under each row is composed from its <c>cloud</c> object by
+    /// <see cref="CloudText"/>, beside the local sentence and never in its place (contract L5).
     /// </para>
     /// </remarks>
     private bool WriteLatestRun(StringBuilder builder, ReportEnvelope envelope)
@@ -1318,7 +1515,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             if (index > 0)
                 builder.AppendLine();
 
-            WriteLatestRunFailure(builder, latest.Failures[index]);
+            WriteLatestRunFailure(builder, latest.Failures[index], envelope.Context?.Cloud);
         }
 
         // The two closing lines sit together under the rows, the cap first because it is about the
@@ -1401,7 +1598,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// The location stays last so its left-truncated form never opens a line.
     /// </para>
     /// </remarks>
-    private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure)
+    private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
     {
         string status = Recorded(ReportVocabulary.StatusWordsFor(failure.Status));
         string decorated = failure.Status == "new" ? capabilities.Emphasis(status) : status;
@@ -1413,10 +1610,12 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                .Append(' ', Math.Max(1, LatestRunStatusWidth - status.Length))
                .AppendLine(FitName(Name(failure.Subject), LatestRunBudget));
 
-        // Cloud's statement replaces the local one rather than joining it: it is about the same
-        // history, over every run uploaded rather than the ones on this machine.
-        foreach (string line in Wrap(CloudText.Contrast(failure.Cloud?.Digest) ?? Recorded(failure.Contrast), LatestRunBudget))
+        foreach (string line in Wrap(Recorded(failure.Contrast), LatestRunBudget))
             builder.Append(' ', LatestRunRowIndent).AppendLine(line);
+
+        // Under the local sentence, never in its place: the two are about different histories, this
+        // machine's and every machine's (contract L5).
+        WriteLatestRunCloud(builder, failure, context);
 
         var trailer = new List<string>();
 
@@ -1439,6 +1638,65 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         builder.Append(' ', LatestRunRowIndent)
                .AppendLine(capabilities.Dim(Fit(string.Join(" | ", trailer), LatestRunBudget)));
+    }
+
+    /// <summary>
+    /// Writes a latest-run row's Cloud line, wrapped at its segments (§7.5, Amendment 3G).
+    /// </summary>
+    /// <remarks>
+    /// Nothing is dropped: the confidence leads and the verdict and the match follow, wrapped at
+    /// their boundaries (Amendment 3P).
+    /// </remarks>
+    private void WriteLatestRunCloud(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
+    {
+        const string prefix = "cloud: ";
+        int width = LatestRunBudget - prefix.Length;
+
+        IReadOnlyList<string> segments = cloudText.LatestRun(failure, context);
+
+        if (segments.Count == 0)
+            return;
+
+        string joint = cloudText.Joint;
+        var lines = new List<string>();
+        string line = string.Empty;
+
+        // A segment too long for a line of its own -- a long project key, a verdict printed as sent
+        // -- is wrapped at its spaces like any other line rather than carried past the fence.
+        foreach (string segment in segments)
+        {
+            if (segment.Length > width)
+            {
+                if (line.Length > 0)
+                    lines.Add(line);
+
+                List<string> pieces = Wrap(segment, width);
+                lines.AddRange(pieces.Take(pieces.Count - 1));
+                line = pieces[^1];
+            }
+            else if (line.Length == 0)
+            {
+                line = segment;
+            }
+            else if (line.Length + joint.Length + segment.Length <= width)
+            {
+                line += joint + segment;
+            }
+            else
+            {
+                lines.Add(line);
+                line = segment;
+            }
+        }
+
+        lines.Add(line);
+
+        for (int index = 0; index < lines.Count; index++)
+        {
+            builder.Append(' ', LatestRunRowIndent)
+                   .Append(index == 0 ? prefix : new string(' ', prefix.Length))
+                   .AppendLine(lines[index]);
+        }
     }
 
     /// <summary>
@@ -1574,13 +1832,19 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// short of the edge on a terminal and at it in a pipe.
     /// </para>
     /// </remarks>
+    /// <param name="context">What the report asked Xping Cloud, which decides the label's layering.</param>
     /// <param name="view">Which view the row is written for.</param>
-    private void WriteFinding(StringBuilder builder, FindingDto finding, int row, RowView view = RowView.List)
+    private void WriteFinding(
+        StringBuilder builder, FindingDto finding, int row, CloudContextDto? context, RowView view = RowView.List)
     {
         string number = row.ToString(CultureInfo.InvariantCulture) + ".";
         string marker = ReportVocabulary.MarkerFor(finding.Severity);
+
         // Recorded, as every vocabulary echo is: an unknown value comes back as it was (Amendment 2F).
-        string label = Recorded(ReportVocabulary.LabelFor(finding.Kind));
+        // The Cloud verdict takes the label's place when Cloud has one; the local kind then moves to
+        // the line under the name, and its words do not change (§7.2).
+        (string label, IReadOnlyList<string> layers) =
+            cloudText.Row(finding, context, Recorded(ReportVocabulary.LabelFor(finding.Kind)));
         int spacing = Math.Max(1, RowLabelWidth - number.Length);
 
         builder.Append(number)
@@ -1614,6 +1878,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         else
             WriteMembers(builder, finding.Subject);
 
+        // Under the name, so the name keeps its own line (Amendment 3I).
+        foreach (string layer in layers)
+        {
+            foreach (string line in Wrap(layer, ContinuationBudget))
+                builder.Append(' ', ContinuationIndent).AppendLine(line);
+        }
+
         foreach (string line in Wrap(Recorded(finding.Headline), ContinuationBudget))
             builder.Append(' ', ContinuationIndent).AppendLine(line);
 
@@ -1628,17 +1899,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             Recorded(finding.Id)
         };
 
-        // Cloud's confidence belongs with the local evidence level: both say how much to believe it.
-        // The category goes first when the line is short of room — the detail view always has it —
-        // because Fit() would otherwise cut the local evidence word off the front.
-        if (CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: true, Charset) is { } cloud)
-        {
-            int rest = trailer.Sum(part => part.Length + SeparatorWidth);
-            trailer.Insert(1, rest + cloud.Length <= budget
-                ? cloud
-                : CloudText.Trailer(finding.Cloud, CloudSeparator, withCategory: false, Charset)!);
-        }
-
+        // Local only: Cloud's confidence has its own line under the name (Amendment 3O).
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
         if (Location(finding.Subject) is { } location)
@@ -1652,9 +1913,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
             // spent counts one separator per segment already in the list, which is exactly the
             // number string.Join adds once the location joins them: three segments here — evidence,
-            // population, id, plus Cloud's confidence when present — is three separators for the
-            // four the join sees. So the joined line
-            // lands on the budget rather than three columns over it, whatever the segment count.
+            // population, id — is three separators for the four the join sees. So the joined line
+            // lands on the budget rather than three columns over it.
             if (FitPath(location, budget - spent) is { } fitted)
                 trailer.Add(fitted);
         }
@@ -1739,7 +1999,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return true;
     }
 
-    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+    /// <summary>A count, as every count in the report is printed.</summary>
+    internal static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
 
@@ -1959,7 +2220,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return sha.Length == 0 ? branch : $"{branch}@{sha}";
     }
 
-    private static string Runs(int count) => count == 1 ? "1 run" : $"{count} runs";
+    /// <summary><c>1 run</c>, <c>20 runs</c>.</summary>
+    internal static string Runs(int count) => count == 1 ? "1 run" : $"{Count(count)} runs";
 
     private static string RunWord(int count) => count == 1 ? "run" : "runs";
 
