@@ -938,8 +938,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                     (string?)cloudText.Signature(signature, signature.ErrorMessageHash is { } hash && here.Contains(hash))))
         ];
 
-        int lifetime = pairs.FindIndex(pair => pair.Label == "lifetime");
-        pairs.InsertRange(lifetime < 0 ? pairs.Count : lifetime, signatures);
+        // Pairs always holds the lifetime row, valued or not; an empty one is dropped when written.
+        pairs.InsertRange(pairs.FindIndex(pair => pair.Label == "lifetime"), signatures);
         pairs.Add(("last run", cloudText.LastRun(context, key)));
 
         WritePairs(builder, pairs, separate: false);

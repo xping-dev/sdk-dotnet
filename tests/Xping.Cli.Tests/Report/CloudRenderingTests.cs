@@ -408,6 +408,27 @@ public sealed class CloudRenderingTests
     }
 
     [Fact]
+    public void ALongSegmentAfterAShortOneStartsItsOwnLine()
+    {
+        ReportEnvelope envelope = Get("cloud-broken");
+        CloudDigestDto digest = CloudDigest("regressing-on-every-branch-since-the-dependency-upgrade-landed");
+        envelope = envelope with
+        {
+            LatestRun = envelope.LatestRun! with
+            {
+                Failures = [envelope.LatestRun.Failures[0] with { Cloud = new CloudFailureDto(digest, "unsignable", null) }]
+            }
+        };
+
+        string[] section = LatestRunSection(Render(envelope, Unicode));
+        int first = Array.IndexOf(section, "                 cloud: confidence 0.22 (35 d)");
+
+        Assert.True(first > 0);
+        Assert.StartsWith("                        regressing-", section[first + 1], StringComparison.Ordinal);
+        Assert.All(section, l => Assert.True(l.Length <= FenceWidth || !l.TrimStart().Contains(' ', StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void AMatchOnlyOnDeveloperMachinesSaysNotInCi()
     {
         ReportEnvelope envelope = Get("cloud-broken");
@@ -526,6 +547,92 @@ public sealed class CloudRenderingTests
     }
 
     [Fact]
+    public void NoRunsInCloudIsALineNotASection()
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        envelope = envelope with { Test = envelope.Test! with { Cloud = envelope.Test.Cloud! with { Runs = [] } } };
+
+        Assert.Contains("RUNS IN CLOUD  no runs in Cloud", Lines(Render(envelope, Unicode)));
+    }
+
+    [Fact]
+    public void ACloudRunRowWithRoomCarriesItsSignature()
+    {
+        string[] lines = Lines(Render(WithOneRun(run => run with { MachineName = "ci-1", Attempts = 3 }), Unicode));
+
+        // The attempts would take the row past the fence, so only the signature joins it.
+        Assert.Contains("  10-31 08:59  ✗ failed   canonical  CI  ci-1  main  0053b0e  ab12…", lines);
+    }
+
+    [Fact]
+    public void ACloudRunRowWithRoomCarriesItsAttempts()
+    {
+        string[] lines = Lines(Render(WithOneRun(run => run with { Tier = null, MachineName = "ci-1", ErrorMessageHash = null, Attempts = 3 }), Unicode));
+
+        Assert.Contains("  10-31 08:59  ✗ failed   —  CI  ci-1  main  0053b0e  (attempt 3)", lines);
+    }
+
+    [Fact]
+    public void TheHistoryMarksADisagreementOnItsVerdict()
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        envelope = envelope with
+        {
+            Findings = [envelope.Findings[0] with { Cloud = envelope.Findings[0].Cloud! with { DisagreesWithLocal = true } }, .. envelope.Findings.Skip(1)]
+        };
+
+        Assert.Contains("    verdict     known flaky (≠ local: flaky)", Lines(Render(envelope, Unicode)));
+    }
+
+    [Fact]
+    public void ADigestWithoutALifetimeStillListsItsSignatures()
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        CloudTestHistoryDto cloud = envelope.Test!.Cloud!;
+        envelope = envelope with { Test = envelope.Test with { Cloud = cloud with { Digest = cloud.Digest! with { TotalRuns = null } } } };
+
+        string[] lines = Lines(Render(envelope, Unicode));
+
+        Assert.Contains(lines, l => l.StartsWith("    signatures  ", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("    lifetime", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("ok", null, "    not answered")]
+    [InlineData("partial", null, "    not answered")]
+    [InlineData("ok", "unknown", "    not in project payments")]
+    public void TheHistorySaysWhyThereIsNoDigest(string status, string? state, string expected)
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        CloudTestHistoryDto cloud = envelope.Test!.Cloud!;
+        CloudDigestDto? digest = state is null ? null : cloud.Digest! with { State = state };
+        envelope = envelope with
+        {
+            Test = envelope.Test with { Cloud = cloud with { Digest = digest } },
+            Context = envelope.Context! with { Cloud = envelope.Context.Cloud! with { Status = status } }
+        };
+
+        string[] lines = Lines(Render(envelope, Unicode));
+        int heading = Array.FindIndex(lines, l => l.StartsWith("CLOUD", StringComparison.Ordinal));
+
+        Assert.Equal(expected, lines[heading + 3]);
+        Assert.DoesNotContain(lines, l => l.StartsWith("RUNS IN CLOUD", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheCloudHeadingWithoutAProjectSaysWhenItWasFetched()
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        CloudContextDto context = envelope.Context!.Cloud!;
+        envelope = envelope with { Context = envelope.Context with { Cloud = context with { Projects = [] } } };
+
+        string heading = Lines(Render(envelope, Unicode)).First(l => l.StartsWith("CLOUD", StringComparison.Ordinal));
+
+        Assert.EndsWith("  fetched 2026-11-01 10:02", heading, StringComparison.Ordinal);
+        Assert.DoesNotContain("payments", heading, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheHistoryHasNoCloudBlockWhenTheLayerDidNotRun()
     {
         ReportEnvelope local = Get("history-flaky");
@@ -570,6 +677,14 @@ public sealed class CloudRenderingTests
         Assert.Equal(
             before.RootElement.GetProperty("latestRun").GetProperty("failures")[0].GetProperty("contrast").GetString(),
             after.RootElement.GetProperty("latestRun").GetProperty("failures")[0].GetProperty("contrast").GetString());
+    }
+
+    private static ReportEnvelope WithOneRun(Func<CloudRunDto, CloudRunDto> edit)
+    {
+        ReportEnvelope envelope = Get("history-cloud");
+        CloudTestHistoryDto cloud = envelope.Test!.Cloud!;
+
+        return envelope with { Test = envelope.Test with { Cloud = cloud with { Runs = [edit(cloud.Runs[0])] } } };
     }
 
     private static ReportEnvelope Single(string kind, CloudDigestDto digest)
