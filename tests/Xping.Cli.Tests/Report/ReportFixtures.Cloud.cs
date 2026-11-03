@@ -4,6 +4,7 @@
  */
 
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -193,13 +194,15 @@ internal static partial class ReportFixtures
     // A local flaky finding Cloud calls known flaky, with a score still pending a rescore.
     private static ReportEnvelope CloudKnownFlaky()
     {
-        ReportEnvelope envelope = Build("docs-retry-deepening");
-        FindingDto finding = envelope.Findings[0];
+        FindingDto finding = Finding(
+            nameof(FindingKind.Flaky), "medium",
+            "MyApp.Tests.CheckoutTests.Checkout_CompletesWithinTheServiceBudget",
+            "failed 4 of 20 executions (20%) in 4 of 20 runs, 1 failure mode",
+            "tests/MyApp.Tests/CheckoutTests.cs", 27) with
+        { Id = "f_5da7c018" };
 
-        envelope = envelope with
-        {
-            Findings = [finding with { Cloud = CloudDigest("known-flaky", flaky: "flaky", score: 0.58, delta: 0.04, freshness: "pending") }]
-        };
+        ReportEnvelope envelope = Envelope(
+            finding with { Cloud = CloudDigest("known-flaky", flaky: "flaky", score: 0.58, delta: 0.04, freshness: "pending") });
 
         return WithCloud(envelope, CloudContext(envelope));
     }

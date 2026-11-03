@@ -338,8 +338,15 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Last, above the fence: it qualifies everything in the block, and a pasted block keeps it.
         // Dim, because it is about the source and not about any test (§7.6).
+        // Wrapped like the block it sits over: it is pasted with it.
         if (cloudText.Reason(envelope.Context?.Cloud) is { } reason)
-            builder.AppendLine(capabilities.Dim("cloud: " + reason));
+        {
+            const string prefix = "cloud: ";
+            List<string> lines = Wrap(reason, FenceWidth - prefix.Length);
+
+            for (int index = 0; index < lines.Count; index++)
+                builder.AppendLine(capabilities.Dim((index == 0 ? prefix : new string(' ', prefix.Length)) + lines[index]));
+        }
     }
 
     /// <summary>
@@ -886,7 +893,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         string? key = CloudText.ProjectKey(context, test.Assembly);
         CloudDigestDto? digest = history.Cloud?.Digest;
-        string joint = $" {cloudText.Separator} ";
+        string joint = cloudText.Joint;
 
         string annotation = string.Join(joint, new[]
         {
@@ -1643,20 +1650,31 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     private void WriteLatestRunCloud(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
     {
         const string prefix = "cloud: ";
-        const int width = LatestRunBudget - 7;
+        int width = LatestRunBudget - prefix.Length;
 
         IReadOnlyList<string> segments = cloudText.LatestRun(failure, context);
 
         if (segments.Count == 0)
             return;
 
-        string joint = $" {cloudText.Separator} ";
+        string joint = cloudText.Joint;
         var lines = new List<string>();
         string line = string.Empty;
 
+        // A segment too long for a line of its own -- a long project key, a verdict printed as sent
+        // -- is wrapped at its spaces like any other line rather than carried past the fence.
         foreach (string segment in segments)
         {
-            if (line.Length == 0)
+            if (segment.Length > width)
+            {
+                if (line.Length > 0)
+                    lines.Add(line);
+
+                List<string> pieces = Wrap(segment, width);
+                lines.AddRange(pieces.Take(pieces.Count - 1));
+                line = pieces[^1];
+            }
+            else if (line.Length == 0)
             {
                 line = segment;
             }
@@ -1881,8 +1899,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             Recorded(finding.Id)
         };
 
-        // Local only. Cloud's confidence has its own line under the name (Amendment 3O).
-
+        // Local only: Cloud's confidence has its own line under the name (Amendment 3O).
         // The source location is what makes a finding actionable, so it is printed whenever the SDK
         // captured one rather than being reserved for a verbose mode.
         if (Location(finding.Subject) is { } location)
@@ -1896,9 +1913,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
             // spent counts one separator per segment already in the list, which is exactly the
             // number string.Join adds once the location joins them: three segments here — evidence,
-            // population, id, plus Cloud's confidence when present — is three separators for the
-            // four the join sees. So the joined line
-            // lands on the budget rather than three columns over it, whatever the segment count.
+            // population, id — is three separators for the four the join sees. So the joined line
+            // lands on the budget rather than three columns over it.
             if (FitPath(location, budget - spent) is { } fitted)
                 trailer.Add(fitted);
         }
@@ -1983,7 +1999,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return true;
     }
 
-    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+    /// <summary>A count, as every count in the report is printed.</summary>
+    internal static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
 
@@ -2203,7 +2220,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         return sha.Length == 0 ? branch : $"{branch}@{sha}";
     }
 
-    private static string Runs(int count) => count == 1 ? "1 run" : $"{count} runs";
+    /// <summary><c>1 run</c>, <c>20 runs</c>.</summary>
+    internal static string Runs(int count) => count == 1 ? "1 run" : $"{Count(count)} runs";
 
     private static string RunWord(int count) => count == 1 ? "run" : "runs";
 

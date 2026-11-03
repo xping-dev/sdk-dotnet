@@ -162,6 +162,11 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.DoesNotContain("xping.io/start", enriched.Error, StringComparison.Ordinal);
         Assert.Contains("xping.io/start", local.Error, StringComparison.Ordinal);
         Assert.DoesNotContain("xping.io/start", local.Output, StringComparison.Ordinal);
+
+        // Only the stream changed: a blank line still sets the invitation off, and one still closes
+        // the report (§11).
+        Assert.Equal(string.Empty, ReportText.Lines(local.Error)[0]);
+        Assert.Equal(string.Empty, ReportText.Lines(local.Output)[^2]);
     }
 
     [Fact]

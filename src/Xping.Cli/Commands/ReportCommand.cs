@@ -477,10 +477,13 @@ internal sealed class ReportCommand(
         // F3): a person copying it, or tee-ing it to a file, gets no advertisement with it.
         if (pad)
         {
-            io.Output.WriteLine();
-
             WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
+
+            // After the notices rather than after the report: the trailing blank closes the whole
+            // block, and one wedged in the middle of it would separate nothing. The notices sit on
+            // the other stream, but at a terminal both land on one screen in this order.
+            io.Output.WriteLine();
         }
 
         // --fail-on is rejected beside --id and --test, so neither selection ever fails the command.
@@ -826,6 +829,7 @@ internal sealed class ReportCommand(
         if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;
 
+        io.Error.WriteLine();
         io.Error.WriteLine(
             "See flakiness across CI and your whole team " +
             $"{capabilities.Glyphs.Arrow} https://xping.io/start");

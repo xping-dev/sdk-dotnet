@@ -40,17 +40,13 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
     private const string NotAttempted = "not-attempted";
 
-    // The local kinds that are observations about this machine (contract L4). Their label never
-    // moves; Cloud adds its flaky state on a second line.
-    private static readonly HashSet<string> Observations = new(StringComparer.Ordinal)
+    // The local kinds a Cloud verdict speaks to: whether the test passes. Every other kind is an
+    // observation about this machine -- time, retries, concurrency, the clock -- and keeps its label,
+    // with Cloud's flaky state on the line under the name (contract L4, Amendment 3S).
+    private static readonly HashSet<string> VerdictKinds = new(StringComparer.Ordinal)
     {
-        nameof(FindingKind.RetryMasked),
-        nameof(FindingKind.RetryExhausted),
-        nameof(FindingKind.TimingOut),
-        nameof(FindingKind.BrokenFixture),
-        nameof(FindingKind.SharedFailure),
-        nameof(FindingKind.DurationUnstable),
-        nameof(FindingKind.Vanished)
+        nameof(FindingKind.Flaky),
+        nameof(FindingKind.AlwaysFailing)
     };
 
     /// <summary>
@@ -62,7 +58,8 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     /// </remarks>
     public string Separator => glyphs.Separator == "|" ? "-" : glyphs.Separator;
 
-    private string Joint => $" {Separator} ";
+    /// <summary>Gets <see cref="Separator"/> with the spaces around it.</summary>
+    public string Joint => $" {Separator} ";
 
     /// <summary>
     /// Whether the Cloud layer ran for this report. Without it the report is exactly the local one
@@ -101,7 +98,8 @@ internal sealed class CloudText(ReportGlyphs glyphs)
             "forbidden" => $"forbidden{Joint}showing local results only",
             "no-project" => NoProject(context),
             "partial" =>
-                $"partial, {Count(context.EnrichedTests)} of {Count(context.RequestedTests)} tests answered ({reason})",
+                $"partial, {TextReportRenderer.Count(context.EnrichedTests)} of " +
+                $"{TextReportRenderer.Count(context.RequestedTests)} tests answered ({reason})",
             _ => $"{Recorded(context.Status)} ({reason})"
         };
     }
@@ -144,9 +142,10 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (digest.DisagreesWithLocal)
         {
             label = $"{labelled} {glyphs.NotEqual} cloud {Recorded(digest.Verdict ?? "no verdict")}";
-            lines.Add("cloud: " + string.Join(Joint, new[] { verdict, flaky }.OfType<string>()));
+            string[] reading = [.. new[] { verdict, flaky }.OfType<string>()];
+            lines.Add("cloud: " + (reading.Length > 0 ? string.Join(Joint, reading) : "no verdict"));
         }
-        else if (Observations.Contains(finding.Kind))
+        else if (!VerdictKinds.Contains(finding.Kind))
         {
             label = labelled;
             lines.Add("cloud: " + (flaky ?? verdict ?? "no verdict"));
@@ -154,7 +153,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         else if (digest.Verdict is "known-flaky" or "broken" or "unstable" or "passing")
         {
             label = "cloud " + digest.Verdict;
-            lines.Add($"local: {local} in {Runs(finding.EvidenceSessions)} here");
+            lines.Add($"local: {local} in {TextReportRenderer.Runs(finding.EvidenceSessions)} here");
         }
         else
         {
@@ -186,20 +185,10 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         var segments = new List<string>();
 
-        if (digest.Confidence is { Score: { } score } scored)
-            segments.Add($"confidence {Score(score)}" + (Window(scored.Window) is { } length ? $" ({length})" : string.Empty));
+        if (ScoreOf(digest.Confidence) is { } score)
+            segments.Add($"confidence {Score(score)}" + (Window(digest.Confidence!.Window) is { } length ? $" ({length})" : string.Empty));
 
-        string? since = digest.Canonical?.FailingSince is { } failingSince ? " since " + Date(failingSince) : null;
-        string? verdict = digest.Verdict switch
-        {
-            null => null,
-            "broken" => "broken" + since,
-            "known-flaky" => "known flaky",
-            "no-history" => "no canonical history",
-            _ => Recorded(digest.Verdict)
-        };
-
-        if (verdict is not null)
+        if (Verdict(digest, brief: true) is { } verdict)
             segments.Add(verdict);
 
         if (MatchPhrase(cloud.Match, cloud.Signature) is { } match)
@@ -226,7 +215,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (confidence.State == "insufficient-evidence")
             return EvidenceToken(confidence) is { } evidence ? "cloud: " + evidence : null;
 
-        if (confidence.Score is not { } score)
+        if (ScoreOf(confidence) is not { } score)
             return null;
 
         var parts = new List<string> { $"cloud: confidence {Score(score)}{Delta(confidence.Delta)}" };
@@ -317,13 +306,13 @@ internal sealed class CloudText(ReportGlyphs glyphs)
             parts.Add(head);
 
         if (signature.Runs is { } runs)
-            parts.Add(Runs(runs));
+            parts.Add(TextReportRenderer.Runs(runs));
 
         if (signature.Machines is { } machines)
-            parts.Add($"{Count(machines)} {(machines == 1 ? "machine" : "machines")}");
+            parts.Add(Machines(machines));
 
         if (signature.CiRuns is { } ci)
-            parts.Add(ci > 0 ? $"{Count(ci)} CI" : "local only");
+            parts.Add(ci > 0 ? $"{TextReportRenderer.Count(ci)} CI" : "local only");
 
         if (signature.FirstSeenAt is { } first)
             parts.Add("since " + Date(first));
@@ -378,24 +367,45 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     private string? NameDiffers(CloudDigestDto digest) =>
         digest.Identity == "name-mismatch" && digest.TestName is { } name ? "cloud: known as " + Recorded(name) : null;
 
-    /// <summary>The verdict in words, with its date when it is <c>broken</c> (Amendment 3A).</summary>
-    private string? Verdict(CloudDigestDto digest, bool withTime = false)
+    /// <summary>
+    /// The verdict in words, with its date when it is <c>broken</c> (Amendment 3A): in full, or
+    /// <paramref name="brief"/> for the latest-run line, which has 48 columns.
+    /// </summary>
+    private string? Verdict(CloudDigestDto digest, bool brief = false, bool withTime = false)
     {
         string? since = digest.Canonical?.FailingSince is { } failingSince
             ? " since " + (withTime ? Time(failingSince) : Date(failingSince))
             : null;
 
+        string where = brief ? string.Empty : " on the canonical branch";
+
         return digest.Verdict switch
         {
             null => null,
             "known-flaky" => "known flaky",
-            "broken" => "broken on the canonical branch" + since,
-            "unstable" => "unstable on the canonical branch",
-            "passing" => "passing on the canonical branch",
+            "broken" => "broken" + where + since,
+            "unstable" => "unstable" + where,
+            "passing" => "passing" + where,
             "no-history" => "no canonical history",
             _ => Recorded(digest.Verdict)
         };
     }
+
+    /// <summary>
+    /// The score, when Cloud scored the test: a score beside a state that says it did not is not
+    /// shown, so no line can disagree with another about it (Amendment 3O).
+    /// </summary>
+    private static double? ScoreOf(CloudConfidenceDto? confidence) =>
+        confidence is { Score: { } score, State: not ("insufficient-evidence" or "not-scored") } ? score : null;
+
+    /// <summary><c>ESS 34</c>, or <c>ESS 4 of 10</c> when it is short of what scoring needs.</summary>
+    private static string EffectiveSamples(CloudConfidenceDto confidence, double ess) =>
+        confidence.State == "insufficient-evidence"
+            ? $"ESS {Ess(ess)} of {TextReportRenderer.Count(MinimumEffectiveSampleSize)}"
+            : $"ESS {Ess(ess)}";
+
+    private static string Machines(int machines) =>
+        $"{TextReportRenderer.Count(machines)} {(machines == 1 ? "machine" : "machines")}";
 
     /// <summary>
     /// The flaky state in words for a row's second line. Never "not flaky" for a state that is not
@@ -428,9 +438,14 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
     private string? MatchPhrase(string match, CloudSignatureDto? signature) => match switch
     {
+        // CI is claimed either way only when Cloud counted it: a missing count is not a zero.
         "matched" when signature is { Machines: { } machines } =>
-            $"same error on {Count(machines)} {(machines == 1 ? "machine" : "machines")}" +
-            (signature.CiRuns > 0 ? " and CI" : ", not in CI"),
+            $"same error on {Machines(machines)}" + signature.CiRuns switch
+            {
+                > 0 => " and CI",
+                null => string.Empty,
+                _ => ", not in CI"
+            },
         "matched" => "same error seen in Cloud",
         "unseen" => "this error unseen in Cloud",
         "unsignable" or "unknown" => null,
@@ -441,16 +456,13 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     {
         var parts = new List<string>();
 
-        if (signature.Machines is { } machines)
-            parts.Add($"same error on {Count(machines)} {(machines == 1 ? "machine" : "machines")}");
-        else
-            parts.Add("same error");
+        parts.Add(signature.Machines is { } machines ? "same error on " + Machines(machines) : "same error");
 
         if (signature.CiRuns is { } ci)
-            parts.Add($"{Count(ci)} CI");
+            parts.Add($"{TextReportRenderer.Count(ci)} CI");
 
         if (signature.LocalRuns is { } local)
-            parts.Add($"{Count(local)} local");
+            parts.Add($"{TextReportRenderer.Count(local)} local");
 
         if (signature.FirstSeenAt is { } first)
             parts.Add("since " + Date(first));
@@ -463,10 +475,9 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (confidence.EvidenceLevel is not { } level || confidence.EffectiveSampleSize is not { } ess)
             return null;
 
-        string of = confidence.State == "insufficient-evidence" ? $" of {Count(MinimumEffectiveSampleSize)}" : string.Empty;
         string window = Window(confidence.EvidenceWindow) is { } length ? ", " + length : string.Empty;
 
-        return $"evidence {Recorded(level)} (ESS {Ess(ess)}{of}{window})";
+        return $"evidence {Recorded(level)} ({EffectiveSamples(confidence, ess)}{window})";
     }
 
     private string? ConfidencePair(CloudConfidenceDto? confidence)
@@ -476,7 +487,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         var parts = new List<string>();
 
-        if (confidence.Score is { } score)
+        if (ScoreOf(confidence) is { } score)
             parts.Add(Score(score) + Delta(confidence.Delta));
         else
             parts.Add(confidence.State is { } state ? Words(state) : "not scored");
@@ -504,16 +515,14 @@ internal sealed class CloudText(ReportGlyphs glyphs)
             parts.Add(Recorded(level));
 
         if (confidence.EffectiveSampleSize is { } ess)
-        {
-            string of = confidence.State == "insufficient-evidence" ? $" of {Count(MinimumEffectiveSampleSize)}" : string.Empty;
-            parts.Add($"ESS {Ess(ess)}{of}");
-        }
+            parts.Add(EffectiveSamples(confidence, ess));
 
         if (confidence.CanonicalRuns is not null || confidence.SpeculativeRuns is not null || confidence.UntrackedRuns is not null)
         {
             parts.Add(
-                $"{Count(confidence.CanonicalRuns ?? 0)} canonical, {Count(confidence.SpeculativeRuns ?? 0)} speculative, " +
-                $"{Count(confidence.UntrackedRuns ?? 0)} untracked");
+                $"{TextReportRenderer.Count(confidence.CanonicalRuns ?? 0)} canonical, " +
+                $"{TextReportRenderer.Count(confidence.SpeculativeRuns ?? 0)} speculative, " +
+                $"{TextReportRenderer.Count(confidence.UntrackedRuns ?? 0)} untracked");
         }
 
         if (Window(confidence.EvidenceWindow) is { } window)
@@ -550,12 +559,12 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         var parts = new List<string>();
 
         if (canonical.Failed is { } failed && canonical.Runs is { } runs)
-            parts.Add($"failed {Count(failed)}/{Count(runs)}");
+            parts.Add($"failed {TextReportRenderer.Count(failed)}/{TextReportRenderer.Count(runs)}");
 
         if (canonical.ConsecutiveFailures is > 0 and { } streak)
         {
             string since = canonical.FailingSince is { } at ? " since " + Time(at) : string.Empty;
-            parts.Add($"{Count(streak)} in a row{since}");
+            parts.Add($"{TextReportRenderer.Count(streak)} in a row{since}");
         }
 
         if (canonical.LatestAt is { } latest)
@@ -582,7 +591,9 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (digest.TotalRuns is not { } total)
             return null;
 
-        return digest.LastExecutedAt is { } last ? $"{Runs(total)}{Joint}last {Time(last)}" : Runs(total);
+        return digest.LastExecutedAt is { } last
+            ? $"{TextReportRenderer.Runs(total)}{Joint}last {Time(last)}"
+            : TextReportRenderer.Runs(total);
     }
 
     /// <summary><c>▼0.61</c> when the score moved by at least 0.01; else nothing.</summary>
@@ -598,8 +609,8 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     private static string? Window(CloudWindowDto? window) => window?.Length switch
     {
         null => null,
-        int length when window.Kind == "runs" => Runs(length),
-        int length => $"{Count(length)} d"
+        int length when window.Kind == "runs" => TextReportRenderer.Runs(length),
+        int length => $"{TextReportRenderer.Count(length)} d"
     };
 
     /// <summary><c>moderately-reliable</c> → <c>moderately reliable</c>.</summary>
@@ -611,8 +622,4 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     private static string Score(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
     private static string Ess(double value) => value.ToString("0", CultureInfo.InvariantCulture);
-
-    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
-
-    private static string Runs(int runs) => runs == 1 ? "1 run" : $"{Count(runs)} runs";
 }

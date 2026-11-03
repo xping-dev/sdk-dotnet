@@ -87,6 +87,24 @@ public sealed class CloudRenderingTests
     }
 
     [Fact]
+    public void ALongReasonLineWrapsAtTheFence()
+    {
+        ReportEnvelope local = Get("latest-run");
+        CloudContextDto context = CloudContext(local, "no-project", "not-found");
+        context = context with
+        {
+            Projects = [.. context.Projects.Select(p => p with { Assembly = "Company.Product.Billing.Integration.Tests", ProjectKey = null })]
+        };
+
+        string[] lines = Lines(Render(local with { Context = local.Context! with { Cloud = context } }, Unicode));
+        int first = Array.FindIndex(lines, l => l.StartsWith("cloud: ", StringComparison.Ordinal));
+
+        Assert.Equal("cloud: no project in this workspace for", lines[first]);
+        Assert.Equal("       Company.Product.Billing.Integration.Tests · pass --project <key>", lines[first + 1]);
+        Assert.All(lines.Skip(1).Take(first), l => Assert.InRange(l.Length, 0, FenceWidth));
+    }
+
+    [Fact]
     public void ANoProjectWithoutAKeyNamesTheAssembly()
     {
         ReportEnvelope local = Get("latest-run");
@@ -95,7 +113,9 @@ public sealed class CloudRenderingTests
 
         string report = Render(local with { Context = local.Context! with { Cloud = context } }, Unicode);
 
-        Assert.Contains("cloud: no project in this workspace for MyApp.Tests · pass --project <key>", report, StringComparison.Ordinal);
+        // Read across the wrap: the line is past the fence's width.
+        string joined = string.Join(' ', Lines(report).Select(l => l.Trim()));
+        Assert.Contains("cloud: no project in this workspace for MyApp.Tests · pass --project <key>", joined, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -173,6 +193,32 @@ public sealed class CloudRenderingTests
 
         Assert.True(row > 0);
         Assert.DoesNotContain(lines.Skip(row + 1).TakeWhile(l => l.Length > 0), l => l.Contains("cloud", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(nameof(FindingKind.DurationRegression), "slower")]
+    [InlineData(nameof(FindingKind.RetryDeepening), "deeper retries")]
+    [InlineData(nameof(FindingKind.ParallelSensitive), "concurrency")]
+    [InlineData(nameof(FindingKind.TimeSensitive), "time sensitive")]
+    public void AKindAVerdictDoesNotSpeakToKeepsItsLabel(string kind, string word)
+    {
+        // A "slower" row labelled "cloud passing" would answer a question the row did not ask
+        // (Amendment 3S).
+        string[] lines = Lines(Render(Single(kind, CloudDigest("passing")), Unicode));
+
+        Assert.Contains($"1.  HIGH  local {word}", lines);
+        Assert.Contains("    cloud: not flaky in 14 d", lines);
+    }
+
+    [Fact]
+    public void ADisagreementWithNothingToSayStillSaysSomething()
+    {
+        CloudDigestDto digest = CloudDigest("passing", disagrees: true) with { Verdict = null, Flaky = null };
+
+        string[] lines = Lines(Render(Single(nameof(FindingKind.Flaky), digest), Unicode));
+
+        Assert.Contains("    cloud: no verdict", lines);
+        Assert.DoesNotContain("    cloud: ", lines);
     }
 
     [Fact]
@@ -302,6 +348,63 @@ public sealed class CloudRenderingTests
         };
 
         Assert.Contains("                 cloud: confidence 0.97 (35 d) · passing", LatestRunSection(Render(envelope, Unicode)));
+    }
+
+    [Fact]
+    public void AnUncountedCiIsNotClaimedEitherWay()
+    {
+        ReportEnvelope envelope = Get("cloud-broken");
+        CloudDigestDto broken = CloudDigest("broken");
+        CloudSignatureDto uncounted = broken.Signatures[0] with { CiRuns = null };
+        envelope = envelope with
+        {
+            LatestRun = envelope.LatestRun! with
+            {
+                Failures = [envelope.LatestRun.Failures[0] with { Cloud = new CloudFailureDto(broken, "matched", uncounted) }]
+            }
+        };
+
+        string[] section = LatestRunSection(Render(envelope, Unicode));
+
+        Assert.Contains("                        same error on 6 machines", section);
+        Assert.DoesNotContain(section, l => l.Contains("CI", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AScoreBesideAStateThatSaysUnscoredIsNotShown()
+    {
+        // The finding row shows the evidence Cloud lacks; the latest-run line must not show a number.
+        CloudDigestDto digest = CloudDigest("broken");
+        digest = digest with { Confidence = digest.Confidence! with { State = "insufficient-evidence", EffectiveSampleSize = 4, EvidenceLevel = "sparse" } };
+
+        ReportEnvelope envelope = Get("cloud-broken");
+        envelope = envelope with
+        {
+            LatestRun = envelope.LatestRun! with
+            {
+                Failures = [envelope.LatestRun.Failures[0] with { Cloud = new CloudFailureDto(digest, "unsignable", null) }]
+            }
+        };
+
+        Assert.Contains("                 cloud: broken since 2026-10-11", LatestRunSection(Render(envelope, Unicode)));
+        Assert.Equal("cloud: evidence sparse (ESS 4 of 10, 14 d)", UnicodeText.ConfidenceLine(digest.Confidence));
+    }
+
+    [Fact]
+    public void ALatestRunSegmentTooLongForItsLineWrapsInsideTheFence()
+    {
+        ReportEnvelope envelope = Get("cloud-partial");
+        CloudContextDto context = envelope.Context!.Cloud!;
+        context = context with
+        {
+            Projects = [.. context.Projects.Select(p => p with { ProjectKey = "payments-and-billing-integration-suite-eu-west" })]
+        };
+
+        string[] section = LatestRunSection(Render(envelope with { Context = envelope.Context with { Cloud = context } }, Unicode));
+
+        Assert.Contains("                 cloud: not in project", section);
+        Assert.Contains("                        payments-and-billing-integration-suite-eu-west", section);
+        Assert.All(section, l => Assert.InRange(l.Length, 0, FenceWidth));
     }
 
     [Fact]

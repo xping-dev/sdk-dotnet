@@ -8,10 +8,9 @@ NEEDS ATTENTION (1 medium)                             most severe first
 1.  MED   cloud known-flaky
     CheckoutTests.Checkout_CompletesWithinTheServiceBudget
     cloud: confidence 0.58 ^0.04 - moderately reliable - 35 d - pending
-    local: deeper retries in 20 runs here
-    attempts to pass 1 -> 3 (+2) over 3 runs against 14 before, 2.4s
-    spent retrying
-    evidence moderate | -env | f_5da7c018 | .../CheckoutTests.cs:27
+    local: flaky in 20 runs here
+    failed 4 of 20 executions (20%) in 4 of 20 runs, 1 failure mode
+    evidence moderate | -env-cluster | f_5da7c018 | ...eckoutTests.cs:27
 ```
 
 rates: the marker on each finding says which runs its percentage was
