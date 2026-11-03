@@ -1,6 +1,6 @@
 Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867
 16 tests · 10 healthy · 6 flagged
-cloud  login required · run xping login
+cloud: login required · run xping login
 
 ```
 LATEST RUN  16:21 · eab9867                               2 new failures

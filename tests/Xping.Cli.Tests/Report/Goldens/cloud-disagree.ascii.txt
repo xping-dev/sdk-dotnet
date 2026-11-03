@@ -7,7 +7,7 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 1.  HIGH  local always failing != cloud passing
     SampleTests.ExceptionTest_ThrowsOnMissingDependency
-    cloud confidence 0.97 - highly reliable - 35 d
+    cloud: confidence 0.97 - highly reliable - 35 d
     cloud: passing on the canonical branch - not flaky in 14 d
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
@@ -35,7 +35,7 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 5.  HIGH  local flaky != cloud unstable                  same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
-    cloud confidence 0.81 v0.02 - reliable - 35 d
+    cloud: confidence 0.81 v0.02 - reliable - 35 d
     cloud: unstable on the canonical branch - not flaky in 14 d
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
     evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83

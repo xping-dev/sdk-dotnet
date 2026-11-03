@@ -209,7 +209,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
-    /// The finding's confidence line, <c>cloud confidence 0.22 ▼0.61 · highly unreliable · 35 d</c>;
+    /// The finding's confidence line, <c>cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d</c>;
     /// for a score Cloud withheld, the evidence it lacks; null when there is no score to speak of
     /// (Amendment 3O).
     /// </summary>
@@ -224,12 +224,12 @@ internal sealed class CloudText(ReportGlyphs glyphs)
             return null;
 
         if (confidence.State == "insufficient-evidence")
-            return EvidenceToken(confidence) is { } evidence ? "cloud " + evidence : null;
+            return EvidenceToken(confidence) is { } evidence ? "cloud: " + evidence : null;
 
         if (confidence.Score is not { } score)
             return null;
 
-        var parts = new List<string> { $"cloud confidence {Score(score)}{Delta(confidence.Delta)}" };
+        var parts = new List<string> { $"cloud: confidence {Score(score)}{Delta(confidence.Delta)}" };
 
         if (confidence.Category is { } category)
             parts.Add(Words(category));
@@ -376,7 +376,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     private string? NameDiffers(CloudDigestDto digest) =>
-        digest.Identity == "name-mismatch" && digest.TestName is { } name ? "cloud name differs: " + Recorded(name) : null;
+        digest.Identity == "name-mismatch" && digest.TestName is { } name ? "cloud: known as " + Recorded(name) : null;
 
     /// <summary>The verdict in words, with its date when it is <c>broken</c> (Amendment 3A).</summary>
     private string? Verdict(CloudDigestDto digest, bool withTime = false)

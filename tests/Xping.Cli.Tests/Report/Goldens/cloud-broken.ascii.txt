@@ -7,13 +7,13 @@ LATEST RUN  16:21 | eab9867                               2 new failures
 
     new          CartTests.Checkout_AppliesDiscount
                  passed the previous 19 runs, failed just now
-                 cloud  confidence 0.22 (35 d) - broken since 2026-10-11
+                 cloud: confidence 0.22 (35 d) - broken since 2026-10-11
                         same error on 6 machines and CI
                  NullReferenceException | CartTests.cs:112
 
     new test     CartTests.Checkout_RejectsExpiredCoupon
                  first seen this run, failed
-                 cloud  no canonical history
+                 cloud: no canonical history
                         this error unseen in Cloud
                  EqualException | CartTests.cs:140
 
@@ -24,7 +24,7 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 1.  HIGH  cloud broken
     SampleTests.ExceptionTest_ThrowsOnMissingDependency
-    cloud confidence 0.22 v0.61 - highly unreliable - 35 d
+    cloud: confidence 0.22 v0.61 - highly unreliable - 35 d
     local: always failing in 20 runs here
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
@@ -32,7 +32,7 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 2.  HIGH  local timing out
     SampleTests.TimeoutTest_UnresponsiveDependency_AwaitsForever
-    cloud confidence 0.97 - highly reliable - 35 d
+    cloud: confidence 0.97 - highly reliable - 35 d
     cloud: not flaky in 14 d
     timed out 20 of 20 executions (100%) in 20 of 20 runs, killed at its
     500ms limit
@@ -49,14 +49,14 @@ NEEDS ATTENTION (5 high)                               most severe first
 
 4.  HIGH  local unstable timing
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
-    cloud confidence 0.41 - unreliable - 35 d
+    cloud: confidence 0.41 - unreliable - 35 d
     cloud: flaky (timing, major) since 2026-10-02
     p50 73ms, ranging 18ms to 129ms, dispersion 0.73 over 20 executions
     evidence high | -env | f_66c10ec3 | .../SampleTests.cs:83
 
 5.  HIGH  cloud known-flaky                              same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
-    cloud confidence 0.41 - unreliable - 35 d
+    cloud: confidence 0.41 - unreliable - 35 d
     local: flaky in 20 runs here
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
     evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83

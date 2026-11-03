@@ -200,7 +200,7 @@ public sealed class HostileEnvelopeTests
             string report = Render(envelope, Drawn(glyphs, color: false));
 
             AssertSafe(report, $"the {mode} rendering of {fixture} with a sparse digest");
-            Assert.Contains("cloud  degraded (solar-flare)", report, StringComparison.Ordinal);
+            Assert.Contains("cloud: degraded (solar-flare)", report, StringComparison.Ordinal);
             Assert.Contains("regressing", report, StringComparison.Ordinal);
         }
     }

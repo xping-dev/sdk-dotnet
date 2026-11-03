@@ -226,7 +226,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         // The local report is intact; the one line added says why Cloud is missing from it (§7.6).
         Assert.Equal(local.Code, down.Code);
         Assert.Equal(local.Output, WithoutReasonLine(down.Output));
-        Assert.Contains("cloud  unavailable (server)", down.Output, StringComparison.Ordinal);
+        Assert.Contains("cloud: unavailable (server)", down.Output, StringComparison.Ordinal);
         string hint = Assert.Single(ReportText.Lines(down.Error), l => l.Length > 0);
         Assert.StartsWith("Cloud data unavailable: could not reach ", hint, StringComparison.Ordinal);
         Assert.EndsWith(". Showing local results only.", hint, StringComparison.Ordinal);
@@ -449,7 +449,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     // of each kind, which says whose word it is (Amendment 3E). Everything else is the local report.
     private static string WithoutReasonLine(string output) =>
         string.Join('\n', output.Split('\n')
-            .Where(line => !line.Contains("cloud  ", StringComparison.Ordinal))
+            .Where(line => !line.Contains("cloud: ", StringComparison.Ordinal))
             .Select(line => line.Replace("  local ", "  ", StringComparison.Ordinal)));
 
     private static JsonElement Finding(JsonElement report, string fingerprint) =>

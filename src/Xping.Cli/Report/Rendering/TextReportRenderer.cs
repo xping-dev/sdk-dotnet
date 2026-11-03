@@ -339,7 +339,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // Last, above the fence: it qualifies everything in the block, and a pasted block keeps it.
         // Dim, because it is about the source and not about any test (§7.6).
         if (cloudText.Reason(envelope.Context?.Cloud) is { } reason)
-            builder.AppendLine(capabilities.Dim("cloud  " + reason));
+            builder.AppendLine(capabilities.Dim("cloud: " + reason));
     }
 
     /// <summary>
@@ -1642,7 +1642,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private void WriteLatestRunCloud(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
     {
-        const string prefix = "cloud  ";
+        const string prefix = "cloud: ";
         const int width = LatestRunBudget - 7;
 
         IReadOnlyList<string> segments = cloudText.LatestRun(failure, context);

@@ -7,7 +7,7 @@ FINDING                                                       row 1 of 1
 
 1.  MED   cloud broken
     CheckoutTests.Completes
-    cloud confidence 0.22 ▼0.61 · highly unreliable · 35 d
+    cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d
     local: flaky in 20 runs here
     failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
     evidence moderate | -env-cluster | f_89134598 | ...eckoutTests.cs:42

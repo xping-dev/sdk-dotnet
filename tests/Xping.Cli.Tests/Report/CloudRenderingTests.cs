@@ -64,13 +64,13 @@ public sealed class CloudRenderingTests
     }
 
     [Theory]
-    [InlineData("unavailable", "timeout", "login", "cloud  unavailable (timeout) · showing local results only")]
-    [InlineData("login-required", "none", "login", "cloud  login required · run xping login")]
-    [InlineData("forbidden", "none", "api-key", "cloud  forbidden · API keys need the Team plan; run xping login instead")]
-    [InlineData("forbidden", "none", "login", "cloud  forbidden · showing local results only")]
-    [InlineData("no-project", "not-found", "login", "cloud  not in this workspace: project payments · pass --project <key>")]
-    [InlineData("partial", "timeout", "login", "cloud  partial: 9 of 14 tests answered (timeout)")]
-    [InlineData("throttled", "rate-limited", "login", "cloud  throttled (rate-limited)")]
+    [InlineData("unavailable", "timeout", "login", "cloud: unavailable (timeout) · showing local results only")]
+    [InlineData("login-required", "none", "login", "cloud: login required · run xping login")]
+    [InlineData("forbidden", "none", "api-key", "cloud: forbidden · API keys need the Team plan; run xping login instead")]
+    [InlineData("forbidden", "none", "login", "cloud: forbidden · showing local results only")]
+    [InlineData("no-project", "not-found", "login", "cloud: not in this workspace: project payments · pass --project <key>")]
+    [InlineData("partial", "timeout", "login", "cloud: partial: 9 of 14 tests answered (timeout)")]
+    [InlineData("throttled", "rate-limited", "login", "cloud: throttled (rate-limited)")]
     public void TheReasonLineSitsAboveTheFenceOnce(string status, string reason, string credential, string expected)
     {
         ReportEnvelope local = Get("latest-run");
@@ -82,7 +82,7 @@ public sealed class CloudRenderingTests
         string[] lines = Lines(Render(envelope, Unicode));
         int fence = Array.IndexOf(lines, Fence);
 
-        Assert.Equal(expected, Assert.Single(lines, l => l.StartsWith("cloud  ", StringComparison.Ordinal)));
+        Assert.Equal(expected, Assert.Single(lines, l => l.StartsWith("cloud: ", StringComparison.Ordinal)));
         Assert.True(Array.IndexOf(lines, expected) < fence);
     }
 
@@ -95,15 +95,17 @@ public sealed class CloudRenderingTests
 
         string report = Render(local with { Context = local.Context! with { Cloud = context } }, Unicode);
 
-        Assert.Contains("cloud  no project in this workspace for MyApp.Tests · pass --project <key>", report, StringComparison.Ordinal);
+        Assert.Contains("cloud: no project in this workspace for MyApp.Tests · pass --project <key>", report, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AReportWideStatusIsNotRepeatedOnEveryRow()
     {
-        string[] lines = Lines(Render(Get("cloud-login-required"), Unicode));
+        string report = Render(Get("cloud-login-required"), Unicode);
+        string[] lines = Lines(report);
 
-        Assert.DoesNotContain(lines, l => l.TrimStart().StartsWith("cloud:", StringComparison.Ordinal));
+        Assert.Single(lines, l => l.StartsWith("cloud: ", StringComparison.Ordinal));
+        Assert.DoesNotContain(Fenced(report), l => l.TrimStart().StartsWith("cloud:", StringComparison.Ordinal));
         Assert.Contains("1.  HIGH  local always failing", lines);
         Assert.Contains(lines, l => l.StartsWith("5.  HIGH  local flaky ", StringComparison.Ordinal));
     }
@@ -189,7 +191,7 @@ public sealed class CloudRenderingTests
 
         string[] lines = Lines(Render(Single(nameof(FindingKind.Flaky), digest), Unicode));
 
-        Assert.Contains("    cloud name differs: Shop.Tests.Old.Name", lines);
+        Assert.Contains("    cloud: known as Shop.Tests.Old.Name", lines);
     }
 
     [Theory]
@@ -214,7 +216,7 @@ public sealed class CloudRenderingTests
         int row = Array.IndexOf(lines, "1.  HIGH  cloud broken");
 
         Assert.True(row > 0);
-        Assert.Equal("    cloud confidence 0.22 ▼0.61 · highly unreliable · 35 d", lines[row + 2]);
+        Assert.Equal("    cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d", lines[row + 2]);
         Assert.Equal("    local: always failing in 20 runs here", lines[row + 3]);
     }
 
@@ -224,7 +226,7 @@ public sealed class CloudRenderingTests
         string[] lines = Lines(Render(Get("cloud-broken"), Unicode));
 
         // Four single-test findings, every one scored; the cluster is never asked about.
-        Assert.Equal(4, lines.Count(l => l.StartsWith("    cloud confidence ", StringComparison.Ordinal)));
+        Assert.Equal(4, lines.Count(l => l.StartsWith("    cloud: confidence ", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -241,7 +243,7 @@ public sealed class CloudRenderingTests
     {
         CloudDigestDto digest = CloudDigest("no-history", score: null);
 
-        Assert.Equal("cloud evidence sparse (ESS 4 of 10, 14 d)", UnicodeText.ConfidenceLine(digest.Confidence));
+        Assert.Equal("cloud: evidence sparse (ESS 4 of 10, 14 d)", UnicodeText.ConfidenceLine(digest.Confidence));
     }
 
     [Fact]
@@ -249,7 +251,7 @@ public sealed class CloudRenderingTests
     {
         CloudDigestDto digest = CloudDigest("broken", delta: 0.004, freshness: "pending");
 
-        Assert.Equal("cloud confidence 0.22 · highly unreliable · 35 d · pending", UnicodeText.ConfidenceLine(digest.Confidence));
+        Assert.Equal("cloud: confidence 0.22 · highly unreliable · 35 d · pending", UnicodeText.ConfidenceLine(digest.Confidence));
     }
 
     [Fact]
@@ -266,8 +268,8 @@ public sealed class CloudRenderingTests
     {
         var text = new CloudText(ReportGlyphs.Ascii);
 
-        Assert.Equal("cloud confidence 0.22 v0.61 - highly unreliable - 35 d", text.ConfidenceLine(CloudDigest("broken").Confidence));
-        Assert.StartsWith("cloud confidence 0.58 ^0.04 ", text.ConfidenceLine(CloudDigest("broken", score: 0.58, delta: 0.04).Confidence), StringComparison.Ordinal);
+        Assert.Equal("cloud: confidence 0.22 v0.61 - highly unreliable - 35 d", text.ConfidenceLine(CloudDigest("broken").Confidence));
+        Assert.StartsWith("cloud: confidence 0.58 ^0.04 ", text.ConfidenceLine(CloudDigest("broken", score: 0.58, delta: 0.04).Confidence), StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------
@@ -282,7 +284,7 @@ public sealed class CloudRenderingTests
         int sentence = Array.IndexOf(lines, "                 passed the previous 19 runs, failed just now");
 
         Assert.True(sentence > 0);
-        Assert.Equal("                 cloud  confidence 0.22 (35 d) · broken since 2026-10-11", lines[sentence + 1]);
+        Assert.Equal("                 cloud: confidence 0.22 (35 d) · broken since 2026-10-11", lines[sentence + 1]);
         Assert.Equal("                        same error on 6 machines and CI", lines[sentence + 2]);
     }
 
@@ -299,7 +301,7 @@ public sealed class CloudRenderingTests
             }
         };
 
-        Assert.Contains("                 cloud  confidence 0.97 (35 d) · passing", LatestRunSection(Render(envelope, Unicode)));
+        Assert.Contains("                 cloud: confidence 0.97 (35 d) · passing", LatestRunSection(Render(envelope, Unicode)));
     }
 
     [Fact]
