@@ -431,7 +431,13 @@ internal sealed class ReportCommand(
         // one-line summary has no slot for Cloud data, so it is not worth a request.
         if (options.Format != ReportFormat.Summary)
         {
-            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions));
+            // Under --id and --test the page holds the selection only. Asking about every finding
+            // behind it would spend the budget the subject's run history needs on rows nobody sees.
+            IReadOnlyList<Finding> findings = envelope.Selection is null && envelope.Test is null
+                ? analysis.Findings
+                : [.. analysis.Findings.Where(f => envelope.Findings.Any(shown => shown.Id == f.Id))];
+
+            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions), window.Sessions, findings);
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);
@@ -467,13 +473,16 @@ internal sealed class ReportCommand(
 
         // Anything beyond the report itself is for a person at a terminal. A redirected stream is on
         // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
+        // On standard error even then, so standard output is the report and nothing else (contract
+        // F3): a person copying it, or tee-ing it to a file, gets no advertisement with it.
         if (pad)
         {
             WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
-            // block, and one wedged in the middle of it would separate nothing.
+            // block, and one wedged in the middle of it would separate nothing. The notices sit on
+            // the other stream, but at a terminal both land on one screen in this order.
             io.Output.WriteLine();
         }
 
@@ -787,7 +796,7 @@ internal sealed class ReportCommand(
         if (others == 0)
             return;
 
-        io.Output.WriteLine(
+        io.Error.WriteLine(
             $"Reporting on {TerminalText.Printable(assembly, glyphs.Charset)} {glyphs.Separator} {others} other " +
             (others == 1 ? "assembly" : "assemblies") +
             " in this store (use --assembly to switch).");
@@ -820,8 +829,8 @@ internal sealed class ReportCommand(
         if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;
 
-        io.Output.WriteLine();
-        io.Output.WriteLine(
+        io.Error.WriteLine();
+        io.Error.WriteLine(
             "See flakiness across CI and your whole team " +
             $"{capabilities.Glyphs.Arrow} https://xping.io/start");
     }

@@ -43,6 +43,7 @@ internal static class CredentialTestData
             AccessToken,
             new DateTimeOffset(2026, 9, 29, 10, 15, 0, TimeSpan.Zero),
             "01J8WORKSPACE",
+            "Acme",
             "01J8SESSION",
             "01J8USER",
             "jane@example.com",

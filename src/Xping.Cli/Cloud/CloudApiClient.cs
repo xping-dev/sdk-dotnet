@@ -5,17 +5,19 @@
 
 using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Polly.Timeout;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
+using Xping.Cli.Cloud.Digest;
 using Xping.Sdk.Core.Services.Serialization;
 
 namespace Xping.Cli.Cloud;
 
 /// <summary>
-/// Reads from the DataGateway and maps its answers (cli-auth-cli-spec §9.7, §10).
+/// Reads from the DataGateway and maps its answers (cli-auth-cli-spec §9.7, cloud-data-in-cli-cli-spec §2.2).
 /// </summary>
 /// <remarks>
 /// Built by <see cref="CloudApiClientFactory"/> around a pipeline that already carries the
@@ -76,28 +78,47 @@ internal sealed class CloudApiClient : ICloudApiClient
         return page with { Items = [.. page.Items.Where(p => p is { Id.Length: > 0 })] };
     }
 
-    public async Task<ProjectSummary?> GetProjectAsync(string projectKey, CancellationToken cancellationToken)
+    public async Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectKey);
+        ArgumentNullException.ThrowIfNull(request);
 
-        ProjectSummary? project = await GetAsync<ProjectSummary>($"projects/{Uri.EscapeDataString(projectKey)}", cancellationToken)
-            .ConfigureAwait(false);
-
-        return project is null || !string.IsNullOrEmpty(project.Id) ? project : throw Incomplete("project");
-    }
-
-    public async Task<CloudTest?> GetTestAsync(string projectKey, string testFingerprint, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(projectKey);
-        ArgumentException.ThrowIfNullOrEmpty(testFingerprint);
-
-        CloudTest? test = await GetAsync<CloudTest>(
-            $"projects/{Uri.EscapeDataString(projectKey)}/tests/{Uri.EscapeDataString(testFingerprint)}",
+        string? body = await SendAsync(
+            HttpMethod.Post,
+            $"projects/{Uri.EscapeDataString(projectKey)}/tests/digest",
+            _serializer.Serialize(request),
             cancellationToken).ConfigureAwait(false);
 
-        return test is null || (!string.IsNullOrEmpty(test.TestFingerprint) && !string.IsNullOrEmpty(test.EvidenceLevel))
-            ? test
-            : throw Incomplete("test");
+        if (body is null)
+            return null;
+
+        // Only a body without a test list is unreadable. An item the CLI cannot read costs that test,
+        // not its batch (contract §8.2 F4), so CloudEnricher sorts the items.
+        return Read<DigestResponse>(body) is { Tests: not null } digest
+            ? digest
+            : throw new CloudResponseException("The DataGateway answered the digest with a body the CLI cannot read.");
+    }
+
+    public async Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(projectKey);
+        ArgumentException.ThrowIfNullOrEmpty(fingerprint);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        string? body = await SendAsync(
+            HttpMethod.Get,
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"projects/{Uri.EscapeDataString(projectKey)}/tests/{Uri.EscapeDataString(fingerprint)}/runs?limit={limit}"),
+            content: null,
+            cancellationToken).ConfigureAwait(false);
+
+        if (body is null)
+            return null;
+
+        return Read<RunsResponse>(body) is { Runs: { } runs } history && runs.All(r => r is not null)
+            ? history
+            : throw new CloudResponseException("The DataGateway answered the run history with a body the CLI cannot read.");
     }
 
     public void Dispose()
@@ -110,6 +131,13 @@ internal sealed class CloudApiClient : ICloudApiClient
     private async Task<T?> GetAsync<T>(string route, CancellationToken cancellationToken)
         where T : class
     {
+        string? body = await SendAsync(HttpMethod.Get, route, content: null, cancellationToken).ConfigureAwait(false);
+        return body is null ? null : Read<T>(body) ?? throw Incomplete("response");
+    }
+
+    // The answer's body on 2xx, null on 404; any other failure throws.
+    private async Task<string?> SendAsync(HttpMethod method, string route, string? content, CancellationToken cancellationToken)
+    {
         var uri = new Uri($"{_gatewayUri}/v1/{route}", UriKind.Absolute);
 
         HttpStatusCode status;
@@ -117,7 +145,11 @@ internal sealed class CloudApiClient : ICloudApiClient
         bool retriedAfterRefresh;
         try
         {
-            using HttpResponseMessage response = await _http.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(method, uri);
+            if (content is not null)
+                request.Content = new StringContent(content, Encoding.UTF8, "application/json");
+
+            using HttpResponseMessage response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             status = response.StatusCode;
             body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             retriedAfterRefresh = response.RequestMessage?.Options.TryGetValue(BearerTokenHandler.RetriedAfterRefresh, out bool retried) == true && retried;
@@ -132,10 +164,10 @@ internal sealed class CloudApiClient : ICloudApiClient
         }
 
         int code = (int)status;
-        _logger.LogInformation("GET {Path} answered {Status}", uri.AbsolutePath, code);
+        _logger.LogInformation("{Method} {Path} answered {Status}", method.Method, uri.AbsolutePath, code);
 
         if (code is >= 200 and < 300)
-            return Read<T>(body) ?? throw Incomplete("response");
+            return body;
 
         if (status == HttpStatusCode.NotFound)
             return null;
@@ -180,7 +212,7 @@ internal sealed class CloudApiClient : ICloudApiClient
                 return new CloudApiException(code, title, "Xping Cloud is rate limiting requests; try again in a minute.");
 
             case >= 500:
-                return AuthFailureException.Unreachable(_gatewayUri, string.Create(CultureInfo.InvariantCulture, $"HTTP {code}"));
+                return new CloudApiException(code, title, string.Create(CultureInfo.InvariantCulture, $"Xping Cloud failed to answer (HTTP {code})."));
 
             default:
                 return new CloudApiException(code, title, Describe(code, problem));

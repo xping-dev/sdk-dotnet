@@ -4,11 +4,13 @@
  */
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Discovery;
 using Xping.Cli.Auth.Http;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Digest;
 
 namespace Xping.Cli.Tests.Cloud;
 
@@ -25,6 +27,8 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
     private const string Project = "shop-tests";
     private const string Fingerprint = "fp-checkout-0001";
     private const string ApiKey = "team-read-key-0123456789";
+
+    private static readonly DigestRequest Request = new([new DigestRequestTest(Fingerprint, [])], []);
 
     private readonly CliFlowHost _host = new();
 
@@ -43,7 +47,7 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
         _host.Time.Advance(TimeSpan.FromMinutes(16));
         using Process process = await StartProcessAsync();
 
-        CloudTest? test = await process.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+        DigestResponse? test = await process.Client.GetDigestAsync(Project, Request, CancellationToken.None);
 
         Assert.NotNull(test);
         RecordedRequest refresh = Assert.Single(_host.Cloud.RequestsTo("/connect/token"), r => r.Form["grant_type"] == "refresh_token");
@@ -73,7 +77,7 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
         using Process process = await StartProcessAsync();
 
         await Assert.ThrowsAsync<LoginRequiredException>(
-            () => process.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => process.Client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.True(_host.Cloud.IsSessionRevoked(before.RefreshToken));
         Assert.Null(_host.StoredRecord());
@@ -88,9 +92,9 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
         using Process first = await StartProcessAsync();
         using Process second = await StartProcessAsync();
 
-        CloudTest?[] tests = await _host.DriveAsync(Task.WhenAll(
-            Task.Run(() => first.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None)),
-            Task.Run(() => second.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None))));
+        DigestResponse?[] tests = await _host.DriveAsync(Task.WhenAll(
+            Task.Run(() => first.Client.GetDigestAsync(Project, Request, CancellationToken.None)),
+            Task.Run(() => second.Client.GetDigestAsync(Project, Request, CancellationToken.None))));
 
         Assert.All(tests, Assert.NotNull);
 
@@ -115,16 +119,16 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
 
         using (Process process = await StartProcessAsync())
         {
-            await process.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+            await process.Client.GetDigestAsync(Project, Request, CancellationToken.None);
 
             // The fallback a definitive sign-in failure leads to (§8.1) gets a pipeline of its own.
             using ICloudApiClient fallback = await process.Factory.CreateAsync(
-                process.Credential.FallbackToApiKey(), _host.Cloud.CloudUrl, CancellationToken.None);
-            await fallback.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+                process.Credential.FallbackToApiKey(), _host.Cloud.CloudUrl, process.Budget, CancellationToken.None);
+            await fallback.GetDigestAsync(Project, Request, CancellationToken.None);
         }
 
         using (Process flagged = await StartProcessAsync(apiKeyFlag: ApiKey))
-            await flagged.Client.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+            await flagged.Client.GetDigestAsync(Project, Request, CancellationToken.None);
 
         Assert.Equal(
             ["Authorization", "X-API-Key", "X-API-Key"],
@@ -142,20 +146,28 @@ public sealed class AuthenticatedPipelineTests : IAsyncDisposable
         ServiceProvider services = _host.BuildServices();
         ResolvedCredential credential = await _host.ResolveAsync(services, apiKeyFlag).ConfigureAwait(false);
         CloudApiClientFactory factory = services.GetRequiredService<CloudApiClientFactory>();
-        ICloudApiClient client = await factory.CreateAsync(credential, _host.Cloud.CloudUrl, CancellationToken.None).ConfigureAwait(false);
 
-        return new Process(services, credential, factory, client);
+        // On a clock of its own: the host's is driven past every timer, and these reads are about
+        // credentials, not the budget.
+#pragma warning disable CA2000 // Owned by the returned Process, which disposes it.
+        var budget = new CloudBudget(new FakeTimeProvider(), CancellationToken.None);
+#pragma warning restore CA2000
+        ICloudApiClient client = await factory.CreateAsync(credential, _host.Cloud.CloudUrl, budget, CancellationToken.None).ConfigureAwait(false);
+
+        return new Process(services, credential, factory, budget, client);
     }
 
     private sealed record Process(
         ServiceProvider Services,
         ResolvedCredential Credential,
         CloudApiClientFactory Factory,
+        CloudBudget Budget,
         ICloudApiClient Client) : IDisposable
     {
         public void Dispose()
         {
             Client.Dispose();
+            Budget.Dispose();
             Services.Dispose();
         }
     }

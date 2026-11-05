@@ -5,84 +5,625 @@
 
 using System.Globalization;
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
 using Xping.Cli.Reporting;
 
 namespace Xping.Cli.Report.Rendering;
 
 /// <summary>
-/// The words the text report prints for Xping Cloud's view of a test (cli-auth-cli-spec §11.3).
+/// The words the text report prints for Xping Cloud's view of a test (cloud-data-in-cli-cli-spec §7,
+/// §8, Amendment 3).
 /// </summary>
 /// <remarks>
-/// Composed at render time from <see cref="CloudTestDto"/> rather than resolved into the envelope's
-/// strings, so that in JSON every Cloud value stays under a <c>cloud</c> object and the local
-/// <c>contrast</c> and <c>metrics</c> are never mixed with it. Every phrase says "cloud" or
-/// "confidence", so no Cloud figure can be read as a local statistic.
 /// <para>
-/// Every word read from the DTO goes through <see cref="Recorded"/>: the Cloud is another writer of
-/// text this process prints, and is trusted no more than the local store (D7).
+/// Composed at render time from the <c>cloud</c> objects rather than resolved into the envelope's
+/// strings, so that in JSON every Cloud value stays under a <c>cloud</c> object and the local
+/// <c>headline</c>, <c>contrast</c> and <c>metrics</c> are never mixed with it (report-format
+/// Amendment 4). Every phrase says <c>cloud</c> or <c>confidence</c>, or sits under a <c>CLOUD</c>
+/// heading, so no Cloud figure can be read as a local statistic (contract R3).
+/// </para>
+/// <para>
+/// Every word read from a DTO goes through <see cref="Recorded"/>: the Cloud is another writer of
+/// text this process prints, and is trusted no more than the local store (D7). A value this build
+/// does not know is printed as sent, never dropped (contract §4).
+/// </para>
+/// <para>
+/// Nothing here derives a verdict from a number (contract R6): the verdict and the flaky state are
+/// printed as Cloud sent them, and the score only ever as a score.
 /// </para>
 /// </remarks>
-internal static class CloudText
+/// <param name="glyphs">The glyph set the report is drawn with.</param>
+internal sealed class CloudText(ReportGlyphs glyphs)
 {
-    private const string InsufficientData = "insufficient-data";
+    /// <summary>The ESS below which Cloud does not score a test (contract §6.2).</summary>
+    private const int MinimumEffectiveSampleSize = 10;
 
-    /// <summary>
-    /// Whether any slot prints something for <paramref name="cloud"/>: a score that is not
-    /// "insufficient data". The header claims Cloud only on the same test the rows use.
-    /// </summary>
-    public static bool HasScore(CloudTestDto? cloud) =>
-        cloud?.Confidence is not null && cloud.Category != InsufficientData;
+    private const string NotAttempted = "not-attempted";
 
-    /// <summary>
-    /// The row-trailer segment, <c>confidence 0.62 · moderately reliable</c> or, without the
-    /// category, <c>confidence 0.62</c>; <see langword="null"/> when the Cloud has no score worth
-    /// showing.
-    /// </summary>
-    public static string? Trailer(CloudTestDto? cloud, string separator, bool withCategory, TerminalCharset charset)
+    // The local kinds a Cloud verdict speaks to: whether the test passes. Every other kind is an
+    // observation about this machine -- time, retries, concurrency, the clock -- and keeps its label,
+    // with Cloud's flaky state on the line under the name (contract L4, Amendment 3S).
+    private static readonly HashSet<string> VerdictKinds = new(StringComparer.Ordinal)
     {
-        if (!HasScore(cloud))
+        nameof(FindingKind.Flaky),
+        nameof(FindingKind.AlwaysFailing)
+    };
+
+    /// <summary>
+    /// Gets what joins the parts of one Cloud phrase.
+    /// </summary>
+    /// <remarks>
+    /// The glyph set's separator, except in ASCII, where it is <c>-</c>: <c>|</c> joins the trailer's
+    /// own segments, and a Cloud part would read as a field of its own.
+    /// </remarks>
+    public string Separator => glyphs.Separator == "|" ? "-" : glyphs.Separator;
+
+    /// <summary>Gets <see cref="Separator"/> with the spaces around it.</summary>
+    public string Joint => $" {Separator} ";
+
+    /// <summary>
+    /// Whether the Cloud layer ran for this report. Without it the report is exactly the local one
+    /// (contract R1, Amendment 3E).
+    /// </summary>
+    public static bool Attempted(CloudContextDto? context) => context is not null && context.Status != NotAttempted;
+
+    /// <summary>
+    /// The header's provenance token: <c>cloud</c> when Cloud answered, <c>cloud (partial)</c> when
+    /// some of it did, else null (§7.5).
+    /// </summary>
+    public static string? HeaderToken(CloudContextDto? context) => context?.Status switch
+    {
+        "ok" => "cloud",
+        "partial" => "cloud (partial)",
+        _ => null
+    };
+
+    /// <summary>
+    /// Why the report has less Cloud data than it asked for, said once for the whole report (§7.6);
+    /// null when there is nothing to say.
+    /// </summary>
+    public string? Reason(CloudContextDto? context)
+    {
+        if (context is null || context.Status is "ok" or NotAttempted)
             return null;
 
-        string score = $"confidence {Score(cloud!.Confidence!.Value)}";
-        return withCategory && Words(cloud.Category, charset) is { } category ? $"{score} {separator} {category}" : score;
+        string reason = Recorded(context.Reason);
+
+        return context.Status switch
+        {
+            "unavailable" => $"unavailable ({reason}){Joint}showing local results only",
+            "login-required" => $"login required{Joint}run xping login",
+            "forbidden" when context.Credential == "api-key" =>
+                $"forbidden{Joint}API keys need the Team plan; run xping login instead",
+            "forbidden" => $"forbidden{Joint}showing local results only",
+            "no-project" => NoProject(context),
+            "partial" =>
+                $"partial, {TextReportRenderer.Count(context.EnrichedTests)} of " +
+                $"{TextReportRenderer.Count(context.RequestedTests)} tests answered ({reason})",
+            _ => $"{Recorded(context.Status)} ({reason})"
+        };
     }
 
     /// <summary>
-    /// The latest-run contrast, <c>confidence 0.94 over 812 runs</c>, or <see langword="null"/> when
-    /// the local sentence should stay.
+    /// A finding's label and the Cloud lines under its name (§7.2, Amendment 3D–3F, 3I, 3O).
     /// </summary>
-    public static string? Contrast(CloudTestDto? cloud) =>
-        HasScore(cloud) ? $"confidence {Score(cloud!.Confidence!.Value)} over {Runs(cloud.Runs)}" : null;
+    /// <param name="finding">The finding.</param>
+    /// <param name="context">What the report asked Cloud.</param>
+    /// <param name="local">The local kind's word, already safe to print.</param>
+    /// <returns>The label, and the lines to write under the name; empty without Cloud data.</returns>
+    public (string Label, IReadOnlyList<string> Lines) Row(FindingDto finding, CloudContextDto? context, string local)
+    {
+        if (!Attempted(context))
+            return (local, []);
+
+        string labelled = "local " + local;
+
+        // A group is never asked about: Cloud knows tests, not clusters.
+        if (finding.Subject.Members != null)
+            return (labelled, []);
+
+        if (finding.Cloud is not { } digest)
+            return (labelled, context!.Status == "partial" ? ["cloud: not answered"] : []);
+
+        if (digest.State != "ok")
+            return (labelled, [$"cloud: {NotInProject(context!, finding.Subject.Assembly)}"]);
+
+        // The score first: it is what Xping adds that no local run can, and it is on the same line
+        // of every scored row so a reader scanning the list reads one column of it (Amendment 3O).
+        var lines = new List<string>();
+
+        if (ConfidenceLine(digest.Confidence) is { } confidence)
+            lines.Add(confidence);
+
+        string label;
+        string? verdict = Verdict(digest);
+        string? flaky = FlakyPhrase(digest.Flaky);
+
+        if (digest.DisagreesWithLocal)
+        {
+            label = $"{labelled} {glyphs.NotEqual} cloud {Recorded(digest.Verdict ?? "no verdict")}";
+            string[] reading = [.. new[] { verdict, flaky }.OfType<string>()];
+            lines.Add("cloud: " + (reading.Length > 0 ? string.Join(Joint, reading) : "no verdict"));
+        }
+        else if (!VerdictKinds.Contains(finding.Kind))
+        {
+            label = labelled;
+            lines.Add("cloud: " + (flaky ?? verdict ?? "no verdict"));
+        }
+        else if (digest.Verdict is "known-flaky" or "broken" or "unstable" or "passing")
+        {
+            label = "cloud " + digest.Verdict;
+            lines.Add($"local: {local} in {TextReportRenderer.Runs(finding.EvidenceSessions)} here");
+        }
+        else
+        {
+            label = labelled;
+            lines.Add("cloud: " + (verdict ?? "no verdict"));
+        }
+
+        if (NameDiffers(digest) is { } name)
+            lines.Add(name);
+
+        return (label, lines);
+    }
 
     /// <summary>
-    /// The detail view's labelled pairs; empty without Cloud data.
+    /// The latest-run Cloud line's segments, the confidence first (§7.5, Amendment 3A, 3G, 3P).
     /// </summary>
-    public static IReadOnlyList<(string Label, string? Value)> Pairs(CloudTestDto? cloud, TerminalCharset charset)
+    public IReadOnlyList<string> LatestRun(LatestRunFailureDto failure, CloudContextDto? context)
     {
-        if (cloud is null)
+        if (!Attempted(context))
             return [];
 
-        string? confidence = cloud.Confidence is { } score
-            ? Words(cloud.Category, charset) is { } category ? $"{Score(score)} ({category})" : Score(score)
+        if (failure.Cloud is not { } cloud)
+            return context!.Status == "partial" ? ["not answered"] : [];
+
+        CloudDigestDto digest = cloud.Digest;
+
+        if (digest.State != "ok")
+            return [NotInProject(context!, failure.Subject.Assembly)];
+
+        var segments = new List<string>();
+
+        if (ScoreOf(digest.Confidence) is { } score)
+            segments.Add($"confidence {Score(score)}" + (Window(digest.Confidence!.Window) is { } length ? $" ({length})" : string.Empty));
+
+        if (Verdict(digest, brief: true) is { } verdict)
+            segments.Add(verdict);
+
+        if (MatchPhrase(cloud.Match, cloud.Signature) is { } match)
+            segments.Add(match);
+
+        return segments;
+    }
+
+    /// <summary>
+    /// The finding's confidence line, <c>cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d</c>;
+    /// for a score Cloud withheld, the evidence it lacks; null when there is no score to speak of
+    /// (Amendment 3O).
+    /// </summary>
+    /// <remarks>
+    /// The window stays with the score and the ESS with the evidence level (contract §4.4, §4.8).
+    /// The category is Cloud's own word for the score, printed as sent: nothing here turns a number
+    /// into a verdict (contract R6).
+    /// </remarks>
+    public string? ConfidenceLine(CloudConfidenceDto? confidence)
+    {
+        if (confidence is null)
+            return null;
+
+        if (confidence.State == "insufficient-evidence")
+            return EvidenceToken(confidence) is { } evidence ? "cloud: " + evidence : null;
+
+        if (ScoreOf(confidence) is not { } score)
+            return null;
+
+        var parts = new List<string> { $"cloud: confidence {Score(score)}{Delta(confidence.Delta)}" };
+
+        if (confidence.Category is { } category)
+            parts.Add(Words(category));
+
+        if (Window(confidence.Window) is { } window)
+            parts.Add(window);
+
+        if (confidence.Freshness == "pending")
+            parts.Add("pending");
+
+        return string.Join(Joint, parts);
+    }
+
+    /// <summary>
+    /// The line under a failure mode's count line (§7.4, Amendment 3J); null for an unsignable mode
+    /// or one with no Cloud view.
+    /// </summary>
+    public string? Mode(CloudMatchDto? cloud)
+    {
+        if (cloud is null)
+            return null;
+
+        return cloud.Match switch
+        {
+            "unsignable" => null,
+            "matched" when cloud.Signature is { } signature => "cloud: " + Spread(signature),
+            "matched" => "cloud: seen",
+            _ => "cloud: " + Recorded(cloud.Match)
+        };
+    }
+
+    /// <summary>
+    /// The labelled pairs for a digest: the detail view's, prefixed <c>cloud</c>, or the
+    /// <c>--test</c> block's, unprefixed (§7.4, §8, Amendment 3N).
+    /// </summary>
+    /// <param name="digest">The digest; nothing is written unless it is <c>ok</c>.</param>
+    /// <param name="prefix">What every label starts with.</param>
+    /// <param name="disagreement">What follows the verdict when it disagrees with the local finding.</param>
+    /// <param name="fetched">Whether to write when it was fetched; the <c>--test</c> heading says it.</param>
+    public IReadOnlyList<(string Label, string? Value)> Pairs(
+        CloudDigestDto? digest, string prefix, string? disagreement, bool fetched)
+    {
+        if (digest is not { State: "ok" })
+            return [];
+
+        string? verdict = Verdict(digest, withTime: true);
+
+        if (verdict is not null && disagreement is not null)
+            verdict += " " + disagreement;
+
+        List<(string Label, string? Value)> pairs =
+        [
+            (prefix + "confidence", ConfidencePair(digest.Confidence)),
+            (prefix + "verdict", verdict),
+            (prefix + "evidence", EvidencePair(digest.Confidence)),
+            (prefix + "flaky", FlakyPair(digest.Flaky)),
+            (prefix + "canonical", CanonicalPair(digest)),
+            (prefix + "transition", TransitionPair(digest.LastTransition)),
+            (prefix + "lifetime", LifetimePair(digest))
+        ];
+
+        if (digest.Identity == "name-mismatch" && digest.TestName is { } name)
+            pairs.Add((prefix + "name", "differs: " + Recorded(name)));
+
+        if (fetched)
+        {
+            string pending = digest.Confidence?.Freshness == "pending" ? " (pending: newer runs not yet scored)" : string.Empty;
+            pairs.Add((prefix + "fetched", Time(digest.FetchedAt) + pending));
+        }
+
+        return pairs;
+    }
+
+    /// <summary>
+    /// One signature in the <c>--test</c> block (§8).
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <param name="seenHere">Whether this machine recorded it.</param>
+    public string Signature(CloudSignatureDto signature, bool seenHere)
+    {
+        string head = string.Join(' ', new[] { ShortHash(signature.ErrorMessageHash), Recorded(signature.ExceptionType) }.OfType<string>());
+        var parts = new List<string>();
+
+        if (head.Length > 0)
+            parts.Add(head);
+
+        if (signature.Runs is { } runs)
+            parts.Add(TextReportRenderer.Runs(runs));
+
+        if (signature.Machines is { } machines)
+            parts.Add(Machines(machines));
+
+        if (signature.CiRuns is { } ci)
+            parts.Add(ci > 0 ? $"{TextReportRenderer.Count(ci)} CI" : "local only");
+
+        if (signature.FirstSeenAt is { } first)
+            parts.Add("since " + Date(first));
+
+        string line = string.Join(Joint, parts);
+        return seenHere ? line + " (seen here)" : line;
+    }
+
+    /// <summary>
+    /// What Cloud's newest session from this machine is doing, for the <c>--test</c> block.
+    /// </summary>
+    public string? LastRun(CloudContextDto? context, string? projectKey)
+    {
+        if (context?.Sessions.FirstOrDefault(s => s.ProjectKey == projectKey) is not { } session)
+            return null;
+
+        string scored = session.Scored ? "scored" : "not scored yet";
+        return $"{Recorded(session.State)}, {scored} (session {TerminalText.Head(Recorded(session.SessionKey), 8)})";
+    }
+
+    /// <summary>The project the assembly was bound to, or null.</summary>
+    public static string? ProjectKey(CloudContextDto? context, string? assembly) =>
+        context?.Projects.FirstOrDefault(p => p.Assembly == assembly)?.ProjectKey;
+
+    /// <summary>Says a test is not in its project, naming the project when one was found.</summary>
+    public string NotInProject(CloudContextDto context, string? assembly) =>
+        ProjectKey(context, assembly) is { } key ? $"not in project {Recorded(key)}" : "not in the project";
+
+    /// <summary>A Cloud time, in UTC as sent (Amendment 3K).</summary>
+    public static string Time(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>The first characters of a signature, marked as shortened.</summary>
+    public string? ShortHash(string? hash) =>
+        Recorded(hash) is { Length: > 0 } recorded ? TerminalText.Head(recorded, 4) + glyphs.Ellipsis : null;
+
+    /// <summary>A value the Cloud sent, made safe for the terminal.</summary>
+    public string Recorded(string? value) => value is null ? string.Empty : TerminalText.Printable(value, glyphs.Charset);
+
+    private string NoProject(CloudContextDto context)
+    {
+        const string fix = "pass --project <key>";
+
+        // Without a name (an API key, or a token issued before the claim) the line says "this
+        // workspace" (Amendment 3B); with one it names it (Amendment 4B, contract §7.4).
+        string workspace = context.Workspace is { } name ? "workspace " + Recorded(name) : "this workspace";
+
+        return context.Projects.FirstOrDefault(p => p.Status == "no-project") switch
+        {
+            { ProjectKey: { } key } => $"not in {workspace}: project {Recorded(key)}{Joint}{fix}",
+            { } row => $"no project in {workspace} for {Recorded(row.Assembly)}{Joint}{fix}",
+            null => $"no project in {workspace}{Joint}{fix}"
+        };
+    }
+
+    private string? NameDiffers(CloudDigestDto digest) =>
+        digest.Identity == "name-mismatch" && digest.TestName is { } name ? "cloud: known as " + Recorded(name) : null;
+
+    /// <summary>
+    /// The verdict in words, with its date when it is <c>broken</c> (Amendment 3A): in full, or
+    /// <paramref name="brief"/> for the latest-run line, which has 48 columns.
+    /// </summary>
+    private string? Verdict(CloudDigestDto digest, bool brief = false, bool withTime = false)
+    {
+        string? since = digest.Canonical?.FailingSince is { } failingSince
+            ? " since " + (withTime ? Time(failingSince) : Date(failingSince))
             : null;
 
-        return
-        [
-            ("cloud confidence", confidence),
-            ("cloud evidence", $"{Words(cloud.EvidenceLevel, charset)}, {Runs(cloud.Runs)}"),
-            ("cloud trend", Words(cloud.Trend, charset))
-        ];
+        string where = brief ? string.Empty : " on the canonical branch";
+
+        return digest.Verdict switch
+        {
+            null => null,
+            "known-flaky" => "known flaky",
+            "broken" => "broken" + where + since,
+            "unstable" => "unstable" + where,
+            "passing" => "passing" + where,
+            "no-history" => "no canonical history",
+            _ => Recorded(digest.Verdict)
+        };
     }
+
+    /// <summary>
+    /// The score, when Cloud scored the test: a score beside a state that says it did not is not
+    /// shown, so no line can disagree with another about it (Amendment 3O).
+    /// </summary>
+    private static double? ScoreOf(CloudConfidenceDto? confidence) =>
+        confidence is { Score: { } score, State: not ("insufficient-evidence" or "not-scored") } ? score : null;
+
+    /// <summary><c>ESS 34</c>, or <c>ESS 4 of 10</c> when it is short of what scoring needs.</summary>
+    private static string EffectiveSamples(CloudConfidenceDto confidence, double ess) =>
+        confidence.State == "insufficient-evidence"
+            ? $"ESS {Ess(ess)} of {TextReportRenderer.Count(MinimumEffectiveSampleSize)}"
+            : $"ESS {Ess(ess)}";
+
+    private static string Machines(int machines) =>
+        $"{TextReportRenderer.Count(machines)} {(machines == 1 ? "machine" : "machines")}";
+
+    /// <summary>
+    /// The flaky state in words for a row's second line. Never "not flaky" for a state that is not
+    /// <c>not-flaky</c> (contract §4.3).
+    /// </summary>
+    private string? FlakyPhrase(CloudFlakyDto? flaky)
+    {
+        if (flaky?.State is not { } state)
+            return null;
+
+        string within = Window(flaky.Window) is { } length ? " in " + length : string.Empty;
+
+        return state switch
+        {
+            "flaky" => FlakyNow(flaky),
+            "not-flaky" => "not flaky" + within,
+            "inconclusive" => "flaky inconclusive" + within,
+            "not-examined" => "not examined for flakiness" + within,
+            _ => Recorded(state)
+        };
+    }
+
+    private string FlakyNow(CloudFlakyDto flaky)
+    {
+        string[] kind = new[] { flaky.Category, flaky.Severity }.OfType<string>().Select(Words).ToArray();
+        string what = kind.Length > 0 ? $"flaky ({string.Join(", ", kind)})" : "flaky";
+
+        return flaky.Since is { } since ? $"{what} since {Date(since)}" : what;
+    }
+
+    private string? MatchPhrase(string match, CloudSignatureDto? signature) => match switch
+    {
+        // CI is claimed either way only when Cloud counted it: a missing count is not a zero.
+        "matched" when signature is { Machines: { } machines } =>
+            $"same error on {Machines(machines)}" + signature.CiRuns switch
+            {
+                > 0 => " and CI",
+                null => string.Empty,
+                _ => ", not in CI"
+            },
+        "matched" => "same error seen in Cloud",
+        "unseen" => "this error unseen in Cloud",
+        "unsignable" or "unknown" => null,
+        _ => Recorded(match)
+    };
+
+    private string Spread(CloudSignatureDto signature)
+    {
+        var parts = new List<string>();
+
+        parts.Add(signature.Machines is { } machines ? "same error on " + Machines(machines) : "same error");
+
+        if (signature.CiRuns is { } ci)
+            parts.Add($"{TextReportRenderer.Count(ci)} CI");
+
+        if (signature.LocalRuns is { } local)
+            parts.Add($"{TextReportRenderer.Count(local)} local");
+
+        if (signature.FirstSeenAt is { } first)
+            parts.Add("since " + Date(first));
+
+        return string.Join(Joint, parts);
+    }
+
+    private string? EvidenceToken(CloudConfidenceDto confidence)
+    {
+        if (confidence.EvidenceLevel is not { } level || confidence.EffectiveSampleSize is not { } ess)
+            return null;
+
+        string window = Window(confidence.EvidenceWindow) is { } length ? ", " + length : string.Empty;
+
+        return $"evidence {Recorded(level)} ({EffectiveSamples(confidence, ess)}{window})";
+    }
+
+    private string? ConfidencePair(CloudConfidenceDto? confidence)
+    {
+        if (confidence is null)
+            return null;
+
+        var parts = new List<string>();
+
+        if (ScoreOf(confidence) is { } score)
+            parts.Add(Score(score) + Delta(confidence.Delta));
+        else
+            parts.Add(confidence.State is { } state ? Words(state) : "not scored");
+
+        if (confidence.Category is { } category)
+            parts.Add(Words(category));
+
+        if (Window(confidence.Window) is { } window)
+            parts.Add(window + " window");
+
+        if (confidence.ComputedAt is { } computed)
+            parts.Add("computed " + Time(computed));
+
+        return string.Join(Joint, parts);
+    }
+
+    private string? EvidencePair(CloudConfidenceDto? confidence)
+    {
+        if (confidence is null || (confidence.EvidenceLevel is null && confidence.EffectiveSampleSize is null))
+            return null;
+
+        var parts = new List<string>();
+
+        if (confidence.EvidenceLevel is { } level)
+            parts.Add(Recorded(level));
+
+        if (confidence.EffectiveSampleSize is { } ess)
+            parts.Add(EffectiveSamples(confidence, ess));
+
+        if (confidence.CanonicalRuns is not null || confidence.SpeculativeRuns is not null || confidence.UntrackedRuns is not null)
+        {
+            parts.Add(
+                $"{TextReportRenderer.Count(confidence.CanonicalRuns ?? 0)} canonical, " +
+                $"{TextReportRenderer.Count(confidence.SpeculativeRuns ?? 0)} speculative, " +
+                $"{TextReportRenderer.Count(confidence.UntrackedRuns ?? 0)} untracked");
+        }
+
+        if (Window(confidence.EvidenceWindow) is { } window)
+            parts.Add(window + " window");
+
+        return string.Join(Joint, parts);
+    }
+
+    private string? FlakyPair(CloudFlakyDto? flaky)
+    {
+        if (flaky?.State is not { } state)
+            return null;
+
+        string? window = Window(flaky.Window);
+        string? examined = flaky.LastDetectionAt is { } at ? "examined " + Time(at) : null;
+
+        IEnumerable<string?> parts = state switch
+        {
+            "flaky" => [FlakyNow(flaky)],
+            "not-flaky" => ["not flaky", examined, window is null ? null : window + " window"],
+            "inconclusive" => ["inconclusive", examined, window is null ? null : window + " window"],
+            "not-examined" => [window is null ? "not examined" : "not examined in " + window],
+            _ => [Recorded(state), examined]
+        };
+
+        return string.Join(Joint, parts.OfType<string>());
+    }
+
+    private string? CanonicalPair(CloudDigestDto digest)
+    {
+        if (digest.Canonical is not { } canonical)
+            return digest.Verdict == "no-history" ? "no canonical history" : null;
+
+        var parts = new List<string>();
+
+        if (canonical.Failed is { } failed && canonical.Runs is { } runs)
+            parts.Add($"failed {TextReportRenderer.Count(failed)}/{TextReportRenderer.Count(runs)}");
+
+        if (canonical.ConsecutiveFailures is > 0 and { } streak)
+        {
+            string since = canonical.FailingSince is { } at ? " since " + Time(at) : string.Empty;
+            parts.Add($"{TextReportRenderer.Count(streak)} in a row{since}");
+        }
+
+        if (canonical.LatestAt is { } latest)
+            parts.Add($"newest {(canonical.LatestOutcome is { } outcome ? Recorded(outcome) + " " : string.Empty)}{Time(latest)}");
+
+        return parts.Count == 0 ? null : string.Join(Joint, parts);
+    }
+
+    private string? TransitionPair(CloudTransitionDto? transition)
+    {
+        if (transition?.Type is not { } type)
+            return null;
+
+        string change = transition.From is { } from && transition.To is { } to
+            ? $" {Words(from)} {glyphs.Arrow} {Words(to)}"
+            : string.Empty;
+        string at = transition.OccurredAt is { } when ? " at " + Time(when) : string.Empty;
+
+        return Words(type) + change + at;
+    }
+
+    private string? LifetimePair(CloudDigestDto digest)
+    {
+        if (digest.TotalRuns is not { } total)
+            return null;
+
+        return digest.LastExecutedAt is { } last
+            ? $"{TextReportRenderer.Runs(total)}{Joint}last {Time(last)}"
+            : TextReportRenderer.Runs(total);
+    }
+
+    /// <summary><c>▼0.61</c> when the score moved by at least 0.01; else nothing.</summary>
+    private string Delta(double? delta)
+    {
+        if (delta is not { } value || Math.Abs(value) < 0.01)
+            return string.Empty;
+
+        return " " + (value < 0 ? glyphs.Down : glyphs.Up) + Score(Math.Abs(value));
+    }
+
+    /// <summary><c>35 d</c> or <c>10 runs</c>; null for a window without a length.</summary>
+    private static string? Window(CloudWindowDto? window) => window?.Length switch
+    {
+        null => null,
+        int length when window.Kind == "runs" => TextReportRenderer.Runs(length),
+        int length => $"{TextReportRenderer.Count(length)} d"
+    };
+
+    /// <summary><c>moderately-reliable</c> → <c>moderately reliable</c>.</summary>
+    private string Words(string kebab) => Recorded(kebab).Replace('-', ' ');
+
+    private static string Date(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Score(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
-    private static string Runs(int runs) =>
-        runs == 1 ? "1 run" : $"{runs.ToString(CultureInfo.InvariantCulture)} runs";
-
-    /// <summary><c>moderately-reliable</c> → <c>moderately reliable</c>.</summary>
-    private static string? Words(string? kebab, TerminalCharset charset) =>
-        string.IsNullOrEmpty(kebab) ? null : Recorded(kebab, charset).Replace('-', ' ');
-
-    /// <summary>A value the Cloud sent, made safe for the terminal.</summary>
-    private static string Recorded(string value, TerminalCharset charset) => TerminalText.Printable(value, charset);
+    private static string Ess(double value) => value.ToString("0", CultureInfo.InvariantCulture);
 }

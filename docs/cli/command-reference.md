@@ -155,7 +155,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it on stderr, so redirecting stdout captures the report alone.
 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal. Recorded text, such as test names and failure messages, is printed with every control, bidi and invisible formatting character replaced by `?` (a failure message's line breaks have already become spaces, and a stack trace's separate its frames), so a recorded escape sequence cannot recolour or reorder your terminal; under `--ascii` and in piped output every non-ASCII character is replaced too, except inside a printed command, where it is needed to select the test. `--format json` carries the recorded values unchanged.
 
@@ -875,15 +875,43 @@ Runs recorded before the SDK could name the assembly belong to no suite. They st
 
 When the CLI has a credential — a sign-in from `xping login`, `--api-key`, or `XPING_APIKEY` — the
 report also asks Xping Cloud what it knows about each test it names, across every run uploaded to
-it. Nothing else changes: the same rows, the same order, the same exit code. Cloud values are always
-labelled, so they are never read as local numbers:
+it. The rows, their order and the exit code stay local. Cloud adds lines, and each line says where
+its value came from, `cloud:` or `local:`:
 
-- the header ends in `· cloud` when anything on the page came from Cloud;
-- a finding's last line gains `confidence 0.62 · moderately reliable` after its evidence level
-  (`confidence 0.62 - moderately reliable` with `--ascii`; the category is dropped when the line has
-  no room for it);
-- a latest-run row says `confidence 0.94 over 812 runs` in place of its local history;
-- `--id` adds `cloud confidence`, `cloud evidence` and `cloud trend` to the detail block.
+```
+1.  HIGH  cloud broken
+    SampleTests.ExceptionTest_ThrowsOnMissingDependency
+    cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d
+    local: always failing in 20 runs here
+    failed 20 of 20 executions (100%), one failure mode:
+```
+
+- The header ends in `· cloud` when anything on the page came from Cloud, and in
+  `· cloud (partial)` when only some tests were answered.
+- **The confidence line** comes first under the name on every finding Cloud has scored: the score,
+  its change, Cloud's category and the window it was computed over. With too little evidence it
+  reads `cloud: evidence sparse (ESS 4 of 10, 14 d)` instead. The score is Cloud's; the verdict is
+  Cloud's own call, not a threshold on the score.
+- **The label** says whose word it is. A flaky or always-failing finding takes Cloud's verdict
+  (`cloud known-flaky`, `cloud broken`, `cloud unstable`, `cloud passing`), and the local kind moves
+  to the `local:` line. Every other kind keeps its local label, such as `local timing out`, because
+  it describes this machine, and Cloud's flaky state goes on a `cloud:` line instead. When the two
+  disagree, the label shows both: `local always failing ≠ cloud passing`.
+- A latest-run failure gains a line under its local sentence, `cloud: confidence 0.22 (35 d) ·
+  broken since 2026-10-11`, followed by whether Cloud has seen the same error:
+  `same error on 6 machines and CI`, or `this error unseen in Cloud`.
+- A test Cloud does not know reads `cloud: not in project payments`. A test whose request Cloud did
+  not answer reads `cloud: not answered`. Both keep their local label.
+- `--id` adds `cloud confidence`, `cloud verdict`, `cloud evidence`, `cloud flaky`, `cloud canonical`,
+  `cloud transition`, `cloud lifetime` and `cloud fetched` to the detail block, and a `cloud:` line
+  under each failure mode saying whether Cloud has seen that error.
+- `--test` adds a `CLOUD` block with the same values and the test's error signatures, and
+  `RUNS IN CLOUD`, its newest runs on every machine: outcome, tier, CI or not, machine, branch and
+  commit. The runs are read only when a second of the four-second budget is left; otherwise the
+  block says `not fetched (budget)`.
+
+Every Cloud value names its window (`35 d`, `14 d`, `10 runs`); `lifetime` is the one all-time
+total. Cloud times are in UTC. With `--ascii`, `·` is `-`, `▼` is `v` and `≠` is `!=`.
 
 Which credential is used is described in [Credentials](#credentials); `xping auth status` shows it.
 
@@ -891,17 +919,23 @@ The report finds the Cloud project from, in order: `--project`, `XPING_PROJECTID
 in `appsettings*.json` (read from `--directory` when given), the project id the SDK recorded with the
 runs, and a Cloud project whose name is the test assembly's.
 
-Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at ten
-seconds), a key that cannot read, no matching project — you get the local report and one line on
-stderr saying why, at a terminal or with `--verbose`. The one line printed everywhere, because only a
-person can fix it, is `Cloud data unavailable: your sign-in is no longer valid. Run xping login.`
-`--summary` never asks Cloud. The other lines you may see:
+Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at four
+seconds), a key that cannot read, no matching project — you get the local report with one line above
+the block saying why, such as `cloud: unavailable (budget) · showing local results only` when the
+four seconds ran out or `cloud: login required · run xping login`, and at most one line on stderr, at a terminal or with
+`--verbose`. Two lines are printed everywhere,
+because only a person can fix them: `Cloud data unavailable: your sign-in is no longer valid. Run
+xping login.` and the line for a key Cloud refuses. When some tests were answered and others were
+not, the line is `Cloud data partial: 9 of 14 tests answered (timeout).`, with the reason
+`context.cloud.reason` gives. `--summary` never asks Cloud. The other lines you may see:
 
 | Line (after `Cloud data unavailable: `) | What to do |
 |---|---|
 | `could not reach https://app.xping.io (timeout). Showing local results only.` | Nothing; the next report tries again |
 | `no matching Cloud project for Checkout.Tests. Use --project <key>.` | Pass `--project`, or set `XPING_PROJECTID` |
+| `no matching Cloud project for Checkout.Tests in workspace Acme. Use --project <key>.` | The same, when you are signed in |
 | `no Cloud project 'checkout' (from XPING_PROJECTID). Check the key, or pass --project <key>.` | Fix the project key |
+| `project checkout (from XPING_PROJECTID) is not in workspace Acme. Check the key, or run xping login to choose another workspace.` | Fix the key, or sign in to the workspace that has the project |
 | ``This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.`` | The key is upload-only; sign in, or use a key with read scope |
 | ``This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.`` | Sign in; the workspace's plan does not allow API keys to read |
 | `Xping Cloud is rate limiting requests; try again in a minute.` | Wait |
@@ -968,11 +1002,28 @@ group the failure by. `timedOut` is `true` when the mode's attempts timed out; a
 timed-out and failed attempts. `report --test --format json` carries the same list for the test,
 counted over every failed attempt in the window.
 
-`context.cloud` is `null` when no credential was found. Otherwise it says which credential was used
-(`stored-login` or `api-key`), the `status` (`ok`, `partial`, `unavailable`, `login-required` or
-`not-attempted`), the `reason` when it is not `ok`, and the `project` the assembly was bound to with
-its `source` (`flag`, `env`, `config`, `session` or `name-match`). Each finding and latest-run failure carries a
-`cloud` object with Cloud's view of its test, or `null`; `metrics` and `contrast` stay local.
+`context.cloud` is always present except under `--summary`. Read `status` first: `ok`, `partial`,
+`unavailable`, `login-required`, `forbidden`, `no-project`, or `not-attempted` when there is no
+credential or nothing to ask. Then `reason`: `none`, `credential-timeout`, `budget`, `timeout`,
+`network`, `server`, `rate-limited`, `invalid-response`, `not-found`, or `signature-algorithm` when
+Cloud matches failures with a different hash than this CLI. It also carries the `credential`
+(`login` or `api-key`), the signed-in `workspaceId` and its `workspace` name (both `null` for an
+API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fetchedAt`, how many tests were asked about
+(`requestedTests`) and answered (`enrichedTests`), one row per assembly in `projects` with its
+`projectKey`, `source` (`flag`, `env`, `config`, `session` or `name-match`), `status` and `reason`,
+and in `sessions` whether Cloud has received and scored this machine's newest runs.
+
+Each single-test finding carries a `cloud` object with Cloud's view of its test, or `null` when
+Cloud did not answer for it: its `state` (`unknown` when Cloud does not know the test), the
+`verdict` (`known-flaky`, `broken`, `unstable`, `passing` or `no-history`), the `confidence` score
+with its own evidence level and windows, the flaky ledger's `flaky.state`, the newest `canonical`
+runs, the `lastTransition`, and the `signatures` Cloud has seen for the test. `disagreesWithLocal`
+is `true` when a local `Flaky` or `AlwaysFailing` finding reads differently in Cloud; `identity` is
+`name-mismatch` or `shared` when a fingerprint names different tests. Every failure mode carries
+the SDK's `errorMessageHash` and, under an enriched finding, a `cloud` match: `matched` with the
+signature, `unseen`, `unsignable` (no message), or `unknown`. A latest-run failure's `cloud` holds
+the `digest`, its `match` and `signature`; `test.cloud` holds the digest and the test's newest
+`runs` in Cloud, with `runsState`. `metrics`, `headline` and `contrast` stay local.
 
 `summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
 split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
@@ -987,14 +1038,21 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.27",
+  "schemaVersion": "1.28",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
     "cloud": {
-      "cloudUrl": "https://app.xping.io", "credential": "stored-login", "workspaceId": "01J8…",
-      "status": "ok", "reason": null,
-      "project": { "assembly": "Checkout.Tests", "projectKey": "checkout-tests", "source": "name-match" }
+      "status": "ok", "reason": "none", "elapsedMs": 412,
+      "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J8…", "workspace": "Acme",
+      "fetchedAt": "2026-08-19T16:30:00+00:00", "signatureAlgorithm": "emh-1", "retentionDays": 365,
+      "requestedTests": 4, "enrichedTests": 4,
+      "projects": [
+        { "assembly": "Checkout.Tests", "projectKey": "checkout-tests", "source": "name-match", "status": "ok", "reason": "none" }
+      ],
+      "sessions": [
+        { "sessionKey": "6f9a2f1c-…", "projectKey": "checkout-tests", "state": "complete", "scored": true, "flakyExamined": true }
+      ]
     }
   },
   "summary": {
@@ -1062,7 +1120,8 @@ are not each other and `tests` is what they add up to:
           "message": "summary for <date> has no rows", "frames": ["Billing.SummaryTests.GenerateMonthlySummary()"],
           "framesDegraded": false, "unavailable": false, "timedOut": false, "occurrences": 4,
           "firstSeenAt": "2026-08-12T09:14:00Z", "firstSeenSha": "c670fc3d1e2f", "firstSeenSessionsAgo": 14,
-          "firstSeenInLatestSession": false, "firstSeenAfterFirstRun": true
+          "firstSeenInLatestSession": false, "firstSeenAfterFirstRun": true,
+          "errorMessageHash": "ab12…", "cloud": { "match": "matched", "signature": { "errorMessageHash": "ab12…", "…": "…" } }
         },
         { "hash": "…", "exceptionType": "System.TimeoutException", "…": "…" },
         { "hash": "…", "exceptionType": null, "unavailable": true, "…": "…" }
@@ -1075,9 +1134,15 @@ are not each other and `tests` is what they add up to:
         "expectation": "run 11 times: at 5 of 20 runs failing (25%), 11 runs show a failure 95% of the time"
       },
       "cloud": {
-        "confidence": 0.62, "category": "moderately-reliable", "evidenceLevel": "robust", "runs": 812,
-        "trend": "stable", "delta": -0.03, "flaky": true,
-        "lastExecutedAt": "2026-08-19T12:00:00+00:00", "fetchedAt": "2026-08-19T16:30:00+00:00"
+        "state": "ok", "fetchedAt": "2026-08-19T16:30:00+00:00", "disagreesWithLocal": false, "identity": null,
+        "verdict": "known-flaky", "testName": "Billing.SummaryTests.GenerateMonthlySummary",
+        "lastExecutedAt": "2026-08-19T12:00:00+00:00", "totalRuns": 812,
+        "confidence": { "state": "scored", "score": 0.62, "category": "moderately-reliable", "trend": "stable",
+                        "effectiveSampleSize": 48.0, "evidenceLevel": "robust", "window": { "kind": "days", "length": 35, "…": "…" }, "…": "…" },
+        "flaky": { "state": "flaky", "category": "timing", "severity": "moderate", "…": "…" },
+        "canonical": { "runs": 10, "failed": 3, "latestOutcome": "passed", "…": "…" },
+        "lastTransition": { "type": "flakiness-introduced", "…": "…" },
+        "signatures": [ { "errorMessageHash": "ab12…", "runs": 36, "ciRuns": 34, "localRuns": 2, "machines": 6, "…": "…" } ]
       }
     }
   ],

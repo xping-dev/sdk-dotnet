@@ -91,13 +91,17 @@ internal sealed partial class BearerTokenHandler : DelegatingHandler
             && challenge.Parameter is { } parameter
             && InvalidTokenParameter().IsMatch(parameter));
 
-    // Reads are bodiless GETs, so method, URI, version and headers are the whole request.
     private static HttpRequestMessage Clone(HttpRequestMessage request)
     {
+        // The content is shared, not copied: HttpClient leaves it undisposed after a send, a
+        // StringContent can be sent again, and the first request is never sent after this. Without
+        // it the digest's retry would reach the DataGateway as a POST without a body. Its headers
+        // travel with it.
         var clone = new HttpRequestMessage(request.Method, request.RequestUri)
         {
             Version = request.Version,
-            VersionPolicy = request.VersionPolicy
+            VersionPolicy = request.VersionPolicy,
+            Content = request.Content
         };
 
         foreach (KeyValuePair<string, IEnumerable<string>> header in request.Headers)

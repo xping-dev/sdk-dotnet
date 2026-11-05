@@ -286,7 +286,7 @@ than as a shared machine credential:
 
 ```bash
 xping login          # once per machine; the sign-in goes to your OS credential store
-xping report         # the same report, now with Cloud confidence on each row
+xping report         # the same report, now with Cloud confidence under each finding
 ```
 
 Machines write, people read: that's how history pools across a team without anyone sharing a
@@ -313,9 +313,10 @@ Two things are worth reading off that diagram:
   repo is the developer half — the portal is documented at [docs.xping.io](https://docs.xping.io).
 
 > **Reading cloud history from the CLI.** After `xping login`, `xping report` asks Xping Cloud
-> about every test it names and labels what came back — `confidence 0.62 · moderately reliable`
-> on a finding, `· cloud` in the header. If Cloud is unreachable you get the local report and one
-> line saying why.
+> about every test it names and labels what came back. Each finding gets a
+> `cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d` line under its name, a flaky or
+> always-failing test takes Cloud's verdict as its label (`cloud broken`, `cloud known-flaky`), and the header
+> ends in `· cloud`. If Cloud is unreachable you get the local report and one line saying why.
 
 ---
 

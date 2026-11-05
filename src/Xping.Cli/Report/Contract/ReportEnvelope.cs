@@ -101,9 +101,13 @@ internal sealed record ReportEnvelope(
     /// <c>firstSeenAfterWindowStart</c> became <c>firstSeenAfterFirstRun</c>, and both its flags came
     /// to be measured from the test's own first run in the window rather than the window's oldest. 1.27 is where each failure mode gained <c>timedOut</c>, and
     /// timed-out attempts became modes of their own rather than sharing one with failed attempts,
-    /// whether or not they recorded detail.
+    /// whether or not they recorded detail. 1.28 replaced the nine-field <c>cloud</c> object with the
+    /// Cloud digest (verdict, confidence, flaky, canonical, signatures), added <c>cloud</c> to
+    /// <c>test</c> and to every failure mode, gave every latest-run failure a signature match, and
+    /// made <c>context.cloud</c> always present with projects and sessions; and where each failure
+    /// mode gained <c>errorMessageHash</c>, the SDK's hash of its message that Cloud matches on.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.27";
+    public const string CurrentSchemaVersion = "1.28";
 }
 
 /// <summary>
@@ -137,8 +141,9 @@ internal sealed record WindowDto(
 /// <param name="Branch">Branch it ran on.</param>
 /// <param name="Assembly">Test assembly the report covers.</param>
 /// <param name="Cloud">
-/// What happened when the report asked Xping Cloud about its tests, or null when no credential
-/// resolved and nothing was asked.
+/// What happened when the report asked Xping Cloud about its tests. Present on every report the
+/// Cloud layer ran for, <c>not-attempted</c> without a credential; null only for
+/// <c>--format summary</c>, which never asks.
 /// </param>
 internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly, CloudContextDto? Cloud = null);
 
@@ -220,8 +225,8 @@ internal sealed record LatestRunDto(
 /// <param name="PriorSessions">Sessions before this one in which the test recorded a verdict.</param>
 /// <param name="PriorFailures">Of those, how many it failed in.</param>
 /// <param name="Cloud">
-/// What Xping Cloud says about the test, or null. When set, the text report prints it in place of
-/// <paramref name="Contrast"/>, which stays the local sentence.
+/// What Xping Cloud says about the test and whether it has seen this failure, or null when Cloud did
+/// not answer for it. <paramref name="Contrast"/> stays the local sentence either way.
 /// </param>
 internal sealed record LatestRunFailureDto(
     string Status,
@@ -230,7 +235,7 @@ internal sealed record LatestRunFailureDto(
     string? FailureSummary,
     int PriorSessions,
     int PriorFailures,
-    CloudTestDto? Cloud = null);
+    CloudFailureDto? Cloud = null);
 
 /// <summary>
 /// Counts describing the run as a whole.
@@ -372,7 +377,8 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// unknown.
 /// </param>
 /// <param name="Cloud">
-/// What Xping Cloud says about the finding's test, or null. Always null for a group finding.
+/// What Xping Cloud says about the finding's test, or null when Cloud did not answer for it. Always
+/// null for a group finding.
 /// </param>
 internal sealed record FindingDto(
     string Id,
@@ -389,7 +395,7 @@ internal sealed record FindingDto(
     JsonNode? Evidence,
     string DrillDown,
     ReproDto? Repro,
-    CloudTestDto? Cloud = null);
+    CloudDigestDto? Cloud = null);
 
 /// <summary>
 /// How to make a finding's failure happen again.
@@ -478,6 +484,15 @@ internal sealed record MetricDto(string Label, string Value);
 /// Whether it was absent from the test's first run in the window. Not a claim that it never
 /// happened before.
 /// </param>
+/// <param name="ErrorMessageHash">
+/// The SDK's hash of its message, the key Xping Cloud matches failures on (contract §5); null when
+/// the adapter recorded no message. A local value, present with or without Cloud, and never part of
+/// <paramref name="Hash"/>.
+/// </param>
+/// <param name="Cloud">
+/// Whether Xping Cloud has seen this signature for the test, or null when the finding has no Cloud
+/// view.
+/// </param>
 internal sealed record FailureModeDto(
     string Hash,
     string? ExceptionType,
@@ -491,7 +506,9 @@ internal sealed record FailureModeDto(
     string? FirstSeenSha,
     int FirstSeenSessionsAgo,
     bool FirstSeenInLatestSession,
-    bool FirstSeenAfterFirstRun);
+    bool FirstSeenAfterFirstRun,
+    string? ErrorMessageHash,
+    CloudMatchDto? Cloud = null);
 
 /// <summary>
 /// Findings broken down by severity.
@@ -630,6 +647,10 @@ internal sealed record TruncationDto(int Shown, int Total, string Command);
 /// numbers it. Under <c>--test</c> the findings are filtered, so their position is not their row.
 /// </param>
 /// <param name="Candidates">Every test the name matched when it matched more than one; else empty.</param>
+/// <param name="Cloud">
+/// What Xping Cloud says about the test, with its run history there; null when the Cloud layer did
+/// not run or no test was resolved.
+/// </param>
 internal sealed record TestHistoryDto(
     string Query,
     SubjectDto? Test,
@@ -640,7 +661,8 @@ internal sealed record TestHistoryDto(
     IReadOnlyList<FailureModeDto> FailureModes,
     string? FindingsWithheld,
     IReadOnlyList<SameSubjectDto> FindingRows,
-    IReadOnlyList<TestCandidateDto> Candidates);
+    IReadOnlyList<TestCandidateDto> Candidates,
+    CloudTestHistoryDto? Cloud = null);
 
 /// <summary>
 /// One session of the window, as the resolved test saw it.

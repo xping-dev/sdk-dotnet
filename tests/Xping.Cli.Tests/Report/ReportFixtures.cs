@@ -32,7 +32,7 @@ namespace Xping.Cli.Tests.Report;
 /// have produced.
 /// </para>
 /// </remarks>
-internal static class ReportFixtures
+internal static partial class ReportFixtures
 {
     /// <summary>Gets the keys the golden sweep and the width and charset sweeps enumerate.</summary>
     /// <remarks>
@@ -88,6 +88,13 @@ internal static class ReportFixtures
         "history-store",
         "history-repro",
         "history-failure-modes",
+        "cloud-broken",
+        "cloud-known-flaky",
+        "cloud-disagree",
+        "cloud-partial",
+        "cloud-login-required",
+        "detail-cloud",
+        "history-cloud",
         "hostile-text",
         "hostile-text-detail",
         "hostile-text-history"
@@ -298,6 +305,13 @@ internal static class ReportFixtures
         "history-store" => HistoryFromStore(),
         "history-repro" => HistoryRepro(),
         "history-failure-modes" => HistoryFailureModes(),
+        "cloud-broken" => CloudBroken(),
+        "cloud-known-flaky" => CloudKnownFlaky(),
+        "cloud-disagree" => CloudDisagree(),
+        "cloud-partial" => CloudPartial(),
+        "cloud-login-required" => CloudLoginRequired(),
+        "detail-cloud" => DetailCloud(),
+        "history-cloud" => HistoryCloud(),
         "hostile-text" => HostileText(),
         "hostile-text-detail" => HostileTextDetail(),
         "hostile-text-history" => HostileTextHistory(),
@@ -446,7 +460,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "expected <num> but was <num>", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: 6,
             FirstSeenAt: new DateTime(2026, 9, 5, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "eab9867",
-            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
+            FirstSeenSessionsAgo: 19, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false, ErrorMessageHash: null);
 
         FindingDto cluster = envelope.Findings[2];
         var clusterEvidence = new BrokenFixtureEvidence(
@@ -589,7 +603,7 @@ internal static class ReportFixtures
             "abc123", "System.InvalidOperationException", "Race condition detected", [],
             Degraded: false, Unavailable: false, TimedOut: false, Occurrences: failing,
             FirstSeenAt: new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), FirstSeenSha: "c670fc3",
-            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false);
+            FirstSeenSessionsAgo: judged - 1, FirstSeenInLatestSession: false, FirstSeenAfterFirstRun: false, ErrorMessageHash: null);
 
         var evidence = new FlakyEvidence(
             failing, judged, judged, failing, failing, judged,

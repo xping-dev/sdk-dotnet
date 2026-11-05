@@ -39,6 +39,8 @@ namespace Xping.Cli.Tests.Cloud;
 internal sealed partial class FakeCloud : IAsyncDisposable
 {
     public const string WorkspaceId = "01J8K2V6XN7Y0Q4R5S6T7V8V9X";
+
+    public const string WorkspaceName = "Acme Payments";
     public const string UserId = "01J8K2V6XN7Y0Q4R5S6T7V8V9W";
     public const string Email = "jane@example.com";
 
@@ -254,6 +256,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             : [];
 
         Fault? fault;
+        Task? gatewayHold;
         lock (_gate)
         {
             _requests.Add(new RecordedRequest(
@@ -268,6 +271,8 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             fault = _faults.TryPeek(out Fault? next) && string.Equals(next.Path, path, StringComparison.Ordinal)
                 ? _faults.Dequeue()
                 : null;
+
+            gatewayHold = _holds.GetValueOrDefault(path);
         }
 
         if (fault is { Drop: true })
@@ -283,7 +288,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
         Reply reply = fault switch
         {
-            null => Route(request.Method, path, form, HttpUtility.ParseQueryString(query), headers),
+            null => Route(request.Method, path, form, HttpUtility.ParseQueryString(query), headers, body),
             { Problem: true } => Problem((int)fault.Status, fault.Error ?? "Error.Injected", fault.Description) with
             {
                 RetryAfter = fault.RetryAfter
@@ -293,6 +298,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
 
         if (path == "/connect/token" && HoldTokenResponses is { } hold)
             await hold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
+
+        if (gatewayHold is not null)
+            await gatewayHold.WaitAsync(context.RequestAborted).ConfigureAwait(false);
 
         context.Response.StatusCode = reply.Status;
         context.Response.ContentType = reply.Body.StartsWith('<') ? "text/html" : "application/json";
@@ -309,10 +317,10 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
     }
 
-    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers) =>
+    private Reply Route(string method, string path, NameValueCollection form, NameValueCollection query, NameValueCollection headers, string body) =>
         (method, path) switch
         {
-            (_, _) when path.StartsWith(GatewayPrefix, StringComparison.Ordinal) => Gateway(method, path, query, headers),
+            (_, _) when path.StartsWith(GatewayPrefix, StringComparison.Ordinal) => Gateway(method, path, query, headers, body),
             ("GET", "/.well-known/openid-configuration") => Discovery(),
             ("GET", "/connect/authorize") => Authorize(query),
             (_, "/moved") => new Reply(302, string.Empty, CloudUrl + "/connect/token"),
@@ -544,6 +552,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             ["aud"] = "xping-datagateway",
             ["sub"] = UserId,
             ["workspace_id"] = WorkspaceId,
+            ["workspace_name"] = WorkspaceName,
             ["sid"] = session.Id,
             ["email"] = Email,
             ["scope"] = "user:read",

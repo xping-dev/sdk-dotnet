@@ -3,11 +3,16 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Http;
 using Xping.Cli.Cloud;
+using Xping.Cli.Cloud.Digest;
 using Xping.Cli.Configuration;
 
 namespace Xping.Cli.Tests.Cloud;
@@ -17,10 +22,17 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     private const string ApiKey = "team-read-key-0123456789";
     private const string Project = "shop-tests";
     private const string Fingerprint = "fp-checkout-0001";
-    private const string TestPath = "/gw/v1/projects/shop-tests/tests/fp-checkout-0001";
+    private const string DigestPath = "/gw/v1/projects/shop-tests/tests/digest";
+    private const string Hash = "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12";
+    private const string SessionKey = "4f1c0c9e-0000-4000-8000-000000000001";
+
+    private static readonly DigestRequest Request = new([new DigestRequestTest(Fingerprint, [Hash])], [SessionKey]);
 
     private readonly CliFlowHost _host = new();
     private readonly ServiceProvider _services;
+
+    // On a clock nobody moves: these tests are about mapping, not time, so the budget never runs out.
+    private readonly CloudBudget _budget = new(new FakeTimeProvider(), CancellationToken.None);
 
     public CloudApiClientTests()
     {
@@ -32,21 +44,173 @@ public sealed class CloudApiClientTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _budget.Dispose();
         await _services.DisposeAsync().ConfigureAwait(false);
         await _host.DisposeAsync().ConfigureAwait(false);
     }
 
     [Fact]
-    public async Task ATestIsReadIntoTheCloudView()
+    public async Task TheDigestIsAPostOfTheBatchInCamelCase()
     {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        CloudTest? test = await client.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+        await client.GetDigestAsync(Project, Request, CancellationToken.None);
 
+        RecordedRequest request = Assert.Single(_host.Cloud.GatewayRequests);
+        Assert.Equal(("POST", DigestPath), (request.Method, request.Path));
+        Assert.StartsWith("application/json", request.Headers["Content-Type"], StringComparison.Ordinal);
         Assert.Equal(
-            new CloudTest(Fingerprint, 0.62, "ModeratelyReliable", "Robust", 812, true, "Stable", -0.03,
-                new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero)),
-            test);
+            $"{{\"tests\":[{{\"fingerprint\":\"{Fingerprint}\",\"errorMessageHashes\":[\"{Hash}\"]}}],\"sessionKeys\":[\"{SessionKey}\"]}}",
+            request.Body);
+    }
+
+    [Fact]
+    public async Task TheDigestIsReadWithEveryBlockAndEveryField()
+    {
+        _host.Cloud.AddTest(Project, "fp-seen", digest => digest["signatures"] = new JsonArray(new JsonObject
+        {
+            ["errorMessageHash"] = Hash,
+            ["exceptionType"] = "InvalidOperationException",
+            ["runs"] = 36,
+            ["canonicalRuns"] = 34,
+            ["ciRuns"] = 34,
+            ["localRuns"] = 2,
+            ["machines"] = 6,
+            ["firstSeenAt"] = "2026-09-11T09:14:00Z",
+            ["lastSeenAt"] = "2026-09-28T12:00:00Z",
+            ["stackTraceHashes"] = new JsonArray("c0ffee"),
+            ["window"] = new JsonObject { ["kind"] = "days", ["length"] = 35, ["end"] = "2026-09-28T12:05:00Z" }
+        }));
+        _host.Cloud.AddSession(SessionKey);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        DigestResponse? response = await client.GetDigestAsync(
+            Project, new DigestRequest([new DigestRequestTest("fp-seen", [Hash])], [SessionKey]), CancellationToken.None);
+
+        DigestWindow days35 = new("days", 35, At("2026-09-28T12:05:00Z"), null);
+        DigestWindow days14 = new("days", 14, At("2026-09-28T12:05:00Z"), null);
+        var expected = new DigestResponse(
+            _host.Time.GetUtcNow(),
+            "emh-1",
+            365,
+            [
+                new TestDigest(
+                    "fp-seen",
+                    "ok",
+                    "Shop.Tests.CheckoutTests.Checkout_Succeeds",
+                    At("2026-09-28T12:00:00Z"),
+                    812,
+                    "known-flaky",
+                    new DigestConfidence(
+                        "scored", 0.62, 0.55, 0.69, "moderately-reliable", "stable", -0.03, 48.0, "robust", 40, 6, 2,
+                        days35, days14, At("2026-09-28T12:05:00Z"), "current"),
+                    new DigestFlaky(
+                        "flaky", "timing", "major", At("2026-09-20T08:00:00Z"), At("2026-09-28T12:05:00Z"),
+                        days14, At("2026-09-28T12:05:00Z"), "current"),
+                    new DigestCanonical(10, 3, 0, null, "passed", At("2026-09-28T12:00:00Z"), new DigestWindow("runs", 10, null, At("2026-09-25T08:00:00Z"))),
+                    new DigestTransition("flakiness-introduced", null, "major", At("2026-09-20T08:00:00Z")),
+                    [
+                        new DigestSignature(
+                            Hash, "InvalidOperationException", true, 36, 34, 34, 2, 6,
+                            At("2026-09-11T09:14:00Z"), At("2026-09-28T12:00:00Z"), ["c0ffee"], days35)
+                    ])
+            ],
+            [new DigestSession(SessionKey, "complete", true, true)]);
+
+        // Field by field, so a member the wire names differently from the record reads as missing.
+        Assert.Equivalent(expected, response, strict: true);
+    }
+
+    [Fact]
+    public async Task ARequestedSignatureCloudHasNotSeenIsAnsweredWithZeroRuns()
+    {
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        DigestResponse? response = await client.GetDigestAsync(Project, Request, CancellationToken.None);
+
+        DigestSignature signature = Assert.Single(Assert.Single(response!.Tests).Signatures!);
+        Assert.Equal((Hash, true, 0), (signature.ErrorMessageHash, signature.Requested, signature.Runs));
+        Assert.Equal("unknown", Assert.Single(response.Sessions!).State);
+    }
+
+    [Fact]
+    public async Task ATestTheProjectDoesNotKnowIsAnsweredAsUnknown()
+    {
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        DigestResponse? response = await client.GetDigestAsync(
+            Project, new DigestRequest([new DigestRequestTest("fp-unknown", [])], []), CancellationToken.None);
+
+        TestDigest digest = Assert.Single(response!.Tests);
+        Assert.Equal(("fp-unknown", "unknown", null), (digest.Fingerprint, digest.State, digest.Confidence));
+    }
+
+    [Fact]
+    public async Task TheRunHistoryIsAGetWithItsLimit()
+    {
+        _host.Cloud.AddRun(Project, Fingerprint, run =>
+        {
+            run["sessionKey"] = SessionKey;
+            run["attempts"] = 2;
+            run["firstAttemptOutcome"] = "passed";
+            run["pullRequestNumber"] = 42;
+            run["errorMessageHash"] = Hash;
+        });
+        _host.Cloud.AddRun(Project, Fingerprint, run => run["outcome"] = "passed");
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        RunsResponse? history = await client.GetRunsAsync(Project, Fingerprint, 1, CancellationToken.None);
+
+        RecordedRequest request = Assert.Single(_host.Cloud.GatewayRequests);
+        Assert.Equal(("GET", "/gw/v1/projects/shop-tests/tests/fp-checkout-0001/runs", "?limit=1"), (request.Method, request.Path, request.Query));
+        Assert.Equivalent(
+            new RunsResponse(
+                365,
+                true,
+                [
+                    new CloudRun(
+                        SessionKey, At("2026-09-28T12:00:00Z"), "failed", 2, "passed", 812, "canonical", true, "gh-runner-17",
+                        "main", "0053b0ef0053b0ef0053b0ef0053b0ef0053b0ef", 42, "InvalidOperationException", Hash)
+                ]),
+            history,
+            strict: true);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("{\"tests\":null}")]
+    public async Task ADigestThatCannotBeReadIsAnInvalidResponse(string body)
+    {
+        _host.Cloud.SetGatewayBody(DigestPath, body);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        await Assert.ThrowsAsync<CloudResponseException>(() => client.GetDigestAsync(Project, Request, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("{\"tests\":[{\"state\":\"ok\"}]}")]
+    [InlineData("{\"tests\":[null]}")]
+    [InlineData("{\"tests\":[],\"sessions\":[{\"sessionKey\":\"k\"}]}")]
+    public async Task AnItemTheCliCannotReadIsLeftForTheEnricherAndDoesNotFailTheBatch(string body)
+    {
+        // Contract §8.2 F4: such an item costs its own test, which only the enricher can attribute.
+        _host.Cloud.SetGatewayBody(DigestPath, body);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        Assert.NotNull(await client.GetDigestAsync(Project, Request, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"hasMore\":false}")]
+    [InlineData("{\"runs\":[null]}")]
+    public async Task ARunHistoryThatCannotBeReadIsAnInvalidResponse(string body)
+    {
+        _host.Cloud.SetGatewayBody("/gw/v1/projects/shop-tests/tests/fp-checkout-0001/runs", body);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        await Assert.ThrowsAsync<CloudResponseException>(() => client.GetRunsAsync(Project, Fingerprint, 50, CancellationToken.None));
     }
 
     [Fact]
@@ -54,7 +218,7 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        await client.GetTestAsync(Project, Fingerprint, CancellationToken.None);
+        await client.GetDigestAsync(Project, Request, CancellationToken.None);
 
         RecordedRequest request = Assert.Single(_host.Cloud.GatewayRequests);
         Assert.Equal(ApiKey, request.Headers["X-API-Key"]);
@@ -64,29 +228,27 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task NotFoundIsNoData()
+    public async Task NotFoundIsNoProjectOrNoTest()
     {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        Assert.Null(await client.GetTestAsync(Project, "fp-unknown", CancellationToken.None));
-        Assert.Null(await client.GetProjectAsync("unknown-project", CancellationToken.None));
+        Assert.Null(await client.GetDigestAsync("unknown-project", Request, CancellationToken.None));
+        Assert.Null(await client.GetRunsAsync(Project, "fp-unknown", 50, CancellationToken.None));
     }
 
     [Fact]
-    public async Task ProjectsAreListedAndReadWithTheirNames()
+    public async Task ProjectsAreListedWithTheirNames()
     {
         _host.Cloud.AddProject("api-tests", displayName: "Api.Tests");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         PagedResult<ProjectSummary> first = await client.ListProjectsAsync(1, 1, CancellationToken.None);
         PagedResult<ProjectSummary> second = await client.ListProjectsAsync(2, 1, CancellationToken.None);
-        ProjectSummary? project = await client.GetProjectAsync(Project, CancellationToken.None);
 
         Assert.Equal([new ProjectSummary(Project, "Shop.Tests", "shop")], first.Items);
         Assert.True(first.HasNextPage);
         Assert.Equal("Api.Tests", Assert.Single(second.Items).DisplayName);
         Assert.False(second.HasNextPage);
-        Assert.Equal(new ProjectSummary(Project, "Shop.Tests", "shop"), project);
         Assert.Equal("?pageNumber=2&pageSize=1", _host.Cloud.GatewayRequests[1].Query);
     }
 
@@ -96,66 +258,14 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         _host.Cloud.AddTest("a b", "fp/1?x");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        CloudTest? test = await client.GetTestAsync("a b", "fp/1?x", CancellationToken.None);
+        RunsResponse? history = await client.GetRunsAsync("a b", "fp/1?x", 50, CancellationToken.None);
+        DigestResponse? digest = await client.GetDigestAsync("a b", new DigestRequest([new DigestRequestTest("fp/1?x", [])], []), CancellationToken.None);
 
-        Assert.Equal("fp/1?x", test?.TestFingerprint);
-        Assert.Equal("/gw/v1/projects/a%20b/tests/fp%2F1%3Fx", Assert.Single(_host.Cloud.GatewayRequests).Path);
-    }
-
-    [Fact]
-    public async Task ServerErrorsAreRetriedThreeTimesThenCloudIsUnreachable()
-    {
-        _host.Cloud.FailGateway(TestPath, 4, HttpStatusCode.ServiceUnavailable, "Error.Unavailable");
-        using ICloudApiClient client = await ApiKeyClientAsync();
-
-        AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
-            () => DriveAsync(client.GetTestAsync(Project, Fingerprint, CancellationToken.None)));
-
-        Assert.Equal(AuthExitCodes.CloudUnreachable, failure.ExitCode);
-        Assert.Contains(_host.Cloud.GatewayUri, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("HTTP 503", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(4, _host.Cloud.GatewayRequests.Count);
-    }
-
-    [Fact]
-    public async Task AServerErrorThatPassesIsRetried()
-    {
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.InternalServerError, "Error.Internal");
-        using ICloudApiClient client = await ApiKeyClientAsync();
-
-        CloudTest? test = await DriveAsync(client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
-
-        Assert.NotNull(test);
-        Assert.Equal(2, _host.Cloud.GatewayRequests.Count);
-    }
-
-    [Fact]
-    public async Task RateLimitingWaitsRetryAfterAndRetriesOnce()
-    {
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.TooManyRequests, "Error.ApiKey.RateLimitExceeded", retryAfter: 3);
-        using ICloudApiClient client = await ApiKeyClientAsync();
-        DateTimeOffset start = _host.Time.GetUtcNow();
-
-        CloudTest? test = await DriveAsync(client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
-
-        Assert.NotNull(test);
-        Assert.Equal(TimeSpan.FromSeconds(3), _host.Time.GetUtcNow() - start);
-    }
-
-    [Theory]
-    [InlineData(3, 2)]
-    [InlineData(null, 1)]
-    [InlineData(11, 1)]
-    public async Task RateLimitingIsRetriedAtMostOnceAndOnlyWithAShortRetryAfter(int? retryAfter, int requests)
-    {
-        _host.Cloud.FailGateway(TestPath, 2, HttpStatusCode.TooManyRequests, "Error.ApiKey.RateLimitExceeded", retryAfter);
-        using ICloudApiClient client = await ApiKeyClientAsync();
-
-        CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => DriveAsync(client.GetTestAsync(Project, Fingerprint, CancellationToken.None)));
-
-        Assert.Equal(429, failure.StatusCode);
-        Assert.Equal(requests, _host.Cloud.GatewayRequests.Count);
+        Assert.NotNull(history);
+        Assert.Equal("ok", Assert.Single(digest!.Tests).State);
+        Assert.Equal(
+            ["/gw/v1/projects/a%20b/tests/fp%2F1%3Fx/runs", "/gw/v1/projects/a%20b/tests/digest"],
+            _host.Cloud.GatewayRequests.Select(r => r.Path));
     }
 
     [Theory]
@@ -167,7 +277,7 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         using ICloudApiClient client = await ApiKeyClientAsync("limited-key-0123456789");
 
         CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Equal(403, failure.StatusCode);
         Assert.Equal(title, failure.Title);
@@ -182,7 +292,7 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         using ICloudApiClient client = await ApiKeyClientAsync("unknown-key-0123456789");
 
         CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Equal(401, failure.StatusCode);
         Assert.Equal("Error.ApiKey.Invalid", failure.Title);
@@ -193,11 +303,11 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     [Fact]
     public async Task AmbiguousCredentialsAreReportedAsACliBug()
     {
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.BadRequest, "Error.Authentication.AmbiguousCredentials");
+        _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.BadRequest, "Error.Authentication.AmbiguousCredentials");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.StartsWith("CLI bug", failure.Message, StringComparison.Ordinal);
     }
@@ -205,11 +315,11 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     [Fact]
     public async Task UpgradeRequiredIsAVersionMismatch()
     {
-        _host.Cloud.FailGateway(TestPath, 1, (HttpStatusCode)426, "Error.UpgradeRequired");
+        _host.Cloud.FailGateway(DigestPath, 1, (HttpStatusCode)426, "Error.UpgradeRequired");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         AuthFailureException failure = await Assert.ThrowsAsync<AuthFailureException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Equal(AuthExitCodes.CloudVersionMismatch, failure.ExitCode);
     }
@@ -217,11 +327,11 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     [Fact]
     public async Task AnyOtherRefusalCarriesTitleAndDetail()
     {
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.Conflict, "Error.Something");
+        _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.Conflict, "Error.Something");
         using ICloudApiClient client = await ApiKeyClientAsync();
 
         CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Equal("Xping Cloud refused the request (Error.Something): Injected fault.", failure.Message);
     }
@@ -230,10 +340,10 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     public async Task MissingCredentialsWithASignInAsksForALoginWithoutDeletingIt()
     {
         _host.SignIn();
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.Unauthorized, "Error.Authentication.MissingCredentials");
+        _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.Unauthorized, "Error.Authentication.MissingCredentials");
         using ICloudApiClient client = await SignedInClientAsync();
 
-        await Assert.ThrowsAsync<LoginRequiredException>(() => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+        await Assert.ThrowsAsync<LoginRequiredException>(() => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.NotNull(_host.StoredRecord());
     }
@@ -244,11 +354,11 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         _host.SignIn();
 
         // A proxy's 401, or a challenge stripped on the way: the handler has nothing to refresh on.
-        _host.Cloud.FailGateway(TestPath, 1, HttpStatusCode.Unauthorized, "Error.AccessToken.Expired");
+        _host.Cloud.FailGateway(DigestPath, 1, HttpStatusCode.Unauthorized, "Error.AccessToken.Expired");
         using ICloudApiClient client = await SignedInClientAsync();
 
         CloudApiException failure = await Assert.ThrowsAsync<CloudApiException>(
-            () => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+            () => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Equal(401, failure.StatusCode);
         Assert.NotNull(_host.StoredRecord());
@@ -289,10 +399,14 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         _host.Cloud.RefuseAccessTokens = true;
         using ICloudApiClient client = await SignedInClientAsync();
 
-        await Assert.ThrowsAsync<LoginRequiredException>(() => client.GetTestAsync(Project, Fingerprint, CancellationToken.None));
+        await Assert.ThrowsAsync<LoginRequiredException>(() => client.GetDigestAsync(Project, Request, CancellationToken.None));
 
         Assert.Null(_host.StoredRecord());
         Assert.Equal(2, _host.Cloud.GatewayRequests.Count);
+
+        // The retry after the refresh is the same POST, body included.
+        Assert.Equal(_host.Cloud.GatewayRequests[0].Body, _host.Cloud.GatewayRequests[1].Body);
+        Assert.NotEmpty(_host.Cloud.GatewayRequests[1].Body);
         Assert.Single(_host.Cloud.RequestsTo("/connect/token"), r => r.Form["grant_type"] == "refresh_token");
     }
 
@@ -301,10 +415,10 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     {
         using ICloudApiClient client = await ApiKeyClientAsync();
 
-        await client.GetProjectAsync(Project, CancellationToken.None);
+        await client.GetDigestAsync(Project, Request, CancellationToken.None);
 
         Assert.Single(_host.Cloud.RequestsTo("/.well-known/openid-configuration"));
-        Assert.Equal("/gw/v1/projects/shop-tests", Assert.Single(_host.Cloud.GatewayRequests).Path);
+        Assert.Equal(DigestPath, Assert.Single(_host.Cloud.GatewayRequests).Path);
     }
 
     private async Task<ICloudApiClient> ApiKeyClientAsync(string key = ApiKey)
@@ -312,17 +426,17 @@ public sealed class CloudApiClientTests : IAsyncDisposable
         ResolvedCredential credential = CredentialResolver.FromApiKey(
             new ConfiguredValue(key, ConfigurationSource.Environment, "XPING_APIKEY"), shadowedLogin: false, [], []);
 
-        return await Factory.CreateAsync(credential, _host.Cloud.CloudUrl, CancellationToken.None).ConfigureAwait(false);
+        return await Factory.CreateAsync(credential, _host.Cloud.CloudUrl, _budget, CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task<ICloudApiClient> SignedInClientAsync()
     {
         ResolvedCredential credential = await _host.ResolveAsync(_services).ConfigureAwait(false);
         Assert.Equal(CredentialSource.StoredLogin, credential.Source);
-        return await Factory.CreateAsync(credential, _host.Cloud.CloudUrl, CancellationToken.None).ConfigureAwait(false);
+        return await Factory.CreateAsync(credential, _host.Cloud.CloudUrl, _budget, CancellationToken.None).ConfigureAwait(false);
     }
 
     private CloudApiClientFactory Factory => _services.GetRequiredService<CloudApiClientFactory>();
 
-    private Task<T> DriveAsync<T>(Task<T> task) => _host.DriveAsync(task);
+    private static DateTimeOffset At(string value) => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
 }

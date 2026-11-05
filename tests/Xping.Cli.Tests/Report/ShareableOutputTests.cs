@@ -221,7 +221,7 @@ public sealed class ShareableOutputTests
     {
         SignatureView unnamed = new(
             "abc123", null, "no detail", [], false, true, false, 19,
-            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), null, 0, true, false);
+            new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc), null, 0, true, false, null);
 
         var (headline, _) = EvidenceHeadline.For(
             FindingKind.AlwaysFailing,

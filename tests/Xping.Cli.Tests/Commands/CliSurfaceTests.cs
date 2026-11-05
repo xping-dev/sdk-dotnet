@@ -388,7 +388,7 @@ public sealed class CliSurfaceTests : IDisposable
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal("1.27", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.28", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
         Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
@@ -419,7 +419,7 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.Empty(error.ToString());
 
         using JsonDocument doc = JsonDocument.Parse(output.ToString());
-        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("context").GetProperty("cloud").ValueKind);
+        Assert.Equal("not-attempted", doc.RootElement.GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }
 
     [Fact]
@@ -432,7 +432,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        Assert.Equal("1.27", doc.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.28", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

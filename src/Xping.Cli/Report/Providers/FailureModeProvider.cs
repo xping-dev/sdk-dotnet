@@ -48,6 +48,7 @@ namespace Xping.Cli.Report.Providers;
 /// window, not a claim that the signature has never occurred before — analysis cannot see past its
 /// own boundary.
 /// </param>
+/// <param name="ErrorMessageHash">The SDK's hash of the message the failures carrying it share most.</param>
 internal sealed record SignatureView(
     string Hash,
     string? ExceptionType,
@@ -61,7 +62,8 @@ internal sealed record SignatureView(
     string? FirstSeenSha,
     int FirstSeenSessionsAgo,
     bool FirstSeenInLatestSession,
-    bool FirstSeenAfterFirstRun);
+    bool FirstSeenAfterFirstRun,
+    string? ErrorMessageHash);
 
 /// <summary>
 /// One failure, published raw so a reader can see what the signature was derived from.
@@ -1187,7 +1189,8 @@ internal sealed class FailureModeProvider : IFindingProvider
             // window late and failed this way from its first run did not regress when it joined. Not
             // a claim that it has never happened before — analysis cannot see past its own boundary,
             // and saying otherwise would be the report inventing history it does not have.
-            appearedSessionIndex < firstRunSessionIndex);
+            appearedSessionIndex < firstRunSessionIndex,
+            signature.ErrorMessageHash);
 
     private static Func<ExecutionRef, string> SignatureHashOf(AnalysisContext context) =>
         reference => context.Signatures.Of(reference)?.Hash ?? string.Empty;

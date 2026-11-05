@@ -23,6 +23,85 @@ implementation session that needs one of them answered stops and asks.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be read as in RFC 2119.
 
+### Amendment 1 — from phase 1
+
+Phase 1 read §3 against the code and found two conflicts. Both are resolved here, decided by the
+owner on 2026-11-02, and committed before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.3: the credential slice covers a proactive token refresh, with the cross-process lock's 5 s `Patience` cut by the slice | The refresh is not part of the credential step. `BearerTokenHandler` refreshes inside the first DataGateway request, so it runs under that request's `AttemptTimeout` (3 s) and the total budget, not the 1 s slice. The slice covers credential resolution only: settings, the keychain probe, choosing a credential. `CrossProcessLock.Patience` drops from 5 s to 2 s, so the "proceed without the lock" rule (cli-auth §9.4) can still apply inside a 3 s attempt. A refresh that does not finish in time costs that run's Cloud data (`unavailable`, `timeout`); the refresh itself runs to the end in the background as today. Putting the refresh under the 1 s slice was rejected: a network refresh often takes longer, and the first report after every 15-minute token lifetime would read `credential-timeout`. **Contract §7.3 lists token refresh under `CredentialBudgetMs`; it needs the matching amendment in the dashboard repo** | §3.3, cli-auth §9.4 |
+| B | §3.2: the retry keeps `HttpClientResiliencePredicates.IsTransient` (5xx, 408, network errors, the attempt timeout) | Contract §7.3 wins: one retry on **5xx only**, and only when `budget.HasAtLeast(1 s)`. 408, network errors and the attempt timeout are not retried; after a 3 s attempt timeout at most 1 s is left anyway. The retry waits `CloudResilience.RetryDelay` = 200 ms, no backoff, no jitter | §3.2 |
+| C | §2.2: the digest DTO is `Digest`, in `Cloud/Digest/` | `TestDigest`: a type named like its namespace (`Xping.Cli.Cloud.Digest`) cannot be referred to by its simple name inside `Xping.Cli.Cloud` | §2.2 |
+| D | §19 Q-2: verify on macOS whether the keychain probe tolerates the slice's cancellation | It does not: `MacOsKeychainStore` probes and reads with synchronous `SecItemCopyMatching` calls that never see the token, so a keychain waiting on an access prompt would hold the report. As Q-2 prescribed, the slice applies around the resolution: `CloudEnricher` runs `CredentialResolver.ResolveAsync` on the thread pool and stops waiting when the slice ends. The abandoned call ends with the process | §3.3, §19 |
+| E | §2.2: `GetProjectAsync` stays | Removed. Its one caller checked a configured key that found no tests; the digest's 404 is that answer now (contract §6.1), so nothing calls it | §2.2 |
+
+### Amendment 2 — from phase 2
+
+Phase 2 found no conflict with the contract or the code. It found cases §3–§6 leave open, and
+decided them here before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §3.4: `not-attempted` for "no credential" | Also `not-attempted` when a credential exists and there is nothing to ask (no single-test subject, a clean run): the digest needs 1–100 tests. `credential` and `workspaceId` are then filled. Settings that cannot be read are `not-attempted` with `cloudUrl` null and the settings error as the hint. A defect caught by the fail-open wrapper is `unavailable` / `none`. `elapsedMs` is 0 whenever nothing was asked, so the local-layer tests of §8.3 stay deterministic | §3.4, §3.5 |
+| B | §3.4: the signal table names exceptions loosely | `CloudApiClient` answers a 5xx after the retry with `CloudApiException` (it was `AuthFailureException` "HTTP 503"), so `server` is told from `network` by type. A 401 on an API key is `login-required` (no sign-in to be over; the key was refused), with its own hint naming the key rather than the sign-in. A fallback key that answers nothing, for whatever reason, leaves the report `login-required`. A plain 401 on a stored login, without `invalid_token`, costs its batch as `network` (a proxy's page: nothing says the sign-in is over, cli-auth §8.2). 426 is `server`. `login-required` and `forbidden` end every batch of the attempt; every other failure costs only its batch | §3.4 |
+| C | §4.2: hashes and the latest session | A hash is sent only in the shape the digest accepts (64 lowercase hex); a fingerprint longer than 128 is not a target. Either would cost its whole batch a 400 (contract §6.1), and the store is a file anyone can edit. "The latest local session" is every session sharing the newest session's key (one host run writes one per assembly). A test's final attempt is its highest attempt number, the latest start on a tie | §4.1, §4.2 |
+| D | §4.3: session keys per request | They ride on each project's first batch only: the answer is the same for every batch. Assemblies bound to one project key are one project, asked once. `MaxEnrichedTests`, `MaxHashesPerTest` and the new `MaxFingerprintLength` = 128 live on `TargetPlanner`, which applies them | §3.2, §4.3 |
+| E | §5.3: `Match(string? errorMessageHash, CloudDigestDto? digest, string? algorithmReason)` | `Match(…, bool algorithmMismatch)`: the matcher needs whether, not why | §5.3 |
+| F | §6.3: the digest mirrors contract §6.2 one to one | `CloudDigestDto` leaves out `fingerprint`: the subject beside it carries it. An item in a state other than `ok` or `unknown`, or without a state, is stitched as `unknown` and makes its project `partial` / `invalid-response` (contract F4). `CloudApiClient` therefore rejects a digest only when it has no `tests` list; an item it cannot read is the enricher's to attribute. A requested fingerprint the answer leaves out is lost as `invalid-response` | §6.3, §2.2 |
+| G | §6.5: `runsState` | A test Cloud does not know has no runs: `ok`, empty, nothing asked; so is a runs 404. A runs request that fails is `unavailable` (`budget` when the total ran out) and never changes `context.cloud`. Without a credential, `test.cloud` is present with `runsState` `not-attempted` | §6.5, §3.3 |
+| H | §3.4, §11: the hint | Built once from the outcome. `login-required` wins even when the API key answered in its place, because the next run without the key would show nothing. `partial` reads `Cloud data partial: {n} of {m} tests answered ({reason}).` | §3.4, §11 |
+| I | §3.4: precedence | When several assemblies disagree and nothing answered, the row with the higher status by the precedence wins, `no-project` over `unavailable`. When something answered and a row is not `ok`, the report is `partial` with the first such row's reason (contract §9.4) | §3.4 |
+| J | §4.1: step 2 takes every ranked finding | Under `--id` and `--test` the page holds the selection only, so step 2 takes the ranked findings the envelope still shows. Asking about up to 200 tests nobody sees would spend the budget the subject's run history needs (§3.3). Contract §7.2's "before `--top`" is about truncation, which a selection is not | §4.1 |
+
+### Amendment 3 — from phase 3
+
+Phase 3 read §7, §8 and §11 against the contract and the renderer and found the conflicts below.
+Decided by the owner on 2026-11-03, committed before the code that depends on them.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §7.5, §8: `broken on main since …` | The digest does not name the canonical branch (contract §4.2, §6.2), so no branch is named. The detail view and the `--test` block say `broken on the canonical branch since {date}`, `unstable on the canonical branch`, `passing on the canonical branch`, `known flaky`, `no canonical history`. The latest-run Cloud line uses the short forms `broken since {date}`, `unstable`, `passing`, `known flaky`, `no canonical history` | §7.5, §8 |
+| B | §7.6: `not in workspace Acme: project billing` | The envelope carries `workspaceId`, not the name contract §7.4 asks for (sdk #335 adds it). Until then: `cloud  not in this workspace: project {key} · pass --project <key>`, or `no project in this workspace for {assembly}` when no key was found | §7.6 |
+| C | §7.3: segment `confidence 0.22 ▼0.61 · evidence adequate (ESS 34) · 35 d`; fit order drops the window, the delta, ESS, the segment | A value never loses its window, and the Cloud evidence level never loses its ESS (contract §4.4, §4.8). Segment: `confidence 0.22 ▼0.61 (35 d) · evidence adequate (ESS 34, 14 d)`, `· pending` after the confidence when `freshness == pending`. Fit order: drop the delta, then the whole evidence token, then the whole segment. `insufficient-evidence`: `evidence sparse (ESS 4 of 10, 14 d)` alone. `not-scored` or no confidence block: no segment | §7.3 |
+| D | §7.2: `passing` always takes the label; `≠` "between the two labels" | Contract L3 wins: a finding with `disagreesWithLocal` keeps its local label first and reads `local {kind} ≠ cloud {verdict}`. Its second line is `cloud: {verdict phrase} · {flaky phrase}` | §7.2 |
+| E | §7.2: `cloud` null → `local {kind}` and the reason line | Contract R1 and §7.1: with `context.cloud` null or `not-attempted`, a row is exactly today's. The layered label applies only when the Cloud layer was attempted. Group findings never carry a digest and get `local {kind}` with no second line | §7.1, §7.2 |
+| F | §7.2, §7.6: the reason per row | A report-wide status (`unavailable`, `login-required`, `forbidden`, `no-project`) is said once, on the reason line; its rows read `local {kind}` with no second line. Rows get a second line only for `partial` with no digest (`cloud: not answered`) and for `state == unknown` (`cloud: not in project {key}`) | §7.2, §7.6 |
+| G | §7.5: the Cloud line is one line, dropped right to left | At 55 columns the verdict and its date leave no room for the match phrase. The line wraps at segment boundaries; continuations align after `cloud  `. Only the confidence token is dropped, when it does not fit the last line | §7.5 |
+| H | §8: `RUNS IN CLOUD` row and heading | Both overflowed the fence. Heading annotation: `newest {n} runs in Cloud (retention {d} days)`; `hasMore` is a dim line under the rows, `more runs in Cloud`. Row: `MM-dd HH:mm`, outcome glyph and word, tier, `CI` or `—`, machine, branch, short SHA, sized to the widest value in the list and capped at 10 (machine) and 8 (branch), cut from the left. The short hash and `(attempt {n})` follow when the row still fits. `runsState` other than `ok` is the annotation `not fetched ({runsState})` | §8 |
+| I | §7.2: where the second line goes | Under the name (and a cluster's members), above the local headline, so the name keeps its own line (report-format D2). `cloud name differs: {testName}` (§10) follows it | §7.2, §10 |
+| J | §7.4: a trailing token per failure mode | A line of its own under the mode's count line, `cloud: …`: the count line is already near the fence | §7.4 |
+| K | §7.4, §8: `1 812 runs` | Counts print as the local report prints them, `1812 runs`. Cloud times print in UTC as sent: `yyyy-MM-dd HH:mm` in pairs, `yyyy-MM-dd` for a `since` | §7.4, §8 |
+| L | §7.2–§8: `≠`, `▼`, `▲`, `—`, `…` | Each is a `ReportGlyphs` pair (`!=`, `v`, `^`, `-`, `...`): the golden charset sweep rejects a non-ASCII character no pair defines | §7 |
+| M | §7.6: the line per status | `unavailable ({reason}) · showing local results only`; `login required · run xping login`; `forbidden · API keys need the Team plan; run xping login instead` with an API key, else `forbidden · showing local results only`; `partial, {n} of {m} tests answered ({reason})` (a comma, not a colon, after the `cloud:` of Amendment 3R); a status this build does not know prints verbatim with its reason | §7.6 |
+| N | §8: the block when no digest | `CLOUD` heading with the §7.6 reason as its only line when the status is report-wide; `not answered` under `partial`; `not in project {key}` for `unknown`. Labels inside the block are unprefixed (the heading says `CLOUD`); the detail view's are prefixed `cloud` | §8 |
+| O | §7.3, 3C: confidence is a trailer segment, fitted into the room the local segments leave | The confidence score is Xping's headline signal and gets a fixed line. The trailer is local only; it has no Cloud segment. Every finding with an `ok` digest gets, first under its name: `cloud confidence {score} {▼▲delta} · {category} · {window}`, plus `· pending` when `freshness == pending`. `insufficient-evidence`: `cloud evidence sparse (ESS 4 of 10, 14 d)`. `not-scored` or no confidence block: no line. The line wraps and is never cut. The §7.2 second line and `cloud name differs` follow it. The category is Cloud's own label, printed as sent (contract R6). Supersedes 3C | §7.2, §7.3 |
+| P | 3G: the latest-run confidence token is the one dropped | It leads the line, `cloud  confidence 0.22 (35 d) · broken since …`, and nothing is dropped: every segment wraps | §7.5 |
+| Q | §7.4, §8: `verdict` is the first pair | `confidence` is the first pair, in the detail view and the `--test` block | §7.4, §8 |
+| R | `cloud confidence …`, `cloud evidence …`, `cloud name differs: …`, the reason line and the latest-run line as `cloud  …` | Every line that says where its value came from starts `cloud:` or `local:`, so a reader reads the source the same way on every line: `cloud: confidence 0.22 ▼0.61 · …`, `cloud: evidence sparse (…)`, `cloud: known as {testName}`, `cloud: unavailable (timeout) · …` above the fence, `cloud: confidence 0.22 (35 d) · broken since …` on a latest-run row. Labels (`cloud broken`, `local flaky`), the header token and the `cloud …` pair labels are names, not sources, and keep no colon | §7.2, §7.5, §7.6, §10 |
+| S | §7.2: the verdict takes the label of every kind but contract L4's seven | `DurationRegression`, `RetryDeepening`, `ParallelSensitive` and `TimeSensitive` keep their local label too, with Cloud's flaky state on the line under the name. They describe how a test behaves on this machine (time, retries, concurrency, clock), not whether it passes, and §12 already calls duration regression a local observation: a `cloud passing` label over "slower" answers a question the row did not ask. Only `Flaky` and `AlwaysFailing`, the two kinds a verdict speaks to, take the verdict's label. **Contract L4 lists seven observation kinds; it needs the matching amendment in the dashboard repo** | §7.2 |
+
+### Amendment 4 — from #335
+
+Contract §7.4 puts the workspace **name** in `context.cloud`, and §9.5 names it in the
+`no-project` hint, but nothing on the wire carried it: the access token had `workspace_id` only
+(cli-auth §3.2) and no DataGateway answer names the workspace. Decided by the owner on
+2026-11-03.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §6.2: `context.cloud` has `workspaceId` and no name | `workspace` (string or null) follows `workspaceId`. Its source is a new access-token claim, `workspace_name`, issued by the Portal next to `workspace_id`. `AccessTokenClaims` reads it, and `CredentialRecord.WorkspaceName` stores it at sign-in and on every refresh, so a renamed workspace shows its new name within one token lifetime. It is null for an API key (no token) and for a token without the claim. A claim was chosen over a digest field because `no-project` is exactly the case where the digest answers 404 with no body; and over a workspace endpoint because it costs no request inside the 4 s budget. Schema stays `1.28`: the field lands before 1.28 leaves the feature branch. **Contract §6.1's claim list needs `workspace_name`, and the Portal needs to issue it: a follow-up in the dashboard repo** | §6.2, cli-auth §3.2, §7.2 |
+| B | §7.6 and Amendment 3B: `not in this workspace: project {key}` | With a name the reason line reads `cloud: not in workspace {name}: project {key} · pass --project <key>`, `cloud: no project in workspace {name} for {assembly} · …`, or `cloud: no project in workspace {name} · …` with no row. The hint for a key from the flag, the environment or the settings that names no project is contract §9.5's, with where the key came from so a typo is still fixed at its source: `project {key} (from {origin}) is not in workspace {name}. Check the key, or run xping login to choose another workspace.` It never says whether the project exists elsewhere. A key recorded with the runs (`source: session`) was never typed and keeps the plain `no Cloud project '{key}' (from …)` hint. The name-match hint gains the name: `no matching Cloud project for {assembly} in workspace {name}. Use --project <key>.` Without a name (an API key, or a token without the claim; a blank claim counts as none), Amendment 3B's line and today's hints stand. The name passes through `TerminalText.Printable` like every Cloud value | §7.6, §11 |
+
+### Amendment 5 — from phase 4
+
+Phase 4 read §17.2 against `ReportCommand` and found the conflict below. Decided by the owner on
+2026-11-03, committed before the tests that depend on it.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §17.2: `Report_TwoAssemblies_OneProjectMissing` | A report covers one assembly: the store reads each session down to the chosen assembly's executions (`SessionAssemblies`), so one `xping report` never sends the enricher two. The two-row case stays a unit test (`CloudEnricherTests.TwoAssembliesOneUnboundIsPartialWithARowEach`). The end-to-end test is `Report_OtherAssembly_NoProject`: a store with two assemblies, one bound to a project; the report on the bound one is `ok`, and the report with `--assembly` on the other is `no-project` with its §7.6 reason line | §17.2 |
+
 ---
 
 ## 1. Purpose, scope, traceability
@@ -110,9 +189,9 @@ Everything in contract §10, and:
 
 | Component | File | Change |
 |---|---|---|
-| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` and `GetProjectAsync` stay. |
+| `ICloudApiClient` | `Cloud/ICloudApiClient.cs` | Remove `GetTestAsync`. Add `Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken ct)` and `Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken ct)`. `ListProjectsAsync` stays; `GetProjectAsync` is removed (Amendment 1E). |
 | `CloudApiClient` | `Cloud/CloudApiClient.cs` | Implement the two calls. `POST {gw}/v1/projects/{key}/tests/digest` with a JSON body; `GET {gw}/v1/projects/{key}/tests/{fp}/runs?limit=`. 404 → null (project or test not in the workspace). The body is serialised with the SDK `IXpingSerializer` `ApiOptions` (camelCase), as today's responses are read. |
-| Cloud DTOs | `Cloud/Digest/*.cs` (new folder) | `DigestRequest`, `DigestRequestTest`, `DigestResponse`, `Digest`, `DigestConfidence`, `DigestFlaky`, `DigestCanonical`, `DigestTransition`, `DigestSignature`, `DigestWindow`, `DigestSession`, `RunsResponse`, `CloudRun`. Records, one file each or one file per group. These are the wire shapes of contract §6; they are not the envelope DTOs (§6). |
+| Cloud DTOs | `Cloud/Digest/*.cs` (new folder) | `DigestRequest`, `DigestRequestTest`, `DigestResponse`, `TestDigest`, `DigestConfidence`, `DigestFlaky`, `DigestCanonical`, `DigestTransition`, `DigestSignature`, `DigestWindow`, `DigestSession`, `RunsResponse`, `CloudRun`. Records, one file each or one file per group. These are the wire shapes of contract §6; they are not the envelope DTOs (§6). |
 | `CloudTest` | `Cloud/CloudTest.cs` | Deleted. |
 | `CloudHttp`, `CloudResilience` | `Cloud/` | Constants replaced per §3.2. |
 | `CloudBudget` | `Cloud/CloudBudget.cs` (new) | Owns the total deadline and the credential slice; answers `Remaining` and `HasAtLeast(TimeSpan)`. Built on `TimeProvider`. |
@@ -150,7 +229,9 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `CloudBudget.Credential` | 1 000 ms [none] | §7.3 `CredentialBudgetMs` |
 | `CloudHttp.AttemptTimeout` | 3 000 ms [10 s] | §7.3 `CloudRequestTimeoutMs` |
 | `CloudHttp.TotalTimeout` | equals `CloudBudget.Total` [30 s] | the `HttpClient.Timeout` can never outlive the budget |
-| `CloudResilience.MaxRetryAttempts` | 1 [3], and only when `budget.HasAtLeast(1 s)` | §7.3 |
+| `CloudResilience.MaxRetryAttempts` | 1 [3], on 5xx only, and only when `budget.HasAtLeast(1 s)` (Amendment 1B) | §7.3 |
+| `CloudResilience.RetryDelay` | 200 ms [2 s exponential, jittered] (Amendment 1B) | — |
+| `CrossProcessLock.Patience` | 2 s [5 s] (Amendment 1A) | cli-auth §9.4 |
 | `CloudResilience` 429 | never retried, never waited for [once if `Retry-After ≤ 10 s`] | §7.3 |
 | `CloudEnricher.MaxConcurrency` | 4 (unchanged) | §7.2 `MaxConcurrentRequests` |
 | `CloudEnricher.MaxEnrichedTests` | 200 | §7.2 |
@@ -162,24 +243,23 @@ All in `Cloud/CloudHttp.cs` unless noted. Today's values in brackets are replace
 | `ProjectResolver.MaxProjectListPages` | 2 [20] | §7.3 |
 | `SignatureAlgorithmId` | `"emh-1"` | contract §5.2 |
 
-The retry predicate keeps `HttpClientResiliencePredicates.IsTransient` for 5xx, 408 and network
-errors (`CloudResilience.cs:61`); 429 is removed from it, and the `Retry-After` reader
-(`CloudResilience.cs:63-79`) is deleted. The retry is skipped, not shortened, when less than one
-second of budget remains: `CloudResilience` receives the `CloudBudget` and checks it in
-`ShouldHandle`.
+The retry predicate is a 5xx answer and nothing else (Amendment 1B): not 408, not a network error,
+not the attempt timeout, not 429. The `Retry-After` reader (`CloudResilience.cs:63-79`) is deleted.
+The retry is skipped, not shortened, when less than one second of budget remains: `CloudResilience`
+receives the `CloudBudget` and checks it in `ShouldHandle`.
 
 ### 3.3 Budget mechanics
 
 - `CloudBudget` starts when `ReportCommand` calls `EnrichAsync`, after local analysis and after the
   envelope exists. It creates the linked `CancellationTokenSource` that today sits at
   `CloudEnricher.cs:144`, with `Total` as its delay.
-- The credential step (`CredentialResolver`, the keychain probe, settings parsing, and a proactive
-  refresh through `TokenRefresher` with the cross-process lock whose `Patience` is 5 s at
-  `CrossProcessLock.cs:32`) runs under a second token linked to the first with the `Credential`
-  delay. On its expiry the enricher returns `unavailable` / `credential-timeout`. The lock's own
-  5 s patience is therefore cut to what the slice allows; `CrossProcessLock` already proceeds
-  without the lock when it cannot get it (`CrossProcessLock.cs:78-79`), and the slice cancellation
-  reaches it through the token.
+- The credential step (`CredentialResolver`, the keychain probe, settings parsing) runs under a
+  second token linked to the first with the `Credential` delay, and on the thread pool, because
+  the keychain backends are synchronous and never see the token (Amendment 1D). On its expiry the
+  enricher returns `unavailable` / `credential-timeout`. A token refresh is not part of it: it
+  runs inside the first DataGateway request, under that request's 3 s attempt timeout, and the
+  cross-process lock's `Patience` is 2 s so its "proceed without the lock" rule still applies
+  there (Amendment 1A).
 - The `login-required` fallback to the ambient API key (`CloudEnricher.cs:150-163`) stays and runs
   inside the same total. It re-sends only the batches that did not answer.
 - The `--test` runs request is sent after every digest batch has answered or failed, and only if
@@ -298,7 +378,8 @@ Cloud match and is never an input to the composite.
 `FailureSignatureFactory.Create`. A mode groups executions by the composite; the mode's
 `ErrorMessageHash` is the hash shared by its executions, or, when a composite groups executions
 with different message hashes (possible when the normaliser and the composite disagree on a
-literal), the most frequent one. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
+literal), the most frequent one, and on a tie the ordinally smallest, so the value does not
+depend on enumeration order. `FailureModes.From(SignatureView)` (`FailureModes.cs:47-49`) writes
 it into `FailureModeDto.ErrorMessageHash`. It is a local field, labelled local, present with or
 without Cloud.
 
@@ -345,7 +426,7 @@ them) and MUST write unknown enum strings verbatim.
 ```json
 "cloud": {
   "status": "partial", "reason": "timeout", "elapsedMs": 2140,
-  "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J…",
+  "cloudUrl": "https://app.xping.io", "credential": "login", "workspaceId": "01J…", "workspace": "Acme",
   "fetchedAt": "2026-11-01T10:02:11Z", "signatureAlgorithm": "emh-1", "retentionDays": 365,
   "requestedTests": 14, "enrichedTests": 9,
   "projects": [
@@ -359,6 +440,8 @@ them) and MUST write unknown enum strings verbatim.
 ```
 
 `credential` is `login` or `api-key` (today's `stored-login` becomes `login`, contract §9.6).
+`workspace` is the name contract §7.4 asks for, read from the access token's `workspace_name`
+claim (Amendment 4A); `workspaceId` and `workspace` are null for an API key.
 `projects[].status` uses the same vocabulary as the root `status`. `sessions[]` is empty when no
 project answered.
 
@@ -648,7 +731,7 @@ None required. Verified against the contract:
   pin is written by the orchestrator (`XpingContextOrchestrator.cs:1181-1182`).
 - The normaliser is frozen by the contract (§5.2). Any change to `MessageNormaliser` is a contract
   amendment first; a test in `Xping.Sdk.Core.Tests` pins its output for a fixed set of messages so a
-  change cannot land silently (§17.1, added by phase 1).
+  change cannot land silently (§17.1, added by phase 0).
 
 ---
 
@@ -659,12 +742,12 @@ the superseded text stays for history.
 
 | Document | Amendment | What it says |
 |---|---|---|
-| `cli-auth-cli-spec.md` | §10, §11 superseded | "The Cloud API client, enrichment targets, budget, envelope `cloud` objects and hint lines are now specified by `cloud-data-in-cli-cli-spec.md` §2–§7, §11. §16 stands." Also §13's "0–3" → "0–4". |
+| `cli-auth-cli-spec.md` | Amendment 1 — §10, §11 superseded | "The Cloud API client, enrichment targets, budget, envelope `cloud` objects and hint lines are now specified by `cloud-data-in-cli-cli-spec.md` §2–§7, §11. §16 stands." Also §13's "0–3" → "0–4". |
 | `cli-report-format-spec.md` | Amendment 5 — Cloud layering | §8's two slots are refilled by §7.2–§7.3 and §7.6 here: the label token and the trailer. Amendment 4's "renderer composes, builder never resolves Cloud text" stands. |
 | `cli-latest-run-spec.md` | Amendment 7 — Cloud line added, not substituted | Reverses Amendment 6's replacement: the local contrast sentence stays; the Cloud line is §7.5 here. |
-| `cli-test-history-spec.md` | Amendment N — `CLOUD` block and `RUNS IN CLOUD` | Fills §8 "Reserved for Cloud" with §8 here; `TestHistoryDto.Cloud`. |
-| `cli-failure-mode-spec.md` | Amendment N — per-mode Cloud token | §8 "nothing is reserved" is replaced by §5.2 and §7.4 here: `errorMessageHash` on every mode, a `cloud` match per mode. |
-| `cli-finding-detail-spec.md` | Amendment N — Cloud pairs | The `cloud *` pairs of §7.4 here replace the two pairs of cli-auth §11.3. |
+| `cli-test-history-spec.md` | Amendment 11 — `CLOUD` block and `RUNS IN CLOUD` | Fills §8 "Reserved for Cloud" with §8 here; `TestHistoryDto.Cloud`. |
+| `cli-failure-mode-spec.md` | Amendment 8 — per-mode Cloud token | §8 "nothing is reserved" is replaced by §5.2 and §7.4 here: `errorMessageHash` on every mode, a `cloud` match per mode. |
+| `cli-finding-detail-spec.md` | Amendment 9 — Cloud pairs | The `cloud *` pairs of §7.4 here replace the three pairs of cli-auth §11.3 (`cloud confidence`, `cloud evidence`, `cloud trend`). |
 
 ---
 
@@ -711,7 +794,7 @@ end to end against it:
 
 `Report_Digest_Ok`, `Report_Digest_PartialBatch`, `Report_Digest_Timeout_LocalIntact`,
 `Report_Digest_RateLimited_NoWait`, `Report_NoCredential_NotAttemptedObject`,
-`Report_ApiKey_Forbidden_Hint`, `Report_TwoAssemblies_OneProjectMissing`,
+`Report_ApiKey_Forbidden_Hint`, `Report_OtherAssembly_NoProject` (Amendment 5A),
 `ReportTest_CloudBlock_And_Runs`, `ReportTest_Runs_SkippedOnBudget`, `Report_Banner_OnStderr`.
 
 ### 17.3 Goldens
@@ -760,7 +843,7 @@ finds a contract or spec conflict stops and reports.
 | # | Question | Proposed answer |
 |---|---|---|
 | Q-1 | Does the `--test` subject count against `MaxEnrichedTests` when it is also a finding subject? | It is one target; the cap is on distinct fingerprints. No contract change. |
-| Q-2 | The credential slice cancels a keychain probe mid-call on macOS; does the keychain API tolerate cancellation? | The probe already runs with a token (cli-auth §7.3). If a backend ignores the token, the slice still expires the enrichment and the probe finishes in the background of the process, which exits normally. Verify in phase 1 on macOS; if the process hangs, the slice must apply at the backend selector instead. |
+| Q-2 | **Answered by Amendment 1D.** The credential slice cancels a keychain probe mid-call on macOS; does the keychain API tolerate cancellation? | The probe already runs with a token (cli-auth §7.3). If a backend ignores the token, the slice still expires the enrichment and the probe finishes in the background of the process, which exits normally. Verify in phase 1 on macOS; if the process hangs, the slice must apply at the backend selector instead. |
 | Q-3 | `CtaThrottle` reads `DateTime.UtcNow` and `Environment` directly, so the banner cannot be tested with the injected clock. | Out of scope here; leave as is, test the stderr move with a redirected `io.Error` only. |
 | Q-4 | Should the reason line (§7.6) print under `not-attempted` on a pipe, where there is no banner? | No. A pipe reader has the JSON or is a script; contract F2 keeps pipes quiet. |
 

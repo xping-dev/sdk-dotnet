@@ -58,5 +58,6 @@ internal static class FailureModes
             view.FirstSeenSha,
             view.FirstSeenSessionsAgo,
             view.FirstSeenInLatestSession,
-            view.FirstSeenAfterFirstRun);
+            view.FirstSeenAfterFirstRun,
+            view.ErrorMessageHash);
 }
