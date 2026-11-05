@@ -73,6 +73,7 @@ jobs:
     needs: build
     permissions:
       contents: write
+      id-token: write  # lets NuGet/login exchange a GitHub OIDC token for a short-lived nuget.org key
     steps:
       - uses: actions/setup-dotnet@v5
         with:
@@ -92,9 +93,16 @@ jobs:
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           fi
       
+      # Trusted publishing: the key lives for 1 hour, so request it right before the push.
+      - name: NuGet login
+        id: nuget_login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish NuGet packages
         run: |
-          dotnet nuget push "_build/nuget/*.nupkg" --api-key "${{ secrets.NUGET_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "_build/nuget/*.nupkg" --api-key "${{ steps.nuget_login.outputs.NUGET_API_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
       
       - name: Upload packages to GitHub release
         if: github.event_name == 'release'
