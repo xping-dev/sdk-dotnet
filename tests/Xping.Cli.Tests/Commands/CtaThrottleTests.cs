@@ -136,11 +136,14 @@ public sealed class CtaThrottleTests : IDisposable
         Assert.False(_throttle.ShouldShow(null, hasFindings: true, isConnected: false));
     }
 
-    [Fact]
-    public void TreatsAnUnparsableStateFileAsNeverShown()
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("{\"ctaLastShownUtc\":\"yesterday\"}")]
+    [InlineData("{\"ctaLastShownUtc\":\"2026-09-29T10:00:00Z")]
+    public void TreatsAnUnparsableStateFileAsNeverShown(string content)
     {
-        // Arrange
-        File.WriteAllText(Path.Combine(_root, CtaThrottle.StateFileName), "{ not json");
+        // Arrange — no key, a value that is not a date, and a value that never ends.
+        File.WriteAllText(Path.Combine(_root, CtaThrottle.StateFileName), content);
 
         // Act & Assert — a corrupt throttle file must not permanently silence the invitation.
         Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
