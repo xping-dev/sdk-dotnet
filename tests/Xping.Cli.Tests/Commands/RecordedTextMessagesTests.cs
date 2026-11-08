@@ -20,8 +20,6 @@ namespace Xping.Cli.Tests.Commands;
 /// Driven through <c>Program.Run</c> to a pipe, so the charset is ASCII and a command on standard
 /// error is the one place a recorded <c>é</c> may still appear.
 /// </remarks>
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class RecordedTextMessagesTests : IDisposable
 {
     // An escape sequence, a newline, an é and a right-to-left override, mid-name.
@@ -33,13 +31,10 @@ public sealed class RecordedTextMessagesTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-recorded-text-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -174,7 +169,7 @@ public sealed class RecordedTextMessagesTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(args, output, error, input: null, isTerminal, configureServices: OfflineCli.Store(_root));
+        int code = Program.Run(args, output, error, input: null, isTerminal, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString(), error.ToString());
     }
 }

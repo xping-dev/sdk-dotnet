@@ -9,6 +9,7 @@ using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Commands;
@@ -21,7 +22,7 @@ namespace Xping.Cli.Commands;
 /// is not answerable by inspection. This makes it answerable, and doubles as the first thing to run
 /// when a report is unexpectedly empty.
 /// </remarks>
-internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, ConsoleIO io)
+internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, ConsoleIO io, IEnvironmentVariableProvider environment)
 {
     public int Run(string? directory)
     {
@@ -39,7 +40,7 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
         // What the report would print a recorded name with on this stream (D7). A path or an assembly
         // name is whatever the file system and the test project were given.
         ReportGlyphs glyphs = OutputCapabilities.Resolve(
-            forceAscii: false, noColor: true, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable).Glyphs;
+            forceAscii: false, noColor: true, redirected: !io.IsTerminal, environment.GetVariable).Glyphs;
 
         output.WriteLine(TerminalText.Printable(store.StorePath, glyphs.Charset));
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Cloud;
+using Xping.Cli.Commands;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Services.Environment;
 
@@ -26,12 +27,19 @@ namespace Xping.Cli.Tests;
 /// <para>
 /// So the home directory is a scratch one, the keychain is left out, the three Cloud variables are
 /// hidden, and both HTTP clients fail any request outright: a test that reaches the network has a
-/// bug, and should say so rather than wait for a timeout.
+/// bug, and should say so rather than wait for a timeout. <c>XPING_NO_BANNER</c>, <c>NO_COLOR</c>
+/// and <c>FORCE_COLOR</c> are hidden too, so a developer's shell cannot change what a test sees.
 /// </para>
 /// </remarks>
 internal static class OfflineCli
 {
-    private static readonly string[] HiddenVariables = ["XPING_APIKEY", "XPING_CLOUDURL", "XPING_PROJECTID"];
+    private static readonly string[] HiddenVariables =
+        ["XPING_APIKEY", "XPING_CLOUDURL", "XPING_PROJECTID", CtaThrottle.SuppressBannerVariable, "NO_COLOR", "FORCE_COLOR"];
+
+    /// <summary>
+    /// The variable that keeps the cloud invitation out of a report, for tests about something else.
+    /// </summary>
+    public static readonly (string Name, string Value) NoBanner = (CtaThrottle.SuppressBannerVariable, "1");
 
     /// <summary>
     /// Applies the isolation to a <c>Program.Run</c> host.

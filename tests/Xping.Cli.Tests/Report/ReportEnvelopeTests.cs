@@ -16,8 +16,6 @@ using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Cli.Tests.Report;
 
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class ReportEnvelopeTests : IDisposable
 {
     private readonly string _root;
@@ -26,13 +24,10 @@ public sealed class ReportEnvelopeTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-envelope-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -305,7 +300,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root));
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString(), error.ToString());
     }
 

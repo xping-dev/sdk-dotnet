@@ -4,6 +4,7 @@
  */
 
 using System.Globalization;
+using Xping.Sdk.Core.Services.Environment;
 
 namespace Xping.Cli.Commands;
 
@@ -14,7 +15,7 @@ namespace Xping.Cli.Commands;
 /// Every rule here exists to keep the invitation from becoming noise. A tool that pitches on every
 /// invocation gets uninstalled, and respecting these is what earns the right to print it at all.
 /// </remarks>
-internal static class CtaThrottle
+internal sealed class CtaThrottle(IEnvironmentVariableProvider environment, TimeProvider timeProvider)
 {
     internal const string SuppressBannerVariable = "XPING_NO_BANNER";
     internal const string StateFileName = "state.json";
@@ -27,7 +28,7 @@ internal static class CtaThrottle
     /// <param name="storeRoot">The local store root, used to persist the throttle timestamp.</param>
     /// <param name="hasFindings">Whether the report found anything worth acting on.</param>
     /// <param name="isConnected">Whether the runs were recorded by a cloud-connected project.</param>
-    public static bool ShouldShow(string? storeRoot, bool hasFindings, bool isConnected)
+    public bool ShouldShow(string? storeRoot, bool hasFindings, bool isConnected)
     {
         // Already a customer.
         if (isConnected)
@@ -37,26 +38,31 @@ internal static class CtaThrottle
         if (!hasFindings)
             return false;
 
-        if (Environment.GetEnvironmentVariable(SuppressBannerVariable) is { Length: > 0 })
+        if (environment.GetVariable(SuppressBannerVariable) is { Length: > 0 })
             return false;
 
         return TryConsumeAllowance(storeRoot);
     }
 
-    private static bool TryConsumeAllowance(string? storeRoot)
+    private bool TryConsumeAllowance(string? storeRoot)
     {
         if (storeRoot == null)
             return false;
 
         string statePath = Path.Combine(storeRoot, StateFileName);
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
 
         try
         {
             if (File.Exists(statePath))
             {
                 string content = File.ReadAllText(statePath);
+
+                // Within the interval either way. A clock stepped back a few seconds must not show
+                // it twice in a row, and one that was once set years ahead must not silence it
+                // until that date.
                 if (TryParseLastShown(content, out DateTime lastShown) &&
-                    DateTime.UtcNow - lastShown < Interval)
+                    (now - lastShown).Duration() < Interval)
                 {
                     return false;
                 }
@@ -67,7 +73,7 @@ internal static class CtaThrottle
                 string.Format(
                     CultureInfo.InvariantCulture,
                     "{{\"ctaLastShownUtc\":\"{0:O}\"}}",
-                    DateTime.UtcNow));
+                    now));
 
             return true;
         }
@@ -92,10 +98,18 @@ internal static class CtaThrottle
         if (end < 0)
             return false;
 
-        return DateTime.TryParse(
+        // Through DateTimeOffset, so a hand-edited value with an offset is compared as the instant
+        // it names rather than as local ticks.
+        if (!DateTimeOffset.TryParse(
             content.AsSpan(start, end - start),
             CultureInfo.InvariantCulture,
-            DateTimeStyles.RoundtripKind,
-            out lastShown);
+            DateTimeStyles.AssumeUniversal,
+            out DateTimeOffset parsed))
+        {
+            return false;
+        }
+
+        lastShown = parsed.UtcDateTime;
+        return true;
     }
 }

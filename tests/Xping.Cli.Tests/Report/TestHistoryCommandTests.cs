@@ -18,8 +18,6 @@ namespace Xping.Cli.Tests.Report;
 /// Rows and ids are read back from a full JSON report, never typed: both are what the coordinator
 /// concluded, and the point of <c>--test</c> is that it agrees with the report.
 /// </remarks>
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class TestHistoryCommandTests : IDisposable
 {
     private const string Assembly = TestSessionFactory.DefaultAssembly;
@@ -31,13 +29,10 @@ public sealed class TestHistoryCommandTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-history-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -708,7 +703,7 @@ public sealed class TestHistoryCommandTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root));
+        int code = Program.Run(["report", .. args], output, error, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString(), error.ToString());
     }
 }

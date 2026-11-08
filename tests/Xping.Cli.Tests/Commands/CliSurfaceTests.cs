@@ -16,8 +16,6 @@ using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
 
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class CliSurfaceTests : IDisposable
 {
     private readonly string _root;
@@ -26,13 +24,10 @@ public sealed class CliSurfaceTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-surface-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -120,8 +115,9 @@ public sealed class CliSurfaceTests : IDisposable
         using var error = new StringWriter();
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
-        // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
+        // the scope notice — are exercised rather than silently suppressed. The cloud invitation is
+        // not: ReviewFixesTests and ReportEnrichmentTests cover it.
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString() + error.ToString());
     }
 
@@ -142,8 +138,10 @@ public sealed class CliSurfaceTests : IDisposable
     [Fact]
     public void APipedReportCarriesNothingButTheReport()
     {
+        // Two assemblies and a finding, so a terminal run would print both the scope notice and the
+        // invitation; the pipe has to print neither.
         SeedSessions("Alpha.Tests", 6);
-        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        Seed("Beta.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -157,7 +155,12 @@ public sealed class CliSurfaceTests : IDisposable
 
         // `xping report | pbcopy` has to copy a report and nothing else.
         Assert.DoesNotContain("Reporting on", report, StringComparison.Ordinal);
-        Assert.DoesNotContain("xping.io/start", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("xping.io/start", report + error, StringComparison.Ordinal);
+
+        // Run second: the pipe consumed no daily allowance, so the terminal still has one to spend.
+        using var terminal = new StringWriter();
+        Program.Run(["report"], terminal, terminal, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
+        Assert.Contains("xping.io/start", terminal.ToString(), StringComparison.Ordinal);
 
         // And it has to arrive drawable: no escape codes, no glyphs a legacy code page cannot show.
         Assert.DoesNotContain("\u001b", report, StringComparison.Ordinal);
@@ -185,7 +188,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
+        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
         foreach (string line in ReportText.Fenced(output.ToString()))
         {
@@ -221,11 +224,33 @@ public sealed class CliSurfaceTests : IDisposable
         using var piped = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
+        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
-        // The terminal run is padded and carries the call to action; the report between the fences
-        // is what the two have to agree on.
+        // The terminal run is padded; the report between the fences is what the two have to agree on.
         Assert.Equal(ReportText.Fenced(piped.ToString()), ReportText.Fenced(terminal));
+    }
+
+    /// <summary>
+    /// The colour variables are read from the command's environment, so the host decides them and
+    /// not whatever the shell running the tests happens to export.
+    /// </summary>
+    [Fact]
+    public void ForceColorInTheCommandsEnvironmentColoursAPipedReport()
+    {
+        // A test that keeps flipping, so the report has a finding to colour.
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+
+        using var plain = new StringWriter();
+        using var forced = new StringWriter();
+        using var error = new StringWriter();
+
+        Program.Run(["report"], plain, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
+        Program.Run(
+            ["report"], forced, error, input: null, isTerminal: false,
+            configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner, ("FORCE_COLOR", "1")));
+
+        Assert.DoesNotContain('\u001b', plain.ToString());
+        Assert.Contains('\u001b', forced.ToString());
     }
 
     [Fact]
@@ -409,7 +434,7 @@ public sealed class CliSurfaceTests : IDisposable
             ["report", "--json"], output, error, input: null, isTerminal: true,
             configureServices: services =>
             {
-                OfflineCli.Store(_root)(services);
+                OfflineCli.Store(_root, OfflineCli.NoBanner)(services);
                 services.AddHttpClient(CloudHttp.ClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient(AuthHttpClients.OAuth).ConfigurePrimaryHttpMessageHandler(() => handler);
             });

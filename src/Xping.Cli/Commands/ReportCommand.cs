@@ -36,7 +36,8 @@ internal sealed class ReportCommand(
     CloudEnricher enricher,
     GlobalOptions globalOptions,
     ConsoleIO io,
-    IEnvironmentVariableProvider environment)
+    IEnvironmentVariableProvider environment,
+    CtaThrottle ctaThrottle)
 {
     // Once per run, so every command the report prints is quoted for the same shell.
     private readonly (ShellDialect Dialect, string? Warning) _shell =
@@ -61,7 +62,7 @@ internal sealed class ReportCommand(
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
         OutputCapabilities capabilities = OutputCapabilities.Resolve(
-            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
+            options.Ascii, options.NoColor, redirected: !io.IsTerminal, environment.GetVariable);
 
         // What the messages around the report may print of a recorded name or path: what the report
         // itself would print it with (D7).
@@ -826,7 +827,7 @@ internal sealed class ReportCommand(
         bool isConnected = (sessions.Count > 0 && LocalSessionProperties.IsConnected(sessions[0]))
             || envelope.Context?.Cloud?.Status is "ok" or "partial";
 
-        if (!CtaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
+        if (!ctaThrottle.ShouldShow(store.StorePath, analysis.Findings.Count > 0, isConnected))
             return;
 
         io.Error.WriteLine();

@@ -18,10 +18,6 @@ namespace Xping.Cli.Tests.Cloud;
 /// The same store gives the same exit code whatever Cloud answered, and whether or not a credential
 /// exists (contract §7.6, §8.3; cloud-data-in-cli-cli-spec §9, §17.1).
 /// </summary>
-/// <remarks>
-/// Sequential because the CTA banner is suppressed through a process-wide variable.
-/// </remarks>
-[Collection("Sequential")]
 public sealed class ExitCodeIndependenceTests : IAsyncDisposable
 {
     private const string Project = "myapp-tests";
@@ -35,7 +31,7 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
     {
         Directory.CreateDirectory(_root);
         _host.Environment[LocalSessionStoreFactory.StoreVariable] = _root;
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
+        _host.Environment[CtaThrottle.SuppressBannerVariable] = "1";
 
         _host.Cloud.AddProject(Project, displayName: TestSessionFactory.DefaultAssembly);
         _host.Cloud.AddTest(Project, "fp-Removed0");
@@ -50,7 +46,6 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
         await _host.DisposeAsync().ConfigureAwait(false);
 
         try

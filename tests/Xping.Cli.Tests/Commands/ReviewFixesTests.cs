@@ -12,8 +12,6 @@ using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
 
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class ReviewFixesTests : IDisposable
 {
     private readonly string _root;
@@ -22,13 +20,10 @@ public sealed class ReviewFixesTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-reviewfix-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
