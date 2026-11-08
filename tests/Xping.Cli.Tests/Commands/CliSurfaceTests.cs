@@ -224,6 +224,29 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.Equal(ReportText.Fenced(piped.ToString()), ReportText.Fenced(terminal));
     }
 
+    /// <summary>
+    /// The colour variables are read from the command's environment, so the host decides them and
+    /// not whatever the shell running the tests happens to export.
+    /// </summary>
+    [Fact]
+    public void ForceColorInTheCommandsEnvironmentColoursAPipedReport()
+    {
+        // A test that keeps flipping, so the report has a finding to colour.
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+
+        using var plain = new StringWriter();
+        using var forced = new StringWriter();
+        using var error = new StringWriter();
+
+        Program.Run(["report"], plain, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
+        Program.Run(
+            ["report"], forced, error, input: null, isTerminal: false,
+            configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner, ("FORCE_COLOR", "1")));
+
+        Assert.DoesNotContain('\u001b', plain.ToString());
+        Assert.Contains('\u001b', forced.ToString());
+    }
+
     [Fact]
     public void ATerminalReportIsGivenBreathingRoomOnEitherSide()
     {

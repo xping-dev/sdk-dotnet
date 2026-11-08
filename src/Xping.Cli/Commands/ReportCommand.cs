@@ -62,7 +62,7 @@ internal sealed class ReportCommand(
         // Resolved once and shared. Asking the console twice is how a report ends up drawn for a
         // terminal and decorated for a pipe, or the reverse.
         OutputCapabilities capabilities = OutputCapabilities.Resolve(
-            options.Ascii, options.NoColor, redirected: !io.IsTerminal, Environment.GetEnvironmentVariable);
+            options.Ascii, options.NoColor, redirected: !io.IsTerminal, environment.GetVariable);
 
         // What the messages around the report may print of a recorded name or path: what the report
         // itself would print it with (D7).

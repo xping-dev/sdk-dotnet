@@ -19,6 +19,7 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
+using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Shared;
 
 namespace Xping.Cli;
@@ -394,7 +395,7 @@ internal static class Program
                     forceAscii: result.GetValue(asciiOption),
                     noColor: false,
                     redirected: !io.IsTerminal,
-                    Environment.GetEnvironmentVariable).Glyphs.Charset)
+                    services.GetRequiredService<IEnvironmentVariableProvider>().GetVariable).Glyphs.Charset)
         };
 
         // NO_COLOR is honoured too; the flag exists for the caller who cannot set an environment
