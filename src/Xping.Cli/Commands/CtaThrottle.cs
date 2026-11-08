@@ -57,11 +57,12 @@ internal sealed class CtaThrottle(IEnvironmentVariableProvider environment, Time
             if (File.Exists(statePath))
             {
                 string content = File.ReadAllText(statePath);
-                // A timestamp from the future (a clock that was once set ahead) counts as never
-                // shown; read as "just shown" it would silence the invitation until that date.
+
+                // Within the interval either way. A clock stepped back a few seconds must not show
+                // it twice in a row, and one that was once set years ahead must not silence it
+                // until that date.
                 if (TryParseLastShown(content, out DateTime lastShown) &&
-                    lastShown <= now &&
-                    now - lastShown < Interval)
+                    (now - lastShown).Duration() < Interval)
                 {
                     return false;
                 }
@@ -97,10 +98,18 @@ internal sealed class CtaThrottle(IEnvironmentVariableProvider environment, Time
         if (end < 0)
             return false;
 
-        return DateTime.TryParse(
+        // Through DateTimeOffset, so a hand-edited value with an offset is compared as the instant
+        // it names rather than as local ticks.
+        if (!DateTimeOffset.TryParse(
             content.AsSpan(start, end - start),
             CultureInfo.InvariantCulture,
-            DateTimeStyles.RoundtripKind,
-            out lastShown);
+            DateTimeStyles.AssumeUniversal,
+            out DateTimeOffset parsed))
+        {
+            return false;
+        }
+
+        lastShown = parsed.UtcDateTime;
+        return true;
     }
 }

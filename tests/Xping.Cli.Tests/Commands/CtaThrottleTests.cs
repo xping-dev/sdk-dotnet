@@ -79,6 +79,32 @@ public sealed class CtaThrottleTests : IDisposable
     }
 
     [Fact]
+    public void StaysQuietWhenTheClockIsSteppedBackAFewSeconds()
+    {
+        // Arrange — shown, then an NTP correction moved the clock back past the recorded instant.
+        // (The fake clock only moves forward, so the timestamp moves instead.)
+        File.WriteAllText(
+            Path.Combine(_root, CtaThrottle.StateFileName),
+            $"{{\"ctaLastShownUtc\":\"{_time.GetUtcNow().UtcDateTime.AddSeconds(10):O}\"}}");
+
+        // Act & Assert — not a new day.
+        Assert.False(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+    }
+
+    [Theory]
+    [InlineData("2026-09-28T15:01:00+05:00", false)] // 23h59m before now: still within the window
+    [InlineData("2026-09-28T14:59:00+05:00", true)] // 24h01m before now: past it
+    public void ReadsATimestampWithAnOffsetAsTheInstantItNames(string stored, bool expected)
+    {
+        // A minute either side of the boundary, so reading the value as local ticks moves it across
+        // on any machine not on UTC.
+        File.WriteAllText(
+            Path.Combine(_root, CtaThrottle.StateFileName), $"{{\"ctaLastShownUtc\":\"{stored}\"}}");
+
+        Assert.Equal(expected, _throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+    }
+
+    [Fact]
     public void IsSuppressedForConnectedProjects()
     {
         // They already signed up.

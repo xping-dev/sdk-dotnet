@@ -138,14 +138,16 @@ public sealed class CliSurfaceTests : IDisposable
     [Fact]
     public void APipedReportCarriesNothingButTheReport()
     {
+        // Two assemblies and a finding, so a terminal run would print both the scope notice and the
+        // invitation; the pipe has to print neither.
         SeedSessions("Alpha.Tests", 6);
-        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        Seed("Beta.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
 
         using var output = new StringWriter();
         using var error = new StringWriter();
 
         int code = Program.Run(
-            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
+            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
 
         string report = output.ToString();
 
@@ -153,7 +155,12 @@ public sealed class CliSurfaceTests : IDisposable
 
         // `xping report | pbcopy` has to copy a report and nothing else.
         Assert.DoesNotContain("Reporting on", report, StringComparison.Ordinal);
-        Assert.DoesNotContain("xping.io/start", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("xping.io/start", report + error, StringComparison.Ordinal);
+
+        // Run second: the pipe consumed no daily allowance, so the terminal still has one to spend.
+        using var terminal = new StringWriter();
+        Program.Run(["report"], terminal, terminal, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
+        Assert.Contains("xping.io/start", terminal.ToString(), StringComparison.Ordinal);
 
         // And it has to arrive drawable: no escape codes, no glyphs a legacy code page cannot show.
         Assert.DoesNotContain("\u001b", report, StringComparison.Ordinal);
@@ -219,8 +226,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
-        // The terminal run is padded and carries the call to action; the report between the fences
-        // is what the two have to agree on.
+        // The terminal run is padded; the report between the fences is what the two have to agree on.
         Assert.Equal(ReportText.Fenced(piped.ToString()), ReportText.Fenced(terminal));
     }
 
