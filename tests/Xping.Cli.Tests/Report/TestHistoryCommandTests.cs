@@ -33,7 +33,6 @@ public sealed class TestHistoryCommandTests : IDisposable
 
     public void Dispose()
     {
-
         try
         {
             if (Directory.Exists(_root))

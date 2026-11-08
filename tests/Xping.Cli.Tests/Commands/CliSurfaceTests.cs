@@ -28,7 +28,6 @@ public sealed class CliSurfaceTests : IDisposable
 
     public void Dispose()
     {
-
         try
         {
             if (Directory.Exists(_root))
@@ -116,7 +115,8 @@ public sealed class CliSurfaceTests : IDisposable
         using var error = new StringWriter();
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
-        // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
+        // the scope notice — are exercised rather than silently suppressed. The cloud invitation is
+        // not: ReviewFixesTests and ReportEnrichmentTests cover it.
         int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString() + error.ToString());
     }

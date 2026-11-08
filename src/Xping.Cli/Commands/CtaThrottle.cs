@@ -57,7 +57,10 @@ internal sealed class CtaThrottle(IEnvironmentVariableProvider environment, Time
             if (File.Exists(statePath))
             {
                 string content = File.ReadAllText(statePath);
+                // A timestamp from the future (a clock that was once set ahead) counts as never
+                // shown; read as "just shown" it would silence the invitation until that date.
                 if (TryParseLastShown(content, out DateTime lastShown) &&
+                    lastShown <= now &&
                     now - lastShown < Interval)
                 {
                     return false;

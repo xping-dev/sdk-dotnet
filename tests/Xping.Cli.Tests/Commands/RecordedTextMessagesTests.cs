@@ -35,7 +35,6 @@ public sealed class RecordedTextMessagesTests : IDisposable
 
     public void Dispose()
     {
-
         try
         {
             if (Directory.Exists(_root))

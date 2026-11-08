@@ -844,7 +844,7 @@ finds a contract or spec conflict stops and reports.
 |---|---|---|
 | Q-1 | Does the `--test` subject count against `MaxEnrichedTests` when it is also a finding subject? | It is one target; the cap is on distinct fingerprints. No contract change. |
 | Q-2 | **Answered by Amendment 1D.** The credential slice cancels a keychain probe mid-call on macOS; does the keychain API tolerate cancellation? | The probe already runs with a token (cli-auth §7.3). If a backend ignores the token, the slice still expires the enrichment and the probe finishes in the background of the process, which exits normally. Verify in phase 1 on macOS; if the process hangs, the slice must apply at the backend selector instead. |
-| Q-3 | `CtaThrottle` reads `DateTime.UtcNow` and `Environment` directly, so the banner cannot be tested with the injected clock. | **Answered by #340.** Out of scope here; leave as is, test the stderr move with a redirected `io.Error` only. #340 then injected the throttle with `IEnvironmentVariableProvider` and `TimeProvider`. |
+| Q-3 | `CtaThrottle` reads `DateTime.UtcNow` and `Environment` directly, so the banner cannot be tested with the injected clock. | **Answered by #340.** Left out of this work, which tested the stderr move with a redirected `io.Error` only. #340 then injected `IEnvironmentVariableProvider` and `TimeProvider` into the throttle, so the banner and its 24-hour window are tested with the fake clock. |
 | Q-4 | Should the reason line (§7.6) print under `not-attempted` on a pipe, where there is no banner? | No. A pipe reader has the JSON or is a script; contract F2 keeps pipes quiet. |
 
 ### Contract observations recorded while writing (no conflict found)

@@ -28,7 +28,6 @@ public sealed class ReportEnvelopeTests : IDisposable
 
     public void Dispose()
     {
-
         try
         {
             if (Directory.Exists(_root))

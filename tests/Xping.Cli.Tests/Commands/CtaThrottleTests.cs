@@ -67,6 +67,18 @@ public sealed class CtaThrottleTests : IDisposable
     }
 
     [Fact]
+    public void TreatsATimestampFromTheFutureAsNeverShown()
+    {
+        // Arrange — written by a clock that was once set years ahead.
+        File.WriteAllText(
+            Path.Combine(_root, CtaThrottle.StateFileName),
+            $"{{\"ctaLastShownUtc\":\"{_time.GetUtcNow().UtcDateTime.AddYears(3):O}\"}}");
+
+        // Act & Assert — otherwise the invitation stays silent until that date.
+        Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+    }
+
+    [Fact]
     public void IsSuppressedForConnectedProjects()
     {
         // They already signed up.

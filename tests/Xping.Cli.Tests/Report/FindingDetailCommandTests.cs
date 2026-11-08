@@ -34,7 +34,6 @@ public sealed class FindingDetailCommandTests : IDisposable
 
     public void Dispose()
     {
-
         try
         {
             if (Directory.Exists(_root))
