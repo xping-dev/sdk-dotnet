@@ -16,8 +16,6 @@ using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests.Commands;
 
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class CliSurfaceTests : IDisposable
 {
     private readonly string _root;
@@ -26,12 +24,10 @@ public sealed class CliSurfaceTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-surface-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
         {
@@ -121,7 +117,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         // Rendered as if a person were watching, so the parts of the output only a terminal gets —
         // the scope notice, the cloud invitation — are exercised rather than silently suppressed.
-        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root));
+        int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString() + error.ToString());
     }
 
@@ -149,7 +145,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var error = new StringWriter();
 
         int code = Program.Run(
-            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
+            ["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
         string report = output.ToString();
 
@@ -185,7 +181,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
+        Program.Run(["report"], output, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
         foreach (string line in ReportText.Fenced(output.ToString()))
         {
@@ -221,7 +217,7 @@ public sealed class CliSurfaceTests : IDisposable
         using var piped = new StringWriter();
         using var error = new StringWriter();
 
-        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root));
+        Program.Run(["report"], piped, error, input: null, isTerminal: false, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
 
         // The terminal run is padded and carries the call to action; the report between the fences
         // is what the two have to agree on.
@@ -409,7 +405,7 @@ public sealed class CliSurfaceTests : IDisposable
             ["report", "--json"], output, error, input: null, isTerminal: true,
             configureServices: services =>
             {
-                OfflineCli.Store(_root)(services);
+                OfflineCli.Store(_root, OfflineCli.NoBanner)(services);
                 services.AddHttpClient(CloudHttp.ClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient(AuthHttpClients.OAuth).ConfigurePrimaryHttpMessageHandler(() => handler);
             });

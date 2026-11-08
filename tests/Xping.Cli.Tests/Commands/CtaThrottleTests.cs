@@ -3,27 +3,28 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Commands;
+using Xping.Sdk.Core.Services.Environment;
 
 namespace Xping.Cli.Tests.Commands;
 
-// Mutates XPING_NO_BANNER, which is process-wide state.
-[Collection("Sequential")]
 public sealed class CtaThrottleTests : IDisposable
 {
     private readonly string _root;
+    private readonly Dictionary<string, string> _environment = new(StringComparer.Ordinal);
+    private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 9, 29, 10, 0, 0, TimeSpan.Zero));
+    private readonly CtaThrottle _throttle;
 
     public CtaThrottleTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-cta-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
+        _throttle = new CtaThrottle(new DictionaryEnvironment(_environment), _time);
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
-
         try
         {
             if (Directory.Exists(_root))
@@ -38,45 +39,55 @@ public sealed class CtaThrottleTests : IDisposable
     public void ShowsAtMostOncePerDay()
     {
         // A tool that pitches on every invocation gets uninstalled.
-        bool first = CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: false);
-        bool second = CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: false);
+        bool first = _throttle.ShouldShow(_root, hasFindings: true, isConnected: false);
+        bool second = _throttle.ShouldShow(_root, hasFindings: true, isConnected: false);
 
         Assert.True(first);
         Assert.False(second);
     }
 
     [Fact]
+    public void StaysQuietUntilTheFullIntervalHasElapsed()
+    {
+        Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+
+        _time.Advance(TimeSpan.FromHours(24) - TimeSpan.FromMinutes(1));
+
+        Assert.False(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+    }
+
+    [Fact]
     public void ShowsAgainOnceTheIntervalHasElapsed()
     {
-        // Arrange — record a timestamp older than the 24 hour window.
-        File.WriteAllText(
-            Path.Combine(_root, CtaThrottle.StateFileName),
-            $"{{\"ctaLastShownUtc\":\"{DateTime.UtcNow.AddDays(-2):O}\"}}");
+        Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
 
-        // Act & Assert
-        Assert.True(CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: false));
+        _time.Advance(TimeSpan.FromHours(24));
+
+        Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
     }
 
     [Fact]
     public void IsSuppressedForConnectedProjects()
     {
         // They already signed up.
-        Assert.False(CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: true));
+        Assert.False(_throttle.ShouldShow(_root, hasFindings: true, isConnected: true));
     }
 
     [Fact]
     public void IsSuppressedAfterACleanReport()
     {
         // Never pitch when nothing was found; the ask has to be tied to a problem just shown.
-        Assert.False(CtaThrottle.ShouldShow(_root, hasFindings: false, isConnected: false));
+        Assert.False(_throttle.ShouldShow(_root, hasFindings: false, isConnected: false));
     }
 
     [Fact]
-    public void IsSuppressedByEnvironmentVariable()
+    public void IsSuppressedByTheInjectedEnvironment()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
+        // Through the command's environment, not the process's: the process variable is never set
+        // here, and a throttle that read it would show the invitation.
+        _environment[CtaThrottle.SuppressBannerVariable] = "1";
 
-        Assert.False(CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: false));
+        Assert.False(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
     }
 
     [Fact]
@@ -84,7 +95,7 @@ public sealed class CtaThrottleTests : IDisposable
     {
         // Without somewhere to record the timestamp there is no way to rate-limit, so the safe
         // failure is silence rather than pitching on every invocation.
-        Assert.False(CtaThrottle.ShouldShow(null, hasFindings: true, isConnected: false));
+        Assert.False(_throttle.ShouldShow(null, hasFindings: true, isConnected: false));
     }
 
     [Fact]
@@ -94,6 +105,11 @@ public sealed class CtaThrottleTests : IDisposable
         File.WriteAllText(Path.Combine(_root, CtaThrottle.StateFileName), "{ not json");
 
         // Act & Assert — a corrupt throttle file must not permanently silence the invitation.
-        Assert.True(CtaThrottle.ShouldShow(_root, hasFindings: true, isConnected: false));
+        Assert.True(_throttle.ShouldShow(_root, hasFindings: true, isConnected: false));
+    }
+
+    private sealed class DictionaryEnvironment(Dictionary<string, string> variables) : IEnvironmentVariableProvider
+    {
+        public string? GetVariable(string name) => variables.GetValueOrDefault(name);
     }
 }

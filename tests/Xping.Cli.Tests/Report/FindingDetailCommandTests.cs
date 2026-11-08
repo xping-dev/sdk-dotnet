@@ -20,8 +20,6 @@ namespace Xping.Cli.Tests.Report;
 /// Ids are read back from a first JSON run, never typed: an id is a hash of what the coordinator
 /// concluded, and one written into a test by hand is a test of the hand.
 /// </remarks>
-// Resolves the store from a temp directory and mutates XPING_NO_BANNER.
-[Collection("Sequential")]
 public sealed class FindingDetailCommandTests : IDisposable
 {
     private const string Other = "Other.Tests";
@@ -32,12 +30,10 @@ public sealed class FindingDetailCommandTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "xping-detail-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
 
         try
         {
@@ -175,7 +171,7 @@ public sealed class FindingDetailCommandTests : IDisposable
             ("posix", $"'{_root}/it'\\''s'")])
         {
             var (code, output, error) = RunIn(
-                OfflineCli.Store(_root, (ShellDialects.Variable, shell)), "--directory", directory, "--format", "json");
+                OfflineCli.Store(_root, OfflineCli.NoBanner, (ShellDialects.Variable, shell)), "--directory", directory, "--format", "json");
 
             Assert.Equal(0, code);
             Assert.Empty(error);
@@ -196,7 +192,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     {
         SeedVanishing();
 
-        var (code, output, error) = RunIn(OfflineCli.Store(_root, (ShellDialects.Variable, "bash")), "--format", "json");
+        var (code, output, error) = RunIn(OfflineCli.Store(_root, OfflineCli.NoBanner, (ShellDialects.Variable, "bash")), "--format", "json");
 
         Assert.Equal(0, code);
         Assert.StartsWith("xping: XPING_SHELL=\"bash\" is not posix or powershell; commands are quoted for ", error, StringComparison.Ordinal);
@@ -527,7 +523,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     private (int Code, string Output, string Error) Run(params string[] args) =>
-        RunIn(OfflineCli.Store(_root), args);
+        RunIn(OfflineCli.Store(_root, OfflineCli.NoBanner), args);
 
     private static (int Code, string Output, string Error) RunIn(Action<IServiceCollection> services, params string[] args)
     {

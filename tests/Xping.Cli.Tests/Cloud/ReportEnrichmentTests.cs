@@ -20,10 +20,6 @@ namespace Xping.Cli.Tests.Cloud;
 /// pipeline, binding, enrichment, hints and exit code (cli-auth-cli-spec §11, §18.2;
 /// cloud-data-in-cli-cli-spec §17.2).
 /// </summary>
-/// <remarks>
-/// Sequential because the CTA banner is suppressed through a process-wide variable.
-/// </remarks>
-[Collection("Sequential")]
 public sealed class ReportEnrichmentTests : IAsyncDisposable
 {
     private const string Assembly = TestSessionFactory.DefaultAssembly;
@@ -41,7 +37,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     {
         Directory.CreateDirectory(_root);
         _host.Environment[LocalSessionStoreFactory.StoreVariable] = _root;
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, "1");
+        _host.Environment[CtaThrottle.SuppressBannerVariable] = "1";
 
         _host.Cloud.AddProject(Project, displayName: Assembly);
         _host.Cloud.AddTest(Project, FindingFingerprint);
@@ -52,7 +48,6 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
         await _host.DisposeAsync().ConfigureAwait(false);
 
         try
@@ -229,7 +224,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     [Fact]
     public void AReportThatReadCloudDataDoesNotPitchTheCloud()
     {
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
+        _host.Environment.Remove(CtaThrottle.SuppressBannerVariable);
         Seed();
         _host.SignIn();
 
@@ -411,7 +406,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     public void Report_Banner_OnStderr()
     {
         // Two assemblies, so the report names the one it chose; no credential, so it invites.
-        Environment.SetEnvironmentVariable(CtaThrottle.SuppressBannerVariable, null);
+        _host.Environment.Remove(CtaThrottle.SuppressBannerVariable);
         Seed(assembly: "Older.Tests");
         Seed(startOrdinal: 8);
 

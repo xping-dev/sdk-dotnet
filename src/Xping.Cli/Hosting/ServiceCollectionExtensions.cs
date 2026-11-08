@@ -51,6 +51,7 @@ internal static class ServiceCollectionExtensions
 
         services.AddXpingLocalAnalysis();
 
+        services.AddSingleton<CtaThrottle>();
         services.AddTransient<ReportCommand>();
         services.AddTransient<WhereCommand>();
         services.AddTransient<ClearCommand>();
