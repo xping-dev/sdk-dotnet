@@ -15,7 +15,7 @@ namespace Xping.Cli.Report;
 /// was printed from. A drill-down that dropped <c>--since</c> would open a different window and
 /// report the finding absent; one that dropped <c>--directory</c> would not find the store at all.
 /// </remarks>
-/// <param name="Assembly">The assembly the report covers, whether named or auto-scoped.</param>
+/// <param name="Assembly">The assembly the report covers.</param>
 /// <param name="Resolution">How the report's window was chosen.</param>
 /// <param name="WindowRuns">
 /// How many sessions the window held. A <see cref="WindowResolution.Store"/> window has no flag to
@@ -28,7 +28,6 @@ namespace Xping.Cli.Report;
 /// The shell every printed command is quoted for. Required for the same reason: a default would
 /// quote for some other shell without anything failing.
 /// </param>
-/// <param name="AssemblyGiven">Whether the caller named it with <c>--assembly</c>.</param>
 /// <param name="Runs">The <c>--runs</c> the caller gave, or <see langword="null"/>.</param>
 /// <param name="Since">The <c>--since</c> the caller gave, or <see langword="null"/>.</param>
 /// <param name="Directory">The <c>--directory</c> the caller gave, or <see langword="null"/>.</param>
@@ -37,7 +36,6 @@ internal sealed record ReportScope(
     WindowResolution Resolution,
     int WindowRuns,
     ShellDialect Shell,
-    bool AssemblyGiven = false,
     int? Runs = null,
     string? Since = null,
     string? Directory = null);

@@ -111,13 +111,6 @@ internal interface IWindowResolver
     /// <see cref="Resolve"/>, but must still apply the one clock rule every read here applies.
     /// </remarks>
     bool IsAhead(DateTime startedAt);
-
-    /// <summary>
-    /// Returns the assembly to scope to when the caller named none, or <see langword="null"/>.
-    /// </summary>
-    /// <param name="source">Where sessions are read from.</param>
-    /// <returns>The assembly, or <see langword="null"/> when no run names one.</returns>
-    string? ScopeAssembly(ISessionSource source);
 }
 
 /// <summary>
@@ -165,58 +158,6 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
 
     /// <inheritdoc/>
     public bool IsAhead(DateTime startedAt) => startedAt > Horizon();
-
-    /// <inheritdoc/>
-    /// <remarks>
-    /// <para>
-    /// The newest run can cover several assemblies at once, and a report covers one. Taking the
-    /// first in ordinal order makes the choice deterministic and repeatable, which matters more than
-    /// which one wins: it is not a silent choice, because the report names the assembly it settled
-    /// on and counts the ones it left out.
-    /// </para>
-    /// <para>
-    /// The newest run may also name no assembly at all, so this walks back to the newest one that
-    /// does rather than reading only the first. Stopping at an unattributable run would return
-    /// <see langword="null"/> and leave the caller unscoped, which is the one outcome auto-scoping
-    /// exists to avoid: an unscoped report pools every suite in the store into one.
-    /// </para>
-    /// <para>
-    /// Resolved here rather than at the store, because "newest" is the same question the window
-    /// bounds ask and has to be answered the same way. A run stamped ahead of this machine's clock
-    /// that chose the scope would hand the developer a report about a suite they are not working on,
-    /// which is the one decision in the report that no later filtering can undo.
-    /// </para>
-    /// <para>
-    /// Answered from file headers, which carry a run's start time and assemblies, so no session is
-    /// loaded. A plain <c>report</c> asks this on every invocation, and loading sessions to answer it
-    /// cost as much as the report itself once the store held many assemblies. A header can be intact
-    /// over a damaged body; such a run can choose the scope, and the report then counts it unreadable
-    /// and rests on that assembly's other runs.
-    /// </para>
-    /// <para>
-    /// When every run that names an assembly is ahead of the clock, the newest of them still chooses.
-    /// That is the store <see cref="Read"/> keeps whole and dates against its own clock, with a
-    /// warning, rather than leaving the developer with no report.
-    /// </para>
-    /// </remarks>
-    public string? ScopeAssembly(ISessionSource source)
-    {
-        DateTime horizon = Horizon();
-        string? ahead = null;
-
-        foreach (LocalSessionHeader header in source.ReadHeaders())
-        {
-            if (header.Assemblies.Count == 0)
-                continue;
-
-            if (header.StartedAt <= horizon)
-                return header.Assemblies[0];
-
-            ahead ??= header.Assemblies[0];
-        }
-
-        return ahead;
-    }
 
     /// <summary>
     /// Applies the default bounds: the most recent N sessions, or everything inside the default age,

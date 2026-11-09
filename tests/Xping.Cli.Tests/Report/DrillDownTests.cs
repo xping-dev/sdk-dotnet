@@ -19,7 +19,7 @@ public sealed class DrillDownTests
     public void AValueTheShellWouldReadIsSingleQuoted(string directory, string printed)
     {
         Assert.Equal(
-            $"xping report --all --directory {printed}",
+            $"xping report --all --assembly MyApp.Tests --directory {printed}",
             DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, ShellDialect.Posix, Directory: directory)));
     }
 
@@ -27,7 +27,7 @@ public sealed class DrillDownTests
     [Fact]
     public void InPowerShellAnEmbeddedQuoteIsDoubled()
     {
-        var scope = new ReportScope("It's.Tests", WindowResolution.SinceDate, 20, ShellDialect.PowerShell, AssemblyGiven: true, Since: "a,b", Directory: "/work/it's");
+        var scope = new ReportScope("It's.Tests", WindowResolution.SinceDate, 20, ShellDialect.PowerShell, Since: "a,b", Directory: "/work/it's");
 
         Assert.Equal(
             "xping report --id f_2a91c0de --assembly 'It''s.Tests' --since 'a,b' --directory '/work/it''s'",
@@ -59,15 +59,38 @@ public sealed class DrillDownTests
     {
         var scope = new ReportScope("MyApp.Tests", WindowResolution.Runs, 5, ShellDialect.Posix, Runs: 5);
 
-        Assert.Equal("xping report --all --runs 5", DrillDown.ForFullReport(scope));
+        Assert.Equal("xping report --all --assembly MyApp.Tests --runs 5", DrillDown.ForFullReport(scope));
     }
 
     [Fact]
     public void ADefaultWindowIsNotPinned()
     {
         Assert.Equal(
-            "xping report --all",
+            "xping report --all --assembly MyApp.Tests",
             DrillDown.ForFullReport(new ReportScope("MyApp.Tests", WindowResolution.Default, 20, ShellDialect.Posix)));
+    }
+
+    /// <summary>
+    /// Report-format Amendment 6H: a bare <c>--all</c> over a store that gains a second assembly opens
+    /// the overview, so the command names the assembly even when the caller never typed it.
+    /// </summary>
+    [Fact]
+    public void TheFullReportCommandNamesTheAssemblyTheCallerNeverTyped()
+    {
+        Assert.Equal(
+            "xping report --all --assembly 'My App.Tests'",
+            DrillDown.ForFullReport(new ReportScope("My App.Tests", WindowResolution.Default, 20, ShellDialect.Posix)));
+    }
+
+    [Fact]
+    public void AnAssemblysReportCommandCarriesTheOverviewsWindow()
+    {
+        var scope = new ReportScope(
+            "My App.Tests", WindowResolution.Runs, 5, ShellDialect.Posix, Runs: 5, Directory: "/work/My Repo");
+
+        Assert.Equal(
+            "xping report --assembly 'My App.Tests' --runs 5 --directory '/work/My Repo'",
+            DrillDown.ForAssembly(scope));
     }
 
     /// <summary>
@@ -77,7 +100,7 @@ public sealed class DrillDownTests
     public void AHistoryNamesTheAssemblyAndDirectoryAndNoWindow()
     {
         var scope = new ReportScope(
-            "MyApp.Tests", WindowResolution.Store, 48, ShellDialect.Posix, AssemblyGiven: true, Runs: 5, Since: "2026-08-01", Directory: "/work/My Repo");
+            "MyApp.Tests", WindowResolution.Store, 48, ShellDialect.Posix, Runs: 5, Since: "2026-08-01", Directory: "/work/My Repo");
 
         Assert.Equal(
             "xping report --test 3a597eb2 --assembly MyApp.Tests --directory '/work/My Repo'",

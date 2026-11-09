@@ -297,8 +297,8 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     /// <summary>
-    /// The history command ends its line even when the message names other assemblies, so copying it
-    /// copies nothing else.
+    /// Over a store with other assemblies, the message names the one window it searched and the
+    /// history command still ends its line, so copying it copies nothing else.
     /// </summary>
     [Fact]
     public void TheHistoryCommandOfAHealthyTestEndsItsLineBesideOtherAssemblies()
@@ -315,8 +315,14 @@ public sealed class FindingDetailCommandTests : IDisposable
         Assert.Equal(ExitCodes.NotFound, code);
 
         string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-        Assert.EndsWith("1 other assembly in this store (use --assembly to switch).", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith("(MyApp.Tests, 8 runs).", lines[0], StringComparison.Ordinal);
         Assert.EndsWith(" --assembly MyApp.Tests", lines[1], StringComparison.Ordinal);
+
+        // Without --assembly every assembly is searched, and the one that knows the test answers.
+        var (unscopedCode, _, unscoped) = Run("--id", id);
+
+        Assert.Equal(ExitCodes.NotFound, unscopedCode);
+        Assert.Equal(error, unscoped);
     }
 
     /// <summary>
@@ -386,7 +392,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     [Fact]
-    public void AnIdFromAnotherAssemblyIsNotReportedAndTheMessageCountsTheOthers()
+    public void AnIdFromAnotherAssemblyIsNotReportedUnderThisOne()
     {
         SeedVanishing();
         SeedOtherAssembly();
@@ -396,13 +402,43 @@ public sealed class FindingDetailCommandTests : IDisposable
         var (code, _, error) = Run("--id", id, "--assembly", Other);
 
         Assert.Equal(ExitCodes.NotFound, code);
-        Assert.Contains($"({Other}, ", error, StringComparison.Ordinal);
-        Assert.EndsWith(
-            " 1 other assembly in this store (use --assembly to switch)." + Environment.NewLine,
-            error,
-            StringComparison.Ordinal);
+        Assert.EndsWith($"({Other}, 6 runs)." + Environment.NewLine, error, StringComparison.Ordinal);
 
         Assert.Equal(0, Run("--id", id, "--assembly", "MyApp.Tests").Code);
+    }
+
+    /// <summary>
+    /// Finding-detail Amendment 10A: without <c>--assembly</c> the id is looked for in every
+    /// assembly, not only in whichever ran last.
+    /// </summary>
+    [Fact]
+    public void AnIdWithoutAnAssemblyIsFoundInWhicheverAssemblyReportsIt()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        string id = FirstId("--assembly", "MyApp.Tests");
+
+        var (code, output, _) = Run("--id", id);
+
+        Assert.Equal(0, code);
+        Assert.Contains(id, output, StringComparison.Ordinal);
+        Assert.Contains("MyApp.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnIdNoAssemblyReportsIsNotReportedAnywhere()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        var (code, output, error) = Run("--id", "f_00000000", "--format", "json");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.Equal(
+            "Finding f_00000000 is not reported in any assembly's window (2 assemblies in this store)." + Environment.NewLine,
+            error);
     }
 
     [Fact]

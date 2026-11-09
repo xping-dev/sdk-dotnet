@@ -44,12 +44,6 @@ internal interface ISessionSource
     SessionReadResult Read(int maxSessions, string? assembly);
 
     /// <summary>
-    /// Lists the stored runs newest first, without loading any of them.
-    /// </summary>
-    /// <returns>Each run's start time and assemblies, read as the sequence is enumerated.</returns>
-    IEnumerable<LocalSessionHeader> ReadHeaders();
-
-    /// <summary>
     /// Reads every session, newest first, one at a time.
     /// </summary>
     /// <param name="assembly">Test assembly to scope to, when one was chosen.</param>
@@ -77,16 +71,13 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
         return new SessionReadResult(result.Sessions, result.UnreadableCount);
     }
 
-    // Both passed through unmaterialised: a caller that stops at the first match must not pay for
-    // the rest, and one that reads everything must not hold it all.
-    public IEnumerable<LocalSessionHeader> ReadHeaders() => store.ReadHeaders();
-
+    // Passed through unmaterialised: a caller that stops at the first match must not pay for the
+    // rest, and one that reads everything must not hold it all.
     public IEnumerable<LocalSessionFile> ReadEach(string? assembly) => store.ReadEach(assembly);
 
     /// <remarks>
-    /// Read from the store's summary, which covers every file: the scope notice reports how many
-    /// other assemblies the store holds, and an assembly whose runs are all older than some probe
-    /// would silently drop out of that count.
+    /// Read from the store's summary, which covers every file: the overview has a row for every
+    /// assembly, and one whose runs are all older than some probe would silently lose its row.
     /// </remarks>
     public IReadOnlyList<string> KnownAssemblies() =>
         [.. store.Summarize().Assemblies.Select(a => a.Name)];

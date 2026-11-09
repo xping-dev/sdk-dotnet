@@ -182,7 +182,14 @@ internal static partial class ReportFixtures
         {
             Selection = new SelectionDto(finding.Id, true, finding.Kind, row, siblings, History(finding.Subject)),
             Findings = [finding],
-            Truncated = full.Truncated with { Shown = 1 }
+            // Named after the selected finding's assembly, as the builder names it after the report's.
+            Truncated = full.Truncated with
+            {
+                Shown = 1,
+                Command = finding.Subject.Assembly is { Length: > 0 } assembly
+                    ? $"xping report --all --assembly {assembly}"
+                    : full.Truncated.Command
+            }
         };
     }
 
@@ -804,7 +811,7 @@ internal static partial class ReportFixtures
 
     /// <summary>The scope <c>--test</c> renders under: the whole store, its assembly named.</summary>
     private static ReportScope HistoryScope(string? assembly, int runs) =>
-        new(assembly, WindowResolution.Store, runs, ShellDialect.Posix, AssemblyGiven: true);
+        new(assembly, WindowResolution.Store, runs, ShellDialect.Posix);
 
     /// <summary>
     /// The spec's §3.1: a flaky test the retry hides, absent from the fourteen newest runs, all of
@@ -2132,6 +2139,7 @@ internal static partial class ReportFixtures
 
         return new ReportEnvelope(
             ReportEnvelope.CurrentSchemaVersion,
+            ReportScopes.Assembly,
             new WindowDto(
                 new DateTime(2026, 8, 5, 9, 12, 0, DateTimeKind.Utc),
                 new DateTime(2026, 8, 19, 16, 40, 0, DateTimeKind.Utc),
@@ -2163,6 +2171,6 @@ internal static partial class ReportFixtures
             null,
             null,
             findings,
-            new TruncationDto(shown, total, "xping report --all"));
+            new TruncationDto(shown, total, "xping report --all --assembly MyApp.Tests"));
     }
 }

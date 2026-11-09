@@ -88,7 +88,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         JsonElement finding = Finding(json, FindingFingerprint);
         Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetProperty("score").GetDouble());
         Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("confidence").GetProperty("category").GetString());
-        Assert.Equal("1.28", json.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", json.GetProperty("schemaVersion").GetString());
         JsonElement session = Assert.Single(cloud.GetProperty("sessions").EnumerateArray());
         Assert.Equal(("complete", true), (session.GetProperty("state").GetString(), session.GetProperty("scored").GetBoolean()));
         Assert.Empty(text.Error);
@@ -324,7 +324,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Seed(startOrdinal: 8);
         _host.SignIn();
 
-        JsonElement bound = Report("--json").Json().GetProperty("context").GetProperty("cloud");
+        JsonElement bound = Report("--json", "--assembly", Assembly).Json().GetProperty("context").GetProperty("cloud");
         JsonElement other = Report("--json", "--assembly", "Other.Tests").Json().GetProperty("context").GetProperty("cloud");
         CliResult text = Report("--ascii", "--no-color", "--assembly", "Other.Tests");
 
@@ -405,18 +405,32 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     [Fact]
     public void Report_Banner_OnStderr()
     {
-        // Two assemblies, so the report names the one it chose; no credential, so it invites.
+        // No credential, so it invites.
         _host.Environment.Remove(CtaThrottle.SuppressBannerVariable);
-        Seed(assembly: "Older.Tests");
-        Seed(startOrdinal: 8);
+        Seed();
 
         CliResult result = Report();
 
         // Stdout is the report alone, so a redirect captures exactly that (contract §8.2 F3).
-        Assert.DoesNotContain("Reporting on ", result.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("xping.io/start", result.Output, StringComparison.Ordinal);
-        Assert.Contains($"Reporting on {Assembly} ", result.Error, StringComparison.Ordinal);
         Assert.Contains("xping.io/start", result.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Cloud-data Amendment 6A: the overview's numbers are its assemblies' local headers, so it asks
+    /// Cloud nothing even when signed in.
+    /// </summary>
+    [Fact]
+    public void Report_Overview_AsksCloudNothing()
+    {
+        Seed(assembly: "Other.Tests");
+        Seed(startOrdinal: 8);
+        _host.SignIn();
+
+        CliResult result = Report("--json");
+
+        Assert.Equal("overview", result.Json().GetProperty("scope").GetString());
+        Assert.Empty(_host.Cloud.GatewayRequests);
     }
 
     [Fact]

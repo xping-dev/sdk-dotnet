@@ -22,6 +22,10 @@ namespace Xping.Cli.Report.Contract;
 /// </para>
 /// </remarks>
 /// <param name="SchemaVersion">Version of this envelope's shape.</param>
+/// <param name="Scope">
+/// Always <see cref="ReportScopes.Assembly"/>. Second, so a script can tell this envelope from the
+/// overview's (<see cref="OverviewEnvelope"/>) before reading anything else.
+/// </param>
 /// <param name="Window">Which sessions were analysed, and how they were chosen.</param>
 /// <param name="Context">Where those sessions came from; null when unknown, never invented.</param>
 /// <param name="Summary">Counts describing the run as a whole.</param>
@@ -44,6 +48,7 @@ namespace Xping.Cli.Report.Contract;
 /// <param name="Truncated">How much of the finding list is shown.</param>
 internal sealed record ReportEnvelope(
     string SchemaVersion,
+    string Scope,
     WindowDto Window,
     ContextDto? Context,
     SummaryDto Summary,
@@ -106,8 +111,10 @@ internal sealed record ReportEnvelope(
     /// <c>test</c> and to every failure mode, gave every latest-run failure a signature match, and
     /// made <c>context.cloud</c> always present with projects and sessions; and where each failure
     /// mode gained <c>errorMessageHash</c>, the SDK's hash of its message that Cloud matches on.
+    /// 1.29 is where the envelope gained <c>scope</c>, and a store with more than one assembly came
+    /// to answer a bare <c>xping report</c> with the overview envelope instead of one assembly's.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.28";
+    public const string CurrentSchemaVersion = "1.29";
 }
 
 /// <summary>

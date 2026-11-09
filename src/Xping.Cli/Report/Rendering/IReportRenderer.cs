@@ -37,4 +37,14 @@ internal sealed class JsonReportRenderer : IReportRenderer
     {
         output.WriteLine(JsonSerializer.Serialize(envelope, ReportJsonOptions.Default));
     }
+
+    /// <summary>
+    /// Writes the overview's envelope, with the same options as a report's.
+    /// </summary>
+    /// <param name="envelope">The overview.</param>
+    /// <param name="output">Where to write it.</param>
+    public static void Render(OverviewEnvelope envelope, TextWriter output)
+    {
+        output.WriteLine(JsonSerializer.Serialize(envelope, ReportJsonOptions.Default));
+    }
 }

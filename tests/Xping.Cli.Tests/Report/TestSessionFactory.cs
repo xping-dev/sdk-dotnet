@@ -390,9 +390,6 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// <summary>Gets how many sessions one-at-a-time reads have handed out.</summary>
     public int SessionsRead { get; private set; }
 
-    /// <summary>Gets how many headers have been enumerated.</summary>
-    public int HeadersRead { get; private set; }
-
     /// <inheritdoc/>
     /// <remarks>
     /// Narrows rather than selects, exactly as <see cref="LocalSessionSource"/> does. A fake that
@@ -428,16 +425,6 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
 
         for (int i = 0; i < UnreadableCount; i++)
             yield return new LocalSessionFile(null);
-    }
-
-    /// <inheritdoc/>
-    public IEnumerable<LocalSessionHeader> ReadHeaders()
-    {
-        foreach (TestSession session in _sessions)
-        {
-            HeadersRead++;
-            yield return new LocalSessionHeader(session.StartedAt, SessionAssemblies.Of(session));
-        }
     }
 
     /// <inheritdoc/>

@@ -1929,7 +1929,7 @@ public sealed class FailureModeProviderTests
 
         Assert.Equal(Json(second), Json(Assert.Single(selected.Findings)));
         Assert.Equal(Json(full.Summary), Json(selected.Summary));
-        Assert.Equal(new TruncationDto(1, full.Findings.Count, "xping report --all"), selected.Truncated);
+        Assert.Equal(new TruncationDto(1, full.Findings.Count, "xping report --all --assembly MyApp.Tests"), selected.Truncated);
 
         SelectionDto dto = Assert.IsType<SelectionDto>(selected.Selection);
         Assert.Equal(second.Id, dto.Id);
@@ -1976,18 +1976,18 @@ public sealed class FailureModeProviderTests
         ReportEnvelope typed = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
             scope: new ReportScope(
-                "My App.Tests", WindowResolution.Runs, 7, ShellDialect.Posix, AssemblyGiven: false, Runs: 7, Directory: "../svc"));
+                "My App.Tests", WindowResolution.Runs, 7, ShellDialect.Posix, Runs: 7, Directory: "../svc"));
 
         Assert.NotEmpty(typed.Findings);
         Assert.All(typed.Findings, finding => Assert.Equal(
             $"xping report --id {finding.Id} --assembly 'My App.Tests' --runs 7 --directory ../svc",
             finding.DrillDown));
-        Assert.Equal("xping report --all --runs 7 --directory ../svc", typed.Truncated.Command);
+        Assert.Equal("xping report --all --assembly 'My App.Tests' --runs 7 --directory ../svc", typed.Truncated.Command);
 
         ReportEnvelope named = EnvelopeBuilder.Build(
             context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
             scope: new ReportScope(
-                "MyApp.Tests", WindowResolution.SinceDate, 20, ShellDialect.Posix, AssemblyGiven: true, Since: "2026-08-01"));
+                "MyApp.Tests", WindowResolution.SinceDate, 20, ShellDialect.Posix, Since: "2026-08-01"));
 
         Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
     }

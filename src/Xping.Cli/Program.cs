@@ -357,7 +357,7 @@ internal static class Program
 
         Option<string?> assemblyOption = new("--assembly")
         {
-            Description = "Restrict to one test assembly"
+            Description = "Report on one test assembly (default: one row per assembly)"
         };
 
         Option<string?> idOption = new("--id")
@@ -489,6 +489,7 @@ internal static class Program
                 Top = showAll
                     ? null
                     : parseResult.GetValue(topOption) ?? LocalAnalysisConstants.DefaultTopFindings,
+                TopGiven = showAll || parseResult.GetResult(topOption) != null,
                 Kinds = parseResult.GetValue(kindOption) ?? [],
                 Assembly = parseResult.GetValue(assemblyOption),
                 Id = parseResult.GetValue(idOption),

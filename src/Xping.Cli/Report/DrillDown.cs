@@ -39,9 +39,8 @@ internal static class DrillDown
     /// <param name="scope">What the report was scoped to.</param>
     /// <returns>The command.</returns>
     /// <remarks>
-    /// Names the assembly whether or not the caller did. An id is a fact about a window, and a bare
-    /// <c>xping report</c> scopes itself to whichever assembly ran most recently; the envelope this
-    /// string lands in outlives the moment that was this one.
+    /// Names the assembly whether or not the caller did. An id is a fact about one assembly's window,
+    /// and the envelope this string lands in outlives the store it was printed from.
     /// </remarks>
     public static string ForFinding(string id, ReportScope scope)
     {
@@ -57,19 +56,27 @@ internal static class DrillDown
     /// <returns>The command.</returns>
     /// <remarks>
     /// This is the "show me the other eleven" affordance, and a reader who wants eleven more of what
-    /// they are already looking at should get exactly that. It repeats only what the caller typed:
-    /// an auto-scoped report's bare <c>--all</c> scopes itself the same way, and one opened from a
-    /// drill-down, which always names the assembly, gets the assembly back. A whole-store window
-    /// names it too: only <c>--test</c> reads one, and its assembly came from the test's name, which
-    /// the bare command does not carry — it would scope itself to whichever assembly ran last.
+    /// they are already looking at should get exactly that. It names the assembly even when the
+    /// caller did not: a bare <c>xping report</c> over a store that has since gained a second
+    /// assembly is the overview, not this report.
     /// </remarks>
     public static string ForFullReport(ReportScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        bool named = scope.AssemblyGiven || scope.Resolution == WindowResolution.Store;
+        return Scoped("xping report --all", scope, scope.Assembly);
+    }
 
-        return Scoped("xping report --all", scope, named ? scope.Assembly : null);
+    /// <summary>
+    /// Builds the invocation that shows one assembly's report, for the overview to point at.
+    /// </summary>
+    /// <param name="scope">The overview's scope, with the assembly the command names.</param>
+    /// <returns>The command.</returns>
+    public static string ForAssembly(ReportScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+
+        return Scoped("xping report", scope, scope.Assembly);
     }
 
     /// <summary>
