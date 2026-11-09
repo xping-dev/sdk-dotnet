@@ -6,6 +6,7 @@
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
 
 namespace Xping.Cli.Tests.Report;
 
@@ -16,14 +17,15 @@ public sealed class OverviewTextRendererTests
 {
     private static readonly DateTime Newest = new(2026, 8, 3, 14, 5, 0, DateTimeKind.Utc);
 
-    private static AssemblyOverviewDto Row(string assembly, int tests, int flagged, int runs, int high = 0)
+    private static AssemblyOverviewDto Row(
+        string assembly, int tests, int flagged, int runs, int high = 0, int medium = 0, int low = 0)
     {
         SummaryDto summary = ReportFixtures.Envelope().Summary with
         {
             Tests = tests,
             Flagged = flagged,
-            Findings = high,
-            Counts = new SeverityCountsDto(high, 0, 0)
+            Findings = high + medium + low,
+            Counts = new SeverityCountsDto(high, medium, low)
         };
 
         var window = new WindowDto(Newest.AddDays(-2), Newest, runs, "default", null, 0, []);
@@ -58,6 +60,36 @@ public sealed class OverviewTextRendererTests
         Assert.EndsWith("2 findings (2 high)", lines[2], StringComparison.Ordinal);
         Assert.Equal(TextReportRenderer.FenceWidth, lines[2].Length);
         Assert.Equal("  120 tests | 3 flagged | 20 runs | last 2026-08-03 14:05", lines[3]);
+    }
+
+    [Theory]
+    [InlineData(0, 2, 1, "3 findings (2 medium, 1 low)")]
+    [InlineData(0, 0, 1, "1 finding (1 low)")]
+    public void TheVerdictIsTheFindingsPhraseAtItsMostSevereBand(int high, int medium, int low, string verdict)
+    {
+        string[] lines = Render(Row("Alpha.Tests", 10, 3, 5, high, medium, low));
+
+        Assert.EndsWith(verdict, lines[2], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The verdict is painted in its most severe band's colour, as the report's own markers are.
+    /// </summary>
+    [Fact]
+    public void TheVerdictIsColouredByItsMostSevereBand()
+    {
+        var colour = ReportText.Drawn(ReportGlyphs.Ascii, color: true);
+
+        foreach ((int medium, int low, string band) in new[] { (1, 0, "medium"), (0, 1, "low") })
+        {
+            using var writer = new StringWriter();
+            new OverviewTextRenderer(colour).Render(
+                new OverviewEnvelope(ReportEnvelope.CurrentSchemaVersion, ReportScopes.Overview, [Row("Alpha.Tests", 1, 1, 1, 0, medium, low)]),
+                writer);
+
+            string verdict = ReportVocabulary.FindingsPhrase(Row("Alpha.Tests", 1, 1, 1, 0, medium, low).Summary!);
+            Assert.Contains(colour.Colorize(band, verdict), writer.ToString(), StringComparison.Ordinal);
+        }
     }
 
     /// <summary>

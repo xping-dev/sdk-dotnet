@@ -9,18 +9,11 @@ using Xping.Sdk.Core.Services.LocalStore;
 namespace Xping.Cli.Report.Store;
 
 /// <summary>
-/// Sessions read from somewhere, with a count of what could not be read.
+/// Sessions read from somewhere, with the files that could not be read.
 /// </summary>
 /// <param name="Sessions">The sessions, newest first.</param>
 /// <param name="UnreadableFiles">The files skipped because they could not be read.</param>
-internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, IReadOnlyList<string> UnreadableFiles)
-{
-    /// <summary>Gets an empty result.</summary>
-    public static SessionReadResult Empty { get; } = new([], []);
-
-    /// <summary>Gets how many files were skipped because they could not be read.</summary>
-    public int UnreadableCount => UnreadableFiles.Count;
-}
+internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, IReadOnlyList<string> UnreadableFiles);
 
 /// <summary>
 /// Where analysis gets its sessions.

@@ -409,6 +409,19 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     [Fact]
+    public void TheSummaryGivesAnAssemblyWithNoWindowALineThatSaysWhy()
+    {
+        SeedSessions("Beta.Tests", 6);
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        string since = TestSessionFactory.Epoch.AddMinutes(500).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+        var (_, output) = Run("report", "--since", since, "--summary", "--ascii");
+
+        Assert.Contains("Xping: Beta.Tests: No sessions recorded on or after", output, StringComparison.Ordinal);
+        Assert.Contains("Alpha.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WhenNoAssemblysWindowOpensTheOverviewIsUnavailable()
     {
         SeedSessions("Alpha.Tests", 6);

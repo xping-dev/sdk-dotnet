@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Commands;
@@ -472,6 +473,62 @@ public sealed class FindingDetailCommandTests : IDisposable
             error);
     }
 
+    /// <summary>
+    /// Finding-detail Amendment 10A: two assemblies that ran the same test source report the same
+    /// id, and the reader is handed each one's command rather than one picked for them.
+    /// </summary>
+    [Fact]
+    public void AnIdTwoAssembliesReportIsAmbiguousAndNamesEachAssemblysCommand()
+    {
+        SeedVanishing();
+        SeedVanishing(Other, firstOrdinal: 20);
+
+        string id = FirstId("--assembly", "MyApp.Tests");
+        Assert.Equal(id, FirstId("--assembly", Other));
+
+        var (code, output, error) = Run("--id", id);
+
+        Assert.Equal(ExitCodes.TestAmbiguous, code);
+        Assert.Empty(output);
+
+        string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal($"Finding {id} is reported in 2 assemblies. Name one:", lines[0]);
+        Assert.Equal(2, lines.Length - 1);
+        Assert.Contains(lines, line => line.StartsWith("  xping report ", StringComparison.Ordinal) && line.EndsWith("--assembly MyApp.Tests", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.StartsWith("  xping report ", StringComparison.Ordinal) && line.EndsWith($"--assembly {Other}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnIdOverAStoreWhereNoAssemblysWindowOpensIsUnavailable()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        var (code, output, error) = Run("--id", "f_00000000", "--since", "2099-01-01");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Empty(output);
+        Assert.Contains("No sessions recorded on or after 2099-01-01", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An assembly whose window cannot be opened was searched and found nothing, like the others.
+    /// </summary>
+    [Fact]
+    public void AnIdIsNotReportedAnywhereWhenOneAssemblyHasNoWindow()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+        string since = TestSessionFactory.Epoch.AddMinutes(15).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+        var (code, _, error) = Run("--id", "f_00000000", "--since", since);
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Equal(
+            "Finding f_00000000 is not reported in any window (every assembly in this store)." + Environment.NewLine,
+            error);
+    }
+
     [Fact]
     public void ANarrowerWindowCanLeaveAnIdOut()
     {
@@ -547,7 +604,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     /// than vanishing ones keeps the later runs above the partial-run share and the family small
     /// enough to clear its correction.
     /// </remarks>
-    private void SeedVanishing()
+    private void SeedVanishing(string assembly = TestSessionFactory.DefaultAssembly, int firstOrdinal = 0)
     {
         ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
@@ -556,15 +613,15 @@ public sealed class FindingDetailCommandTests : IDisposable
             var executions = new List<TestExecution>();
 
             for (int t = 0; t <= 3; t++)
-                executions.Add(TestSessionFactory.Execution($"Stable{t}"));
+                executions.Add(TestSessionFactory.Execution($"Stable{t}", assembly: assembly));
 
             if (i < 5)
             {
                 for (int t = 0; t < 3; t++)
-                    executions.Add(TestSessionFactory.Execution($"Removed{t}"));
+                    executions.Add(TestSessionFactory.Execution($"Removed{t}", assembly: assembly));
             }
 
-            store.Write(TestSessionFactory.Session(i, executions));
+            store.Write(TestSessionFactory.Session(firstOrdinal + i, executions));
         }
     }
 

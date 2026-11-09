@@ -347,24 +347,13 @@ internal sealed class ReportCommand(
     /// Explains why no assembly's window could be opened.
     /// </summary>
     /// <remarks>
-    /// Every window was asked for with the same <c>--runs</c> or <c>--since</c>, so a reason all of
-    /// them share is said once, as for one assembly. Reasons that differ are each said with the
-    /// assembly they are about.
+    /// Said once, from the first: every window was asked for with the same <c>--runs</c> or
+    /// <c>--since</c>, and the resolver's reasons name neither the assembly nor anything in it, so
+    /// every one of them failed for the same reason. The warnings are every read's.
     /// </remarks>
     private int ReportNoWindow(
-        IReadOnlyList<AssemblyAnalysis> analyses, ILocalSessionStore store, LookupWarnings warnings, TerminalCharset charset)
-    {
-        if (analyses.Select(a => (a.Resolved.Failure, a.Resolved.FailureDetail)).Distinct().Count() == 1)
-            return ReportUnavailable(analyses[0].Resolved, store, null, charset, warnings);
-
-        foreach (AssemblyAnalysis analysis in analyses)
-            io.Error.WriteLine($"{TerminalText.Printable(analysis.Assembly, charset)}: {TerminalText.Printable(analysis.Unavailable!, charset)}");
-
-        io.Error.WriteLine("Run your tests once with the Xping SDK installed, then try again.");
-        WriteLookupWarnings(warnings, charset);
-
-        return ExitCodes.InsufficientData;
-    }
+        IReadOnlyList<AssemblyAnalysis> analyses, ILocalSessionStore store, LookupWarnings warnings, TerminalCharset charset) =>
+        ReportUnavailable(analyses[0].Resolved, store, null, charset, warnings);
 
     /// <summary>
     /// The finding-list flags the caller gave, as they would type them; empty when none.
