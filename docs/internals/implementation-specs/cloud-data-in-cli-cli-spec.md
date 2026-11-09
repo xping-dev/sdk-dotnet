@@ -102,6 +102,16 @@ Phase 4 read §17.2 against `ReportCommand` and found the conflict below. Decide
 |---|---|---|---|
 | A | §17.2: `Report_TwoAssemblies_OneProjectMissing` | A report covers one assembly: the store reads each session down to the chosen assembly's executions (`SessionAssemblies`), so one `xping report` never sends the enricher two. The two-row case stays a unit test (`CloudEnricherTests.TwoAssembliesOneUnboundIsPartialWithARowEach`). The end-to-end test is `Report_OtherAssembly_NoProject`: a store with two assemblies, one bound to a project; the report on the bound one is `ok`, and the report with `--assembly` on the other is `no-project` with its §7.6 reason line | §17.2 |
 
+### Amendment 6 — from #346
+
+`cli-report-format-spec.md` Amendment 6 makes the default report a local overview of every
+assembly.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | §11: the scope notice moves to stderr | The scope notice is removed. The overview never enriches: it carries only numbers its assemblies' own reports print in their headers, and those are local. Cloud data in the overview waits for a token both views print | §11 |
+| B | Amendment 5A: "one `xping report` never sends the enricher two" assemblies | Still true. An assembly's report covers one assembly, and the overview sends the enricher nothing | Amendment 5A |
+
 ---
 
 ## 1. Purpose, scope, traceability

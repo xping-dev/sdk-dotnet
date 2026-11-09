@@ -114,6 +114,25 @@ quoted rows.
 Amendment 4's rule stands: the renderer composes every Cloud string, and the builder never resolves
 Cloud text.
 
+### Amendment 6 — from #346: the default report is an overview of every assembly
+
+Auto-scoping to the newest assembly picked a suite the reader did not choose. After a solution-wide
+`dotnet test` the newest one is whichever finished last. It also made `--fail-on` judge one suite
+and pass a build that another suite should have failed. These changes are applied in place in the
+sections named, and `cli-finding-detail-spec.md` and `cli-test-history-spec.md` amend their own
+references.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | With no `--assembly`, the report covers the newest assembly, and a stderr notice names the others | A store whose runs name one assembly gets that assembly's report. With two or more and no `--assembly`, the report is an **overview**: one row per assembly. The scope notice is removed | this amendment |
+| B | — | **The header-copy rule.** Each row repeats the header of that assembly's `--assembly` report: the same window (the caller's `--runs`/`--since`, else the default), the same analysis, the same numbers. It never carries a number that report does not show. Cloud data stays out of the overview until a token exists that both views print | this amendment |
+| C | — | Text layout: a header `Xping · N assemblies · local store`, then one row per assembly: name · `N tests` · `N flagged (h high, m medium)` or `healthy` · `N runs` · `last <newest session start, UTC>`. An assembly whose window cannot be opened gets a row that says why. Rows are ordered by the most severe finding (high, then medium, then low, then none, then no window), then by name, ordinal. The last line is `Details: xping report --assembly <first row>`, built like every printed command so it carries `--runs`, `--since` and `--directory` | this amendment |
+| D | `--summary` prints one line | Over the overview, one line per assembly, in row order, in the same format | this amendment |
+| E | `--fail-on` judges the one report | Over the overview, it judges every assembly's findings. Exit 1 if any assembly has a finding at the threshold. An assembly whose window cannot be opened is reported in its row and judged as having nothing; exit 2 only when no assembly's window can be opened | this amendment |
+| F | `--top`, `--all` and `--kind` apply to the one report | Over the overview they are rejected: exit 2, with a message that names `--assembly`. They describe a list of findings, and the overview has none | this amendment |
+| G | The envelope has no scope | Schema `1.29`. `ReportEnvelope` gains `scope: "assembly"` after `schemaVersion`. The overview writes its own envelope: `schemaVersion`, `scope: "overview"`, `assemblies[]`, each `{assembly, window, summary, unavailable, command}`. `window` and `summary` are the same DTOs the assembly's report writes, so B holds by construction. `unavailable` is the reason text when the window cannot be opened, and then `window` and `summary` are null | this amendment, D9 |
+| H | A printed `xping report --all` names the assembly only when the caller did | Every printed command names the assembly. `ReportScope.AssemblyGiven` is removed | this amendment |
+
 ---
 
 ## 1. Ground truth
