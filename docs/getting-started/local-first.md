@@ -161,17 +161,28 @@ Skipped and not-executed tests are ignored; they carry no reliability signal.
 
 ## Multiple test projects
 
-Every test project in a solution shares one store. By default the report covers the assembly that ran most recently and tells you when others exist:
+Every test project in a solution shares one store. When it holds more than one, `xping report` lists them, one row each, most severe first:
 
 ```
-Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly to switch).
+Xping · 3 assemblies
+
+Checkout.Tests                               4 findings (1 high, 3 medium)
+  412 tests · 4 flagged · 20 runs · last 2026-11-08 16:45
+Billing.Tests                                                  no findings
+  96 tests · 0 flagged · 20 runs · last 2026-11-08 16:44
+Search.Tests                                                   no findings
+  57 tests · 0 flagged · 6 runs · last 2026-11-02 09:12
+
+Details: xping report --assembly Checkout.Tests
 ```
 
-To see another suite:
+To see one suite's findings:
 
 ```bash
 xping report --assembly Billing.Tests
 ```
+
+`--fail-on` judges every suite, so a CI step fails when any of them has a finding at the threshold.
 
 Each assembly is analysed against **its own** run history, so a suite that has run 3 times is never described against another suite's 12-run window. `--all` is not the way to see every suite — it shows every finding, and every row of the latest run, instead of the first ten of each.
 
