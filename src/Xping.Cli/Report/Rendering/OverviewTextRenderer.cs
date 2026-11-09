@@ -67,7 +67,7 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
 
             output.WriteLine(Line(name, verdict, text => capabilities.Colorize(severity, text)));
             output.WriteLine(capabilities.Dim(indent + string.Join(separator,
-                $"{summary.Tests.ToString(CultureInfo.InvariantCulture)} tests",
+                TextReportRenderer.Tests(summary.Tests),
                 $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged",
                 TextReportRenderer.Runs(window.SessionCount),
                 "last " + window.To.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))));

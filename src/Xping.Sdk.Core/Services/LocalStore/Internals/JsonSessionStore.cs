@@ -119,7 +119,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 .ToList();
 
             var sessions = new List<TestSession>(Math.Min(maxSessions, files.Count));
-            int unreadable = 0;
+            var unreadable = new List<string>();
             string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
 
             foreach (string file in files)
@@ -141,7 +141,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                 {
                     // Only files we actually attempted are counted. Files beyond the window were
                     // never opened, so claiming them as unreadable would overstate the damage.
-                    unreadable++;
+                    unreadable.Add(file);
                     continue;
                 }
 
@@ -233,9 +233,6 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
-    public IEnumerable<LocalSessionHeader> ReadHeaders() =>
-        Headers(ListNewestFirst().Where(f => f.Dated));
-
     public IEnumerable<LocalSessionFile> ReadEach(string? assembly = null) =>
         Files(ListNewestFirst(), assembly);
 
@@ -244,11 +241,11 @@ internal sealed class JsonSessionStore : ILocalSessionStore
     /// sessions. Files whose name carries no start time come last, as ordinal order puts them.
     /// </summary>
     /// <remarks>
-    /// Listed eagerly so the lazy readers built on it stay iterators: an iterator cannot yield inside
+    /// Listed eagerly so the lazy reader built on it stays an iterator: an iterator cannot yield inside
     /// a try that catches, and listing is the only step that can fail. Each file read degrades on
     /// its own.
     /// </remarks>
-    private List<(DateTime StartedAt, bool Dated, string Path)> ListNewestFirst()
+    private List<(DateTime StartedAt, string Path)> ListNewestFirst()
     {
         string? directory = SessionsPath;
         if (!Directory.Exists(directory))
@@ -256,12 +253,13 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
         try
         {
-            var files = new List<(DateTime StartedAt, bool Dated, string Path)>();
+            var files = new List<(DateTime StartedAt, string Path)>();
 
             foreach (string file in Directory.GetFiles(directory!, SessionFileName.SearchPattern))
             {
-                bool dated = SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt);
-                files.Add((startedAt, dated, file));
+                // An undated name parses to the minimum, which sorts it last.
+                _ = SessionFileName.TryParseStartedAt(Path.GetFileName(file), out DateTime startedAt);
+                files.Add((startedAt, file));
             }
 
             // Not the reverse of the name order ReadRecent walks: that breaks same-tick ties by id
@@ -334,23 +332,16 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         }
     }
 
-    private static IEnumerable<LocalSessionHeader> Headers(
-        IEnumerable<(DateTime StartedAt, bool Dated, string Path)> files)
-    {
-        foreach ((DateTime startedAt, _, string path) in files)
-            yield return new LocalSessionHeader(startedAt, SessionFileHeader.ReadAssemblies(path) ?? []);
-    }
-
     /// <remarks>
     /// Skips and narrows exactly as <see cref="ReadRecent"/> does, so the two never disagree about
     /// which runs an assembly has.
     /// </remarks>
     private IEnumerable<LocalSessionFile> Files(
-        List<(DateTime StartedAt, bool Dated, string Path)> files, string? assembly)
+        List<(DateTime StartedAt, string Path)> files, string? assembly)
     {
         string? tag = assembly == null ? null : SessionFileName.Tag(assembly);
 
-        foreach ((_, _, string path) in files)
+        foreach ((_, string path) in files)
         {
             if (tag != null
                 && SessionFileName.ParseTags(Path.GetFileName(path)) is { } tags

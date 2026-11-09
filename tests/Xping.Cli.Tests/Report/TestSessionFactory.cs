@@ -381,6 +381,13 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
     /// <summary>Gets or sets the unreadable-file count every read reports.</summary>
     public int UnreadableCount { get; set; }
 
+    /// <summary>
+    /// Gets the files every read reports unreadable: the same ones each time, as one store's reads
+    /// would meet the same damaged files.
+    /// </summary>
+    private List<string> UnreadableFiles =>
+        [.. Enumerable.Range(0, UnreadableCount).Select(i => $"/fake/store/sessions/unreadable-{i}.json.gz")];
+
     /// <summary>Gets every bounded read asked of the source, in order.</summary>
     public List<(int MaxSessions, string? Assembly)> Reads { get; } = [];
 
@@ -404,7 +411,7 @@ internal sealed class FakeSessionSource(params TestSession[] sessions) : ISessio
             ? _sessions
             : _sessions.Select(s => SessionAssemblies.Project(s, assembly)).OfType<TestSession>();
 
-        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableCount);
+        return new SessionReadResult([.. matching.Take(maxSessions)], UnreadableFiles);
     }
 
     /// <inheritdoc/>

@@ -318,11 +318,16 @@ public sealed class FindingDetailCommandTests : IDisposable
         Assert.EndsWith("(MyApp.Tests, 8 runs).", lines[0], StringComparison.Ordinal);
         Assert.EndsWith(" --assembly MyApp.Tests", lines[1], StringComparison.Ordinal);
 
-        // Without --assembly every assembly is searched, and the one that knows the test answers.
+        // Without --assembly every assembly is searched, so every one is the window, and the one that
+        // knows the test is named beside its command.
         var (unscopedCode, _, unscoped) = Run("--id", id);
 
         Assert.Equal(ExitCodes.NotFound, unscopedCode);
-        Assert.Equal(error, unscoped);
+
+        string[] unscopedLines = unscoped.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.EndsWith("(every assembly in this store).", unscopedLines[0], StringComparison.Ordinal);
+        Assert.StartsWith("Its test has no findings in MyApp.Tests: xping report ", unscopedLines[1], StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests", unscopedLines[1], StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -437,7 +442,33 @@ public sealed class FindingDetailCommandTests : IDisposable
         Assert.Equal(ExitCodes.NotFound, code);
         Assert.Empty(output);
         Assert.Equal(
-            "Finding f_00000000 is not reported in any assembly's window (2 assemblies in this store)." + Environment.NewLine,
+            "Finding f_00000000 is not reported in any window (every assembly in this store)." + Environment.NewLine,
+            error);
+    }
+
+    /// <summary>
+    /// Regression: when one assembly knew the id's subject, the message named only that assembly's
+    /// window although every assembly was searched, and JSON wrote that one assembly's envelope
+    /// where every other not-found case writes none.
+    /// </summary>
+    [Fact]
+    public void AnIdNoAssemblyReportsNamesEveryWindowAndWhereItsSubjectWent()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        JsonElement finding = Json("--assembly", "MyApp.Tests").GetProperty("findings")[0];
+        string fingerprint = finding.GetProperty("subject").GetProperty("fingerprint").GetString()!;
+        string moved = FindingId.Compute(FindingKind.Flaky, fingerprint);
+
+        var (code, output, error) = Run("--id", moved, "--format", "json");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.Equal(
+            $"Finding {moved} (flaky) is not reported in any window (every assembly in this store). " +
+            $"In MyApp.Tests, its subject is reported as {finding.GetProperty("id").GetString()} (stopped running, row 1)." +
+            Environment.NewLine,
             error);
     }
 

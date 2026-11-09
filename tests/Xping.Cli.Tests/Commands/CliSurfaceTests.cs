@@ -111,6 +111,21 @@ public sealed class CliSurfaceTests : IDisposable
             [TestSessionFactory.Execution("Mystery", assembly: string.Empty)]));
     }
 
+    /// <summary>
+    /// Seeds, then overwrites every file the seeding added with bytes that are no session, keeping
+    /// the names, and so the tags, the store gave them.
+    /// </summary>
+    private void SeedUnreadable(Action seed)
+    {
+        string directory = LocalSessionStore.Create(storePath: _root).SessionsPath!;
+        HashSet<string> before = Directory.Exists(directory) ? [.. Directory.GetFiles(directory)] : [];
+
+        seed();
+
+        foreach (string file in Directory.GetFiles(directory).Where(f => !before.Contains(f)))
+            File.WriteAllBytes(file, [0x00]);
+    }
+
     private (int Code, string Output) Run(params string[] args)
     {
         using var output = new StringWriter();
@@ -334,7 +349,7 @@ public sealed class CliSurfaceTests : IDisposable
         var (_, output) = Run("report", "--ascii");
 
         Assert.Contains("Xping | 2 assemblies", output, StringComparison.Ordinal);
-        Assert.Equal(2, Regex.Count(output, @"1 tests? \| 0 flagged \| 6 runs"));
+        Assert.Equal(2, Regex.Count(output, @"1 test \| 0 flagged \| 6 runs"));
     }
 
     [Fact]
@@ -403,6 +418,65 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(ExitCodes.InsufficientData, code);
         Assert.Contains("No sessions recorded on or after 2099-01-01", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: the warning summed every assembly's count, so a run both assemblies covered was
+    /// counted twice.
+    /// </summary>
+    [Fact]
+    public void TheOverviewCountsARunStampedAheadOnceThoughTwoAssembliesShareIt()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        LocalSessionStore.Create(storePath: _root).Write(TestSessionFactory.Session(
+            _nextOrdinal++,
+            [
+                TestSessionFactory.Execution("FirstSuiteTest", assembly: "Alpha.Tests"),
+                TestSessionFactory.Execution("SecondSuiteTest", assembly: "Beta.Tests")
+            ],
+            startedAt: new DateTime(2099, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        var (_, output) = Run("report", "--ascii");
+
+        Assert.Contains("warning: 1 run(s) stamped ahead of this machine's clock", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: the warning took the largest assembly's count, but each assembly's read skips
+    /// the files tagged for another, so one assembly's damaged run hid the other's.
+    /// </summary>
+    [Fact]
+    public void TheOverviewCountsEachUnreadableRunOnceWhicheverAssemblysReadMetIt()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnreadable(() => SeedSessions("Alpha.Tests", 1, startOrdinal: 20));
+        SeedUnreadable(() => SeedSessions("Beta.Tests", 1, startOrdinal: 21));
+        SeedUnreadable(() => SeedMixedSessions("Alpha.Tests", "Beta.Tests", 1));
+
+        var (_, output) = Run("report", "--ascii");
+
+        Assert.Contains("warning: 3 unreadable run(s) skipped.", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: with no window open, only the first assembly's read warnings were said.
+    /// </summary>
+    [Fact]
+    public void WhenNoAssemblysWindowOpensEveryAssemblysReadWarningsAreSaid()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnreadable(() => SeedSessions("Alpha.Tests", 1, startOrdinal: 20));
+        SeedUnreadable(() => SeedSessions("Beta.Tests", 1, startOrdinal: 21));
+
+        var (code, output) = Run("report", "--since", "2099-01-01", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Equal(1, Regex.Count(output, "No sessions recorded on or after 2099-01-01"));
+        Assert.Contains("warning: 2 unreadable run(s) skipped.", output, StringComparison.Ordinal);
     }
 
     [Theory]

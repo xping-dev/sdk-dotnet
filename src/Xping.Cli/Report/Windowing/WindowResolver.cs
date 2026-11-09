@@ -46,22 +46,33 @@ internal enum WindowFailure
 /// <param name="Window">The resolved window, or <see langword="null"/> when resolution failed.</param>
 /// <param name="Failure">Why resolution failed, when it did.</param>
 /// <param name="FailureDetail">Human-readable detail for the failure message.</param>
-/// <param name="UnreadableSessions">Files that could not be read while gathering the window.</param>
-/// <param name="SkewedSessions">
-/// Sessions left out because they are stamped ahead of this machine's clock. Zero when
+/// <param name="UnreadableFiles">Files that could not be read while gathering the window.</param>
+/// <param name="SkewedSessionIds">
+/// Sessions left out because they are stamped ahead of this machine's clock. Empty when
 /// <paramref name="WholeStoreSkewed"/> is set, where they were kept rather than excluded.
 /// </param>
 /// <param name="WholeStoreSkewed">
 /// Whether every session read was stamped ahead of the clock, so none could be excluded.
 /// </param>
+/// <remarks>
+/// Which files and which sessions rather than how many: the overview reads every assembly, a file
+/// with no tags is opened by each of those reads and a run that covered two assemblies is read by
+/// both, and only identities let it say how many there were rather than how many times one was met.
+/// </remarks>
 internal sealed record WindowResult(
     AnalysisWindow? Window,
     WindowFailure? Failure,
     string? FailureDetail,
-    int UnreadableSessions,
-    int SkewedSessions = 0,
+    IReadOnlyList<string> UnreadableFiles,
+    IReadOnlyList<Guid> SkewedSessionIds,
     bool WholeStoreSkewed = false)
 {
+    /// <summary>Gets how many files could not be read while gathering the window.</summary>
+    public int UnreadableSessions => UnreadableFiles.Count;
+
+    /// <summary>Gets how many sessions were left out as stamped ahead of the clock.</summary>
+    public int SkewedSessions => SkewedSessionIds.Count;
+
     /// <summary>Creates a successful result.</summary>
     /// <param name="window">The resolved window.</param>
     /// <param name="unreadable">Files skipped while gathering it.</param>
@@ -69,8 +80,11 @@ internal sealed record WindowResult(
     /// <param name="wholeStoreSkewed">Whether every session read was stamped ahead of it.</param>
     /// <returns>The result.</returns>
     public static WindowResult Success(
-        AnalysisWindow window, int unreadable, int skewed = 0, bool wholeStoreSkewed = false) =>
-        new(window, null, null, unreadable, skewed, wholeStoreSkewed);
+        AnalysisWindow window,
+        IReadOnlyList<string>? unreadable = null,
+        IReadOnlyList<Guid>? skewed = null,
+        bool wholeStoreSkewed = false) =>
+        new(window, null, null, unreadable ?? [], skewed ?? [], wholeStoreSkewed);
 
     /// <summary>Creates a failed result.</summary>
     /// <param name="failure">Why resolution failed.</param>
@@ -82,10 +96,10 @@ internal sealed record WindowResult(
     public static WindowResult Failed(
         WindowFailure failure,
         string? detail = null,
-        int unreadable = 0,
-        int skewed = 0,
+        IReadOnlyList<string>? unreadable = null,
+        IReadOnlyList<Guid>? skewed = null,
         bool wholeStoreSkewed = false) =>
-        new(null, failure, detail, unreadable, skewed, wholeStoreSkewed);
+        new(null, failure, detail, unreadable ?? [], skewed ?? [], wholeStoreSkewed);
 }
 
 /// <summary>
@@ -138,7 +152,10 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
     /// <param name="Skewed">Sessions left out as stamped ahead of the clock.</param>
     /// <param name="WholeStoreSkewed">Whether every session read was stamped ahead of it.</param>
     private sealed record DatableRead(
-        IReadOnlyList<TestSession> Sessions, int Unreadable, int Skewed, bool WholeStoreSkewed);
+        IReadOnlyList<TestSession> Sessions,
+        IReadOnlyList<string> Unreadable,
+        IReadOnlyList<Guid> Skewed,
+        bool WholeStoreSkewed);
 
     public WindowResult Resolve(ISessionSource source, WindowRequest request)
     {
@@ -328,7 +345,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
         DateTime horizon = Horizon();
 
         if (read.Sessions.All(s => s.StartedAt <= horizon))
-            return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: false);
+            return new DatableRead(read.Sessions, read.UnreadableFiles, [], WholeStoreSkewed: false);
 
         // Already the whole store, so there is nothing deeper to read.
         SessionReadResult deep = maxSessions == Unbounded
@@ -336,7 +353,7 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
             : source.Read(Unbounded, assembly);
 
         var selected = new List<TestSession>(Math.Min(maxSessions, deep.Sessions.Count));
-        int skewed = 0;
+        var skewed = new List<Guid>();
 
         // Counted over the runs walked past to fill the window, and not over the whole store: this
         // is what the report left out of the window it is about to publish.
@@ -346,15 +363,15 @@ internal sealed class WindowResolver(TimeProvider timeProvider) : IWindowResolve
                 break;
 
             if (session.StartedAt > horizon)
-                skewed++;
+                skewed.Add(session.SessionId);
             else
                 selected.Add(session);
         }
 
         if (selected.Count == 0)
-            return new DatableRead(read.Sessions, read.UnreadableCount, 0, WholeStoreSkewed: true);
+            return new DatableRead(read.Sessions, read.UnreadableFiles, [], WholeStoreSkewed: true);
 
-        return new DatableRead(selected, deep.UnreadableCount, skewed, WholeStoreSkewed: false);
+        return new DatableRead(selected, deep.UnreadableFiles, skewed, WholeStoreSkewed: false);
     }
 
     /// <summary>

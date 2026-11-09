@@ -488,6 +488,17 @@ ask for. Exit `3` is also what a finding that has healed returns, so a script ca
 still reported* without reading any output. With `--format json` the envelope is still printed,
 with `findings` empty and `selection.reported` false.
 
+Without `--assembly`, over a store with several assemblies, the id is looked for in every
+assembly. If none reports it, the message names every assembly as the window searched, and says
+in which assembly the subject went elsewhere:
+
+```
+Finding f_7c905f05 (shared failure) is not reported in any window (every assembly in this store). In Checkout.Tests, its subject is reported as f_3ea537e4 (broken fixture, row 3).
+```
+
+There is no single report to print then, so `--format json` leaves stdout empty. The exit code is
+still `3`.
+
 Copy the block, or pipe it:
 
 ```bash

@@ -12,11 +12,14 @@ namespace Xping.Cli.Report.Store;
 /// Sessions read from somewhere, with a count of what could not be read.
 /// </summary>
 /// <param name="Sessions">The sessions, newest first.</param>
-/// <param name="UnreadableCount">Files skipped because they could not be read.</param>
-internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, int UnreadableCount)
+/// <param name="UnreadableFiles">The files skipped because they could not be read.</param>
+internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, IReadOnlyList<string> UnreadableFiles)
 {
     /// <summary>Gets an empty result.</summary>
-    public static SessionReadResult Empty { get; } = new([], 0);
+    public static SessionReadResult Empty { get; } = new([], []);
+
+    /// <summary>Gets how many files were skipped because they could not be read.</summary>
+    public int UnreadableCount => UnreadableFiles.Count;
 }
 
 /// <summary>
@@ -68,7 +71,7 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
         LocalSessionReadResult result = store.ReadRecent(maxSessions, assembly);
-        return new SessionReadResult(result.Sessions, result.UnreadableCount);
+        return new SessionReadResult(result.Sessions, result.UnreadableFiles);
     }
 
     // Passed through unmaterialised: a caller that stops at the first match must not pay for the

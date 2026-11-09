@@ -162,11 +162,12 @@ internal sealed class ReportCommand(
         }
 
         IReadOnlyList<AssemblyAnalysis> analyses = AnalyzeEach(options, assemblies, source, charset);
+        LookupWarnings warnings = OverviewWarnings(analyses);
 
         if (analyses.All(a => a.Envelope == null))
-            return ReportUnavailable(analyses[0].Resolved, store, null, charset);
+            return ReportNoWindow(analyses, store, warnings, charset);
 
-        WriteOverviewWarnings(analyses, charset);
+        WriteLookupWarnings(warnings, charset);
 
         if (options.Format == ReportFormat.Summary)
         {
@@ -236,11 +237,12 @@ internal sealed class ReportCommand(
     {
         TerminalCharset charset = capabilities.Glyphs.Charset;
         IReadOnlyList<AssemblyAnalysis> analyses = AnalyzeEach(options, assemblies, source, charset);
+        LookupWarnings warnings = OverviewWarnings(analyses);
 
         if (analyses.All(a => a.Envelope == null))
-            return ReportUnavailable(analyses[0].Resolved, store, null, charset);
+            return ReportNoWindow(analyses, store, warnings, charset);
 
-        WriteOverviewWarnings(analyses, charset);
+        WriteLookupWarnings(warnings, charset);
 
         List<AssemblyAnalysis> reported =
             [.. analyses.Where(a => a.Envelope?.Selection is { Reported: true })];
@@ -266,24 +268,10 @@ internal sealed class ReportCommand(
             return ExitCodes.TestAmbiguous;
         }
 
-        // Not reported anywhere. Where exactly one assembly knows the id's subject, its message says
-        // where that subject went; otherwise there is nothing to add to "not reported".
-        List<AssemblyAnalysis> knowing = [.. analyses.Where(a =>
-            a.Envelope?.Selection is { } selection && (selection.SameSubject.Count > 0 || selection.History != null))];
-
-        if (knowing.Count == 1)
-        {
-            ReportEnvelope envelope = knowing[0].Envelope!;
-            WriteNotReported(envelope.Selection!, envelope, knowing[0].Assembly, charset);
-
-            if (options.Format == ReportFormat.Json)
-                new JsonReportRenderer().Render(envelope, io.Output);
-        }
-        else
-        {
-            await io.Error.WriteLineAsync(
-                $"Finding {TerminalText.Printable(id, charset)} is not reported in any assembly's window ({assemblies.Count} assemblies in this store).").ConfigureAwait(false);
-        }
+        // Not reported anywhere. Standard output stays empty whatever the format: there is no one
+        // report to hand a script, as for a --test name that resolved to no test (finding-detail
+        // Amendment 10A).
+        WriteNotReportedAnywhere(id, analyses, charset);
 
         return ExitCodes.NotFound;
     }
@@ -336,25 +324,46 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
-    /// Says once what every assembly's read could not use.
+    /// What every assembly's read could not use, each file and each run counted once.
     /// </summary>
     /// <remarks>
-    /// Each read walks the whole store, so an unreadable file is seen by every one of them and is
-    /// counted once, not once per assembly. A run stamped ahead belongs to its own assembly, so those
-    /// add up; an assembly whose every run is ahead is named on its own, as the <c>--test</c> lookup
-    /// names it.
+    /// A file whose name carries no tags is opened by every assembly's read, and a run that covered
+    /// two assemblies is read by both, so neither a sum nor a maximum of the reads' counts is the
+    /// number of files or runs. An assembly whose every run is ahead is named on its own, as the
+    /// <c>--test</c> lookup names it.
     /// </remarks>
-    private void WriteOverviewWarnings(IReadOnlyList<AssemblyAnalysis> analyses, TerminalCharset charset)
+    private static LookupWarnings OverviewWarnings(IReadOnlyList<AssemblyAnalysis> analyses)
     {
         bool everyAhead = analyses.All(a => a.Resolved.WholeStoreSkewed);
 
-        WriteLookupWarnings(
-            new LookupWarnings(
-                analyses.Max(a => a.Resolved.UnreadableSessions),
-                analyses.Where(a => !a.Resolved.WholeStoreSkewed).Sum(a => a.Resolved.SkewedSessions),
-                everyAhead ? [] : [.. analyses.Where(a => a.Resolved.WholeStoreSkewed).Select(a => a.Assembly)],
-                everyAhead),
-            charset);
+        return new LookupWarnings(
+            analyses.SelectMany(a => a.Resolved.UnreadableFiles).Distinct(StringComparer.Ordinal).Count(),
+            analyses.Where(a => !a.Resolved.WholeStoreSkewed).SelectMany(a => a.Resolved.SkewedSessionIds).Distinct().Count(),
+            everyAhead ? [] : [.. analyses.Where(a => a.Resolved.WholeStoreSkewed).Select(a => a.Assembly)],
+            everyAhead);
+    }
+
+    /// <summary>
+    /// Explains why no assembly's window could be opened.
+    /// </summary>
+    /// <remarks>
+    /// Every window was asked for with the same <c>--runs</c> or <c>--since</c>, so a reason all of
+    /// them share is said once, as for one assembly. Reasons that differ are each said with the
+    /// assembly they are about.
+    /// </remarks>
+    private int ReportNoWindow(
+        IReadOnlyList<AssemblyAnalysis> analyses, ILocalSessionStore store, LookupWarnings warnings, TerminalCharset charset)
+    {
+        if (analyses.Select(a => (a.Resolved.Failure, a.Resolved.FailureDetail)).Distinct().Count() == 1)
+            return ReportUnavailable(analyses[0].Resolved, store, null, charset, warnings);
+
+        foreach (AssemblyAnalysis analysis in analyses)
+            io.Error.WriteLine($"{TerminalText.Printable(analysis.Assembly, charset)}: {TerminalText.Printable(analysis.Unavailable!, charset)}");
+
+        io.Error.WriteLine("Run your tests once with the Xping SDK installed, then try again.");
+        WriteLookupWarnings(warnings, charset);
+
+        return ExitCodes.InsufficientData;
     }
 
     /// <summary>
@@ -403,13 +412,8 @@ internal sealed class ReportCommand(
 
         if (lookup.Resolution is not { } resolution)
         {
-            LookupWarnings skipped = lookup.Warnings;
             return ReportUnavailable(
-                WindowResult.Failed(
-                    lookup.Failure!.Value, null, skipped.Unreadable, skipped.Skewed, skipped.WholeStoreSkewed),
-                store,
-                options.Assembly,
-                charset);
+                WindowResult.Failed(lookup.Failure!.Value), store, options.Assembly, charset, lookup.Warnings);
         }
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
@@ -796,7 +800,16 @@ internal sealed class ReportCommand(
     /// Always exit code 2, never 1. A build step has to tell "I looked and found problems" apart
     /// from "I could not look", and every case here is the second.
     /// </remarks>
-    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly, TerminalCharset charset)
+    /// <param name="result">Why the window could not be opened.</param>
+    /// <param name="store">The store that was read.</param>
+    /// <param name="assembly">The assembly the reader named, if any.</param>
+    /// <param name="charset">What the messages may print of a recorded name.</param>
+    /// <param name="warnings">
+    /// What the reads behind it could not use, when that was gathered over several reads rather
+    /// than carried on <paramref name="result"/>.
+    /// </param>
+    private int ReportUnavailable(
+        WindowResult result, ILocalSessionStore store, string? assembly, TerminalCharset charset, LookupWarnings? warnings = null)
     {
         TextWriter error = io.Error;
 
@@ -828,7 +841,10 @@ internal sealed class ReportCommand(
                 break;
         }
 
-        WriteReadWarnings(result);
+        if (warnings != null)
+            WriteLookupWarnings(warnings, charset);
+        else
+            WriteReadWarnings(result);
 
         return ExitCodes.InsufficientData;
     }
@@ -1008,6 +1024,51 @@ internal sealed class ReportCommand(
         if (selection.SameSubject.Count == 0 && selection.History is { } history)
             io.Error.WriteLine(
                 $"Its test has no findings in this window: {TerminalText.Printable(history, TerminalCharset.Command)}");
+    }
+
+    /// <summary>
+    /// Says that no assembly's window reports the finding <c>--id</c> named, and where its subject
+    /// went in each assembly that knows it.
+    /// </summary>
+    /// <remarks>
+    /// Names every assembly as the window, because every one was searched (finding-detail
+    /// Amendment 10B). A row number or a history command belongs to one assembly's report, so each
+    /// is said with the assembly it is from.
+    /// </remarks>
+    private void WriteNotReportedAnywhere(string id, IReadOnlyList<AssemblyAnalysis> analyses, TerminalCharset charset)
+    {
+        string Recorded(string value) => TerminalText.Printable(value, charset);
+
+        List<(string Assembly, SelectionDto Selection)> selections = [.. analyses
+            .Where(a => a.Envelope?.Selection != null)
+            .Select(a => (a.Assembly, a.Envelope!.Selection!))
+            .OrderBy(a => a.Assembly, StringComparer.Ordinal)];
+
+        var message = new StringBuilder("Finding ")
+            .Append(Recorded(selections.Count > 0 ? selections[0].Selection.Id : id));
+
+        if (selections.Select(s => s.Selection.Kind).FirstOrDefault(k => k != null) is { } kind)
+            message.Append(" (").Append(Recorded(ReportVocabulary.LabelFor(kind))).Append(')');
+
+        message.Append(" is not reported in any window (every assembly in this store).");
+
+        foreach ((string assembly, SelectionDto selection) in selections.Where(s => s.Selection.SameSubject.Count > 0))
+        {
+            message.Append(" In ").Append(Recorded(assembly)).Append(", its subject is reported as ")
+                   .AppendJoin(", ", selection.SameSubject.Select(same =>
+                       $"{Recorded(same.Id)} ({Recorded(ReportVocabulary.LabelFor(same.Kind))}, row {same.Row})"))
+                   .Append('.');
+        }
+
+        io.Error.WriteLine(message.ToString());
+
+        // Each a line of its own, ending on the command, as WriteNotReported writes it.
+        foreach ((string assembly, SelectionDto selection) in selections)
+        {
+            if (selection.SameSubject.Count == 0 && selection.History is { } history)
+                io.Error.WriteLine(
+                    $"Its test has no findings in {Recorded(assembly)}: {TerminalText.Printable(history, TerminalCharset.Command)}");
+        }
     }
 
     /// <summary>

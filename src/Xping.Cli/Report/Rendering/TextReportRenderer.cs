@@ -316,7 +316,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // and one finding covering a whole cluster.
         var counts = new List<string>
         {
-            $"{summary.Tests.ToString(CultureInfo.InvariantCulture)} tests",
+            Tests(summary.Tests),
             $"{summary.Healthy.ToString(CultureInfo.InvariantCulture)} healthy",
             $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged"
         };
@@ -2192,7 +2192,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             : file;
     }
 
-    private static string Tests(int count) =>
+    /// <summary><c>1 test</c>, <c>20 tests</c>.</summary>
+    internal static string Tests(int count) =>
         count == 1 ? "1 test" : $"{count.ToString(CultureInfo.InvariantCulture)} tests";
 
     /// <summary>

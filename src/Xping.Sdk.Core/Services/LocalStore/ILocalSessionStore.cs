@@ -22,15 +22,15 @@ public sealed class LocalSessionReadResult
     /// Initializes a new instance of the <see cref="LocalSessionReadResult"/> class.
     /// </summary>
     /// <param name="sessions">The sessions that were read.</param>
-    /// <param name="unreadableCount">The number of files skipped because they could not be read.</param>
-    public LocalSessionReadResult(IReadOnlyList<TestSession> sessions, int unreadableCount)
+    /// <param name="unreadableFiles">The paths of the files skipped because they could not be read.</param>
+    public LocalSessionReadResult(IReadOnlyList<TestSession> sessions, IReadOnlyList<string> unreadableFiles)
     {
         Sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        UnreadableCount = unreadableCount;
+        UnreadableFiles = unreadableFiles ?? throw new ArgumentNullException(nameof(unreadableFiles));
     }
 
     /// <summary>Gets an empty result.</summary>
-    public static LocalSessionReadResult Empty { get; } = new(new List<TestSession>(), 0);
+    public static LocalSessionReadResult Empty { get; } = new(new List<TestSession>(), new List<string>());
 
     /// <summary>
     /// Gets the sessions read, ordered newest first by <see cref="TestSession.StartedAt"/> with
@@ -38,8 +38,15 @@ public sealed class LocalSessionReadResult
     /// </summary>
     public IReadOnlyList<TestSession> Sessions { get; }
 
+    /// <summary>Gets the paths of the files skipped because they could not be read.</summary>
+    /// <remarks>
+    /// Paths rather than a count, so a caller that reads several assemblies can count a file that
+    /// every one of those reads opened once.
+    /// </remarks>
+    public IReadOnlyList<string> UnreadableFiles { get; }
+
     /// <summary>Gets the number of files skipped because they could not be read.</summary>
-    public int UnreadableCount { get; }
+    public int UnreadableCount => UnreadableFiles.Count;
 }
 
 /// <summary>
@@ -58,32 +65,6 @@ public sealed class LocalSessionFile
 
     /// <summary>Gets the session, or <see langword="null"/> when the file could not be read.</summary>
     public TestSession? Session { get; }
-}
-
-/// <summary>
-/// One stored run as its file's name and header describe it, without the run itself.
-/// </summary>
-public sealed class LocalSessionHeader
-{
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LocalSessionHeader"/> class.
-    /// </summary>
-    /// <param name="startedAt">When the run started, in UTC.</param>
-    /// <param name="assemblies">The assemblies the run covered, ordered by name.</param>
-    public LocalSessionHeader(DateTime startedAt, IReadOnlyList<string> assemblies)
-    {
-        StartedAt = startedAt;
-        Assemblies = assemblies ?? throw new ArgumentNullException(nameof(assemblies));
-    }
-
-    /// <summary>Gets when the run started, in UTC.</summary>
-    public DateTime StartedAt { get; }
-
-    /// <summary>
-    /// Gets the assemblies the run covered, ordered by name. Empty when it names none or its header
-    /// could not be read.
-    /// </summary>
-    public IReadOnlyList<string> Assemblies { get; }
 }
 
 /// <summary>
@@ -220,25 +201,6 @@ public interface ILocalSessionStore
     LocalStoreSummary Summarize();
 
     /// <summary>
-    /// Lists the stored runs newest first, as their file names and headers describe them.
-    /// </summary>
-    /// <returns>
-    /// One header per file, read only as the sequence is enumerated, so a caller looking for the
-    /// newest run with some property reads as few headers as it needs.
-    /// </returns>
-    /// <remarks>
-    /// <para>
-    /// Loads no session. A header is the head of the file, so a damaged run whose head is intact is
-    /// listed here although <see cref="ReadRecent"/> reports it unreadable.
-    /// </para>
-    /// <para>
-    /// Ties in start time break the same way <see cref="ReadRecent"/> breaks them, so "the newest
-    /// run" means the same run through either method.
-    /// </para>
-    /// </remarks>
-    IEnumerable<LocalSessionHeader> ReadHeaders();
-
-    /// <summary>
     /// Reads every stored session, newest first, one file at a time.
     /// </summary>
     /// <param name="assembly">
@@ -252,7 +214,7 @@ public interface ILocalSessionStore
     /// <remarks>
     /// For a caller that needs every session but only a little of each. Holding them all, as
     /// <see cref="ReadRecent"/> does, costs many times the store's size on disk; enumerating holds
-    /// one at a time. Ordered as <see cref="ReadRecent"/> and <see cref="ReadHeaders"/> are.
+    /// one at a time. Ordered as <see cref="ReadRecent"/> is.
     /// </remarks>
     IEnumerable<LocalSessionFile> ReadEach(string? assembly = null);
 
