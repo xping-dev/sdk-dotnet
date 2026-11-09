@@ -34,5 +34,5 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 1 of 1 finding | all: xping report --all
+Showing 1 of 1 finding | all: xping report --all --assembly MyApp.Tests
 Repro: dotnet test tests/Ns.Tests/Ns.Tests.csproj -e XPING_ENABLED=false --filter 'FullyQualifiedName=Ns.A.One|FullyQualifiedName=Ns.B.Two|FullyQualifiedName=Ns.C.Three'

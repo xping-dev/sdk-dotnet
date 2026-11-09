@@ -147,6 +147,18 @@ everywhere else.**
 Amendment 5's rule stands: the renderer appends the pairs from `FindingDto.Cloud`, and
 `findings[].metrics` stays local.
 
+### Amendment 10 — from #346
+
+`cli-report-format-spec.md` Amendment 6 makes the default report an overview of every assembly.
+An id given without `--assembly` can no longer fall into an auto-scoped suite.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | `--id` without `--assembly` looks only in the newest assembly's window | It looks in every assembly's window, each opened as `report --assembly` would open it, on the model of `cli-test-history-spec.md` D2. Found in one: that assembly's detail view. Found in more than one: exit 4 with one candidate line per assembly, each with its `--id … --assembly` command, as `--test` prints them. Found in none: the D3 message, exit 3. Standard output stays empty in every format, as for a `--test` name that resolves to no test: there is no one report to hand a script | D3, D6 |
+| B | D3: the not-found message adds `N other assemblies in this store (use --assembly to switch).` | Removed. Without `--assembly` every assembly was searched; with it, the reader chose the suite. The not-found message names the window it searched: the assembly's when one was named or the store holds one, else `Finding <id> (<kind>) is not reported in any window (every assembly in this store).` Where an assembly's window reports the id's subject under another id, the message adds `In <assembly>, its subject is reported as …`; where an assembly ran its test with no finding, a line of its own says `Its test has no findings in <assembly>: <history command>` | D3 |
+| C | D6: the scope notice matters more here than in the full report | The scope notice is removed (report-format Amendment 6A) | D6 |
+| D | Amendment 2B: an auto-scoped report's bare `--all` reproduces its scope | Every printed command names the assembly (report-format Amendment 6H) | Amendment 2B |
+
 ---
 
 ## 1. Ground truth

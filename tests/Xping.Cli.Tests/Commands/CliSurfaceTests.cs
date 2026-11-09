@@ -3,7 +3,9 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Cloud;
@@ -109,14 +111,29 @@ public sealed class CliSurfaceTests : IDisposable
             [TestSessionFactory.Execution("Mystery", assembly: string.Empty)]));
     }
 
+    /// <summary>
+    /// Seeds, then overwrites every file the seeding added with bytes that are no session, keeping
+    /// the names, and so the tags, the store gave them.
+    /// </summary>
+    private void SeedUnreadable(Action seed)
+    {
+        string directory = LocalSessionStore.Create(storePath: _root).SessionsPath!;
+        HashSet<string> before = Directory.Exists(directory) ? [.. Directory.GetFiles(directory)] : [];
+
+        seed();
+
+        foreach (string file in Directory.GetFiles(directory).Where(f => !before.Contains(f)))
+            File.WriteAllBytes(file, [0x00]);
+    }
+
     private (int Code, string Output) Run(params string[] args)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        // Rendered as if a person were watching, so the parts of the output only a terminal gets —
-        // the scope notice — are exercised rather than silently suppressed. The cloud invitation is
-        // not: ReviewFixesTests and ReportEnrichmentTests cover it.
+        // Rendered as if a person were watching, so the parts of the output only a terminal gets are
+        // exercised rather than silently suppressed. The cloud invitation is not: ReviewFixesTests
+        // and ReportEnrichmentTests cover it.
         int code = Program.Run(args, output, error, input: null, isTerminal: true, configureServices: OfflineCli.Store(_root, OfflineCli.NoBanner));
         return (code, output.ToString() + error.ToString());
     }
@@ -138,9 +155,7 @@ public sealed class CliSurfaceTests : IDisposable
     [Fact]
     public void APipedReportCarriesNothingButTheReport()
     {
-        // Two assemblies and a finding, so a terminal run would print both the scope notice and the
-        // invitation; the pipe has to print neither.
-        SeedSessions("Alpha.Tests", 6);
+        // A finding, so a terminal run would print the invitation; the pipe has to leave it out.
         Seed("Beta.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
 
         using var output = new StringWriter();
@@ -154,7 +169,6 @@ public sealed class CliSurfaceTests : IDisposable
         Assert.Equal(0, code);
 
         // `xping report | pbcopy` has to copy a report and nothing else.
-        Assert.DoesNotContain("Reporting on", report, StringComparison.Ordinal);
         Assert.DoesNotContain("xping.io/start", report + error, StringComparison.Ordinal);
 
         // Run second: the pipe consumed no daily allowance, so the terminal still has one to spend.
@@ -266,28 +280,47 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     [Fact]
-    public void ReportScopesToTheNewestAssemblyAndSaysSo()
+    public void ABareReportOverSeveralAssembliesHasARowForEachAndNamesNone()
     {
-        SeedSessions("Alpha.Tests", 6);
-        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        // Beta ran last. Before #346 the report was Beta's alone, and Alpha's finding went unseen.
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 5000);
 
         var (code, output) = Run("report", "--ascii");
 
         Assert.Equal(0, code);
-        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
-        Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
+        Assert.Contains("Xping | 2 assemblies", output, StringComparison.Ordinal);
+        Assert.Contains("Beta.Tests", output, StringComparison.Ordinal);
+
+        // Most severe first, so the row with the finding is the one the command opens.
+        Assert.True(
+            output.IndexOf("Alpha.Tests", StringComparison.Ordinal) < output.IndexOf("Beta.Tests", StringComparison.Ordinal),
+            output);
+        Assert.Contains("Details: xping report --assembly Alpha.Tests", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ReportScopedExplicitlyDoesNotPrintTheNotice()
+    public void AStoreWithOneAssemblyGetsThatAssemblysReport()
     {
-        // The notice exists to flag an omission the user did not ask for.
+        SeedSessions("Alpha.Tests", 6);
+
+        var (code, output) = Run("report", "--ascii");
+
+        Assert.Equal(0, code);
+        Assert.Contains("Xping | Alpha.Tests | 6 runs", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("assemblies", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportScopedExplicitlyIsThatAssemblysReport()
+    {
         SeedSessions("Alpha.Tests", 6);
         SeedSessions("Beta.Tests", 6, startOrdinal: 10);
 
         var (_, output) = Run("report", "--assembly", "Alpha.Tests", "--ascii");
 
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
+        Assert.Contains("Xping | Alpha.Tests | 6 runs", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Beta.Tests", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -309,23 +342,20 @@ public sealed class CliSurfaceTests : IDisposable
     }
 
     [Fact]
-    public void TheScopeNoticeCountsAnAssemblyThatSharedTheSameRun()
+    public void TheOverviewHasARowForEachAssemblyASharedRunCovered()
     {
         SeedMixedSessions("Alpha.Tests", "Beta.Tests", 6);
 
         var (_, output) = Run("report", "--ascii");
 
-        Assert.Contains("Reporting on Alpha.Tests", output, StringComparison.Ordinal);
-        Assert.Contains("1 other assembly", output, StringComparison.Ordinal);
+        Assert.Contains("Xping | 2 assemblies", output, StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Count(output, @"1 test \| 0 flagged \| 6 runs"));
     }
 
     [Fact]
-    public void AutoScopingWalksPastANewestRunThatNamesNoAssembly()
+    public void TheOverviewLeavesOutRunsThatNameNoAssembly()
     {
-        // Stopping at the unattributable run would leave the report unscoped, which pools every
-        // suite in the store into one set of numbers no --assembly value can reproduce. Beta is
-        // seeded last, so landing on it proves the walk stops at the newest run that names an
-        // assembly rather than falling through to whatever else it finds.
+        // Pooling the unattributable run into a row would give numbers no --assembly value reproduces.
         SeedSessions("Alpha.Tests", 6);
         SeedSessions("Beta.Tests", 6, startOrdinal: 10);
         SeedUnattributableSession();
@@ -333,8 +363,218 @@ public sealed class CliSurfaceTests : IDisposable
         var (code, output) = Run("report", "--ascii");
 
         Assert.Equal(0, code);
-        Assert.Contains("Reporting on Beta.Tests", output, StringComparison.Ordinal);
-        Assert.Contains("6 runs", output, StringComparison.Ordinal);
+        Assert.Contains("Xping | 2 assemblies", output, StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Count(output, @"\| 6 runs \|"));
+    }
+
+    /// <summary>
+    /// Regression for #346: <c>--fail-on</c> judged only the newest assembly, so a build passed while
+    /// an older suite had findings at the threshold.
+    /// </summary>
+    [Fact]
+    public void FailOnJudgesEveryAssemblyNotJustTheNewest()
+    {
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 5000);
+
+        var (code, _) = Run("report", "--fail-on", "low", "--ascii");
+
+        Assert.Equal(ExitCodes.FindingsAtThreshold, code);
+    }
+
+    [Fact]
+    public void FailOnPassesWhenNoAssemblyReachesTheThreshold()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        var (code, _) = Run("report", "--fail-on", "low", "--ascii");
+
+        Assert.Equal(ExitCodes.Success, code);
+    }
+
+    [Fact]
+    public void AnAssemblyWithNoWindowIsARowAndTheOthersStillDecideTheExitCode()
+    {
+        // Beta's runs are all older than the --since date, so its window cannot open; Alpha's can.
+        SeedSessions("Beta.Tests", 6);
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        string since = TestSessionFactory.Epoch.AddMinutes(500).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+        var (code, output) = Run("report", "--since", since, "--fail-on", "low", "--ascii");
+
+        Assert.Equal(ExitCodes.FindingsAtThreshold, code);
+        Assert.Contains("no window", output, StringComparison.Ordinal);
+        Assert.Contains("No sessions recorded on or after", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheSummaryGivesAnAssemblyWithNoWindowALineThatSaysWhy()
+    {
+        SeedSessions("Beta.Tests", 6);
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        string since = TestSessionFactory.Epoch.AddMinutes(500).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+        var (_, output) = Run("report", "--since", since, "--summary", "--ascii");
+
+        Assert.Contains("Xping: Beta.Tests: No sessions recorded on or after", output, StringComparison.Ordinal);
+        Assert.Contains("Alpha.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhenNoAssemblysWindowOpensTheOverviewIsUnavailable()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        var (code, output) = Run("report", "--since", "2099-01-01", "--fail-on", "low", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains("No sessions recorded on or after 2099-01-01", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: the warning summed every assembly's count, so a run both assemblies covered was
+    /// counted twice.
+    /// </summary>
+    [Fact]
+    public void TheOverviewCountsARunStampedAheadOnceThoughTwoAssembliesShareIt()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        LocalSessionStore.Create(storePath: _root).Write(TestSessionFactory.Session(
+            _nextOrdinal++,
+            [
+                TestSessionFactory.Execution("FirstSuiteTest", assembly: "Alpha.Tests"),
+                TestSessionFactory.Execution("SecondSuiteTest", assembly: "Beta.Tests")
+            ],
+            startedAt: new DateTime(2099, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        var (_, output) = Run("report", "--ascii");
+
+        Assert.Contains("warning: 1 run(s) stamped ahead of this machine's clock", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: the warning took the largest assembly's count, but each assembly's read skips
+    /// the files tagged for another, so one assembly's damaged run hid the other's.
+    /// </summary>
+    [Fact]
+    public void TheOverviewCountsEachUnreadableRunOnceWhicheverAssemblysReadMetIt()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnreadable(() => SeedSessions("Alpha.Tests", 1, startOrdinal: 20));
+        SeedUnreadable(() => SeedSessions("Beta.Tests", 1, startOrdinal: 21));
+        SeedUnreadable(() => SeedMixedSessions("Alpha.Tests", "Beta.Tests", 1));
+
+        var (_, output) = Run("report", "--ascii");
+
+        Assert.Contains("warning: 3 unreadable run(s) skipped.", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression: with no window open, only the first assembly's read warnings were said.
+    /// </summary>
+    [Fact]
+    public void WhenNoAssemblysWindowOpensEveryAssemblysReadWarningsAreSaid()
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+        SeedUnreadable(() => SeedSessions("Alpha.Tests", 1, startOrdinal: 20));
+        SeedUnreadable(() => SeedSessions("Beta.Tests", 1, startOrdinal: 21));
+
+        var (code, output) = Run("report", "--since", "2099-01-01", "--ascii");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Equal(1, Regex.Count(output, "No sessions recorded on or after 2099-01-01"));
+        Assert.Contains("warning: 2 unreadable run(s) skipped.", output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("--kind", "flaky", "--kind")]
+    [InlineData("--top", "3", "--top")]
+    [InlineData("--all", null, "--all")]
+    public void AFindingListFlagWithoutAnAssemblyIsRefusedOverSeveral(string flag, string? value, string named)
+    {
+        SeedSessions("Alpha.Tests", 6);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 10);
+
+        var (code, output) = Run(value == null ? ["report", flag] : ["report", flag, value]);
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Contains($"{named} needs --assembly", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFindingListFlagStillWorksOverAStoreWithOneAssembly()
+    {
+        SeedSessions("Alpha.Tests", 6);
+
+        var (code, _) = Run("report", "--top", "3", "--ascii");
+
+        Assert.Equal(0, code);
+    }
+
+    [Fact]
+    public void TheOverviewInJsonIsItsOwnEnvelope()
+    {
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 5000);
+
+        var (code, output) = Run("report", "--json");
+
+        Assert.Equal(0, code);
+        using var doc = JsonDocument.Parse(output);
+        JsonElement root = doc.RootElement;
+
+        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("overview", root.GetProperty("scope").GetString());
+
+        JsonElement[] rows = [.. root.GetProperty("assemblies").EnumerateArray()];
+        Assert.Equal(["Alpha.Tests", "Beta.Tests"], rows.Select(r => r.GetProperty("assembly").GetString()));
+        Assert.Equal("xping report --assembly Alpha.Tests", rows[0].GetProperty("command").GetString());
+        Assert.Equal(JsonValueKind.Null, rows[0].GetProperty("unavailable").ValueKind);
+    }
+
+    /// <summary>
+    /// Report-format Amendment 6B: a row never says anything its assembly's report does not.
+    /// </summary>
+    [Fact]
+    public void EveryRowIsTheHeaderOfTheReportItsCommandOpens()
+    {
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 5000);
+        SeedMixedSessions("Beta.Tests", "Gamma.Tests", 3);
+
+        var (_, overview) = Run("report", "--json");
+        using var doc = JsonDocument.Parse(overview);
+
+        foreach (JsonElement row in doc.RootElement.GetProperty("assemblies").EnumerateArray())
+        {
+            var (_, report) = Run("report", "--assembly", row.GetProperty("assembly").GetString()!, "--json");
+            using var single = JsonDocument.Parse(report);
+
+            // Compared compact: the two envelopes indent the same object to different depths.
+            Assert.Equal(JsonSerializer.Serialize(single.RootElement.GetProperty("window")), JsonSerializer.Serialize(row.GetProperty("window")));
+            Assert.Equal(JsonSerializer.Serialize(single.RootElement.GetProperty("summary")), JsonSerializer.Serialize(row.GetProperty("summary")));
+        }
+    }
+
+    [Fact]
+    public void TheSummaryOverSeveralAssembliesIsALineEach()
+    {
+        Seed("Alpha.Tests", [.. Enumerable.Range(0, 12).Select(i => i % 2 == 0)]);
+        SeedSessions("Beta.Tests", 6, startOrdinal: 5000);
+
+        var (code, output) = Run("report", "--summary");
+
+        Assert.Equal(0, code);
+        string[] lines = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, lines.Length);
+        Assert.EndsWith("in 12 runs of Alpha.Tests", lines[0], StringComparison.Ordinal);
+        Assert.Equal("Xping: no findings in 6 runs of Beta.Tests", lines[1]);
     }
 
     [Fact]
@@ -413,7 +653,7 @@ public sealed class CliSurfaceTests : IDisposable
         using JsonDocument doc = JsonDocument.Parse(output);
         JsonElement root = doc.RootElement;
 
-        Assert.Equal("1.28", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(6, root.GetProperty("window").GetProperty("sessionCount").GetInt32());
         Assert.Equal("default", root.GetProperty("window").GetProperty("resolution").GetString());
         Assert.Equal(1, root.GetProperty("summary").GetProperty("tests").GetInt32());
@@ -457,7 +697,7 @@ public sealed class CliSurfaceTests : IDisposable
 
         Assert.Equal(0, code);
         using JsonDocument doc = JsonDocument.Parse(output);
-        Assert.Equal("1.28", doc.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", doc.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]
@@ -481,7 +721,6 @@ public sealed class CliSurfaceTests : IDisposable
         var (_, output) = Run("report", "--format", "json");
 
         Assert.DoesNotContain("Xping report", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
     }
 
     // -----------------------------------------------------------------------

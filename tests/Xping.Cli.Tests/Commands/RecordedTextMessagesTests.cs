@@ -79,18 +79,21 @@ public sealed class RecordedTextMessagesTests : IDisposable
     }
 
     [Fact]
-    public void TheScopeNoticeNamesTheAssemblyPrintable()
+    public void TheOverviewNamesEveryAssemblyPrintable()
     {
         Seed("Stable", assembly: "Other.Tests");
         Seed("Stable", assembly: $"{Hostile}.Tests", startOrdinal: 10);
 
-        var (code, output, error) = Run(isTerminal: true, "report", "--ascii", "--no-color");
+        var (code, output, _) = Run(isTerminal: true, "report", "--ascii", "--no-color");
 
-        // On standard error, so standard output is the report alone (contract F3).
         Assert.Equal(ExitCodes.Success, code);
-        Assert.Contains("Reporting on Pay?[31m?Caf??.Tests | ", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("Reporting on", output, StringComparison.Ordinal);
-        AssertPrintableAscii(error);
+        Assert.Contains("Pay?[31m?Caf??.Tests ", output, StringComparison.Ordinal);
+
+        // Everything but the command line, which is printed to be run: its é stays, its controls do not.
+        string[] lines = output.Split('\n');
+        string details = Assert.Single(lines, line => line.StartsWith("Details: ", StringComparison.Ordinal));
+        AssertPrintableAscii(string.Join('\n', lines.Where(line => line != details)));
+        Assert.DoesNotContain(details, c => c is '\u001b' or '\u202e');
     }
 
     [Fact]

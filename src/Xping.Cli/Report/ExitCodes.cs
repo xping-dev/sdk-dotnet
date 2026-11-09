@@ -64,4 +64,17 @@ internal static class ExitCodes
 
         return Success;
     }
+
+    /// <summary>
+    /// Chooses the exit code for the overview: <see cref="ForReport"/> over every assembly.
+    /// </summary>
+    /// <param name="findings">Each assembly's findings; empty for one whose window did not open.</param>
+    /// <param name="failOn">Least severity that should fail the command, or <see langword="null"/>.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// Any one assembly at the threshold fails the command. A threshold judged on one suite of a
+    /// solution would pass a build another suite should have failed.
+    /// </remarks>
+    public static int ForOverview(IEnumerable<IReadOnlyList<Finding>> findings, Severity? failOn) =>
+        findings.Any(each => ForReport(each, failOn) == FindingsAtThreshold) ? FindingsAtThreshold : Success;
 }

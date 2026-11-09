@@ -567,7 +567,7 @@ public sealed class LatestRunRenderingTests
 
         // The command that lifts the cap is the footer's, which counts the failures it withheld.
         Assert.Contains(
-            Faint + "Showing 1 of 12 failures · all: xping report --all" + Reset, coloured, StringComparison.Ordinal);
+            Faint + "Showing 1 of 12 failures · all: xping report --all --assembly MyApp.Tests" + Reset, coloured, StringComparison.Ordinal);
     }
 
     [Fact]

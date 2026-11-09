@@ -123,7 +123,7 @@ public sealed class EnvelopeBuilderTests
         ReportEnvelope history = Build(context, result, History(context));
 
         Assert.Equal(Json(full.Summary), Json(history.Summary));
-        Assert.Equal(new TruncationDto(3, 4, "xping report --all"), history.Truncated);
+        Assert.Equal(new TruncationDto(3, 4, "xping report --all --assembly MyApp.Tests"), history.Truncated);
         Assert.Null(history.Selection);
         Assert.Null(full.Test);
     }
@@ -176,7 +176,7 @@ public sealed class EnvelopeBuilderTests
 
         Assert.Empty(envelope.Findings);
         Assert.Equal("Nope", Assert.IsType<TestHistoryDto>(envelope.Test).Query);
-        Assert.Equal(new TruncationDto(0, 4, "xping report --all"), envelope.Truncated);
+        Assert.Equal(new TruncationDto(0, 4, "xping report --all --assembly MyApp.Tests"), envelope.Truncated);
     }
 
     [Fact]
@@ -199,9 +199,9 @@ public sealed class EnvelopeBuilderTests
         using JsonDocument document = JsonDocument.Parse(Json(Build(context, AnalysisResult.Empty, History(context))));
         JsonElement root = document.RootElement;
 
-        Assert.Equal("1.28", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(
-            ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
+            ["schemaVersion", "scope", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));
 
         JsonElement test = root.GetProperty("test");

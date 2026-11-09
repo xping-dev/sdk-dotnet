@@ -953,7 +953,7 @@ public sealed class ShareableOutputTests
 
         // And a truncated one ends on the two navigation lines, together.
         Assert.EndsWith(
-            $"Showing 1 of 21 findings {ReportText.Capabilities(redirected: true).Glyphs.Separator} all: xping report --all" +
+            $"Showing 1 of 21 findings {ReportText.Capabilities(redirected: true).Glyphs.Separator} all: xping report --all --assembly MyApp.Tests" +
             Environment.NewLine + detail,
             truncated,
             StringComparison.Ordinal);

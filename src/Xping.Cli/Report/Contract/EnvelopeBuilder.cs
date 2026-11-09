@@ -136,6 +136,7 @@ internal static class EnvelopeBuilder
 
         return new ReportEnvelope(
             ReportEnvelope.CurrentSchemaVersion,
+            ReportScopes.Assembly,
             BuildWindow(context.Window),
             BuildContext(context.Revision),
             new SummaryDto(

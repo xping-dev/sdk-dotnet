@@ -9,15 +9,11 @@ using Xping.Sdk.Core.Services.LocalStore;
 namespace Xping.Cli.Report.Store;
 
 /// <summary>
-/// Sessions read from somewhere, with a count of what could not be read.
+/// Sessions read from somewhere, with the files that could not be read.
 /// </summary>
 /// <param name="Sessions">The sessions, newest first.</param>
-/// <param name="UnreadableCount">Files skipped because they could not be read.</param>
-internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, int UnreadableCount)
-{
-    /// <summary>Gets an empty result.</summary>
-    public static SessionReadResult Empty { get; } = new([], 0);
-}
+/// <param name="UnreadableFiles">The files skipped because they could not be read.</param>
+internal sealed record SessionReadResult(IReadOnlyList<TestSession> Sessions, IReadOnlyList<string> UnreadableFiles);
 
 /// <summary>
 /// Where analysis gets its sessions.
@@ -44,12 +40,6 @@ internal interface ISessionSource
     SessionReadResult Read(int maxSessions, string? assembly);
 
     /// <summary>
-    /// Lists the stored runs newest first, without loading any of them.
-    /// </summary>
-    /// <returns>Each run's start time and assemblies, read as the sequence is enumerated.</returns>
-    IEnumerable<LocalSessionHeader> ReadHeaders();
-
-    /// <summary>
     /// Reads every session, newest first, one at a time.
     /// </summary>
     /// <param name="assembly">Test assembly to scope to, when one was chosen.</param>
@@ -74,19 +64,16 @@ internal sealed class LocalSessionSource(ILocalSessionStore store) : ISessionSou
     public SessionReadResult Read(int maxSessions, string? assembly)
     {
         LocalSessionReadResult result = store.ReadRecent(maxSessions, assembly);
-        return new SessionReadResult(result.Sessions, result.UnreadableCount);
+        return new SessionReadResult(result.Sessions, result.UnreadableFiles);
     }
 
-    // Both passed through unmaterialised: a caller that stops at the first match must not pay for
-    // the rest, and one that reads everything must not hold it all.
-    public IEnumerable<LocalSessionHeader> ReadHeaders() => store.ReadHeaders();
-
+    // Passed through unmaterialised: a caller that stops at the first match must not pay for the
+    // rest, and one that reads everything must not hold it all.
     public IEnumerable<LocalSessionFile> ReadEach(string? assembly) => store.ReadEach(assembly);
 
     /// <remarks>
-    /// Read from the store's summary, which covers every file: the scope notice reports how many
-    /// other assemblies the store holds, and an assembly whose runs are all older than some probe
-    /// would silently drop out of that count.
+    /// Read from the store's summary, which covers every file: the overview has a row for every
+    /// assembly, and one whose runs are all older than some probe would silently lose its row.
     /// </remarks>
     public IReadOnlyList<string> KnownAssemblies() =>
         [.. store.Summarize().Assemblies.Select(a => a.Name)];

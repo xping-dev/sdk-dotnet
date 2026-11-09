@@ -33,6 +33,6 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 1 of 1 finding | all: xping report --all
+Showing 1 of 1 finding | all: xping report --all --assembly MyApp.Tests
 History: xping report --test fp-Refun --assembly MyApp.Tests
 Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter 'FullyQualifiedName=MyApp.Tests.SampleTests.Refund?[31m?Café?Total'

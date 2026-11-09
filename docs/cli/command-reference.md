@@ -65,10 +65,10 @@ xping report [options]
 |---|---|---|
 | `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last`. Under `--test` the default is every run in the store |
 | `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
-| `--top <n>` | `10` | Findings to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all` |
-| `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each |
-| `--kind <Kind>...` | all | Restrict to one or more finding kinds |
-| `--assembly <name>` | newest | Scope the report to one test assembly |
+| `--top <n>` | `10` | Findings to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all`. Needs `--assembly` when the store holds several |
+| `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each. Needs `--assembly` when the store holds several |
+| `--kind <Kind>...` | all | Restrict to one or more finding kinds. Needs `--assembly` when the store holds several |
+| `--assembly <name>` | the only one | Report on one test assembly. Without it, a store with several gets [one row per assembly](#scoping) |
 | `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--test`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--test <name>` | — | Show one test's run-by-run history, by its name or fingerprint — see [Test history](#test-history). Excludes `--id`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
 | `--directory <path>` | working directory | Resolve the store starting from this directory |
@@ -76,13 +76,13 @@ xping report [options]
 | `--format <f>` | `text` | `text`, `json` or `summary` |
 | `--json` | off | Alias for `--format json` |
 | `--summary` | off | Alias for `--format summary` |
-| `--fail-on <s>` | `none` | Exit non-zero when a finding reaches `high`, `medium` or `low` |
+| `--fail-on <s>` | `none` | Exit non-zero when a finding reaches `high`, `medium` or `low`. Without `--assembly`, judged over every assembly |
 | `--ascii` | auto | Force ASCII output |
 | `--no-color` | auto | Never emit ANSI colour. `NO_COLOR` is honoured too |
 
 > `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
 
-**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on` · `2` no report could be produced (no store, no readable runs, or a parse error) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test.
+**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on`, in any assembly · `2` no report could be produced (no store, no readable runs, a parse error, or `--top`, `--all` or `--kind` without `--assembly` over several assemblies) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test; with `--id` and no `--assembly`, more than one assembly reports that finding.
 
 The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
 
@@ -155,7 +155,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
 
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the scope notice and the cloud invitation can follow it on stderr, so redirecting stdout captures the report alone.
+The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all --assembly Checkout.Tests`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the cloud invitation can follow it on stderr, so redirecting stdout captures the report alone.
 
 Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal. Recorded text, such as test names and failure messages, is printed with every control, bidi and invisible formatting character replaced by `?` (a failure message's line breaks have already become spaces, and a stack trace's separate its frames), so a recorded escape sequence cannot recolour or reorder your terminal; under `--ascii` and in piped output every non-ASCII character is replaced too, except inside a printed command, where it is needed to select the test. `--format json` carries the recorded values unchanged.
 
@@ -219,7 +219,7 @@ Not `2 of 22 (9.1%)`. Both are defensible and they answer different questions �
 **The marker states the rule, not whether it fired.** A finding marked `-env-cluster` in a window with no outages and no clusters has had nothing removed from it, and its denominator is simply how many times the test ran. To see whether a rule actually bit, read the counts in the JSON evidence:
 
 ```bash
-xping report --all --format json \
+xping report --assembly Checkout.Tests --all --format json \
   | jq '.findings[] | select(.population | startswith("excludesEnvironmental"))
         | {kind, population, evidence: (.evidence | {
             executionsConsidered, discountedEnvironmental, discountedClustered })}'
@@ -230,7 +230,7 @@ Those three add up to the number of times the test ran in the window, which is t
 The filter names the two execution populations rather than excluding `allExecutions`, because those are the findings that carry these three fields. An `all runs` finding has no discount counts at all — there is nothing for it to report having set aside — and `excludesPartialRuns` discounts runs rather than executions, so projecting it here would return a row of nulls. Read that one with its own projection:
 
 ```bash
-xping report --all --format json \
+xping report --assembly Checkout.Tests --all --format json \
   | jq '.findings[] | select(.population == "excludesPartialRuns")
         | {kind, population, evidence: (.evidence | {
             baselineSessions, baselineSessionCount, currentSessionCount,
@@ -425,7 +425,7 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 1 of 5 findings · all: xping report --all
+Showing 1 of 5 findings · all: xping report --all --assembly SampleApp.XUnit
 History: xping report --test fp-Sampl --assembly SampleApp.XUnit
 ````
 
@@ -488,6 +488,17 @@ ask for. Exit `3` is also what a finding that has healed returns, so a script ca
 still reported* without reading any output. With `--format json` the envelope is still printed,
 with `findings` empty and `selection.reported` false.
 
+Without `--assembly`, over a store with several assemblies, the id is looked for in every
+assembly. If none reports it, the message names every assembly as the window searched, and says
+in which assembly the subject went elsewhere:
+
+```
+Finding f_7c905f05 (shared failure) is not reported in any window (every assembly in this store). In Checkout.Tests, its subject is reported as f_3ea537e4 (broken fixture, row 3).
+```
+
+There is no single report to print then, so `--format json` leaves stdout empty. The exit code is
+still `3`.
+
 Copy the block, or pipe it:
 
 ```bash
@@ -496,7 +507,7 @@ xping report | clip            # Windows
 xping report | wl-copy         # Linux (Wayland)
 ```
 
-When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no scope notice, no cloud invitation, and no blank lines around the block.
+When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no cloud invitation, and no blank lines around the block.
 
 
 ### Reproducing a finding
@@ -542,7 +553,7 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 1 of 1 finding · all: xping report --all
+Showing 1 of 1 finding · all: xping report --all --assembly SampleApp.MSTest
 History: xping report --test fp-Sampl --assembly SampleApp.MSTest
 Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
 ````
@@ -859,13 +870,30 @@ Xping: 5 findings (5 high) in 20 runs of SampleApp.XUnit, 2 new failures
 
 ### Scoping
 
-Every test project in a solution shares one store. Without `--assembly`, the report covers one assembly and says so when others exist:
+Every test project in a solution shares one store. A report covers one assembly: analysing them together would pool unrelated suites, so one assembly's history would contain another's tests, and its run count would be the solution-wide total.
+
+When the store holds one assembly, `xping report` is that assembly's report. When it holds several, `xping report` prints one row per assembly, most severe first, and the command that opens the first:
 
 ```
-Reporting on Checkout.Tests · 2 other assemblies in this store (use --assembly to switch).
+Xping · 3 assemblies
+
+Checkout.Tests                               4 findings (1 high, 3 medium)
+  412 tests · 4 flagged · 20 runs · last 2026-11-08 16:45
+Billing.Tests                                                  no findings
+  96 tests · 0 flagged · 20 runs · last 2026-11-08 16:44
+Search.Tests                                                   no findings
+  57 tests · 0 flagged · 6 runs · last 2026-11-02 09:12
+
+Details: xping report --assembly Checkout.Tests
 ```
 
-Analysing them together would pool unrelated suites: one assembly's history would contain another's tests, and its run count would be the solution-wide total.
+Each row repeats the header of that assembly's own report: the same window, the same numbers. The overview is local only; `--assembly` adds [Cloud data](#cloud-data).
+
+- `--runs` and `--since` set every assembly's window. An assembly with no runs in it gets a row that says so.
+- `--fail-on` judges every assembly, so one suite's finding fails the build even when another suite ran last.
+- `--summary` prints one line per assembly. `--json` writes an envelope with `"scope": "overview"` and an `assemblies` array; an assembly's own report has `"scope": "assembly"`.
+- `--top`, `--all` and `--kind` describe one list of findings, so they need `--assembly`.
+- `--id` without `--assembly` looks in every assembly. `--test` already does.
 
 **A run can belong to more than one assembly.** A *run* is one test host process, and `dotnet test` over a solution puts several test projects in a single host. One run of that kind is one run of **each** assembly it covered, and `--assembly` narrows it to that assembly's tests rather than choosing between runs. So `Checkout.Tests` and `Billing.Tests` can each report 20 runs from the same 20 solution-wide invocations, each seeing only its own tests.
 
@@ -947,7 +975,7 @@ not, the line is `Cloud data partial: 9 of 14 tests answered (timeout).`, with t
 For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
 
 ```bash
-xping report --all --format json > findings.json
+xping report --assembly Checkout.Tests --all --format json > findings.json
 ```
 
 Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
@@ -1038,7 +1066,8 @@ are not each other and `tests` is what they add up to:
 
 ```json
 {
-  "schemaVersion": "1.28",
+  "schemaVersion": "1.29",
+  "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
@@ -1146,7 +1175,7 @@ are not each other and `tests` is what they add up to:
       }
     }
   ],
-  "truncated": { "shown": 3, "total": 3, "command": "xping report --all" }
+  "truncated": { "shown": 3, "total": 3, "command": "xping report --all --assembly Checkout.Tests" }
 }
 ```
 

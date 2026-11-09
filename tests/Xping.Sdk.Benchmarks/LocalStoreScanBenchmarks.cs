@@ -18,8 +18,9 @@ namespace Xping.Sdk.Benchmarks;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each pair is the read before #283 and the read after it, at the store level, where nearly all of
-/// the cost is: deserializing sessions. The CLI's indexing on top is negligible next to it.
+/// The lookup pair is the read before #283 and the read after it, at the store level, where nearly
+/// all of the cost is: deserializing sessions. The CLI's indexing on top is negligible next to it.
+/// The assembly listing loads no session, and is measured to show it stays cheap beside them.
 /// </para>
 /// <para>
 /// BenchmarkDotNet reports time and allocation, not what is held at once. Setup logs the retained
@@ -80,18 +81,12 @@ public class LocalStoreScanBenchmarks
     }
 
     /// <summary>
-    /// Choosing the scope before #283: load the newest 200 runs, keep the first naming an assembly.
+    /// Listing the assemblies, which every bare report does before choosing between one report and
+    /// the overview (#346): every file's head, and no session.
     /// </summary>
-    [Benchmark(Baseline = true)]
-    public string? ScopeAssembly_LoadSessions() =>
-        _store.ReadRecent(200).Sessions
-            .Select(SessionAssemblies.Of)
-            .FirstOrDefault(a => a.Count > 0)?[0];
-
-    /// <summary>Choosing the scope after #283: the first header naming an assembly.</summary>
     [Benchmark]
-    public string? ScopeAssembly_ReadHeaders() =>
-        _store.ReadHeaders().FirstOrDefault(h => h.Assemblies.Count > 0)?.Assemblies[0];
+    public int KnownAssemblies_Summarize() =>
+        _store.Summarize().Assemblies.Count;
 
     /// <summary>The <c>--test</c> lookup before #283: one unscoped read of up to 1000 runs.</summary>
     [Benchmark]

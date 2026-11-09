@@ -71,25 +71,29 @@ internal sealed class ReportCommand(
         if (options.Test is { } query)
             return await RunTestAsync(options, query, startDirectory, store, source, capabilities, cancellationToken).ConfigureAwait(false);
 
-        // Auto-scope to the newest assembly unless the caller named one. Every test project in a
-        // solution shares one store, so an unscoped report would pool unrelated suites: one
-        // assembly's history would contain another's tests and its session count would be the
-        // solution-wide total.
+        // Every test project in a solution shares one store, so a report that pooled them would mix
+        // unrelated suites: one assembly's history would hold another's tests and its session count
+        // would be the solution-wide total. A report covers one assembly, and a store with several
+        // answers a bare command with one row for each (report-format Amendment 6A).
         string? assembly = options.Assembly;
 
         if (assembly == null)
         {
-            // Asked of the resolver rather than of the store: "newest" has to mean the same thing
-            // here as it does at the window bounds, or a run from a fast clock chooses which suite
-            // the report is about — the one decision no later filtering can undo.
-            assembly = windowResolver.ScopeAssembly(source);
+            IReadOnlyList<string> assemblies = source.KnownAssemblies();
 
-            // Every report is scoped to exactly one assembly, so there is no unscoped fallback to
-            // fall back to. A store holding runs that none of them attributes to an assembly has
-            // nothing to scope by, and reporting on them anyway would pool every suite together and
-            // produce numbers no --assembly value can reproduce.
-            if (assembly == null && source.Read(1, null).Sessions.Count > 0)
+            // A store holding runs that none of them attributes to an assembly has nothing to scope
+            // by, and reporting on them anyway would produce numbers no --assembly value reproduces.
+            if (assemblies.Count == 0 && source.Read(1, null).Sessions.Count > 0)
                 return ReportNothingAttributable(store, charset);
+
+            if (assemblies.Count > 1)
+            {
+                return options.Id is { } id
+                    ? await RunIdAcrossAsync(options, id, assemblies, startDirectory, store, source, capabilities, cancellationToken).ConfigureAwait(false)
+                    : RunOverview(options, assemblies, store, source, capabilities);
+            }
+
+            assembly = assemblies.Count == 1 ? assemblies[0] : null;
         }
 
         WindowResult resolved = windowResolver.Resolve(
@@ -98,14 +102,7 @@ internal sealed class ReportCommand(
         if (resolved.Window == null)
             return ReportUnavailable(resolved, store, options.Assembly, charset);
 
-        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
-            options,
-            resolved,
-            assembly,
-            assemblyGiven: options.Assembly != null,
-            shortFingerprint: options.Id != null && assembly != null
-                ? fingerprint => ShortFingerprintOf(source, assembly, fingerprint)
-                : null);
+        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(options, resolved, assembly, source);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -117,7 +114,7 @@ internal sealed class ReportCommand(
         // fence around an absence the message already describes.
         if (envelope.Selection is { Reported: false } selection)
         {
-            WriteNotReported(selection, envelope, source, assembly, charset);
+            WriteNotReported(selection, envelope, assembly, charset);
 
             if (options.Format == ReportFormat.Json)
                 new JsonReportRenderer().Render(envelope, io.Output);
@@ -126,8 +123,252 @@ internal sealed class ReportCommand(
         }
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, source, assembly, options.Assembly != null, capabilities, cancellationToken)
+            options, envelope, analysis, resolved, startDirectory, store, capabilities, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes one row per assembly: what each one's own report would say in its header.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every row is that assembly's report, built the way <c>--assembly</c> builds it and then
+    /// reduced to its window and summary. Computing the numbers any other way would let the row and
+    /// the report its command opens disagree, and a reader who sees two numbers for one suite stops
+    /// trusting both (report-format Amendment 6B).
+    /// </para>
+    /// <para>
+    /// Never enriched: the header a row copies is local, and Cloud data the report it opens did not
+    /// headline would be exactly the disagreement above.
+    /// </para>
+    /// </remarks>
+    private int RunOverview(
+        ReportOptions options,
+        IReadOnlyList<string> assemblies,
+        ILocalSessionStore store,
+        LocalSessionSource source,
+        OutputCapabilities capabilities)
+    {
+        TerminalCharset charset = capabilities.Glyphs.Charset;
+
+        // Each describes a list of findings, and the overview has none. Running anyway would print
+        // rows the flag had no effect on, which reads as the flag being honoured.
+        if (ListFlags(options) is { Length: > 0 } flags)
+        {
+            io.Error.WriteLine(
+                $"{flags} needs --assembly: this store holds {assemblies.Count} assemblies, and a list of findings covers one.");
+            io.Error.WriteLine("Run xping report to see them, then add --assembly <name>.");
+            return ExitCodes.InsufficientData;
+        }
+
+        IReadOnlyList<AssemblyAnalysis> analyses = AnalyzeEach(options, assemblies, source, charset);
+        LookupWarnings warnings = OverviewWarnings(analyses);
+
+        if (analyses.All(a => a.Envelope == null))
+            return ReportNoWindow(analyses, store, warnings, charset);
+
+        WriteLookupWarnings(warnings, charset);
+
+        if (options.Format == ReportFormat.Summary)
+        {
+            var summary = new SummaryReportRenderer(charset);
+
+            foreach (AssemblyAnalysis analysis in OverviewBuilder.Order(analyses, a => a.Assembly, a => a.Envelope?.Summary))
+            {
+                if (analysis.Envelope is { } envelope)
+                    summary.Render(envelope, io.Output);
+                else
+                    io.Output.WriteLine($"Xping: {TerminalText.Printable(analysis.Assembly, charset)}: {TerminalText.Printable(analysis.Unavailable!, charset)}");
+            }
+        }
+        else
+        {
+            OverviewEnvelope overview = OverviewBuilder.Build(
+                [.. analyses.Select(a => new OverviewRow(a.Assembly, a.Envelope, a.Unavailable))],
+                assembly => new ReportScope(
+                    assembly,
+                    WindowResolution.Default,
+                    0,
+                    _shell.Dialect,
+                    options.Runs,
+                    options.Since,
+                    options.Directory));
+
+            if (options.Format == ReportFormat.Json)
+            {
+                JsonReportRenderer.Render(overview, io.Output);
+            }
+            else
+            {
+                // A blank line either side for a person only, as around the full report.
+                bool pad = capabilities.Decorate;
+
+                if (pad)
+                    io.Output.WriteLine();
+
+                new OverviewTextRenderer(capabilities).Render(overview, io.Output);
+
+                if (pad)
+                    io.Output.WriteLine();
+            }
+        }
+
+        return ExitCodes.ForOverview(analyses.Select(a => a.Analysis?.Findings ?? []), options.FailOn);
+    }
+
+    /// <summary>
+    /// Shows the finding an id names, looked for in every assembly's window.
+    /// </summary>
+    /// <remarks>
+    /// Each window is opened as <c>--assembly</c> would open it, so the finding found is the one that
+    /// assembly's report holds. An id can be reported by two assemblies when both ran the same test
+    /// source; the reader then names one, as with a <c>--test</c> name that matched two tests
+    /// (finding-detail Amendment 10A).
+    /// </remarks>
+    private async Task<int> RunIdAcrossAsync(
+        ReportOptions options,
+        string id,
+        IReadOnlyList<string> assemblies,
+        string startDirectory,
+        ILocalSessionStore store,
+        LocalSessionSource source,
+        OutputCapabilities capabilities,
+        CancellationToken cancellationToken)
+    {
+        TerminalCharset charset = capabilities.Glyphs.Charset;
+        IReadOnlyList<AssemblyAnalysis> analyses = AnalyzeEach(options, assemblies, source, charset);
+        LookupWarnings warnings = OverviewWarnings(analyses);
+
+        if (analyses.All(a => a.Envelope == null))
+            return ReportNoWindow(analyses, store, warnings, charset);
+
+        WriteLookupWarnings(warnings, charset);
+
+        List<AssemblyAnalysis> reported =
+            [.. analyses.Where(a => a.Envelope?.Selection is { Reported: true })];
+
+        if (reported.Count == 1)
+        {
+            AssemblyAnalysis found = reported[0];
+
+            return await EnrichAndRenderAsync(
+                options, found.Envelope!, found.Analysis!, found.Resolved, startDirectory, store, capabilities, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (reported.Count > 1)
+        {
+            await io.Error.WriteLineAsync(
+                $"Finding {TerminalText.Printable(id, charset)} is reported in {reported.Count} assemblies. Name one:").ConfigureAwait(false);
+
+            // Each its own line, ending on the command, so any one of them can be copied and run.
+            foreach (AssemblyAnalysis candidate in reported)
+                await io.Error.WriteLineAsync("  " + TerminalText.Printable(candidate.Envelope!.Findings[0].DrillDown, TerminalCharset.Command)).ConfigureAwait(false);
+
+            return ExitCodes.TestAmbiguous;
+        }
+
+        // Not reported anywhere. Standard output stays empty whatever the format: there is no one
+        // report to hand a script, as for a --test name that resolved to no test (finding-detail
+        // Amendment 10A).
+        WriteNotReportedAnywhere(id, analyses, charset);
+
+        return ExitCodes.NotFound;
+    }
+
+    /// <summary>
+    /// One assembly's report, built for the overview or for an id looked for in every assembly.
+    /// </summary>
+    /// <param name="Assembly">The assembly.</param>
+    /// <param name="Resolved">What its window resolved to.</param>
+    /// <param name="Envelope">Its report; null when the window could not be opened.</param>
+    /// <param name="Analysis">The analysis behind the report; null with it.</param>
+    /// <param name="Unavailable">Why the window could not be opened; null when it was.</param>
+    private sealed record AssemblyAnalysis(
+        string Assembly, WindowResult Resolved, ReportEnvelope? Envelope, AnalysisResult? Analysis, string? Unavailable);
+
+    /// <summary>
+    /// Builds every assembly's report over the caller's window, as <c>--assembly</c> would build it.
+    /// </summary>
+    /// <remarks>
+    /// A provider's warning is written with the assembly it is about: over several reports, a
+    /// warning that named none could be about any of them.
+    /// </remarks>
+    private List<AssemblyAnalysis> AnalyzeEach(
+        ReportOptions options, IReadOnlyList<string> assemblies, LocalSessionSource source, TerminalCharset charset)
+    {
+        var analyses = new List<AssemblyAnalysis>(assemblies.Count);
+
+        foreach (string assembly in assemblies)
+        {
+            WindowResult resolved = windowResolver.Resolve(
+                source, new WindowRequest(options.Runs, options.Since, assembly));
+
+            if (resolved.Window == null)
+            {
+                analyses.Add(new AssemblyAnalysis(
+                    assembly, resolved, null, null, resolved.FailureDetail ?? "No runs recorded."));
+                continue;
+            }
+
+            using var warnings = new StringWriter();
+            (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(options, resolved, assembly, source, warnings);
+
+            foreach (string line in warnings.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                io.Error.WriteLine($"{TerminalText.Printable(assembly, charset)}: {TerminalText.Printable(line, charset)}");
+
+            analyses.Add(new AssemblyAnalysis(assembly, resolved, envelope, analysis, null));
+        }
+
+        return analyses;
+    }
+
+    /// <summary>
+    /// What every assembly's read could not use, each file and each run counted once.
+    /// </summary>
+    /// <remarks>
+    /// A file whose name carries no tags is opened by every assembly's read, and a run that covered
+    /// two assemblies is read by both, so neither a sum nor a maximum of the reads' counts is the
+    /// number of files or runs. An assembly whose every run is ahead is named on its own, as the
+    /// <c>--test</c> lookup names it.
+    /// </remarks>
+    private static LookupWarnings OverviewWarnings(IReadOnlyList<AssemblyAnalysis> analyses)
+    {
+        bool everyAhead = analyses.All(a => a.Resolved.WholeStoreSkewed);
+
+        return new LookupWarnings(
+            analyses.SelectMany(a => a.Resolved.UnreadableFiles).Distinct(StringComparer.Ordinal).Count(),
+            analyses.Where(a => !a.Resolved.WholeStoreSkewed).SelectMany(a => a.Resolved.SkewedSessionIds).Distinct().Count(),
+            everyAhead ? [] : [.. analyses.Where(a => a.Resolved.WholeStoreSkewed).Select(a => a.Assembly)],
+            everyAhead);
+    }
+
+    /// <summary>
+    /// Explains why no assembly's window could be opened.
+    /// </summary>
+    /// <remarks>
+    /// Said once, from the first: every window was asked for with the same <c>--runs</c> or
+    /// <c>--since</c>, and the resolver's reasons name neither the assembly nor anything in it, so
+    /// every one of them failed for the same reason. The warnings are every read's.
+    /// </remarks>
+    private int ReportNoWindow(
+        IReadOnlyList<AssemblyAnalysis> analyses, ILocalSessionStore store, LookupWarnings warnings, TerminalCharset charset) =>
+        ReportUnavailable(analyses[0].Resolved, store, null, charset, warnings);
+
+    /// <summary>
+    /// The finding-list flags the caller gave, as they would type them; empty when none.
+    /// </summary>
+    private static string ListFlags(ReportOptions options)
+    {
+        var flags = new List<string>(2);
+
+        if (options.TopGiven)
+            flags.Add(options.Top == null ? "--all" : "--top");
+
+        if (options.Kinds.Count > 0)
+            flags.Add("--kind");
+
+        return string.Join(" and ", flags);
     }
 
     /// <summary>
@@ -160,13 +401,8 @@ internal sealed class ReportCommand(
 
         if (lookup.Resolution is not { } resolution)
         {
-            LookupWarnings skipped = lookup.Warnings;
             return ReportUnavailable(
-                WindowResult.Failed(
-                    lookup.Failure!.Value, null, skipped.Unreadable, skipped.Skewed, skipped.WholeStoreSkewed),
-                store,
-                options.Assembly,
-                charset);
+                WindowResult.Failed(lookup.Failure!.Value), store, options.Assembly, charset, lookup.Warnings);
         }
 
         // The same refusal report makes, for the same reason: runs that name no assembly cannot be
@@ -194,16 +430,13 @@ internal sealed class ReportCommand(
             options,
             resolved,
             match.Assembly,
-
-            // The assembly came from the name. A printed command that left it out would scope
-            // itself to whichever assembly ran last (Amendment 5B).
-            assemblyGiven: true,
-            (context, _) => TestHistoryBuilder.Found(context, query, match));
+            source,
+            history: (context, _) => TestHistoryBuilder.Found(context, query, match));
 
         WriteClockWarning(resolved);
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, source, match.Assembly, assemblyGiven: true, capabilities, cancellationToken)
+            options, envelope, analysis, resolved, startDirectory, store, capabilities, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -262,7 +495,7 @@ internal sealed class ReportCommand(
                     resolution,
                     new ReportScope(
                         options.Assembly, WindowResolution.Store, resolution.RunCount, _shell.Dialect,
-                        AssemblyGiven: true, Directory: options.Directory)),
+                        Directory: options.Directory)),
                 ExitCodes.TestAmbiguous)
             : (TestHistoryBuilder.NotFound(resolution.Query), ExitCodes.NotFound);
 
@@ -276,10 +509,11 @@ internal sealed class ReportCommand(
         if (options.Format != ReportFormat.Json)
             return exitCode;
 
-        // Report's own scope over the --test window (Amendment 5A). Where that scope has no window to
-        // open, the answer above stands alone rather than being replaced by a failure about a window
-        // the reader never asked a question of.
-        if ((options.Assembly ?? windowResolver.ScopeAssembly(source)) is { } assembly
+        // Report's own scope over the --test window (Amendment 5A): the named assembly, or the store's
+        // only one. A store with several has no one report to write around the answer (Amendment
+        // 12A), and where the scope has no window to open, the answer stands alone rather than being
+        // replaced by a failure about a window the reader never asked a question of.
+        if ((options.Assembly ?? OnlyAssembly(source)) is { } assembly
             && windowResolver.Resolve(source, TestWindow(options, assembly)) is { Window: not null } resolved)
         {
             RenderUnresolved(options, resolved, assembly, history);
@@ -297,8 +531,7 @@ internal sealed class ReportCommand(
     /// </remarks>
     private void RenderUnresolved(ReportOptions options, WindowResult resolved, string assembly, TestHistoryDto history)
     {
-        (ReportEnvelope envelope, _) = Analyze(
-            options, resolved, assembly, assemblyGiven: true, (_, _) => history);
+        (ReportEnvelope envelope, _) = Analyze(options, resolved, assembly, source: null, history: (_, _) => history);
 
         new JsonReportRenderer().Render(envelope, io.Output);
     }
@@ -318,6 +551,12 @@ internal sealed class ReportCommand(
             : null;
 
     /// <summary>
+    /// The store's one assembly, or <see langword="null"/> when it holds none or several.
+    /// </summary>
+    private static string? OnlyAssembly(LocalSessionSource source) =>
+        source.KnownAssemblies() is [var only] ? only : null;
+
+    /// <summary>
     /// The window <c>--test</c> reads: the whole store, unless <c>--runs</c> or <c>--since</c>
     /// replaces it.
     /// </summary>
@@ -330,14 +569,14 @@ internal sealed class ReportCommand(
     /// <param name="options">Parsed command-line options.</param>
     /// <param name="resolved">The window, which must have resolved.</param>
     /// <param name="assembly">The assembly the report covers.</param>
-    /// <param name="assemblyGiven">Whether every printed command has to name the assembly.</param>
+    /// <param name="source">
+    /// Where sessions are read from, for <c>--id</c>'s history command; <see langword="null"/> when
+    /// the report answers no id.
+    /// </param>
+    /// <param name="warnings">Where a provider's failure is said; standard error when omitted.</param>
     /// <param name="history">
     /// Builds what <c>--test</c> resolved to over the window, or <see langword="null"/> when the
     /// command is not <c>--test</c>.
-    /// </param>
-    /// <param name="shortFingerprint">
-    /// Works out a test's short fingerprint over the assembly's whole store, for <c>--id</c>'s
-    /// history command; <see langword="null"/> otherwise.
     /// </param>
     /// <returns>The envelope, and the analysis behind it.</returns>
     /// <remarks>
@@ -348,9 +587,9 @@ internal sealed class ReportCommand(
         ReportOptions options,
         WindowResult resolved,
         string? assembly,
-        bool assemblyGiven,
-        Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null,
-        Func<string, string?>? shortFingerprint = null)
+        LocalSessionSource? source,
+        TextWriter? warnings = null,
+        Func<AnalysisContext, ReportScope, TestHistoryDto>? history = null)
     {
         AnalysisWindow window = resolved.Window
             ?? throw new ArgumentException("The window did not resolve.", nameof(resolved));
@@ -364,7 +603,7 @@ internal sealed class ReportCommand(
         IReadOnlySet<FindingKind>? kinds =
             options.Id != null || options.Test != null || options.Kinds.Count == 0 ? null : options.Kinds.ToHashSet();
 
-        AnalysisResult analysis = coordinator.Run(context, kinds, io.Error);
+        AnalysisResult analysis = coordinator.Run(context, kinds, warnings ?? io.Error);
 
         // Beside the coordinator and not inside it: these rows are observations of one session,
         // not hypotheses, and must never be ranked, corrected or graded with the findings. A null
@@ -384,7 +623,6 @@ internal sealed class ReportCommand(
             window.Resolution,
             window.SessionCount,
             _shell.Dialect,
-            assemblyGiven,
             options.Runs,
             options.Since,
             options.Directory);
@@ -404,7 +642,11 @@ internal sealed class ReportCommand(
             scope,
             options.Id,
             history?.Invoke(context, scope),
-            shortFingerprint);
+
+            // Only when the selection is about one test, so any other report pays nothing for it.
+            options.Id != null && source != null && assembly != null
+                ? fingerprint => ShortFingerprintOf(source, assembly, fingerprint)
+                : null);
 
         return (envelope, analysis);
     }
@@ -419,9 +661,6 @@ internal sealed class ReportCommand(
         WindowResult resolved,
         string startDirectory,
         ILocalSessionStore store,
-        LocalSessionSource source,
-        string? assembly,
-        bool assemblyGiven,
         OutputCapabilities capabilities,
         CancellationToken cancellationToken)
     {
@@ -445,7 +684,7 @@ internal sealed class ReportCommand(
             envelope = enriched.Envelope;
         }
 
-        return Render(options, envelope, analysis, window, store, source, assembly, assemblyGiven, capabilities);
+        return Render(options, envelope, analysis, window, store, capabilities);
     }
 
     /// <summary>
@@ -457,9 +696,6 @@ internal sealed class ReportCommand(
         AnalysisResult analysis,
         AnalysisWindow window,
         ILocalSessionStore store,
-        LocalSessionSource source,
-        string? assembly,
-        bool assemblyGiven,
         OutputCapabilities capabilities)
     {
         // A blank line either side, for a person only. It separates the report from the command that
@@ -473,12 +709,11 @@ internal sealed class ReportCommand(
         Renderer(options, capabilities).Render(envelope, io.Output);
 
         // Anything beyond the report itself is for a person at a terminal. A redirected stream is on
-        // its way to a clipboard, a file or a script, and none of them asked for a scope notice.
+        // its way to a clipboard, a file or a script, and none of them asked for an invitation.
         // On standard error even then, so standard output is the report and nothing else (contract
         // F3): a person copying it, or tee-ing it to a file, gets no advertisement with it.
         if (pad)
         {
-            WriteScopeNotice(source, assembly, assemblyGiven, capabilities.Glyphs);
             WriteCloudInvitation(store, analysis, window.Sessions, envelope, capabilities);
 
             // After the notices rather than after the report: the trailing blank closes the whole
@@ -554,7 +789,16 @@ internal sealed class ReportCommand(
     /// Always exit code 2, never 1. A build step has to tell "I looked and found problems" apart
     /// from "I could not look", and every case here is the second.
     /// </remarks>
-    private int ReportUnavailable(WindowResult result, ILocalSessionStore store, string? assembly, TerminalCharset charset)
+    /// <param name="result">Why the window could not be opened.</param>
+    /// <param name="store">The store that was read.</param>
+    /// <param name="assembly">The assembly the reader named, if any.</param>
+    /// <param name="charset">What the messages may print of a recorded name.</param>
+    /// <param name="warnings">
+    /// What the reads behind it could not use, when that was gathered over several reads rather
+    /// than carried on <paramref name="result"/>.
+    /// </param>
+    private int ReportUnavailable(
+        WindowResult result, ILocalSessionStore store, string? assembly, TerminalCharset charset, LookupWarnings? warnings = null)
     {
         TextWriter error = io.Error;
 
@@ -586,7 +830,10 @@ internal sealed class ReportCommand(
                 break;
         }
 
-        WriteReadWarnings(result);
+        if (warnings != null)
+            WriteLookupWarnings(warnings, charset);
+        else
+            WriteReadWarnings(result);
 
         return ExitCodes.InsufficientData;
     }
@@ -727,9 +974,7 @@ internal sealed class ReportCommand(
     /// <para>
     /// "Not reported in this window", never "not found" or "error": an id that was on screen
     /// yesterday and is absent today is the report working. The window is named because it is the
-    /// honest boundary — a finding that needs twenty runs is absent from five — and the other
-    /// assemblies are counted because the likeliest reason an id is missing is that the report
-    /// scoped itself to a different suite.
+    /// honest boundary — a finding that needs twenty runs is absent from five.
     /// </para>
     /// <para>
     /// Names the current id rather than showing it. A promoted cluster is a different claim, and
@@ -737,7 +982,7 @@ internal sealed class ReportCommand(
     /// </para>
     /// </remarks>
     private void WriteNotReported(
-        SelectionDto selection, ReportEnvelope envelope, LocalSessionSource source, string? assembly, TerminalCharset charset)
+        SelectionDto selection, ReportEnvelope envelope, string? assembly, TerminalCharset charset)
     {
         string Recorded(string value) => TerminalText.Printable(value, charset);
 
@@ -760,15 +1005,6 @@ internal sealed class ReportCommand(
                        $"{Recorded(same.Id)} ({Recorded(ReportVocabulary.LabelFor(same.Kind))}, row {same.Row})"))
                    .Append('.');
         }
-        int others = OtherAssemblies(source, assembly);
-
-        if (others > 0)
-        {
-            message.Append(' ')
-                   .Append(others)
-                   .Append(others == 1 ? " other assembly" : " other assemblies")
-                   .Append(" in this store (use --assembly to switch).");
-        }
 
         io.Error.WriteLine(message.ToString());
 
@@ -780,34 +1016,49 @@ internal sealed class ReportCommand(
     }
 
     /// <summary>
-    /// Says which assembly the report covers when the store holds more than one.
+    /// Says that no assembly's window reports the finding <c>--id</c> named, and where its subject
+    /// went in each assembly that knows it.
     /// </summary>
     /// <remarks>
-    /// Auto-scoping keeps the numbers honest, but silently omitting other suites would be worse than
-    /// the problem it solves. Naming the scope makes the omission visible and points at the flag.
+    /// Names every assembly as the window, because every one was searched (finding-detail
+    /// Amendment 10B). A row number or a history command belongs to one assembly's report, so each
+    /// is said with the assembly it is from.
     /// </remarks>
-    private void WriteScopeNotice(
-        LocalSessionSource source, string? assembly, bool explicitlyChosen, ReportGlyphs glyphs)
+    private void WriteNotReportedAnywhere(string id, IReadOnlyList<AssemblyAnalysis> analyses, TerminalCharset charset)
     {
-        if (assembly == null || explicitlyChosen)
-            return;
+        string Recorded(string value) => TerminalText.Printable(value, charset);
 
-        int others = OtherAssemblies(source, assembly);
+        List<(string Assembly, SelectionDto Selection)> selections = [.. analyses
+            .Where(a => a.Envelope?.Selection != null)
+            .Select(a => (a.Assembly, a.Envelope!.Selection!))
+            .OrderBy(a => a.Assembly, StringComparer.Ordinal)];
 
-        if (others == 0)
-            return;
+        var message = new StringBuilder("Finding ")
+            .Append(Recorded(selections.Count > 0 ? selections[0].Selection.Id : id));
 
-        io.Error.WriteLine(
-            $"Reporting on {TerminalText.Printable(assembly, glyphs.Charset)} {glyphs.Separator} {others} other " +
-            (others == 1 ? "assembly" : "assemblies") +
-            " in this store (use --assembly to switch).");
+        if (selections.Select(s => s.Selection.Kind).FirstOrDefault(k => k != null) is { } kind)
+            message.Append(" (").Append(Recorded(ReportVocabulary.LabelFor(kind))).Append(')');
+
+        message.Append(" is not reported in any window (every assembly in this store).");
+
+        foreach ((string assembly, SelectionDto selection) in selections.Where(s => s.Selection.SameSubject.Count > 0))
+        {
+            message.Append(" In ").Append(Recorded(assembly)).Append(", its subject is reported as ")
+                   .AppendJoin(", ", selection.SameSubject.Select(same =>
+                       $"{Recorded(same.Id)} ({Recorded(ReportVocabulary.LabelFor(same.Kind))}, row {same.Row})"))
+                   .Append('.');
+        }
+
+        io.Error.WriteLine(message.ToString());
+
+        // Each a line of its own, ending on the command, as WriteNotReported writes it.
+        foreach ((string assembly, SelectionDto selection) in selections)
+        {
+            if (selection.SameSubject.Count == 0 && selection.History is { } history)
+                io.Error.WriteLine(
+                    $"Its test has no findings in {Recorded(assembly)}: {TerminalText.Printable(history, TerminalCharset.Command)}");
+        }
     }
-
-    /// <summary>
-    /// Counts the assemblies in the store other than the one the report covers.
-    /// </summary>
-    private static int OtherAssemblies(LocalSessionSource source, string? assembly) =>
-        source.KnownAssemblies().Count(a => !string.Equals(a, assembly, StringComparison.Ordinal));
 
     /// <summary>
     /// Prints the cloud invitation, at most once a day and only when it is relevant.

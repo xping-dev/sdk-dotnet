@@ -44,10 +44,16 @@ internal sealed class ReportOptions
     /// </summary>
     public int? Top { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="Top"/> came from <c>--top</c> or
+    /// <c>--all</c> rather than the default.
+    /// </summary>
+    public bool TopGiven { get; set; }
+
     /// <summary>Gets or sets the kinds to report, or empty for all of them.</summary>
     public IReadOnlyList<FindingKind> Kinds { get; set; } = [];
 
-    /// <summary>Gets or sets the test assembly to restrict to, or <see langword="null"/> to auto-scope.</summary>
+    /// <summary>Gets or sets the test assembly to restrict to, or <see langword="null"/> for the store's only one, or the overview when it holds several.</summary>
     public string? Assembly { get; set; }
 
     /// <summary>

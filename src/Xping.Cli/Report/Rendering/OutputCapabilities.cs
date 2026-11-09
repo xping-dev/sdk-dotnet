@@ -25,7 +25,7 @@ namespace Xping.Cli.Report.Rendering;
 /// <param name="Glyphs">The character set the report is drawn with.</param>
 /// <param name="Color">Whether ANSI colour may be emitted.</param>
 /// <param name="Decorate">
-/// Whether output beyond the report itself — the scope notice, the cloud invitation — may be
+/// Whether output beyond the report itself — the blank lines around it, the cloud invitation — may be
 /// written. False whenever stdout is redirected, so <c>xping report | pbcopy</c> copies a report
 /// and nothing else.
 /// </param>

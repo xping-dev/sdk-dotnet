@@ -210,13 +210,15 @@ No API key, no signup, no network calls. Everything lives in `.xping/` on your m
 ```bash
 xping report                    # findings from recent runs
 xping report --format json      # the versioned envelope, for a script or an agent
-xping report --summary          # one line, for a chat message or a CI step title
-xping report --fail-on high     # exit non-zero when a high finding shows up
+xping report --summary          # one line per assembly, for a chat message or a CI step title
+xping report --fail-on high     # exit non-zero when any assembly has a high finding
 xping report --runs 50          # widen the window (or --since <sha|yyyy-MM-dd>)
-xping report --kind flaky       # restrict to one or more finding kinds
+xping report --assembly Shop.Tests --kind flaky   # one assembly, one or more finding kinds
 xping where                     # show where local runs are stored
 xping clear                     # delete recorded runs
 ```
+
+With several test projects, `xping report` prints one row per assembly; `--assembly` opens one. See [Scoping](cli/command-reference.md#scoping).
 
 Full flags, finding kinds, and the JSON schema: [CLI Command Reference](cli/command-reference.md).
 

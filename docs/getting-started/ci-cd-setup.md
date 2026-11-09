@@ -507,10 +507,11 @@ wrote, so this works with or without an API key:
   run: xping report --fail-on high
 ```
 
-`--fail-on high` exits non-zero when a high-severity finding appears. Useful variants:
+`--fail-on high` exits non-zero when a high-severity finding appears in any test assembly, not only
+the one that ran last. Useful variants:
 
 ```bash
-xping report --summary            # one line, good as a CI step title
+xping report --summary            # one line per assembly, good as a CI step title
 xping report --format json        # versioned envelope, for a script or an agent
 xping report --no-color --ascii   # for log collectors that mangle ANSI
 ```

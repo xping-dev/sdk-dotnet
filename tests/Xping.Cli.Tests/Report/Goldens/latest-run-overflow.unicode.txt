@@ -87,5 +87,5 @@ rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
 https://docs.xping.io/cli/command-reference.html#the-population-marker
 
-Showing 10 of 23 failures · all: xping report --all
+Showing 10 of 23 failures · all: xping report --all --assembly MyApp.Tests
 Detail of row 1: xping report --id f_c7b87f12 --assembly SampleApp.XUnit

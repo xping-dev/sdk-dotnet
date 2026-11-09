@@ -142,6 +142,18 @@ records what it changes here, committed with that spec.
 
 Exit codes are unchanged (0 / 3 / 4).
 
+### Amendment 12 — from #346
+
+`cli-report-format-spec.md` Amendment 6 removes `report`'s auto-scoping. D2's lookup is unchanged
+and is now also the model for an unscoped `--id`.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Amendment 5A: the unresolved-name envelope is the report over `--assembly` or else the newest assembly | Over `--assembly`, or the store's one assembly. A store with two or more and no `--assembly` writes no envelope: stdout is empty, and stderr and the exit code stand, as they already do when no window can be opened | Amendment 5A, D3, D4 |
+| B | Amendment 5B: `ReportScope.AssemblyGiven` is true under `--test` | `AssemblyGiven` is removed. Every printed command names the assembly | Amendment 5B |
+| C | Amendment 6E: the trailing `1 other assembly in this store…` clause | Removed with the scope notice | Amendment 6E |
+| D | §1.1: `report`'s auto-scoping picks the newest assembly from each file's header | `report` has no auto-scoping, and `ScopeAssembly` is removed | §1.1 |
+
 ---
 
 ## 1. Ground truth

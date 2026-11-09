@@ -319,7 +319,8 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.28", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("assembly", root.GetProperty("scope").GetString());
 
         JsonElement window = root.GetProperty("window");
         foreach (string key in
@@ -343,7 +344,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.True(truncated.TryGetProperty("shown", out _));
         Assert.True(truncated.TryGetProperty("total", out _));
         Assert.Equal(
-            "xping report --all", truncated.GetProperty("command").GetString());
+            "xping report --all --assembly MyApp.Tests", truncated.GetProperty("command").GetString());
 
         Assert.True(root.TryGetProperty("context", out _));
         Assert.True(root.TryGetProperty("findings", out _));
@@ -353,7 +354,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.Equal(JsonValueKind.Null, root.GetProperty("selection").ValueKind);
         Assert.Equal(JsonValueKind.Null, root.GetProperty("test").ValueKind);
         Assert.Equal(
-            ["schemaVersion", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
+            ["schemaVersion", "scope", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));
 
         JsonElement latestRun = root.GetProperty("latestRun");
@@ -616,7 +617,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // One command lifts both caps, and the envelope carries it once.
         Assert.False(capped.TryGetProperty("overflowCommand", out _));
-        Assert.Equal("xping report --all", root.GetProperty("truncated").GetProperty("command").GetString());
+        Assert.Equal("xping report --all --assembly MyApp.Tests", root.GetProperty("truncated").GetProperty("command").GetString());
 
         JsonElement lifted = RunJson("--all").GetProperty("latestRun");
         Assert.Equal(many, lifted.GetProperty("failuresShown").GetInt32());
@@ -906,7 +907,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.28", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.29", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

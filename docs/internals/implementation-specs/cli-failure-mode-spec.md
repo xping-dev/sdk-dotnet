@@ -102,6 +102,12 @@ These changes are applied in place in the sections named.
 
 The composite signature stays the local grouping key; `ErrorMessageHash` is never an input to it.
 
+### Amendment 9 — from #346
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Amendment 2G: the scope notice joins its segments with the glyph set's separator | The scope notice is removed (`cli-report-format-spec.md` Amendment 6A). The rule still holds for `xping where` and for the report overview | D7 |
+
 ---
 
 ## 1. Ground truth

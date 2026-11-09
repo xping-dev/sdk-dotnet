@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Commands;
@@ -297,8 +298,8 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     /// <summary>
-    /// The history command ends its line even when the message names other assemblies, so copying it
-    /// copies nothing else.
+    /// Over a store with other assemblies, the message names the one window it searched and the
+    /// history command still ends its line, so copying it copies nothing else.
     /// </summary>
     [Fact]
     public void TheHistoryCommandOfAHealthyTestEndsItsLineBesideOtherAssemblies()
@@ -315,8 +316,19 @@ public sealed class FindingDetailCommandTests : IDisposable
         Assert.Equal(ExitCodes.NotFound, code);
 
         string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-        Assert.EndsWith("1 other assembly in this store (use --assembly to switch).", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith("(MyApp.Tests, 8 runs).", lines[0], StringComparison.Ordinal);
         Assert.EndsWith(" --assembly MyApp.Tests", lines[1], StringComparison.Ordinal);
+
+        // Without --assembly every assembly is searched, so every one is the window, and the one that
+        // knows the test is named beside its command.
+        var (unscopedCode, _, unscoped) = Run("--id", id);
+
+        Assert.Equal(ExitCodes.NotFound, unscopedCode);
+
+        string[] unscopedLines = unscoped.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.EndsWith("(every assembly in this store).", unscopedLines[0], StringComparison.Ordinal);
+        Assert.StartsWith("Its test has no findings in MyApp.Tests: xping report ", unscopedLines[1], StringComparison.Ordinal);
+        Assert.EndsWith(" --assembly MyApp.Tests", unscopedLines[1], StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -386,7 +398,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     }
 
     [Fact]
-    public void AnIdFromAnotherAssemblyIsNotReportedAndTheMessageCountsTheOthers()
+    public void AnIdFromAnotherAssemblyIsNotReportedUnderThisOne()
     {
         SeedVanishing();
         SeedOtherAssembly();
@@ -396,13 +408,125 @@ public sealed class FindingDetailCommandTests : IDisposable
         var (code, _, error) = Run("--id", id, "--assembly", Other);
 
         Assert.Equal(ExitCodes.NotFound, code);
-        Assert.Contains($"({Other}, ", error, StringComparison.Ordinal);
-        Assert.EndsWith(
-            " 1 other assembly in this store (use --assembly to switch)." + Environment.NewLine,
-            error,
-            StringComparison.Ordinal);
+        Assert.EndsWith($"({Other}, 6 runs)." + Environment.NewLine, error, StringComparison.Ordinal);
 
         Assert.Equal(0, Run("--id", id, "--assembly", "MyApp.Tests").Code);
+    }
+
+    /// <summary>
+    /// Finding-detail Amendment 10A: without <c>--assembly</c> the id is looked for in every
+    /// assembly, not only in whichever ran last.
+    /// </summary>
+    [Fact]
+    public void AnIdWithoutAnAssemblyIsFoundInWhicheverAssemblyReportsIt()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        string id = FirstId("--assembly", "MyApp.Tests");
+
+        var (code, output, _) = Run("--id", id);
+
+        Assert.Equal(0, code);
+        Assert.Contains(id, output, StringComparison.Ordinal);
+        Assert.Contains("MyApp.Tests", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnIdNoAssemblyReportsIsNotReportedAnywhere()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        var (code, output, error) = Run("--id", "f_00000000", "--format", "json");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.Equal(
+            "Finding f_00000000 is not reported in any window (every assembly in this store)." + Environment.NewLine,
+            error);
+    }
+
+    /// <summary>
+    /// Regression: when one assembly knew the id's subject, the message named only that assembly's
+    /// window although every assembly was searched, and JSON wrote that one assembly's envelope
+    /// where every other not-found case writes none.
+    /// </summary>
+    [Fact]
+    public void AnIdNoAssemblyReportsNamesEveryWindowAndWhereItsSubjectWent()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        JsonElement finding = Json("--assembly", "MyApp.Tests").GetProperty("findings")[0];
+        string fingerprint = finding.GetProperty("subject").GetProperty("fingerprint").GetString()!;
+        string moved = FindingId.Compute(FindingKind.Flaky, fingerprint);
+
+        var (code, output, error) = Run("--id", moved, "--format", "json");
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Empty(output);
+        Assert.Equal(
+            $"Finding {moved} (flaky) is not reported in any window (every assembly in this store). " +
+            $"In MyApp.Tests, its subject is reported as {finding.GetProperty("id").GetString()} (stopped running, row 1)." +
+            Environment.NewLine,
+            error);
+    }
+
+    /// <summary>
+    /// Finding-detail Amendment 10A: two assemblies that ran the same test source report the same
+    /// id, and the reader is handed each one's command rather than one picked for them.
+    /// </summary>
+    [Fact]
+    public void AnIdTwoAssembliesReportIsAmbiguousAndNamesEachAssemblysCommand()
+    {
+        SeedVanishing();
+        SeedVanishing(Other, firstOrdinal: 20);
+
+        string id = FirstId("--assembly", "MyApp.Tests");
+        Assert.Equal(id, FirstId("--assembly", Other));
+
+        var (code, output, error) = Run("--id", id);
+
+        Assert.Equal(ExitCodes.TestAmbiguous, code);
+        Assert.Empty(output);
+
+        string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal($"Finding {id} is reported in 2 assemblies. Name one:", lines[0]);
+        Assert.Equal(2, lines.Length - 1);
+        Assert.Contains(lines, line => line.StartsWith("  xping report ", StringComparison.Ordinal) && line.EndsWith("--assembly MyApp.Tests", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.StartsWith("  xping report ", StringComparison.Ordinal) && line.EndsWith($"--assembly {Other}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnIdOverAStoreWhereNoAssemblysWindowOpensIsUnavailable()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+
+        var (code, output, error) = Run("--id", "f_00000000", "--since", "2099-01-01");
+
+        Assert.Equal(ExitCodes.InsufficientData, code);
+        Assert.Empty(output);
+        Assert.Contains("No sessions recorded on or after 2099-01-01", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An assembly whose window cannot be opened was searched and found nothing, like the others.
+    /// </summary>
+    [Fact]
+    public void AnIdIsNotReportedAnywhereWhenOneAssemblyHasNoWindow()
+    {
+        SeedVanishing();
+        SeedOtherAssembly();
+        string since = TestSessionFactory.Epoch.AddMinutes(15).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+        var (code, _, error) = Run("--id", "f_00000000", "--since", since);
+
+        Assert.Equal(ExitCodes.NotFound, code);
+        Assert.Equal(
+            "Finding f_00000000 is not reported in any window (every assembly in this store)." + Environment.NewLine,
+            error);
     }
 
     [Fact]
@@ -480,7 +604,7 @@ public sealed class FindingDetailCommandTests : IDisposable
     /// than vanishing ones keeps the later runs above the partial-run share and the family small
     /// enough to clear its correction.
     /// </remarks>
-    private void SeedVanishing()
+    private void SeedVanishing(string assembly = TestSessionFactory.DefaultAssembly, int firstOrdinal = 0)
     {
         ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
@@ -489,15 +613,15 @@ public sealed class FindingDetailCommandTests : IDisposable
             var executions = new List<TestExecution>();
 
             for (int t = 0; t <= 3; t++)
-                executions.Add(TestSessionFactory.Execution($"Stable{t}"));
+                executions.Add(TestSessionFactory.Execution($"Stable{t}", assembly: assembly));
 
             if (i < 5)
             {
                 for (int t = 0; t < 3; t++)
-                    executions.Add(TestSessionFactory.Execution($"Removed{t}"));
+                    executions.Add(TestSessionFactory.Execution($"Removed{t}", assembly: assembly));
             }
 
-            store.Write(TestSessionFactory.Session(i, executions));
+            store.Write(TestSessionFactory.Session(firstOrdinal + i, executions));
         }
     }
 
