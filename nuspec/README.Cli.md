@@ -84,8 +84,9 @@ LATEST RUN  16:21 · eab9867                               2 new failures
 
 | Command | Description |
 |---------|-------------|
-| `xping report` | Report flakiness from recent local runs |
-| `xping report --all` | Show every finding and every latest-run row, not only the first ten of each |
+| `xping report` | Report flakiness from recent local runs. With several test assemblies, one row per assembly, most severe first |
+| `xping report --assembly <name>` | One assembly's full report |
+| `xping report --all` | Show every finding and every latest-run row, not only the first ten of each. Needs `--assembly` when the store holds several assemblies |
 | `xping report --json` | Emit a versioned JSON document for scripting and CI |
 | `xping report --id <id>` | Show one finding in detail: every metric, its full name and location, how the test failed, the other findings about the same test, and the command that reruns it |
 | `xping report --test <name>` | Show one test's history, run by run, each way it failed, and the findings about it. Works for any test, healthy or not |
