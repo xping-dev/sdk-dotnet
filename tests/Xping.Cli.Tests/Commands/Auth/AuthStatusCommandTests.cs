@@ -56,7 +56,7 @@ public sealed class AuthStatusCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(requests, _host.Cloud.Requests.Count);
         Assert.Contains("Credential    stored login (", result.Error, StringComparison.Ordinal);
         Assert.Contains($"Signed in     {FakeCloud.Email}", result.Error, StringComparison.Ordinal);
-        Assert.Contains($"Workspace     {FakeCloud.WorkspaceId}", result.Error, StringComparison.Ordinal);
+        Assert.Contains($"Workspace     {FakeCloud.WorkspaceName} ({FakeCloud.WorkspaceId})", result.Error, StringComparison.Ordinal);
         Assert.Contains($"Session       ...{record.Sid![^6..]}", result.Error, StringComparison.Ordinal);
         Assert.Contains("Access token  expires in 12 minutes (refreshed automatically)", result.Error, StringComparison.Ordinal);
 
@@ -67,6 +67,7 @@ public sealed class AuthStatusCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(FakeCloud.Email, json.GetProperty("email").GetString());
         Assert.Equal(FakeCloud.UserId, json.GetProperty("sub").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, json.GetProperty("workspaceId").GetString());
+        Assert.Equal(FakeCloud.WorkspaceName, json.GetProperty("workspaceName").GetString());
         Assert.Equal(record.Sid, json.GetProperty("sessionId").GetString());
         Assert.Equal("2026-09-29T10:15:00Z", json.GetProperty("accessTokenExpiresAt").GetString());
         Assert.Equal("2026-09-29T10:00:00Z", json.GetProperty("storedAt").GetString());
@@ -75,6 +76,19 @@ public sealed class AuthStatusCommandTests : IAsyncLifetime, IAsyncDisposable
 
         Assert.DoesNotContain(record.RefreshToken, result.Output + result.Error, StringComparison.Ordinal);
         Assert.DoesNotContain(record.AccessToken!, result.Output + result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASignInWithoutAWorkspaceNameShowsTheIdAlone()
+    {
+        _host.Cloud.IssuedWorkspaceName = null;
+        _host.SignIn();
+
+        CliResult result = _host.Run("auth", "status", "--json");
+
+        Assert.Equal(0, result.Code);
+        Assert.Contains($"Workspace     {FakeCloud.WorkspaceId}{Environment.NewLine}", result.Error, StringComparison.Ordinal);
+        Assert.Equal(JsonValueKind.Null, result.Json().GetProperty("workspaceName").ValueKind);
     }
 
     [Fact]

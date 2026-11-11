@@ -6,6 +6,7 @@
 using Xping.Cli.Auth.Store;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
 using Xping.Sdk.Core.Services.Environment;
 
 namespace Xping.Cli.Commands.Auth;
@@ -59,13 +60,33 @@ internal sealed class AuthText
 
         Done($"Signed in as {record.Email ?? record.Sub ?? "an unknown user"}");
 
-        if (record.WorkspaceId is { } workspace)
+        if (Workspace(record) is { } workspace)
             Line($"  Workspace  {workspace}");
 
         if (ShortSession(record.Sid) is { } session)
             Line($"  Session    {session}   (shown on {SessionsPage})");
 
         Line($"  Stored in  {store.DisplayName}");
+    }
+
+    /// <summary>
+    /// The workspace line's value: its name with the ID in parentheses, or the ID alone when the
+    /// sign-in predates the <c>workspace_name</c> claim.
+    /// </summary>
+    /// <remarks>
+    /// The ID stays because <c>login --workspace</c> takes it. The name is the server's text, so it
+    /// is made printable before it reaches the terminal.
+    /// </remarks>
+    public string? Workspace(CredentialRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        if (record.WorkspaceId is not { } id)
+            return null;
+
+        return record.WorkspaceName is { } name
+            ? $"{TerminalText.Printable(name, Capabilities.Glyphs.Charset)} ({id})"
+            : id;
     }
 
     /// <summary>
