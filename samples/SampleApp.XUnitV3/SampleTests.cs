@@ -238,6 +238,5 @@ internal static class UnresponsiveService
     /// Issues a request that never completes.
     /// </summary>
     /// <returns>A task that never completes.</returns>
-    public static Task<string> FetchAsync() =>
-        new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+    public static Task<string> FetchAsync() => new TaskCompletionSource<string>().Task;
 }

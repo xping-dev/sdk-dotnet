@@ -85,6 +85,9 @@ error message on vstest, and through the exit code on Microsoft.Testing.Platform
 
 - xRetry.v3 reports only the attempt a retried test ended on: the attempts before it are not
   recorded, and the duration covers all of them.
+- On Microsoft.Testing.Platform with `--report-trx`, a timed-out test that passed
+  `TestContext.Current.CancellationToken` to its hung call can crash the TRX report (exit 7). This is
+  an xUnit v3 bug ([xunit/xunit#3669](https://github.com/xunit/xunit/issues/3669)).
 - Two theory rows whose arguments display the same way share one identity.
 - The runner is not recorded under xUnit's own console runner.
 
