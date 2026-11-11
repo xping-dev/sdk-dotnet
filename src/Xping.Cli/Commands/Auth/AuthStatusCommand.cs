@@ -68,7 +68,7 @@ internal sealed class AuthStatusCommand(
                 Row(text, "Credential", $"stored login ({login.Store.DisplayName})");
                 Row(text, "Signed in", record.Email ?? record.Sub ?? "unknown user");
 
-                if (record.WorkspaceId is { } workspace)
+                if (text.Workspace(record) is { } workspace)
                     Row(text, "Workspace", workspace);
 
                 if (AuthText.ShortSession(record.Sid) is { } session)
@@ -152,6 +152,7 @@ internal sealed class AuthStatusCommand(
             record?.Email,
             record?.Sub,
             record?.WorkspaceId,
+            record?.WorkspaceName,
             record?.Sid,
             record?.AccessToken is null ? null : AuthJson.Timestamp(record.AccessTokenExpiresAt),
             AuthJson.Timestamp(record?.StoredAt),

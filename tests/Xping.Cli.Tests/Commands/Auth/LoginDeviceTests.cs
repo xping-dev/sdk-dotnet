@@ -60,6 +60,7 @@ public sealed class LoginDeviceTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal("signed-in", json.GetProperty("result").GetString());
         Assert.Equal("device", json.GetProperty("flow").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, json.GetProperty("workspaceId").GetString());
+        Assert.Equal(FakeCloud.WorkspaceName, json.GetProperty("workspaceName").GetString());
 
         // The browser gets the page with the code filled in; the device code is never shown.
         Assert.Equal(new Uri($"{host.Cloud.CloudUrl}/device?user_code={userCode}"), Assert.Single(host.Browser.Opened));

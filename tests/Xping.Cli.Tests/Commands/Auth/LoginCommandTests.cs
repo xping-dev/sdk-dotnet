@@ -55,7 +55,7 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
 
         Assert.Contains($"Opening your browser to sign in to Xping Cloud ({host.Cloud.CloudUrl}).", result.Error, StringComparison.Ordinal);
         Assert.Contains($"Signed in as {FakeCloud.Email}", result.Error, StringComparison.Ordinal);
-        Assert.Contains($"Workspace  {FakeCloud.WorkspaceId}", result.Error, StringComparison.Ordinal);
+        Assert.Contains($"Workspace  {FakeCloud.WorkspaceName} ({FakeCloud.WorkspaceId})", result.Error, StringComparison.Ordinal);
         Assert.Contains($"Session    ...{record.Sid![^6..]}", result.Error, StringComparison.Ordinal);
         Assert.Contains("Stored in  ", result.Error, StringComparison.Ordinal);
 
@@ -67,6 +67,7 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
         Assert.Equal(FakeCloud.Email, json.GetProperty("email").GetString());
         Assert.Equal(FakeCloud.UserId, json.GetProperty("sub").GetString());
         Assert.Equal(FakeCloud.WorkspaceId, json.GetProperty("workspaceId").GetString());
+        Assert.Equal(FakeCloud.WorkspaceName, json.GetProperty("workspaceName").GetString());
         Assert.Equal(record.Sid, json.GetProperty("sessionId").GetString());
         Assert.Equal("file", json.GetProperty("store").GetString());
         Assert.Equal("2026-09-29T10:15:00Z", json.GetProperty("accessTokenExpiresAt").GetString());
@@ -78,6 +79,33 @@ public sealed class LoginCommandTests : IAsyncLifetime, IAsyncDisposable
             Assert.DoesNotContain(record.AccessToken!, output, StringComparison.Ordinal);
             Assert.DoesNotContain("eyJ", output, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void ATokenWithoutAWorkspaceNameShowsTheIdAlone()
+    {
+        CliFlowHost host = _host;
+        host.Cloud.IssuedWorkspaceName = null;
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.Contains($"Workspace  {FakeCloud.WorkspaceId}{Environment.NewLine}", result.Error, StringComparison.Ordinal);
+        Assert.Equal(JsonValueKind.Null, result.Json().GetProperty("workspaceName").ValueKind);
+    }
+
+    [Fact]
+    public void TheWorkspaceNameCannotDriveTheTerminal()
+    {
+        CliFlowHost host = _host;
+        host.Cloud.IssuedWorkspaceName = "Ac\u001b[2Jme";
+
+        CliResult result = host.Run("login", "--json");
+
+        Assert.True(result.Code == 0, result.Error);
+        Assert.DoesNotContain("\u001b", result.Error, StringComparison.Ordinal);
+        Assert.Contains($"({FakeCloud.WorkspaceId})", result.Error, StringComparison.Ordinal);
+        Assert.Equal("Ac\u001b[2Jme", result.Json().GetProperty("workspaceName").GetString());
     }
 
     [Fact]

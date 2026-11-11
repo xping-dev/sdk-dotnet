@@ -77,6 +77,7 @@ internal sealed record LoginSucceededDocument(
     string? Email,
     string? Sub,
     string? WorkspaceId,
+    string? WorkspaceName,
     string? SessionId,
     string Store,
     string? AccessTokenExpiresAt);
@@ -121,6 +122,7 @@ internal sealed record AuthStatusDocument(
     string? Email,
     string? Sub,
     string? WorkspaceId,
+    string? WorkspaceName,
     string? SessionId,
     string? AccessTokenExpiresAt,
     string? StoredAt,

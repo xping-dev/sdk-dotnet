@@ -130,6 +130,7 @@ internal sealed class LoginCommand(
             record.Email,
             record.Sub,
             record.WorkspaceId,
+            record.WorkspaceName,
             record.Sid,
             AuthJson.StoreName(written.Store.Kind),
             AuthJson.Timestamp(record.AccessTokenExpiresAt)));

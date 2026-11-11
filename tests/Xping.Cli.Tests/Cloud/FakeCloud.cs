@@ -97,6 +97,12 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     /// </summary>
     public Task? HoldTokenResponses { get; set; }
 
+    /// <summary>
+    /// Gets or sets the <c>workspace_name</c> claim of every access token issued from now on; null
+    /// leaves the claim out, as a token issued before Cloud sent it.
+    /// </summary>
+    public string? IssuedWorkspaceName { get; set; } = WorkspaceName;
+
     public IReadOnlyList<RecordedRequest> Requests
     {
         get
@@ -552,7 +558,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             ["aud"] = "xping-datagateway",
             ["sub"] = UserId,
             ["workspace_id"] = WorkspaceId,
-            ["workspace_name"] = WorkspaceName,
+            ["workspace_name"] = IssuedWorkspaceName,
             ["sid"] = session.Id,
             ["email"] = Email,
             ["scope"] = "user:read",
@@ -561,6 +567,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
             ["iat"] = now.ToUnixTimeSeconds(),
             ["exp"] = (now + AccessTokenLifetime).ToUnixTimeSeconds()
         };
+
+        if (IssuedWorkspaceName is null)
+            payload.Remove("workspace_name");
 
         string token = $"{Base64Url(header.ToJsonString())}.{Base64Url(payload.ToJsonString())}.fake-signature";
         _accessTokens[token] = new IssuedAccessToken(session.Id, now + AccessTokenLifetime);

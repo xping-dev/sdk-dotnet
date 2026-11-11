@@ -298,10 +298,15 @@ If it does not open, use this link:
 
 Waiting for you to finish in the browser (up to 5 minutes)...
 ✓ Signed in as jane@example.com
-  Workspace  01J8K2V6XN7Y0Q4R5S6T7U8V9X
+  Workspace  Acme (01J8K2V6XN7Y0Q4R5S6T7U8V9X)
   Session    ...A7F2Q9   (shown on Settings → Security → CLI sessions)
   Stored in  macOS Keychain
 ```
+
+The `Workspace` line names the workspace from the token's `workspace_name` claim (contract §6.1),
+made safe for the terminal like every string the server writes, and keeps the ID in parentheses
+because `login --workspace` takes the ID. A sign-in from before the claim has no name, and the line
+shows the ID alone. `auth status` prints the same value.
 
 The link line prints the full authorization URL exactly once, always, even when the browser
 opened (contract §3.1 step 4). When `HeadlessDetector` reports headless (§5.2) the first line is
@@ -337,6 +342,7 @@ minutes, so a short lifetime never reads "up to 0 minutes".
   "email": "jane@example.com",
   "sub": "01J8K2V6XN7Y0Q4R5S6T7U8V9W",
   "workspaceId": "01J8K2V6XN7Y0Q4R5S6T7U8V9X",
+  "workspaceName": "Acme",
   "sessionId": "01J8K2V6XN7Y0Q4R5S6T7U8VA7F2Q9",
   "store": "keychain",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z"
@@ -396,7 +402,7 @@ Options: `--json`. No network call, ever (contract §6.1 allows answering from s
 Cloud URL     https://app.xping.io
 Credential    stored login (macOS Keychain)
 Signed in     jane@example.com
-Workspace     01J8K2V6XN7Y0Q4R5S6T7U8V9X
+Workspace     Acme (01J8K2V6XN7Y0Q4R5S6T7U8V9X)
 Session       ...A7F2Q9
 Access token  expires in 12 minutes (refreshed automatically)
 ```
@@ -426,6 +432,7 @@ JSON:
   "email": "jane@example.com",
   "sub": "...",
   "workspaceId": "...",
+  "workspaceName": "Acme" | null,
   "sessionId": "...",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z" | null,
   "storedAt": "2026-09-01T08:00:00Z",

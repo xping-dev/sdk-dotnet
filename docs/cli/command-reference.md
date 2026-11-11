@@ -1249,7 +1249,7 @@ xping login [--device] [--no-browser] [--workspace <id>] [--json]
 |---|---|
 | `--device` | Sign in with a code on any device. Use it when your browser is on another machine |
 | `--no-browser` | Print the sign-in link without trying to open a browser |
-| `--workspace <id>` | Preselect this workspace on the consent page. The id is the 26-character value `xping auth status` shows |
+| `--workspace <id>` | Preselect this workspace on the consent page. The id is the 26-character value `xping auth status` shows in parentheses after the name |
 | `--json` | Write the result to stdout as JSON |
 
 The [global options](#global-options) apply too: `--cloud-url` signs in to another Xping Cloud.
@@ -1265,7 +1265,7 @@ If it does not open, use this link:
 
 Waiting for you to finish in the browser (up to 5 minutes)...
 ✓ Signed in as jane@example.com
-  Workspace  01J8K2V6XN7Y0Q4R5S6T7U8V9X
+  Workspace  Acme (01J8K2V6XN7Y0Q4R5S6T7U8V9X)
   Session    ...A7F2Q9   (shown on Settings → Security → CLI sessions)
   Stored in  macOS Keychain
 ```
@@ -1366,13 +1366,15 @@ there moves it to the OS store.
   "email": "jane@example.com",
   "sub": "01J8K2V6XN7Y0Q4R5S6T7U8V9W",
   "workspaceId": "01J8K2V6XN7Y0Q4R5S6T7U8V9X",
+  "workspaceName": "Acme",
   "sessionId": "01J8K2V6XN7Y0Q4R5S6T7U8VA7F2Q9",
   "store": "keychain",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z"
 }
 ```
 
-`flow` is `loopback` or `device`; `store` is `keychain` or `file`. Every failure of `login`,
+`flow` is `loopback` or `device`; `store` is `keychain` or `file`. `workspaceName` is `null` when the
+sign-in predates Xping Cloud sending it; the text then shows the workspace ID alone. Every failure of `login`,
 `logout` and `auth status` under `--json` writes the same document:
 
 ```json
@@ -1444,7 +1446,7 @@ xping auth status [--json]
 Cloud URL     https://app.xping.io
 Credential    stored login (macOS Keychain)
 Signed in     jane@example.com
-Workspace     01J8K2V6XN7Y0Q4R5S6T7U8V9X
+Workspace     Acme (01J8K2V6XN7Y0Q4R5S6T7U8V9X)
 Session       ...A7F2Q9
 Access token  expires in 12 minutes (refreshed automatically)
 ```
@@ -1473,6 +1475,7 @@ states:
   "email": "jane@example.com",
   "sub": "01J8K2V6XN7Y0Q4R5S6T7U8V9W",
   "workspaceId": "01J8K2V6XN7Y0Q4R5S6T7U8V9X",
+  "workspaceName": "Acme",
   "sessionId": "01J8K2V6XN7Y0Q4R5S6T7U8VA7F2Q9",
   "accessTokenExpiresAt": "2026-09-29T10:15:00Z",
   "storedAt": "2026-09-01T08:00:00Z",
