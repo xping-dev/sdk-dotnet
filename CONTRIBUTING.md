@@ -62,3 +62,18 @@ terminal, or launch the IDE from it (`open -a Rider` on macOS) so it inherits th
 `Mode = XpingMode.LocalOnly` and a scratch `LocalStorePath`, or a loopback `ApiEndpoint` when the
 test needs the upload path. Never build one from the ambient configuration: in CI it carries the
 real API key, and the test's synthetic session would be uploaded next to the real ones.
+
+## Releasing
+
+Maintainers cut releases from an up-to-date `main`:
+
+```sh
+python scripts/release.py        # current version, commits since it, next candidates
+python scripts/release.py rc     # v1.0.0-rc.7 -> v1.0.0-rc.8; also patch, minor, major or vX.Y.Z
+```
+
+The script checks that CI passed on `HEAD` and that the version is new on nuget.org. It then
+packs the SDK, installs the CLI tool from those packages, pushes the tag and opens a **draft**
+GitHub release. Write the title and notes, then publish the draft. Publishing runs
+`release.yml`, which waits for approval on the `nuget` environment, then pushes the packages to
+nuget.org and deploys the docs. Nothing is pushed to nuget.org from a local machine.

@@ -2,43 +2,40 @@ name: Release
 on:
   release:
     types: [published]
+  # Redeploys the docs only. Packages ship from a published release, so the version always comes
+  # from a tag (scripts/release.py creates it).
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'What to release'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-          - nuget
-          - docs
-          - both
-      version:
-        description: 'Version (required for NuGet, e.g., 1.2.3)'
-        required: false
-        type: string
 
 jobs:
   build:
-    if: github.event_name == 'release' || github.event.inputs.release_type == 'nuget' || github.event.inputs.release_type == 'both'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 10.0.x
-    
-    - name: Extract version from tag
+
+    # nuget.org versions cannot be deleted, so refuse a tag that is not SemVer or not on main.
+    - name: Check the release tag
       id: get_version
       run: |
-        if [ "${{ github.event_name }}" = "release" ]; then
-          echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-        else
-          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        VERSION="${GITHUB_REF_NAME#v}"
+        if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "::error::$GITHUB_REF_NAME is not a vX.Y.Z[-suffix] tag"
+          exit 1
         fi
-    
+        if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+          echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main"
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
     - name: Restore dependencies
       run: dotnet restore
     
@@ -68,9 +65,11 @@ jobs:
         path: _build/nuget
 
   publish:
-    if: github.event_name == 'release' || github.event.inputs.release_type == 'nuget' || github.event.inputs.release_type == 'both'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     needs: build
+    # Required reviewers on this environment gate the push to nuget.org.
+    environment: nuget
     permissions:
       contents: write
       id-token: write  # lets NuGet/login exchange a GitHub OIDC token for a short-lived nuget.org key
@@ -86,12 +85,7 @@ jobs:
       
       - name: Extract version from tag
         id: get_version
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          fi
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       
       # Trusted publishing: the key lives for 1 hour, so request it right before the push.
       - name: NuGet login
@@ -105,7 +99,6 @@ jobs:
           dotnet nuget push "_build/nuget/*.nupkg" --api-key "${{ steps.nuget_login.outputs.NUGET_API_KEY }}" --skip-duplicate --source https://api.nuget.org/v3/index.json
       
       - name: Upload packages to GitHub release
-        if: github.event_name == 'release'
         run: |
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.Core.${{ steps.get_version.outputs.VERSION }}.nupkg
           gh release upload --repo xping-dev/sdk-dotnet ${GITHUB_REF_NAME} _build/nuget/Xping.Sdk.NUnit.${{ steps.get_version.outputs.VERSION }}.nupkg
@@ -117,7 +110,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   publish-docs:
-    if: github.event_name == 'release' || github.event.inputs.release_type == 'docs' || github.event.inputs.release_type == 'both'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
