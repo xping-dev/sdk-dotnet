@@ -30,3 +30,8 @@
     href: optimization/performance-configuration.md
   - name: Performance Troubleshooting
     href: optimization/performance-troubleshooting.md
+
+- name: Pull Requests
+  items:
+  - name: Reading the Xping Comment
+    href: pull-requests/reading-the-xping-comment.md
