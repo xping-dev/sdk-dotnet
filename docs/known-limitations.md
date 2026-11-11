@@ -120,6 +120,23 @@ attempt (2/3)`) on the run's own bus, which is where the attempt number comes fr
 vstest refuses one. This is xUnit's and the SDK's behavior, not Xping's. Reference `xunit.v3.mtp-off`
 instead of `xunit.v3` to stay on vstest, or move `dotnet test` to Microsoft.Testing.Platform.
 
+#### A Timed-Out Test Can Crash The TRX Report On Microsoft.Testing.Platform
+
+**Affected Versions**: xunit.v3 4.0.2 with Microsoft.Testing.Extensions.TrxReport 2.5.1
+**Impact**: Now and then, a run with `--report-trx` exits 7 ("test host crashed") after a
+`[Fact(Timeout = …)]` test times out. The output shows an extra `[Test Cleanup Failure (…)]` result
+for that test and an `InvalidOperationException` from `TrxReportEngine.GetClassAndMethodName`, and
+the TRX is empty. Xping still records the test as timed out. It happens more often on a loaded
+machine, such as CI.
+
+**Reason**: the test passed `TestContext.Current.CancellationToken` to the call that hung. xUnit
+cancels that token at the timeout, so the abandoned task fails afterwards. xUnit v3 sometimes reports
+that failure as a separate cleanup failure, which carries no class or method name, and the TRX
+extension crashes on it. This happens without Xping too: see
+[xunit/xunit#3669](https://github.com/xunit/xunit/issues/3669). Until it is fixed, drop the token
+from a call the timeout is meant to abandon (and suppress `xUnit1069` there), or run without
+`--report-trx`.
+
 #### A Theory Row Is Identified By The Arguments In Its Display Name
 
 **Impact**: Two rows of one theory whose arguments display the same way, such as two different

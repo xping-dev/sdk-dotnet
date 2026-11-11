@@ -32,7 +32,7 @@ public sealed class MtpRunTests : IDisposable
         _runner.Dispose();
     }
 
-    // A pass, a thrown exception, and a test its framework cancels for overrunning a 500 ms budget.
+    // A pass, a thrown exception, and a test its framework stops for overrunning a 500 ms budget.
     [Theory]
     [InlineData("SampleApp.NUnit", TestRunner.MtpDotnetTest, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]
     [InlineData("SampleApp.NUnit", TestRunner.MtpExecutable, "PassingTestIsTracked", "ThrowingTestIsTracked", "TimeoutTest_UnresponsiveDependency_AwaitsForever")]

@@ -28,16 +28,21 @@ public class SampleTests
     /// budget declared below alongside the measured duration.
     /// </para>
     /// </remarks>
+    // No TestContext.Current.CancellationToken on purpose. xUnit cancels it at the timeout, which faults
+    // the abandoned task, and xUnit v3 sometimes reports that fault as an extra cleanup failure that
+    // crashes Microsoft.Testing.Platform's TRX report (#337).
+#pragma warning disable xUnit1069 // Tests with a Timeout should reference TestContext.Current.CancellationToken
     [Fact(Timeout = 500)]
     [Trait("Category", "Unit")]
     [Trait("Category", "Timeout")]
     public async Task TimeoutTest_UnresponsiveDependency_AwaitsForever()
     {
-        // Never completes. xUnit races this await against its own 500 ms budget and kills the test.
-        var response = await UnresponsiveService.FetchAsync(TestContext.Current.CancellationToken);
+        // Never completes. xUnit races this await against its own 500 ms budget and abandons the test.
+        var response = await UnresponsiveService.FetchAsync();
 
         Assert.NotNull(response);
     }
+#pragma warning restore xUnit1069
 
     [Fact]
     [Trait("Category", "Integration")]
@@ -230,17 +235,8 @@ public class BrokenFixtureTests(UnprovisionedDatabase database) : IClassFixture<
 internal static class UnresponsiveService
 {
     /// <summary>
-    /// Issues a request that never completes unless <paramref name="cancellationToken"/> fires.
+    /// Issues a request that never completes.
     /// </summary>
-    /// <param name="cancellationToken">Token that abandons the wait, when the caller supplies one.</param>
-    /// <returns>A task that never completes successfully.</returns>
-    public static async Task<string> FetchAsync(CancellationToken cancellationToken = default)
-    {
-        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        using (cancellationToken.Register(() => pending.TrySetCanceled(cancellationToken)))
-        {
-            return await pending.Task.ConfigureAwait(false);
-        }
-    }
+    /// <returns>A task that never completes.</returns>
+    public static Task<string> FetchAsync() => new TaskCompletionSource<string>().Task;
 }
