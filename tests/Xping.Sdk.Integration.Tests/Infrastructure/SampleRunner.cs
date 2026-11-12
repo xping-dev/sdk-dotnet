@@ -221,11 +221,14 @@ internal sealed class SampleRunner : IDisposable
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
         Task<string> stderr = process.StandardError.ReadToEndAsync();
 
-        Task exited = process.WaitForExitAsync();
-        if (await Task.WhenAny(exited, Task.Delay(RunTimeout)).ConfigureAwait(true) != exited)
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(RunTimeout).ConfigureAwait(true);
+        }
+        catch (TimeoutException exception)
         {
             process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"{description} did not finish within {RunTimeout}.");
+            throw new TimeoutException($"{description} did not finish within {RunTimeout}.", exception);
         }
 
         return (process.ExitCode, await stdout.ConfigureAwait(true) + await stderr.ConfigureAwait(true));
