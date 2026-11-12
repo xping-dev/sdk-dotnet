@@ -196,7 +196,7 @@ public sealed class FindingDetailCommandTests : IDisposable
 
         Assert.Equal(0, code);
         Assert.StartsWith("xping: XPING_SHELL=\"bash\" is not posix or powershell; commands are quoted for ", error, StringComparison.Ordinal);
-        Assert.NotEmpty(JsonDocument.Parse(output).RootElement.GetProperty("findings").EnumerateArray());
+        Assert.NotEmpty(JsonElement.Parse(output).GetProperty("findings").EnumerateArray());
     }
 
     /// <summary>
