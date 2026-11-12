@@ -323,28 +323,20 @@ public sealed class LatestRunAnalyzerTests
     }
 
     // ---------------------------------------------------------------------------------------
-    // D5 — single-session suppression
+    // D5 — a window of one session
     // ---------------------------------------------------------------------------------------
 
     [Fact]
-    public void AWindowOfOneSessionIsSuppressedButStillCounted()
+    public void AWindowOfOneSessionListsItsFailuresAsNewTests()
     {
+        // #353: this window was suppressed, so the failure appeared nowhere in the report.
         LatestRunAnalysis analysis = Analyze(Context([Pass("Alpha"), Fail("Beta"), Fail("Gamma")]));
 
-        Assert.True(analysis.Suppressed);
-        Assert.Empty(analysis.Failures);
-        Assert.Equal(0, analysis.FailuresTotal);
+        Assert.Equal(2, analysis.FailuresTotal);
+        Assert.Equal(2, analysis.NewFailures);
+        Assert.All(analysis.Failures, row => Assert.Equal(LatestRunStatus.NewTest, row.Status));
         Assert.Equal(3, analysis.TestsExecuted);
         Assert.Equal(2, analysis.TestsFailed);
-    }
-
-    [Fact]
-    public void AWindowOfTwoSessionsIsNotSuppressed()
-    {
-        LatestRunAnalysis analysis = Analyze(Context([Pass("Alpha")], [Fail("Alpha")]));
-
-        Assert.False(analysis.Suppressed);
-        Assert.Single(analysis.Failures);
     }
 
     [Fact]
@@ -373,7 +365,6 @@ public sealed class LatestRunAnalyzerTests
         LatestRunAnalysis analysis = Analyze(context);
 
         Assert.True(analysis.Session.IsLikelyEnvironmental);
-        Assert.False(analysis.Suppressed);
         Assert.Empty(analysis.Failures);
         Assert.Equal(0, analysis.FailuresTotal);
         Assert.Equal(0, analysis.ExplainedByFindings);

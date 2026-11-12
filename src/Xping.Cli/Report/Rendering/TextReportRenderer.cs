@@ -311,7 +311,8 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // What state the suite is in, and nothing about the findings: the line above answers what was
         // analysed, and the heading below the fence carries the severity breakdown beside the list
-        // it describes. The three counts reconcile -- tests is healthy plus flagged -- which is what
+        // it describes. The counts reconcile -- tests is healthy plus flagged plus failed in the
+        // latest run, the last only when there is one -- which is what
         // the finding count standing in this position could never do, one test carrying two findings
         // and one finding covering a whole cluster.
         var counts = new List<string>
@@ -320,6 +321,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             $"{summary.Healthy.ToString(CultureInfo.InvariantCulture)} healthy",
             $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged"
         };
+
+        if (summary.FailedLatestRun > 0)
+            counts.Add(FailedLatestRun(summary));
 
         if (summary.ExcludedLowEvidence > 0)
             counts.Add($"{summary.ExcludedLowEvidence} awaiting more runs");
@@ -1487,7 +1491,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private bool WriteLatestRun(StringBuilder builder, ReportEnvelope envelope)
     {
-        if (envelope.LatestRun is not { Suppressed: false } latest)
+        if (envelope.LatestRun is not { } latest)
             return false;
 
         if (!latest.IsLikelyEnvironmental && latest.Failures.Count == 0 && latest.ExplainedByFindings == 0)
@@ -1983,7 +1987,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             counts.Add($"{Count(truncated.Shown)} of {Count(truncated.Total)} {Plural(truncated.Total, "finding")}");
 
         if (envelope.Selection == null
-            && envelope.LatestRun is { Suppressed: false, IsLikelyEnvironmental: false } latest
+            && envelope.LatestRun is { IsLikelyEnvironmental: false } latest
             && latest.FailuresShown < latest.FailuresTotal)
         {
             counts.Add($"{Count(latest.FailuresShown)} of {Count(latest.FailuresTotal)} {Plural(latest.FailuresTotal, "failure")}");
@@ -1998,6 +2002,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         return true;
     }
+
+    /// <summary>
+    /// The summary's count of tests the latest run failed and no finding names, as the header and
+    /// the overview both print it.
+    /// </summary>
+    internal static string FailedLatestRun(SummaryDto summary) =>
+        $"{Count(summary.FailedLatestRun)} failed in latest run";
 
     /// <summary>A count, as every count in the report is printed.</summary>
     internal static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);

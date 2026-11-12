@@ -199,7 +199,7 @@ public sealed class EnvelopeBuilderTests
         using JsonDocument document = JsonDocument.Parse(Json(Build(context, AnalysisResult.Empty, History(context))));
         JsonElement root = document.RootElement;
 
-        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.30", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(
             ["schemaVersion", "scope", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));

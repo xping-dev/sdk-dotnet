@@ -113,8 +113,11 @@ internal sealed record ReportEnvelope(
     /// mode gained <c>errorMessageHash</c>, the SDK's hash of its message that Cloud matches on.
     /// 1.29 is where the envelope gained <c>scope</c>, and a store with more than one assembly came
     /// to answer a bare <c>xping report</c> with the overview envelope instead of one assembly's.
+    /// 1.30 is where <c>summary</c> gained <c>failedLatestRun</c> and stopped counting those tests as
+    /// healthy, and where <c>latestRun</c> lost <c>suppressed</c>: a window of one run lists its
+    /// failures like any other.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.29";
+    public const string CurrentSchemaVersion = "1.30";
 }
 
 /// <summary>
@@ -167,8 +170,7 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly,
 /// </para>
 /// <para>
 /// Always present when the window holds a session, so that a consumer can tell <i>nothing
-/// failed</i> from <i>not itemised</i>: <see cref="Suppressed"/> says the window held one session
-/// and had no history to contrast, <see cref="IsLikelyEnvironmental"/> says the session failed too
+/// failed</i> from <i>not itemised</i>: <see cref="IsLikelyEnvironmental"/> says the session failed too
 /// widely to list test by test, and <see cref="FailuresTotal"/> against <see cref="FailuresShown"/>
 /// says how many rows the cap withheld.
 /// </para>
@@ -177,7 +179,6 @@ internal sealed record ContextDto(string? Sha, string? Branch, string? Assembly,
 /// <param name="StartedAt">When it started. Rendered, so a stale store is visible.</param>
 /// <param name="Sha">Commit it ran at, when one was recorded. Never invented.</param>
 /// <param name="IsLikelyEnvironmental">Whether the session itself is suspect.</param>
-/// <param name="Suppressed">True when the window holds this session alone.</param>
 /// <param name="TestsExecuted">Tests that recorded a verdict in this session.</param>
 /// <param name="TestsFailed">Tests whose final outcome was a failure.</param>
 /// <param name="NewFailures">
@@ -199,7 +200,6 @@ internal sealed record LatestRunDto(
     DateTime StartedAt,
     string? Sha,
     bool IsLikelyEnvironmental,
-    bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
     int NewFailures,
@@ -258,8 +258,15 @@ internal sealed record LatestRunFailureDto(
 /// four unhealthy tests out of sixteen has to reconstruct a deduplication they cannot see, and the
 /// two counts read as an arithmetic error.
 /// </param>
+/// <param name="FailedLatestRun">
+/// Tests that ended the newest run red and that no finding names: the latest run's rows, counted
+/// before the cap. Not inside <paramref name="Healthy"/>, so <paramref name="Tests"/> is healthy
+/// plus flagged plus this, and a summary can never call a suite healthy beside a failure it lists.
+/// Zero when the newest run looked environmental, which every finding discounts too.
+/// </param>
 /// <param name="Healthy">
-/// Tests no finding was raised about. Not "tests that were checked and are fine": a test a metric
+/// Tests no finding was raised about and that did not fail the newest run. Not "tests that were
+/// checked and are fine": a test a metric
 /// could not be computed for is in here too, and <paramref name="NotMeasured"/> is what says so.
 /// The unmeasured are deliberately not subtracted — which of them there are depends on which kinds
 /// were asked for, and a headline count that moves with <c>--kind</c> would be worse than one that
@@ -313,6 +320,7 @@ internal sealed record SummaryDto(
     int Findings,
     SeverityCountsDto Counts,
     int Flagged,
+    int FailedLatestRun,
     int Healthy,
     int ExcludedLowEvidence,
     int ExcludedNotSignificant,

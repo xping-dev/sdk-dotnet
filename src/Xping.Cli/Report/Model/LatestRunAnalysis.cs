@@ -59,17 +59,12 @@ internal sealed record LatestRunFailure(
 /// <para>
 /// Complete, or explicitly not. Every test that ended the session red is either a row, counted in
 /// <see cref="ExplainedByFindings"/>, or withheld under a rule the values here make visible:
-/// <see cref="Suppressed"/> for a window with nothing to contrast against,
 /// <see cref="SessionView.IsLikelyEnvironmental"/> on <see cref="Session"/> for a run the report
 /// declines to itemise, and <see cref="FailuresTotal"/> against <see cref="Failures"/> for the
 /// cap.
 /// </para>
 /// </remarks>
 /// <param name="Session">The newest analysed session.</param>
-/// <param name="Suppressed">
-/// Whether the window holds this session alone. Every row would then restate the test runner, so
-/// none is produced.
-/// </param>
 /// <param name="TestsExecuted">Tests that recorded a verdict in this session.</param>
 /// <param name="TestsFailed">Of those, how many ended it as a failure.</param>
 /// <param name="NewFailures">
@@ -86,7 +81,6 @@ internal sealed record LatestRunFailure(
 /// <param name="FailuresTotal">Rows before the cap.</param>
 internal sealed record LatestRunAnalysis(
     SessionView Session,
-    bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
     int NewFailures,

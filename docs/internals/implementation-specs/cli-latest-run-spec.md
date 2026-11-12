@@ -182,6 +182,19 @@ in JSON it is always the local sentence, so a Cloud value never appears outside 
 `Contrast` stays the only place the local sentence is composed, and the renderer composes the Cloud
 line from the failure's `cloud` object.
 
+### Amendment 8 — from #353: one run is listed, and counted in the summary
+
+On a store of one run, the format spec's header said `9 tests · 9 healthy · 0 flagged` while the
+run had a failure. D5 then suppressed the section, so the failure appeared nowhere. With `--runs 20`
+the same failure was listed under a header that still called every test healthy. Applied in place
+in the sections named.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D5: a window of one session suppresses the whole section | The section is written as on any window. Every row is `newTest`, because nothing came before it. The header counts the failure (B), and a section that went silent beside that count would name a failure without saying which. Rows also carry the Cloud line (Amendment 7), which is the contrast one local run cannot give | §1.4, D5, §3.5, §7 |
+| B | A failing test with no finding counted as healthy | `SummaryDto` gains `FailedLatestRun`, after `Flagged`. It is `FailuresTotal`, the latest run's rows before the cap, and they are disjoint from the flagged set. `Healthy` is `Tests − Flagged − FailedLatestRun`. Zero on an environmental run, which every finding discounts too. Format spec Amendment 7 prints it | §4.2, format spec D4 |
+| C | `LatestRunDto.Suppressed` | Removed. Schema `1.30` | §4.2 |
+
 ---
 
 ## 1. Ground truth and problem
@@ -223,10 +236,11 @@ This yields the governing rule of the section (D5): **no row without a contrast.
 ### 1.4 Honest scope of the benefit
 
 On a store containing exactly one session, every test is "first seen this run" and the section adds
-nothing over the test runner's own output. It is suppressed there (D5).
+little over the test runner's own output. It is still written there (D5, Amendment 8A), because the
+summary counts those failures and must not count them unnamed.
 
-The section therefore makes `xping report` useful from **run 2**, not run 1: four runs earlier than
-today, not five. Stated here so nobody discovers it in review.
+The contrast therefore makes `xping report` useful from **run 2**, not run 1: four runs earlier
+than today, not five. Stated here so nobody discovers it in review.
 
 ---
 
@@ -291,14 +305,12 @@ Findings are referenced by the row numbers assigned in `cli-report-format-spec.m
 the section a complete account of the latest run at the cost of one line, with no duplication. The
 line is omitted when the count is zero.
 
-### D5 — No row without a contrast; single-session suppression
+### D5 — A window of one session
 
-If the analysis window contains exactly one session, the whole section is suppressed: heading, rule
-and the "also failing" line included. There is no history to contrast against, so every row would
-restate the test runner.
-
-`LatestRunDto` is still emitted in JSON in that case, with `Suppressed = true` and an empty list, so
-a consumer can distinguish *suppressed* from *nothing failed*.
+*Amended by 8A.* If the analysis window contains exactly one session, the section is written as on
+any other window, and every row is `newTest`. There is no local history to contrast against, but
+the header counts the failures (Amendment 8B), and each row carries Cloud's line when Cloud
+answered.
 
 ### D6 — Environmental collapse
 
@@ -491,13 +503,13 @@ Section absent entirely. No heading, no rule, no line.
 ### 3.5 What the goldens say
 
 Per D10 the goldens are authority. `latest-run`, `latest-run-known-only`, `latest-run-environmental`,
-`latest-run-overflow`, `latest-run-suppressed` and `latest-run-store` under
+`latest-run-overflow`, `latest-run-one-run` and `latest-run-store` under
 `tests/Xping.Cli.Tests/Report/Goldens/` are the rendering of §2, and §3.1 differs from
 `latest-run.unicode.txt` in two places, both by decision: the second trailer reads
 `EqualException` and not `Assert.Equal() Failure` (Amendment 3A), and the closing line reads
 `5 tests explained by findings below (#1, #2, #3)` because the block beneath it is the format
-spec's §3, whose third row is the cluster. §3.2 and §3.3 render as shown; §3.4 is
-`latest-run-suppressed`, byte-identical to `spec-section-3`.
+spec's §3, whose third row is the cluster. §3.2 and §3.3 render as shown. `latest-run-one-run`
+is a store of one run with one failure (Amendment 8).
 
 `latest-run-store` is the section as the whole pipeline produces it from twenty sessions. It shows
 one thing §1.1 does not: a test that passed nineteen times and failed once is a `Flaky` finding on a
@@ -531,7 +543,6 @@ Positioned before `Findings`, matching render order.
 /// <param name="StartedAt">When it started. Renders so a stale store is visible.</param>
 /// <param name="Sha">Commit it ran at, when one was recorded. Never invented.</param>
 /// <param name="IsLikelyEnvironmental">Whether the session itself is suspect (D6).</param>
-/// <param name="Suppressed">True when the window holds one session (D5).</param>
 /// <param name="TestsExecuted">Tests with a verdict in this session (Amendment 2A: counted from the verdict-only view, not SessionView.Tests).</param>
 /// <param name="TestsFailed">Tests whose final outcome was a failure.</param>
 /// <param name="NewFailures">Rows whose status is new or newTest, before the cap (Amendment 3C).</param>
@@ -546,7 +557,6 @@ internal sealed record LatestRunDto(
     DateTime StartedAt,
     string? Sha,
     bool IsLikelyEnvironmental,
-    bool Suppressed,
     int TestsExecuted,
     int TestsFailed,
     int NewFailures,
@@ -724,8 +734,8 @@ sample if it shows a report.
   evidence gates exist to prevent. It stays a count. If it is ever wanted, it is
   `xping report --watchlist` and its own spec.
 - Any change to finding emission, thresholds, or severity.
-- A `--latest-run-only` mode. `--runs 1` already produces a report whose only content would be this
-  section, except that D5 suppresses it, which is correct. Revisit only if asked for.
+- A `--latest-run-only` mode. `--runs 1` already produces a report whose only content is this
+  section (Amendment 8A). Revisit only if asked for.
 - Cloud (§8).
 
 ---
